@@ -192,6 +192,17 @@ export const generateRender = createServerFn({ method: "POST" })
     }
   });
 
+export type RenderItem = {
+  id: string;
+  prompt: string;
+  render_type: string;
+  accuracy: number;
+  consistency: number;
+  result_url: string | null;
+  status: string;
+  created_at: string;
+};
+
 export const listMyRenders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -202,21 +213,20 @@ export const listMyRenders = createServerFn({ method: "GET" })
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(50);
-    if (error) return { items: [] as Array<Record<string, unknown>>, error: error.message };
+    if (error) return { items: [] as RenderItem[], error: error.message };
 
-    // Refresh signed URLs for any items pointing to storage
-    const refreshed = await Promise.all(
+    const refreshed: RenderItem[] = await Promise.all(
       (data ?? []).map(async (r) => {
-        if (!r.result_url) return r;
+        if (!r.result_url) return r as RenderItem;
         const path = `${userId}/${r.id}.png`;
         const { data: s } = await supabase.storage
           .from("renders")
           .createSignedUrl(path, 60 * 60 * 24);
-        return { ...r, result_url: s?.signedUrl ?? r.result_url };
+        return { ...(r as RenderItem), result_url: s?.signedUrl ?? r.result_url };
       }),
     );
 
-    return { items: refreshed, error: null };
+    return { items: refreshed, error: null as string | null };
   });
 
 export const deleteRender = createServerFn({ method: "POST" })
