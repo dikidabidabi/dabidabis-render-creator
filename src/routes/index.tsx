@@ -123,7 +123,7 @@ function Landing() {
             Kontrol penuh di tangan arsitek.
           </h2>
           <p className="mt-3 max-w-2xl text-muted-foreground">
-            Bukan generator acak — Atelier menjaga proporsi sketsa Anda dan mengikuti referensi gaya yang Anda pilih.
+            Bukan generator acak — Dabidabi's menjaga proporsi sketsa Anda dan mengikuti referensi gaya yang Anda pilih.
           </p>
 
           <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -147,7 +147,7 @@ function Landing() {
       </section>
 
       <footer className="border-t border-border/40 px-4 py-10 text-center text-xs text-muted-foreground sm:px-6">
-        Atelier — AI render studio untuk arsitek modern.
+        Dabidabi's — AI render studio untuk arsitek modern.
       </footer>
     </main>
   );

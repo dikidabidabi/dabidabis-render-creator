@@ -33,13 +33,13 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Atelier — AI Architectural Render Studio" },
+      { title: "Dabidabi's — AI Architectural Render Studio" },
       {
         name: "description",
         content:
           "Ubah sketsa arsitektur menjadi render fotorealistis dengan AI. Upload sketsa, referensi gaya, dan kontrol akurasi serta konsistensi.",
       },
-      { property: "og:title", content: "Atelier — AI Architectural Render Studio" },
+      { property: "og:title", content: "Dabidabi's — AI Architectural Render Studio" },
       {
         property: "og:description",
         content: "Ubah sketsa arsitektur menjadi render fotorealistis dengan AI.",
@@ -85,7 +85,7 @@ function Header() {
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-ember shadow-ember">
             <Layers className="h-4 w-4 text-primary-foreground" />
           </div>
-          <span className="font-display text-lg font-semibold tracking-tight">Atelier</span>
+          <span className="font-display text-lg font-semibold tracking-tight">Dabidabi's</span>
         </Link>
         <nav className="flex items-center gap-2 sm:gap-4">
           {user ? (

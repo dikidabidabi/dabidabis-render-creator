@@ -62,7 +62,7 @@ function LoginPage() {
             <Layers className="h-6 w-6 text-primary-foreground" />
           </div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
-            {tab === "signin" ? "Masuk ke Atelier" : "Buat akun Atelier"}
+            {tab === "signin" ? "Masuk ke Dabidabi's" : "Buat akun Dabidabi's"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {tab === "signin"
