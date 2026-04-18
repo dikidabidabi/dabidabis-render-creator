@@ -14,7 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      renders: {
+        Row: {
+          accuracy: number
+          consistency: number
+          created_at: string
+          error: string | null
+          id: string
+          prompt: string
+          reference_url: string | null
+          render_type: string
+          result_url: string | null
+          sketch_url: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          accuracy?: number
+          consistency?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          prompt: string
+          reference_url?: string | null
+          render_type: string
+          result_url?: string | null
+          sketch_url?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          accuracy?: number
+          consistency?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          prompt?: string
+          reference_url?: string | null
+          render_type?: string
+          result_url?: string | null
+          sketch_url?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
