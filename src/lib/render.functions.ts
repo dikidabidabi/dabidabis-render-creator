@@ -589,7 +589,7 @@ export const generateRender = createServerFn({ method: "POST" })
       // ============================================================
       // TAHAP 3 + 4 + 5: Pecah jadi 4x4 = 16 tile, perdetail tiap tile via AI
       // dengan instruksi KETAT (tidak boleh ubah bentuk/komposisi/warna),
-      // lalu satukan kembali dengan feathered blend (Tahap 5).
+      // lalu satukan kembali dengan paste presisi tanpa overlap (Tahap 5).
       // Hanya untuk 2K/4K — di 1K tidak perlu karena gambar masih asli AI.
       // ============================================================
       if (resolutionKey !== "1k") {
