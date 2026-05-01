@@ -354,7 +354,7 @@ async function enhanceTileWithAI(
           {
             role: "user",
             content: [
-              { type: "text", text: prompt },
+              { type: "text", text: TILE_ENHANCE_PROMPT },
               { type: "image_url", image_url: { url: inputUrl } },
             ],
           },
