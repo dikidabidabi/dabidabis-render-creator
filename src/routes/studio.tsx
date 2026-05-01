@@ -32,7 +32,7 @@ const RESOLUTIONS = [
   { id: "1k", label: "1K", desc: "1024px · cepat" },
   { id: "2k", label: "2K", desc: "2048px · tajam" },
   { id: "4k", label: "4K", desc: "3840px · maksimal" },
-  { id: "6k", label: "6K", desc: "6144px · ultra" },
+  { id: "8k", label: "8K", desc: "7680px · ultra" },
 ] as const;
 
 type Resolution = (typeof RESOLUTIONS)[number]["id"];
@@ -224,7 +224,7 @@ function StudioPage() {
             <p className="text-xs text-muted-foreground">
               {resolution === "1k"
               ? "Tahap 1 saja: render AI utuh (paling cepat, tanpa post-process)."
-              : "5 tahap: 1) render AI utuh → 2) upscale 2–5× → 3) pecah 16 tile (overlap 1%) → 4) tiap tile dipertajam AI dengan prompt & parameter IDENTIK (anti-variasi) → 5) gabung mulus dengan blending di overlap."}
+              : "5 tahap: 1) render AI utuh → 2) upscale 2–10× (menyesuaikan target 2K/4K/8K) → 3) pecah 16 tile (overlap 1%) → 4) tiap tile dipertajam AI dengan prompt & parameter IDENTIK (anti-variasi) → 5) gabung mulus dengan blending di overlap."}
             </p>
           </div>
 

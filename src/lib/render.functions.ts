@@ -23,14 +23,14 @@ const InputSchema = z.object({
   accuracy: z.number().int().min(1).max(10),
   consistency: z.number().int().min(1).max(10),
   seed: z.number().int().min(0).max(2147483647).nullable().optional(),
-  resolution: z.enum(["1k", "2k", "4k", "6k"]).default("1k").optional(),
+  resolution: z.enum(["1k", "2k", "4k", "8k"]).default("1k").optional(),
 });
 
 const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
   "1k": { label: "1K (1024px)", longEdge: 1024 },
   "2k": { label: "2K (2048px)", longEdge: 2048 },
   "4k": { label: "4K (3840px)", longEdge: 3840 },
-  "6k": { label: "6K (6144px)", longEdge: 6144 },
+  "8k": { label: "8K (7680px)", longEdge: 7680 },
 };
 
 const IMAGE_MODEL = "google/gemini-2.5-flash-image";
@@ -264,7 +264,7 @@ function upscaleOnly(image: RgbaImage, resolutionKey: string): RgbaImage {
   if (resolutionKey === "1k") return image;
   const targetLongEdge = RESOLUTION_SPECS[resolutionKey]?.longEdge ?? RESOLUTION_SPECS["1k"].longEdge;
   const currentLongEdge = Math.max(image.width, image.height);
-  const scale = Math.min(5, Math.max(2, targetLongEdge / currentLongEdge));
+  const scale = Math.min(10, Math.max(2, targetLongEdge / currentLongEdge));
   return resizeBicubic(image, scale);
 }
 
@@ -744,7 +744,7 @@ export const generateRender = createServerFn({ method: "POST" })
         bytes = new Uint8Array(
           jpeg.encode(
             { width: processedImage.width, height: processedImage.height, data: processedImage.data },
-            resolutionKey === "6k" ? 95 : resolutionKey === "4k" ? 94 : 92,
+            resolutionKey === "8k" ? 96 : resolutionKey === "4k" ? 94 : 92,
           ).data,
         );
       }
