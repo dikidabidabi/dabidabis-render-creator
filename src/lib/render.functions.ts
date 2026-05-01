@@ -580,51 +580,15 @@ export const generateRender = createServerFn({ method: "POST" })
         return { ok: false as const, error: "AI tidak menghasilkan gambar." };
       }
 
-      // Pass 2: ALWAYS run a cleanup pass to remove Gemini/Google watermark.
-      // The watermark from gemini-3.1-flash-image-preview is consistently in the
-      // bottom-right corner — we instruct the model to inpaint that region only.
-      let cleanedDataUrl = imageDataUrl;
-      try {
-        const cleanupPrompt = `TUGAS UTAMA: Hapus total watermark / logo "Gemini" / logo "Google" / tanda "AI" yang berada di pojok kanan bawah gambar ini. Gantikan area watermark dengan kelanjutan visual yang natural dari konten arsitektural di sekitarnya (inpainting) — sehingga tidak terlihat ada watermark sama sekali.
+      // ============================================================
+      // TAHAP 1 SELESAI: gambar utuh sudah dihasilkan oleh AI di atas.
+      // Kita TIDAK menjalankan cleanup-pass yang minta AI me-redraw seluruh
+      // gambar (itu yang dulu sering mengubah komposisi & memunculkan elemen
+      // aneh). Watermark sudah ditekan via instruksi prompt awal.
+      // ============================================================
 
-ATURAN KETAT:
-- JANGAN ubah komposisi, framing, warna, mood, pencahayaan, sudut kamera, atau elemen arsitektural manapun.
-- JANGAN tambah objek baru, JANGAN crop, JANGAN re-style.
-- HASIL HARUS identik dengan gambar input KECUALI watermark sudah hilang sempurna.
-- Output 100% bersih: tanpa logo, tanpa teks, tanpa signature, tanpa watermark apapun.
-- Pertahankan kualitas, ketajaman, dan resolusi maksimal.`;
-        const cleanResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-3.1-flash-image-preview",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: cleanupPrompt },
-                  { type: "image_url", image_url: { url: imageDataUrl } },
-                ],
-              },
-            ],
-            modalities: ["image", "text"],
-          }),
-        });
-        if (cleanResp.ok) {
-          const cleanJson = await cleanResp.json();
-          const cleanUrl: string | undefined =
-            cleanJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-          if (cleanUrl) cleanedDataUrl = cleanUrl;
-        }
-      } catch {
-        // fallback: keep original
-      }
-
-      // Decode the (cleaned) image into raw bytes
-      const match = cleanedDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+      // Decode hasil Tahap 1 menjadi pixel mentah
+      const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!match) {
         await supabase
           .from("renders")
@@ -636,24 +600,23 @@ ATURAN KETAT:
       let ext = mime.split("/")[1] ?? "png";
       let bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
 
-      // Pass 3: real internal pixel upscale + sharpening.
-      // Gemini's image endpoint often returns ~1K pixels even when prompted for 2K/4K,
-      // so we physically resize the cleaned image 2–5x toward the requested target,
-      // then apply an unsharp-mask style detail pass and a final logo touchup.
       const decodedImage = decodeImage(bytes, mime);
-      let processedImage = upscaleAndSharpen(decodedImage, resolutionKey);
 
-      // Pass 4 (2K/4K only): Tile-based AI super-resolution.
-      // Split the upscaled image into a 4x4 grid (16 tiles) with overlap, ask Gemini
-      // to add micro-detail to each tile (limited concurrency), then stitch with
-      // feathered blend for seamless results.
+      // ============================================================
+      // TAHAP 2: Upscale piksel 2-5x ke target 2K/4K (bicubic, tanpa sharpen).
+      // Untuk 1K: lewati upscale, gunakan gambar asli apa adanya.
+      // ============================================================
+      let processedImage = upscaleOnly(decodedImage, resolutionKey);
+
+      // ============================================================
+      // TAHAP 3 + 4 + 5: Pecah jadi 4x4 = 16 tile, perdetail tiap tile via AI
+      // dengan instruksi KETAT (tidak boleh ubah bentuk/komposisi/warna),
+      // lalu satukan kembali dengan feathered blend (Tahap 5).
+      // Hanya untuk 2K/4K — di 1K tidak perlu karena gambar masih asli AI.
+      // ============================================================
       if (resolutionKey !== "1k") {
         try {
           processedImage = await tileEnhanceImage(processedImage, LOVABLE_API_KEY, 4);
-          // Final light sharpen + logo touchup after stitching
-          processedImage = touchupBottomRightLogo(
-            sharpenImage(processedImage, resolutionKey === "4k" ? 0.25 : 0.2),
-          );
         } catch (tileErr) {
           console.error("Tile enhance failed, using upscaled fallback:", tileErr);
         }
