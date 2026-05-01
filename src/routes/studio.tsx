@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, Dice5, Lock, Unlock } from "lucide-react";
+import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, Dice5, Lock, Unlock, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
