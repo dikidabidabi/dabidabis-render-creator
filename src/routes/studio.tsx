@@ -41,6 +41,8 @@ function StudioPage() {
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
+  const [seedLocked, setSeedLocked] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
