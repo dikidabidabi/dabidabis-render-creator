@@ -363,36 +363,71 @@ ATURAN KETAT:
   }
 }
 
-async function tileEnhanceImage(image: RgbaImage, apiKey: string): Promise<RgbaImage> {
+async function tileEnhanceImage(
+  image: RgbaImage,
+  apiKey: string,
+  gridSize = 4,
+): Promise<RgbaImage> {
   const W = image.width;
   const H = image.height;
-  // 2x2 grid with ~12% overlap on inner edges for seamless blending
-  const overlapX = Math.round(W * 0.12);
-  const overlapY = Math.round(H * 0.12);
-  const halfW = Math.ceil(W / 2);
-  const halfH = Math.ceil(H / 2);
+  const N = gridSize;
+  // NxN grid with ~8% overlap on inner edges for seamless blending
+  const overlapX = Math.round((W / N) * 0.18);
+  const overlapY = Math.round((H / N) * 0.18);
 
-  const tilesSpec = [
-    { name: "kiri-atas",   gx: 0, gy: 0 },
-    { name: "kanan-atas",  gx: 1, gy: 0 },
-    { name: "kiri-bawah",  gx: 0, gy: 1 },
-    { name: "kanan-bawah", gx: 1, gy: 1 },
-  ];
+  // Compute base cell boundaries
+  const xEdges: number[] = [];
+  const yEdges: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    xEdges.push(Math.round((W * i) / N));
+    yEdges.push(Math.round((H * i) / N));
+  }
 
-  const cropped = tilesSpec.map((t) => {
-    const x0 = t.gx === 0 ? 0 : Math.max(0, halfW - overlapX);
-    const y0 = t.gy === 0 ? 0 : Math.max(0, halfH - overlapY);
-    const x1 = t.gx === 0 ? Math.min(W, halfW + overlapX) : W;
-    const y1 = t.gy === 0 ? Math.min(H, halfH + overlapY) : H;
-    return { ...t, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-  });
+  type TileSpec = {
+    gx: number;
+    gy: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    name: string;
+  };
 
-  // Enhance all 4 tiles in parallel
-  const enhanced = await Promise.all(
-    cropped.map((c) =>
-      enhanceTileWithAI(cropTile(image, c.x, c.y, c.w, c.h), apiKey, `kuadran ${c.name}`),
-    ),
-  );
+  const cropped: TileSpec[] = [];
+  for (let gy = 0; gy < N; gy++) {
+    for (let gx = 0; gx < N; gx++) {
+      const x0 = gx === 0 ? 0 : Math.max(0, xEdges[gx] - overlapX);
+      const y0 = gy === 0 ? 0 : Math.max(0, yEdges[gy] - overlapY);
+      const x1 = gx === N - 1 ? W : Math.min(W, xEdges[gx + 1] + overlapX);
+      const y1 = gy === N - 1 ? H : Math.min(H, yEdges[gy + 1] + overlapY);
+      cropped.push({
+        gx,
+        gy,
+        x: x0,
+        y: y0,
+        w: x1 - x0,
+        h: y1 - y0,
+        name: `r${gy + 1}c${gx + 1}`,
+      });
+    }
+  }
+
+  // Enhance tiles with limited concurrency to avoid AI gateway rate limits
+  const CONCURRENCY = 4;
+  const enhanced: (RgbaImage | null)[] = new Array(cropped.length).fill(null);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < cropped.length) {
+      const idx = cursor++;
+      const c = cropped[idx];
+      enhanced[idx] = await enhanceTileWithAI(
+        cropTile(image, c.x, c.y, c.w, c.h),
+        apiKey,
+        `tile ${c.name}`,
+      );
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
   // Stitch onto a fresh canvas (start from a sharpened copy as fallback)
   const canvas: RgbaImage = { width: W, height: H, data: new Uint8Array(image.data) };
@@ -401,10 +436,10 @@ async function tileEnhanceImage(image: RgbaImage, apiKey: string): Promise<RgbaI
     const tile = enhanced[i];
     if (!tile) continue;
     const c = cropped[i];
-    const featherLeft = c.gx === 1 ? overlapX : 0;
-    const featherTop = c.gy === 1 ? overlapY : 0;
-    const featherRight = c.gx === 0 ? overlapX : 0;
-    const featherBottom = c.gy === 0 ? overlapY : 0;
+    const featherLeft = c.gx > 0 ? overlapX : 0;
+    const featherTop = c.gy > 0 ? overlapY : 0;
+    const featherRight = c.gx < N - 1 ? overlapX : 0;
+    const featherBottom = c.gy < N - 1 ? overlapY : 0;
     pasteTileFeathered(canvas, tile, c.x, c.y, featherLeft, featherTop, featherRight, featherBottom);
   }
 
