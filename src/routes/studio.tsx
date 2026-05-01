@@ -280,7 +280,7 @@ function StudioPage() {
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merender + pertajam 16 tile seragam... (~20–60 detik)
+                Merender + AI sharpening 16 tile seragam... (~30–90 detik)
               </>
             ) : (
               <>
