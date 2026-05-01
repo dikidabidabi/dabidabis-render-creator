@@ -109,7 +109,12 @@ export const generateRender = createServerFn({ method: "POST" })
       data.seed !== null && data.seed !== undefined
         ? `\n\nGunakan variation seed #${data.seed} sebagai anchor deterministik — render yang sama dengan seed sama harus mempertahankan komposisi, framing kamera, sudut pencahayaan, dan keputusan kreatif yang konsisten. Seed berbeda boleh menghasilkan variasi.`
         : "";
-    const promptWithSeed = finalPrompt + seedSuffix;
+
+    const resolutionKey = data.resolution ?? "1k";
+    const resSpec = RESOLUTION_SPECS[resolutionKey];
+    const resolutionSuffix = `\n\nTARGET RESOLUSI: ${resSpec.label} pada sisi terpanjang. Hasilkan gambar setajam dan sedetail mungkin pada resolusi maksimal model. Jangan tampilkan watermark, logo, signature, tanda air, label "Gemini", "Google", "AI generated", atau marka apapun pada gambar. Output harus bersih sepenuhnya — hanya konten arsitektur.`;
+
+    const promptWithSeed = finalPrompt + seedSuffix + resolutionSuffix;
 
     const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
       { type: "text", text: promptWithSeed },
