@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, Dice5, Lock, Unlock } from "lucide-react";
+import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, Dice5, Lock, Unlock, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
@@ -28,6 +28,14 @@ const RENDER_TYPES = [
 
 type RenderType = (typeof RENDER_TYPES)[number]["id"];
 
+const RESOLUTIONS = [
+  { id: "1k", label: "1K", desc: "1024px · cepat" },
+  { id: "2k", label: "2K", desc: "2048px · tajam" },
+  { id: "4k", label: "4K", desc: "3840px · maksimal" },
+] as const;
+
+type Resolution = (typeof RESOLUTIONS)[number]["id"];
+
 function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -38,6 +46,7 @@ function StudioPage() {
   const [prompt, setPrompt] = useState("");
   const [renderType, setRenderType] = useState<RenderType>("exterior");
   const [accuracy, setAccuracy] = useState(8);
+  const [resolution, setResolution] = useState<Resolution>("1k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -70,11 +79,12 @@ function StudioPage() {
           accuracy,
           consistency,
           seed: useSeed,
+          resolution,
         },
       });
       if (res.ok) {
         setResult(res.resultUrl);
-        toast.success(`Render selesai! Seed: ${useSeed}`);
+        toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
       } else {
         toast.error(res.error || "Gagal render");
       }
@@ -175,6 +185,46 @@ function StudioPage() {
               onChange={setConsistency}
               disabled={!reference}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Maximize2 className="h-3.5 w-3.5 text-ember" />
+              Resolusi output
+            </Label>
+            <div className="grid grid-cols-3 gap-2">
+              {RESOLUTIONS.map((r) => {
+                const active = resolution === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setResolution(r.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 rounded-lg border p-2.5 transition-all",
+                      active
+                        ? "border-ember bg-ember/10 shadow-soft"
+                        : "border-border/60 bg-surface/40 hover:border-border",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "font-display text-base font-semibold",
+                        active ? "text-ember" : "text-foreground",
+                      )}
+                    >
+                      {r.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{r.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {resolution === "1k"
+                ? "Render standar — paling cepat."
+                : "Pass kedua untuk upscale & menghapus watermark Gemini (~+15 detik)."}
+            </p>
           </div>
 
           <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-3">
