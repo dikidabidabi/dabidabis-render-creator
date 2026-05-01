@@ -223,7 +223,7 @@ function StudioPage() {
             <p className="text-xs text-muted-foreground">
               {resolution === "1k"
               ? "Tahap 1 saja: render AI utuh (paling cepat, tanpa post-process)."
-              : "5 tahap: 1) render AI utuh → 2) upscale 2–5× → 3) pecah 16 tile → 4) AI pertajam tiap tile (bentuk konsisten) → 5) gabung mulus (~+45–90 detik)."}
+              : "5 tahap: 1) render AI utuh → 2) upscale 2–5× → 3) pecah 16 tile (overlap 1%) → 4) pertajam tiap tile dengan rumus IDENTIK (deterministik, anti-batas) → 5) gabung mulus dengan blending di overlap."}
             </p>
           </div>
 
