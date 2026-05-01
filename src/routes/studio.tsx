@@ -79,11 +79,12 @@ function StudioPage() {
           accuracy,
           consistency,
           seed: useSeed,
+          resolution,
         },
       });
       if (res.ok) {
         setResult(res.resultUrl);
-        toast.success(`Render selesai! Seed: ${useSeed}`);
+        toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
       } else {
         toast.error(res.error || "Gagal render");
       }
