@@ -312,15 +312,17 @@ async function enhanceTileWithAI(
   contextHint: string,
 ): Promise<RgbaImage | null> {
   const inputUrl = rgbaToJpegDataUrl(tile, 92);
-  const prompt = `Tugas: Tingkatkan ketajaman dan detail mikro pada gambar render arsitektur ini (ini adalah SATU KUADRAN dari gambar yang lebih besar — ${contextHint}).
+  const prompt = `Tugas: Tingkatkan KETAJAMAN dan DETAIL MIKRO pada gambar ini (ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar — ${contextHint}).
 
-ATURAN KETAT:
-- JANGAN ubah komposisi, framing, warna dominan, pencahayaan, sudut, atau elemen apapun.
-- JANGAN tambah/hilangkan objek. JANGAN crop. JANGAN re-style.
-- Output HARUS memiliki dimensi dan framing IDENTIK dengan input — hanya lebih tajam dan detail.
-- Tambahkan detail mikro realistis: tekstur material (urat kayu, pori beton, butiran batu, refleksi kaca, jahitan kain), tepi tajam, kontras lokal natural.
-- JANGAN tambahkan watermark, logo, teks, signature apapun.
-- Hasilkan gambar bersih sepenuhnya, kualitas fotografi profesional.`;
+ATURAN MUTLAK (WAJIB DIPATUHI):
+- DILARANG mengubah bentuk, garis, kontur, geometri, proporsi, atau siluet apapun.
+- DILARANG menambah, menghilangkan, menggeser, atau memodifikasi objek/elemen apapun (termasuk jendela, pintu, kolom, pohon, kendaraan, manusia, langit, bayangan).
+- DILARANG mengubah komposisi, framing, crop, warna dominan, palet, pencahayaan, atau sudut pandang.
+- DILARANG re-style, re-render ulang, atau re-interpretasi.
+- Output WAJIB beresolusi dan framing IDENTIK dengan input — anggap ini hanya filter penajam, bukan generasi ulang.
+- HANYA tambahkan: ketajaman tepi (edge sharpness), tekstur mikro material yang SUDAH ADA (urat kayu pada kayu, pori pada beton, butiran pada batu, refleksi halus pada kaca yang sudah ada), dan kontras lokal natural.
+- DILARANG menambahkan watermark, logo, teks, signature, tanda "AI", "Gemini", "Google", atau marka apapun.
+- Output harus 100% bersih, kualitas fotografi profesional, dan KONSISTEN dengan tile sebelahnya.`;
   try {
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
