@@ -98,6 +98,12 @@ export const generateRender = createServerFn({ method: "POST" })
       !!data.referenceBase64,
     );
 
+    const seedSuffix =
+      data.seed !== null && data.seed !== undefined
+        ? `\n\nGunakan variation seed #${data.seed} sebagai anchor deterministik — render yang sama dengan seed sama harus mempertahankan komposisi, framing kamera, sudut pencahayaan, dan keputusan kreatif yang konsisten. Seed berbeda boleh menghasilkan variasi.`
+        : "";
+    const promptWithSeed = finalPrompt + seedSuffix;
+
     const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
       { type: "text", text: finalPrompt },
       { type: "image_url", image_url: { url: data.sketchBase64 } },
