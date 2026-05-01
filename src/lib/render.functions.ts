@@ -181,6 +181,10 @@ function sharpenImage(image: RgbaImage, amount: number): RgbaImage {
   return { ...image, data: output };
 }
 
+function detailMicroOnly(image: RgbaImage): RgbaImage {
+  return sharpenImage(image, 0.78);
+}
+
 function touchupBottomRightLogo(image: RgbaImage): RgbaImage {
   const output = new Uint8Array(image.data);
   const marginX = Math.round(image.width * 0.012);
