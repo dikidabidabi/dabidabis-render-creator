@@ -25,7 +25,7 @@ import {
   motionLabels,
   fileExtFromMime,
   type MotionPreset,
-} from "@/lib/animate.client";
+} from "@/lib/animate-render";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
