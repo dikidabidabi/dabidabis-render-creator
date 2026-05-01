@@ -60,8 +60,8 @@ const METHODS = [
   },
   {
     id: "ai" as const,
-    label: "AI Cinematic",
-    desc: "Parallax + AI keyframe",
+    label: "AI Parallax 3D",
+    desc: "Foreground+background terpisah · sudut bangunan berubah",
     icon: Wand2,
   },
 ];
