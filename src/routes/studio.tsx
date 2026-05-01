@@ -28,6 +28,14 @@ const RENDER_TYPES = [
 
 type RenderType = (typeof RENDER_TYPES)[number]["id"];
 
+const RESOLUTIONS = [
+  { id: "1k", label: "1K", desc: "1024px · cepat" },
+  { id: "2k", label: "2K", desc: "2048px · tajam" },
+  { id: "4k", label: "4K", desc: "3840px · maksimal" },
+] as const;
+
+type Resolution = (typeof RESOLUTIONS)[number]["id"];
+
 function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
