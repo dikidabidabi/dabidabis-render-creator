@@ -187,6 +187,46 @@ function StudioPage() {
             />
           </div>
 
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Maximize2 className="h-3.5 w-3.5 text-ember" />
+              Resolusi output
+            </Label>
+            <div className="grid grid-cols-3 gap-2">
+              {RESOLUTIONS.map((r) => {
+                const active = resolution === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setResolution(r.id)}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 rounded-lg border p-2.5 transition-all",
+                      active
+                        ? "border-ember bg-ember/10 shadow-soft"
+                        : "border-border/60 bg-surface/40 hover:border-border",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "font-display text-base font-semibold",
+                        active ? "text-ember" : "text-foreground",
+                      )}
+                    >
+                      {r.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{r.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {resolution === "1k"
+                ? "Render standar — paling cepat."
+                : "Pass kedua untuk upscale & menghapus watermark Gemini (~+15 detik)."}
+            </p>
+          </div>
+
           <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-3">
             <div className="flex items-center justify-between">
               <Label htmlFor="seed" className="flex items-center gap-1.5 text-sm">
