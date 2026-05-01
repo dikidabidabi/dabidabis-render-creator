@@ -222,8 +222,8 @@ function StudioPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               {resolution === "1k"
-              ? "Render standar — paling cepat."
-              : "Upscale 2–5x + AI detail per 16 tile (4×4) + sharpening + touchup logo (~+45–90 detik)."}
+              ? "Tahap 1 saja: render AI utuh (paling cepat, tanpa post-process)."
+              : "5 tahap: 1) render AI utuh → 2) upscale 2–5× → 3) pecah 16 tile → 4) AI pertajam tiap tile (bentuk konsisten) → 5) gabung mulus (~+45–90 detik)."}
             </p>
           </div>
 
