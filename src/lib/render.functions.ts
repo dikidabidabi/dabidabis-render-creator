@@ -322,14 +322,11 @@ function dataUrlToRgba(dataUrl: string): RgbaImage | null {
   }
 }
 
-async function enhanceTileWithAI(
-  tile: RgbaImage,
-  apiKey: string,
-  contextHint: string,
-): Promise<RgbaImage | null> {
-  const inputUrl = rgbaToJpegDataUrl(tile, 92);
-  const prompt = `MODE: NON-GENERATIVE IMAGE FILTER ONLY.
-Tugas: pertajam gambar ini secara sangat ringan seperti filter kamera (unsharp mask + local contrast). Ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar — ${contextHint}.
+// PROMPT KONSTAN — identik untuk SEMUA 16 tile, tanpa variasi konteks per tile.
+// Ini menjamin AI menerapkan metode & intensitas sharpening yang sama persis
+// pada setiap tile sehingga tidak terlihat perbedaan kualitas antar bagian.
+const TILE_ENHANCE_PROMPT = `MODE: NON-GENERATIVE IMAGE FILTER ONLY.
+Tugas: pertajam gambar ini secara sangat ringan seperti filter kamera (unsharp mask + local contrast). Ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar.
 
 ATURAN MUTLAK (WAJIB DIPATUHI):
 - INPUT ADALAH MASTER SHAPE. Semua pixel harus tetap berada pada posisi visual yang sama.
