@@ -329,11 +329,14 @@ export const listMyRenders = createServerFn({ method: "GET" })
     const refreshed: RenderItem[] = await Promise.all(
       (data ?? []).map(async (r) => {
         if (!r.result_url) return r as RenderItem;
-        const path = `${userId}/${r.id}.png`;
-        const { data: s } = await supabase.storage
-          .from("renders")
-          .createSignedUrl(path, 60 * 60 * 24);
-        return { ...(r as RenderItem), result_url: s?.signedUrl ?? r.result_url };
+        // Try both extensions (newer 2K/4K renders are jpg, older are png)
+        for (const ext of ["jpg", "png"]) {
+          const { data: s } = await supabase.storage
+            .from("renders")
+            .createSignedUrl(`${userId}/${r.id}.${ext}`, 60 * 60 * 24);
+          if (s?.signedUrl) return { ...(r as RenderItem), result_url: s.signedUrl };
+        }
+        return r as RenderItem;
       }),
     );
 
