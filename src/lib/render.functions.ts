@@ -227,6 +227,190 @@ function upscaleAndSharpen(image: RgbaImage, resolutionKey: string): RgbaImage {
   return touchupBottomRightLogo(sharpened);
 }
 
+// --- Tile-based AI super-resolution helpers ---
+
+function cropTile(image: RgbaImage, x: number, y: number, w: number, h: number): RgbaImage {
+  const data = new Uint8Array(w * h * 4);
+  const srcStride = image.width * 4;
+  for (let row = 0; row < h; row++) {
+    const srcOffset = (y + row) * srcStride + x * 4;
+    const dstOffset = row * w * 4;
+    data.set(image.data.subarray(srcOffset, srcOffset + w * 4), dstOffset);
+  }
+  return { width: w, height: h, data };
+}
+
+function pasteTileFeathered(
+  canvas: RgbaImage,
+  tile: RgbaImage,
+  destX: number,
+  destY: number,
+  featherLeft: number,
+  featherTop: number,
+  featherRight: number,
+  featherBottom: number,
+) {
+  const cw = canvas.width;
+  const tw = tile.width;
+  const th = tile.height;
+  for (let y = 0; y < th; y++) {
+    let wy = 1;
+    if (featherTop > 0 && y < featherTop) wy = (y + 0.5) / featherTop;
+    if (featherBottom > 0 && y >= th - featherBottom) {
+      const d = (th - y - 0.5) / featherBottom;
+      wy = Math.min(wy, d);
+    }
+    for (let x = 0; x < tw; x++) {
+      let wx = 1;
+      if (featherLeft > 0 && x < featherLeft) wx = (x + 0.5) / featherLeft;
+      if (featherRight > 0 && x >= tw - featherRight) {
+        const d = (tw - x - 0.5) / featherRight;
+        wx = Math.min(wx, d);
+      }
+      let w = Math.max(0, Math.min(1, wx * wy));
+      // smoothstep
+      w = w * w * (3 - 2 * w);
+      if (w <= 0) continue;
+      const ti = (y * tw + x) * 4;
+      const ci = ((destY + y) * cw + (destX + x)) * 4;
+      const inv = 1 - w;
+      canvas.data[ci] = clampByte(canvas.data[ci] * inv + tile.data[ti] * w);
+      canvas.data[ci + 1] = clampByte(canvas.data[ci + 1] * inv + tile.data[ti + 1] * w);
+      canvas.data[ci + 2] = clampByte(canvas.data[ci + 2] * inv + tile.data[ti + 2] * w);
+      canvas.data[ci + 3] = 255;
+    }
+  }
+}
+
+function rgbaToJpegDataUrl(image: RgbaImage, quality = 90): string {
+  const encoded = jpeg.encode(
+    { width: image.width, height: image.height, data: image.data },
+    quality,
+  );
+  // Manual base64 encode (Worker-safe)
+  let binary = "";
+  const bytes = encoded.data;
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as number[]);
+  }
+  return `data:image/jpeg;base64,${btoa(binary)}`;
+}
+
+function dataUrlToRgba(dataUrl: string): RgbaImage | null {
+  const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!m) return null;
+  try {
+    const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+    return decodeImage(bytes, m[1]);
+  } catch {
+    return null;
+  }
+}
+
+async function enhanceTileWithAI(
+  tile: RgbaImage,
+  apiKey: string,
+  contextHint: string,
+): Promise<RgbaImage | null> {
+  const inputUrl = rgbaToJpegDataUrl(tile, 92);
+  const prompt = `Tugas: Tingkatkan ketajaman dan detail mikro pada gambar render arsitektur ini (ini adalah SATU KUADRAN dari gambar yang lebih besar — ${contextHint}).
+
+ATURAN KETAT:
+- JANGAN ubah komposisi, framing, warna dominan, pencahayaan, sudut, atau elemen apapun.
+- JANGAN tambah/hilangkan objek. JANGAN crop. JANGAN re-style.
+- Output HARUS memiliki dimensi dan framing IDENTIK dengan input — hanya lebih tajam dan detail.
+- Tambahkan detail mikro realistis: tekstur material (urat kayu, pori beton, butiran batu, refleksi kaca, jahitan kain), tepi tajam, kontras lokal natural.
+- JANGAN tambahkan watermark, logo, teks, signature apapun.
+- Hasilkan gambar bersih sepenuhnya, kualitas fotografi profesional.`;
+  try {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-3.1-flash-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: inputUrl } },
+            ],
+          },
+        ],
+        modalities: ["image", "text"],
+      }),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const url: string | undefined = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!url) return null;
+    const decoded = dataUrlToRgba(url);
+    if (!decoded) return null;
+    // Resize back to tile dims if AI returned different size
+    if (decoded.width !== tile.width || decoded.height !== tile.height) {
+      const scaleX = tile.width / decoded.width;
+      const scaleY = tile.height / decoded.height;
+      const scale = (scaleX + scaleY) / 2;
+      const resized = resizeBicubic(decoded, scale);
+      // pad/crop to exact tile size
+      if (resized.width === tile.width && resized.height === tile.height) return resized;
+      return cropTile(resized, 0, 0, Math.min(resized.width, tile.width), Math.min(resized.height, tile.height));
+    }
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+async function tileEnhanceImage(image: RgbaImage, apiKey: string): Promise<RgbaImage> {
+  const W = image.width;
+  const H = image.height;
+  // 2x2 grid with ~12% overlap on inner edges for seamless blending
+  const overlapX = Math.round(W * 0.12);
+  const overlapY = Math.round(H * 0.12);
+  const halfW = Math.ceil(W / 2);
+  const halfH = Math.ceil(H / 2);
+
+  const tilesSpec = [
+    { name: "kiri-atas",   gx: 0, gy: 0 },
+    { name: "kanan-atas",  gx: 1, gy: 0 },
+    { name: "kiri-bawah",  gx: 0, gy: 1 },
+    { name: "kanan-bawah", gx: 1, gy: 1 },
+  ];
+
+  const cropped = tilesSpec.map((t) => {
+    const x0 = t.gx === 0 ? 0 : Math.max(0, halfW - overlapX);
+    const y0 = t.gy === 0 ? 0 : Math.max(0, halfH - overlapY);
+    const x1 = t.gx === 0 ? Math.min(W, halfW + overlapX) : W;
+    const y1 = t.gy === 0 ? Math.min(H, halfH + overlapY) : H;
+    return { ...t, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  });
+
+  // Enhance all 4 tiles in parallel
+  const enhanced = await Promise.all(
+    cropped.map((c) =>
+      enhanceTileWithAI(cropTile(image, c.x, c.y, c.w, c.h), apiKey, `kuadran ${c.name}`),
+    ),
+  );
+
+  // Stitch onto a fresh canvas (start from a sharpened copy as fallback)
+  const canvas: RgbaImage = { width: W, height: H, data: new Uint8Array(image.data) };
+
+  for (let i = 0; i < cropped.length; i++) {
+    const tile = enhanced[i];
+    if (!tile) continue;
+    const c = cropped[i];
+    const featherLeft = c.gx === 1 ? overlapX : 0;
+    const featherTop = c.gy === 1 ? overlapY : 0;
+    const featherRight = c.gx === 0 ? overlapX : 0;
+    const featherBottom = c.gy === 0 ? overlapY : 0;
+    pasteTileFeathered(canvas, tile, c.x, c.y, featherLeft, featherTop, featherRight, featherBottom);
+  }
+
+  return canvas;
+}
+
 function buildSystemPrompt(
   renderType: string,
   accuracy: number,
