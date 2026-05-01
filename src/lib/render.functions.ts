@@ -608,7 +608,22 @@ ATURAN KETAT:
       // so we physically resize the cleaned image 2–5x toward the requested target,
       // then apply an unsharp-mask style detail pass and a final logo touchup.
       const decodedImage = decodeImage(bytes, mime);
-      const processedImage = upscaleAndSharpen(decodedImage, resolutionKey);
+      let processedImage = upscaleAndSharpen(decodedImage, resolutionKey);
+
+      // Pass 4 (2K/4K only): Tile-based AI super-resolution.
+      // Split the upscaled image into a 2x2 grid with overlap, ask Gemini to add
+      // micro-detail to each quadrant in parallel, then stitch with feathered blend.
+      if (resolutionKey !== "1k") {
+        try {
+          processedImage = await tileEnhanceImage(processedImage, LOVABLE_API_KEY);
+          // Final light sharpen + logo touchup after stitching
+          processedImage = touchupBottomRightLogo(
+            sharpenImage(processedImage, resolutionKey === "4k" ? 0.25 : 0.2),
+          );
+        } catch (tileErr) {
+          console.error("Tile enhance failed, using upscaled fallback:", tileErr);
+        }
+      }
 
       if (resolutionKey === "1k") {
         mime = "image/png";
