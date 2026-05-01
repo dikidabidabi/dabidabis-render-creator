@@ -646,11 +646,12 @@ ATURAN KETAT:
       let processedImage = upscaleAndSharpen(decodedImage, resolutionKey);
 
       // Pass 4 (2K/4K only): Tile-based AI super-resolution.
-      // Split the upscaled image into a 2x2 grid with overlap, ask Gemini to add
-      // micro-detail to each quadrant in parallel, then stitch with feathered blend.
+      // Split the upscaled image into a 4x4 grid (16 tiles) with overlap, ask Gemini
+      // to add micro-detail to each tile (limited concurrency), then stitch with
+      // feathered blend for seamless results.
       if (resolutionKey !== "1k") {
         try {
-          processedImage = await tileEnhanceImage(processedImage, LOVABLE_API_KEY);
+          processedImage = await tileEnhanceImage(processedImage, LOVABLE_API_KEY, 4);
           // Final light sharpen + logo touchup after stitching
           processedImage = touchupBottomRightLogo(
             sharpenImage(processedImage, resolutionKey === "4k" ? 0.25 : 0.2),
