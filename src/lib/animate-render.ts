@@ -1,5 +1,8 @@
 // Client-side image-to-video renderer using Canvas + MediaRecorder.
-// Supports Ken Burns (pan/zoom) and AI cinematic blend (start ↔ end frame).
+// Modes:
+//   - Ken Burns: single-image pan/zoom
+//   - Pseudo-3D Parallax: 2 layers (foreground + background) animated with
+//     different speeds & perspective skew → bangunan terasa berputar mengikuti kamera.
 
 export type MotionPreset =
   | "zoom-in"
@@ -13,12 +16,13 @@ export type MotionPreset =
 
 export type AnimateOptions = {
   startImage: HTMLImageElement;
-  endImage?: HTMLImageElement | null; // optional AI keyframe — blended over time
+  foregroundImage?: HTMLImageElement | null; // AI-isolated subject (transparent bg)
+  backgroundImage?: HTMLImageElement | null; // AI-inpainted background
   motion: MotionPreset;
   durationSec: number; // 3 / 5 / 8
-  resolution: "1080p" | "2k"; // long-edge target
+  resolution: "1080p" | "2k";
   fps?: number; // default 30
-  onProgress?: (p: number) => void; // 0..1
+  onProgress?: (p: number) => void;
 };
 
 export type AnimateResult = {
@@ -29,32 +33,79 @@ export type AnimateResult = {
   height: number;
 };
 
-// Smoothstep for natural ease-in-out
 const ease = (t: number) => t * t * (3 - 2 * t);
 
-function getTransform(motion: MotionPreset, t: number) {
-  // Returns { scale, tx, ty } where tx/ty are in -1..1 (normalized to canvas)
-  // scale: 1 = full fit, >1 = zoomed in
+// Per-layer transform: foreground moves more / has stronger perspective skew
+// than background → parallax depth + apparent angle change of buildings.
+type LayerTransform = {
+  scale: number;
+  tx: number; // -1..1 normalized
+  ty: number;
+  skewX: number; // radians, for pseudo-perspective
+  skewY: number;
+};
+
+function getLayerTransform(motion: MotionPreset, t: number, depth: "fg" | "bg" | "flat"): LayerTransform {
   const e = ease(t);
+  // Depth multipliers — fg moves more & skews more for parallax illusion.
+  const m = depth === "fg" ? 1.0 : depth === "bg" ? 0.45 : 0.75;
+  const skewMul = depth === "fg" ? 1.0 : depth === "bg" ? 0.2 : 0.5;
+
   switch (motion) {
     case "zoom-in":
-      return { scale: 1 + 0.25 * e, tx: 0, ty: 0 };
+      return {
+        scale: 1 + 0.28 * e * m,
+        tx: 0,
+        ty: 0,
+        skewX: 0,
+        skewY: 0,
+      };
     case "zoom-out":
-      return { scale: 1.25 - 0.25 * e, tx: 0, ty: 0 };
-    case "pan-lr":
-      return { scale: 1.15, tx: -0.12 + 0.24 * e, ty: 0 };
-    case "pan-rl":
-      return { scale: 1.15, tx: 0.12 - 0.24 * e, ty: 0 };
-    case "pan-tb":
-      return { scale: 1.15, tx: 0, ty: -0.1 + 0.2 * e };
-    case "pan-bt":
-      return { scale: 1.15, tx: 0, ty: 0.1 - 0.2 * e };
-    case "diagonal":
-      return { scale: 1.15 + 0.1 * e, tx: -0.1 + 0.2 * e, ty: 0.08 - 0.16 * e };
+      return {
+        scale: 1.28 - 0.28 * e * m,
+        tx: 0,
+        ty: 0,
+        skewX: 0,
+        skewY: 0,
+      };
+    case "pan-lr": {
+      const p = (-0.12 + 0.24 * e) * m;
+      return { scale: 1.15, tx: p, ty: 0, skewX: 0, skewY: -p * 0.18 * skewMul };
+    }
+    case "pan-rl": {
+      const p = (0.12 - 0.24 * e) * m;
+      return { scale: 1.15, tx: p, ty: 0, skewX: 0, skewY: -p * 0.18 * skewMul };
+    }
+    case "pan-tb": {
+      const p = (-0.1 + 0.2 * e) * m;
+      return { scale: 1.15, tx: 0, ty: p, skewX: -p * 0.18 * skewMul, skewY: 0 };
+    }
+    case "pan-bt": {
+      const p = (0.1 - 0.2 * e) * m;
+      return { scale: 1.15, tx: 0, ty: p, skewX: -p * 0.18 * skewMul, skewY: 0 };
+    }
+    case "diagonal": {
+      const px = (-0.1 + 0.2 * e) * m;
+      const py = (0.08 - 0.16 * e) * m;
+      return {
+        scale: 1.15 + 0.1 * e * m,
+        tx: px,
+        ty: py,
+        skewX: -py * 0.15 * skewMul,
+        skewY: -px * 0.15 * skewMul,
+      };
+    }
     case "orbit": {
-      // Subtle horizontal oscillation + slight zoom
-      const angle = e * Math.PI; // 0 → π
-      return { scale: 1.18, tx: 0.15 * Math.sin(angle), ty: 0.04 * Math.cos(angle) - 0.04 };
+      const angle = e * Math.PI;
+      const px = 0.18 * Math.sin(angle) * m;
+      const py = (0.05 * Math.cos(angle) - 0.05) * m;
+      return {
+        scale: 1.18,
+        tx: px,
+        ty: py,
+        skewX: 0,
+        skewY: -px * 0.22 * skewMul, // strong skew → orbit illusion
+      };
     }
   }
 }
@@ -80,9 +131,30 @@ export async function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = (e) => reject(new Error("Gagal memuat gambar"));
+    img.onerror = () => reject(new Error("Gagal memuat gambar"));
     img.src = src;
   });
+}
+
+function drawLayer(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  outW: number,
+  outH: number,
+  tr: LayerTransform,
+) {
+  const baseScale = Math.max(outW / img.naturalWidth, outH / img.naturalHeight);
+  const drawW = img.naturalWidth * baseScale * tr.scale;
+  const drawH = img.naturalHeight * baseScale * tr.scale;
+  const cx = outW / 2 + tr.tx * outW * 0.5;
+  const cy = outH / 2 + tr.ty * outH * 0.5;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  // Apply pseudo-perspective via skew (cheap parallax / angle illusion)
+  ctx.transform(1, tr.skewY, tr.skewX, 1, 0, 0);
+  ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  ctx.restore();
 }
 
 export async function renderAnimation(opts: AnimateOptions): Promise<AnimateResult> {
@@ -100,7 +172,6 @@ export async function renderAnimation(opts: AnimateOptions): Promise<AnimateResu
     outH = longEdge;
     outW = Math.round(longEdge * aspect);
   }
-  // ensure even dimensions (codec requirement)
   outW -= outW % 2;
   outH -= outH % 2;
 
@@ -112,9 +183,9 @@ export async function renderAnimation(opts: AnimateOptions): Promise<AnimateResu
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  const { mime, ext } = pickMimeType();
+  const { mime } = pickMimeType();
   const stream = canvas.captureStream(fps);
-  const bitsPerPixel = 0.18; // quality factor
+  const bitsPerPixel = 0.18;
   const bitrate = Math.min(24_000_000, Math.max(4_000_000, Math.round(outW * outH * fps * bitsPerPixel)));
 
   let recorder: MediaRecorder;
@@ -139,37 +210,34 @@ export async function renderAnimation(opts: AnimateOptions): Promise<AnimateResu
   const frameInterval = 1000 / fps;
   const startTime = performance.now();
 
+  const hasParallax = !!(opts.foregroundImage && opts.backgroundImage);
+
   const drawFrame = (frameIdx: number) => {
     const t = totalFrames <= 1 ? 1 : frameIdx / (totalFrames - 1);
-    const tr = getTransform(opts.motion, t);
 
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, outW, outH);
 
-    // Compute source rectangle (cover-fit on canvas, then transform)
-    const baseScale = Math.max(outW / img.naturalWidth, outH / img.naturalHeight);
-    const drawW = img.naturalWidth * baseScale * tr.scale;
-    const drawH = img.naturalHeight * baseScale * tr.scale;
-    const cx = outW / 2 + tr.tx * outW * 0.5;
-    const cy = outH / 2 + tr.ty * outH * 0.5;
-    const dx = cx - drawW / 2;
-    const dy = cy - drawH / 2;
-
-    ctx.globalAlpha = 1;
-    ctx.drawImage(img, dx, dy, drawW, drawH);
-
-    if (opts.endImage) {
-      // Cross-blend toward AI end keyframe so motion gains parallax-like depth
-      const blend = ease(t) * 0.85; // peak blend 85%
-      const e = opts.endImage;
-      const baseScaleE = Math.max(outW / e.naturalWidth, outH / e.naturalHeight);
-      const drawWE = e.naturalWidth * baseScaleE * tr.scale;
-      const drawHE = e.naturalHeight * baseScaleE * tr.scale;
-      const dxE = cx - drawWE / 2;
-      const dyE = cy - drawHE / 2;
-      ctx.globalAlpha = blend;
-      ctx.drawImage(e, dxE, dyE, drawWE, drawHE);
+    if (hasParallax) {
+      // Background layer — slow, minimal skew
+      const bgT = getLayerTransform(opts.motion, t, "bg");
       ctx.globalAlpha = 1;
+      drawLayer(ctx, opts.backgroundImage!, outW, outH, bgT);
+
+      // Original image as midground, blended at low opacity to fill any gaps
+      // (helps where AI inpaint is imperfect)
+      const midT = getLayerTransform(opts.motion, t, "flat");
+      ctx.globalAlpha = 0.35;
+      drawLayer(ctx, img, outW, outH, midT);
+
+      // Foreground layer — fast, strong skew → angle change illusion
+      const fgT = getLayerTransform(opts.motion, t, "fg");
+      ctx.globalAlpha = 1;
+      drawLayer(ctx, opts.foregroundImage!, outW, outH, fgT);
+    } else {
+      const tr = getLayerTransform(opts.motion, t, "flat");
+      ctx.globalAlpha = 1;
+      drawLayer(ctx, img, outW, outH, tr);
     }
   };
 
@@ -182,7 +250,6 @@ export async function renderAnimation(opts: AnimateOptions): Promise<AnimateResu
     else await new Promise((r) => requestAnimationFrame(() => r(null)));
   }
 
-  // Hold final frame briefly
   drawFrame(totalFrames - 1);
   await new Promise((r) => setTimeout(r, 120));
 

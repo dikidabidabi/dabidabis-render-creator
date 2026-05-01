@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
-import { generateCinematicKeyframe } from "@/lib/animate.functions";
+import { generateDepthLayers } from "@/lib/animate.functions";
 import {
   loadImage,
   renderAnimation,
@@ -60,8 +60,8 @@ const METHODS = [
   },
   {
     id: "ai" as const,
-    label: "AI Cinematic",
-    desc: "Parallax + AI keyframe",
+    label: "AI Parallax 3D",
+    desc: "Foreground+background terpisah · sudut bangunan berubah",
     icon: Wand2,
   },
 ];
@@ -69,7 +69,7 @@ const METHODS = [
 function AnimatePage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const aiKeyframeFn = useServerFn(generateCinematicKeyframe);
+  const depthLayersFn = useServerFn(generateDepthLayers);
 
   const [image, setImage] = useState<string | null>(null);
   const [method, setMethod] = useState<"kenburns" | "ai">("kenburns");
@@ -104,18 +104,23 @@ function AnimatePage() {
       setStage("Memuat gambar...");
       const startImg = await loadImage(image);
 
-      let endImg: HTMLImageElement | null = null;
+      let fgImg: HTMLImageElement | null = null;
+      let bgImg: HTMLImageElement | null = null;
       if (method === "ai") {
-        setStage("AI menyusun keyframe sinematik...");
-        const res = await aiKeyframeFn({ data: { imageBase64: image, motion } });
+        setStage("AI memisahkan foreground & background...");
+        const res = await depthLayersFn({ data: { imageBase64: image } });
         if (!res.ok) {
-          toast.warning(`AI keyframe gagal — fallback ke Ken Burns. (${res.error})`);
+          toast.warning(`AI parallax gagal — fallback ke Ken Burns. (${res.error})`);
         } else {
           try {
-            endImg = await loadImage(res.imageBase64);
+            const [fg, bg] = await Promise.all([
+              res.foregroundBase64 ? loadImage(res.foregroundBase64) : Promise.resolve(null),
+              res.backgroundBase64 ? loadImage(res.backgroundBase64) : Promise.resolve(null),
+            ]);
+            fgImg = fg;
+            bgImg = bg;
           } catch {
-            toast.warning("Gagal memuat AI keyframe — fallback ke Ken Burns.");
-            endImg = null;
+            toast.warning("Gagal memuat layer AI — fallback ke Ken Burns.");
           }
         }
       }
@@ -123,7 +128,8 @@ function AnimatePage() {
       setStage("Merender animasi...");
       const out = await renderAnimation({
         startImage: startImg,
-        endImage: endImg,
+        foregroundImage: fgImg,
+        backgroundImage: bgImg,
         motion,
         durationSec: duration,
         resolution,
