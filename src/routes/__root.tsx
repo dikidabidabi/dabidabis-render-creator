@@ -104,6 +104,13 @@ function Header() {
                 Studio
               </Link>
               <Link
+                to="/animate"
+                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
+                activeProps={{ className: "text-foreground font-medium" }}
+              >
+                Animasi
+              </Link>
+              <Link
                 to="/gallery"
                 className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
                 activeProps={{ className: "text-foreground font-medium" }}
