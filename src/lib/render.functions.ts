@@ -348,7 +348,9 @@ export const deleteRender = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await supabase.storage.from("renders").remove([`${userId}/${data.id}.png`]);
+    await supabase.storage
+      .from("renders")
+      .remove([`${userId}/${data.id}.png`, `${userId}/${data.id}.jpg`]);
     const { error } = await supabase.from("renders").delete().eq("id", data.id);
     return { ok: !error, error: error?.message ?? null };
   });
