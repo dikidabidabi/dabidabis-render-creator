@@ -216,15 +216,13 @@ function touchupBottomRightLogo(image: RgbaImage): RgbaImage {
   return { ...image, data: output };
 }
 
-function upscaleAndSharpen(image: RgbaImage, resolutionKey: string): RgbaImage {
-  if (resolutionKey === "1k") return sharpenImage(touchupBottomRightLogo(image), 0.2);
-
+// TAHAP 2: pixel upscale 2-5x bicubic (NO sharpening here — sharpening dilakukan AI per tile di Tahap 4)
+function upscaleOnly(image: RgbaImage, resolutionKey: string): RgbaImage {
+  if (resolutionKey === "1k") return image;
   const targetLongEdge = RESOLUTION_SPECS[resolutionKey]?.longEdge ?? RESOLUTION_SPECS["1k"].longEdge;
   const currentLongEdge = Math.max(image.width, image.height);
   const scale = Math.min(5, Math.max(2, targetLongEdge / currentLongEdge));
-  const upscaled = resizeBicubic(touchupBottomRightLogo(image), scale);
-  const sharpened = sharpenImage(upscaled, resolutionKey === "4k" ? 0.62 : 0.48);
-  return touchupBottomRightLogo(sharpened);
+  return resizeBicubic(image, scale);
 }
 
 // --- Tile-based AI super-resolution helpers ---
