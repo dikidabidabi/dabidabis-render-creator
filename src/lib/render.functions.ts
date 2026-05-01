@@ -338,6 +338,12 @@ ATURAN MUTLAK (WAJIB DIPATUHI):
 - HANYA BOLEH: menaikkan ketajaman tepi yang SUDAH ADA, kontras lokal halus, dan tekstur mikro pada material yang SUDAH ADA tanpa mengubah bentuk materialnya.
 - DILARANG menambahkan watermark, logo, teks, signature, tanda "AI", "Gemini", "Google", atau marka apapun.
 - Bila ragu, pertahankan pixel asli. Output harus terlihat seperti input yang sedikit lebih tajam, bukan versi baru.`;
+
+async function enhanceTileWithAI(
+  tile: RgbaImage,
+  apiKey: string,
+): Promise<RgbaImage | null> {
+  const inputUrl = rgbaToJpegDataUrl(tile, 92);
   try {
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
