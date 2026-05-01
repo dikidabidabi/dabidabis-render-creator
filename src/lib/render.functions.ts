@@ -345,11 +345,8 @@ async function tileEnhanceImage(
   const W = image.width;
   const H = image.height;
   const N = gridSize;
-  // NxN grid with ~8% overlap on inner edges for seamless blending
-  const overlapX = Math.round((W / N) * 0.18);
-  const overlapY = Math.round((H / N) * 0.18);
 
-  // Compute base cell boundaries
+  // Disjoint cell boundaries — NO overlap. Setiap pixel hanya milik 1 tile.
   const xEdges: number[] = [];
   const yEdges: number[] = [];
   for (let i = 0; i <= N; i++) {
@@ -370,10 +367,10 @@ async function tileEnhanceImage(
   const cropped: TileSpec[] = [];
   for (let gy = 0; gy < N; gy++) {
     for (let gx = 0; gx < N; gx++) {
-      const x0 = gx === 0 ? 0 : Math.max(0, xEdges[gx] - overlapX);
-      const y0 = gy === 0 ? 0 : Math.max(0, yEdges[gy] - overlapY);
-      const x1 = gx === N - 1 ? W : Math.min(W, xEdges[gx + 1] + overlapX);
-      const y1 = gy === N - 1 ? H : Math.min(H, yEdges[gy + 1] + overlapY);
+      const x0 = xEdges[gx];
+      const y0 = yEdges[gy];
+      const x1 = xEdges[gx + 1];
+      const y1 = yEdges[gy + 1];
       cropped.push({
         gx,
         gy,
@@ -403,18 +400,15 @@ async function tileEnhanceImage(
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
-  // Stitch onto a fresh canvas (start from a sharpened copy as fallback)
+  // Stitch: paste tiap tile pada posisi tepat tanpa blending (disjoint).
+  // Fallback ke pixel asli untuk tile yang gagal AI enhance.
   const canvas: RgbaImage = { width: W, height: H, data: new Uint8Array(image.data) };
 
   for (let i = 0; i < cropped.length; i++) {
     const tile = enhanced[i];
     if (!tile) continue;
     const c = cropped[i];
-    const featherLeft = c.gx > 0 ? overlapX : 0;
-    const featherTop = c.gy > 0 ? overlapY : 0;
-    const featherRight = c.gx < N - 1 ? overlapX : 0;
-    const featherBottom = c.gy < N - 1 ? overlapY : 0;
-    pasteTileFeathered(canvas, tile, c.x, c.y, featherLeft, featherTop, featherRight, featherBottom);
+    pasteTileExact(canvas, tile, c.x, c.y);
   }
 
   return canvas;
