@@ -20,6 +20,7 @@ const InputSchema = z.object({
   renderType: z.enum(["exterior", "interior", "night", "watercolor"]),
   accuracy: z.number().int().min(1).max(10),
   consistency: z.number().int().min(1).max(10),
+  seed: z.number().int().min(0).max(2147483647).nullable().optional(),
 });
 
 function buildSystemPrompt(
