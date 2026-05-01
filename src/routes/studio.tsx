@@ -51,6 +51,13 @@ function StudioPage() {
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    const useSeed = seedLocked
+      ? seed
+      : (() => {
+          const next = Math.floor(Math.random() * 1_000_000);
+          setSeed(next);
+          return next;
+        })();
     setGenerating(true);
     setResult(null);
     try {
@@ -62,11 +69,12 @@ function StudioPage() {
           renderType,
           accuracy,
           consistency,
+          seed: useSeed,
         },
       });
       if (res.ok) {
         setResult(res.resultUrl);
-        toast.success("Render selesai!");
+        toast.success(`Render selesai! Seed: ${useSeed}`);
       } else {
         toast.error(res.error || "Gagal render");
       }
