@@ -238,45 +238,19 @@ function cropTile(image: RgbaImage, x: number, y: number, w: number, h: number):
   return { width: w, height: h, data };
 }
 
-function pasteTileFeathered(
+function pasteTileExact(
   canvas: RgbaImage,
   tile: RgbaImage,
   destX: number,
   destY: number,
-  featherLeft: number,
-  featherTop: number,
-  featherRight: number,
-  featherBottom: number,
 ) {
   const cw = canvas.width;
   const tw = tile.width;
   const th = tile.height;
   for (let y = 0; y < th; y++) {
-    let wy = 1;
-    if (featherTop > 0 && y < featherTop) wy = (y + 0.5) / featherTop;
-    if (featherBottom > 0 && y >= th - featherBottom) {
-      const d = (th - y - 0.5) / featherBottom;
-      wy = Math.min(wy, d);
-    }
-    for (let x = 0; x < tw; x++) {
-      let wx = 1;
-      if (featherLeft > 0 && x < featherLeft) wx = (x + 0.5) / featherLeft;
-      if (featherRight > 0 && x >= tw - featherRight) {
-        const d = (tw - x - 0.5) / featherRight;
-        wx = Math.min(wx, d);
-      }
-      let w = Math.max(0, Math.min(1, wx * wy));
-      // smoothstep
-      w = w * w * (3 - 2 * w);
-      if (w <= 0) continue;
-      const ti = (y * tw + x) * 4;
-      const ci = ((destY + y) * cw + (destX + x)) * 4;
-      const inv = 1 - w;
-      canvas.data[ci] = clampByte(canvas.data[ci] * inv + tile.data[ti] * w);
-      canvas.data[ci + 1] = clampByte(canvas.data[ci + 1] * inv + tile.data[ti + 1] * w);
-      canvas.data[ci + 2] = clampByte(canvas.data[ci + 2] * inv + tile.data[ti + 2] * w);
-      canvas.data[ci + 3] = 255;
-    }
+    const ti = y * tw * 4;
+    const ci = ((destY + y) * cw + destX) * 4;
+    canvas.data.set(tile.data.subarray(ti, ti + tw * 4), ci);
   }
 }
 
