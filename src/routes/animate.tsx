@@ -69,7 +69,7 @@ const METHODS = [
 function AnimatePage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const aiKeyframeFn = useServerFn(generateCinematicKeyframe);
+  const depthLayersFn = useServerFn(generateDepthLayers);
 
   const [image, setImage] = useState<string | null>(null);
   const [method, setMethod] = useState<"kenburns" | "ai">("kenburns");
