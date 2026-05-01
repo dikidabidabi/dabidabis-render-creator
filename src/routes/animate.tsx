@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
-import { generateCinematicKeyframe } from "@/lib/animate.functions";
+import { generateDepthLayers } from "@/lib/animate.functions";
 import {
   loadImage,
   renderAnimation,
