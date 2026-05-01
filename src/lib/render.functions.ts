@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { decode as decodePng, encode as encodePng } from "fast-png";
+import * as jpeg from "jpeg-js";
 import { z } from "zod";
 
 const RENDER_TYPE_PROMPTS: Record<string, string> = {
@@ -29,6 +31,201 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
   "2k": { label: "2K (2048px)", longEdge: 2048 },
   "4k": { label: "4K (3840px)", longEdge: 3840 },
 };
+
+type RgbaImage = { width: number; height: number; data: Uint8Array };
+
+const clampByte = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+
+function decodeImage(bytes: Uint8Array, mime: string): RgbaImage {
+  if (mime.includes("jpeg") || mime.includes("jpg")) {
+    const decoded = jpeg.decode(bytes, {
+      useTArray: true,
+      formatAsRGBA: true,
+      tolerantDecoding: true,
+      maxResolutionInMP: 80,
+      maxMemoryUsageInMB: 512,
+    });
+    return { width: decoded.width, height: decoded.height, data: decoded.data };
+  }
+
+  const decoded = decodePng(bytes);
+  const source = decoded.data;
+  const channels = decoded.channels;
+  const rgba = new Uint8Array(decoded.width * decoded.height * 4);
+  const to8Bit = (value: number) => (decoded.depth === 16 ? Math.round(value / 257) : value);
+
+  for (let i = 0, p = 0; i < decoded.width * decoded.height; i++, p += 4) {
+    const s = i * channels;
+    if (channels === 1) {
+      const gray = to8Bit(source[s]);
+      rgba[p] = gray;
+      rgba[p + 1] = gray;
+      rgba[p + 2] = gray;
+      rgba[p + 3] = 255;
+    } else if (channels === 2) {
+      const gray = to8Bit(source[s]);
+      rgba[p] = gray;
+      rgba[p + 1] = gray;
+      rgba[p + 2] = gray;
+      rgba[p + 3] = to8Bit(source[s + 1]);
+    } else {
+      rgba[p] = to8Bit(source[s]);
+      rgba[p + 1] = to8Bit(source[s + 1]);
+      rgba[p + 2] = to8Bit(source[s + 2]);
+      rgba[p + 3] = channels === 4 ? to8Bit(source[s + 3]) : 255;
+    }
+  }
+
+  return { width: decoded.width, height: decoded.height, data: rgba };
+}
+
+function cubicWeight(distance: number) {
+  const a = -0.5;
+  const x = Math.abs(distance);
+  if (x <= 1) return (a + 2) * x ** 3 - (a + 3) * x ** 2 + 1;
+  if (x < 2) return a * x ** 3 - 5 * a * x ** 2 + 8 * a * x - 4 * a;
+  return 0;
+}
+
+function buildAxisMap(sourceSize: number, targetSize: number) {
+  const indices = new Int32Array(targetSize * 4);
+  const weights = new Float32Array(targetSize * 4);
+  const scale = sourceSize / targetSize;
+
+  for (let target = 0; target < targetSize; target++) {
+    const source = (target + 0.5) * scale - 0.5;
+    const base = Math.floor(source);
+    let total = 0;
+
+    for (let tap = 0; tap < 4; tap++) {
+      const sourceIndex = base + tap - 1;
+      const mapIndex = target * 4 + tap;
+      indices[mapIndex] = Math.max(0, Math.min(sourceSize - 1, sourceIndex));
+      const weight = cubicWeight(source - sourceIndex);
+      weights[mapIndex] = weight;
+      total += weight;
+    }
+
+    if (total !== 0) {
+      for (let tap = 0; tap < 4; tap++) weights[target * 4 + tap] /= total;
+    }
+  }
+
+  return { indices, weights };
+}
+
+function resizeBicubic(image: RgbaImage, scale: number): RgbaImage {
+  const targetWidth = Math.max(1, Math.round(image.width * scale));
+  const targetHeight = Math.max(1, Math.round(image.height * scale));
+  const xMap = buildAxisMap(image.width, targetWidth);
+  const yMap = buildAxisMap(image.height, targetHeight);
+  const output = new Uint8Array(targetWidth * targetHeight * 4);
+
+  for (let y = 0; y < targetHeight; y++) {
+    const yMapOffset = y * 4;
+    for (let x = 0; x < targetWidth; x++) {
+      const xMapOffset = x * 4;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+
+      for (let yy = 0; yy < 4; yy++) {
+        const sourceY = yMap.indices[yMapOffset + yy];
+        const wy = yMap.weights[yMapOffset + yy];
+        const row = sourceY * image.width * 4;
+        for (let xx = 0; xx < 4; xx++) {
+          const sourceX = xMap.indices[xMapOffset + xx];
+          const weight = wy * xMap.weights[xMapOffset + xx];
+          const sourceIndex = row + sourceX * 4;
+          r += image.data[sourceIndex] * weight;
+          g += image.data[sourceIndex + 1] * weight;
+          b += image.data[sourceIndex + 2] * weight;
+          a += image.data[sourceIndex + 3] * weight;
+        }
+      }
+
+      const targetIndex = (y * targetWidth + x) * 4;
+      output[targetIndex] = clampByte(r);
+      output[targetIndex + 1] = clampByte(g);
+      output[targetIndex + 2] = clampByte(b);
+      output[targetIndex + 3] = clampByte(a);
+    }
+  }
+
+  return { width: targetWidth, height: targetHeight, data: output };
+}
+
+function sharpenImage(image: RgbaImage, amount: number): RgbaImage {
+  const output = new Uint8Array(image.data);
+  const stride = image.width * 4;
+
+  for (let y = 1; y < image.height - 1; y++) {
+    for (let x = 1; x < image.width - 1; x++) {
+      const i = y * stride + x * 4;
+      for (let c = 0; c < 3; c++) {
+        const center = image.data[i + c];
+        const neighborAverage =
+          (image.data[i - 4 + c] +
+            image.data[i + 4 + c] +
+            image.data[i - stride + c] +
+            image.data[i + stride + c]) /
+          4;
+        output[i + c] = clampByte(center + (center - neighborAverage) * amount);
+      }
+    }
+  }
+
+  return { ...image, data: output };
+}
+
+function touchupBottomRightLogo(image: RgbaImage): RgbaImage {
+  const output = new Uint8Array(image.data);
+  const marginX = Math.round(image.width * 0.012);
+  const marginY = Math.round(image.height * 0.016);
+  const regionWidth = Math.max(80, Math.round(image.width * 0.2));
+  const regionHeight = Math.max(36, Math.round(image.height * 0.11));
+  const x0 = Math.max(0, image.width - regionWidth - marginX);
+  const y0 = Math.max(0, image.height - regionHeight - marginY);
+  const x1 = Math.max(x0 + 1, image.width - marginX);
+  const y1 = Math.max(y0 + 1, image.height - marginY);
+  const feather = Math.max(8, Math.round(Math.min(regionWidth, regionHeight) * 0.22));
+
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const edgeDistance = Math.min(x - x0, x1 - 1 - x, y - y0, y1 - 1 - y);
+      const blend = Math.max(0, Math.min(1, edgeDistance / feather));
+      const smoothBlend = blend * blend * (3 - 2 * blend);
+      if (smoothBlend <= 0) continue;
+
+      const sxA = Math.max(0, Math.min(image.width - 1, Math.round(x - regionWidth * 0.86)));
+      const syA = Math.max(0, Math.min(image.height - 1, Math.round(y - regionHeight * 0.12)));
+      const sxB = Math.max(0, Math.min(image.width - 1, Math.round(x - regionWidth * 0.18)));
+      const syB = Math.max(0, Math.min(image.height - 1, Math.round(y - regionHeight * 1.08)));
+      const target = (y * image.width + x) * 4;
+      const sampleA = (syA * image.width + sxA) * 4;
+      const sampleB = (syB * image.width + sxB) * 4;
+
+      for (let c = 0; c < 3; c++) {
+        const patch = image.data[sampleA + c] * 0.65 + image.data[sampleB + c] * 0.35;
+        output[target + c] = clampByte(image.data[target + c] * (1 - smoothBlend) + patch * smoothBlend);
+      }
+    }
+  }
+
+  return { ...image, data: output };
+}
+
+function upscaleAndSharpen(image: RgbaImage, resolutionKey: string): RgbaImage {
+  if (resolutionKey === "1k") return sharpenImage(touchupBottomRightLogo(image), 0.2);
+
+  const targetLongEdge = RESOLUTION_SPECS[resolutionKey]?.longEdge ?? RESOLUTION_SPECS["1k"].longEdge;
+  const currentLongEdge = Math.max(image.width, image.height);
+  const scale = Math.min(5, Math.max(2, targetLongEdge / currentLongEdge));
+  const upscaled = resizeBicubic(touchupBottomRightLogo(image), scale);
+  const sharpened = sharpenImage(upscaled, resolutionKey === "4k" ? 0.62 : 0.48);
+  return touchupBottomRightLogo(sharpened);
+}
 
 function buildSystemPrompt(
   renderType: string,
