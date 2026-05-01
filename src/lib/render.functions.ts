@@ -429,20 +429,22 @@ ATURAN KETAT:
       if (resolutionKey === "1k") {
         mime = "image/png";
         ext = "png";
-        bytes = encodePng({
+        bytes = new Uint8Array(encodePng({
           width: processedImage.width,
           height: processedImage.height,
           data: processedImage.data,
           channels: 4,
           depth: 8,
-        });
+        }));
       } else {
         mime = "image/jpeg";
         ext = "jpg";
-        bytes = jpeg.encode(
-          { width: processedImage.width, height: processedImage.height, data: processedImage.data },
-          resolutionKey === "4k" ? 94 : 92,
-        ).data;
+        bytes = new Uint8Array(
+          jpeg.encode(
+            { width: processedImage.width, height: processedImage.height, data: processedImage.data },
+            resolutionKey === "4k" ? 94 : 92,
+          ).data,
+        );
       }
 
       const path = `${userId}/${row.id}.${ext}`;
