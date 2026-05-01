@@ -216,15 +216,13 @@ function touchupBottomRightLogo(image: RgbaImage): RgbaImage {
   return { ...image, data: output };
 }
 
-function upscaleAndSharpen(image: RgbaImage, resolutionKey: string): RgbaImage {
-  if (resolutionKey === "1k") return sharpenImage(touchupBottomRightLogo(image), 0.2);
-
+// TAHAP 2: pixel upscale 2-5x bicubic (NO sharpening here — sharpening dilakukan AI per tile di Tahap 4)
+function upscaleOnly(image: RgbaImage, resolutionKey: string): RgbaImage {
+  if (resolutionKey === "1k") return image;
   const targetLongEdge = RESOLUTION_SPECS[resolutionKey]?.longEdge ?? RESOLUTION_SPECS["1k"].longEdge;
   const currentLongEdge = Math.max(image.width, image.height);
   const scale = Math.min(5, Math.max(2, targetLongEdge / currentLongEdge));
-  const upscaled = resizeBicubic(touchupBottomRightLogo(image), scale);
-  const sharpened = sharpenImage(upscaled, resolutionKey === "4k" ? 0.62 : 0.48);
-  return touchupBottomRightLogo(sharpened);
+  return resizeBicubic(image, scale);
 }
 
 // --- Tile-based AI super-resolution helpers ---
@@ -314,15 +312,17 @@ async function enhanceTileWithAI(
   contextHint: string,
 ): Promise<RgbaImage | null> {
   const inputUrl = rgbaToJpegDataUrl(tile, 92);
-  const prompt = `Tugas: Tingkatkan ketajaman dan detail mikro pada gambar render arsitektur ini (ini adalah SATU KUADRAN dari gambar yang lebih besar — ${contextHint}).
+  const prompt = `Tugas: Tingkatkan KETAJAMAN dan DETAIL MIKRO pada gambar ini (ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar — ${contextHint}).
 
-ATURAN KETAT:
-- JANGAN ubah komposisi, framing, warna dominan, pencahayaan, sudut, atau elemen apapun.
-- JANGAN tambah/hilangkan objek. JANGAN crop. JANGAN re-style.
-- Output HARUS memiliki dimensi dan framing IDENTIK dengan input — hanya lebih tajam dan detail.
-- Tambahkan detail mikro realistis: tekstur material (urat kayu, pori beton, butiran batu, refleksi kaca, jahitan kain), tepi tajam, kontras lokal natural.
-- JANGAN tambahkan watermark, logo, teks, signature apapun.
-- Hasilkan gambar bersih sepenuhnya, kualitas fotografi profesional.`;
+ATURAN MUTLAK (WAJIB DIPATUHI):
+- DILARANG mengubah bentuk, garis, kontur, geometri, proporsi, atau siluet apapun.
+- DILARANG menambah, menghilangkan, menggeser, atau memodifikasi objek/elemen apapun (termasuk jendela, pintu, kolom, pohon, kendaraan, manusia, langit, bayangan).
+- DILARANG mengubah komposisi, framing, crop, warna dominan, palet, pencahayaan, atau sudut pandang.
+- DILARANG re-style, re-render ulang, atau re-interpretasi.
+- Output WAJIB beresolusi dan framing IDENTIK dengan input — anggap ini hanya filter penajam, bukan generasi ulang.
+- HANYA tambahkan: ketajaman tepi (edge sharpness), tekstur mikro material yang SUDAH ADA (urat kayu pada kayu, pori pada beton, butiran pada batu, refleksi halus pada kaca yang sudah ada), dan kontras lokal natural.
+- DILARANG menambahkan watermark, logo, teks, signature, tanda "AI", "Gemini", "Google", atau marka apapun.
+- Output harus 100% bersih, kualitas fotografi profesional, dan KONSISTEN dengan tile sebelahnya.`;
   try {
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -582,51 +582,15 @@ export const generateRender = createServerFn({ method: "POST" })
         return { ok: false as const, error: "AI tidak menghasilkan gambar." };
       }
 
-      // Pass 2: ALWAYS run a cleanup pass to remove Gemini/Google watermark.
-      // The watermark from gemini-3.1-flash-image-preview is consistently in the
-      // bottom-right corner — we instruct the model to inpaint that region only.
-      let cleanedDataUrl = imageDataUrl;
-      try {
-        const cleanupPrompt = `TUGAS UTAMA: Hapus total watermark / logo "Gemini" / logo "Google" / tanda "AI" yang berada di pojok kanan bawah gambar ini. Gantikan area watermark dengan kelanjutan visual yang natural dari konten arsitektural di sekitarnya (inpainting) — sehingga tidak terlihat ada watermark sama sekali.
+      // ============================================================
+      // TAHAP 1 SELESAI: gambar utuh sudah dihasilkan oleh AI di atas.
+      // Kita TIDAK menjalankan cleanup-pass yang minta AI me-redraw seluruh
+      // gambar (itu yang dulu sering mengubah komposisi & memunculkan elemen
+      // aneh). Watermark sudah ditekan via instruksi prompt awal.
+      // ============================================================
 
-ATURAN KETAT:
-- JANGAN ubah komposisi, framing, warna, mood, pencahayaan, sudut kamera, atau elemen arsitektural manapun.
-- JANGAN tambah objek baru, JANGAN crop, JANGAN re-style.
-- HASIL HARUS identik dengan gambar input KECUALI watermark sudah hilang sempurna.
-- Output 100% bersih: tanpa logo, tanpa teks, tanpa signature, tanpa watermark apapun.
-- Pertahankan kualitas, ketajaman, dan resolusi maksimal.`;
-        const cleanResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-3.1-flash-image-preview",
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: cleanupPrompt },
-                  { type: "image_url", image_url: { url: imageDataUrl } },
-                ],
-              },
-            ],
-            modalities: ["image", "text"],
-          }),
-        });
-        if (cleanResp.ok) {
-          const cleanJson = await cleanResp.json();
-          const cleanUrl: string | undefined =
-            cleanJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-          if (cleanUrl) cleanedDataUrl = cleanUrl;
-        }
-      } catch {
-        // fallback: keep original
-      }
-
-      // Decode the (cleaned) image into raw bytes
-      const match = cleanedDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+      // Decode hasil Tahap 1 menjadi pixel mentah
+      const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!match) {
         await supabase
           .from("renders")
@@ -638,24 +602,23 @@ ATURAN KETAT:
       let ext = mime.split("/")[1] ?? "png";
       let bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
 
-      // Pass 3: real internal pixel upscale + sharpening.
-      // Gemini's image endpoint often returns ~1K pixels even when prompted for 2K/4K,
-      // so we physically resize the cleaned image 2–5x toward the requested target,
-      // then apply an unsharp-mask style detail pass and a final logo touchup.
       const decodedImage = decodeImage(bytes, mime);
-      let processedImage = upscaleAndSharpen(decodedImage, resolutionKey);
 
-      // Pass 4 (2K/4K only): Tile-based AI super-resolution.
-      // Split the upscaled image into a 4x4 grid (16 tiles) with overlap, ask Gemini
-      // to add micro-detail to each tile (limited concurrency), then stitch with
-      // feathered blend for seamless results.
+      // ============================================================
+      // TAHAP 2: Upscale piksel 2-5x ke target 2K/4K (bicubic, tanpa sharpen).
+      // Untuk 1K: lewati upscale, gunakan gambar asli apa adanya.
+      // ============================================================
+      let processedImage = upscaleOnly(decodedImage, resolutionKey);
+
+      // ============================================================
+      // TAHAP 3 + 4 + 5: Pecah jadi 4x4 = 16 tile, perdetail tiap tile via AI
+      // dengan instruksi KETAT (tidak boleh ubah bentuk/komposisi/warna),
+      // lalu satukan kembali dengan feathered blend (Tahap 5).
+      // Hanya untuk 2K/4K — di 1K tidak perlu karena gambar masih asli AI.
+      // ============================================================
       if (resolutionKey !== "1k") {
         try {
           processedImage = await tileEnhanceImage(processedImage, LOVABLE_API_KEY, 4);
-          // Final light sharpen + logo touchup after stitching
-          processedImage = touchupBottomRightLogo(
-            sharpenImage(processedImage, resolutionKey === "4k" ? 0.25 : 0.2),
-          );
         } catch (tileErr) {
           console.error("Tile enhance failed, using upscaled fallback:", tileErr);
         }
