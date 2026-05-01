@@ -32,6 +32,8 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
   "4k": { label: "4K (3840px)", longEdge: 3840 },
 };
 
+const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+
 type RgbaImage = { width: number; height: number; data: Uint8Array };
 
 const clampByte = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
