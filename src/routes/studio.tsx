@@ -223,7 +223,7 @@ function StudioPage() {
             <p className="text-xs text-muted-foreground">
               {resolution === "1k"
               ? "Tahap 1 saja: render AI utuh (paling cepat, tanpa post-process)."
-              : "5 tahap: 1) render AI utuh → 2) upscale 2–5× → 3) pecah 16 tile → 4) AI pertajam tiap tile (bentuk konsisten) → 5) gabung mulus (~+45–90 detik)."}
+              : "5 tahap: 1) render AI utuh → 2) upscale 2–5× → 3) pecah 16 tile (overlap 1%) → 4) pertajam tiap tile dengan rumus IDENTIK (deterministik, anti-batas) → 5) gabung mulus dengan blending di overlap."}
             </p>
           </div>
 
@@ -280,7 +280,7 @@ function StudioPage() {
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merender + AI detail 16 tile... (~30–120 detik)
+                Merender + pertajam 16 tile seragam... (~20–60 detik)
               </>
             ) : (
               <>

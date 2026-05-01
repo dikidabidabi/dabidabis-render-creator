@@ -381,16 +381,80 @@ ATURAN MUTLAK (WAJIB DIPATUHI):
   }
 }
 
+// Enhancement deterministik IDENTIK untuk semua tile — parameter konstan,
+// tidak melibatkan AI per tile, sehingga setiap tile diproses dengan rumus
+// yang sama persis. Ini menghilangkan perbedaan kualitas antar tile.
+function uniformTileEnhance(tile: RgbaImage): RgbaImage {
+  // Unsharp mask amount tetap (sama untuk semua tile, semua resolusi).
+  return sharpenImage(tile, 0.55);
+}
+
+// Paste tile dengan feathered blending HANYA di area overlap (1% dari sisi tile).
+// Area inti tile (di luar overlap) di-set langsung tanpa blending.
+function pasteTileFeathered(
+  canvas: RgbaImage,
+  tile: RgbaImage,
+  destX: number,
+  destY: number,
+  featherLeft: number,
+  featherTop: number,
+  featherRight: number,
+  featherBottom: number,
+) {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  const tw = tile.width;
+  const th = tile.height;
+  for (let y = 0; y < th; y++) {
+    const cy = destY + y;
+    if (cy < 0 || cy >= ch) continue;
+    // Weight vertikal berdasarkan jarak ke tepi feathered.
+    let wy = 1;
+    if (featherTop > 0 && y < featherTop) wy = (y + 0.5) / featherTop;
+    else if (featherBottom > 0 && y >= th - featherBottom)
+      wy = (th - y - 0.5) / featherBottom;
+    wy = Math.max(0, Math.min(1, wy));
+    const wySmooth = wy * wy * (3 - 2 * wy);
+
+    for (let x = 0; x < tw; x++) {
+      const cx = destX + x;
+      if (cx < 0 || cx >= cw) continue;
+      let wx = 1;
+      if (featherLeft > 0 && x < featherLeft) wx = (x + 0.5) / featherLeft;
+      else if (featherRight > 0 && x >= tw - featherRight)
+        wx = (tw - x - 0.5) / featherRight;
+      wx = Math.max(0, Math.min(1, wx));
+      const wxSmooth = wx * wx * (3 - 2 * wx);
+
+      const w = wxSmooth * wySmooth;
+      const ti = (y * tw + x) * 4;
+      const ci = (cy * cw + cx) * 4;
+      if (w >= 0.999) {
+        canvas.data[ci] = tile.data[ti];
+        canvas.data[ci + 1] = tile.data[ti + 1];
+        canvas.data[ci + 2] = tile.data[ti + 2];
+        canvas.data[ci + 3] = tile.data[ti + 3];
+      } else {
+        const inv = 1 - w;
+        canvas.data[ci] = clampByte(canvas.data[ci] * inv + tile.data[ti] * w);
+        canvas.data[ci + 1] = clampByte(canvas.data[ci + 1] * inv + tile.data[ti + 1] * w);
+        canvas.data[ci + 2] = clampByte(canvas.data[ci + 2] * inv + tile.data[ti + 2] * w);
+        canvas.data[ci + 3] = clampByte(canvas.data[ci + 3] * inv + tile.data[ti + 3] * w);
+      }
+    }
+  }
+}
+
 async function tileEnhanceImage(
   image: RgbaImage,
-  apiKey: string,
+  _apiKey: string,
   gridSize = 4,
 ): Promise<RgbaImage> {
   const W = image.width;
   const H = image.height;
   const N = gridSize;
 
-  // Disjoint cell boundaries — NO overlap. Setiap pixel hanya milik 1 tile.
+  // Boundary cell disjoint (4x4).
   const xEdges: number[] = [];
   const yEdges: number[] = [];
   for (let i = 0; i <= N; i++) {
@@ -398,65 +462,78 @@ async function tileEnhanceImage(
     yEdges.push(Math.round((H * i) / N));
   }
 
+  // Overlap 1% dari sisi terpanjang gambar (dibagi rata ke kedua sisi tile).
+  const overlap = Math.max(2, Math.round(Math.max(W, H) * 0.01));
+
   type TileSpec = {
     gx: number;
     gy: number;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
+    // Crop region (dengan overlap di sisi internal).
+    cropX: number;
+    cropY: number;
+    cropW: number;
+    cropH: number;
+    // Posisi paste pada canvas (= cropX/cropY).
+    // Feather di sisi yang ada tetangganya saja (bukan di tepi gambar).
+    featherLeft: number;
+    featherTop: number;
+    featherRight: number;
+    featherBottom: number;
     name: string;
   };
 
-  const cropped: TileSpec[] = [];
+  const specs: TileSpec[] = [];
   for (let gy = 0; gy < N; gy++) {
     for (let gx = 0; gx < N; gx++) {
       const x0 = xEdges[gx];
       const y0 = yEdges[gy];
       const x1 = xEdges[gx + 1];
       const y1 = yEdges[gy + 1];
-      cropped.push({
+      const hasLeft = gx > 0;
+      const hasTop = gy > 0;
+      const hasRight = gx < N - 1;
+      const hasBottom = gy < N - 1;
+      const cropX = hasLeft ? x0 - overlap : x0;
+      const cropY = hasTop ? y0 - overlap : y0;
+      const cropX1 = hasRight ? x1 + overlap : x1;
+      const cropY1 = hasBottom ? y1 + overlap : y1;
+      specs.push({
         gx,
         gy,
-        x: x0,
-        y: y0,
-        w: x1 - x0,
-        h: y1 - y0,
+        cropX: Math.max(0, cropX),
+        cropY: Math.max(0, cropY),
+        cropW: Math.min(W, cropX1) - Math.max(0, cropX),
+        cropH: Math.min(H, cropY1) - Math.max(0, cropY),
+        featherLeft: hasLeft ? overlap : 0,
+        featherTop: hasTop ? overlap : 0,
+        featherRight: hasRight ? overlap : 0,
+        featherBottom: hasBottom ? overlap : 0,
         name: `r${gy + 1}c${gx + 1}`,
       });
     }
   }
 
-  // Enhance tiles with limited concurrency to avoid AI gateway rate limits
-  const CONCURRENCY = 4;
-  const enhanced: (RgbaImage | null)[] = new Array(cropped.length).fill(null);
-  const useGenerativeTileEnhance = true;
-  let cursor = 0;
-  async function worker() {
-    while (cursor < cropped.length) {
-      const idx = cursor++;
-      const c = cropped[idx];
-      const tile = cropTile(image, c.x, c.y, c.w, c.h);
-      if (!useGenerativeTileEnhance) {
-        enhanced[idx] = detailMicroOnly(tile);
-        continue;
-      }
+  // Proses SEMUA tile dengan fungsi yang IDENTIK — output identik per tile,
+  // tidak ada perbedaan kualitas/metode antar tile. Tanpa AI per-tile.
+  const enhanced: RgbaImage[] = specs.map((s) => {
+    const tile = cropTile(image, s.cropX, s.cropY, s.cropW, s.cropH);
+    return uniformTileEnhance(tile);
+  });
 
-      const aiTile = await enhanceTileWithAI(tile, apiKey, `tile ${c.name}`);
-      enhanced[idx] = aiTile && preservesTileStructure(tile, aiTile) ? aiTile : detailMicroOnly(tile);
-    }
-  }
-  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
-
-  // Stitch: paste tiap tile pada posisi tepat tanpa blending (disjoint).
-  // Fallback ke pixel asli untuk tile yang gagal AI enhance.
+  // Stitch dengan feathered blending hanya di area overlap 1%.
   const canvas: RgbaImage = { width: W, height: H, data: new Uint8Array(image.data) };
-
-  for (let i = 0; i < cropped.length; i++) {
-    const tile = enhanced[i];
-    if (!tile) continue;
-    const c = cropped[i];
-    pasteTileExact(canvas, tile, c.x, c.y);
+  for (let i = 0; i < specs.length; i++) {
+    const s = specs[i];
+    pasteTileFeathered(
+      canvas,
+      enhanced[i],
+      s.cropX,
+      s.cropY,
+      s.featherLeft,
+      s.featherTop,
+      s.featherRight,
+      s.featherBottom,
+    );
   }
 
   return canvas;
