@@ -516,12 +516,19 @@ async function tileEnhanceImage(
     }
   }
 
-  // Proses SEMUA tile dengan fungsi yang IDENTIK — output identik per tile,
-  // tidak ada perbedaan kualitas/metode antar tile. Tanpa AI per-tile.
-  const enhanced: RgbaImage[] = specs.map((s) => {
-    const tile = cropTile(image, s.cropX, s.cropY, s.cropW, s.cropH);
-    return uniformTileEnhance(tile);
-  });
+  // TAHAP 4: Setiap tile dipertajam dengan AI menggunakan PROMPT IDENTIK,
+  // MODEL IDENTIK, dan PARAMETER IDENTIK (tanpa konteks unik per tile) — sehingga
+  // metode & kualitas enhancement antar tile konsisten. Bila AI gagal/menyimpang
+  // dari struktur asli, fallback ke filter sharpen deterministik yang juga
+  // identik untuk semua tile. Tidak ada variasi parameter antar tile.
+  const enhanced: RgbaImage[] = await Promise.all(
+    specs.map(async (s) => {
+      const tile = cropTile(image, s.cropX, s.cropY, s.cropW, s.cropH);
+      const aiTile = await enhanceTileWithAI(tile, _apiKey);
+      if (aiTile && preservesTileStructure(tile, aiTile)) return aiTile;
+      return uniformTileEnhance(tile);
+    }),
+  );
 
   // Stitch dengan feathered blending hanya di area overlap 1%.
   const canvas: RgbaImage = { width: W, height: H, data: new Uint8Array(image.data) };
