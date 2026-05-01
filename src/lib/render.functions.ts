@@ -105,7 +105,7 @@ export const generateRender = createServerFn({ method: "POST" })
     const promptWithSeed = finalPrompt + seedSuffix;
 
     const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      { type: "text", text: finalPrompt },
+      { type: "text", text: promptWithSeed },
       { type: "image_url", image_url: { url: data.sketchBase64 } },
     ];
     if (data.referenceBase64) {
