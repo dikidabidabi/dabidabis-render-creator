@@ -177,6 +177,50 @@ function StudioPage() {
             />
           </div>
 
+          <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="seed" className="flex items-center gap-1.5 text-sm">
+                {seedLocked ? (
+                  <Lock className="h-3.5 w-3.5 text-ember" />
+                ) : (
+                  <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                Seed variasi
+              </Label>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground">
+                  {seedLocked ? "Terkunci" : "Acak setiap render"}
+                </span>
+                <Switch checked={seedLocked} onCheckedChange={setSeedLocked} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="seed"
+                type="number"
+                min={0}
+                max={2147483647}
+                value={seed}
+                onChange={(e) => setSeed(Math.max(0, parseInt(e.target.value || "0", 10) || 0))}
+                disabled={!seedLocked}
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setSeed(Math.floor(Math.random() * 1_000_000))}
+                title="Acak seed"
+              >
+                <Dice5 className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Kunci seed untuk variasi konsisten — ubah prompt/slider dengan seed yang sama untuk
+              tweak halus pada komposisi yang sama.
+            </p>
+          </div>
+
           <Button
             onClick={handleGenerate}
             disabled={generating || !sketch || !prompt.trim()}
