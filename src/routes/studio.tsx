@@ -193,7 +193,7 @@ function StudioPage() {
               <Maximize2 className="h-3.5 w-3.5 text-ember" />
               Resolusi output
             </Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {RESOLUTIONS.map((r) => {
                 const active = resolution === r.id;
                 return (
