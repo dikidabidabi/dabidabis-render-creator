@@ -430,16 +430,20 @@ async function tileEnhanceImage(
   // Enhance tiles with limited concurrency to avoid AI gateway rate limits
   const CONCURRENCY = 4;
   const enhanced: (RgbaImage | null)[] = new Array(cropped.length).fill(null);
-  const useGenerativeTileEnhance = false;
+  const useGenerativeTileEnhance = true;
   let cursor = 0;
   async function worker() {
     while (cursor < cropped.length) {
       const idx = cursor++;
       const c = cropped[idx];
       const tile = cropTile(image, c.x, c.y, c.w, c.h);
-      enhanced[idx] = useGenerativeTileEnhance
-        ? await enhanceTileWithAI(tile, apiKey, `tile ${c.name}`)
-        : detailMicroOnly(tile);
+      if (!useGenerativeTileEnhance) {
+        enhanced[idx] = detailMicroOnly(tile);
+        continue;
+      }
+
+      const aiTile = await enhanceTileWithAI(tile, apiKey, `tile ${c.name}`);
+      enhanced[idx] = aiTile && preservesTileStructure(tile, aiTile) ? aiTile : detailMicroOnly(tile);
     }
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
