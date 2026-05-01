@@ -166,8 +166,44 @@ export const generateRender = createServerFn({ method: "POST" })
         return { ok: false as const, error: "AI tidak menghasilkan gambar." };
       }
 
+      // Pass 2: Upscale & cleanup watermark for 2K/4K
+      let finalImageDataUrl = imageDataUrl;
+      if (resolutionKey === "2k" || resolutionKey === "4k") {
+        try {
+          const upscalePrompt = `Upscale gambar ini ke resolusi ${resSpec.label} dengan ketajaman maksimal. Tingkatkan detail micro: tekstur material (beton, kayu, kaca, batu, tanaman), refleksi, kontras pencahayaan, dan kejelasan garis arsitektural. Pertahankan komposisi, warna, framing, dan mood persis seperti aslinya — hanya tingkatkan resolusi & ketajaman. WAJIB hapus seluruh watermark, logo "Gemini", logo "Google", tanda "AI", signature, atau marka apapun jika ada. Output harus benar-benar bersih tanpa logo atau teks apapun pada gambar.`;
+          const upResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-3.1-flash-image-preview",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: upscalePrompt },
+                    { type: "image_url", image_url: { url: imageDataUrl } },
+                  ],
+                },
+              ],
+              modalities: ["image", "text"],
+            }),
+          });
+          if (upResp.ok) {
+            const upJson = await upResp.json();
+            const upUrl: string | undefined =
+              upJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+            if (upUrl) finalImageDataUrl = upUrl;
+          }
+        } catch {
+          // fallback: keep original render
+        }
+      }
+
       // Decode and upload to storage
-      const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+      const match = finalImageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!match) {
         await supabase
           .from("renders")
