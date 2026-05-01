@@ -23,13 +23,14 @@ const InputSchema = z.object({
   accuracy: z.number().int().min(1).max(10),
   consistency: z.number().int().min(1).max(10),
   seed: z.number().int().min(0).max(2147483647).nullable().optional(),
-  resolution: z.enum(["1k", "2k", "4k"]).default("1k").optional(),
+  resolution: z.enum(["1k", "2k", "4k", "6k"]).default("1k").optional(),
 });
 
 const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
   "1k": { label: "1K (1024px)", longEdge: 1024 },
   "2k": { label: "2K (2048px)", longEdge: 2048 },
   "4k": { label: "4K (3840px)", longEdge: 3840 },
+  "6k": { label: "6K (6144px)", longEdge: 6144 },
 };
 
 const IMAGE_MODEL = "google/gemini-2.5-flash-image";
@@ -743,7 +744,7 @@ export const generateRender = createServerFn({ method: "POST" })
         bytes = new Uint8Array(
           jpeg.encode(
             { width: processedImage.width, height: processedImage.height, data: processedImage.data },
-            resolutionKey === "4k" ? 94 : 92,
+            resolutionKey === "6k" ? 95 : resolutionKey === "4k" ? 94 : 92,
           ).data,
         );
       }
