@@ -223,7 +223,7 @@ function StudioPage() {
             <p className="text-xs text-muted-foreground">
               {resolution === "1k"
                 ? "Render standar — paling cepat."
-                : "Pass kedua untuk upscale & menghapus watermark Gemini (~+15 detik)."}
+                : "Upscale internal 2–5x, penajaman detail, dan touchup area logo (~+15 detik)."}
             </p>
           </div>
 
@@ -280,7 +280,7 @@ function StudioPage() {
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merender... (~20–40 detik)
+                Merender & upscale... (~20–60 detik)
               </>
             ) : (
               <>
