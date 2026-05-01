@@ -744,7 +744,7 @@ export const generateRender = createServerFn({ method: "POST" })
         bytes = new Uint8Array(
           jpeg.encode(
             { width: processedImage.width, height: processedImage.height, data: processedImage.data },
-            resolutionKey === "4k" ? 94 : 92,
+            resolutionKey === "6k" ? 95 : resolutionKey === "4k" ? 94 : 92,
           ).data,
         );
       }
