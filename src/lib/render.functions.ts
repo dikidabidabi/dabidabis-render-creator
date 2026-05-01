@@ -32,6 +32,8 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
   "4k": { label: "4K (3840px)", longEdge: 3840 },
 };
 
+const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+
 type RgbaImage = { width: number; height: number; data: Uint8Array };
 
 const clampByte = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
@@ -179,6 +181,46 @@ function sharpenImage(image: RgbaImage, amount: number): RgbaImage {
   return { ...image, data: output };
 }
 
+function detailMicroOnly(image: RgbaImage): RgbaImage {
+  return sharpenImage(image, 0.78);
+}
+
+function lumaAt(image: RgbaImage, x: number, y: number) {
+  const i = (y * image.width + x) * 4;
+  return image.data[i] * 0.299 + image.data[i + 1] * 0.587 + image.data[i + 2] * 0.114;
+}
+
+function preservesTileStructure(source: RgbaImage, candidate: RgbaImage) {
+  if (source.width !== candidate.width || source.height !== candidate.height) return false;
+
+  let samples = 0;
+  let strongColorShift = 0;
+  let newEdgesInFlatArea = 0;
+  const step = Math.max(1, Math.floor(Math.min(source.width, source.height) / 220));
+
+  for (let y = 1; y < source.height - 1; y += step) {
+    for (let x = 1; x < source.width - 1; x += step) {
+      samples++;
+      const i = (y * source.width + x) * 4;
+      const colorDiff =
+        Math.abs(source.data[i] - candidate.data[i]) +
+        Math.abs(source.data[i + 1] - candidate.data[i + 1]) +
+        Math.abs(source.data[i + 2] - candidate.data[i + 2]);
+      if (colorDiff > 92) strongColorShift++;
+
+      const sourceEdge =
+        Math.abs(lumaAt(source, x + 1, y) - lumaAt(source, x - 1, y)) +
+        Math.abs(lumaAt(source, x, y + 1) - lumaAt(source, x, y - 1));
+      const candidateEdge =
+        Math.abs(lumaAt(candidate, x + 1, y) - lumaAt(candidate, x - 1, y)) +
+        Math.abs(lumaAt(candidate, x, y + 1) - lumaAt(candidate, x, y - 1));
+      if (sourceEdge < 18 && candidateEdge > 58) newEdgesInFlatArea++;
+    }
+  }
+
+  return strongColorShift / samples < 0.045 && newEdgesInFlatArea / samples < 0.018;
+}
+
 function touchupBottomRightLogo(image: RgbaImage): RgbaImage {
   const output = new Uint8Array(image.data);
   const marginX = Math.round(image.width * 0.012);
@@ -286,23 +328,25 @@ async function enhanceTileWithAI(
   contextHint: string,
 ): Promise<RgbaImage | null> {
   const inputUrl = rgbaToJpegDataUrl(tile, 92);
-  const prompt = `Tugas: Tingkatkan KETAJAMAN dan DETAIL MIKRO pada gambar ini (ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar — ${contextHint}).
+  const prompt = `MODE: NON-GENERATIVE IMAGE FILTER ONLY.
+Tugas: pertajam gambar ini secara sangat ringan seperti filter kamera (unsharp mask + local contrast). Ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar — ${contextHint}.
 
 ATURAN MUTLAK (WAJIB DIPATUHI):
-- DILARANG mengubah bentuk, garis, kontur, geometri, proporsi, atau siluet apapun.
-- DILARANG menambah, menghilangkan, menggeser, atau memodifikasi objek/elemen apapun (termasuk jendela, pintu, kolom, pohon, kendaraan, manusia, langit, bayangan).
-- DILARANG mengubah komposisi, framing, crop, warna dominan, palet, pencahayaan, atau sudut pandang.
-- DILARANG re-style, re-render ulang, atau re-interpretasi.
-- Output WAJIB beresolusi dan framing IDENTIK dengan input — anggap ini hanya filter penajam, bukan generasi ulang.
-- HANYA tambahkan: ketajaman tepi (edge sharpness), tekstur mikro material yang SUDAH ADA (urat kayu pada kayu, pori pada beton, butiran pada batu, refleksi halus pada kaca yang sudah ada), dan kontras lokal natural.
+- INPUT ADALAH MASTER SHAPE. Semua pixel harus tetap berada pada posisi visual yang sama.
+- DILARANG TOTAL menambah bentuk, objek, ornamen, furniture, tanaman, manusia, kendaraan, jendela, pintu, garis, teks, logo, watermark, bayangan baru, pantulan baru, atau elemen baru sekecil apapun.
+- DILARANG menghapus, mengganti, menggeser, memperbesar, mengecilkan, meluruskan, membengkokkan, atau menyambung bentuk/objek yang sudah ada.
+- DILARANG mengubah kontur, siluet, geometri, proporsi, perspektif, komposisi, framing, crop, warna dominan, palet, pencahayaan, material, dan sudut pandang.
+- DILARANG re-style, re-render ulang, inpaint, outpaint, hallucinate, atau interpretasi kreatif.
+- Output WAJIB beresolusi dan framing IDENTIK dengan input — anggap ini hanya proses sharpening, bukan pembuatan gambar baru.
+- HANYA BOLEH: menaikkan ketajaman tepi yang SUDAH ADA, kontras lokal halus, dan tekstur mikro pada material yang SUDAH ADA tanpa mengubah bentuk materialnya.
 - DILARANG menambahkan watermark, logo, teks, signature, tanda "AI", "Gemini", "Google", atau marka apapun.
-- Output harus 100% bersih, kualitas fotografi profesional, dan KONSISTEN dengan tile sebelahnya.`;
+- Bila ragu, pertahankan pixel asli. Output harus terlihat seperti input yang sedikit lebih tajam, bukan versi baru.`;
   try {
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3.1-flash-image-preview",
+        model: IMAGE_MODEL,
         messages: [
           {
             role: "user",
@@ -386,16 +430,20 @@ async function tileEnhanceImage(
   // Enhance tiles with limited concurrency to avoid AI gateway rate limits
   const CONCURRENCY = 4;
   const enhanced: (RgbaImage | null)[] = new Array(cropped.length).fill(null);
+  const useGenerativeTileEnhance = true;
   let cursor = 0;
   async function worker() {
     while (cursor < cropped.length) {
       const idx = cursor++;
       const c = cropped[idx];
-      enhanced[idx] = await enhanceTileWithAI(
-        cropTile(image, c.x, c.y, c.w, c.h),
-        apiKey,
-        `tile ${c.name}`,
-      );
+      const tile = cropTile(image, c.x, c.y, c.w, c.h);
+      if (!useGenerativeTileEnhance) {
+        enhanced[idx] = detailMicroOnly(tile);
+        continue;
+      }
+
+      const aiTile = await enhanceTileWithAI(tile, apiKey, `tile ${c.name}`);
+      enhanced[idx] = aiTile && preservesTileStructure(tile, aiTile) ? aiTile : detailMicroOnly(tile);
     }
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
@@ -520,7 +568,7 @@ export const generateRender = createServerFn({ method: "POST" })
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3.1-flash-image-preview",
+          model: IMAGE_MODEL,
           messages: [{ role: "user", content: userContent }],
           modalities: ["image", "text"],
         }),
@@ -581,7 +629,7 @@ export const generateRender = createServerFn({ method: "POST" })
       // ============================================================
       // TAHAP 3 + 4 + 5: Pecah jadi 4x4 = 16 tile, perdetail tiap tile via AI
       // dengan instruksi KETAT (tidak boleh ubah bentuk/komposisi/warna),
-      // lalu satukan kembali dengan feathered blend (Tahap 5).
+      // lalu satukan kembali dengan paste presisi tanpa overlap (Tahap 5).
       // Hanya untuk 2K/4K — di 1K tidak perlu karena gambar masih asli AI.
       // ============================================================
       if (resolutionKey !== "1k") {
