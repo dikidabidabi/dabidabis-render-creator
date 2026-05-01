@@ -292,23 +292,25 @@ async function enhanceTileWithAI(
   contextHint: string,
 ): Promise<RgbaImage | null> {
   const inputUrl = rgbaToJpegDataUrl(tile, 92);
-  const prompt = `Tugas: Tingkatkan KETAJAMAN dan DETAIL MIKRO pada gambar ini (ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar — ${contextHint}).
+  const prompt = `MODE: NON-GENERATIVE IMAGE FILTER ONLY.
+Tugas: pertajam gambar ini secara sangat ringan seperti filter kamera (unsharp mask + local contrast). Ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar — ${contextHint}.
 
 ATURAN MUTLAK (WAJIB DIPATUHI):
-- DILARANG mengubah bentuk, garis, kontur, geometri, proporsi, atau siluet apapun.
-- DILARANG menambah, menghilangkan, menggeser, atau memodifikasi objek/elemen apapun (termasuk jendela, pintu, kolom, pohon, kendaraan, manusia, langit, bayangan).
-- DILARANG mengubah komposisi, framing, crop, warna dominan, palet, pencahayaan, atau sudut pandang.
-- DILARANG re-style, re-render ulang, atau re-interpretasi.
-- Output WAJIB beresolusi dan framing IDENTIK dengan input — anggap ini hanya filter penajam, bukan generasi ulang.
-- HANYA tambahkan: ketajaman tepi (edge sharpness), tekstur mikro material yang SUDAH ADA (urat kayu pada kayu, pori pada beton, butiran pada batu, refleksi halus pada kaca yang sudah ada), dan kontras lokal natural.
+- INPUT ADALAH MASTER SHAPE. Semua pixel harus tetap berada pada posisi visual yang sama.
+- DILARANG TOTAL menambah bentuk, objek, ornamen, furniture, tanaman, manusia, kendaraan, jendela, pintu, garis, teks, logo, watermark, bayangan baru, pantulan baru, atau elemen baru sekecil apapun.
+- DILARANG menghapus, mengganti, menggeser, memperbesar, mengecilkan, meluruskan, membengkokkan, atau menyambung bentuk/objek yang sudah ada.
+- DILARANG mengubah kontur, siluet, geometri, proporsi, perspektif, komposisi, framing, crop, warna dominan, palet, pencahayaan, material, dan sudut pandang.
+- DILARANG re-style, re-render ulang, inpaint, outpaint, hallucinate, atau interpretasi kreatif.
+- Output WAJIB beresolusi dan framing IDENTIK dengan input — anggap ini hanya proses sharpening, bukan pembuatan gambar baru.
+- HANYA BOLEH: menaikkan ketajaman tepi yang SUDAH ADA, kontras lokal halus, dan tekstur mikro pada material yang SUDAH ADA tanpa mengubah bentuk materialnya.
 - DILARANG menambahkan watermark, logo, teks, signature, tanda "AI", "Gemini", "Google", atau marka apapun.
-- Output harus 100% bersih, kualitas fotografi profesional, dan KONSISTEN dengan tile sebelahnya.`;
+- Bila ragu, pertahankan pixel asli. Output harus terlihat seperti input yang sedikit lebih tajam, bukan versi baru.`;
   try {
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3.1-flash-image-preview",
+        model: IMAGE_MODEL,
         messages: [
           {
             role: "user",
