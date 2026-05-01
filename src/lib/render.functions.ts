@@ -185,6 +185,42 @@ function detailMicroOnly(image: RgbaImage): RgbaImage {
   return sharpenImage(image, 0.78);
 }
 
+function lumaAt(image: RgbaImage, x: number, y: number) {
+  const i = (y * image.width + x) * 4;
+  return image.data[i] * 0.299 + image.data[i + 1] * 0.587 + image.data[i + 2] * 0.114;
+}
+
+function preservesTileStructure(source: RgbaImage, candidate: RgbaImage) {
+  if (source.width !== candidate.width || source.height !== candidate.height) return false;
+
+  let samples = 0;
+  let strongColorShift = 0;
+  let newEdgesInFlatArea = 0;
+  const step = Math.max(1, Math.floor(Math.min(source.width, source.height) / 220));
+
+  for (let y = 1; y < source.height - 1; y += step) {
+    for (let x = 1; x < source.width - 1; x += step) {
+      samples++;
+      const i = (y * source.width + x) * 4;
+      const colorDiff =
+        Math.abs(source.data[i] - candidate.data[i]) +
+        Math.abs(source.data[i + 1] - candidate.data[i + 1]) +
+        Math.abs(source.data[i + 2] - candidate.data[i + 2]);
+      if (colorDiff > 92) strongColorShift++;
+
+      const sourceEdge =
+        Math.abs(lumaAt(source, x + 1, y) - lumaAt(source, x - 1, y)) +
+        Math.abs(lumaAt(source, x, y + 1) - lumaAt(source, x, y - 1));
+      const candidateEdge =
+        Math.abs(lumaAt(candidate, x + 1, y) - lumaAt(candidate, x - 1, y)) +
+        Math.abs(lumaAt(candidate, x, y + 1) - lumaAt(candidate, x, y - 1));
+      if (sourceEdge < 18 && candidateEdge > 58) newEdgesInFlatArea++;
+    }
+  }
+
+  return strongColorShift / samples < 0.045 && newEdgesInFlatArea / samples < 0.018;
+}
+
 function touchupBottomRightLogo(image: RgbaImage): RgbaImage {
   const output = new Uint8Array(image.data);
   const marginX = Math.round(image.width * 0.012);
