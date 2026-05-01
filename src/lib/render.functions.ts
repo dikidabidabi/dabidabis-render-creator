@@ -20,6 +20,7 @@ const InputSchema = z.object({
   renderType: z.enum(["exterior", "interior", "night", "watercolor"]),
   accuracy: z.number().int().min(1).max(10),
   consistency: z.number().int().min(1).max(10),
+  seed: z.number().int().min(0).max(2147483647).nullable().optional(),
 });
 
 function buildSystemPrompt(
@@ -97,8 +98,14 @@ export const generateRender = createServerFn({ method: "POST" })
       !!data.referenceBase64,
     );
 
+    const seedSuffix =
+      data.seed !== null && data.seed !== undefined
+        ? `\n\nGunakan variation seed #${data.seed} sebagai anchor deterministik — render yang sama dengan seed sama harus mempertahankan komposisi, framing kamera, sudut pencahayaan, dan keputusan kreatif yang konsisten. Seed berbeda boleh menghasilkan variasi.`
+        : "";
+    const promptWithSeed = finalPrompt + seedSuffix;
+
     const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      { type: "text", text: finalPrompt },
+      { type: "text", text: promptWithSeed },
       { type: "image_url", image_url: { url: data.sketchBase64 } },
     ];
     if (data.referenceBase64) {

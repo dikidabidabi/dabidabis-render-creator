@@ -1,11 +1,13 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
+import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, Dice5, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
 import { generateRender } from "@/lib/render.functions";
@@ -39,6 +41,8 @@ function StudioPage() {
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
+  const [seedLocked, setSeedLocked] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -47,6 +51,13 @@ function StudioPage() {
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    const useSeed = seedLocked
+      ? seed
+      : (() => {
+          const next = Math.floor(Math.random() * 1_000_000);
+          setSeed(next);
+          return next;
+        })();
     setGenerating(true);
     setResult(null);
     try {
@@ -58,11 +69,12 @@ function StudioPage() {
           renderType,
           accuracy,
           consistency,
+          seed: useSeed,
         },
       });
       if (res.ok) {
         setResult(res.resultUrl);
-        toast.success("Render selesai!");
+        toast.success(`Render selesai! Seed: ${useSeed}`);
       } else {
         toast.error(res.error || "Gagal render");
       }
@@ -163,6 +175,50 @@ function StudioPage() {
               onChange={setConsistency}
               disabled={!reference}
             />
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="seed" className="flex items-center gap-1.5 text-sm">
+                {seedLocked ? (
+                  <Lock className="h-3.5 w-3.5 text-ember" />
+                ) : (
+                  <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                Seed variasi
+              </Label>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground">
+                  {seedLocked ? "Terkunci" : "Acak setiap render"}
+                </span>
+                <Switch checked={seedLocked} onCheckedChange={setSeedLocked} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="seed"
+                type="number"
+                min={0}
+                max={2147483647}
+                value={seed}
+                onChange={(e) => setSeed(Math.max(0, parseInt(e.target.value || "0", 10) || 0))}
+                disabled={!seedLocked}
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setSeed(Math.floor(Math.random() * 1_000_000))}
+                title="Acak seed"
+              >
+                <Dice5 className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Kunci seed untuk variasi konsisten — ubah prompt/slider dengan seed yang sama untuk
+              tweak halus pada komposisi yang sama.
+            </p>
           </div>
 
           <Button
