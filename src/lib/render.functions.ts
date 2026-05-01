@@ -419,75 +419,30 @@ ATURAN KETAT:
       let ext = mime.split("/")[1] ?? "png";
       let bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
 
-      // Pass 3: AI super-resolution via Gemini itself.
-      // The Cloudflare Worker runtime blocks dynamic WASM compilation, so
-      // jSquash/sharp/canvas are all unavailable. Instead we use Gemini as
-      // its own upscaler: re-feed the cleaned image with an explicit
-      // "increase pixel detail / sharpen / add micro-texture" prompt.
-      // 2K = 1 enhance pass, 4K = 2 progressive enhance passes.
-      const enhancePasses = resolutionKey === "4k" ? 2 : resolutionKey === "2k" ? 1 : 0;
-      let currentDataUrl = cleanedDataUrl;
+      // Pass 3: real internal pixel upscale + sharpening.
+      // Gemini's image endpoint often returns ~1K pixels even when prompted for 2K/4K,
+      // so we physically resize the cleaned image 2–5x toward the requested target,
+      // then apply an unsharp-mask style detail pass and a final logo touchup.
+      const decodedImage = decodeImage(bytes, mime);
+      const processedImage = upscaleAndSharpen(decodedImage, resolutionKey);
 
-      for (let i = 0; i < enhancePasses; i++) {
-        const targetLabel = resSpec.label;
-        const passLabel = enhancePasses > 1 ? ` (pass ${i + 1}/${enhancePasses})` : "";
-        const enhancePrompt = `TUGAS: Tingkatkan resolusi efektif dan ketajaman gambar arsitektur ini ke kualitas ${targetLabel}${passLabel}.
-
-YANG HARUS DILAKUKAN:
-- Tambahkan detail mikro yang realistis pada material: serat kayu, pori beton, refleksi pada kaca, tekstur batu, daun vegetasi, butir aspal, jahitan logam.
-- Pertajam tepi arsitektural — garis kusen, mullion, profil kolom, sambungan panel — sehingga terlihat crisp pada layar besar.
-- Naikkan local contrast dan micro-contrast secara natural (seperti hasil kamera medium-format).
-- Bersihkan noise/blur halus, recover detail di area gelap dan highlight tanpa over-expose.
-- Pertahankan depth of field, bokeh, dan atmospheric haze yang sudah ada.
-
-ATURAN KETAT:
-- JANGAN ubah komposisi, framing, sudut kamera, proporsi bangunan, palet warna, atau mood pencahayaan.
-- JANGAN tambah/hilangkan bukaan, kolom, vegetasi, atau elemen arsitektural.
-- JANGAN tambahkan watermark, logo, teks, signature, atau marka apapun. Output harus 100% bersih.
-- Hasil harus terlihat seperti versi resolusi-tinggi dari gambar yang sama, bukan render baru.`;
-
-        try {
-          const enhResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-3.1-flash-image-preview",
-              messages: [
-                {
-                  role: "user",
-                  content: [
-                    { type: "text", text: enhancePrompt },
-                    { type: "image_url", image_url: { url: currentDataUrl } },
-                  ],
-                },
-              ],
-              modalities: ["image", "text"],
-            }),
-          });
-          if (enhResp.ok) {
-            const enhJson = await enhResp.json();
-            const enhUrl: string | undefined =
-              enhJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-            if (enhUrl) currentDataUrl = enhUrl;
-          } else {
-            console.error("Enhance pass failed:", enhResp.status, await enhResp.text());
-          }
-        } catch (e) {
-          console.error("Enhance pass error:", e);
-        }
-      }
-
-      // Re-decode the final (possibly enhanced) image
-      if (enhancePasses > 0 && currentDataUrl !== cleanedDataUrl) {
-        const m2 = currentDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-        if (m2) {
-          mime = m2[1];
-          ext = mime.split("/")[1] ?? "png";
-          bytes = Uint8Array.from(atob(m2[2]), (c) => c.charCodeAt(0));
-        }
+      if (resolutionKey === "1k") {
+        mime = "image/png";
+        ext = "png";
+        bytes = encodePng({
+          width: processedImage.width,
+          height: processedImage.height,
+          data: processedImage.data,
+          channels: 4,
+          depth: 8,
+        });
+      } else {
+        mime = "image/jpeg";
+        ext = "jpg";
+        bytes = jpeg.encode(
+          { width: processedImage.width, height: processedImage.height, data: processedImage.data },
+          resolutionKey === "4k" ? 94 : 92,
+        ).data;
       }
 
       const path = `${userId}/${row.id}.${ext}`;
