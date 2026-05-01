@@ -166,44 +166,51 @@ export const generateRender = createServerFn({ method: "POST" })
         return { ok: false as const, error: "AI tidak menghasilkan gambar." };
       }
 
-      // Pass 2: Upscale & cleanup watermark for 2K/4K
-      let finalImageDataUrl = imageDataUrl;
-      if (resolutionKey === "2k" || resolutionKey === "4k") {
-        try {
-          const upscalePrompt = `Upscale gambar ini ke resolusi ${resSpec.label} dengan ketajaman maksimal. Tingkatkan detail micro: tekstur material (beton, kayu, kaca, batu, tanaman), refleksi, kontras pencahayaan, dan kejelasan garis arsitektural. Pertahankan komposisi, warna, framing, dan mood persis seperti aslinya — hanya tingkatkan resolusi & ketajaman. WAJIB hapus seluruh watermark, logo "Gemini", logo "Google", tanda "AI", signature, atau marka apapun jika ada. Output harus benar-benar bersih tanpa logo atau teks apapun pada gambar.`;
-          const upResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-3.1-flash-image-preview",
-              messages: [
-                {
-                  role: "user",
-                  content: [
-                    { type: "text", text: upscalePrompt },
-                    { type: "image_url", image_url: { url: imageDataUrl } },
-                  ],
-                },
-              ],
-              modalities: ["image", "text"],
-            }),
-          });
-          if (upResp.ok) {
-            const upJson = await upResp.json();
-            const upUrl: string | undefined =
-              upJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-            if (upUrl) finalImageDataUrl = upUrl;
-          }
-        } catch {
-          // fallback: keep original render
+      // Pass 2: ALWAYS run a cleanup pass to remove Gemini/Google watermark.
+      // The watermark from gemini-3.1-flash-image-preview is consistently in the
+      // bottom-right corner — we instruct the model to inpaint that region only.
+      let cleanedDataUrl = imageDataUrl;
+      try {
+        const cleanupPrompt = `TUGAS UTAMA: Hapus total watermark / logo "Gemini" / logo "Google" / tanda "AI" yang berada di pojok kanan bawah gambar ini. Gantikan area watermark dengan kelanjutan visual yang natural dari konten arsitektural di sekitarnya (inpainting) — sehingga tidak terlihat ada watermark sama sekali.
+
+ATURAN KETAT:
+- JANGAN ubah komposisi, framing, warna, mood, pencahayaan, sudut kamera, atau elemen arsitektural manapun.
+- JANGAN tambah objek baru, JANGAN crop, JANGAN re-style.
+- HASIL HARUS identik dengan gambar input KECUALI watermark sudah hilang sempurna.
+- Output 100% bersih: tanpa logo, tanpa teks, tanpa signature, tanpa watermark apapun.
+- Pertahankan kualitas, ketajaman, dan resolusi maksimal.`;
+        const cleanResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3.1-flash-image-preview",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: cleanupPrompt },
+                  { type: "image_url", image_url: { url: imageDataUrl } },
+                ],
+              },
+            ],
+            modalities: ["image", "text"],
+          }),
+        });
+        if (cleanResp.ok) {
+          const cleanJson = await cleanResp.json();
+          const cleanUrl: string | undefined =
+            cleanJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+          if (cleanUrl) cleanedDataUrl = cleanUrl;
         }
+      } catch {
+        // fallback: keep original
       }
 
-      // Decode and upload to storage
-      const match = finalImageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+      // Decode the (cleaned) image into raw bytes
+      const match = cleanedDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
       if (!match) {
         await supabase
           .from("renders")
@@ -211,9 +218,58 @@ export const generateRender = createServerFn({ method: "POST" })
           .eq("id", row.id);
         return { ok: false as const, error: "Format gambar tidak valid." };
       }
-      const mime = match[1];
-      const ext = mime.split("/")[1] ?? "png";
-      const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+      let mime = match[1];
+      let ext = mime.split("/")[1] ?? "png";
+      let bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+
+      // Pass 3: REAL pixel upscale via WASM (jSquash) for 2K/4K.
+      // The Gemini image model outputs ~1024px on the long edge regardless of
+      // prompt instructions, so we must resample on the server.
+      if (resolutionKey === "2k" || resolutionKey === "4k") {
+        try {
+          const [{ default: decodePng }, { default: encodePng }, { default: decodeJpeg }, { default: encodeJpeg }, { default: resize }] =
+            await Promise.all([
+              import("@jsquash/png/decode"),
+              import("@jsquash/png/encode"),
+              import("@jsquash/jpeg/decode"),
+              import("@jsquash/jpeg/encode"),
+              import("@jsquash/resize"),
+            ]);
+
+          const isPng = mime === "image/png";
+          const imageData = isPng
+            ? await decodePng(bytes.buffer as ArrayBuffer)
+            : await decodeJpeg(bytes.buffer as ArrayBuffer);
+
+          const longEdge = Math.max(imageData.width, imageData.height);
+          const scale = resSpec.longEdge / longEdge;
+          if (scale > 1.01) {
+            const targetW = Math.round(imageData.width * scale);
+            const targetH = Math.round(imageData.height * scale);
+            const upscaled = await resize(imageData, {
+              width: targetW,
+              height: targetH,
+              method: "lanczos3",
+              fitMethod: "stretch",
+              premultiply: true,
+              linearRGB: true,
+            });
+            // Re-encode as JPEG quality 95 (PNG at 4K would be huge)
+            const jpegBuf = await encodeJpeg(upscaled, { quality: 95 });
+            bytes = new Uint8Array(jpegBuf);
+            mime = "image/jpeg";
+            ext = "jpg";
+          } else {
+            // Already at or above target — just re-encode original
+            if (isPng) {
+              const buf = await encodePng(imageData);
+              bytes = new Uint8Array(buf);
+            }
+          }
+        } catch (e) {
+          console.error("Upscale pass failed, using cleaned original:", e);
+        }
+      }
 
       const path = `${userId}/${row.id}.${ext}`;
       const { error: upErr } = await supabase.storage
@@ -273,11 +329,14 @@ export const listMyRenders = createServerFn({ method: "GET" })
     const refreshed: RenderItem[] = await Promise.all(
       (data ?? []).map(async (r) => {
         if (!r.result_url) return r as RenderItem;
-        const path = `${userId}/${r.id}.png`;
-        const { data: s } = await supabase.storage
-          .from("renders")
-          .createSignedUrl(path, 60 * 60 * 24);
-        return { ...(r as RenderItem), result_url: s?.signedUrl ?? r.result_url };
+        // Try both extensions (newer 2K/4K renders are jpg, older are png)
+        for (const ext of ["jpg", "png"]) {
+          const { data: s } = await supabase.storage
+            .from("renders")
+            .createSignedUrl(`${userId}/${r.id}.${ext}`, 60 * 60 * 24);
+          if (s?.signedUrl) return { ...(r as RenderItem), result_url: s.signedUrl };
+        }
+        return r as RenderItem;
       }),
     );
 
@@ -289,7 +348,9 @@ export const deleteRender = createServerFn({ method: "POST" })
   .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await supabase.storage.from("renders").remove([`${userId}/${data.id}.png`]);
+    await supabase.storage
+      .from("renders")
+      .remove([`${userId}/${data.id}.png`, `${userId}/${data.id}.jpg`]);
     const { error } = await supabase.from("renders").delete().eq("id", data.id);
     return { ok: !error, error: error?.message ?? null };
   });
