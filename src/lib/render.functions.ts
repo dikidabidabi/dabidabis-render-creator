@@ -386,32 +386,18 @@ ATURAN MUTLAK (WAJIB DIPATUHI):
 
 async function enhanceTileWithAI(
   tile: RgbaImage,
-  apiKey: string,
+  _apiKey: string,
 ): Promise<RgbaImage | null> {
   const inputUrl = rgbaToJpegDataUrl(tile, 92);
   try {
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: IMAGE_MODEL,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: TILE_ENHANCE_PROMPT },
-              { type: "image_url", image_url: { url: inputUrl } },
-            ],
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
-    });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const url: string | undefined = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!url) return null;
-    const decoded = dataUrlToRgba(url);
+    const inlinePart = dataUrlToInlinePart(inputUrl);
+    if (!inlinePart) return null;
+    const result = await callGeminiImage([
+      { text: TILE_ENHANCE_PROMPT },
+      inlinePart,
+    ]);
+    if (!result.ok) return null;
+    const decoded = dataUrlToRgba(result.dataUrl);
     if (!decoded) return null;
     // Resize back to tile dims if AI returned different size
     if (decoded.width !== tile.width || decoded.height !== tile.height) {
