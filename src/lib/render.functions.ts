@@ -738,7 +738,7 @@ export const generateRender = createServerFn({ method: "POST" })
       // ============================================================
       if (resolutionKey !== "1k") {
         try {
-          processedImage = await tileEnhanceImage(processedImage, LOVABLE_API_KEY, 4);
+          processedImage = await tileEnhanceImage(processedImage, GEMINI_API_KEY, 4);
         } catch (tileErr) {
           console.error("Tile enhance failed, using upscaled fallback:", tileErr);
         }
