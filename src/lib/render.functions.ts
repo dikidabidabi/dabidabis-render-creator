@@ -668,55 +668,39 @@ export const generateRender = createServerFn({ method: "POST" })
 
     const promptWithSeed = finalPrompt + seedSuffix + resolutionSuffix;
 
-    const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      { type: "text", text: promptWithSeed },
-      { type: "image_url", image_url: { url: data.sketchBase64 } },
-    ];
+    // Build Gemini parts (text + images) — direct Google AI Studio call.
+    const geminiParts: GeminiPart[] = [{ text: promptWithSeed }];
     if (data.referenceBase64) {
-      userContent.splice(1, 0, {
-        type: "text",
-        text: "Gambar 1 di bawah adalah REFERENSI GAYA. Gambar 2 adalah SKETSA yang harus dirender:",
-      });
-      userContent.push({ type: "image_url", image_url: { url: data.referenceBase64 } });
+      geminiParts.push({ text: "Gambar 1 di bawah adalah REFERENSI GAYA. Gambar 2 adalah SKETSA yang harus dirender:" });
+      const refPart = dataUrlToInlinePart(data.referenceBase64);
+      if (refPart) geminiParts.push(refPart);
     }
+    const sketchPart = dataUrlToInlinePart(data.sketchBase64);
+    if (!sketchPart) {
+      await supabase
+        .from("renders")
+        .update({ status: "failed", error: "Sketsa bukan data URL valid" })
+        .eq("id", row.id);
+      return { ok: false as const, error: "Format sketsa tidak valid." };
+    }
+    geminiParts.push(sketchPart);
 
     try {
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: IMAGE_MODEL,
-          messages: [{ role: "user", content: userContent }],
-          modalities: ["image", "text"],
-        }),
-      });
+      const aiResult = await callGeminiImage(geminiParts);
 
-      if (!aiResp.ok) {
-        const errText = await aiResp.text();
-        let msg = `AI error (${aiResp.status})`;
-        if (aiResp.status === 429) msg = "Rate limit tercapai. Coba lagi sebentar.";
-        if (aiResp.status === 402) msg = "Kredit AI habis. Tambahkan kredit di workspace.";
+      if (!aiResult.ok) {
+        let msg = `Gemini error (${aiResult.status})`;
+        if (aiResult.status === 429) msg = "Rate limit Gemini tercapai. Coba lagi sebentar.";
+        if (aiResult.status === 403) msg = "API key Gemini ditolak (403). Periksa VITE_GEMINI_API_KEY.";
+        if (aiResult.status === 400) msg = "Permintaan ditolak Gemini (400).";
         await supabase
           .from("renders")
-          .update({ status: "failed", error: msg + " — " + errText.slice(0, 200) })
+          .update({ status: "failed", error: msg + " — " + aiResult.error })
           .eq("id", row.id);
         return { ok: false as const, error: msg };
       }
 
-      const aiJson = await aiResp.json();
-      const imageDataUrl: string | undefined =
-        aiJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-      if (!imageDataUrl) {
-        await supabase
-          .from("renders")
-          .update({ status: "failed", error: "Tidak ada gambar dihasilkan" })
-          .eq("id", row.id);
-        return { ok: false as const, error: "AI tidak menghasilkan gambar." };
-      }
+      const imageDataUrl = aiResult.dataUrl;
 
       // ============================================================
       // TAHAP 1 SELESAI: gambar utuh sudah dihasilkan oleh AI di atas.
