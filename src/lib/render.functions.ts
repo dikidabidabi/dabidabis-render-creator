@@ -33,7 +33,51 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
   "8k": { label: "8K (7680px)", longEdge: 7680 },
 };
 
-const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+// Direct Google Gemini API (Google AI Studio) — model image-generation terbaru.
+const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? "") as string;
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
+
+type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
+
+function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
+  const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!m) return null;
+  return { inline_data: { mime_type: m[1], data: m[2] } };
+}
+
+async function callGeminiImage(
+  parts: GeminiPart[],
+): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string }> {
+  if (!GEMINI_API_KEY) {
+    return { ok: false, status: 0, error: "VITE_GEMINI_API_KEY belum dikonfigurasi" };
+  }
+  const resp = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    return { ok: false, status: resp.status, error: text.slice(0, 400) };
+  }
+  const json = await resp.json();
+  const respParts: Array<Record<string, unknown>> =
+    json?.candidates?.[0]?.content?.parts ?? [];
+  for (const p of respParts) {
+    const inline = (p?.inline_data ?? (p as { inlineData?: { mime_type?: string; mimeType?: string; data?: string } }).inlineData) as
+      | { mime_type?: string; mimeType?: string; data?: string }
+      | undefined;
+    if (inline?.data) {
+      const mt = inline.mime_type ?? inline.mimeType ?? "image/png";
+      return { ok: true, dataUrl: `data:${mt};base64,${inline.data}` };
+    }
+  }
+  return { ok: false, status: 200, error: "Gemini tidak mengembalikan gambar" };
+}
 
 type RgbaImage = { width: number; height: number; data: Uint8Array };
 
@@ -342,32 +386,18 @@ ATURAN MUTLAK (WAJIB DIPATUHI):
 
 async function enhanceTileWithAI(
   tile: RgbaImage,
-  apiKey: string,
+  _apiKey: string,
 ): Promise<RgbaImage | null> {
   const inputUrl = rgbaToJpegDataUrl(tile, 92);
   try {
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: IMAGE_MODEL,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: TILE_ENHANCE_PROMPT },
-              { type: "image_url", image_url: { url: inputUrl } },
-            ],
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
-    });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const url: string | undefined = json?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!url) return null;
-    const decoded = dataUrlToRgba(url);
+    const inlinePart = dataUrlToInlinePart(inputUrl);
+    if (!inlinePart) return null;
+    const result = await callGeminiImage([
+      { text: TILE_ENHANCE_PROMPT },
+      inlinePart,
+    ]);
+    if (!result.ok) return null;
+    const decoded = dataUrlToRgba(result.dataUrl);
     if (!decoded) return null;
     // Resize back to tile dims if AI returned different size
     if (decoded.width !== tile.width || decoded.height !== tile.height) {
@@ -594,9 +624,11 @@ export const generateRender = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-    if (!LOVABLE_API_KEY) {
-      return { ok: false as const, error: "AI service belum dikonfigurasi." };
+    if (!GEMINI_API_KEY) {
+      return {
+        ok: false as const,
+        error: "VITE_GEMINI_API_KEY belum dikonfigurasi. Tambahkan di Workspace Settings → Build Secrets.",
+      };
     }
 
     // Insert pending row
@@ -636,55 +668,39 @@ export const generateRender = createServerFn({ method: "POST" })
 
     const promptWithSeed = finalPrompt + seedSuffix + resolutionSuffix;
 
-    const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-      { type: "text", text: promptWithSeed },
-      { type: "image_url", image_url: { url: data.sketchBase64 } },
-    ];
+    // Build Gemini parts (text + images) — direct Google AI Studio call.
+    const geminiParts: GeminiPart[] = [{ text: promptWithSeed }];
     if (data.referenceBase64) {
-      userContent.splice(1, 0, {
-        type: "text",
-        text: "Gambar 1 di bawah adalah REFERENSI GAYA. Gambar 2 adalah SKETSA yang harus dirender:",
-      });
-      userContent.push({ type: "image_url", image_url: { url: data.referenceBase64 } });
+      geminiParts.push({ text: "Gambar 1 di bawah adalah REFERENSI GAYA. Gambar 2 adalah SKETSA yang harus dirender:" });
+      const refPart = dataUrlToInlinePart(data.referenceBase64);
+      if (refPart) geminiParts.push(refPart);
     }
+    const sketchPart = dataUrlToInlinePart(data.sketchBase64);
+    if (!sketchPart) {
+      await supabase
+        .from("renders")
+        .update({ status: "failed", error: "Sketsa bukan data URL valid" })
+        .eq("id", row.id);
+      return { ok: false as const, error: "Format sketsa tidak valid." };
+    }
+    geminiParts.push(sketchPart);
 
     try {
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: IMAGE_MODEL,
-          messages: [{ role: "user", content: userContent }],
-          modalities: ["image", "text"],
-        }),
-      });
+      const aiResult = await callGeminiImage(geminiParts);
 
-      if (!aiResp.ok) {
-        const errText = await aiResp.text();
-        let msg = `AI error (${aiResp.status})`;
-        if (aiResp.status === 429) msg = "Rate limit tercapai. Coba lagi sebentar.";
-        if (aiResp.status === 402) msg = "Kredit AI habis. Tambahkan kredit di workspace.";
+      if (!aiResult.ok) {
+        let msg = `Gemini error (${aiResult.status})`;
+        if (aiResult.status === 429) msg = "Rate limit Gemini tercapai. Coba lagi sebentar.";
+        if (aiResult.status === 403) msg = "API key Gemini ditolak (403). Periksa VITE_GEMINI_API_KEY.";
+        if (aiResult.status === 400) msg = "Permintaan ditolak Gemini (400).";
         await supabase
           .from("renders")
-          .update({ status: "failed", error: msg + " — " + errText.slice(0, 200) })
+          .update({ status: "failed", error: msg + " — " + aiResult.error })
           .eq("id", row.id);
         return { ok: false as const, error: msg };
       }
 
-      const aiJson = await aiResp.json();
-      const imageDataUrl: string | undefined =
-        aiJson?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
-      if (!imageDataUrl) {
-        await supabase
-          .from("renders")
-          .update({ status: "failed", error: "Tidak ada gambar dihasilkan" })
-          .eq("id", row.id);
-        return { ok: false as const, error: "AI tidak menghasilkan gambar." };
-      }
+      const imageDataUrl = aiResult.dataUrl;
 
       // ============================================================
       // TAHAP 1 SELESAI: gambar utuh sudah dihasilkan oleh AI di atas.
@@ -722,7 +738,7 @@ export const generateRender = createServerFn({ method: "POST" })
       // ============================================================
       if (resolutionKey !== "1k") {
         try {
-          processedImage = await tileEnhanceImage(processedImage, LOVABLE_API_KEY, 4);
+          processedImage = await tileEnhanceImage(processedImage, GEMINI_API_KEY, 4);
         } catch (tileErr) {
           console.error("Tile enhance failed, using upscaled fallback:", tileErr);
         }
