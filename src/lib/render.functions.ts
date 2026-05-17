@@ -33,7 +33,51 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
   "8k": { label: "8K (7680px)", longEdge: 7680 },
 };
 
-const IMAGE_MODEL = "google/gemini-2.5-flash-image";
+// Direct Google Gemini API (Google AI Studio) — model image-generation terbaru.
+const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? "") as string;
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
+
+type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
+
+function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
+  const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!m) return null;
+  return { inline_data: { mime_type: m[1], data: m[2] } };
+}
+
+async function callGeminiImage(
+  parts: GeminiPart[],
+): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string }> {
+  if (!GEMINI_API_KEY) {
+    return { ok: false, status: 0, error: "VITE_GEMINI_API_KEY belum dikonfigurasi" };
+  }
+  const resp = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    return { ok: false, status: resp.status, error: text.slice(0, 400) };
+  }
+  const json = await resp.json();
+  const respParts: Array<Record<string, unknown>> =
+    json?.candidates?.[0]?.content?.parts ?? [];
+  for (const p of respParts) {
+    const inline = (p?.inline_data ?? (p as { inlineData?: { mime_type?: string; mimeType?: string; data?: string } }).inlineData) as
+      | { mime_type?: string; mimeType?: string; data?: string }
+      | undefined;
+    if (inline?.data) {
+      const mt = inline.mime_type ?? inline.mimeType ?? "image/png";
+      return { ok: true, dataUrl: `data:${mt};base64,${inline.data}` };
+    }
+  }
+  return { ok: false, status: 200, error: "Gemini tidak mengembalikan gambar" };
+}
 
 type RgbaImage = { width: number; height: number; data: Uint8Array };
 
