@@ -624,9 +624,11 @@ export const generateRender = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-    if (!LOVABLE_API_KEY) {
-      return { ok: false as const, error: "AI service belum dikonfigurasi." };
+    if (!GEMINI_API_KEY) {
+      return {
+        ok: false as const,
+        error: "VITE_GEMINI_API_KEY belum dikonfigurasi. Tambahkan di Workspace Settings → Build Secrets.",
+      };
     }
 
     // Insert pending row
