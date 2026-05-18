@@ -53,6 +53,7 @@ function StudioPage() {
   const [resolution, setResolution] = useState<Resolution>("1k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
+  const [progressMsg, setProgressMsg] = useState<string>("");
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
@@ -64,6 +65,7 @@ function StudioPage() {
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    if (!user) return toast.error("Sesi login tidak ditemukan");
     const useSeed = seedLocked
       ? seed
       : (() => {
@@ -73,6 +75,7 @@ function StudioPage() {
         })();
     setGenerating(true);
     setResult(null);
+    setProgressMsg("Tahap 1: render AI...");
     try {
       const res = await generateFn({
         data: {
@@ -86,16 +89,43 @@ function StudioPage() {
           resolution,
         },
       });
-      if (res.ok) {
-        setResult(res.resultUrl);
-        toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
-      } else {
+      if (!res.ok) {
         toast.error(res.error || "Gagal render");
+        return;
       }
+
+      // Tahap 2-5 berjalan di browser via Canvas API (tanpa AI/API luar).
+      const processed = await processRenderInBrowser(
+        res.baseDataUrl,
+        resolution,
+        (m) => setProgressMsg(m),
+      );
+
+      setProgressMsg("Mengunggah hasil...");
+      const path = `${user.id}/${res.id}.${processed.ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("renders")
+        .upload(path, processed.blob, {
+          contentType: processed.mime,
+          upsert: true,
+        });
+      if (upErr) {
+        toast.error("Upload gagal: " + upErr.message);
+        return;
+      }
+
+      const fin = await finalizeFn({ data: { id: res.id, ext: processed.ext } });
+      if (!fin.ok) {
+        toast.error(fin.error || "Gagal finalize");
+        return;
+      }
+      setResult(fin.resultUrl);
+      toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
       setGenerating(false);
+      setProgressMsg("");
     }
   };
 
