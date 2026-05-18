@@ -8,10 +8,20 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
-import { generateRender } from "@/lib/render.functions";
-import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { GEMINI_API_KEY, GEMINI_IMAGE_MODEL } from "@/config/apiConfig";
+
+const RENDER_TYPE_PROMPTS: Record<string, string> = {
+  exterior:
+    "Professional photorealistic architectural exterior render. Natural golden hour lighting, realistic materials (concrete, wood, glass, steel), accurate reflections, dramatic sky, integrated landscaping, subtle depth of field. Top-tier architect portfolio quality.",
+  interior:
+    "Magazine-quality photorealistic interior render. Soft ambient lighting, tasteful contemporary furniture, accurate material textures (wood, marble, fabric, metal), natural highlights and shadows, cinematic depth of field.",
+  night:
+    "Dramatic architectural night shot. Warm interior light spilling out, strategic landscape lighting, deep blue night sky with subtle stars, light reflections on glass and wet surfaces, cinematic high-end mood.",
+  watercolor:
+    "Artistic architectural watercolor illustration. Soft color washes, thin ink contour lines, visible paper texture, accurate proportions preserved, calm elegant palette, architect concept presentation style.",
+};
 
 export const Route = createFileRoute("/studio")({
   component: StudioPage,
@@ -29,7 +39,6 @@ type RenderType = (typeof RENDER_TYPES)[number]["id"];
 function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const generateFn = useServerFn(generateRender);
 
   const [sketch, setSketch] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
@@ -45,27 +54,39 @@ function StudioPage() {
   }, [user, loading, navigate]);
 
   const handleGenerate = async () => {
-    if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    if (!GEMINI_API_KEY || GEMINI_API_KEY.startsWith("GANTI_")) {
+      return toast.error("API Key Gemini belum diisi di src/config/apiConfig.ts");
+    }
     setGenerating(true);
     setResult(null);
     try {
-      const res = await generateFn({
-        data: {
-          sketchBase64: sketch,
-          referenceBase64: reference,
-          prompt: prompt.trim(),
-          renderType,
-          accuracy,
-          consistency,
-        },
+      const stylePrefix = RENDER_TYPE_PROMPTS[renderType];
+      const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
+      const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:predict?key=${GEMINI_API_KEY}`;
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt: fullPrompt }],
+          parameters: { sampleCount: 1, aspectRatio: "4:3" },
+        }),
       });
-      if (res.ok) {
-        setResult(res.resultUrl);
-        toast.success("Render selesai!");
-      } else {
-        toast.error(res.error || "Gagal render");
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Gemini API ${resp.status}: ${errText.slice(0, 200)}`);
       }
+      const json = await resp.json();
+      const b64: string | undefined =
+        json?.predictions?.[0]?.bytesBase64Encoded ??
+        json?.predictions?.[0]?.image?.bytesBase64Encoded;
+      if (!b64) throw new Error("Tidak ada gambar dihasilkan");
+
+      setResult(`data:image/png;base64,${b64}`);
+      toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
