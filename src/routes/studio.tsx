@@ -294,7 +294,7 @@ function StudioPage() {
           <div className="space-y-2">
             <Button
               onClick={handleGenerate}
-              disabled={busy || cooldownActive || !sketch || !prompt.trim()}
+              disabled={busy || !sketch || !prompt.trim()}
               size="lg"
               className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
             >
@@ -306,11 +306,7 @@ function StudioPage() {
               ) : (
                 <>
                   <Sparkles className="mr-2 h-4 w-4" />
-                  {cooldownActive
-                    ? `Tunggu ${cooldownSeconds}d`
-                    : baseDataUrl
-                      ? "Tahap 1: Generate ulang"
-                      : "Tahap 1: Generate dengan AI"}
+                  {baseDataUrl ? "Tahap 1: Generate ulang" : "Tahap 1: Generate dengan AI"}
                 </>
               )}
             </Button>
