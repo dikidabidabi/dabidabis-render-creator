@@ -35,7 +35,7 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
 
 // Direct Google Gemini API (Google AI Studio) — model image-generation terbaru.
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
-const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? "") as string;
+import { GEMINI_API_KEY } from "@/config/apiConfig";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
 
 type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
@@ -49,8 +49,8 @@ function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
 async function callGeminiImage(
   parts: GeminiPart[],
 ): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string }> {
-  if (!GEMINI_API_KEY) {
-    return { ok: false, status: 0, error: "VITE_GEMINI_API_KEY belum dikonfigurasi" };
+  if (!GEMINI_API_KEY || GEMINI_API_KEY === "ISI_API_KEY_DISINI") {
+    return { ok: false, status: 0, error: "GEMINI_API_KEY belum diisi di src/config/apiConfig.ts" };
   }
   const resp = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
     method: "POST",
