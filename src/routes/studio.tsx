@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, Dice5, Lock, Unlock, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,16 +58,21 @@ function StudioPage() {
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
+  const generateRequestRef = useRef(false);
+  const upscaleRequestRef = useRef(false);
   const busy = generating || upscaling;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (event?: MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
     if (!user) return toast.error("Sesi login tidak ditemukan");
+    if (generateRequestRef.current) return;
+    generateRequestRef.current = true;
     const useSeed = seedLocked
       ? seed
       : (() => {
@@ -103,14 +108,18 @@ function StudioPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
+      generateRequestRef.current = false;
       setGenerating(false);
       setProgressMsg("");
     }
   };
 
-  const handleUpscale = async () => {
+  const handleUpscale = async (event?: MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
     if (!baseDataUrl || !baseRenderId) return toast.error("Jalankan Tahap 1 dulu");
     if (!user) return toast.error("Sesi login tidak ditemukan");
+    if (upscaleRequestRef.current) return;
+    upscaleRequestRef.current = true;
     setUpscaling(true);
     setResult(null);
     try {
@@ -143,6 +152,7 @@ function StudioPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
+      upscaleRequestRef.current = false;
       setUpscaling(false);
       setProgressMsg("");
     }
@@ -293,6 +303,7 @@ function StudioPage() {
 
           <div className="space-y-2">
             <Button
+              type="button"
               onClick={handleGenerate}
               disabled={busy || !sketch || !prompt.trim()}
               size="lg"
@@ -418,6 +429,7 @@ function StudioPage() {
               })}
             </div>
             <Button
+              type="button"
               onClick={handleUpscale}
               disabled={busy || !baseDataUrl}
               size="lg"
