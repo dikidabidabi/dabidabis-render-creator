@@ -30,14 +30,13 @@ const RENDER_TYPES = [
 
 type RenderType = (typeof RENDER_TYPES)[number]["id"];
 
-const RESOLUTIONS = [
-  { id: "1k", label: "1K", desc: "1024px · cepat" },
+const UPSCALE_RESOLUTIONS = [
   { id: "2k", label: "2K", desc: "2048px · tajam" },
   { id: "4k", label: "4K", desc: "3840px · maksimal" },
   { id: "8k", label: "8K", desc: "7680px · ultra" },
 ] as const;
 
-type Resolution = (typeof RESOLUTIONS)[number]["id"];
+type UpscaleResolution = (typeof UPSCALE_RESOLUTIONS)[number]["id"];
 const GEMINI_CLIENT_COOLDOWN_MS = 70_000;
 
 function StudioPage() {
@@ -51,7 +50,7 @@ function StudioPage() {
   const [prompt, setPrompt] = useState("");
   const [renderType, setRenderType] = useState<RenderType>("exterior");
   const [accuracy, setAccuracy] = useState(8);
-  const [resolution, setResolution] = useState<Resolution>("1k");
+  const [resolution, setResolution] = useState<UpscaleResolution>("2k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [upscaling, setUpscaling] = useState(false);
@@ -107,7 +106,7 @@ function StudioPage() {
           accuracy,
           consistency,
           seed: useSeed,
-          resolution,
+          resolution: "1k",
         },
       });
       if (!res.ok) {
@@ -261,43 +260,10 @@ function StudioPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Maximize2 className="h-3.5 w-3.5 text-ember" />
-              Resolusi output
-            </Label>
-            <div className="grid grid-cols-4 gap-2">
-              {RESOLUTIONS.map((r) => {
-                const active = resolution === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setResolution(r.id)}
-                    className={cn(
-                      "flex flex-col items-center gap-0.5 rounded-lg border p-2.5 transition-all",
-                      active
-                        ? "border-ember bg-ember/10 shadow-soft"
-                        : "border-border/60 bg-surface/40 hover:border-border",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "font-display text-base font-semibold",
-                        active ? "text-ember" : "text-foreground",
-                      )}
-                    >
-                      {r.label}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">{r.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="rounded-lg border border-border/60 bg-surface/40 p-3">
             <p className="text-xs text-muted-foreground">
-              {resolution === "1k"
-              ? "Tahap 1 saja: render AI utuh (paling cepat, tanpa post-process)."
-              : "5 tahap: 1) render AI utuh → 2) upscale lokal 2–10× → 3) pecah 16 tile lokal (overlap 1%) → 4) pertajam tile via Canvas tanpa API → 5) gabung lokal dengan blending di overlap."}
+              Tahap 1 selalu menghasilkan pratinjau 1K (cepat & hemat kuota).
+              Pilihan upscale 2K–8K muncul di bawah hasil render.
             </p>
           </div>
 
@@ -369,31 +335,6 @@ function StudioPage() {
               )}
             </Button>
 
-            <Button
-              onClick={handleUpscale}
-              disabled={busy || !baseDataUrl}
-              size="lg"
-              variant="outline"
-              className="w-full text-base"
-            >
-              {upscaling ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {progressMsg || "Memproses..."}
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="mr-2 h-4 w-4" />
-                  {`Tahap 2–5: Upscale ke ${resolution.toUpperCase()} & simpan`}
-                </>
-              )}
-            </Button>
-
-            {!baseDataUrl && (
-              <p className="text-xs text-muted-foreground">
-                Jalankan Tahap 1 dulu. Bila hasilnya sudah cocok, lanjut ke upscaling.
-              </p>
-            )}
           </div>
         </div>
 
@@ -461,11 +402,70 @@ function StudioPage() {
             </AnimatePresence>
           </div>
 
-          {result && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Tersimpan otomatis di galeri Anda.
-            </p>
-          )}
+          <div className="mt-5 space-y-3 rounded-xl border border-border/60 bg-surface/40 p-4">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-1.5 text-sm">
+                <Maximize2 className="h-3.5 w-3.5 text-ember" />
+                Upscale resolusi
+              </Label>
+              <span className="text-[10px] text-muted-foreground">
+                {baseDataUrl ? "Pratinjau 1K siap" : "Jalankan Tahap 1 dulu"}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {UPSCALE_RESOLUTIONS.map((r) => {
+                const active = resolution === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setResolution(r.id)}
+                    disabled={busy}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 rounded-lg border p-2.5 transition-all disabled:opacity-50",
+                      active
+                        ? "border-ember bg-ember/10 shadow-soft"
+                        : "border-border/60 bg-surface/40 hover:border-border",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "font-display text-base font-semibold",
+                        active ? "text-ember" : "text-foreground",
+                      )}
+                    >
+                      {r.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{r.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <Button
+              onClick={handleUpscale}
+              disabled={busy || !baseDataUrl}
+              size="lg"
+              className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
+            >
+              {upscaling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {progressMsg || "Memproses..."}
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="mr-2 h-4 w-4" />
+                  {`Tahap 2–5: Upscale ke ${resolution.toUpperCase()} & simpan`}
+                </>
+              )}
+            </Button>
+            {result && (
+              <p className="text-xs text-muted-foreground">
+                Tersimpan otomatis di galeri Anda.
+              </p>
+            )}
+          </div>
+
         </div>
       </div>
     </main>
