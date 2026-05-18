@@ -260,43 +260,10 @@ function StudioPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Maximize2 className="h-3.5 w-3.5 text-ember" />
-              Resolusi output
-            </Label>
-            <div className="grid grid-cols-4 gap-2">
-              {RESOLUTIONS.map((r) => {
-                const active = resolution === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setResolution(r.id)}
-                    className={cn(
-                      "flex flex-col items-center gap-0.5 rounded-lg border p-2.5 transition-all",
-                      active
-                        ? "border-ember bg-ember/10 shadow-soft"
-                        : "border-border/60 bg-surface/40 hover:border-border",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "font-display text-base font-semibold",
-                        active ? "text-ember" : "text-foreground",
-                      )}
-                    >
-                      {r.label}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">{r.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="rounded-lg border border-border/60 bg-surface/40 p-3">
             <p className="text-xs text-muted-foreground">
-              {resolution === "1k"
-              ? "Tahap 1 saja: render AI utuh (paling cepat, tanpa post-process)."
-              : "5 tahap: 1) render AI utuh → 2) upscale lokal 2–10× → 3) pecah 16 tile lokal (overlap 1%) → 4) pertajam tile via Canvas tanpa API → 5) gabung lokal dengan blending di overlap."}
+              Tahap 1 selalu menghasilkan pratinjau 1K (cepat & hemat kuota).
+              Pilihan upscale 2K–8K muncul di bawah hasil render.
             </p>
           </div>
 
