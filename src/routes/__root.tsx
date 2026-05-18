@@ -89,6 +89,7 @@ function Header() {
           <span className="font-display text-lg font-semibold tracking-tight">Dabidabi's</span>
         </Link>
         <nav className="flex items-center gap-2 sm:gap-4">
+          <GeminiKeyInput />
           {user ? (
             <>
               <Link
