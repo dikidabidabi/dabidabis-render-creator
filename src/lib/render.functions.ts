@@ -37,8 +37,19 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 import { GEMINI_API_KEY } from "@/config/apiConfig";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
+const GEMINI_RENDER_COOLDOWN_MS = 70_000;
+const geminiRenderNextAllowedAtByUser = new Map<string, number>();
+const geminiRenderInFlightByUser = new Set<string>();
 
 type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
+
+function parseGeminiRetryMs(errorText: string, retryAfter: string | null) {
+  const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
+  const bodySeconds = Number.parseInt(errorText.match(/retryDelay"?\s*:?\s*"?(\d+)s/i)?.[1] ?? "", 10);
+  const seconds = Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : bodySeconds;
+  if (!Number.isFinite(seconds) || seconds <= 0) return GEMINI_RENDER_COOLDOWN_MS;
+  return Math.min(180_000, Math.max(15_000, seconds * 1000));
+}
 
 function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
   const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
@@ -48,7 +59,7 @@ function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
 
 async function callGeminiImage(
   parts: GeminiPart[],
-): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string; retryAfterMs?: number }> {
   if (!GEMINI_API_KEY || (GEMINI_API_KEY as string) === "ISI_API_KEY_DISINI") {
     return { ok: false, status: 0, error: "GEMINI_API_KEY belum diisi di src/config/apiConfig.ts" };
   }
@@ -62,7 +73,12 @@ async function callGeminiImage(
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
-    return { ok: false, status: resp.status, error: text.slice(0, 400) };
+    return {
+      ok: false,
+      status: resp.status,
+      error: text.slice(0, 400),
+      retryAfterMs: resp.status === 429 ? parseGeminiRetryMs(text, resp.headers.get("retry-after")) : undefined,
+    };
   }
   const json = await resp.json();
   const respParts: Array<Record<string, unknown>> =
@@ -341,80 +357,6 @@ function pasteTileExact(
   }
 }
 
-function rgbaToJpegDataUrl(image: RgbaImage, quality = 90): string {
-  const encoded = jpeg.encode(
-    { width: image.width, height: image.height, data: image.data },
-    quality,
-  );
-  // Manual base64 encode (Worker-safe)
-  let binary = "";
-  const bytes = encoded.data;
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as number[]);
-  }
-  return `data:image/jpeg;base64,${btoa(binary)}`;
-}
-
-function dataUrlToRgba(dataUrl: string): RgbaImage | null {
-  const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-  if (!m) return null;
-  try {
-    const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
-    return decodeImage(bytes, m[1]);
-  } catch {
-    return null;
-  }
-}
-
-// PROMPT KONSTAN — identik untuk SEMUA 16 tile, tanpa variasi konteks per tile.
-// Ini menjamin AI menerapkan metode & intensitas sharpening yang sama persis
-// pada setiap tile sehingga tidak terlihat perbedaan kualitas antar bagian.
-const TILE_ENHANCE_PROMPT = `MODE: NON-GENERATIVE IMAGE FILTER ONLY.
-Tugas: pertajam gambar ini secara sangat ringan seperti filter kamera (unsharp mask + local contrast). Ini adalah SATU TILE / kuadran kecil dari gambar render arsitektur yang lebih besar.
-
-ATURAN MUTLAK (WAJIB DIPATUHI):
-- INPUT ADALAH MASTER SHAPE. Semua pixel harus tetap berada pada posisi visual yang sama.
-- DILARANG TOTAL menambah bentuk, objek, ornamen, furniture, tanaman, manusia, kendaraan, jendela, pintu, garis, teks, logo, watermark, bayangan baru, pantulan baru, atau elemen baru sekecil apapun.
-- DILARANG menghapus, mengganti, menggeser, memperbesar, mengecilkan, meluruskan, membengkokkan, atau menyambung bentuk/objek yang sudah ada.
-- DILARANG mengubah kontur, siluet, geometri, proporsi, perspektif, komposisi, framing, crop, warna dominan, palet, pencahayaan, material, dan sudut pandang.
-- DILARANG re-style, re-render ulang, inpaint, outpaint, hallucinate, atau interpretasi kreatif.
-- Output WAJIB beresolusi dan framing IDENTIK dengan input — anggap ini hanya proses sharpening, bukan pembuatan gambar baru.
-- HANYA BOLEH: menaikkan ketajaman tepi yang SUDAH ADA, kontras lokal halus, dan tekstur mikro pada material yang SUDAH ADA tanpa mengubah bentuk materialnya.
-- DILARANG menambahkan watermark, logo, teks, signature, tanda "AI", "Gemini", "Google", atau marka apapun.
-- Bila ragu, pertahankan pixel asli. Output harus terlihat seperti input yang sedikit lebih tajam, bukan versi baru.`;
-
-async function enhanceTileWithAI(
-  tile: RgbaImage,
-  _apiKey: string,
-): Promise<RgbaImage | null> {
-  const inputUrl = rgbaToJpegDataUrl(tile, 92);
-  try {
-    const inlinePart = dataUrlToInlinePart(inputUrl);
-    if (!inlinePart) return null;
-    const result = await callGeminiImage([
-      { text: TILE_ENHANCE_PROMPT },
-      inlinePart,
-    ]);
-    if (!result.ok) return null;
-    const decoded = dataUrlToRgba(result.dataUrl);
-    if (!decoded) return null;
-    // Resize back to tile dims if AI returned different size
-    if (decoded.width !== tile.width || decoded.height !== tile.height) {
-      const scaleX = tile.width / decoded.width;
-      const scaleY = tile.height / decoded.height;
-      const scale = (scaleX + scaleY) / 2;
-      const resized = resizeBicubic(decoded, scale);
-      // pad/crop to exact tile size
-      if (resized.width === tile.width && resized.height === tile.height) return resized;
-      return cropTile(resized, 0, 0, Math.min(resized.width, tile.width), Math.min(resized.height, tile.height));
-    }
-    return decoded;
-  } catch {
-    return null;
-  }
-}
-
 // Enhancement deterministik IDENTIK untuk semua tile — parameter konstan,
 // tidak melibatkan AI per tile, sehingga setiap tile diproses dengan rumus
 // yang sama persis. Ini menghilangkan perbedaan kualitas antar tile.
@@ -644,6 +586,18 @@ export const generateRender = createServerFn({ method: "POST" })
       return { ok: false as const, error: insertErr?.message ?? "DB error" };
     }
 
+    const now = Date.now();
+    const nextAllowedAt = geminiRenderNextAllowedAtByUser.get(userId) ?? 0;
+    if (geminiRenderInFlightByUser.has(userId) || now < nextAllowedAt) {
+      const waitMs = geminiRenderInFlightByUser.has(userId)
+        ? GEMINI_RENDER_COOLDOWN_MS
+        : Math.max(1, nextAllowedAt - now);
+      const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000));
+      const msg = `Render Gemini sedang cooldown. Coba lagi sekitar ${waitSeconds} detik lagi.`;
+      await supabase.from("renders").update({ status: "failed", error: msg }).eq("id", row.id);
+      return { ok: false as const, error: msg };
+    }
+
     const finalPrompt = buildSystemPrompt(
       data.renderType,
       data.accuracy,
@@ -683,11 +637,17 @@ export const generateRender = createServerFn({ method: "POST" })
     // TAHAP 1: panggil Gemini SEKALI saja. Tahap 2-5 (upscale, pecah 16 tile,
     // sharpen, stitch) dipindah ke browser via Canvas API agar tidak menguras
     // RPM Gemini dan gratis bagi user.
+    geminiRenderInFlightByUser.add(userId);
     try {
       const aiResult = await callGeminiImage(geminiParts);
       if (!aiResult.ok) {
         let msg = `Gemini error (${aiResult.status})`;
-        if (aiResult.status === 429) msg = "Rate limit Gemini tercapai. Coba lagi sebentar.";
+        if (aiResult.status === 429) {
+          const retryMs = aiResult.retryAfterMs ?? GEMINI_RENDER_COOLDOWN_MS;
+          geminiRenderNextAllowedAtByUser.set(userId, Date.now() + retryMs);
+          const retrySeconds = Math.max(1, Math.ceil(retryMs / 1000));
+          msg = `Kuota Gemini sedang jeda otomatis. Coba lagi sekitar ${retrySeconds} detik lagi.`;
+        }
         if (aiResult.status === 403) msg = "API key Gemini ditolak (403). Periksa GEMINI_API_KEY di src/config/apiConfig.ts.";
         if (aiResult.status === 400) msg = "Permintaan ditolak Gemini (400).";
         await supabase
@@ -707,6 +667,8 @@ export const generateRender = createServerFn({ method: "POST" })
       const msg = e instanceof Error ? e.message : "Unknown error";
       await supabase.from("renders").update({ status: "failed", error: msg }).eq("id", row.id);
       return { ok: false as const, error: msg };
+    } finally {
+      geminiRenderInFlightByUser.delete(userId);
     }
   });
 

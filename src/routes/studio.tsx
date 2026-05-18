@@ -38,6 +38,7 @@ const RESOLUTIONS = [
 ] as const;
 
 type Resolution = (typeof RESOLUTIONS)[number]["id"];
+const GEMINI_CLIENT_COOLDOWN_MS = 70_000;
 
 function StudioPage() {
   const { user, loading } = useAuth();
@@ -57,15 +58,29 @@ function StudioPage() {
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
+  const [nextRenderAt, setNextRenderAt] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const cooldownActive = nextRenderAt > nowMs;
+  const cooldownSeconds = Math.max(1, Math.ceil((nextRenderAt - nowMs) / 1000));
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    if (!cooldownActive) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownActive]);
+
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
     if (!user) return toast.error("Sesi login tidak ditemukan");
+    const waitMs = nextRenderAt - Date.now();
+    if (waitMs > 0) {
+      return toast.warning(`Tunggu sekitar ${Math.ceil(waitMs / 1000)} detik sebelum render berikutnya.`);
+    }
     const useSeed = seedLocked
       ? seed
       : (() => {
@@ -90,9 +105,13 @@ function StudioPage() {
         },
       });
       if (!res.ok) {
+        if (res.error?.toLowerCase().includes("gemini")) {
+          setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
+        }
         toast.error(res.error || "Gagal render");
         return;
       }
+      setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
 
       // Tahap 2-5 berjalan di browser via Canvas API (tanpa AI/API luar).
       const processed = await processRenderInBrowser(
@@ -257,7 +276,7 @@ function StudioPage() {
             <p className="text-xs text-muted-foreground">
               {resolution === "1k"
               ? "Tahap 1 saja: render AI utuh (paling cepat, tanpa post-process)."
-              : "5 tahap: 1) render AI utuh → 2) upscale 2–10× (menyesuaikan target 2K/4K/8K) → 3) pecah 16 tile (overlap 1%) → 4) tiap tile dipertajam AI dengan prompt & parameter IDENTIK (anti-variasi) → 5) gabung mulus dengan blending di overlap."}
+              : "5 tahap: 1) render AI utuh → 2) upscale lokal 2–10× → 3) pecah 16 tile lokal (overlap 1%) → 4) pertajam tile via Canvas tanpa API → 5) gabung lokal dengan blending di overlap."}
             </p>
           </div>
 
@@ -307,7 +326,7 @@ function StudioPage() {
 
           <Button
             onClick={handleGenerate}
-            disabled={generating || !sketch || !prompt.trim()}
+            disabled={generating || cooldownActive || !sketch || !prompt.trim()}
             size="lg"
             className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
           >
@@ -319,7 +338,7 @@ function StudioPage() {
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Render dengan AI
+                {cooldownActive ? `Tunggu ${cooldownSeconds}d` : "Render dengan AI"}
               </>
             )}
           </Button>
