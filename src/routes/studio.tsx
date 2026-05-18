@@ -400,7 +400,9 @@ function StudioPage() {
         {/* Result */}
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <Label>Hasil render</Label>
+            <Label>
+              {result ? "Hasil final" : baseDataUrl ? "Pratinjau Tahap 1" : "Hasil render"}
+            </Label>
             {result && (
               <Button asChild variant="ghost" size="sm">
                 <a href={result} target="_blank" rel="noreferrer" download>
@@ -413,7 +415,7 @@ function StudioPage() {
 
           <div className="relative aspect-square overflow-hidden rounded-xl border border-border/60 bg-background sm:aspect-[4/3]">
             <AnimatePresence mode="wait">
-              {generating ? (
+              {busy ? (
                 <motion.div
                   key="loading"
                   initial={{ opacity: 0 }}
@@ -424,7 +426,7 @@ function StudioPage() {
                   <div className="absolute inset-0 animate-shimmer" />
                   <Sparkles className="relative h-10 w-10 text-ember" />
                   <p className="relative text-sm text-muted-foreground">
-                    AI sedang menyusun render Anda...
+                    {progressMsg || "Memproses..."}
                   </p>
                 </motion.div>
               ) : result ? (
@@ -432,6 +434,15 @@ function StudioPage() {
                   key="result"
                   src={result}
                   alt="Hasil render"
+                  initial={{ opacity: 0, scale: 1.02 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="h-full w-full object-contain"
+                />
+              ) : baseDataUrl ? (
+                <motion.img
+                  key="base"
+                  src={baseDataUrl}
+                  alt="Pratinjau Tahap 1"
                   initial={{ opacity: 0, scale: 1.02 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="h-full w-full object-contain"
