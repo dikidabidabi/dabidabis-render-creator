@@ -37,8 +37,6 @@ const UPSCALE_RESOLUTIONS = [
 ] as const;
 
 type UpscaleResolution = (typeof UPSCALE_RESOLUTIONS)[number]["id"];
-const GEMINI_CLIENT_COOLDOWN_MS = 70_000;
-
 function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -60,30 +58,16 @@ function StudioPage() {
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
-  const [nextRenderAt, setNextRenderAt] = useState(0);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const cooldownActive = nextRenderAt > nowMs;
-  const cooldownSeconds = Math.max(1, Math.ceil((nextRenderAt - nowMs) / 1000));
   const busy = generating || upscaling;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!cooldownActive) return;
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [cooldownActive]);
-
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
     if (!user) return toast.error("Sesi login tidak ditemukan");
-    const waitMs = nextRenderAt - Date.now();
-    if (waitMs > 0) {
-      return toast.warning(`Tunggu sekitar ${Math.ceil(waitMs / 1000)} detik sebelum render berikutnya.`);
-    }
     const useSeed = seedLocked
       ? seed
       : (() => {
@@ -110,13 +94,9 @@ function StudioPage() {
         },
       });
       if (!res.ok) {
-        if (res.error?.toLowerCase().includes("gemini")) {
-          setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
-        }
         toast.error(res.error || "Gagal render");
         return;
       }
-      setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
       setBaseDataUrl(res.baseDataUrl);
       setBaseRenderId(res.id);
       toast.success(`Tahap 1 selesai. Periksa hasil — bila sudah cocok lanjut ke upscaling. Seed: ${useSeed}`);
