@@ -10,7 +10,9 @@ import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { GEMINI_API_KEY, GEMINI_IMAGE_MODEL } from "@/config/apiConfig";
+import { getGeminiApiKey } from "@/lib/gemini-key";
+
+const GEMINI_IMAGE_MODEL = "imagen-3.0-generate-002";
 
 const RENDER_TYPE_PROMPTS: Record<string, string> = {
   exterior:
