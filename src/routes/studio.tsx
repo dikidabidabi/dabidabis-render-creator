@@ -66,15 +66,13 @@ function StudioPage() {
       const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
       const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const instruction = `Anda adalah AI generator gambar Nano Banana Pro. Buatlah satu gambar AI yang sangat realistis dan sinematik berdasarkan prompt berikut, lalu kembalikan hasilnya murni dalam bentuk data URL gambar (Base64) atau gunakan fungsi internal generator gambar Anda: ${fullPrompt}`;
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: fullPrompt,
-          numberOfImages: 1,
-          aspectRatio: "1:1",
-          outputMimeType: "image/jpeg",
+          contents: [{ parts: [{ text: instruction }] }],
         }),
       });
 
@@ -83,15 +81,34 @@ function StudioPage() {
         throw new Error(`Gemini API ${resp.status}: ${errText.slice(0, 200)}`);
       }
       const json = await resp.json();
-      const img =
-        json?.generatedImages?.[0]?.image ??
-        json?.generated_images?.[0]?.image;
-      const b64: string | undefined = img?.imageBytes ?? img?.image_bytes;
-      const mime: string = img?.mimeType ?? img?.mime_type ?? "image/jpeg";
-      if (!b64) throw new Error("Tidak ada gambar dihasilkan");
+      const parts: Array<{ text?: string; inlineData?: { data: string; mimeType?: string }; inline_data?: { data: string; mime_type?: string } }> =
+        json?.candidates?.[0]?.content?.parts ?? [];
 
-      setResult(`data:${mime};base64,${b64}`);
-      toast.success("Render selesai!");
+      // 1) Prefer inline image data if model returns it
+      const inlinePart = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
+      if (inlinePart) {
+        const b64 = inlinePart.inlineData?.data ?? inlinePart.inline_data?.data!;
+        const mime = inlinePart.inlineData?.mimeType ?? inlinePart.inline_data?.mime_type ?? "image/png";
+        setResult(`data:${mime};base64,${b64}`);
+        toast.success("Render selesai!");
+        return;
+      }
+
+      // 2) Fallback: parse text for data URL or raw base64
+      const text = parts.map((p) => p.text ?? "").join("\n").trim();
+      const dataUrlMatch = text.match(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/);
+      if (dataUrlMatch) {
+        setResult(dataUrlMatch[0]);
+        toast.success("Render selesai!");
+        return;
+      }
+      const rawB64 = text.match(/[A-Za-z0-9+/=]{500,}/);
+      if (rawB64) {
+        setResult(`data:image/png;base64,${rawB64[0]}`);
+        toast.success("Render selesai!");
+        return;
+      }
+      throw new Error("Model tidak mengembalikan gambar. Coba model image generation (mis. gemini-2.5-flash-image).");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
