@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,18 +11,7 @@ import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-
-const RENDER_TYPE_PROMPTS: Record<string, string> = {
-  exterior:
-    "Professional photorealistic architectural exterior render. Natural golden hour lighting, realistic materials (concrete, wood, glass, steel), accurate reflections, dramatic sky, integrated landscaping, subtle depth of field. Top-tier architect portfolio quality.",
-  interior:
-    "Magazine-quality photorealistic interior render. Soft ambient lighting, tasteful contemporary furniture, accurate material textures (wood, marble, fabric, metal), natural highlights and shadows, cinematic depth of field.",
-  night:
-    "Dramatic architectural night shot. Warm interior light spilling out, strategic landscape lighting, deep blue night sky with subtle stars, light reflections on glass and wet surfaces, cinematic high-end mood.",
-  watercolor:
-    "Artistic architectural watercolor illustration. Soft color washes, thin ink contour lines, visible paper texture, accurate proportions preserved, calm elegant palette, architect concept presentation style.",
-};
+import { generateRender } from "@/lib/render.functions";
 
 export const Route = createFileRoute("/studio")({
   component: StudioPage,
@@ -53,26 +43,27 @@ function StudioPage() {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
+  const runGenerate = useServerFn(generateRender);
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     setGenerating(true);
     setResult(null);
     try {
-      const stylePrefix = RENDER_TYPE_PROMPTS[renderType];
-      const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
-      const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
-
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=1024&height=1024&model=flux&enhance=true&nologo=true`;
-
-      // Preload to ensure the image is ready before showing
-      await new Promise<void>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Gagal memuat gambar dari Pollinations"));
-        img.src = imageUrl;
+      const res = await runGenerate({
+        data: {
+          sketchBase64: sketch,
+          referenceBase64: reference,
+          prompt: prompt.trim(),
+          renderType,
+          accuracy,
+          consistency,
+        },
       });
-
-      setResult(imageUrl);
+      if (!res.ok) throw new Error(res.error);
+      if (!res.resultUrl) throw new Error("Tidak ada URL hasil");
+      setResult(res.resultUrl);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
