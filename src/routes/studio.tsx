@@ -402,11 +402,70 @@ function StudioPage() {
             </AnimatePresence>
           </div>
 
-          {result && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Tersimpan otomatis di galeri Anda.
-            </p>
-          )}
+          <div className="mt-5 space-y-3 rounded-xl border border-border/60 bg-surface/40 p-4">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-1.5 text-sm">
+                <Maximize2 className="h-3.5 w-3.5 text-ember" />
+                Upscale resolusi
+              </Label>
+              <span className="text-[10px] text-muted-foreground">
+                {baseDataUrl ? "Pratinjau 1K siap" : "Jalankan Tahap 1 dulu"}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {UPSCALE_RESOLUTIONS.map((r) => {
+                const active = resolution === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setResolution(r.id)}
+                    disabled={busy}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 rounded-lg border p-2.5 transition-all disabled:opacity-50",
+                      active
+                        ? "border-ember bg-ember/10 shadow-soft"
+                        : "border-border/60 bg-surface/40 hover:border-border",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "font-display text-base font-semibold",
+                        active ? "text-ember" : "text-foreground",
+                      )}
+                    >
+                      {r.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{r.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <Button
+              onClick={handleUpscale}
+              disabled={busy || !baseDataUrl}
+              size="lg"
+              className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
+            >
+              {upscaling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {progressMsg || "Memproses..."}
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="mr-2 h-4 w-4" />
+                  {`Tahap 2–5: Upscale ke ${resolution.toUpperCase()} & simpan`}
+                </>
+              )}
+            </Button>
+            {result && (
+              <p className="text-xs text-muted-foreground">
+                Tersimpan otomatis di galeri Anda.
+              </p>
+            )}
+          </div>
+
         </div>
       </div>
     </main>
