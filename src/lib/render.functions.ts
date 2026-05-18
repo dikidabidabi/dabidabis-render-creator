@@ -624,10 +624,10 @@ export const generateRender = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    if (!GEMINI_API_KEY) {
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === "ISI_API_KEY_DISINI") {
       return {
         ok: false as const,
-        error: "VITE_GEMINI_API_KEY belum dikonfigurasi. Tambahkan di Workspace Settings → Build Secrets.",
+        error: "GEMINI_API_KEY belum diisi. Buka src/config/apiConfig.ts dan masukkan API key Google AI Studio Anda.",
       };
     }
 
@@ -691,7 +691,7 @@ export const generateRender = createServerFn({ method: "POST" })
       if (!aiResult.ok) {
         let msg = `Gemini error (${aiResult.status})`;
         if (aiResult.status === 429) msg = "Rate limit Gemini tercapai. Coba lagi sebentar.";
-        if (aiResult.status === 403) msg = "API key Gemini ditolak (403). Periksa VITE_GEMINI_API_KEY.";
+        if (aiResult.status === 403) msg = "API key Gemini ditolak (403). Periksa GEMINI_API_KEY di src/config/apiConfig.ts.";
         if (aiResult.status === 400) msg = "Permintaan ditolak Gemini (400).";
         await supabase
           .from("renders")
