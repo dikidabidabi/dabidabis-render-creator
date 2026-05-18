@@ -37,8 +37,19 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
 const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 import { GEMINI_API_KEY } from "@/config/apiConfig";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
+const GEMINI_RENDER_COOLDOWN_MS = 70_000;
+const geminiRenderNextAllowedAtByUser = new Map<string, number>();
+const geminiRenderInFlightByUser = new Set<string>();
 
 type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
+
+function parseGeminiRetryMs(errorText: string, retryAfter: string | null) {
+  const retryAfterSeconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
+  const bodySeconds = Number.parseInt(errorText.match(/retryDelay"?\s*:?\s*"?(\d+)s/i)?.[1] ?? "", 10);
+  const seconds = Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : bodySeconds;
+  if (!Number.isFinite(seconds) || seconds <= 0) return GEMINI_RENDER_COOLDOWN_MS;
+  return Math.min(180_000, Math.max(15_000, seconds * 1000));
+}
 
 function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
   const m = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
@@ -48,7 +59,7 @@ function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
 
 async function callGeminiImage(
   parts: GeminiPart[],
-): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string; retryAfterMs?: number }> {
   if (!GEMINI_API_KEY || (GEMINI_API_KEY as string) === "ISI_API_KEY_DISINI") {
     return { ok: false, status: 0, error: "GEMINI_API_KEY belum diisi di src/config/apiConfig.ts" };
   }
@@ -62,7 +73,12 @@ async function callGeminiImage(
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
-    return { ok: false, status: resp.status, error: text.slice(0, 400) };
+    return {
+      ok: false,
+      status: resp.status,
+      error: text.slice(0, 400),
+      retryAfterMs: resp.status === 429 ? parseGeminiRetryMs(text, resp.headers.get("retry-after")) : undefined,
+    };
   }
   const json = await resp.json();
   const respParts: Array<Record<string, unknown>> =
