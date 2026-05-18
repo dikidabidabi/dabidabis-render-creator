@@ -66,13 +66,13 @@ function StudioPage() {
       const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
       const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      const instruction = `Anda adalah AI generator gambar Nano Banana Pro. Buatlah satu gambar AI yang sangat realistis dan sinematik berdasarkan prompt berikut, lalu kembalikan hasilnya murni dalam bentuk data URL gambar (Base64) atau gunakan fungsi internal generator gambar Anda: ${fullPrompt}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: instruction }] }],
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
         }),
       });
 
@@ -81,10 +81,10 @@ function StudioPage() {
         throw new Error(`Gemini API ${resp.status}: ${errText.slice(0, 200)}`);
       }
       const json = await resp.json();
+      const candidate = json?.candidates?.[0];
       const parts: Array<{ text?: string; inlineData?: { data: string; mimeType?: string }; inline_data?: { data: string; mime_type?: string } }> =
-        json?.candidates?.[0]?.content?.parts ?? [];
+        candidate?.content?.parts ?? [];
 
-      // 1) Prefer inline image data if model returns it
       const inlinePart = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
       if (inlinePart) {
         const b64 = inlinePart.inlineData?.data ?? inlinePart.inline_data?.data!;
@@ -94,21 +94,11 @@ function StudioPage() {
         return;
       }
 
-      // 2) Fallback: parse text for data URL or raw base64
-      const text = parts.map((p) => p.text ?? "").join("\n").trim();
-      const dataUrlMatch = text.match(/data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=]+/);
-      if (dataUrlMatch) {
-        setResult(dataUrlMatch[0]);
-        toast.success("Render selesai!");
-        return;
-      }
-      const rawB64 = text.match(/[A-Za-z0-9+/=]{500,}/);
-      if (rawB64) {
-        setResult(`data:image/png;base64,${rawB64[0]}`);
-        toast.success("Render selesai!");
-        return;
-      }
-      throw new Error("Model tidak mengembalikan gambar. Coba model image generation (mis. gemini-2.5-flash-image).");
+      const finishReason = candidate?.finishReason;
+      const textOut = parts.map((p) => p.text ?? "").join(" ").trim();
+      throw new Error(
+        `Model tidak mengembalikan gambar${finishReason ? ` (${finishReason})` : ""}.${textOut ? ` ${textOut.slice(0, 160)}` : ""}`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
