@@ -314,7 +314,7 @@ function StudioPage() {
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merender + AI sharpening 16 tile seragam... (~30–90 detik)
+                {progressMsg || "Memproses..."}
               </>
             ) : (
               <>
