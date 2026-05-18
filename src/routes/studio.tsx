@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
@@ -188,7 +188,7 @@ function StudioPage() {
 
           <Button
             onClick={handleGenerate}
-            disabled={generating || !sketch || !prompt.trim()}
+            disabled={generating || !prompt.trim()}
             size="lg"
             className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
           >
