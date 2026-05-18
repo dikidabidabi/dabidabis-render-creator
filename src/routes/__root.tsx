@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Layers } from "lucide-react";
+import { GeminiKeyInput } from "@/lib/gemini-key";
 
 import appCss from "../styles.css?url";
 
@@ -88,6 +89,7 @@ function Header() {
           <span className="font-display text-lg font-semibold tracking-tight">Dabidabi's</span>
         </Link>
         <nav className="flex items-center gap-2 sm:gap-4">
+          <GeminiKeyInput />
           {user ? (
             <>
               <Link
