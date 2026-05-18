@@ -38,7 +38,6 @@ const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 import { GEMINI_API_KEY } from "@/config/apiConfig";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
 const GEMINI_RENDER_COOLDOWN_MS = 70_000;
-const geminiRenderNextAllowedAtByUser = new Map<string, number>();
 const geminiRenderInFlightByUser = new Set<string>();
 
 type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
@@ -586,14 +585,8 @@ export const generateRender = createServerFn({ method: "POST" })
       return { ok: false as const, error: insertErr?.message ?? "DB error" };
     }
 
-    const now = Date.now();
-    const nextAllowedAt = geminiRenderNextAllowedAtByUser.get(userId) ?? 0;
-    if (geminiRenderInFlightByUser.has(userId) || now < nextAllowedAt) {
-      const waitMs = geminiRenderInFlightByUser.has(userId)
-        ? GEMINI_RENDER_COOLDOWN_MS
-        : Math.max(1, nextAllowedAt - now);
-      const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000));
-      const msg = `Render Gemini sedang cooldown. Coba lagi sekitar ${waitSeconds} detik lagi.`;
+    if (geminiRenderInFlightByUser.has(userId)) {
+      const msg = "Render Gemini sedang berjalan. Tunggu hasil render pertama selesai sebelum klik lagi.";
       await supabase.from("renders").update({ status: "failed", error: msg }).eq("id", row.id);
       return { ok: false as const, error: msg };
     }
@@ -644,7 +637,6 @@ export const generateRender = createServerFn({ method: "POST" })
         let msg = `Gemini error (${aiResult.status})`;
         if (aiResult.status === 429) {
           const retryMs = aiResult.retryAfterMs ?? GEMINI_RENDER_COOLDOWN_MS;
-          geminiRenderNextAllowedAtByUser.set(userId, Date.now() + retryMs);
           const retrySeconds = Math.max(1, Math.ceil(retryMs / 1000));
           msg = `Kuota Gemini sedang jeda otomatis. Coba lagi sekitar ${retrySeconds} detik lagi.`;
         }
