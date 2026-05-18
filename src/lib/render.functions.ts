@@ -49,7 +49,7 @@ function dataUrlToInlinePart(dataUrl: string): GeminiPart | null {
 async function callGeminiImage(
   parts: GeminiPart[],
 ): Promise<{ ok: true; dataUrl: string } | { ok: false; status: number; error: string }> {
-  if (!GEMINI_API_KEY || GEMINI_API_KEY === "ISI_API_KEY_DISINI") {
+  if (!GEMINI_API_KEY || (GEMINI_API_KEY as string) === "ISI_API_KEY_DISINI") {
     return { ok: false, status: 0, error: "GEMINI_API_KEY belum diisi di src/config/apiConfig.ts" };
   }
   const resp = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
@@ -624,7 +624,7 @@ export const generateRender = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    if (!GEMINI_API_KEY || GEMINI_API_KEY === "ISI_API_KEY_DISINI") {
+    if (!GEMINI_API_KEY || (GEMINI_API_KEY as string) === "ISI_API_KEY_DISINI") {
       return {
         ok: false as const,
         error: "GEMINI_API_KEY belum diisi. Buka src/config/apiConfig.ts dan masukkan API key Google AI Studio Anda.",
