@@ -12,8 +12,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getGeminiApiKey } from "@/lib/gemini-key";
 
-const GEMINI_IMAGE_MODEL = "imagen-3.0-generate-002";
-
 const RENDER_TYPE_PROMPTS: Record<string, string> = {
   exterior:
     "Professional photorealistic architectural exterior render. Natural golden hour lighting, realistic materials (concrete, wood, glass, steel), accurate reflections, dramatic sky, integrated landscaping, subtle depth of field. Top-tier architect portfolio quality.",
@@ -68,13 +66,17 @@ function StudioPage() {
       const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
       const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:predict?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instances: [{ prompt: fullPrompt }],
-          parameters: { sampleCount: 1, aspectRatio: "4:3" },
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: "4:3",
+            personGeneration: "allow_adult",
+          },
         }),
       });
 
