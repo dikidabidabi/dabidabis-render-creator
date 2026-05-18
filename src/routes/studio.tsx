@@ -57,8 +57,9 @@ function StudioPage() {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
-    if (!GEMINI_API_KEY || GEMINI_API_KEY.startsWith("GANTI_")) {
-      return toast.error("API Key Gemini belum diisi di src/config/apiConfig.ts");
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      return toast.warning("Silakan masukkan API Key Anda terlebih dahulu");
     }
     setGenerating(true);
     setResult(null);
@@ -67,7 +68,7 @@ function StudioPage() {
       const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
       const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:predict?key=${GEMINI_API_KEY}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:predict?key=${apiKey}`;
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
