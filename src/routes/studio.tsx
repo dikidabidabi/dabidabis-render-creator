@@ -54,7 +54,10 @@ function StudioPage() {
   const [resolution, setResolution] = useState<Resolution>("1k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
+  const [upscaling, setUpscaling] = useState(false);
   const [progressMsg, setProgressMsg] = useState<string>("");
+  const [baseDataUrl, setBaseDataUrl] = useState<string | null>(null);
+  const [baseRenderId, setBaseRenderId] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
@@ -62,6 +65,7 @@ function StudioPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const cooldownActive = nextRenderAt > nowMs;
   const cooldownSeconds = Math.max(1, Math.ceil((nextRenderAt - nowMs) / 1000));
+  const busy = generating || upscaling;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
