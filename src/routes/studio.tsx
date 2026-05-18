@@ -335,31 +335,6 @@ function StudioPage() {
               )}
             </Button>
 
-            <Button
-              onClick={handleUpscale}
-              disabled={busy || !baseDataUrl}
-              size="lg"
-              variant="outline"
-              className="w-full text-base"
-            >
-              {upscaling ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {progressMsg || "Memproses..."}
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="mr-2 h-4 w-4" />
-                  {`Tahap 2–5: Upscale ke ${resolution.toUpperCase()} & simpan`}
-                </>
-              )}
-            </Button>
-
-            {!baseDataUrl && (
-              <p className="text-xs text-muted-foreground">
-                Jalankan Tahap 1 dulu. Bila hasilnya sudah cocok, lanjut ke upscaling.
-              </p>
-            )}
           </div>
         </div>
 
