@@ -50,7 +50,7 @@ function StudioPage() {
   const [prompt, setPrompt] = useState("");
   const [renderType, setRenderType] = useState<RenderType>("exterior");
   const [accuracy, setAccuracy] = useState(8);
-  const [resolution, setResolution] = useState<Resolution>("1k");
+  const [resolution, setResolution] = useState<UpscaleResolution>("2k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [upscaling, setUpscaling] = useState(false);
