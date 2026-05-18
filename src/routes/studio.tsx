@@ -48,32 +48,73 @@ function StudioPage() {
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [hfToken, setHfTokenState] = useState("");
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
-  const runGenerate = useServerFn(generateRender);
+  useEffect(() => {
+    setHfTokenState(getHfToken());
+  }, []);
+
+  const handleTokenChange = (v: string) => {
+    setHfTokenState(v);
+    setHfToken(v.trim());
+  };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    if (!hfToken.trim()) return toast.error("Masukkan Hugging Face token terlebih dahulu");
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
+    if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+
     setGenerating(true);
     setResult(null);
     try {
-      const res = await runGenerate({
-        data: {
-          sketchBase64: sketch,
-          referenceBase64: reference,
-          prompt: prompt.trim(),
-          renderType,
-          accuracy,
-          consistency,
+      // Convert sketch data URL → Blob
+      const sketchBlob = await (await fetch(sketch)).blob();
+
+      const stylePrefix = STYLE_PROMPTS[renderType];
+      const fidelity = accuracy >= 8 ? "strictly preserve composition and proportions of the sketch" : accuracy >= 5 ? "follow sketch composition closely" : "loose interpretation of sketch";
+      const fullPrompt = `${stylePrefix}, ${fidelity}, ${prompt.trim()}`;
+
+      // HF Inference img2img: kirim image binary sebagai body, prompt via header parameters
+      // SDXL refiner accepts image bytes as body + parameters via x-wait-for-model header
+      const formData = new FormData();
+      formData.append("image", sketchBlob, "sketch.png");
+      formData.append("inputs", fullPrompt);
+      formData.append("parameters", JSON.stringify({
+        prompt: fullPrompt,
+        strength: 1 - accuracy / 12, // higher accuracy = lower strength = closer to sketch
+        guidance_scale: 7.5,
+        num_inference_steps: 30,
+      }));
+
+      const res = await fetch(HF_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${hfToken.trim()}`,
         },
+        body: formData,
       });
-      if (!res.ok) throw new Error(res.error);
-      if (!res.resultUrl) throw new Error("Tidak ada URL hasil");
-      setResult(res.resultUrl);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        if (res.status === 401) throw new Error("Token Hugging Face tidak valid");
+        if (res.status === 503) throw new Error("Model sedang loading di HF, coba lagi ~20 detik");
+        if (res.status === 429) throw new Error("Rate limit HF tercapai, coba lagi nanti");
+        throw new Error(`HF error ${res.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.startsWith("image/")) {
+        const txt = await res.text();
+        throw new Error(`Respons bukan gambar: ${txt.slice(0, 200)}`);
+      }
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      setResult(objectUrl);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
