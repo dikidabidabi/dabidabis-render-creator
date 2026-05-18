@@ -1,17 +1,27 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
+import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, KeyRound, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { generateRender } from "@/lib/render.functions";
+import { getHfToken, setHfToken } from "@/lib/hf-token";
+
+const STYLE_PROMPTS: Record<string, string> = {
+  exterior: "professional photorealistic architectural exterior render, golden hour, realistic materials (concrete, wood, glass, steel), accurate reflections, dramatic sky, landscaping, ultra detailed, 8k",
+  interior: "magazine-quality photorealistic interior render, soft ambient lighting, contemporary furniture, accurate materials (wood, marble, fabric, metal), cinematic depth of field, ultra detailed, 8k",
+  night: "dramatic architectural night shot, warm interior light spilling out, landscape lighting, deep blue night sky, light reflections on glass, cinematic, ultra detailed, 8k",
+  watercolor: "architectural watercolor illustration, soft color washes, thin ink contour lines, paper texture, elegant palette, concept presentation",
+};
+
+const HF_MODEL = "stabilityai/stable-diffusion-xl-refiner-1.0";
+const HF_ENDPOINT = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
 
 export const Route = createFileRoute("/studio")({
   component: StudioPage,
