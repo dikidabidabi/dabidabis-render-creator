@@ -10,7 +10,7 @@ import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getGeminiApiKey } from "@/lib/gemini-key";
+
 
 const RENDER_TYPE_PROMPTS: Record<string, string> = {
   exterior:
@@ -55,10 +55,6 @@ function StudioPage() {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) {
-      return toast.warning("Silakan masukkan API Key Anda terlebih dahulu");
-    }
     setGenerating(true);
     setResult(null);
     try {
@@ -66,39 +62,18 @@ function StudioPage() {
       const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
       const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-        }),
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=1024&height=1024&model=flux&enhance=true&nologo=true`;
+
+      // Preload to ensure the image is ready before showing
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Gagal memuat gambar dari Pollinations"));
+        img.src = imageUrl;
       });
 
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`Gemini API ${resp.status}: ${errText.slice(0, 200)}`);
-      }
-      const json = await resp.json();
-      const candidate = json?.candidates?.[0];
-      const parts: Array<{ text?: string; inlineData?: { data: string; mimeType?: string }; inline_data?: { data: string; mime_type?: string } }> =
-        candidate?.content?.parts ?? [];
-
-      const inlinePart = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
-      if (inlinePart) {
-        const b64 = inlinePart.inlineData?.data ?? inlinePart.inline_data?.data!;
-        const mime = inlinePart.inlineData?.mimeType ?? inlinePart.inline_data?.mime_type ?? "image/png";
-        setResult(`data:${mime};base64,${b64}`);
-        toast.success("Render selesai!");
-        return;
-      }
-
-      const finishReason = candidate?.finishReason;
-      const textOut = parts.map((p) => p.text ?? "").join(" ").trim();
-      throw new Error(
-        `Model tidak mengembalikan gambar${finishReason ? ` (${finishReason})` : ""}.${textOut ? ` ${textOut.slice(0, 160)}` : ""}`,
-      );
+      setResult(imageUrl);
+      toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
