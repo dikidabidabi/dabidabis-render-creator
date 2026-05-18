@@ -54,7 +54,10 @@ function StudioPage() {
   const [resolution, setResolution] = useState<Resolution>("1k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
+  const [upscaling, setUpscaling] = useState(false);
   const [progressMsg, setProgressMsg] = useState<string>("");
+  const [baseDataUrl, setBaseDataUrl] = useState<string | null>(null);
+  const [baseRenderId, setBaseRenderId] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
@@ -62,6 +65,7 @@ function StudioPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const cooldownActive = nextRenderAt > nowMs;
   const cooldownSeconds = Math.max(1, Math.ceil((nextRenderAt - nowMs) / 1000));
+  const busy = generating || upscaling;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -90,6 +94,8 @@ function StudioPage() {
         })();
     setGenerating(true);
     setResult(null);
+    setBaseDataUrl(null);
+    setBaseRenderId(null);
     setProgressMsg("Tahap 1: render AI...");
     try {
       const res = await generateFn({
@@ -112,16 +118,31 @@ function StudioPage() {
         return;
       }
       setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
+      setBaseDataUrl(res.baseDataUrl);
+      setBaseRenderId(res.id);
+      toast.success(`Tahap 1 selesai. Periksa hasil — bila sudah cocok lanjut ke upscaling. Seed: ${useSeed}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error");
+    } finally {
+      setGenerating(false);
+      setProgressMsg("");
+    }
+  };
 
-      // Tahap 2-5 berjalan di browser via Canvas API (tanpa AI/API luar).
+  const handleUpscale = async () => {
+    if (!baseDataUrl || !baseRenderId) return toast.error("Jalankan Tahap 1 dulu");
+    if (!user) return toast.error("Sesi login tidak ditemukan");
+    setUpscaling(true);
+    setResult(null);
+    try {
       const processed = await processRenderInBrowser(
-        res.baseDataUrl,
+        baseDataUrl,
         resolution,
         (m) => setProgressMsg(m),
       );
 
       setProgressMsg("Mengunggah hasil...");
-      const path = `${user.id}/${res.id}.${processed.ext}`;
+      const path = `${user.id}/${baseRenderId}.${processed.ext}`;
       const { error: upErr } = await supabase.storage
         .from("renders")
         .upload(path, processed.blob, {
@@ -133,17 +154,17 @@ function StudioPage() {
         return;
       }
 
-      const fin = await finalizeFn({ data: { id: res.id, ext: processed.ext } });
+      const fin = await finalizeFn({ data: { id: baseRenderId, ext: processed.ext } });
       if (!fin.ok) {
         toast.error(fin.error || "Gagal finalize");
         return;
       }
       setResult(fin.resultUrl);
-      toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
+      toast.success(`Upscaling selesai (${resolution.toUpperCase()})!`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
-      setGenerating(false);
+      setUpscaling(false);
       setProgressMsg("");
     }
   };
@@ -324,30 +345,64 @@ function StudioPage() {
             </p>
           </div>
 
-          <Button
-            onClick={handleGenerate}
-            disabled={generating || cooldownActive || !sketch || !prompt.trim()}
-            size="lg"
-            className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {progressMsg || "Memproses..."}
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                {cooldownActive ? `Tunggu ${cooldownSeconds}d` : "Render dengan AI"}
-              </>
+          <div className="space-y-2">
+            <Button
+              onClick={handleGenerate}
+              disabled={busy || cooldownActive || !sketch || !prompt.trim()}
+              size="lg"
+              className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {progressMsg || "Tahap 1: render AI..."}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {cooldownActive
+                    ? `Tunggu ${cooldownSeconds}d`
+                    : baseDataUrl
+                      ? "Tahap 1: Generate ulang"
+                      : "Tahap 1: Generate dengan AI"}
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handleUpscale}
+              disabled={busy || !baseDataUrl}
+              size="lg"
+              variant="outline"
+              className="w-full text-base"
+            >
+              {upscaling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {progressMsg || "Memproses..."}
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="mr-2 h-4 w-4" />
+                  {`Tahap 2–5: Upscale ke ${resolution.toUpperCase()} & simpan`}
+                </>
+              )}
+            </Button>
+
+            {!baseDataUrl && (
+              <p className="text-xs text-muted-foreground">
+                Jalankan Tahap 1 dulu. Bila hasilnya sudah cocok, lanjut ke upscaling.
+              </p>
             )}
-          </Button>
+          </div>
         </div>
 
         {/* Result */}
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <Label>Hasil render</Label>
+            <Label>
+              {result ? "Hasil final" : baseDataUrl ? "Pratinjau Tahap 1" : "Hasil render"}
+            </Label>
             {result && (
               <Button asChild variant="ghost" size="sm">
                 <a href={result} target="_blank" rel="noreferrer" download>
@@ -360,7 +415,7 @@ function StudioPage() {
 
           <div className="relative aspect-square overflow-hidden rounded-xl border border-border/60 bg-background sm:aspect-[4/3]">
             <AnimatePresence mode="wait">
-              {generating ? (
+              {busy ? (
                 <motion.div
                   key="loading"
                   initial={{ opacity: 0 }}
@@ -371,7 +426,7 @@ function StudioPage() {
                   <div className="absolute inset-0 animate-shimmer" />
                   <Sparkles className="relative h-10 w-10 text-ember" />
                   <p className="relative text-sm text-muted-foreground">
-                    AI sedang menyusun render Anda...
+                    {progressMsg || "Memproses..."}
                   </p>
                 </motion.div>
               ) : result ? (
@@ -379,6 +434,15 @@ function StudioPage() {
                   key="result"
                   src={result}
                   alt="Hasil render"
+                  initial={{ opacity: 0, scale: 1.02 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="h-full w-full object-contain"
+                />
+              ) : baseDataUrl ? (
+                <motion.img
+                  key="base"
+                  src={baseDataUrl}
+                  alt="Pratinjau Tahap 1"
                   initial={{ opacity: 0, scale: 1.02 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="h-full w-full object-contain"
