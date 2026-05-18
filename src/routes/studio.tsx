@@ -38,6 +38,7 @@ const RESOLUTIONS = [
 ] as const;
 
 type Resolution = (typeof RESOLUTIONS)[number]["id"];
+const GEMINI_CLIENT_COOLDOWN_MS = 70_000;
 
 function StudioPage() {
   const { user, loading } = useAuth();
@@ -57,6 +58,7 @@ function StudioPage() {
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
+  const [nextRenderAt, setNextRenderAt] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -66,6 +68,10 @@ function StudioPage() {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
     if (!user) return toast.error("Sesi login tidak ditemukan");
+    const waitMs = nextRenderAt - Date.now();
+    if (waitMs > 0) {
+      return toast.warning(`Tunggu sekitar ${Math.ceil(waitMs / 1000)} detik sebelum render berikutnya.`);
+    }
     const useSeed = seedLocked
       ? seed
       : (() => {
@@ -90,9 +96,13 @@ function StudioPage() {
         },
       });
       if (!res.ok) {
+        if (res.error?.toLowerCase().includes("gemini")) {
+          setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
+        }
         toast.error(res.error || "Gagal render");
         return;
       }
+      setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
 
       // Tahap 2-5 berjalan di browser via Canvas API (tanpa AI/API luar).
       const processed = await processRenderInBrowser(
