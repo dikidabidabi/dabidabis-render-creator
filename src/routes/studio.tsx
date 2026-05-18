@@ -59,11 +59,19 @@ function StudioPage() {
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
   const [nextRenderAt, setNextRenderAt] = useState(0);
-  const cooldownActive = nextRenderAt > Date.now();
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const cooldownActive = nextRenderAt > nowMs;
+  const cooldownSeconds = Math.max(1, Math.ceil((nextRenderAt - nowMs) / 1000));
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (!cooldownActive) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownActive]);
 
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
@@ -330,7 +338,7 @@ function StudioPage() {
             ) : (
               <>
                 <Sparkles className="mr-2 h-4 w-4" />
-                Render dengan AI
+                {cooldownActive ? `Tunggu ${cooldownSeconds}d` : "Render dengan AI"}
               </>
             )}
           </Button>
