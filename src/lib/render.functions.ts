@@ -34,7 +34,7 @@ const RESOLUTION_SPECS: Record<string, { label: string; longEdge: number }> = {
 };
 
 // Direct Google Gemini API (Google AI Studio) — model image-generation terbaru.
-const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
+const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
 import { GEMINI_API_KEY } from "@/config/apiConfig";
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`;
 
