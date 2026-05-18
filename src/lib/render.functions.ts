@@ -660,6 +660,18 @@ export const generateRender = createServerFn({ method: "POST" })
       return { ok: false as const, error: insertErr?.message ?? "DB error" };
     }
 
+    const now = Date.now();
+    const nextAllowedAt = geminiRenderNextAllowedAtByUser.get(userId) ?? 0;
+    if (geminiRenderInFlightByUser.has(userId) || now < nextAllowedAt) {
+      const waitMs = geminiRenderInFlightByUser.has(userId)
+        ? GEMINI_RENDER_COOLDOWN_MS
+        : Math.max(1, nextAllowedAt - now);
+      const waitSeconds = Math.max(1, Math.ceil(waitMs / 1000));
+      const msg = `Render Gemini sedang cooldown. Coba lagi sekitar ${waitSeconds} detik lagi.`;
+      await supabase.from("renders").update({ status: "failed", error: msg }).eq("id", row.id);
+      return { ok: false as const, error: msg };
+    }
+
     const finalPrompt = buildSystemPrompt(
       data.renderType,
       data.accuracy,
@@ -699,11 +711,17 @@ export const generateRender = createServerFn({ method: "POST" })
     // TAHAP 1: panggil Gemini SEKALI saja. Tahap 2-5 (upscale, pecah 16 tile,
     // sharpen, stitch) dipindah ke browser via Canvas API agar tidak menguras
     // RPM Gemini dan gratis bagi user.
+    geminiRenderInFlightByUser.add(userId);
     try {
       const aiResult = await callGeminiImage(geminiParts);
       if (!aiResult.ok) {
         let msg = `Gemini error (${aiResult.status})`;
-        if (aiResult.status === 429) msg = "Rate limit Gemini tercapai. Coba lagi sebentar.";
+        if (aiResult.status === 429) {
+          const retryMs = aiResult.retryAfterMs ?? GEMINI_RENDER_COOLDOWN_MS;
+          geminiRenderNextAllowedAtByUser.set(userId, Date.now() + retryMs);
+          const retrySeconds = Math.max(1, Math.ceil(retryMs / 1000));
+          msg = `Kuota Gemini sedang jeda otomatis. Coba lagi sekitar ${retrySeconds} detik lagi.`;
+        }
         if (aiResult.status === 403) msg = "API key Gemini ditolak (403). Periksa GEMINI_API_KEY di src/config/apiConfig.ts.";
         if (aiResult.status === 400) msg = "Permintaan ditolak Gemini (400).";
         await supabase
@@ -723,6 +741,8 @@ export const generateRender = createServerFn({ method: "POST" })
       const msg = e instanceof Error ? e.message : "Unknown error";
       await supabase.from("renders").update({ status: "failed", error: msg }).eq("id", row.id);
       return { ok: false as const, error: msg };
+    } finally {
+      geminiRenderInFlightByUser.delete(userId);
     }
   });
 
