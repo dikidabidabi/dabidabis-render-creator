@@ -680,9 +680,11 @@ export const generateRender = createServerFn({ method: "POST" })
     }
     geminiParts.push(sketchPart);
 
+    // TAHAP 1: panggil Gemini SEKALI saja. Tahap 2-5 (upscale, pecah 16 tile,
+    // sharpen, stitch) dipindah ke browser via Canvas API agar tidak menguras
+    // RPM Gemini dan gratis bagi user.
     try {
       const aiResult = await callGeminiImage(geminiParts);
-
       if (!aiResult.ok) {
         let msg = `Gemini error (${aiResult.status})`;
         if (aiResult.status === 429) msg = "Rate limit Gemini tercapai. Coba lagi sebentar.";
@@ -694,102 +696,52 @@ export const generateRender = createServerFn({ method: "POST" })
           .eq("id", row.id);
         return { ok: false as const, error: msg };
       }
-
-      const imageDataUrl = aiResult.dataUrl;
-
-      // ============================================================
-      // TAHAP 1 SELESAI: gambar utuh sudah dihasilkan oleh AI di atas.
-      // Kita TIDAK menjalankan cleanup-pass yang minta AI me-redraw seluruh
-      // gambar (itu yang dulu sering mengubah komposisi & memunculkan elemen
-      // aneh). Watermark sudah ditekan via instruksi prompt awal.
-      // ============================================================
-
-      // Decode hasil Tahap 1 menjadi pixel mentah
-      const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-      if (!match) {
-        await supabase
-          .from("renders")
-          .update({ status: "failed", error: "Invalid image format" })
-          .eq("id", row.id);
-        return { ok: false as const, error: "Format gambar tidak valid." };
-      }
-      let mime = match[1];
-      let ext = mime.split("/")[1] ?? "png";
-      let bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-
-      const decodedImage = decodeImage(bytes, mime);
-
-      // ============================================================
-      // TAHAP 2: Upscale piksel 2-5x ke target 2K/4K (bicubic, tanpa sharpen).
-      // Untuk 1K: lewati upscale, gunakan gambar asli apa adanya.
-      // ============================================================
-      let processedImage = upscaleOnly(decodedImage, resolutionKey);
-
-      // ============================================================
-      // TAHAP 3 + 4 + 5: Pecah jadi 4x4 = 16 tile, perdetail tiap tile via AI
-      // dengan instruksi KETAT (tidak boleh ubah bentuk/komposisi/warna),
-      // lalu satukan kembali dengan paste presisi tanpa overlap (Tahap 5).
-      // Hanya untuk 2K/4K — di 1K tidak perlu karena gambar masih asli AI.
-      // ============================================================
-      if (resolutionKey !== "1k") {
-        try {
-          processedImage = await tileEnhanceImage(processedImage, GEMINI_API_KEY, 4);
-        } catch (tileErr) {
-          console.error("Tile enhance failed, using upscaled fallback:", tileErr);
-        }
-      }
-
-      if (resolutionKey === "1k") {
-        mime = "image/png";
-        ext = "png";
-        bytes = new Uint8Array(encodePng({
-          width: processedImage.width,
-          height: processedImage.height,
-          data: processedImage.data,
-          channels: 4,
-          depth: 8,
-        }));
-      } else {
-        mime = "image/jpeg";
-        ext = "jpg";
-        bytes = new Uint8Array(
-          jpeg.encode(
-            { width: processedImage.width, height: processedImage.height, data: processedImage.data },
-            resolutionKey === "8k" ? 96 : resolutionKey === "4k" ? 94 : 92,
-          ).data,
-        );
-      }
-
-      const path = `${userId}/${row.id}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("renders")
-        .upload(path, bytes, { contentType: mime, upsert: true });
-      if (upErr) {
-        await supabase
-          .from("renders")
-          .update({ status: "failed", error: upErr.message })
-          .eq("id", row.id);
-        return { ok: false as const, error: upErr.message };
-      }
-
-      // Signed URL (1 year)
-      const { data: signed } = await supabase.storage
-        .from("renders")
-        .createSignedUrl(path, 60 * 60 * 24 * 365);
-
-      const resultUrl = signed?.signedUrl ?? null;
-
-      await supabase
-        .from("renders")
-        .update({ status: "completed", result_url: resultUrl })
-        .eq("id", row.id);
-
-      return { ok: true as const, id: row.id, resultUrl };
+      // Kembalikan gambar dasar ke browser; client jalankan canvas pipeline
+      // lalu upload hasil final + panggil finalizeRender.
+      return {
+        ok: true as const,
+        id: row.id as string,
+        baseDataUrl: aiResult.dataUrl,
+      };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error";
       await supabase.from("renders").update({ status: "failed", error: msg }).eq("id", row.id);
       return { ok: false as const, error: msg };
     }
+  });
+
+// Dipanggil dari browser setelah hasil canvas (Tahap 5) di-upload ke
+// Supabase Storage. Membuat signed URL 1 tahun & menandai row completed.
+export const finalizeRender = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        ext: z.enum(["png", "jpg"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const path = `${userId}/${data.id}.${data.ext}`;
+    const { data: signed, error: signErr } = await supabase.storage
+      .from("renders")
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+    if (signErr || !signed?.signedUrl) {
+      const msg = signErr?.message ?? "Sign URL gagal";
+      await supabase
+        .from("renders")
+        .update({ status: "failed", error: msg })
+        .eq("id", data.id);
+      return { ok: false as const, error: msg };
+    }
+    const { error: upErr } = await supabase
+      .from("renders")
+      .update({ status: "completed", result_url: signed.signedUrl })
+      .eq("id", data.id);
+    if (upErr) return { ok: false as const, error: upErr.message };
+    return { ok: true as const, resultUrl: signed.signedUrl };
   });
 
 export type RenderItem = {
