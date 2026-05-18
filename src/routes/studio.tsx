@@ -1,17 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, KeyRound, ExternalLink } from "lucide-react";
+import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getHfToken, setHfToken } from "@/lib/hf-token";
 
 const STYLE_PROMPTS: Record<string, string> = {
   exterior: "professional photorealistic architectural exterior render, golden hour, realistic materials (concrete, wood, glass, steel), accurate reflections, dramatic sky, landscaping, ultra detailed, 8k",
@@ -19,9 +17,6 @@ const STYLE_PROMPTS: Record<string, string> = {
   night: "dramatic architectural night shot, warm interior light spilling out, landscape lighting, deep blue night sky, light reflections on glass, cinematic, ultra detailed, 8k",
   watercolor: "architectural watercolor illustration, soft color washes, thin ink contour lines, paper texture, elegant palette, concept presentation",
 };
-
-const HF_MODEL = "stabilityai/stable-diffusion-xl-refiner-1.0";
-const HF_ENDPOINT = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
 
 export const Route = createFileRoute("/studio")({
   component: StudioPage,
@@ -48,73 +43,45 @@ function StudioPage() {
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
-  const [hfToken, setHfTokenState] = useState("");
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    setHfTokenState(getHfToken());
-  }, []);
-
-  const handleTokenChange = (v: string) => {
-    setHfTokenState(v);
-    setHfToken(v.trim());
-  };
-
   const handleGenerate = async () => {
-    if (!hfToken.trim()) return toast.error("Masukkan Hugging Face token terlebih dahulu");
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
 
     setGenerating(true);
     setResult(null);
     try {
-      // Convert sketch data URL → Blob
-      const sketchBlob = await (await fetch(sketch)).blob();
-
       const stylePrefix = STYLE_PROMPTS[renderType];
-      const fidelity = accuracy >= 8 ? "strictly preserve composition and proportions of the sketch" : accuracy >= 5 ? "follow sketch composition closely" : "loose interpretation of sketch";
+      const fidelity =
+        accuracy >= 8
+          ? "strictly preserve composition and proportions of the sketch"
+          : accuracy >= 5
+          ? "follow sketch composition closely"
+          : "loose interpretation of sketch";
       const fullPrompt = `${stylePrefix}, ${fidelity}, ${prompt.trim()}`;
 
-      // HF Inference img2img: kirim image binary sebagai body, prompt via header parameters
-      // SDXL refiner accepts image bytes as body + parameters via x-wait-for-model header
-      const formData = new FormData();
-      formData.append("image", sketchBlob, "sketch.png");
-      formData.append("inputs", fullPrompt);
-      formData.append("parameters", JSON.stringify({
-        prompt: fullPrompt,
-        strength: 1 - accuracy / 12, // higher accuracy = lower strength = closer to sketch
-        guidance_scale: 7.5,
-        num_inference_steps: 30,
-      }));
+      // Pollinations Img2Img: kirim base64 sketsa via parameter `feed`
+      // Endpoint bebas CORS, bebas token.
+      const base64Sketch = sketch.includes(",") ? sketch.split(",")[1] : sketch;
+      const seed = Math.floor(Math.random() * 1_000_000);
+      const finalUrl =
+        `https://image.pollinations.ai/p/${encodeURIComponent(fullPrompt)}` +
+        `?width=1024&height=1024&model=flux&enhance=true&nologo=true&seed=${seed}` +
+        `&feed=${encodeURIComponent(base64Sketch)}`;
 
-      const res = await fetch(HF_ENDPOINT, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${hfToken.trim()}`,
-        },
-        body: formData,
+      // Preload supaya tahu kapan gambar siap & error handling
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Gagal memuat gambar dari Pollinations"));
+        img.src = finalUrl;
       });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        if (res.status === 401) throw new Error("Token Hugging Face tidak valid");
-        if (res.status === 503) throw new Error("Model sedang loading di HF, coba lagi ~20 detik");
-        if (res.status === 429) throw new Error("Rate limit HF tercapai, coba lagi nanti");
-        throw new Error(`HF error ${res.status}: ${errText.slice(0, 200)}`);
-      }
-
-      const ct = res.headers.get("content-type") ?? "";
-      if (!ct.startsWith("image/")) {
-        const txt = await res.text();
-        throw new Error(`Respons bukan gambar: ${txt.slice(0, 200)}`);
-      }
-
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      setResult(objectUrl);
+      setResult(finalUrl);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
@@ -145,35 +112,6 @@ function StudioPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.1fr]">
         {/* Controls */}
         <div className="space-y-6 rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur sm:p-6">
-          <div className="space-y-2 rounded-lg border border-border/50 bg-background/40 p-3">
-            <Label htmlFor="hf-token" className="flex items-center gap-1.5 text-xs">
-              <KeyRound className="h-3.5 w-3.5 text-ember" />
-              Masukkan Hugging Face Token
-            </Label>
-            <Input
-              id="hf-token"
-              type="password"
-              value={hfToken}
-              onChange={(e) => handleTokenChange(e.target.value)}
-              placeholder="hf_xxxxxxxxxxxxxxxxxxxx"
-              className="h-9 font-mono text-xs"
-              autoComplete="off"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Token gratis, didapat dari{" "}
-              <a
-                href="https://huggingface.co/settings/tokens"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-0.5 text-ember underline underline-offset-2 hover:opacity-80"
-              >
-                huggingface.co/settings/tokens
-                <ExternalLink className="h-2.5 w-2.5" />
-              </a>
-              . Disimpan lokal di browser Anda.
-            </p>
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <ImageDropzone
               label="Sketsa *"
@@ -253,7 +191,7 @@ function StudioPage() {
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merender... (~20–40 detik)
+                Merender... (~15–30 detik)
               </>
             ) : (
               <>
@@ -316,12 +254,6 @@ function StudioPage() {
               )}
             </AnimatePresence>
           </div>
-
-          {result && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Tersimpan otomatis di galeri Anda.
-            </p>
-          )}
         </div>
       </div>
     </main>
