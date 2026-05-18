@@ -30,14 +30,13 @@ const RENDER_TYPES = [
 
 type RenderType = (typeof RENDER_TYPES)[number]["id"];
 
-const RESOLUTIONS = [
-  { id: "1k", label: "1K", desc: "1024px · cepat" },
+const UPSCALE_RESOLUTIONS = [
   { id: "2k", label: "2K", desc: "2048px · tajam" },
   { id: "4k", label: "4K", desc: "3840px · maksimal" },
   { id: "8k", label: "8K", desc: "7680px · ultra" },
 ] as const;
 
-type Resolution = (typeof RESOLUTIONS)[number]["id"];
+type UpscaleResolution = (typeof UPSCALE_RESOLUTIONS)[number]["id"];
 const GEMINI_CLIENT_COOLDOWN_MS = 70_000;
 
 function StudioPage() {
