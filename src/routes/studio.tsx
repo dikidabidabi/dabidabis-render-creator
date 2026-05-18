@@ -66,17 +66,16 @@ function StudioPage() {
       const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
       const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateContent?key=${apiKey}`;
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          instances: [{ prompt: fullPrompt }],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: "4:3",
-            personGeneration: "allow_adult",
-          },
+          contents: [
+            {
+              parts: [{ text: fullPrompt }],
+            },
+          ],
         }),
       });
 
@@ -85,12 +84,14 @@ function StudioPage() {
         throw new Error(`Gemini API ${resp.status}: ${errText.slice(0, 200)}`);
       }
       const json = await resp.json();
-      const b64: string | undefined =
-        json?.predictions?.[0]?.bytesBase64Encoded ??
-        json?.predictions?.[0]?.image?.bytesBase64Encoded;
+      const parts: Array<{ inlineData?: { data: string; mimeType?: string }; inline_data?: { data: string; mime_type?: string } }> =
+        json?.candidates?.[0]?.content?.parts ?? [];
+      const imgPart = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
+      const b64 = imgPart?.inlineData?.data ?? imgPart?.inline_data?.data;
+      const mime = imgPart?.inlineData?.mimeType ?? imgPart?.inline_data?.mime_type ?? "image/png";
       if (!b64) throw new Error("Tidak ada gambar dihasilkan");
 
-      setResult(`data:image/png;base64,${b64}`);
+      setResult(`data:${mime};base64,${b64}`);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
