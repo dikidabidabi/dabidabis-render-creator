@@ -145,6 +145,35 @@ function StudioPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.1fr]">
         {/* Controls */}
         <div className="space-y-6 rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur sm:p-6">
+          <div className="space-y-2 rounded-lg border border-border/50 bg-background/40 p-3">
+            <Label htmlFor="hf-token" className="flex items-center gap-1.5 text-xs">
+              <KeyRound className="h-3.5 w-3.5 text-ember" />
+              Masukkan Hugging Face Token
+            </Label>
+            <Input
+              id="hf-token"
+              type="password"
+              value={hfToken}
+              onChange={(e) => handleTokenChange(e.target.value)}
+              placeholder="hf_xxxxxxxxxxxxxxxxxxxx"
+              className="h-9 font-mono text-xs"
+              autoComplete="off"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Token gratis, didapat dari{" "}
+              <a
+                href="https://huggingface.co/settings/tokens"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-0.5 text-ember underline underline-offset-2 hover:opacity-80"
+              >
+                huggingface.co/settings/tokens
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+              . Disimpan lokal di browser Anda.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <ImageDropzone
               label="Sketsa *"
