@@ -345,24 +345,56 @@ function StudioPage() {
             </p>
           </div>
 
-          <Button
-            onClick={handleGenerate}
-            disabled={generating || cooldownActive || !sketch || !prompt.trim()}
-            size="lg"
-            className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {progressMsg || "Memproses..."}
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                {cooldownActive ? `Tunggu ${cooldownSeconds}d` : "Render dengan AI"}
-              </>
+          <div className="space-y-2">
+            <Button
+              onClick={handleGenerate}
+              disabled={busy || cooldownActive || !sketch || !prompt.trim()}
+              size="lg"
+              className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {progressMsg || "Tahap 1: render AI..."}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {cooldownActive
+                    ? `Tunggu ${cooldownSeconds}d`
+                    : baseDataUrl
+                      ? "Tahap 1: Generate ulang"
+                      : "Tahap 1: Generate dengan AI"}
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handleUpscale}
+              disabled={busy || !baseDataUrl}
+              size="lg"
+              variant="outline"
+              className="w-full text-base"
+            >
+              {upscaling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {progressMsg || "Memproses..."}
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="mr-2 h-4 w-4" />
+                  {`Tahap 2–5: Upscale ke ${resolution.toUpperCase()} & simpan`}
+                </>
+              )}
+            </Button>
+
+            {!baseDataUrl && (
+              <p className="text-xs text-muted-foreground">
+                Jalankan Tahap 1 dulu. Bila hasilnya sudah cocok, lanjut ke upscaling.
+              </p>
             )}
-          </Button>
+          </div>
         </div>
 
         {/* Result */}
