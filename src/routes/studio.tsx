@@ -59,6 +59,7 @@ function StudioPage() {
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
   const [nextRenderAt, setNextRenderAt] = useState(0);
+  const cooldownActive = nextRenderAt > Date.now();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -317,7 +318,7 @@ function StudioPage() {
 
           <Button
             onClick={handleGenerate}
-            disabled={generating || !sketch || !prompt.trim()}
+            disabled={generating || cooldownActive || !sketch || !prompt.trim()}
             size="lg"
             className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
           >
