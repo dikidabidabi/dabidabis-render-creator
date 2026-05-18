@@ -43,6 +43,7 @@ function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const generateFn = useServerFn(generateRender);
+  const finalizeFn = useServerFn(finalizeRender);
 
   const [sketch, setSketch] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
