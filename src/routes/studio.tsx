@@ -43,26 +43,27 @@ function StudioPage() {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
+  const runGenerate = useServerFn(generateRender);
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     setGenerating(true);
     setResult(null);
     try {
-      const stylePrefix = RENDER_TYPE_PROMPTS[renderType];
-      const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
-      const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
-
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=1024&height=1024&model=flux&enhance=true&nologo=true`;
-
-      // Preload to ensure the image is ready before showing
-      await new Promise<void>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Gagal memuat gambar dari Pollinations"));
-        img.src = imageUrl;
+      const res = await runGenerate({
+        data: {
+          sketchBase64: sketch,
+          referenceBase64: reference,
+          prompt: prompt.trim(),
+          renderType,
+          accuracy,
+          consistency,
+        },
       });
-
-      setResult(imageUrl);
+      if (!res.ok) throw new Error(res.error);
+      if (!res.resultUrl) throw new Error("Tidak ada URL hasil");
+      setResult(res.resultUrl);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
