@@ -94,6 +94,8 @@ function StudioPage() {
         })();
     setGenerating(true);
     setResult(null);
+    setBaseDataUrl(null);
+    setBaseRenderId(null);
     setProgressMsg("Tahap 1: render AI...");
     try {
       const res = await generateFn({
@@ -116,16 +118,31 @@ function StudioPage() {
         return;
       }
       setNextRenderAt(Date.now() + GEMINI_CLIENT_COOLDOWN_MS);
+      setBaseDataUrl(res.baseDataUrl);
+      setBaseRenderId(res.id);
+      toast.success(`Tahap 1 selesai. Periksa hasil — bila sudah cocok lanjut ke upscaling. Seed: ${useSeed}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error");
+    } finally {
+      setGenerating(false);
+      setProgressMsg("");
+    }
+  };
 
-      // Tahap 2-5 berjalan di browser via Canvas API (tanpa AI/API luar).
+  const handleUpscale = async () => {
+    if (!baseDataUrl || !baseRenderId) return toast.error("Jalankan Tahap 1 dulu");
+    if (!user) return toast.error("Sesi login tidak ditemukan");
+    setUpscaling(true);
+    setResult(null);
+    try {
       const processed = await processRenderInBrowser(
-        res.baseDataUrl,
+        baseDataUrl,
         resolution,
         (m) => setProgressMsg(m),
       );
 
       setProgressMsg("Mengunggah hasil...");
-      const path = `${user.id}/${res.id}.${processed.ext}`;
+      const path = `${user.id}/${baseRenderId}.${processed.ext}`;
       const { error: upErr } = await supabase.storage
         .from("renders")
         .upload(path, processed.blob, {
@@ -137,17 +154,17 @@ function StudioPage() {
         return;
       }
 
-      const fin = await finalizeFn({ data: { id: res.id, ext: processed.ext } });
+      const fin = await finalizeFn({ data: { id: baseRenderId, ext: processed.ext } });
       if (!fin.ok) {
         toast.error(fin.error || "Gagal finalize");
         return;
       }
       setResult(fin.resultUrl);
-      toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
+      toast.success(`Upscaling selesai (${resolution.toUpperCase()})!`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
-      setGenerating(false);
+      setUpscaling(false);
       setProgressMsg("");
     }
   };
