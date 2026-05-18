@@ -12,8 +12,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getGeminiApiKey } from "@/lib/gemini-key";
 
-const GEMINI_IMAGE_MODEL = "imagen-3.0-generate-002";
-
 const RENDER_TYPE_PROMPTS: Record<string, string> = {
   exterior:
     "Professional photorealistic architectural exterior render. Natural golden hour lighting, realistic materials (concrete, wood, glass, steel), accurate reflections, dramatic sky, integrated landscaping, subtle depth of field. Top-tier architect portfolio quality.",
