@@ -66,16 +66,15 @@ function StudioPage() {
       const fidelity = accuracy >= 8 ? "Strictly preserve composition." : accuracy >= 5 ? "Follow composition closely." : "Loose interpretation.";
       const fullPrompt = `${stylePrefix} ${fidelity} Architect request: ${prompt.trim()}`;
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateContent?key=${apiKey}`;
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${apiKey}`;
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: fullPrompt }],
-            },
-          ],
+          prompt: fullPrompt,
+          numberOfImages: 1,
+          aspectRatio: "1:1",
+          outputMimeType: "image/jpeg",
         }),
       });
 
@@ -84,11 +83,11 @@ function StudioPage() {
         throw new Error(`Gemini API ${resp.status}: ${errText.slice(0, 200)}`);
       }
       const json = await resp.json();
-      const parts: Array<{ inlineData?: { data: string; mimeType?: string }; inline_data?: { data: string; mime_type?: string } }> =
-        json?.candidates?.[0]?.content?.parts ?? [];
-      const imgPart = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
-      const b64 = imgPart?.inlineData?.data ?? imgPart?.inline_data?.data;
-      const mime = imgPart?.inlineData?.mimeType ?? imgPart?.inline_data?.mime_type ?? "image/png";
+      const img =
+        json?.generatedImages?.[0]?.image ??
+        json?.generated_images?.[0]?.image;
+      const b64: string | undefined = img?.imageBytes ?? img?.image_bytes;
+      const mime: string = img?.mimeType ?? img?.mime_type ?? "image/jpeg";
       if (!b64) throw new Error("Tidak ada gambar dihasilkan");
 
       setResult(`data:${mime};base64,${b64}`);
