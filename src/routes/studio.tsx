@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
-import { generateRender } from "@/lib/render.functions";
+import { generateRender, finalizeRender } from "@/lib/render.functions";
+import { processRenderInBrowser } from "@/lib/client-canvas-pipeline";
+import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,7 @@ function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const generateFn = useServerFn(generateRender);
+  const finalizeFn = useServerFn(finalizeRender);
 
   const [sketch, setSketch] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
@@ -50,6 +53,7 @@ function StudioPage() {
   const [resolution, setResolution] = useState<Resolution>("1k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
+  const [progressMsg, setProgressMsg] = useState<string>("");
   const [result, setResult] = useState<string | null>(null);
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
   const [seedLocked, setSeedLocked] = useState(false);
@@ -61,6 +65,7 @@ function StudioPage() {
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
+    if (!user) return toast.error("Sesi login tidak ditemukan");
     const useSeed = seedLocked
       ? seed
       : (() => {
@@ -70,6 +75,7 @@ function StudioPage() {
         })();
     setGenerating(true);
     setResult(null);
+    setProgressMsg("Tahap 1: render AI...");
     try {
       const res = await generateFn({
         data: {
@@ -83,16 +89,43 @@ function StudioPage() {
           resolution,
         },
       });
-      if (res.ok) {
-        setResult(res.resultUrl);
-        toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
-      } else {
+      if (!res.ok) {
         toast.error(res.error || "Gagal render");
+        return;
       }
+
+      // Tahap 2-5 berjalan di browser via Canvas API (tanpa AI/API luar).
+      const processed = await processRenderInBrowser(
+        res.baseDataUrl,
+        resolution,
+        (m) => setProgressMsg(m),
+      );
+
+      setProgressMsg("Mengunggah hasil...");
+      const path = `${user.id}/${res.id}.${processed.ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("renders")
+        .upload(path, processed.blob, {
+          contentType: processed.mime,
+          upsert: true,
+        });
+      if (upErr) {
+        toast.error("Upload gagal: " + upErr.message);
+        return;
+      }
+
+      const fin = await finalizeFn({ data: { id: res.id, ext: processed.ext } });
+      if (!fin.ok) {
+        toast.error(fin.error || "Gagal finalize");
+        return;
+      }
+      setResult(fin.resultUrl);
+      toast.success(`Render selesai (${resolution.toUpperCase()})! Seed: ${useSeed}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
       setGenerating(false);
+      setProgressMsg("");
     }
   };
 
@@ -281,7 +314,7 @@ function StudioPage() {
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merender + AI sharpening 16 tile seragam... (~30–90 detik)
+                {progressMsg || "Memproses..."}
               </>
             ) : (
               <>
