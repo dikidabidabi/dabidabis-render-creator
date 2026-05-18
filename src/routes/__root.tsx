@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Layers } from "lucide-react";
+import { GeminiKeyInput } from "@/lib/gemini-key";
 
 import appCss from "../styles.css?url";
 
