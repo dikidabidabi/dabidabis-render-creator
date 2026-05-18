@@ -106,7 +106,7 @@ function StudioPage() {
           accuracy,
           consistency,
           seed: useSeed,
-          resolution,
+          resolution: "1k",
         },
       });
       if (!res.ok) {
