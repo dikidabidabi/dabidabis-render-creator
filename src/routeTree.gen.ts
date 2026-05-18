@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
-import { Route as AnimateRouteImport } from './routes/animate'
 import { Route as IndexRouteImport } from './routes/index'
 
 const StudioRoute = StudioRouteImport.update({
@@ -30,11 +29,6 @@ const GalleryRoute = GalleryRouteImport.update({
   path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AnimateRoute = AnimateRouteImport.update({
-  id: '/animate',
-  path: '/animate',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,14 +37,12 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/animate': typeof AnimateRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/animate': typeof AnimateRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/studio': typeof StudioRoute
@@ -58,22 +50,20 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/animate': typeof AnimateRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/studio': typeof StudioRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/animate' | '/gallery' | '/login' | '/studio'
+  fullPaths: '/' | '/gallery' | '/login' | '/studio'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/animate' | '/gallery' | '/login' | '/studio'
-  id: '__root__' | '/' | '/animate' | '/gallery' | '/login' | '/studio'
+  to: '/' | '/gallery' | '/login' | '/studio'
+  id: '__root__' | '/' | '/gallery' | '/login' | '/studio'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AnimateRoute: typeof AnimateRoute
   GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
   StudioRoute: typeof StudioRoute
@@ -102,13 +92,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/animate': {
-      id: '/animate'
-      path: '/animate'
-      fullPath: '/animate'
-      preLoaderRoute: typeof AnimateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -121,7 +104,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AnimateRoute: AnimateRoute,
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,
   StudioRoute: StudioRoute,

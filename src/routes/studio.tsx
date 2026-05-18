@@ -1,18 +1,14 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush, Dice5, Lock, Unlock, Maximize2 } from "lucide-react";
+import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
-import { generateRender, finalizeRender } from "@/lib/render.functions";
-import { processRenderInBrowser } from "@/lib/client-canvas-pipeline";
-import { supabase } from "@/integrations/supabase/client";
+import { generateRender } from "@/lib/render.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -30,61 +26,29 @@ const RENDER_TYPES = [
 
 type RenderType = (typeof RENDER_TYPES)[number]["id"];
 
-const UPSCALE_RESOLUTIONS = [
-  { id: "2k", label: "2K", desc: "2048px · tajam" },
-  { id: "4k", label: "4K", desc: "3840px · maksimal" },
-  { id: "8k", label: "8K", desc: "7680px · ultra" },
-] as const;
-
-type UpscaleResolution = (typeof UPSCALE_RESOLUTIONS)[number]["id"];
 function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const generateFn = useServerFn(generateRender);
-  const finalizeFn = useServerFn(finalizeRender);
 
   const [sketch, setSketch] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [renderType, setRenderType] = useState<RenderType>("exterior");
   const [accuracy, setAccuracy] = useState(8);
-  const [resolution, setResolution] = useState<UpscaleResolution>("2k");
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
-  const [upscaling, setUpscaling] = useState(false);
-  const [progressMsg, setProgressMsg] = useState<string>("");
-  const [baseDataUrl, setBaseDataUrl] = useState<string | null>(null);
-  const [baseRenderId, setBaseRenderId] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000));
-  const [seedLocked, setSeedLocked] = useState(false);
-  const generateRequestRef = useRef(false);
-  const upscaleRequestRef = useRef(false);
-  const busy = generating || upscaling;
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
-  const handleGenerate = async (event?: MouseEvent<HTMLButtonElement>) => {
-    event?.preventDefault();
+  const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
-    if (!user) return toast.error("Sesi login tidak ditemukan");
-    if (generateRequestRef.current) return;
-    generateRequestRef.current = true;
-    const useSeed = seedLocked
-      ? seed
-      : (() => {
-          const next = Math.floor(Math.random() * 1_000_000);
-          setSeed(next);
-          return next;
-        })();
     setGenerating(true);
     setResult(null);
-    setBaseDataUrl(null);
-    setBaseRenderId(null);
-    setProgressMsg("Tahap 1: render AI...");
     try {
       const res = await generateFn({
         data: {
@@ -94,67 +58,18 @@ function StudioPage() {
           renderType,
           accuracy,
           consistency,
-          seed: useSeed,
-          resolution: "1k",
         },
       });
-      if (!res.ok) {
+      if (res.ok) {
+        setResult(res.resultUrl);
+        toast.success("Render selesai!");
+      } else {
         toast.error(res.error || "Gagal render");
-        return;
       }
-      setBaseDataUrl(res.baseDataUrl);
-      setBaseRenderId(res.id);
-      toast.success(`Tahap 1 selesai. Periksa hasil — bila sudah cocok lanjut ke upscaling. Seed: ${useSeed}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
-      generateRequestRef.current = false;
       setGenerating(false);
-      setProgressMsg("");
-    }
-  };
-
-  const handleUpscale = async (event?: MouseEvent<HTMLButtonElement>) => {
-    event?.preventDefault();
-    if (!baseDataUrl || !baseRenderId) return toast.error("Jalankan Tahap 1 dulu");
-    if (!user) return toast.error("Sesi login tidak ditemukan");
-    if (upscaleRequestRef.current) return;
-    upscaleRequestRef.current = true;
-    setUpscaling(true);
-    setResult(null);
-    try {
-      const processed = await processRenderInBrowser(
-        baseDataUrl,
-        resolution,
-        (m) => setProgressMsg(m),
-      );
-
-      setProgressMsg("Mengunggah hasil...");
-      const path = `${user.id}/${baseRenderId}.${processed.ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("renders")
-        .upload(path, processed.blob, {
-          contentType: processed.mime,
-          upsert: true,
-        });
-      if (upErr) {
-        toast.error("Upload gagal: " + upErr.message);
-        return;
-      }
-
-      const fin = await finalizeFn({ data: { id: baseRenderId, ext: processed.ext } });
-      if (!fin.ok) {
-        toast.error(fin.error || "Gagal finalize");
-        return;
-      }
-      setResult(fin.resultUrl);
-      toast.success(`Upscaling selesai (${resolution.toUpperCase()})!`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error");
-    } finally {
-      upscaleRequestRef.current = false;
-      setUpscaling(false);
-      setProgressMsg("");
     }
   };
 
@@ -250,87 +165,30 @@ function StudioPage() {
             />
           </div>
 
-          <div className="rounded-lg border border-border/60 bg-surface/40 p-3">
-            <p className="text-xs text-muted-foreground">
-              Tahap 1 selalu menghasilkan pratinjau 1K (cepat & hemat kuota).
-              Pilihan upscale 2K–8K muncul di bawah hasil render.
-            </p>
-          </div>
-
-          <div className="space-y-2 rounded-lg border border-border/60 bg-surface/40 p-3">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="seed" className="flex items-center gap-1.5 text-sm">
-                {seedLocked ? (
-                  <Lock className="h-3.5 w-3.5 text-ember" />
-                ) : (
-                  <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-                Seed variasi
-              </Label>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground">
-                  {seedLocked ? "Terkunci" : "Acak setiap render"}
-                </span>
-                <Switch checked={seedLocked} onCheckedChange={setSeedLocked} />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                id="seed"
-                type="number"
-                min={0}
-                max={2147483647}
-                value={seed}
-                onChange={(e) => setSeed(Math.max(0, parseInt(e.target.value || "0", 10) || 0))}
-                disabled={!seedLocked}
-                className="font-mono"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setSeed(Math.floor(Math.random() * 1_000_000))}
-                title="Acak seed"
-              >
-                <Dice5 className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Kunci seed untuk variasi konsisten — ubah prompt/slider dengan seed yang sama untuk
-              tweak halus pada komposisi yang sama.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Button
-              type="button"
-              onClick={handleGenerate}
-              disabled={busy || !sketch || !prompt.trim()}
-              size="lg"
-              className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {progressMsg || "Tahap 1: render AI..."}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {baseDataUrl ? "Tahap 1: Generate ulang" : "Tahap 1: Generate dengan AI"}
-                </>
-              )}
-            </Button>
-
-          </div>
+          <Button
+            onClick={handleGenerate}
+            disabled={generating || !sketch || !prompt.trim()}
+            size="lg"
+            className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
+          >
+            {generating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Merender... (~20–40 detik)
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Render dengan AI
+              </>
+            )}
+          </Button>
         </div>
 
         {/* Result */}
         <div className="rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <Label>
-              {result ? "Hasil final" : baseDataUrl ? "Pratinjau Tahap 1" : "Hasil render"}
-            </Label>
+            <Label>Hasil render</Label>
             {result && (
               <Button asChild variant="ghost" size="sm">
                 <a href={result} target="_blank" rel="noreferrer" download>
@@ -343,7 +201,7 @@ function StudioPage() {
 
           <div className="relative aspect-square overflow-hidden rounded-xl border border-border/60 bg-background sm:aspect-[4/3]">
             <AnimatePresence mode="wait">
-              {busy ? (
+              {generating ? (
                 <motion.div
                   key="loading"
                   initial={{ opacity: 0 }}
@@ -354,7 +212,7 @@ function StudioPage() {
                   <div className="absolute inset-0 animate-shimmer" />
                   <Sparkles className="relative h-10 w-10 text-ember" />
                   <p className="relative text-sm text-muted-foreground">
-                    {progressMsg || "Memproses..."}
+                    AI sedang menyusun render Anda...
                   </p>
                 </motion.div>
               ) : result ? (
@@ -362,15 +220,6 @@ function StudioPage() {
                   key="result"
                   src={result}
                   alt="Hasil render"
-                  initial={{ opacity: 0, scale: 1.02 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="h-full w-full object-contain"
-                />
-              ) : baseDataUrl ? (
-                <motion.img
-                  key="base"
-                  src={baseDataUrl}
-                  alt="Pratinjau Tahap 1"
                   initial={{ opacity: 0, scale: 1.02 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="h-full w-full object-contain"
@@ -389,71 +238,11 @@ function StudioPage() {
             </AnimatePresence>
           </div>
 
-          <div className="mt-5 space-y-3 rounded-xl border border-border/60 bg-surface/40 p-4">
-            <div className="flex items-center justify-between">
-              <Label className="flex items-center gap-1.5 text-sm">
-                <Maximize2 className="h-3.5 w-3.5 text-ember" />
-                Upscale resolusi
-              </Label>
-              <span className="text-[10px] text-muted-foreground">
-                {baseDataUrl ? "Pratinjau 1K siap" : "Jalankan Tahap 1 dulu"}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {UPSCALE_RESOLUTIONS.map((r) => {
-                const active = resolution === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => setResolution(r.id)}
-                    disabled={busy}
-                    className={cn(
-                      "flex flex-col items-center gap-0.5 rounded-lg border p-2.5 transition-all disabled:opacity-50",
-                      active
-                        ? "border-ember bg-ember/10 shadow-soft"
-                        : "border-border/60 bg-surface/40 hover:border-border",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "font-display text-base font-semibold",
-                        active ? "text-ember" : "text-foreground",
-                      )}
-                    >
-                      {r.label}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">{r.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <Button
-              type="button"
-              onClick={handleUpscale}
-              disabled={busy || !baseDataUrl}
-              size="lg"
-              className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
-            >
-              {upscaling ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {progressMsg || "Memproses..."}
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="mr-2 h-4 w-4" />
-                  {`Tahap 2–5: Upscale ke ${resolution.toUpperCase()} & simpan`}
-                </>
-              )}
-            </Button>
-            {result && (
-              <p className="text-xs text-muted-foreground">
-                Tersimpan otomatis di galeri Anda.
-              </p>
-            )}
-          </div>
-
+          {result && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Tersimpan otomatis di galeri Anda.
+            </p>
+          )}
         </div>
       </div>
     </main>
