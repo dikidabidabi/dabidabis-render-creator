@@ -41,6 +41,7 @@ function StudioPage() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [hasKey, setHasKey] = useState<boolean>(false);
+  const callImagen = useServerFn(generateImagen);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
