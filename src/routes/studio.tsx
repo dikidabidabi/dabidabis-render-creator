@@ -60,32 +60,67 @@ function StudioPage() {
         hasReference: !!reference,
       });
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${encodeURIComponent(apiKey)}`;
+      const parseDataUrl = (dataUrl: string) => {
+        const m = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+        if (!m) throw new Error("Format gambar tidak valid.");
+        return { mimeType: m[1], data: m[2] };
+      };
+
+      const parts: Array<
+        { text: string } | { inline_data: { mime_type: string; data: string } }
+      > = [];
+
+      if (reference) {
+        parts.push({ text: "Gambar berikut adalah REFERENSI GAYA (style, palet warna, mood, material):" });
+        const ref = parseDataUrl(reference);
+        parts.push({ inline_data: { mime_type: ref.mimeType, data: ref.data } });
+      }
+      parts.push({
+        text: reference
+          ? "Gambar berikut adalah SKETSA arsitektur yang harus dirender — pertahankan komposisi, proporsi, dan elemen bangunannya:"
+          : "Gambar berikut adalah SKETSA arsitektur yang harus dirender — pertahankan komposisi, proporsi, dan elemen bangunannya:",
+      });
+      const sk = parseDataUrl(sketch);
+      parts.push({ inline_data: { mime_type: sk.mimeType, data: sk.data } });
+      parts.push({ text: `INSTRUKSI RENDER:\n${finalPrompt}\n\nHasilkan SATU gambar render berkualitas tinggi sebagai output.` });
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
       const resp = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: finalPrompt,
-          numberOfImages: 1,
-          aspectRatio: "1:1",
-          outputMimeType: "image/jpeg",
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
         }),
       });
 
       if (!resp.ok) {
         const errText = await resp.text();
         let msg = `Google API error (${resp.status})`;
-        if (resp.status === 400) msg = "Request ditolak. Cek API Key & akses Imagen.";
-        if (resp.status === 401 || resp.status === 403) msg = "API Key tidak valid atau tidak punya akses Imagen 3.";
+        if (resp.status === 400) msg = "Request ditolak. Cek API Key & akses Gemini Image.";
+        if (resp.status === 401 || resp.status === 403) msg = "API Key tidak valid atau tidak punya akses Gemini Image.";
         if (resp.status === 429) msg = "Quota habis / rate limit. Coba lagi nanti.";
-        throw new Error(`${msg} — ${errText.slice(0, 200)}`);
+        throw new Error(`${msg} — ${errText.slice(0, 240)}`);
       }
 
       const json = await resp.json();
-      const imageBytes: string | undefined = json?.generatedImages?.[0]?.image?.imageBytes;
-      if (!imageBytes) throw new Error("API tidak mengembalikan gambar.");
+      const candParts: Array<{ inline_data?: { mime_type?: string; data?: string }; inlineData?: { mimeType?: string; data?: string } }> =
+        json?.candidates?.[0]?.content?.parts ?? [];
+      let imgB64: string | undefined;
+      let imgMime = "image/png";
+      for (const p of candParts) {
+        const inline = p.inline_data ?? p.inlineData;
+        const data = inline?.data;
+        const mime = (inline as { mime_type?: string; mimeType?: string } | undefined)?.mime_type ?? (inline as { mimeType?: string } | undefined)?.mimeType;
+        if (data) {
+          imgB64 = data;
+          if (mime) imgMime = mime;
+          break;
+        }
+      }
+      if (!imgB64) throw new Error("API tidak mengembalikan gambar.");
 
-      setResult(`data:image/jpeg;base64,${imageBytes}`);
+      setResult(`data:${imgMime};base64,${imgB64}`);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
