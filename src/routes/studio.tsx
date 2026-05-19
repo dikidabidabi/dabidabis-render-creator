@@ -62,33 +62,10 @@ function StudioPage() {
         hasReference: !!reference,
       });
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${encodeURIComponent(apiKey)}`;
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: finalPrompt,
-          numberOfImages: 1,
-          aspectRatio: "1:1",
-          outputMimeType: "image/jpeg",
-        }),
+      const { imageBase64, mimeType } = await callImagen({
+        data: { apiKey, prompt: finalPrompt },
       });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        let msg = `Google API error (${resp.status})`;
-        if (resp.status === 400) msg = "Request ditolak. Cek API Key & akses Imagen 3.";
-        if (resp.status === 401 || resp.status === 403) msg = "API Key tidak valid atau tidak punya akses Imagen 3.";
-        if (resp.status === 404) msg = "Model tidak ditemukan. Pastikan akses Imagen 3 aktif.";
-        if (resp.status === 429) msg = "Quota habis / rate limit. Coba lagi nanti.";
-        throw new Error(`${msg} — ${errText.slice(0, 240)}`);
-      }
-
-      const json = await resp.json();
-      const imgB64: string | undefined = json?.generatedImages?.[0]?.image?.imageBytes;
-      if (!imgB64) throw new Error("API tidak mengembalikan gambar.");
-
-      setResult(`data:image/jpeg;base64,${imgB64}`);
+      setResult(`data:${mimeType};base64,${imageBase64}`);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
