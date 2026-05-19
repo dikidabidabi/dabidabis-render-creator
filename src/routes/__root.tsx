@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Layers } from "lucide-react";
 
-
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -47,6 +46,12 @@ export const Route = createRootRoute({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Dabidabi's — AI Architectural Render Studio" },
+      { name: "description", content: "AI-powered architectural rendering studio for generating realistic visualizations from sketches and style references." },
+      { property: "og:description", content: "AI-powered architectural rendering studio for generating realistic visualizations from sketches and style references." },
+      { name: "twitter:description", content: "AI-powered architectural rendering studio for generating realistic visualizations from sketches and style references." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ae03db73-a228-4c85-a174-607d77c1a097/id-preview-12b6d484--86e7266a-7012-4c9a-bf76-b1a56cbd42ab.lovable.app-1776502237687.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ae03db73-a228-4c85-a174-607d77c1a097/id-preview-12b6d484--86e7266a-7012-4c9a-bf76-b1a56cbd42ab.lovable.app-1776502237687.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -89,7 +94,6 @@ function Header() {
           <span className="font-display text-lg font-semibold tracking-tight">Dabidabi's</span>
         </Link>
         <nav className="flex items-center gap-2 sm:gap-4">
-          
           {user ? (
             <>
               <Link

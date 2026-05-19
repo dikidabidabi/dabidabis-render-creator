@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
@@ -8,15 +8,10 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/image-dropzone";
 import { useAuth } from "@/lib/auth";
+import { generateRender } from "@/lib/render.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-const STYLE_PROMPTS: Record<string, string> = {
-  exterior: "professional photorealistic architectural exterior render, golden hour, realistic materials (concrete, wood, glass, steel), accurate reflections, dramatic sky, landscaping, ultra detailed, 8k",
-  interior: "magazine-quality photorealistic interior render, soft ambient lighting, contemporary furniture, accurate materials (wood, marble, fabric, metal), cinematic depth of field, ultra detailed, 8k",
-  night: "dramatic architectural night shot, warm interior light spilling out, landscape lighting, deep blue night sky, light reflections on glass, cinematic, ultra detailed, 8k",
-  watercolor: "architectural watercolor illustration, soft color washes, thin ink contour lines, paper texture, elegant palette, concept presentation",
-};
 
 export const Route = createFileRoute("/studio")({
   component: StudioPage,
@@ -34,6 +29,7 @@ type RenderType = (typeof RENDER_TYPES)[number]["id"];
 function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const generateFn = useServerFn(generateRender);
 
   const [sketch, setSketch] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
@@ -51,38 +47,25 @@ function StudioPage() {
   const handleGenerate = async () => {
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
-
     setGenerating(true);
     setResult(null);
     try {
-      const stylePrefix = STYLE_PROMPTS[renderType];
-      const fidelity =
-        accuracy >= 8
-          ? "strictly preserve composition and proportions of the sketch"
-          : accuracy >= 5
-          ? "follow sketch composition closely"
-          : "loose interpretation of sketch";
-      const fullPrompt = `${stylePrefix}, ${fidelity}, ${prompt.trim()}`;
-
-      // Pollinations Img2Img: kirim base64 sketsa via parameter `feed`
-      // Endpoint bebas CORS, bebas token.
-      const base64Sketch = sketch.includes(",") ? sketch.split(",")[1] : sketch;
-      const seed = Math.floor(Math.random() * 1_000_000);
-      const finalUrl =
-        `https://image.pollinations.ai/p/${encodeURIComponent(fullPrompt)}` +
-        `?width=1024&height=1024&model=flux&enhance=true&nologo=true&seed=${seed}` +
-        `&feed=${encodeURIComponent(base64Sketch)}`;
-
-      // Preload supaya tahu kapan gambar siap & error handling
-      await new Promise<void>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Gagal memuat gambar dari Pollinations"));
-        img.src = finalUrl;
+      const res = await generateFn({
+        data: {
+          sketchBase64: sketch,
+          referenceBase64: reference,
+          prompt: prompt.trim(),
+          renderType,
+          accuracy,
+          consistency,
+        },
       });
-
-      setResult(finalUrl);
-      toast.success("Render selesai!");
+      if (res.ok) {
+        setResult(res.resultUrl);
+        toast.success("Render selesai!");
+      } else {
+        toast.error(res.error || "Gagal render");
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
@@ -184,14 +167,14 @@ function StudioPage() {
 
           <Button
             onClick={handleGenerate}
-            disabled={generating || !prompt.trim()}
+            disabled={generating || !sketch || !prompt.trim()}
             size="lg"
             className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
           >
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merender... (~15–30 detik)
+                Merender... (~20–40 detik)
               </>
             ) : (
               <>
@@ -254,6 +237,12 @@ function StudioPage() {
               )}
             </AnimatePresence>
           </div>
+
+          {result && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Tersimpan otomatis di galeri Anda.
+            </p>
+          )}
         </div>
       </div>
     </main>
