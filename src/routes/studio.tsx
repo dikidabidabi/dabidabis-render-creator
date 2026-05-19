@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { ImageDropzone } from "@/components/image-dropzone";
 import { ApiKeyPanel } from "@/components/api-key-panel";
 import { useAuth } from "@/lib/auth";
 import { getApiKey, buildImagenPrompt } from "@/lib/api-key";
+import { generateImagen } from "@/lib/imagen.functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
