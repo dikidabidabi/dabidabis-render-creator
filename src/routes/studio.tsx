@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
@@ -7,9 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { ImageDropzone } from "@/components/image-dropzone";
+import { ApiKeyPanel } from "@/components/api-key-panel";
 import { useAuth } from "@/lib/auth";
-import { generateRender } from "@/lib/render.functions";
-import { useServerFn } from "@tanstack/react-start";
+import { getApiKey, buildImagenPrompt } from "@/lib/api-key";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +29,6 @@ type RenderType = (typeof RENDER_TYPES)[number]["id"];
 function StudioPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const generateFn = useServerFn(generateRender);
 
   const [sketch, setSketch] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
@@ -39,33 +38,55 @@ function StudioPage() {
   const [consistency, setConsistency] = useState(7);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [hasKey, setHasKey] = useState<boolean>(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [user, loading, navigate]);
 
   const handleGenerate = async () => {
+    const apiKey = getApiKey();
+    if (!apiKey) return toast.error("Masukkan Google API Key terlebih dahulu.");
     if (!sketch) return toast.error("Upload sketsa terlebih dahulu");
     if (!prompt.trim()) return toast.error("Tulis prompt deskripsi");
     setGenerating(true);
     setResult(null);
     try {
-      const res = await generateFn({
-        data: {
-          sketchBase64: sketch,
-          referenceBase64: reference,
-          prompt: prompt.trim(),
-          renderType,
-          accuracy,
-          consistency,
-        },
+      const finalPrompt = buildImagenPrompt({
+        renderType,
+        accuracy,
+        consistency,
+        userPrompt: prompt.trim(),
+        hasReference: !!reference,
       });
-      if (res.ok) {
-        setResult(res.resultUrl);
-        toast.success("Render selesai!");
-      } else {
-        toast.error(res.error || "Gagal render");
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${encodeURIComponent(apiKey)}`;
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: finalPrompt,
+          numberOfImages: 1,
+          aspectRatio: "1:1",
+          outputMimeType: "image/jpeg",
+        }),
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        let msg = `Google API error (${resp.status})`;
+        if (resp.status === 400) msg = "Request ditolak. Cek API Key & akses Imagen.";
+        if (resp.status === 401 || resp.status === 403) msg = "API Key tidak valid atau tidak punya akses Imagen 3.";
+        if (resp.status === 429) msg = "Quota habis / rate limit. Coba lagi nanti.";
+        throw new Error(`${msg} — ${errText.slice(0, 200)}`);
       }
+
+      const json = await resp.json();
+      const imageBytes: string | undefined = json?.generatedImages?.[0]?.image?.imageBytes;
+      if (!imageBytes) throw new Error("API tidak mengembalikan gambar.");
+
+      setResult(`data:image/jpeg;base64,${imageBytes}`);
+      toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
     } finally {
@@ -95,6 +116,7 @@ function StudioPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.1fr]">
         {/* Controls */}
         <div className="space-y-6 rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur sm:p-6">
+          <ApiKeyPanel onChange={setHasKey} />
           <div className="grid grid-cols-2 gap-4">
             <ImageDropzone
               label="Sketsa *"
@@ -167,7 +189,7 @@ function StudioPage() {
 
           <Button
             onClick={handleGenerate}
-            disabled={generating || !sketch || !prompt.trim()}
+            disabled={generating || !sketch || !prompt.trim() || !hasKey}
             size="lg"
             className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
           >
