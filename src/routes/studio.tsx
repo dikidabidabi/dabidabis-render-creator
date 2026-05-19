@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Download, Loader2, Building2, Sofa, Moon, Brush } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { ImageDropzone } from "@/components/image-dropzone";
 import { ApiKeyPanel } from "@/components/api-key-panel";
 import { useAuth } from "@/lib/auth";
 import { getApiKey, buildImagenPrompt } from "@/lib/api-key";
+import { generateImagen } from "@/lib/imagen.functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +41,7 @@ function StudioPage() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [hasKey, setHasKey] = useState<boolean>(false);
+  const callImagen = useServerFn(generateImagen);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -60,33 +63,10 @@ function StudioPage() {
         hasReference: !!reference,
       });
 
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:generateImages?key=${encodeURIComponent(apiKey)}`;
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: finalPrompt,
-          numberOfImages: 1,
-          aspectRatio: "1:1",
-          outputMimeType: "image/jpeg",
-        }),
+      const { imageBase64, mimeType } = await callImagen({
+        data: { apiKey, prompt: finalPrompt },
       });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        let msg = `Google API error (${resp.status})`;
-        if (resp.status === 400) msg = "Request ditolak. Cek API Key & akses Imagen 3.";
-        if (resp.status === 401 || resp.status === 403) msg = "API Key tidak valid atau tidak punya akses Imagen 3.";
-        if (resp.status === 404) msg = "Model tidak ditemukan. Pastikan akses Imagen 3 aktif.";
-        if (resp.status === 429) msg = "Quota habis / rate limit. Coba lagi nanti.";
-        throw new Error(`${msg} — ${errText.slice(0, 240)}`);
-      }
-
-      const json = await resp.json();
-      const imgB64: string | undefined = json?.generatedImages?.[0]?.image?.imageBytes;
-      if (!imgB64) throw new Error("API tidak mengembalikan gambar.");
-
-      setResult(`data:image/jpeg;base64,${imgB64}`);
+      setResult(`data:${mimeType};base64,${imageBase64}`);
       toast.success("Render selesai!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error");
