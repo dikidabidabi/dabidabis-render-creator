@@ -116,6 +116,7 @@ function StudioPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.1fr]">
         {/* Controls */}
         <div className="space-y-6 rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur sm:p-6">
+          <ApiKeyPanel onChange={setHasKey} />
           <div className="grid grid-cols-2 gap-4">
             <ImageDropzone
               label="Sketsa *"
@@ -188,7 +189,7 @@ function StudioPage() {
 
           <Button
             onClick={handleGenerate}
-            disabled={generating || !sketch || !prompt.trim()}
+            disabled={generating || !sketch || !prompt.trim() || !hasKey}
             size="lg"
             className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
           >
