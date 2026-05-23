@@ -20,6 +20,7 @@ import {
   Maximize2,
   Minimize2,
   X,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
