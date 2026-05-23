@@ -573,6 +573,76 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setFuture([]);
   }, [lines, layers]);
 
+  // ===== Viewport transform (pan/zoom/rotate) =====
+  // World (where lines/layers are stored) -> screen via: rotate(r) -> scale(s) -> translate(tx,ty)
+  const [view, setView] = useState({ s: 1, r: 0, tx: 0, ty: 0 });
+  // Reset view when switching sketch
+  useEffect(() => {
+    setView({ s: 1, r: 0, tx: 0, ty: 0 });
+  }, [id]);
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  const screenToWorld = useCallback((p: Point): Point => {
+    const v = viewRef.current;
+    const dx = p.x - v.tx;
+    const dy = p.y - v.ty;
+    const cos = Math.cos(-v.r), sin = Math.sin(-v.r);
+    const rx = dx * cos - dy * sin;
+    const ry = dx * sin + dy * cos;
+    return { x: rx / v.s, y: ry / v.s };
+  }, []);
+
+  // Multi-pointer gesture tracking (pinch zoom + rotate)
+  const pointersRef = useRef<Map<number, Point>>(new Map());
+  const gestureRef = useRef<null | {
+    startDist: number;
+    startAngle: number;
+    startMid: Point;
+    startView: { s: number; r: number; tx: number; ty: number };
+    startWorldMid: Point;
+  }>(null);
+
+  const startGesture = useCallback(() => {
+    const pts = Array.from(pointersRef.current.values());
+    if (pts.length < 2) return;
+    const [p1, p2] = pts;
+    const startMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    const startDist = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+    const startAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    gestureRef.current = {
+      startDist,
+      startAngle,
+      startMid,
+      startView: { ...viewRef.current },
+      startWorldMid: screenToWorld(startMid),
+    };
+  }, [screenToWorld]);
+
+  const updateGesture = useCallback(() => {
+    const g = gestureRef.current;
+    if (!g) return;
+    const pts = Array.from(pointersRef.current.values());
+    if (pts.length < 2) return;
+    const [p1, p2] = pts;
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    const d = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+    const a = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const newS = Math.max(0.2, Math.min(8, g.startView.s * (d / g.startDist)));
+    const newR = g.startView.r + (a - g.startAngle);
+    // Keep startWorldMid under the current finger midpoint:
+    // screen = rotate(r) -> scale(s) -> translate(tx,ty)
+    const cos = Math.cos(newR), sin = Math.sin(newR);
+    const wx = g.startWorldMid.x * newS, wy = g.startWorldMid.y * newS;
+    const rotX = wx * cos - wy * sin;
+    const rotY = wx * sin + wy * cos;
+    setView({ s: newS, r: newR, tx: mid.x - rotX, ty: mid.y - rotY });
+  }, []);
+
+  const resetView = () => setView({ s: 1, r: 0, tx: 0, ty: 0 });
+
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
 
   // Recompute layer areas on scale change (preserve relative geometry)
