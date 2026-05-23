@@ -1344,6 +1344,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          <div className="h-6 w-px bg-border/60" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetView}
+            title="Reset zoom & rotasi"
+            disabled={view.s === 1 && view.r === 0 && view.tx === 0 && view.ty === 0}
+          >
+            <RotateCcw className="mr-1.5 h-4 w-4" />
+            {Math.round(view.s * 100)}%
+          </Button>
         </div>
 
         {/* Scale tag */}
