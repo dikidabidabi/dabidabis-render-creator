@@ -21,6 +21,9 @@ import {
   Minimize2,
   X,
   RotateCcw,
+  Minus,
+  Spline,
+  PenTool,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
