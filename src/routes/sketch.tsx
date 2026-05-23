@@ -1054,6 +1054,55 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const sp = getScreenPos(e);
     return snapPoint(screenToWorld(sp));
   };
+  const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
+
+  // Commit a finished line into state, run cycle detection, push history.
+  const commitLine = useCallback(
+    (newLine: Line) => {
+      const nextLines = [...lines, newLine];
+      const newIdx = nextLines.length - 1;
+      const cycle = findCycleWithLine(nextLines, newIdx);
+      let nextLayers = layers;
+      if (cycle && cycle.length >= 3) {
+        const areaPx = polygonAreaPx(cycle);
+        if (areaPx > 25) {
+          const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+          const idx = layers.length + 1;
+          const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+          const layer: Layer = {
+            id: `L${Date.now()}`,
+            name: `Ruang ${idx}`,
+            points: cycle,
+            areaM2,
+            color,
+            locked: false,
+          };
+          nextLayers = [...layers, layer];
+          toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+        }
+      }
+      pushHistory();
+      onChange({ lines: nextLines, layers: nextLayers });
+    },
+    [lines, layers, pxPerMeter, pushHistory, onChange],
+  );
+
+  const commitPendingCurve = useCallback(() => {
+    if (!pendingCurve) return;
+    commitLine({
+      a: pendingCurve.a,
+      b: pendingCurve.b,
+      kind: "bezier",
+      c1: pendingCurve.c1,
+      c2: pendingCurve.c2,
+    });
+    setPendingCurve(null);
+  }, [pendingCurve, commitLine]);
+
+  const cancelPendingCurve = useCallback(() => {
+    setPendingCurve(null);
+    setDraggingHandle(null);
+  }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -1062,7 +1111,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Two or more fingers => gesture (pinch zoom + rotate). Abort any draw.
     if (pointersRef.current.size >= 2) {
       if (drawing) setDrawing(null);
+      setDraggingHandle(null);
       startGesture();
+      return;
+    }
+
+    // Pending bezier handle drag has top priority
+    if (pendingCurve) {
+      const wp = getWorldPosRaw(e);
+      const tol = 14 / view.s;
+      if (dist(wp, pendingCurve.c1) <= tol) {
+        setDraggingHandle("c1");
+        return;
+      }
+      if (dist(wp, pendingCurve.c2) <= tol) {
+        setDraggingHandle("c2");
+        return;
+      }
+      // Tap outside handles: do nothing (use Selesai button to commit)
       return;
     }
 
@@ -1086,7 +1152,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       let bestD = Infinity;
       lines.forEach((ln, i) => {
         if (isLineLocked(ln)) return;
-        const d = pointToSegment(p, ln.a, ln.b);
+        const d = pointToLine(p, ln);
         if (d < bestD) {
           bestD = d;
           bestIdx = i;
@@ -1096,7 +1162,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         pushHistory();
         onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
       } else {
-        const hitLocked = lines.find((ln) => isLineLocked(ln) && pointToSegment(p, ln.a, ln.b) <= tol);
+        const hitLocked = lines.find((ln) => isLineLocked(ln) && pointToLine(p, ln) <= tol);
         if (hitLocked) toast.error("Garis terkunci");
       }
     }
@@ -1111,6 +1177,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
     if (pointersRef.current.size >= 2) return;
+
+    if (draggingHandle && pendingCurve) {
+      const wp = getWorldPosRaw(e);
+      setPendingCurve({ ...pendingCurve, [draggingHandle]: wp });
+      return;
+    }
+
     const p = getWorldPos(e);
     setHover(p);
     if (drawing) setDrawing({ a: drawing.a, b: p });
@@ -1130,43 +1203,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const wasGesture = !!gestureRef.current;
     endPointer(e);
     if (wasGesture) return;
+
+    if (draggingHandle) {
+      setDraggingHandle(null);
+      return;
+    }
     if (!drawing) return;
     if (dist(drawing.a, drawing.b) < 4) {
       setDrawing(null);
       return;
     }
-    const newLine = { a: drawing.a, b: drawing.b };
-    const nextLines = [...lines, newLine];
+    const a = drawing.a;
+    const b = drawing.b;
     setDrawing(null);
 
-    const newIdx = nextLines.length - 1;
-    const cycle = findCycleWithLine(nextLines, newIdx);
-    let nextLayers = layers;
-    if (cycle && cycle.length >= 3) {
-      const areaPx = polygonAreaPx(cycle);
-      if (areaPx > 25) {
-        const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
-        const idx = layers.length + 1;
-        const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
-        const layer: Layer = {
-          id: `L${Date.now()}`,
-          name: `Ruang ${idx}`,
-          points: cycle,
-          areaM2,
-          color,
-          locked: false,
-        };
-        nextLayers = [...layers, layer];
-        toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
-      }
+    if (lineKind === "bezier") {
+      // Defer commit: open tangent handles for adjustment
+      setPendingCurve({ a, b, ...defaultBezierHandles(a, b) });
+      toast("Sesuaikan dua tangent, lalu tekan Selesai", { duration: 2500 });
+      return;
     }
-    pushHistory();
-    onChange({ lines: nextLines, layers: nextLayers });
+
+    const newLine: Line =
+      lineKind === "arc"
+        ? { a, b, kind: "arc", bulge: defaultBulgePx(a, b) }
+        : { a, b, kind: "straight" };
+    commitLine(newLine);
   };
 
   const onPointerCancel = (e: React.PointerEvent) => {
     endPointer(e);
     setDrawing(null);
+    setDraggingHandle(null);
   };
 
   const handleUndo = () => {
