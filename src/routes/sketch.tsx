@@ -1302,6 +1302,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
