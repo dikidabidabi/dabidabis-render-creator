@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Pencil, Trash2, Magnet, Ruler, Undo2, CheckCircle2 } from "lucide-react";
+import { Pencil, Trash2, Magnet, Ruler, Undo2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -21,13 +21,7 @@ export const Route = createFileRoute("/sketch")({
       {
         name: "description",
         content:
-          "Sketsa batas lahan presisi di kertas milimeter block digital. Skala 1:100 / 1:200, snap to grid, dan kalkulasi luas otomatis dalam m².",
-      },
-      { property: "og:title", content: "Sketsa Batas Lahan — Dabidabi's" },
-      {
-        property: "og:description",
-        content:
-          "Gambar batas lahan dengan skala arsitektur, snap to grid, dan luas otomatis.",
+          "Sketsa batas lahan presisi di kertas milimeter block digital. Skala 1:100 hingga 1:1000, snap to grid, dan rekapitulasi luas otomatis dalam m².",
       },
     ],
   }),
@@ -36,22 +30,45 @@ export const Route = createFileRoute("/sketch")({
 
 type Point = { x: number; y: number };
 type Line = { a: Point; b: Point };
-type Scale = "1:100" | "1:200";
+type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
 
-// 1 kotak besar (10 mm pada kertas milimeter) = 1 m pada skala 1:100, 2 m pada 1:200.
-const METERS_PER_MAJOR: Record<Scale, number> = { "1:100": 1, "1:200": 2 };
-const MINOR_PX = 8; // ukuran 1 kotak kecil di layar (px)
-const MAJOR_EVERY = 10; // 10 kotak kecil = 1 kotak besar
+type Layer = {
+  id: string;
+  name: string;
+  points: Point[];
+  areaM2: number;
+  color: string;
+};
+
+const METERS_PER_MAJOR: Record<Scale, number> = {
+  "1:100": 1,
+  "1:200": 2,
+  "1:500": 5,
+  "1:1000": 10,
+};
+const MINOR_PX = 8;
+const MAJOR_EVERY = 10;
+const SNAP_TOL = MINOR_PX * 0.9;
+
+const LAYER_COLORS = [
+  "rgba(232, 93, 58, ALPHA)",   // ember
+  "rgba(34, 197, 94, ALPHA)",   // emerald
+  "rgba(59, 130, 246, ALPHA)",  // blue
+  "rgba(168, 85, 247, ALPHA)",  // purple
+  "rgba(234, 179, 8, ALPHA)",   // amber
+  "rgba(236, 72, 153, ALPHA)",  // pink
+];
 
 function dist(a: Point, b: Point) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
-
-function pointsClose(a: Point, b: Point, tol: number) {
+function pointsClose(a: Point, b: Point, tol = SNAP_TOL) {
   return dist(a, b) <= tol;
 }
-
-// Shoelace area (px²)
+function keyOf(p: Point) {
+  // bucket by snap tol so endpoints that "look the same" collapse
+  return `${Math.round(p.x / SNAP_TOL)}_${Math.round(p.y / SNAP_TOL)}`;
+}
 function polygonAreaPx(pts: Point[]) {
   let s = 0;
   for (let i = 0; i < pts.length; i++) {
@@ -60,36 +77,73 @@ function polygonAreaPx(pts: Point[]) {
   }
   return Math.abs(s) / 2;
 }
+function pointInPolygon(p: Point, poly: Point[]) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect =
+      yi > p.y !== yj > p.y &&
+      p.x < ((xj - xi) * (p.y - yi)) / (yj - yi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
 
 /**
- * Build closed polygons from connected line endpoints.
- * Simple approach: try to form a polygon by walking the last N lines if they form a closed loop.
+ * Build graph from lines, then find shortest cycle that uses the newly added line.
+ * Returns ordered polygon points or null.
  */
-function detectClosedPolygon(lines: Line[], tol: number): Point[] | null {
+function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
   if (lines.length < 3) return null;
-  // Try chains ending at the latest line and going back.
-  for (let start = 0; start <= lines.length - 3; start++) {
-    const chain = lines.slice(start);
-    const pts: Point[] = [chain[0].a];
-    let ok = true;
-    for (let i = 0; i < chain.length; i++) {
-      const prev = pts[pts.length - 1];
-      const seg = chain[i];
-      if (pointsClose(prev, seg.a, tol)) {
-        pts.push(seg.b);
-      } else if (pointsClose(prev, seg.b, tol)) {
-        pts.push(seg.a);
-      } else {
-        ok = false;
-        break;
-      }
+  // node id -> representative point
+  const nodes = new Map<string, Point>();
+  const adj = new Map<string, { to: string; lineIdx: number }[]>();
+  const addNode = (p: Point) => {
+    const k = keyOf(p);
+    if (!nodes.has(k)) {
+      nodes.set(k, p);
+      adj.set(k, []);
     }
-    if (ok && pts.length >= 4 && pointsClose(pts[0], pts[pts.length - 1], tol)) {
-      pts.pop();
-      return pts;
+    return k;
+  };
+  lines.forEach((ln, i) => {
+    const ka = addNode(ln.a);
+    const kb = addNode(ln.b);
+    if (ka === kb) return;
+    adj.get(ka)!.push({ to: kb, lineIdx: i });
+    adj.get(kb)!.push({ to: ka, lineIdx: i });
+  });
+  const newLine = lines[newLineIdx];
+  const startK = keyOf(newLine.a);
+  const goalK = keyOf(newLine.b);
+  if (startK === goalK) return null;
+  // BFS shortest path from start to goal, forbidden to use newLineIdx
+  const prev = new Map<string, string | null>();
+  prev.set(startK, null);
+  const queue: string[] = [startK];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur === goalK) break;
+    for (const e of adj.get(cur) || []) {
+      if (e.lineIdx === newLineIdx) continue;
+      if (prev.has(e.to)) continue;
+      prev.set(e.to, cur);
+      queue.push(e.to);
     }
   }
-  return null;
+  if (!prev.has(goalK)) return null;
+  // Reconstruct path from goal back to start, then prepend start node points
+  const pathKeys: string[] = [];
+  let cur: string | null = goalK;
+  while (cur) {
+    pathKeys.push(cur);
+    cur = prev.get(cur) ?? null;
+  }
+  // pathKeys is goal -> ... -> start; reverse to start -> ... -> goal
+  pathKeys.reverse();
+  if (pathKeys.length < 3) return null;
+  return pathKeys.map((k) => nodes.get(k)!);
 }
 
 function SketchPage() {
@@ -102,12 +156,21 @@ function SketchPage() {
   const [lines, setLines] = useState<Line[]>([]);
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
-  const [polygon, setPolygon] = useState<Point[] | null>(null);
+  const [layers, setLayers] = useState<Layer[]>([]);
 
-  // px per meter
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
 
-  // Resize observer
+  // Recompute layer areas when scale changes
+  useEffect(() => {
+    setLayers((prev) =>
+      prev.map((l) => ({
+        ...l,
+        areaM2: polygonAreaPx(l.points) / (pxPerMeter * pxPerMeter),
+      })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale]);
+
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -144,11 +207,10 @@ function SketchPage() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.w, size.h);
 
-    // Background (warm paper)
     ctx.fillStyle = "#f6efe3";
     ctx.fillRect(0, 0, size.w, size.h);
 
-    // Minor grid
+    // minor grid
     ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -162,7 +224,7 @@ function SketchPage() {
     }
     ctx.stroke();
 
-    // Major grid
+    // major grid
     ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
     ctx.lineWidth = 1.2;
     ctx.beginPath();
@@ -177,20 +239,36 @@ function SketchPage() {
     }
     ctx.stroke();
 
-    // Polygon fill
-    if (polygon && polygon.length >= 3) {
+    // layers (closed polygons) - filled with each color
+    layers.forEach((layer) => {
+      if (layer.points.length < 3) return;
       ctx.beginPath();
-      ctx.moveTo(polygon[0].x, polygon[0].y);
-      for (let i = 1; i < polygon.length; i++) ctx.lineTo(polygon[i].x, polygon[i].y);
+      ctx.moveTo(layer.points[0].x, layer.points[0].y);
+      for (let i = 1; i < layer.points.length; i++) {
+        ctx.lineTo(layer.points[i].x, layer.points[i].y);
+      }
       ctx.closePath();
-      ctx.fillStyle = "rgba(232, 93, 58, 0.18)";
+      ctx.fillStyle = layer.color.replace("ALPHA", "0.28");
       ctx.fill();
-      ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
+      ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
       ctx.lineWidth = 2.5;
       ctx.stroke();
-    }
 
-    // Lines
+      // label centroid
+      let cx = 0, cy = 0;
+      layer.points.forEach((p) => { cx += p.x; cy += p.y; });
+      cx /= layer.points.length;
+      cy /= layer.points.length;
+      const label = `${layer.name} · ${layer.areaM2.toFixed(2)} m²`;
+      ctx.font = "600 12px Manrope, sans-serif";
+      const w = ctx.measureText(label).width + 14;
+      ctx.fillStyle = "rgba(26,26,26,0.92)";
+      ctx.fillRect(cx - w / 2, cy - 11, w, 22);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(label, cx - w / 2 + 7, cy + 4);
+    });
+
+    // lines
     ctx.strokeStyle = "#1a1a1a";
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
@@ -201,7 +279,7 @@ function SketchPage() {
       ctx.stroke();
     }
 
-    // Endpoints
+    // endpoints
     ctx.fillStyle = "#1a1a1a";
     for (const ln of lines) {
       for (const p of [ln.a, ln.b]) {
@@ -211,7 +289,7 @@ function SketchPage() {
       }
     }
 
-    // Active drawing
+    // active drawing
     if (drawing) {
       ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
       ctx.lineWidth = 2;
@@ -222,10 +300,9 @@ function SketchPage() {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Length label
       const meters = dist(drawing.a, drawing.b) / pxPerMeter;
       const mid = { x: (drawing.a.x + drawing.b.x) / 2, y: (drawing.a.y + drawing.b.y) / 2 };
-      const label = `Panjang: ${meters.toFixed(2)} m`;
+      const label = `${meters.toFixed(2)} m`;
       ctx.font = "600 12px Manrope, sans-serif";
       const w = ctx.measureText(label).width + 12;
       ctx.fillStyle = "rgba(26,26,26,0.92)";
@@ -234,38 +311,32 @@ function SketchPage() {
       ctx.fillText(label, mid.x + 14, mid.y - 8);
     }
 
-    // Hover indicator
     if (hover && tool === "line" && !drawing) {
       ctx.fillStyle = "rgba(232,93,58,0.9)";
       ctx.beginPath();
       ctx.arc(hover.x, hover.y, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [size, lines, drawing, hover, polygon, tool, pxPerMeter]);
+  }, [size, lines, drawing, hover, layers, tool, pxPerMeter]);
 
   const getPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
     return snapPoint({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
-  const tryCloseAfter = (newLines: Line[]) => {
-    const tol = MINOR_PX * 0.75;
-    const poly = detectClosedPolygon(newLines, tol);
-    if (poly) {
-      setPolygon(poly);
-      const m2 = polygonAreaPx(poly) / (pxPerMeter * pxPerMeter);
-      toast.success(`Bidang terkunci — Luas ${m2.toFixed(2)} m²`);
-    }
-  };
-
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     const p = getPos(e);
     if (tool === "line") {
-      if (polygon) setPolygon(null);
       setDrawing({ a: p, b: p });
     } else if (tool === "erase") {
-      // erase nearest line within tolerance
+      // Try erasing layer first if click is inside one
+      const hitLayer = [...layers].reverse().find((l) => pointInPolygon(p, l.points));
+      if (hitLayer) {
+        setLayers((prev) => prev.filter((l) => l.id !== hitLayer.id));
+        toast.success(`Layer ${hitLayer.name} dihapus`);
+        return;
+      }
       const tol = 8;
       let bestIdx = -1;
       let bestD = Infinity;
@@ -277,9 +348,7 @@ function SketchPage() {
         }
       });
       if (bestIdx >= 0 && bestD <= tol) {
-        const next = lines.filter((_, i) => i !== bestIdx);
-        setLines(next);
-        setPolygon(null);
+        setLines((prev) => prev.filter((_, i) => i !== bestIdx));
       }
     }
   };
@@ -296,28 +365,52 @@ function SketchPage() {
       setDrawing(null);
       return;
     }
-    const next = [...lines, { a: drawing.a, b: drawing.b }];
+    const newLine = { a: drawing.a, b: drawing.b };
+    const next = [...lines, newLine];
     setLines(next);
     setDrawing(null);
-    tryCloseAfter(next);
+
+    // Detect cycle that uses the newly added line
+    const newIdx = next.length - 1;
+    const cycle = findCycleWithLine(next, newIdx);
+    if (cycle && cycle.length >= 3) {
+      const areaPx = polygonAreaPx(cycle);
+      if (areaPx > 25) {
+        const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+        setLayers((prev) => {
+          const idx = prev.length + 1;
+          const color = LAYER_COLORS[prev.length % LAYER_COLORS.length];
+          const layer: Layer = {
+            id: `L${Date.now()}`,
+            name: `Lahan ${idx}`,
+            points: cycle,
+            areaM2,
+            color,
+          };
+          toast.success(`${layer.name} terkunci — ${areaM2.toFixed(2)} m²`);
+          return [...prev, layer];
+        });
+      }
+    }
   };
 
   const handleUndo = () => {
     if (!lines.length) return;
     setLines(lines.slice(0, -1));
-    setPolygon(null);
   };
 
   const handleClear = () => {
     setLines([]);
-    setPolygon(null);
+    setLayers([]);
     setDrawing(null);
   };
 
-  const totalLengthM =
-    lines.reduce((s, l) => s + dist(l.a, l.b), 0) / pxPerMeter;
-  const areaM2 =
-    polygon ? polygonAreaPx(polygon) / (pxPerMeter * pxPerMeter) : 0;
+  const removeLayer = (id: string) => {
+    setLayers((prev) => prev.filter((l) => l.id !== id));
+  };
+
+  const totalLengthM = lines.reduce((s, l) => s + dist(l.a, l.b), 0) / pxPerMeter;
+  const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
@@ -326,12 +419,11 @@ function SketchPage() {
           Sketsa Batas Lahan
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Kertas milimeter block digital — gambar batas lahan dengan skala arsitektur, snap to grid, dan luas otomatis.
+          Kertas milimeter block digital — skala 1:100 hingga 1:1000, snap to grid, dan rekapitulasi luas otomatis.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Canvas */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
         <div
           ref={wrapRef}
           className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
@@ -344,26 +436,26 @@ function SketchPage() {
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" ? "cursor-crosshair" : "cursor-not-allowed",
+              tool === "line" ? "cursor-crosshair" : "cursor-pointer",
             )}
           />
-          {/* Scale ribbon */}
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
             Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
           </div>
         </div>
 
-        {/* Side panel */}
         <aside className="space-y-5 rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur">
           <div className="space-y-2">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">Skala</Label>
-            <Select value={scale} onValueChange={(v) => { setScale(v as Scale); setPolygon(null); }}>
+            <Select value={scale} onValueChange={(v) => setScale(v as Scale)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="1:100">1 : 100 (1 kotak besar = 1 m)</SelectItem>
                 <SelectItem value="1:200">1 : 200 (1 kotak besar = 2 m)</SelectItem>
+                <SelectItem value="1:500">1 : 500 (1 kotak besar = 5 m)</SelectItem>
+                <SelectItem value="1:1000">1 : 1000 (1 kotak besar = 10 m)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -391,7 +483,7 @@ function SketchPage() {
               <Button variant="outline" size="sm" onClick={handleUndo} disabled={!lines.length}>
                 <Undo2 className="mr-1.5 h-4 w-4" /> Undo
               </Button>
-              <Button variant="outline" size="sm" onClick={handleClear} disabled={!lines.length}>
+              <Button variant="outline" size="sm" onClick={handleClear} disabled={!lines.length && !layers.length}>
                 Bersihkan
               </Button>
             </div>
@@ -408,44 +500,77 @@ function SketchPage() {
             <Switch checked={snap} onCheckedChange={setSnap} />
           </div>
 
+          {/* Rekapitulasi Layer */}
           <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+              </div>
+              <span className="text-[11px] text-muted-foreground">{layers.length} lahan</span>
+            </div>
+
+            {layers.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-[11px] text-muted-foreground">
+                Sambungkan garis hingga membentuk poligon tertutup untuk membuat layer lahan.
+              </div>
+            ) : (
+              <ul className="space-y-1.5">
+                {layers.map((l) => (
+                  <li
+                    key={l.id}
+                    className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background/60 px-2.5 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
+                        style={{ background: l.color.replace("ALPHA", "0.9") }}
+                      />
+                      <span className="truncate text-sm font-medium">{l.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-display text-sm font-semibold">
+                        {l.areaM2.toFixed(2)} <span className="text-[10px] text-muted-foreground">m²</span>
+                      </span>
+                      <button
+                        onClick={() => removeLayer(l.id)}
+                        className="text-muted-foreground transition hover:text-ember"
+                        aria-label="Hapus layer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="border-t border-border/60 pt-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs uppercase tracking-wider text-muted-foreground">Total luas</span>
+                <span className="font-display text-2xl font-semibold text-ember">
+                  {totalAreaM2 > 0 ? totalAreaM2.toFixed(2) : "—"}
+                  <span className="ml-1 text-xs text-muted-foreground">m²</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
             <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-              <Ruler className="h-3.5 w-3.5" /> Ringkasan
+              <Ruler className="h-3.5 w-3.5" /> Garis
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Jumlah garis</span>
+              <span className="text-sm text-muted-foreground">Jumlah</span>
               <span className="font-display text-base font-semibold">{lines.length}</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Total panjang</span>
-              <span className="font-display text-base font-semibold">
-                {totalLengthM.toFixed(2)} m
-              </span>
-            </div>
-            <div className="border-t border-border/60 pt-3">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                Luas lahan
-              </div>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="font-display text-3xl font-semibold text-ember">
-                  {areaM2 > 0 ? areaM2.toFixed(2) : "—"}
-                </span>
-                <span className="text-sm text-muted-foreground">m²</span>
-              </div>
-              {polygon ? (
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald-400">
-                  <CheckCircle2 className="h-3 w-3" /> Bidang tertutup terdeteksi
-                </div>
-              ) : (
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                  Sambungkan garis hingga membentuk poligon tertutup.
-                </div>
-              )}
+              <span className="text-sm text-muted-foreground">Panjang</span>
+              <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
             </div>
           </div>
 
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Tips: aktifkan Snap to Grid untuk presisi milimeter. Sentuhan stylus/jari didukung penuh di tablet.
+            Tip: gunakan alat Hapus lalu klik pada area dalam lahan untuk menghapus layer.
           </p>
         </aside>
       </div>
