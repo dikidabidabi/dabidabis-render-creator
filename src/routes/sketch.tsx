@@ -614,11 +614,20 @@ function SketchPage() {
               </ul>
             )}
 
-            <div className="border-t border-border/60 pt-3">
+            <div className="space-y-2 border-t border-border/60 pt-3">
               <div className="flex items-baseline justify-between">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">Total luas</span>
-                <span className="font-display text-2xl font-semibold text-ember">
+                <span className="text-xs uppercase tracking-wider text-muted-foreground">Total seluruh ruang</span>
+                <span className="font-display text-xl font-semibold">
                   {totalAreaM2 > 0 ? totalAreaM2.toFixed(2) : "—"}
+                  <span className="ml-1 text-xs text-muted-foreground">m²</span>
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between rounded-md bg-ember/10 px-2.5 py-2">
+                <span className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-ember">
+                  <MapPin className="h-3 w-3" /> Luas Lahan (acuan KDB/KLB)
+                </span>
+                <span className="font-display text-2xl font-semibold text-ember">
+                  {totalLahanM2 > 0 ? totalLahanM2.toFixed(2) : "—"}
                   <span className="ml-1 text-xs text-muted-foreground">m²</span>
                 </span>
               </div>
