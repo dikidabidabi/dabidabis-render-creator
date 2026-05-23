@@ -526,7 +526,7 @@ function SketchPage() {
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
                 <Layers className="h-3.5 w-3.5" /> Rekapitulasi
               </div>
-              <span className="text-[11px] text-muted-foreground">{layers.length} lahan</span>
+              <span className="text-[11px] text-muted-foreground">{layers.length} ruang · {lahanLayers.length} lahan</span>
             </div>
 
             {layers.length === 0 ? (
