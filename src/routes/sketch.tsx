@@ -653,8 +653,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [size, setSize] = useState({ w: 800, h: 600 });
 
   const [tool, setTool] = useState<"line" | "erase">("line");
+  const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
+  // Pending bezier curve (after endpoints set, awaiting tangent adjustment + commit)
+  const [pendingCurve, setPendingCurve] = useState<
+    | { a: Point; b: Point; c1: Point; c2: Point }
+    | null
+  >(null);
+  const [draggingHandle, setDraggingHandle] = useState<null | "c1" | "c2">(null);
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
