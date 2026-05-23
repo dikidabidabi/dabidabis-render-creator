@@ -535,32 +535,82 @@ function SketchPage() {
               </div>
             ) : (
               <ul className="space-y-1.5">
-                {layers.map((l) => (
-                  <li
-                    key={l.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background/60 px-2.5 py-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
-                        style={{ background: l.color.replace("ALPHA", "0.9") }}
-                      />
-                      <span className="truncate text-sm font-medium">{l.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-sm font-semibold">
-                        {l.areaM2.toFixed(2)} <span className="text-[10px] text-muted-foreground">m²</span>
-                      </span>
-                      <button
-                        onClick={() => removeLayer(l.id)}
-                        className="text-muted-foreground transition hover:text-ember"
-                        aria-label="Hapus layer"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {layers.map((l) => {
+                  const lahan = isLahanName(l.name);
+                  const editing = editingId === l.id;
+                  return (
+                    <li
+                      key={l.id}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded-md border px-2.5 py-2",
+                        lahan
+                          ? "border-ember/60 bg-ember/5"
+                          : "border-border/50 bg-background/60",
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
+                          style={{ background: l.color.replace("ALPHA", "0.9") }}
+                        />
+                        {editing ? (
+                          <Input
+                            autoFocus
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={commitRename}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitRename();
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            className="h-7 text-sm"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => startRename(l)}
+                            className="flex min-w-0 items-center gap-1.5 truncate text-left text-sm font-medium hover:text-ember"
+                            title="Klik untuk ganti nama"
+                          >
+                            {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
+                            <span className="truncate">{l.name}</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-sm font-semibold">
+                          {l.areaM2.toFixed(2)} <span className="text-[10px] text-muted-foreground">m²</span>
+                        </span>
+                        {editing ? (
+                          <button
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={commitRename}
+                            className="text-ember"
+                            aria-label="Simpan nama"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => startRename(l)}
+                              className="text-muted-foreground transition hover:text-foreground"
+                              aria-label="Ganti nama"
+                            >
+                              <PencilIcon className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => removeLayer(l.id)}
+                              className="text-muted-foreground transition hover:text-ember"
+                              aria-label="Hapus layer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
