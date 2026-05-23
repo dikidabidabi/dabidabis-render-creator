@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Pencil, Trash2, Magnet, Ruler, Undo2, Layers } from "lucide-react";
+import { Pencil, Trash2, Magnet, Ruler, Undo2, Layers, Pencil as PencilIcon, Check, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -382,7 +383,7 @@ function SketchPage() {
           const color = LAYER_COLORS[prev.length % LAYER_COLORS.length];
           const layer: Layer = {
             id: `L${Date.now()}`,
-            name: `Lahan ${idx}`,
+            name: `Ruang ${idx}`,
             points: cycle,
             areaM2,
             color,
@@ -409,8 +410,27 @@ function SketchPage() {
     setLayers((prev) => prev.filter((l) => l.id !== id));
   };
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  const startRename = (l: Layer) => {
+    setEditingId(l.id);
+    setEditingName(l.name);
+  };
+  const commitRename = () => {
+    if (!editingId) return;
+    const name = editingName.trim() || "Ruang";
+    setLayers((prev) => prev.map((l) => (l.id === editingId ? { ...l, name } : l)));
+    const isLahan = name.toLowerCase().startsWith("lahan");
+    if (isLahan) toast.success(`${name} ditandai sebagai acuan KDB/KLB`);
+    setEditingId(null);
+  };
+
+  const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const totalLengthM = lines.reduce((s, l) => s + dist(l.a, l.b), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
+  const lahanLayers = layers.filter((l) => isLahanName(l.name));
+  const totalLahanM2 = lahanLayers.reduce((s, l) => s + l.areaM2, 0);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
@@ -506,49 +526,108 @@ function SketchPage() {
               <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
                 <Layers className="h-3.5 w-3.5" /> Rekapitulasi
               </div>
-              <span className="text-[11px] text-muted-foreground">{layers.length} lahan</span>
+              <span className="text-[11px] text-muted-foreground">{layers.length} ruang · {lahanLayers.length} lahan</span>
             </div>
 
             {layers.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                Sambungkan garis hingga membentuk poligon tertutup untuk membuat layer lahan.
+                Sambungkan garis hingga membentuk poligon tertutup untuk membuat ruang. Ubah nama menjadi "Lahan ..." untuk menjadikannya acuan KDB/KLB.
               </div>
             ) : (
               <ul className="space-y-1.5">
-                {layers.map((l) => (
-                  <li
-                    key={l.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background/60 px-2.5 py-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
-                        style={{ background: l.color.replace("ALPHA", "0.9") }}
-                      />
-                      <span className="truncate text-sm font-medium">{l.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-sm font-semibold">
-                        {l.areaM2.toFixed(2)} <span className="text-[10px] text-muted-foreground">m²</span>
-                      </span>
-                      <button
-                        onClick={() => removeLayer(l.id)}
-                        className="text-muted-foreground transition hover:text-ember"
-                        aria-label="Hapus layer"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {layers.map((l) => {
+                  const lahan = isLahanName(l.name);
+                  const editing = editingId === l.id;
+                  return (
+                    <li
+                      key={l.id}
+                      className={cn(
+                        "flex items-center justify-between gap-2 rounded-md border px-2.5 py-2",
+                        lahan
+                          ? "border-ember/60 bg-ember/5"
+                          : "border-border/50 bg-background/60",
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
+                          style={{ background: l.color.replace("ALPHA", "0.9") }}
+                        />
+                        {editing ? (
+                          <Input
+                            autoFocus
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={commitRename}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitRename();
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            className="h-7 text-sm"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => startRename(l)}
+                            className="flex min-w-0 items-center gap-1.5 truncate text-left text-sm font-medium hover:text-ember"
+                            title="Klik untuk ganti nama"
+                          >
+                            {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
+                            <span className="truncate">{l.name}</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-display text-sm font-semibold">
+                          {l.areaM2.toFixed(2)} <span className="text-[10px] text-muted-foreground">m²</span>
+                        </span>
+                        {editing ? (
+                          <button
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={commitRename}
+                            className="text-ember"
+                            aria-label="Simpan nama"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => startRename(l)}
+                              className="text-muted-foreground transition hover:text-foreground"
+                              aria-label="Ganti nama"
+                            >
+                              <PencilIcon className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => removeLayer(l.id)}
+                              className="text-muted-foreground transition hover:text-ember"
+                              aria-label="Hapus layer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
-            <div className="border-t border-border/60 pt-3">
+            <div className="space-y-2 border-t border-border/60 pt-3">
               <div className="flex items-baseline justify-between">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">Total luas</span>
-                <span className="font-display text-2xl font-semibold text-ember">
+                <span className="text-xs uppercase tracking-wider text-muted-foreground">Total seluruh ruang</span>
+                <span className="font-display text-xl font-semibold">
                   {totalAreaM2 > 0 ? totalAreaM2.toFixed(2) : "—"}
+                  <span className="ml-1 text-xs text-muted-foreground">m²</span>
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between rounded-md bg-ember/10 px-2.5 py-2">
+                <span className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-ember">
+                  <MapPin className="h-3 w-3" /> Luas Lahan (acuan KDB/KLB)
+                </span>
+                <span className="font-display text-2xl font-semibold text-ember">
+                  {totalLahanM2 > 0 ? totalLahanM2.toFixed(2) : "—"}
                   <span className="ml-1 text-xs text-muted-foreground">m²</span>
                 </span>
               </div>
