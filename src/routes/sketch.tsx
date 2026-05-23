@@ -1130,7 +1130,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button variant="outline" size="sm" onClick={handleRedo} disabled={!future.length}>
             <Redo2 className="mr-1.5 h-4 w-4" /> Redo
           </Button>
+        <div className="flex items-center justify-between rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs">
+          <span className="text-muted-foreground">
+            Zoom <span className="font-display font-semibold text-foreground">{Math.round(view.s * 100)}%</span>
+            <span className="mx-1.5">·</span>
+            Rotasi <span className="font-display font-semibold text-foreground">{Math.round((view.r * 180) / Math.PI)}°</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={resetView}
+            disabled={view.s === 1 && view.r === 0 && view.tx === 0 && view.ty === 0}
+          >
+            <RotateCcw className="mr-1 h-3 w-3" /> Reset
+          </Button>
         </div>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Tablet: cubit 2 jari untuk zoom, putar 2 jari untuk rotasi kanvas.
+        </p>
       </div>
 
       <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
