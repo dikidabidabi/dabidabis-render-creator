@@ -905,11 +905,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     ctx.lineCap = "round";
     for (const ln of lines) {
       const locked = isLineLocked(ln);
+      const kind = ln.kind ?? "straight";
       ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
       ctx.lineWidth = (locked ? 2.6 : 2) / s;
       ctx.beginPath();
       ctx.moveTo(ln.a.x, ln.a.y);
-      ctx.lineTo(ln.b.x, ln.b.y);
+      if (kind === "straight") {
+        ctx.lineTo(ln.b.x, ln.b.y);
+      } else if (kind === "arc") {
+        const C = arcControlPoint(ln);
+        ctx.quadraticCurveTo(C.x, C.y, ln.b.x, ln.b.y);
+      } else {
+        const c1 = ln.c1 ?? ln.a;
+        const c2 = ln.c2 ?? ln.b;
+        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
+      }
       ctx.stroke();
     }
 
@@ -923,16 +933,58 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
-    // Active drawing line
+    // Active drawing preview (during drag)
     if (drawing) {
       ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
       ctx.lineWidth = 2 / s;
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
       ctx.moveTo(drawing.a.x, drawing.a.y);
-      ctx.lineTo(drawing.b.x, drawing.b.y);
+      if (lineKind === "arc") {
+        const C = arcControlPoint({
+          a: drawing.a, b: drawing.b, kind: "arc",
+          bulge: defaultBulgePx(drawing.a, drawing.b),
+        });
+        ctx.quadraticCurveTo(C.x, C.y, drawing.b.x, drawing.b.y);
+      } else {
+        ctx.lineTo(drawing.b.x, drawing.b.y);
+      }
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // Pending bezier (with two adjustable tangent handles)
+    if (pendingCurve) {
+      const { a, b, c1, c2 } = pendingCurve;
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
+      ctx.lineWidth = 2.2 / s;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.55)";
+      ctx.lineWidth = 1 / s;
+      ctx.setLineDash([4 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y); ctx.lineTo(c1.x, c1.y);
+      ctx.moveTo(b.x, b.y); ctx.lineTo(c2.x, c2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#1a1a1a";
+      for (const p of [a, b]) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4 / s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (const h of [c1, c2]) {
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "rgba(232, 93, 58, 1)";
+        ctx.lineWidth = 2 / s;
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, 7 / s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
     }
 
     if (hover && tool === "line" && !drawing) {
