@@ -1347,6 +1347,66 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
         </div>
+        {tool === "line" && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Jenis garis
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <Button
+                variant={lineKind === "straight" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  cancelPendingCurve();
+                  setLineKind("straight");
+                }}
+                className={cn("h-8 px-2 text-[11px]", lineKind === "straight" && "bg-foreground text-background")}
+                title="Garis lurus"
+              >
+                <Minus className="mr-1 h-3.5 w-3.5" /> Lurus
+              </Button>
+              <Button
+                variant={lineKind === "arc" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  cancelPendingCurve();
+                  setLineKind("arc");
+                }}
+                className={cn("h-8 px-2 text-[11px]", lineKind === "arc" && "bg-foreground text-background")}
+                title="Lengkung sempurna dengan radius otomatis"
+              >
+                <Spline className="mr-1 h-3.5 w-3.5" /> Lengkung
+              </Button>
+              <Button
+                variant={lineKind === "bezier" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  cancelPendingCurve();
+                  setLineKind("bezier");
+                }}
+                className={cn("h-8 px-2 text-[11px]", lineKind === "bezier" && "bg-foreground text-background")}
+                title="Lengkung dengan dua tangent yang dapat disesuaikan di kedua ujung"
+              >
+                <PenTool className="mr-1 h-3.5 w-3.5" /> Tangent
+              </Button>
+            </div>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              {lineKind === "straight" && "Tarik dua titik untuk membuat garis lurus."}
+              {lineKind === "arc" && "Tarik dua titik — lengkung otomatis tegak lurus tali busur."}
+              {lineKind === "bezier" && "Tarik dua titik, lalu geser dua handle tangent, tekan Selesai."}
+            </p>
+          </div>
+        )}
+        {pendingCurve && (
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-ember shadow-ember">
+              <Check className="mr-1.5 h-4 w-4" /> Selesai
+            </Button>
+            <Button size="sm" variant="outline" onClick={cancelPendingCurve}>
+              <X className="mr-1.5 h-4 w-4" /> Batal
+            </Button>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" onClick={handleUndo} disabled={!past.length}>
             <Undo2 className="mr-1.5 h-4 w-4" /> Undo
