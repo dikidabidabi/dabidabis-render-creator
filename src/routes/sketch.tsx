@@ -20,6 +20,7 @@ import {
   Maximize2,
   Minimize2,
   X,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -573,6 +574,76 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setFuture([]);
   }, [lines, layers]);
 
+  // ===== Viewport transform (pan/zoom/rotate) =====
+  // World (where lines/layers are stored) -> screen via: rotate(r) -> scale(s) -> translate(tx,ty)
+  const [view, setView] = useState({ s: 1, r: 0, tx: 0, ty: 0 });
+  // Reset view when switching sketch
+  useEffect(() => {
+    setView({ s: 1, r: 0, tx: 0, ty: 0 });
+  }, [id]);
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  const screenToWorld = useCallback((p: Point): Point => {
+    const v = viewRef.current;
+    const dx = p.x - v.tx;
+    const dy = p.y - v.ty;
+    const cos = Math.cos(-v.r), sin = Math.sin(-v.r);
+    const rx = dx * cos - dy * sin;
+    const ry = dx * sin + dy * cos;
+    return { x: rx / v.s, y: ry / v.s };
+  }, []);
+
+  // Multi-pointer gesture tracking (pinch zoom + rotate)
+  const pointersRef = useRef<Map<number, Point>>(new Map());
+  const gestureRef = useRef<null | {
+    startDist: number;
+    startAngle: number;
+    startMid: Point;
+    startView: { s: number; r: number; tx: number; ty: number };
+    startWorldMid: Point;
+  }>(null);
+
+  const startGesture = useCallback(() => {
+    const pts = Array.from(pointersRef.current.values());
+    if (pts.length < 2) return;
+    const [p1, p2] = pts;
+    const startMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    const startDist = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+    const startAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    gestureRef.current = {
+      startDist,
+      startAngle,
+      startMid,
+      startView: { ...viewRef.current },
+      startWorldMid: screenToWorld(startMid),
+    };
+  }, [screenToWorld]);
+
+  const updateGesture = useCallback(() => {
+    const g = gestureRef.current;
+    if (!g) return;
+    const pts = Array.from(pointersRef.current.values());
+    if (pts.length < 2) return;
+    const [p1, p2] = pts;
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    const d = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+    const a = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const newS = Math.max(0.2, Math.min(8, g.startView.s * (d / g.startDist)));
+    const newR = g.startView.r + (a - g.startAngle);
+    // Keep startWorldMid under the current finger midpoint:
+    // screen = rotate(r) -> scale(s) -> translate(tx,ty)
+    const cos = Math.cos(newR), sin = Math.sin(newR);
+    const wx = g.startWorldMid.x * newS, wy = g.startWorldMid.y * newS;
+    const rotX = wx * cos - wy * sin;
+    const rotY = wx * sin + wy * cos;
+    setView({ s: newS, r: newR, tx: mid.x - rotX, ty: mid.y - rotY });
+  }, []);
+
+  const resetView = () => setView({ s: 1, r: 0, tx: 0, ty: 0 });
+
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
 
   // Recompute layer areas on scale change (preserve relative geometry)
@@ -649,36 +720,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.w, size.h);
 
+    // Paper background fills full screen (drawn before transform)
     ctx.fillStyle = "#f6efe3";
     ctx.fillRect(0, 0, size.w, size.h);
 
-    ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x <= size.w; x += MINOR_PX) {
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, size.h);
-    }
-    for (let y = 0; y <= size.h; y += MINOR_PX) {
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(size.w, y + 0.5);
-    }
-    ctx.stroke();
+    // Apply world transform: translate -> rotate -> scale
+    ctx.save();
+    ctx.translate(view.tx, view.ty);
+    ctx.rotate(view.r);
+    ctx.scale(view.s, view.s);
 
-    ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
+    const s = view.s;
+
+    // Compute visible world bounds (inverse-transform the 4 screen corners)
+    const corners: Point[] = [
+      { x: 0, y: 0 },
+      { x: size.w, y: 0 },
+      { x: size.w, y: size.h },
+      { x: 0, y: size.h },
+    ].map((c) => {
+      const dx = c.x - view.tx, dy = c.y - view.ty;
+      const cos = Math.cos(-view.r), sin = Math.sin(-view.r);
+      return { x: (dx * cos - dy * sin) / s, y: (dx * sin + dy * cos) / s };
+    });
+    const minX = Math.min(...corners.map((c) => c.x));
+    const maxX = Math.max(...corners.map((c) => c.x));
+    const minY = Math.min(...corners.map((c) => c.y));
+    const maxY = Math.max(...corners.map((c) => c.y));
     const major = MINOR_PX * MAJOR_EVERY;
-    for (let x = 0; x <= size.w; x += major) {
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, size.h);
+    const x0 = Math.floor(minX / MINOR_PX) * MINOR_PX;
+    const y0 = Math.floor(minY / MINOR_PX) * MINOR_PX;
+
+    // Minor grid (in world units)
+    ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
+    ctx.lineWidth = 1 / s;
+    ctx.beginPath();
+    for (let x = x0; x <= maxX; x += MINOR_PX) {
+      ctx.moveTo(x, minY);
+      ctx.lineTo(x, maxY);
     }
-    for (let y = 0; y <= size.h; y += major) {
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(size.w, y + 0.5);
+    for (let y = y0; y <= maxY; y += MINOR_PX) {
+      ctx.moveTo(minX, y);
+      ctx.lineTo(maxX, y);
     }
     ctx.stroke();
 
+    // Major grid
+    ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
+    ctx.lineWidth = 1.2 / s;
+    ctx.beginPath();
+    const xm0 = Math.floor(minX / major) * major;
+    const ym0 = Math.floor(minY / major) * major;
+    for (let x = xm0; x <= maxX; x += major) {
+      ctx.moveTo(x, minY);
+      ctx.lineTo(x, maxY);
+    }
+    for (let y = ym0; y <= maxY; y += major) {
+      ctx.moveTo(minX, y);
+      ctx.lineTo(maxX, y);
+    }
+    ctx.stroke();
+
+    // Layers
     layers.forEach((layer) => {
       if (layer.points.length < 3) return;
       ctx.beginPath();
@@ -690,14 +793,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
       ctx.fill();
       ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
-      ctx.lineWidth = layer.locked ? 3 : 2.5;
+      ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
       ctx.stroke();
+    });
 
+    // Lines
+    ctx.lineCap = "round";
+    for (const ln of lines) {
+      const locked = isLineLocked(ln);
+      ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
+      ctx.lineWidth = (locked ? 2.6 : 2) / s;
+      ctx.beginPath();
+      ctx.moveTo(ln.a.x, ln.a.y);
+      ctx.lineTo(ln.b.x, ln.b.y);
+      ctx.stroke();
+    }
+
+    // Endpoints
+    ctx.fillStyle = "#1a1a1a";
+    for (const ln of lines) {
+      for (const p of [ln.a, ln.b]) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3 / s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Active drawing line
+    if (drawing) {
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
+      ctx.lineWidth = 2 / s;
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.moveTo(drawing.a.x, drawing.a.y);
+      ctx.lineTo(drawing.b.x, drawing.b.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    if (hover && tool === "line" && !drawing) {
+      ctx.fillStyle = "rgba(232,93,58,0.9)";
+      ctx.beginPath();
+      ctx.arc(hover.x, hover.y, 4 / s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    // ----- Screen-space overlays (labels, so they stay upright & legible) -----
+    const worldToScreen = (p: Point): Point => {
+      const cos = Math.cos(view.r), sin = Math.sin(view.r);
+      const wx = p.x * view.s, wy = p.y * view.s;
+      return { x: wx * cos - wy * sin + view.tx, y: wx * sin + wy * cos + view.ty };
+    };
+
+    // Layer labels (vertical: name on top, area below) drawn upright
+    layers.forEach((layer) => {
+      if (layer.points.length < 3) return;
       let cx = 0, cy = 0;
       layer.points.forEach((p) => { cx += p.x; cy += p.y; });
       cx /= layer.points.length;
       cy /= layer.points.length;
-
+      const sp = worldToScreen({ x: cx, y: cy });
       const nameText = layer.locked ? `🔒 ${layer.name}` : layer.name;
       const areaText = `${layer.areaM2.toFixed(2)} m²`;
       ctx.font = "600 13px Manrope, sans-serif";
@@ -707,74 +864,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const boxW = Math.max(nameW, areaW) + 16;
       const boxH = 38;
       ctx.fillStyle = "rgba(26,26,26,0.92)";
-      ctx.fillRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH);
+      ctx.fillRect(sp.x - boxW / 2, sp.y - boxH / 2, boxW, boxH);
       ctx.fillStyle = "#fff";
       ctx.font = "600 13px Manrope, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(nameText, cx, cy - 3);
+      ctx.fillText(nameText, sp.x, sp.y - 3);
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = "700 12px Manrope, sans-serif";
-      ctx.fillText(areaText, cx, cy + 14);
+      ctx.fillText(areaText, sp.x, sp.y + 14);
       ctx.textAlign = "start";
     });
 
-    ctx.lineCap = "round";
-    for (const ln of lines) {
-      const locked = isLineLocked(ln);
-      ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
-      ctx.lineWidth = locked ? 2.6 : 2;
-      ctx.beginPath();
-      ctx.moveTo(ln.a.x, ln.a.y);
-      ctx.lineTo(ln.b.x, ln.b.y);
-      ctx.stroke();
-    }
-
-    ctx.fillStyle = "#1a1a1a";
-    for (const ln of lines) {
-      for (const p of [ln.a, ln.b]) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
+    // Active line length label, screen-space
     if (drawing) {
-      ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      ctx.moveTo(drawing.a.x, drawing.a.y);
-      ctx.lineTo(drawing.b.x, drawing.b.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
       const meters = dist(drawing.a, drawing.b) / pxPerMeter;
-      const mid = { x: (drawing.a.x + drawing.b.x) / 2, y: (drawing.a.y + drawing.b.y) / 2 };
+      const midW = { x: (drawing.a.x + drawing.b.x) / 2, y: (drawing.a.y + drawing.b.y) / 2 };
+      const sp = worldToScreen(midW);
       const label = `${meters.toFixed(2)} m`;
       ctx.font = "600 12px Manrope, sans-serif";
       const w = ctx.measureText(label).width + 12;
       ctx.fillStyle = "rgba(26,26,26,0.92)";
-      ctx.fillRect(mid.x + 8, mid.y - 22, w, 20);
+      ctx.fillRect(sp.x + 8, sp.y - 22, w, 20);
       ctx.fillStyle = "#fff";
-      ctx.fillText(label, mid.x + 14, mid.y - 8);
+      ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
+  }, [size, lines, drawing, hover, layers, tool, pxPerMeter, isLineLocked, view]);
 
-    if (hover && tool === "line" && !drawing) {
-      ctx.fillStyle = "rgba(232,93,58,0.9)";
-      ctx.beginPath();
-      ctx.arc(hover.x, hover.y, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }, [size, lines, drawing, hover, layers, tool, pxPerMeter, isLineLocked]);
-
-  const getPos = (e: React.PointerEvent): Point => {
+  const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
-    return snapPoint({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const getWorldPos = (e: React.PointerEvent): Point => {
+    const sp = getScreenPos(e);
+    return snapPoint(screenToWorld(sp));
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
-    const p = getPos(e);
+    pointersRef.current.set(e.pointerId, getScreenPos(e));
+
+    // Two or more fingers => gesture (pinch zoom + rotate). Abort any draw.
+    if (pointersRef.current.size >= 2) {
+      if (drawing) setDrawing(null);
+      startGesture();
+      return;
+    }
+
+    const p = getWorldPos(e);
     if (tool === "line") {
       setDrawing({ a: p, b: p });
     } else if (tool === "erase") {
@@ -789,7 +925,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         toast.success(`Layer ${hitLayer.name} dihapus`);
         return;
       }
-      const tol = 8;
+      const tol = 8 / view.s; // world-space tolerance
       let bestIdx = -1;
       let bestD = Infinity;
       lines.forEach((ln, i) => {
@@ -811,12 +947,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    const p = getPos(e);
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, getScreenPos(e));
+    }
+    if (gestureRef.current && pointersRef.current.size >= 2) {
+      updateGesture();
+      return;
+    }
+    if (pointersRef.current.size >= 2) return;
+    const p = getWorldPos(e);
     setHover(p);
     if (drawing) setDrawing({ a: drawing.a, b: p });
   };
 
-  const onPointerUp = () => {
+  const endPointer = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2 && gestureRef.current) {
+      gestureRef.current = null;
+      // Don't commit any draw on gesture end
+      setDrawing(null);
+      return;
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    const wasGesture = !!gestureRef.current;
+    endPointer(e);
+    if (wasGesture) return;
     if (!drawing) return;
     if (dist(drawing.a, drawing.b) < 4) {
       setDrawing(null);
@@ -849,6 +1006,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     pushHistory();
     onChange({ lines: nextLines, layers: nextLayers });
+  };
+
+  const onPointerCancel = (e: React.PointerEvent) => {
+    endPointer(e);
+    setDrawing(null);
   };
 
   const handleUndo = () => {
@@ -969,6 +1131,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Redo2 className="mr-1.5 h-4 w-4" /> Redo
           </Button>
         </div>
+        <div className="flex items-center justify-between rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs">
+          <span className="text-muted-foreground">
+            Zoom <span className="font-display font-semibold text-foreground">{Math.round(view.s * 100)}%</span>
+            <span className="mx-1.5">·</span>
+            Rotasi <span className="font-display font-semibold text-foreground">{Math.round((view.r * 180) / Math.PI)}°</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={resetView}
+            disabled={view.s === 1 && view.r === 0 && view.tx === 0 && view.ty === 0}
+          >
+            <RotateCcw className="mr-1 h-3 w-3" /> Reset
+          </Button>
+        </div>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Tablet: cubit 2 jari untuk zoom, putar 2 jari untuk rotasi kanvas.
+        </p>
       </div>
 
       <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
@@ -1140,6 +1321,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
@@ -1181,6 +1363,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          <div className="h-6 w-px bg-border/60" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetView}
+            title="Reset zoom & rotasi"
+            disabled={view.s === 1 && view.r === 0 && view.tx === 0 && view.ty === 0}
+          >
+            <RotateCcw className="mr-1.5 h-4 w-4" />
+            {Math.round(view.s * 100)}%
+          </Button>
         </div>
 
         {/* Scale tag */}
@@ -1205,6 +1398,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
           onPointerLeave={() => setHover(null)}
           className={cn(
             "block touch-none select-none",
