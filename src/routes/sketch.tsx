@@ -64,7 +64,15 @@ export const Route = createFileRoute("/sketch")({
 });
 
 type Point = { x: number; y: number };
-type Line = { a: Point; b: Point };
+type LineKind = "straight" | "arc" | "bezier";
+type Line = {
+  a: Point;
+  b: Point;
+  kind?: LineKind;
+  bulge?: number; // for arc: perpendicular sagitta (signed)
+  c1?: Point; // for bezier: tangent control near a
+  c2?: Point; // for bezier: tangent control near b
+};
 type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
 
 type Layer = {
