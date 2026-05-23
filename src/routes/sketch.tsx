@@ -1130,6 +1130,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button variant="outline" size="sm" onClick={handleRedo} disabled={!future.length}>
             <Redo2 className="mr-1.5 h-4 w-4" /> Redo
           </Button>
+        </div>
         <div className="flex items-center justify-between rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs">
           <span className="text-muted-foreground">
             Zoom <span className="font-display font-semibold text-foreground">{Math.round(view.s * 100)}%</span>
