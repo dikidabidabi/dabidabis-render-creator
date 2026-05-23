@@ -1300,7 +1300,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
-  const totalLengthM = lines.reduce((s, l) => s + dist(l.a, l.b), 0) / pxPerMeter;
+  const totalLengthM = lines.reduce((s, l) => s + lineLengthPx(l), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
   const lahanLayers = layers.filter((l) => isLahanName(l.name));
   const totalLahanM2 = lahanLayers.reduce((s, l) => s + l.areaM2, 0);
