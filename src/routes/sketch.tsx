@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Pencil, Trash2, Magnet, Ruler, Undo2, Layers } from "lucide-react";
+import { Pencil, Trash2, Magnet, Ruler, Undo2, Layers, Pencil as PencilIcon, Check, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
