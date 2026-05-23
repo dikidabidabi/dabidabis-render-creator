@@ -383,7 +383,7 @@ function SketchPage() {
           const color = LAYER_COLORS[prev.length % LAYER_COLORS.length];
           const layer: Layer = {
             id: `L${Date.now()}`,
-            name: `Lahan ${idx}`,
+            name: `Ruang ${idx}`,
             points: cycle,
             areaM2,
             color,
