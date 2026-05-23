@@ -1647,6 +1647,46 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          {tool === "line" && (
+            <>
+              <div className="h-6 w-px bg-border/60" />
+              <Button
+                variant={lineKind === "straight" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineKind("straight"); }}
+                title="Garis lurus"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={lineKind === "arc" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineKind("arc"); }}
+                title="Lengkung sempurna (radius otomatis)"
+              >
+                <Spline className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={lineKind === "bezier" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineKind("bezier"); }}
+                title="Lengkung dengan dua tangent"
+              >
+                <PenTool className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          {pendingCurve && (
+            <>
+              <div className="h-6 w-px bg-border/60" />
+              <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-ember shadow-ember">
+                <Check className="mr-1 h-4 w-4" /> Selesai
+              </Button>
+              <Button size="sm" variant="ghost" onClick={cancelPendingCurve}>
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           <div className="h-6 w-px bg-border/60" />
           <Button
             variant="ghost"
