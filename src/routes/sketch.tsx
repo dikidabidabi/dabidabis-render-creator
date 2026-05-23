@@ -410,8 +410,27 @@ function SketchPage() {
     setLayers((prev) => prev.filter((l) => l.id !== id));
   };
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  const startRename = (l: Layer) => {
+    setEditingId(l.id);
+    setEditingName(l.name);
+  };
+  const commitRename = () => {
+    if (!editingId) return;
+    const name = editingName.trim() || "Ruang";
+    setLayers((prev) => prev.map((l) => (l.id === editingId ? { ...l, name } : l)));
+    const isLahan = name.toLowerCase().startsWith("lahan");
+    if (isLahan) toast.success(`${name} ditandai sebagai acuan KDB/KLB`);
+    setEditingId(null);
+  };
+
+  const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const totalLengthM = lines.reduce((s, l) => s + dist(l.a, l.b), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
+  const lahanLayers = layers.filter((l) => isLahanName(l.name));
+  const totalLahanM2 = lahanLayers.reduce((s, l) => s + l.areaM2, 0);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
