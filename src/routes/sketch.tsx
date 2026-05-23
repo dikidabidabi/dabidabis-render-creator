@@ -531,7 +531,7 @@ function SketchPage() {
 
             {layers.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                Sambungkan garis hingga membentuk poligon tertutup untuk membuat layer lahan.
+                Sambungkan garis hingga membentuk poligon tertutup untuk membuat ruang. Ubah nama menjadi "Lahan ..." untuk menjadikannya acuan KDB/KLB.
               </div>
             ) : (
               <ul className="space-y-1.5">
