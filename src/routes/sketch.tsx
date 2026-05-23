@@ -292,6 +292,11 @@ function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
   return points;
 }
 
+function formatDate(ts: number) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 function newSketch(idx: number): Sketch {
   const now = Date.now();
   return {
