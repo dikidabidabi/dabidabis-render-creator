@@ -6,6 +6,7 @@ import {
   Magnet,
   Ruler,
   Undo2,
+  Redo2,
   Layers,
   Pencil as PencilIcon,
   Check,
@@ -15,6 +16,10 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
+  Plus,
+  Maximize2,
+  Minimize2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +52,7 @@ export const Route = createFileRoute("/sketch")({
       {
         name: "description",
         content:
-          "Sketsa batas lahan presisi di kertas milimeter block digital. Skala 1:100 hingga 1:1000, snap to grid, dan rekapitulasi luas otomatis dalam m².",
+          "Sketsa batas lahan presisi di kertas milimeter block digital. Multi-tab, skala 1:100 hingga 1:1000, snap to grid, dan rekapitulasi luas otomatis dalam m².",
       },
     ],
   }),
@@ -67,7 +72,8 @@ type Layer = {
   locked?: boolean;
 };
 
-type SavedState = {
+type Sketch = {
+  id: string;
   title: string;
   createdAt: number;
   updatedAt: number;
@@ -77,7 +83,13 @@ type SavedState = {
   layers: Layer[];
 };
 
-const STORAGE_KEY = "dabidabis_sketch_v1";
+type StoreShape = {
+  sketches: Sketch[];
+  openId: string | null;
+};
+
+const STORAGE_KEY = "dabidabis_sketch_v2";
+const LEGACY_KEY = "dabidabis_sketch_v1";
 
 const METERS_PER_MAJOR: Record<Scale, number> = {
   "1:100": 1,
@@ -124,12 +136,6 @@ function pointInPolygon(p: Point, poly: Point[]) {
   }
   return inside;
 }
-function sameSegment(ln: Line, a: Point, b: Point) {
-  const k1 = keyOf(ln.a), k2 = keyOf(ln.b);
-  const ka = keyOf(a), kb = keyOf(b);
-  return (k1 === ka && k2 === kb) || (k1 === kb && k2 === ka);
-}
-
 function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
   if (lines.length < 3) return null;
   const nodes = new Map<string, Point>();
@@ -183,89 +189,403 @@ function formatDate(ts: number) {
   return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function pointToSegment(p: Point, a: Point, b: Point) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return dist(p, a);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+
+function newSketch(idx: number): Sketch {
+  const now = Date.now();
+  return {
+    id: `S${now}_${Math.random().toString(36).slice(2, 7)}`,
+    title: `Sketsa ${idx}`,
+    createdAt: now,
+    updatedAt: now,
+    scale: "1:100",
+    snap: true,
+    lines: [],
+    layers: [],
+  };
+}
+
 function SketchPage() {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [size, setSize] = useState({ w: 800, h: 600 });
-
-  // Persisted core state
-  const [title, setTitle] = useState("Sketsa Baru");
-  const [createdAt, setCreatedAt] = useState(() => Date.now());
-  const [updatedAt, setUpdatedAt] = useState(() => Date.now());
-  const [scale, setScale] = useState<Scale>("1:100");
-  const [snap, setSnap] = useState(true);
-  const [lines, setLines] = useState<Line[]>([]);
-  const [layers, setLayers] = useState<Layer[]>([]);
-
-  // UI-only
-  const [tool, setTool] = useState<"line" | "erase">("line");
-  const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
-  const [hover, setHover] = useState<Point | null>(null);
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(title);
-  const [minimized, setMinimized] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [sketches, setSketches] = useState<Sketch[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [savedTick, setSavedTick] = useState(0);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
-
-  // Load from localStorage
+  // Load
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const s = JSON.parse(raw) as SavedState;
-        if (s && typeof s === "object") {
-          setTitle(s.title ?? "Sketsa Baru");
-          setCreatedAt(s.createdAt ?? Date.now());
-          setUpdatedAt(s.updatedAt ?? Date.now());
-          setScale(s.scale ?? "1:100");
-          setSnap(s.snap ?? true);
-          setLines(Array.isArray(s.lines) ? s.lines : []);
-          setLayers(Array.isArray(s.layers) ? s.layers : []);
+        const s = JSON.parse(raw) as StoreShape;
+        if (s && Array.isArray(s.sketches)) {
+          setSketches(s.sketches);
+          setOpenId(s.openId ?? s.sketches[0]?.id ?? null);
+          setLoaded(true);
+          return;
         }
       }
+      // Migrate legacy single-sketch
+      const legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy) {
+        const ls = JSON.parse(legacy);
+        const migrated: Sketch = {
+          id: `S${Date.now()}`,
+          title: ls.title ?? "Sketsa 1",
+          createdAt: ls.createdAt ?? Date.now(),
+          updatedAt: ls.updatedAt ?? Date.now(),
+          scale: ls.scale ?? "1:100",
+          snap: ls.snap ?? true,
+          lines: Array.isArray(ls.lines) ? ls.lines : [],
+          layers: Array.isArray(ls.layers) ? ls.layers : [],
+        };
+        setSketches([migrated]);
+        setOpenId(migrated.id);
+      } else {
+        const first = newSketch(1);
+        setSketches([first]);
+        setOpenId(first.id);
+      }
     } catch {
-      // ignore
+      const first = newSketch(1);
+      setSketches([first]);
+      setOpenId(first.id);
     }
     setLoaded(true);
   }, []);
 
-  // Auto-save (debounced)
+  // Save
   useEffect(() => {
     if (!loaded) return;
     const handle = setTimeout(() => {
-      const now = Date.now();
-      const payload: SavedState = {
-        title,
-        createdAt,
-        updatedAt: now,
-        scale,
-        snap,
-        lines,
-        layers,
-      };
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-        setUpdatedAt(now);
-        setSavedTick((t) => t + 1);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ sketches, openId } as StoreShape));
       } catch {
-        // ignore quota
+        // ignore
       }
     }, 400);
     return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, scale, snap, lines, layers, loaded]);
+  }, [sketches, openId, loaded]);
 
-  // Recompute layer areas on scale change
+  const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
+    setSketches((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s)),
+    );
+  }, []);
+
+  const openSketch = useCallback((id: string) => {
+    setOpenId(id);
+  }, []);
+
+  const minimizeSketch = useCallback((id: string) => {
+    setOpenId((cur) => (cur === id ? null : cur));
+    setFullscreenId((cur) => (cur === id ? null : cur));
+  }, []);
+
+  const addSketch = () => {
+    const next = newSketch(sketches.length + 1);
+    setSketches((prev) => [...prev, next]);
+    setOpenId(next.id);
+    toast.success(`${next.title} ditambahkan`);
+  };
+
+  const deleteSketch = (id: string) => {
+    setSketches((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      if (next.length === 0) {
+        const first = newSketch(1);
+        setOpenId(first.id);
+        return [first];
+      }
+      if (openId === id) setOpenId(next[0].id);
+      return next;
+    });
+    setFullscreenId((cur) => (cur === id ? null : cur));
+    setConfirmDeleteId(null);
+    toast.success("Sketsa dihapus");
+  };
+
+  const fullscreenSketch = fullscreenId ? sketches.find((s) => s.id === fullscreenId) : null;
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="mb-4">
+        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+          Sketsa Batas Lahan
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Kertas milimeter block digital — multi-tab, tersimpan otomatis di perangkat ini.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {sketches.map((s) => (
+          <SketchCard
+            key={s.id}
+            sketch={s}
+            isOpen={openId === s.id && fullscreenId !== s.id}
+            isFullscreen={false}
+            onOpen={() => openSketch(s.id)}
+            onMinimize={() => minimizeSketch(s.id)}
+            onChange={(patch) => updateSketch(s.id, patch)}
+            onRequestDelete={() => setConfirmDeleteId(s.id)}
+            onEnterFullscreen={() => {
+              setOpenId(s.id);
+              setFullscreenId(s.id);
+            }}
+            onExitFullscreen={() => setFullscreenId(null)}
+          />
+        ))}
+
+        <button
+          onClick={addSketch}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-surface/30 px-4 py-5 text-sm font-medium text-muted-foreground transition hover:border-ember/60 hover:bg-ember/5 hover:text-ember"
+        >
+          <Plus className="h-4 w-4" /> Tambah Sketsa
+        </button>
+      </div>
+
+      {fullscreenSketch && (
+        <FullscreenSketch
+          sketch={fullscreenSketch}
+          onChange={(patch) => updateSketch(fullscreenSketch.id, patch)}
+          onExit={() => setFullscreenId(null)}
+        />
+      )}
+
+      <AlertDialog open={!!confirmDeleteId} onOpenChange={(v) => !v && setConfirmDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus sketsa ini?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Sketsa "{sketches.find((s) => s.id === confirmDeleteId)?.title}" beserta seluruh garis
+              dan layer akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDeleteId && deleteSketch(confirmDeleteId)}
+              className="bg-ember text-white hover:bg-ember/90"
+            >
+              Ya, hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </main>
+  );
+}
+
+// ============================================================
+// SketchCard — single sketch with header + (optional) canvas
+// ============================================================
+
+type SketchCardProps = {
+  sketch: Sketch;
+  isOpen: boolean;
+  isFullscreen: boolean;
+  onOpen: () => void;
+  onMinimize: () => void;
+  onChange: (patch: Partial<Sketch>) => void;
+  onRequestDelete: () => void;
+  onEnterFullscreen: () => void;
+  onExitFullscreen: () => void;
+};
+
+function SketchCard(props: SketchCardProps) {
+  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onEnterFullscreen } = props;
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(sketch.title);
+
+  const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
+  const lahanLayers = sketch.layers.filter((l) => isLahanName(l.name));
+  const totalAreaM2 = sketch.layers.reduce((s, l) => s + l.areaM2, 0);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft">
+      {/* Title bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-surface/60 px-4 py-3 backdrop-blur">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <button
+            onClick={isOpen ? onMinimize : onOpen}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/60 text-muted-foreground transition hover:text-foreground"
+            aria-label={isOpen ? "Minimize" : "Buka"}
+            title={isOpen ? "Minimize" : "Buka sketsa"}
+          >
+            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          <div className="min-w-0 flex-1">
+            {editingTitle ? (
+              <Input
+                autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={() => {
+                  onChange({ title: titleDraft.trim() || "Sketsa Tanpa Judul" });
+                  setEditingTitle(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    onChange({ title: titleDraft.trim() || "Sketsa Tanpa Judul" });
+                    setEditingTitle(false);
+                  }
+                  if (e.key === "Escape") setEditingTitle(false);
+                }}
+                className="h-8 font-display text-base font-semibold"
+              />
+            ) : (
+              <button
+                onClick={() => {
+                  if (!isOpen) onOpen();
+                  setTitleDraft(sketch.title);
+                  setEditingTitle(true);
+                }}
+                className="group flex min-w-0 items-center gap-2 text-left"
+                title="Klik untuk ganti judul"
+              >
+                <span className="truncate font-display text-lg font-semibold">{sketch.title}</span>
+                <PencilIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+              </button>
+            )}
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+              <span>Mulai: {formatDate(sketch.createdAt)}</span>
+              <span>•</span>
+              <span>Diedit: {formatDate(sketch.updatedAt)}</span>
+              <span className="inline-flex items-center gap-1 text-emerald-600">
+                <Save className="h-3 w-3" /> tersimpan otomatis
+              </span>
+              {!isOpen && (
+                <>
+                  <span>•</span>
+                  <span>
+                    {sketch.layers.length} ruang · {lahanLayers.length} lahan ·{" "}
+                    {totalAreaM2.toFixed(2)} m²
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isOpen && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onEnterFullscreen}
+              title="Mode layar penuh"
+            >
+              <Maximize2 className="mr-1.5 h-4 w-4" /> Full
+            </Button>
+          )}
+          {!isOpen && (
+            <Button variant="outline" size="sm" onClick={onOpen}>
+              Buka
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRequestDelete}
+            className="border-ember/40 text-ember hover:bg-ember/10 hover:text-ember"
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
+          </Button>
+        </div>
+      </div>
+
+      {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} />}
+    </section>
+  );
+}
+
+// ============================================================
+// FullscreenSketch — overlay mode
+// ============================================================
+
+function FullscreenSketch({
+  sketch,
+  onChange,
+  onExit,
+}: {
+  sketch: Sketch;
+  onChange: (patch: Partial<Sketch>) => void;
+  onExit: () => void;
+}) {
   useEffect(() => {
-    setLayers((prev) =>
-      prev.map((l) => ({
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onExit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onExit]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background">
+      <SketchEditor sketch={sketch} onChange={onChange} fullscreen onExitFullscreen={onExit} />
+    </div>
+  );
+}
+
+// ============================================================
+// SketchEditor — drawing surface + side panel
+// ============================================================
+
+type EditorProps = {
+  sketch: Sketch;
+  onChange: (patch: Partial<Sketch>) => void;
+  fullscreen: boolean;
+  onExitFullscreen?: () => void;
+};
+
+function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
+  const { id, scale, snap, lines, layers } = sketch;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState({ w: 800, h: 600 });
+
+  const [tool, setTool] = useState<"line" | "erase">("line");
+  const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
+  const [hover, setHover] = useState<Point | null>(null);
+
+  // Undo/redo history snapshots: {lines, layers}
+  type Snap = { lines: Line[]; layers: Layer[] };
+  const [past, setPast] = useState<Snap[]>([]);
+  const [future, setFuture] = useState<Snap[]>([]);
+  // Reset history when switching sketch
+  useEffect(() => {
+    setPast([]);
+    setFuture([]);
+  }, [id]);
+
+  const pushHistory = useCallback(() => {
+    setPast((p) => [...p.slice(-49), { lines, layers }]);
+    setFuture([]);
+  }, [lines, layers]);
+
+  const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
+
+  // Recompute layer areas on scale change (preserve relative geometry)
+  const prevScaleRef = useRef(scale);
+  useEffect(() => {
+    if (prevScaleRef.current !== scale) {
+      const next = layers.map((l) => ({
         ...l,
         areaM2: polygonAreaPx(l.points) / (pxPerMeter * pxPerMeter),
-      })),
-    );
+      }));
+      onChange({ layers: next });
+      prevScaleRef.current = scale;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale]);
 
@@ -278,7 +598,7 @@ function SketchPage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [minimized]);
+  }, []);
 
   const snapPoint = useCallback(
     (p: Point): Point => {
@@ -291,7 +611,6 @@ function SketchPage() {
     [snap],
   );
 
-  // Lines that belong to any locked layer (cannot be erased)
   const lockedLineKeys = useMemo(() => {
     const s = new Set<string>();
     layers.forEach((l) => {
@@ -318,7 +637,6 @@ function SketchPage() {
 
   // Redraw
   useEffect(() => {
-    if (minimized) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
@@ -334,7 +652,6 @@ function SketchPage() {
     ctx.fillStyle = "#f6efe3";
     ctx.fillRect(0, 0, size.w, size.h);
 
-    // minor grid
     ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -348,7 +665,6 @@ function SketchPage() {
     }
     ctx.stroke();
 
-    // major grid
     ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
     ctx.lineWidth = 1.2;
     ctx.beginPath();
@@ -363,7 +679,6 @@ function SketchPage() {
     }
     ctx.stroke();
 
-    // layers
     layers.forEach((layer) => {
       if (layer.points.length < 3) return;
       ctx.beginPath();
@@ -378,7 +693,6 @@ function SketchPage() {
       ctx.lineWidth = layer.locked ? 3 : 2.5;
       ctx.stroke();
 
-      // Vertical centroid label: name on top, area below
       let cx = 0, cy = 0;
       layer.points.forEach((p) => { cx += p.x; cy += p.y; });
       cx /= layer.points.length;
@@ -404,7 +718,6 @@ function SketchPage() {
       ctx.textAlign = "start";
     });
 
-    // lines
     ctx.lineCap = "round";
     for (const ln of lines) {
       const locked = isLineLocked(ln);
@@ -416,7 +729,6 @@ function SketchPage() {
       ctx.stroke();
     }
 
-    // endpoints
     ctx.fillStyle = "#1a1a1a";
     for (const ln of lines) {
       for (const p of [ln.a, ln.b]) {
@@ -426,7 +738,6 @@ function SketchPage() {
       }
     }
 
-    // active drawing
     if (drawing) {
       ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
       ctx.lineWidth = 2;
@@ -454,7 +765,7 @@ function SketchPage() {
       ctx.arc(hover.x, hover.y, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [size, lines, drawing, hover, layers, tool, pxPerMeter, minimized, isLineLocked]);
+  }, [size, lines, drawing, hover, layers, tool, pxPerMeter, isLineLocked]);
 
   const getPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -473,7 +784,8 @@ function SketchPage() {
           toast.error(`${hitLayer.name} terkunci`);
           return;
         }
-        setLayers((prev) => prev.filter((l) => l.id !== hitLayer.id));
+        pushHistory();
+        onChange({ layers: layers.filter((l) => l.id !== hitLayer.id) });
         toast.success(`Layer ${hitLayer.name} dihapus`);
         return;
       }
@@ -489,9 +801,9 @@ function SketchPage() {
         }
       });
       if (bestIdx >= 0 && bestD <= tol) {
-        setLines((prev) => prev.filter((_, i) => i !== bestIdx));
-      } else if (bestIdx === -1 && lines.some(isLineLocked)) {
-        // user might have clicked a locked line
+        pushHistory();
+        onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
+      } else {
         const hitLocked = lines.find((ln) => isLineLocked(ln) && pointToSegment(p, ln.a, ln.b) <= tol);
         if (hitLocked) toast.error("Garis terkunci");
       }
@@ -511,71 +823,71 @@ function SketchPage() {
       return;
     }
     const newLine = { a: drawing.a, b: drawing.b };
-    const next = [...lines, newLine];
-    setLines(next);
+    const nextLines = [...lines, newLine];
     setDrawing(null);
 
-    const newIdx = next.length - 1;
-    const cycle = findCycleWithLine(next, newIdx);
+    const newIdx = nextLines.length - 1;
+    const cycle = findCycleWithLine(nextLines, newIdx);
+    let nextLayers = layers;
     if (cycle && cycle.length >= 3) {
       const areaPx = polygonAreaPx(cycle);
       if (areaPx > 25) {
         const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
-        setLayers((prev) => {
-          const idx = prev.length + 1;
-          const color = LAYER_COLORS[prev.length % LAYER_COLORS.length];
-          const layer: Layer = {
-            id: `L${Date.now()}`,
-            name: `Ruang ${idx}`,
-            points: cycle,
-            areaM2,
-            color,
-            locked: false,
-          };
-          toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
-          return [...prev, layer];
-        });
+        const idx = layers.length + 1;
+        const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+        const layer: Layer = {
+          id: `L${Date.now()}`,
+          name: `Ruang ${idx}`,
+          points: cycle,
+          areaM2,
+          color,
+          locked: false,
+        };
+        nextLayers = [...layers, layer];
+        toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
       }
     }
+    pushHistory();
+    onChange({ lines: nextLines, layers: nextLayers });
   };
 
   const handleUndo = () => {
-    if (!lines.length) return;
-    // Don't undo locked lines
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (!isLineLocked(lines[i])) {
-        setLines(lines.filter((_, j) => j !== i));
-        return;
-      }
+    if (!past.length) {
+      toast.error("Tidak ada yang bisa di-undo");
+      return;
     }
-    toast.error("Semua garis terakhir terkunci");
+    const prev = past[past.length - 1];
+    setPast((p) => p.slice(0, -1));
+    setFuture((f) => [...f, { lines, layers }]);
+    onChange({ lines: prev.lines, layers: prev.layers });
   };
 
-  const doClearAll = () => {
-    setLines([]);
-    setLayers([]);
-    setDrawing(null);
-    setTitle("Sketsa Baru");
-    const now = Date.now();
-    setCreatedAt(now);
-    setUpdatedAt(now);
-    setConfirmClear(false);
-    toast.success("Sketsa dihapus dan disetel ulang");
+  const handleRedo = () => {
+    if (!future.length) {
+      toast.error("Tidak ada yang bisa di-redo");
+      return;
+    }
+    const nxt = future[future.length - 1];
+    setFuture((f) => f.slice(0, -1));
+    setPast((p) => [...p, { lines, layers }]);
+    onChange({ lines: nxt.lines, layers: nxt.layers });
   };
 
-  const removeLayer = (id: string) => {
-    const layer = layers.find((l) => l.id === id);
+  const removeLayer = (lid: string) => {
+    const layer = layers.find((l) => l.id === lid);
     if (layer?.locked) {
       toast.error(`${layer.name} terkunci`);
       return;
     }
-    setLayers((prev) => prev.filter((l) => l.id !== id));
+    pushHistory();
+    onChange({ layers: layers.filter((l) => l.id !== lid) });
   };
 
-  const toggleLock = (id: string) => {
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, locked: !l.locked } : l)),
-    );
+  const toggleLock = (lid: string) => {
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, locked: !l.locked } : l)),
+    });
   };
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -592,16 +904,13 @@ function SketchPage() {
   const commitRename = () => {
     if (!editingId) return;
     const name = editingName.trim() || "Ruang";
-    setLayers((prev) => prev.map((l) => (l.id === editingId ? { ...l, name } : l)));
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === editingId ? { ...l, name } : l)),
+    });
     const isLahan = name.toLowerCase().startsWith("lahan");
     if (isLahan) toast.success(`${name} ditandai sebagai acuan KDB/KLB`);
     setEditingId(null);
-  };
-
-  const commitTitle = () => {
-    const t = titleDraft.trim() || "Sketsa Tanpa Judul";
-    setTitle(t);
-    setEditingTitle(false);
   };
 
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
@@ -610,352 +919,303 @@ function SketchPage() {
   const lahanLayers = layers.filter((l) => isLahanName(l.name));
   const totalLahanM2 = lahanLayers.reduce((s, l) => s + l.areaM2, 0);
 
-  return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="mb-4">
-        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-          Sketsa Batas Lahan
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Kertas milimeter block digital — tersimpan otomatis di perangkat ini.
-        </p>
+  // Side panel content (reused for normal and fullscreen)
+  const SidePanel = (
+    <aside
+      className={cn(
+        "space-y-5 rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-soft backdrop-blur",
+        fullscreen && "max-h-[calc(100vh-40px)] overflow-y-auto",
+      )}
+    >
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Skala</Label>
+        <Select value={scale} onValueChange={(v) => onChange({ scale: v as Scale })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1:100">1 : 100 (1 kotak besar = 1 m)</SelectItem>
+            <SelectItem value="1:200">1 : 200 (1 kotak besar = 2 m)</SelectItem>
+            <SelectItem value="1:500">1 : 500 (1 kotak besar = 5 m)</SelectItem>
+            <SelectItem value="1:1000">1 : 1000 (1 kotak besar = 10 m)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Title bar above sketch box */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-surface/60 px-4 py-3 shadow-soft backdrop-blur">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <button
-            onClick={() => setMinimized((m) => !m)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/60 text-muted-foreground transition hover:text-foreground"
-            aria-label={minimized ? "Perbesar" : "Minimize"}
-            title={minimized ? "Perbesar sketsa" : "Minimize sketsa"}
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant={tool === "line" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTool("line")}
+            className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
           >
-            {minimized ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-          </button>
+            <Pencil className="mr-1.5 h-4 w-4" /> Garis
+          </Button>
+          <Button
+            variant={tool === "erase" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTool("erase")}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" size="sm" onClick={handleUndo} disabled={!past.length}>
+            <Undo2 className="mr-1.5 h-4 w-4" /> Undo
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleRedo} disabled={!future.length}>
+            <Redo2 className="mr-1.5 h-4 w-4" /> Redo
+          </Button>
+        </div>
+      </div>
 
-          <div className="min-w-0 flex-1">
-            {editingTitle ? (
-              <Input
-                autoFocus
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={commitTitle}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitTitle();
-                  if (e.key === "Escape") setEditingTitle(false);
-                }}
-                className="h-8 font-display text-base font-semibold"
-              />
-            ) : (
-              <button
-                onClick={() => {
-                  setTitleDraft(title);
-                  setEditingTitle(true);
-                }}
-                className="group flex min-w-0 items-center gap-2 text-left"
-                title="Klik untuk ganti judul"
-              >
-                <span className="truncate font-display text-lg font-semibold">{title}</span>
-                <PencilIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
-              </button>
-            )}
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-              <span>Mulai: {formatDate(createdAt)}</span>
-              <span>•</span>
-              <span>Diedit: {formatDate(updatedAt)}</span>
-              <span className="inline-flex items-center gap-1 text-emerald-600">
-                <Save className="h-3 w-3" /> tersimpan otomatis
-              </span>
-            </div>
+      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <Magnet className="h-4 w-4 text-ember" />
+          <div>
+            <div className="text-sm font-medium">Snap to Grid</div>
+            <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
           </div>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setConfirmClear(true)}
-          className="border-ember/40 text-ember hover:bg-ember/10 hover:text-ember"
-        >
-          <Trash2 className="mr-1.5 h-4 w-4" /> Hapus Sketsa
-        </Button>
+        <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
       </div>
 
-      {!minimized && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
-          <div
-            ref={wrapRef}
-            className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
-          >
-            <canvas
-              ref={canvasRef}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerLeave={() => setHover(null)}
-              className={cn(
-                "block touch-none select-none",
-                tool === "line" ? "cursor-crosshair" : "cursor-pointer",
-              )}
-            />
-            <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
-              Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
-            </div>
+      <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+            <Layers className="h-3.5 w-3.5" /> Rekapitulasi
           </div>
+          <span className="text-[11px] text-muted-foreground">
+            {layers.length} ruang · {lahanLayers.length} lahan
+          </span>
+        </div>
 
-          <aside className="space-y-5 rounded-2xl border border-border/60 bg-surface/60 p-5 shadow-soft backdrop-blur">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Skala</Label>
-              <Select value={scale} onValueChange={(v) => setScale(v as Scale)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1:100">1 : 100 (1 kotak besar = 1 m)</SelectItem>
-                  <SelectItem value="1:200">1 : 200 (1 kotak besar = 2 m)</SelectItem>
-                  <SelectItem value="1:500">1 : 500 (1 kotak besar = 5 m)</SelectItem>
-                  <SelectItem value="1:1000">1 : 1000 (1 kotak besar = 10 m)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant={tool === "line" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTool("line")}
-                  className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
+        {layers.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-[11px] text-muted-foreground">
+            Sambungkan garis hingga membentuk poligon tertutup untuk membuat ruang. Ubah nama menjadi
+            "Lahan ..." untuk menjadikannya acuan KDB/KLB.
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {layers.map((l) => {
+              const lahan = isLahanName(l.name);
+              const editing = editingId === l.id;
+              return (
+                <li
+                  key={l.id}
+                  className={cn(
+                    "rounded-md border px-2.5 py-2",
+                    lahan ? "border-ember/60 bg-ember/5" : "border-border/50 bg-background/60",
+                    l.locked && "ring-1 ring-foreground/15",
+                  )}
                 >
-                  <Pencil className="mr-1.5 h-4 w-4" /> Garis
-                </Button>
-                <Button
-                  variant={tool === "erase" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTool("erase")}
-                >
-                  <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" size="sm" onClick={handleUndo} disabled={!lines.length}>
-                  <Undo2 className="mr-1.5 h-4 w-4" /> Undo
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConfirmClear(true)}
-                  disabled={!lines.length && !layers.length}
-                >
-                  Bersihkan
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <Magnet className="h-4 w-4 text-ember" />
-                <div>
-                  <div className="text-sm font-medium">Snap to Grid</div>
-                  <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
-                </div>
-              </div>
-              <Switch checked={snap} onCheckedChange={setSnap} />
-            </div>
-
-            {/* Rekapitulasi */}
-            <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  <Layers className="h-3.5 w-3.5" /> Rekapitulasi
-                </div>
-                <span className="text-[11px] text-muted-foreground">
-                  {layers.length} ruang · {lahanLayers.length} lahan
-                </span>
-              </div>
-
-              {layers.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-[11px] text-muted-foreground">
-                  Sambungkan garis hingga membentuk poligon tertutup untuk membuat ruang. Ubah nama menjadi "Lahan ..." untuk menjadikannya acuan KDB/KLB.
-                </div>
-              ) : (
-                <ul className="space-y-1.5">
-                  {layers.map((l) => {
-                    const lahan = isLahanName(l.name);
-                    const editing = editingId === l.id;
-                    return (
-                      <li
-                        key={l.id}
-                        className={cn(
-                          "rounded-md border px-2.5 py-2",
-                          lahan ? "border-ember/60 bg-ember/5" : "border-border/50 bg-background/60",
-                          l.locked && "ring-1 ring-foreground/15",
-                        )}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
+                      style={{ background: l.color.replace("ALPHA", "0.9") }}
+                    />
+                    {editing ? (
+                      <Input
+                        autoFocus
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitRename();
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                        className="h-7 text-sm"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => startRename(l)}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-left text-sm font-medium hover:text-ember"
+                        title={l.locked ? "Layer terkunci" : "Klik untuk ganti nama"}
                       >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
-                            style={{ background: l.color.replace("ALPHA", "0.9") }}
-                          />
-                          {editing ? (
-                            <Input
-                              autoFocus
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                              onBlur={commitRename}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") commitRename();
-                                if (e.key === "Escape") setEditingId(null);
-                              }}
-                              className="h-7 text-sm"
-                            />
-                          ) : (
-                            <button
-                              onClick={() => startRename(l)}
-                              className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-left text-sm font-medium hover:text-ember"
-                              title={l.locked ? "Layer terkunci" : "Klik untuk ganti nama"}
-                            >
-                              {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
-                              <span className="truncate">{l.name}</span>
-                            </button>
-                          )}
+                        {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
+                        <span className="truncate">{l.name}</span>
+                      </button>
+                    )}
 
-                          <button
-                            onClick={() => toggleLock(l.id)}
-                            className={cn(
-                              "shrink-0 rounded p-1 transition",
-                              l.locked
-                                ? "text-ember hover:bg-ember/10"
-                                : "text-muted-foreground hover:text-foreground",
-                            )}
-                            aria-label={l.locked ? "Buka kunci" : "Kunci layer"}
-                            title={l.locked ? "Buka kunci" : "Kunci layer agar aman dari hapus"}
-                          >
-                            {l.locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
-                          </button>
+                    <button
+                      onClick={() => toggleLock(l.id)}
+                      className={cn(
+                        "shrink-0 rounded p-1 transition",
+                        l.locked
+                          ? "text-ember hover:bg-ember/10"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      aria-label={l.locked ? "Buka kunci" : "Kunci layer"}
+                      title={l.locked ? "Buka kunci" : "Kunci layer agar aman dari hapus"}
+                    >
+                      {l.locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
+                    </button>
 
-                          {editing ? (
-                            <button
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={commitRename}
-                              className="text-ember"
-                              aria-label="Simpan nama"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => removeLayer(l.id)}
-                              className={cn(
-                                "shrink-0 transition",
-                                l.locked
-                                  ? "cursor-not-allowed text-muted-foreground/40"
-                                  : "text-muted-foreground hover:text-ember",
-                              )}
-                              aria-label="Hapus layer"
-                              disabled={l.locked}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        <div className="mt-1 pl-5 font-display text-sm font-semibold">
-                          {l.areaM2.toFixed(2)}{" "}
-                          <span className="text-[10px] font-normal text-muted-foreground">m²</span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+                    {editing ? (
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={commitRename}
+                        className="text-ember"
+                        aria-label="Simpan nama"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => removeLayer(l.id)}
+                        className={cn(
+                          "shrink-0 transition",
+                          l.locked
+                            ? "cursor-not-allowed text-muted-foreground/40"
+                            : "text-muted-foreground hover:text-ember",
+                        )}
+                        aria-label="Hapus layer"
+                        disabled={l.locked}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-1 pl-5 font-display text-sm font-semibold">
+                    {l.areaM2.toFixed(2)}{" "}
+                    <span className="text-[10px] font-normal text-muted-foreground">m²</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-              <div className="space-y-2 border-t border-border/60 pt-3">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Total seluruh ruang
-                  </span>
-                  <span className="font-display text-xl font-semibold">
-                    {totalAreaM2 > 0 ? totalAreaM2.toFixed(2) : "—"}
-                    <span className="ml-1 text-xs text-muted-foreground">m²</span>
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between rounded-md bg-ember/10 px-2.5 py-2">
-                  <span className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-ember">
-                    <MapPin className="h-3 w-3" /> Luas Lahan (acuan KDB/KLB)
-                  </span>
-                  <span className="font-display text-2xl font-semibold text-ember">
-                    {totalLahanM2 > 0 ? totalLahanM2.toFixed(2) : "—"}
-                    <span className="ml-1 text-xs text-muted-foreground">m²</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                <Ruler className="h-3.5 w-3.5" /> Garis
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm text-muted-foreground">Jumlah</span>
-                <span className="font-display text-base font-semibold">{lines.length}</span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm text-muted-foreground">Panjang</span>
-                <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
-              </div>
-            </div>
-
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Tip: kunci layer (ikon gembok) agar tidak terhapus saat memakai alat Hapus. Progres tersimpan otomatis.
-            </p>
-          </aside>
-        </div>
-      )}
-
-      {minimized && (
-        <div className="rounded-2xl border border-dashed border-border/60 bg-surface/30 px-4 py-6 text-center text-sm text-muted-foreground">
-          Sketsa diminimize. Klik panah di samping judul untuk membuka kembali.
-          <div className="mt-2 text-[11px]">
-            {layers.length} ruang · {lahanLayers.length} lahan · {totalAreaM2.toFixed(2)} m² total
+        <div className="space-y-2 border-t border-border/60 pt-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">
+              Total seluruh ruang
+            </span>
+            <span className="font-display text-xl font-semibold">
+              {totalAreaM2 > 0 ? totalAreaM2.toFixed(2) : "—"}
+              <span className="ml-1 text-xs text-muted-foreground">m²</span>
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between rounded-md bg-ember/10 px-2.5 py-2">
+            <span className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-ember">
+              <MapPin className="h-3 w-3" /> Luas Lahan (acuan KDB/KLB)
+            </span>
+            <span className="font-display text-2xl font-semibold text-ember">
+              {totalLahanM2 > 0 ? totalLahanM2.toFixed(2) : "—"}
+              <span className="ml-1 text-xs text-muted-foreground">m²</span>
+            </span>
           </div>
         </div>
-      )}
+      </div>
 
-      <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Hapus sketsa ini?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Seluruh garis, layer, dan judul "{title}" akan dihapus permanen dari perangkat ini.
-              Tindakan ini tidak bisa dibatalkan.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={doClearAll} className="bg-ember text-white hover:bg-ember/90">
-              Ya, hapus
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+          <Ruler className="h-3.5 w-3.5" /> Garis
+        </div>
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm text-muted-foreground">Jumlah</span>
+          <span className="font-display text-base font-semibold">{lines.length}</span>
+        </div>
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm text-muted-foreground">Panjang</span>
+          <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
+        </div>
+      </div>
 
-      {/* invisible live region for save tick (a11y) */}
-      <span className="sr-only" aria-live="polite">
-        Tersimpan {savedTick} kali
-      </span>
-    </main>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Tip: kunci layer (ikon gembok) agar tidak terhapus saat memakai alat Hapus. Progres
+        tersimpan otomatis.
+      </p>
+    </aside>
+  );
+
+  if (fullscreen) {
+    return (
+      <div className="relative h-screen w-screen overflow-hidden bg-background">
+        <div ref={wrapRef} className="absolute inset-0">
+          <canvas
+            ref={canvasRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={() => setHover(null)}
+            className={cn(
+              "block touch-none select-none",
+              tool === "line" ? "cursor-crosshair" : "cursor-pointer",
+            )}
+          />
+        </div>
+
+        {/* Top-left controls: escape, undo, redo */}
+        <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-xl border border-border/60 bg-background/85 p-1.5 shadow-soft backdrop-blur">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onExitFullscreen}
+            title="Keluar layar penuh (Esc)"
+          >
+            <X className="mr-1.5 h-4 w-4" /> Esc
+          </Button>
+          <div className="h-6 w-px bg-border/60" />
+          <Button variant="ghost" size="sm" onClick={handleUndo} disabled={!past.length} title="Undo">
+            <Undo2 className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleRedo} disabled={!future.length} title="Redo">
+            <Redo2 className="h-4 w-4" />
+          </Button>
+          <div className="h-6 w-px bg-border/60" />
+          <Button
+            variant={tool === "line" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setTool("line")}
+            className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "erase" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setTool("erase")}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Scale tag */}
+        <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
+          {sketch.title} · Skala {scale} · 1 kotak besar = {METERS_PER_MAJOR[scale]} m
+        </div>
+
+        {/* Floating side panel on the right */}
+        <div className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]">{SidePanel}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-[1fr_340px] lg:p-5">
+      <div
+        ref={wrapRef}
+        className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
+      >
+        <canvas
+          ref={canvasRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={() => setHover(null)}
+          className={cn(
+            "block touch-none select-none",
+            tool === "line" ? "cursor-crosshair" : "cursor-pointer",
+          )}
+        />
+        <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
+          Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
+        </div>
+      </div>
+      {SidePanel}
+    </div>
   );
 }
-
-function pointToSegment(p: Point, a: Point, b: Point) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return dist(p, a);
-  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
-}
-
-// keep export reference (avoids tree-shake removal warnings)
-export const __sameSegment = sameSegment;
