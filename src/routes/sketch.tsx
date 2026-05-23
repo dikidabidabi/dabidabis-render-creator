@@ -148,6 +148,86 @@ function pointInPolygon(p: Point, poly: Point[]) {
   }
   return inside;
 }
+
+function perpUnit(a: Point, b: Point): Point {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: -dy / len, y: dx / len };
+}
+function defaultBulgePx(a: Point, b: Point) {
+  return Math.hypot(b.x - a.x, b.y - a.y) / 5; // sagitta ~20% of chord
+}
+function arcControlPoint(ln: Line): Point {
+  const mid = { x: (ln.a.x + ln.b.x) / 2, y: (ln.a.y + ln.b.y) / 2 };
+  const n = perpUnit(ln.a, ln.b);
+  const bulge = ln.bulge ?? 0;
+  // Quadratic Bezier midpoint (t=0.5) sits at (a + 2C + b)/4.
+  // To place that midpoint at mid + n*bulge, control C = 2*(mid + n*bulge) - (a+b)/2 = mid + 2*n*bulge.
+  return { x: mid.x + 2 * n.x * bulge, y: mid.y + 2 * n.y * bulge };
+}
+function defaultBezierHandles(a: Point, b: Point): { c1: Point; c2: Point } {
+  const n = perpUnit(a, b);
+  const bulge = defaultBulgePx(a, b);
+  return {
+    c1: { x: a.x + (b.x - a.x) / 3 + n.x * bulge, y: a.y + (b.y - a.y) / 3 + n.y * bulge },
+    c2: { x: b.x - (b.x - a.x) / 3 + n.x * bulge, y: b.y - (b.y - a.y) / 3 + n.y * bulge },
+  };
+}
+function sampleLine(ln: Line, steps = 24): Point[] {
+  const kind = ln.kind ?? "straight";
+  if (kind === "straight") return [ln.a, ln.b];
+  const out: Point[] = [];
+  if (kind === "arc") {
+    const C = arcControlPoint(ln);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const mt = 1 - t;
+      out.push({
+        x: mt * mt * ln.a.x + 2 * mt * t * C.x + t * t * ln.b.x,
+        y: mt * mt * ln.a.y + 2 * mt * t * C.y + t * t * ln.b.y,
+      });
+    }
+  } else {
+    const c1 = ln.c1 ?? ln.a;
+    const c2 = ln.c2 ?? ln.b;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const mt = 1 - t;
+      out.push({
+        x: mt * mt * mt * ln.a.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * ln.b.x,
+        y: mt * mt * mt * ln.a.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * ln.b.y,
+      });
+    }
+  }
+  return out;
+}
+function lineLengthPx(ln: Line): number {
+  if ((ln.kind ?? "straight") === "straight") return dist(ln.a, ln.b);
+  const pts = sampleLine(ln, 32);
+  let s = 0;
+  for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]);
+  return s;
+}
+function pointToSegment(p: Point, a: Point, b: Point) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return dist(p, a);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+function pointToLine(p: Point, ln: Line): number {
+  if ((ln.kind ?? "straight") === "straight") return pointToSegment(p, ln.a, ln.b);
+  const pts = sampleLine(ln, 20);
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const d = pointToSegment(p, pts[i - 1], pts[i]);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
 function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
   if (lines.length < 3) return null;
   const nodes = new Map<string, Point>();
@@ -171,7 +251,7 @@ function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
   const startK = keyOf(newLine.a);
   const goalK = keyOf(newLine.b);
   if (startK === goalK) return null;
-  const prev = new Map<string, string | null>();
+  const prev = new Map<string, { from: string; lineIdx: number } | null>();
   prev.set(startK, null);
   const queue: string[] = [startK];
   while (queue.length) {
@@ -180,35 +260,36 @@ function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
     for (const e of adj.get(cur) || []) {
       if (e.lineIdx === newLineIdx) continue;
       if (prev.has(e.to)) continue;
-      prev.set(e.to, cur);
+      prev.set(e.to, { from: cur, lineIdx: e.lineIdx });
       queue.push(e.to);
     }
   }
   if (!prev.has(goalK)) return null;
-  const pathKeys: string[] = [];
+
+  // Reconstruct ordered edges start -> ... -> goal
+  const edges: { lineIdx: number; from: string; to: string }[] = [];
   let cur: string | null = goalK;
-  while (cur) {
-    pathKeys.push(cur);
-    cur = prev.get(cur) ?? null;
+  while (cur && cur !== startK) {
+    const entry = prev.get(cur);
+    if (!entry) return null;
+    edges.push({ lineIdx: entry.lineIdx, from: entry.from, to: cur });
+    cur = entry.from;
   }
-  pathKeys.reverse();
-  if (pathKeys.length < 3) return null;
-  return pathKeys.map((k) => nodes.get(k)!);
-}
+  edges.reverse();
+  // Closing edge: goal -> start via newLine
+  edges.push({ lineIdx: newLineIdx, from: goalK, to: startK });
+  if (edges.length < 3) return null;
 
-function formatDate(ts: number) {
-  const d = new Date(ts);
-  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function pointToSegment(p: Point, a: Point, b: Point) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return dist(p, a);
-  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+  // Densify each edge using sampleLine in the correct direction.
+  const points: Point[] = [];
+  for (const e of edges) {
+    const ln = lines[e.lineIdx];
+    const reversed = keyOf(ln.a) !== e.from;
+    const sampled = sampleLine(ln, 24);
+    const seq = reversed ? sampled.slice().reverse() : sampled;
+    for (let i = 0; i < seq.length - 1; i++) points.push(seq[i]);
+  }
+  return points;
 }
 
 function newSketch(idx: number): Sketch {
