@@ -889,14 +889,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
   }, [size, lines, drawing, hover, layers, tool, pxPerMeter, isLineLocked, view]);
 
-  const getPos = (e: React.PointerEvent): Point => {
+  const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
-    return snapPoint({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const getWorldPos = (e: React.PointerEvent): Point => {
+    const sp = getScreenPos(e);
+    return snapPoint(screenToWorld(sp));
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
-    const p = getPos(e);
+    pointersRef.current.set(e.pointerId, getScreenPos(e));
+
+    // Two or more fingers => gesture (pinch zoom + rotate). Abort any draw.
+    if (pointersRef.current.size >= 2) {
+      if (drawing) setDrawing(null);
+      startGesture();
+      return;
+    }
+
+    const p = getWorldPos(e);
     if (tool === "line") {
       setDrawing({ a: p, b: p });
     } else if (tool === "erase") {
@@ -911,7 +924,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         toast.success(`Layer ${hitLayer.name} dihapus`);
         return;
       }
-      const tol = 8;
+      const tol = 8 / view.s; // world-space tolerance
       let bestIdx = -1;
       let bestD = Infinity;
       lines.forEach((ln, i) => {
@@ -933,12 +946,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    const p = getPos(e);
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, getScreenPos(e));
+    }
+    if (gestureRef.current && pointersRef.current.size >= 2) {
+      updateGesture();
+      return;
+    }
+    if (pointersRef.current.size >= 2) return;
+    const p = getWorldPos(e);
     setHover(p);
     if (drawing) setDrawing({ a: drawing.a, b: p });
   };
 
-  const onPointerUp = () => {
+  const endPointer = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2 && gestureRef.current) {
+      gestureRef.current = null;
+      // Don't commit any draw on gesture end
+      setDrawing(null);
+      return;
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    const wasGesture = !!gestureRef.current;
+    endPointer(e);
+    if (wasGesture) return;
     if (!drawing) return;
     if (dist(drawing.a, drawing.b) < 4) {
       setDrawing(null);
@@ -971,6 +1005,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     pushHistory();
     onChange({ lines: nextLines, layers: nextLayers });
+  };
+
+  const onPointerCancel = (e: React.PointerEvent) => {
+    endPointer(e);
+    setDrawing(null);
   };
 
   const handleUndo = () => {
