@@ -21,6 +21,9 @@ import {
   Minimize2,
   X,
   RotateCcw,
+  Minus,
+  Spline,
+  PenTool,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +64,15 @@ export const Route = createFileRoute("/sketch")({
 });
 
 type Point = { x: number; y: number };
-type Line = { a: Point; b: Point };
+type LineKind = "straight" | "arc" | "bezier";
+type Line = {
+  a: Point;
+  b: Point;
+  kind?: LineKind;
+  bulge?: number; // for arc: perpendicular sagitta (signed)
+  c1?: Point; // for bezier: tangent control near a
+  c2?: Point; // for bezier: tangent control near b
+};
 type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
 
 type Layer = {
@@ -137,6 +148,86 @@ function pointInPolygon(p: Point, poly: Point[]) {
   }
   return inside;
 }
+
+function perpUnit(a: Point, b: Point): Point {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: -dy / len, y: dx / len };
+}
+function defaultBulgePx(a: Point, b: Point) {
+  return Math.hypot(b.x - a.x, b.y - a.y) / 5; // sagitta ~20% of chord
+}
+function arcControlPoint(ln: Line): Point {
+  const mid = { x: (ln.a.x + ln.b.x) / 2, y: (ln.a.y + ln.b.y) / 2 };
+  const n = perpUnit(ln.a, ln.b);
+  const bulge = ln.bulge ?? 0;
+  // Quadratic Bezier midpoint (t=0.5) sits at (a + 2C + b)/4.
+  // To place that midpoint at mid + n*bulge, control C = 2*(mid + n*bulge) - (a+b)/2 = mid + 2*n*bulge.
+  return { x: mid.x + 2 * n.x * bulge, y: mid.y + 2 * n.y * bulge };
+}
+function defaultBezierHandles(a: Point, b: Point): { c1: Point; c2: Point } {
+  const n = perpUnit(a, b);
+  const bulge = defaultBulgePx(a, b);
+  return {
+    c1: { x: a.x + (b.x - a.x) / 3 + n.x * bulge, y: a.y + (b.y - a.y) / 3 + n.y * bulge },
+    c2: { x: b.x - (b.x - a.x) / 3 + n.x * bulge, y: b.y - (b.y - a.y) / 3 + n.y * bulge },
+  };
+}
+function sampleLine(ln: Line, steps = 24): Point[] {
+  const kind = ln.kind ?? "straight";
+  if (kind === "straight") return [ln.a, ln.b];
+  const out: Point[] = [];
+  if (kind === "arc") {
+    const C = arcControlPoint(ln);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const mt = 1 - t;
+      out.push({
+        x: mt * mt * ln.a.x + 2 * mt * t * C.x + t * t * ln.b.x,
+        y: mt * mt * ln.a.y + 2 * mt * t * C.y + t * t * ln.b.y,
+      });
+    }
+  } else {
+    const c1 = ln.c1 ?? ln.a;
+    const c2 = ln.c2 ?? ln.b;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const mt = 1 - t;
+      out.push({
+        x: mt * mt * mt * ln.a.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * ln.b.x,
+        y: mt * mt * mt * ln.a.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * ln.b.y,
+      });
+    }
+  }
+  return out;
+}
+function lineLengthPx(ln: Line): number {
+  if ((ln.kind ?? "straight") === "straight") return dist(ln.a, ln.b);
+  const pts = sampleLine(ln, 32);
+  let s = 0;
+  for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]);
+  return s;
+}
+function pointToSegment(p: Point, a: Point, b: Point) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return dist(p, a);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+function pointToLine(p: Point, ln: Line): number {
+  if ((ln.kind ?? "straight") === "straight") return pointToSegment(p, ln.a, ln.b);
+  const pts = sampleLine(ln, 20);
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const d = pointToSegment(p, pts[i - 1], pts[i]);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
 function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
   if (lines.length < 3) return null;
   const nodes = new Map<string, Point>();
@@ -160,7 +251,7 @@ function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
   const startK = keyOf(newLine.a);
   const goalK = keyOf(newLine.b);
   if (startK === goalK) return null;
-  const prev = new Map<string, string | null>();
+  const prev = new Map<string, { from: string; lineIdx: number } | null>();
   prev.set(startK, null);
   const queue: string[] = [startK];
   while (queue.length) {
@@ -169,35 +260,41 @@ function findCycleWithLine(lines: Line[], newLineIdx: number): Point[] | null {
     for (const e of adj.get(cur) || []) {
       if (e.lineIdx === newLineIdx) continue;
       if (prev.has(e.to)) continue;
-      prev.set(e.to, cur);
+      prev.set(e.to, { from: cur, lineIdx: e.lineIdx });
       queue.push(e.to);
     }
   }
   if (!prev.has(goalK)) return null;
-  const pathKeys: string[] = [];
+
+  // Reconstruct ordered edges start -> ... -> goal
+  const edges: { lineIdx: number; from: string; to: string }[] = [];
   let cur: string | null = goalK;
-  while (cur) {
-    pathKeys.push(cur);
-    cur = prev.get(cur) ?? null;
+  while (cur && cur !== startK) {
+    const entry = prev.get(cur);
+    if (!entry) return null;
+    edges.push({ lineIdx: entry.lineIdx, from: entry.from, to: cur });
+    cur = entry.from;
   }
-  pathKeys.reverse();
-  if (pathKeys.length < 3) return null;
-  return pathKeys.map((k) => nodes.get(k)!);
+  edges.reverse();
+  // Closing edge: goal -> start via newLine
+  edges.push({ lineIdx: newLineIdx, from: goalK, to: startK });
+  if (edges.length < 3) return null;
+
+  // Densify each edge using sampleLine in the correct direction.
+  const points: Point[] = [];
+  for (const e of edges) {
+    const ln = lines[e.lineIdx];
+    const reversed = keyOf(ln.a) !== e.from;
+    const sampled = sampleLine(ln, 24);
+    const seq = reversed ? sampled.slice().reverse() : sampled;
+    for (let i = 0; i < seq.length - 1; i++) points.push(seq[i]);
+  }
+  return points;
 }
 
 function formatDate(ts: number) {
   const d = new Date(ts);
   return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function pointToSegment(p: Point, a: Point, b: Point) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return dist(p, a);
-  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
 }
 
 function newSketch(idx: number): Sketch {
@@ -556,8 +653,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [size, setSize] = useState({ w: 800, h: 600 });
 
   const [tool, setTool] = useState<"line" | "erase">("line");
+  const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
+  // Pending bezier curve (after endpoints set, awaiting tangent adjustment + commit)
+  const [pendingCurve, setPendingCurve] = useState<
+    | { a: Point; b: Point; c1: Point; c2: Point }
+    | null
+  >(null);
+  const [draggingHandle, setDraggingHandle] = useState<null | "c1" | "c2">(null);
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
@@ -801,11 +905,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     ctx.lineCap = "round";
     for (const ln of lines) {
       const locked = isLineLocked(ln);
+      const kind = ln.kind ?? "straight";
       ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
       ctx.lineWidth = (locked ? 2.6 : 2) / s;
       ctx.beginPath();
       ctx.moveTo(ln.a.x, ln.a.y);
-      ctx.lineTo(ln.b.x, ln.b.y);
+      if (kind === "straight") {
+        ctx.lineTo(ln.b.x, ln.b.y);
+      } else if (kind === "arc") {
+        const C = arcControlPoint(ln);
+        ctx.quadraticCurveTo(C.x, C.y, ln.b.x, ln.b.y);
+      } else {
+        const c1 = ln.c1 ?? ln.a;
+        const c2 = ln.c2 ?? ln.b;
+        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
+      }
       ctx.stroke();
     }
 
@@ -819,16 +933,58 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
-    // Active drawing line
+    // Active drawing preview (during drag)
     if (drawing) {
       ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
       ctx.lineWidth = 2 / s;
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
       ctx.moveTo(drawing.a.x, drawing.a.y);
-      ctx.lineTo(drawing.b.x, drawing.b.y);
+      if (lineKind === "arc") {
+        const C = arcControlPoint({
+          a: drawing.a, b: drawing.b, kind: "arc",
+          bulge: defaultBulgePx(drawing.a, drawing.b),
+        });
+        ctx.quadraticCurveTo(C.x, C.y, drawing.b.x, drawing.b.y);
+      } else {
+        ctx.lineTo(drawing.b.x, drawing.b.y);
+      }
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // Pending bezier (with two adjustable tangent handles)
+    if (pendingCurve) {
+      const { a, b, c1, c2 } = pendingCurve;
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
+      ctx.lineWidth = 2.2 / s;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.55)";
+      ctx.lineWidth = 1 / s;
+      ctx.setLineDash([4 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y); ctx.lineTo(c1.x, c1.y);
+      ctx.moveTo(b.x, b.y); ctx.lineTo(c2.x, c2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#1a1a1a";
+      for (const p of [a, b]) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4 / s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (const h of [c1, c2]) {
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "rgba(232, 93, 58, 1)";
+        ctx.lineWidth = 2 / s;
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, 7 / s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
     }
 
     if (hover && tool === "line" && !drawing) {
@@ -888,7 +1044,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, pxPerMeter, isLineLocked, view]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -898,6 +1054,55 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const sp = getScreenPos(e);
     return snapPoint(screenToWorld(sp));
   };
+  const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
+
+  // Commit a finished line into state, run cycle detection, push history.
+  const commitLine = useCallback(
+    (newLine: Line) => {
+      const nextLines = [...lines, newLine];
+      const newIdx = nextLines.length - 1;
+      const cycle = findCycleWithLine(nextLines, newIdx);
+      let nextLayers = layers;
+      if (cycle && cycle.length >= 3) {
+        const areaPx = polygonAreaPx(cycle);
+        if (areaPx > 25) {
+          const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+          const idx = layers.length + 1;
+          const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+          const layer: Layer = {
+            id: `L${Date.now()}`,
+            name: `Ruang ${idx}`,
+            points: cycle,
+            areaM2,
+            color,
+            locked: false,
+          };
+          nextLayers = [...layers, layer];
+          toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+        }
+      }
+      pushHistory();
+      onChange({ lines: nextLines, layers: nextLayers });
+    },
+    [lines, layers, pxPerMeter, pushHistory, onChange],
+  );
+
+  const commitPendingCurve = useCallback(() => {
+    if (!pendingCurve) return;
+    commitLine({
+      a: pendingCurve.a,
+      b: pendingCurve.b,
+      kind: "bezier",
+      c1: pendingCurve.c1,
+      c2: pendingCurve.c2,
+    });
+    setPendingCurve(null);
+  }, [pendingCurve, commitLine]);
+
+  const cancelPendingCurve = useCallback(() => {
+    setPendingCurve(null);
+    setDraggingHandle(null);
+  }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -906,7 +1111,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Two or more fingers => gesture (pinch zoom + rotate). Abort any draw.
     if (pointersRef.current.size >= 2) {
       if (drawing) setDrawing(null);
+      setDraggingHandle(null);
       startGesture();
+      return;
+    }
+
+    // Pending bezier handle drag has top priority
+    if (pendingCurve) {
+      const wp = getWorldPosRaw(e);
+      const tol = 14 / view.s;
+      if (dist(wp, pendingCurve.c1) <= tol) {
+        setDraggingHandle("c1");
+        return;
+      }
+      if (dist(wp, pendingCurve.c2) <= tol) {
+        setDraggingHandle("c2");
+        return;
+      }
+      // Tap outside handles: do nothing (use Selesai button to commit)
       return;
     }
 
@@ -930,7 +1152,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       let bestD = Infinity;
       lines.forEach((ln, i) => {
         if (isLineLocked(ln)) return;
-        const d = pointToSegment(p, ln.a, ln.b);
+        const d = pointToLine(p, ln);
         if (d < bestD) {
           bestD = d;
           bestIdx = i;
@@ -940,7 +1162,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         pushHistory();
         onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
       } else {
-        const hitLocked = lines.find((ln) => isLineLocked(ln) && pointToSegment(p, ln.a, ln.b) <= tol);
+        const hitLocked = lines.find((ln) => isLineLocked(ln) && pointToLine(p, ln) <= tol);
         if (hitLocked) toast.error("Garis terkunci");
       }
     }
@@ -955,6 +1177,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
     if (pointersRef.current.size >= 2) return;
+
+    if (draggingHandle && pendingCurve) {
+      const wp = getWorldPosRaw(e);
+      setPendingCurve({ ...pendingCurve, [draggingHandle]: wp });
+      return;
+    }
+
     const p = getWorldPos(e);
     setHover(p);
     if (drawing) setDrawing({ a: drawing.a, b: p });
@@ -974,43 +1203,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const wasGesture = !!gestureRef.current;
     endPointer(e);
     if (wasGesture) return;
+
+    if (draggingHandle) {
+      setDraggingHandle(null);
+      return;
+    }
     if (!drawing) return;
     if (dist(drawing.a, drawing.b) < 4) {
       setDrawing(null);
       return;
     }
-    const newLine = { a: drawing.a, b: drawing.b };
-    const nextLines = [...lines, newLine];
+    const a = drawing.a;
+    const b = drawing.b;
     setDrawing(null);
 
-    const newIdx = nextLines.length - 1;
-    const cycle = findCycleWithLine(nextLines, newIdx);
-    let nextLayers = layers;
-    if (cycle && cycle.length >= 3) {
-      const areaPx = polygonAreaPx(cycle);
-      if (areaPx > 25) {
-        const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
-        const idx = layers.length + 1;
-        const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
-        const layer: Layer = {
-          id: `L${Date.now()}`,
-          name: `Ruang ${idx}`,
-          points: cycle,
-          areaM2,
-          color,
-          locked: false,
-        };
-        nextLayers = [...layers, layer];
-        toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
-      }
+    if (lineKind === "bezier") {
+      // Defer commit: open tangent handles for adjustment
+      setPendingCurve({ a, b, ...defaultBezierHandles(a, b) });
+      toast("Sesuaikan dua tangent, lalu tekan Selesai", { duration: 2500 });
+      return;
     }
-    pushHistory();
-    onChange({ lines: nextLines, layers: nextLayers });
+
+    const newLine: Line =
+      lineKind === "arc"
+        ? { a, b, kind: "arc", bulge: defaultBulgePx(a, b) }
+        : { a, b, kind: "straight" };
+    commitLine(newLine);
   };
 
   const onPointerCancel = (e: React.PointerEvent) => {
     endPointer(e);
     setDrawing(null);
+    setDraggingHandle(null);
   };
 
   const handleUndo = () => {
@@ -1076,7 +1300,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
-  const totalLengthM = lines.reduce((s, l) => s + dist(l.a, l.b), 0) / pxPerMeter;
+  const totalLengthM = lines.reduce((s, l) => s + lineLengthPx(l), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
   const lahanLayers = layers.filter((l) => isLahanName(l.name));
   const totalLahanM2 = lahanLayers.reduce((s, l) => s + l.areaM2, 0);
@@ -1123,6 +1347,66 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
         </div>
+        {tool === "line" && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Jenis garis
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <Button
+                variant={lineKind === "straight" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  cancelPendingCurve();
+                  setLineKind("straight");
+                }}
+                className={cn("h-8 px-2 text-[11px]", lineKind === "straight" && "bg-foreground text-background")}
+                title="Garis lurus"
+              >
+                <Minus className="mr-1 h-3.5 w-3.5" /> Lurus
+              </Button>
+              <Button
+                variant={lineKind === "arc" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  cancelPendingCurve();
+                  setLineKind("arc");
+                }}
+                className={cn("h-8 px-2 text-[11px]", lineKind === "arc" && "bg-foreground text-background")}
+                title="Lengkung sempurna dengan radius otomatis"
+              >
+                <Spline className="mr-1 h-3.5 w-3.5" /> Lengkung
+              </Button>
+              <Button
+                variant={lineKind === "bezier" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  cancelPendingCurve();
+                  setLineKind("bezier");
+                }}
+                className={cn("h-8 px-2 text-[11px]", lineKind === "bezier" && "bg-foreground text-background")}
+                title="Lengkung dengan dua tangent yang dapat disesuaikan di kedua ujung"
+              >
+                <PenTool className="mr-1 h-3.5 w-3.5" /> Tangent
+              </Button>
+            </div>
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              {lineKind === "straight" && "Tarik dua titik untuk membuat garis lurus."}
+              {lineKind === "arc" && "Tarik dua titik — lengkung otomatis tegak lurus tali busur."}
+              {lineKind === "bezier" && "Tarik dua titik, lalu geser dua handle tangent, tekan Selesai."}
+            </p>
+          </div>
+        )}
+        {pendingCurve && (
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-ember shadow-ember">
+              <Check className="mr-1.5 h-4 w-4" /> Selesai
+            </Button>
+            <Button size="sm" variant="outline" onClick={cancelPendingCurve}>
+              <X className="mr-1.5 h-4 w-4" /> Batal
+            </Button>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" size="sm" onClick={handleUndo} disabled={!past.length}>
             <Undo2 className="mr-1.5 h-4 w-4" /> Undo
@@ -1363,6 +1647,46 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          {tool === "line" && (
+            <>
+              <div className="h-6 w-px bg-border/60" />
+              <Button
+                variant={lineKind === "straight" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineKind("straight"); }}
+                title="Garis lurus"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={lineKind === "arc" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineKind("arc"); }}
+                title="Lengkung sempurna (radius otomatis)"
+              >
+                <Spline className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={lineKind === "bezier" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineKind("bezier"); }}
+                title="Lengkung dengan dua tangent"
+              >
+                <PenTool className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          {pendingCurve && (
+            <>
+              <div className="h-6 w-px bg-border/60" />
+              <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-ember shadow-ember">
+                <Check className="mr-1 h-4 w-4" /> Selesai
+              </Button>
+              <Button size="sm" variant="ghost" onClick={cancelPendingCurve}>
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           <div className="h-6 w-px bg-border/60" />
           <Button
             variant="ghost"
