@@ -735,6 +735,7 @@ type EditorProps = {
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef } = sketch;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
+  const [rekapMinimized, setRekapMinimized] = useState(false);
 
   // Level management helpers
   const ensureLevels = useCallback((): { levels: Level[]; activeId: string } => {
@@ -2185,7 +2186,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         layers={layers}
       />
 
-      {fullscreen && RekapPanel}
+      
 
 
 
@@ -2362,6 +2363,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
         {/* Floating side panel on the right */}
         <div className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]">{SidePanel}</div>
+
+        {/* Floating minimizable Rekapitulasi at the bottom */}
+        <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 flex justify-center">
+          <div
+            className={cn(
+              "pointer-events-auto w-full max-w-[1100px] rounded-2xl border border-border/60 bg-background/85 shadow-elevated backdrop-blur transition-all",
+              rekapMinimized ? "p-1.5" : "p-2",
+            )}
+          >
+            <div className="flex items-center justify-between gap-2 px-2 py-1">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setRekapMinimized((v) => !v)}
+                title={rekapMinimized ? "Perluas" : "Minimalkan"}
+              >
+                {rekapMinimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+            {!rekapMinimized && <div className="px-1 pb-1">{RekapPanel}</div>}
+          </div>
+        </div>
       </div>
     );
   }
