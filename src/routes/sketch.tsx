@@ -1287,8 +1287,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const tol = 4;
       if (dist(p, ln.a) < tol || dist(p, ln.b) < tol) return;
       pushHistory();
-      const left: Line = { ...ln, id: crypto.randomUUID(), a: ln.a, b: p, kind: "straight" };
-      const right: Line = { ...ln, id: crypto.randomUUID(), a: p, b: ln.b, kind: "straight" };
+      const left: Line = { ...ln, a: ln.a, b: p, kind: "straight" };
+      const right: Line = { ...ln, a: p, b: ln.b, kind: "straight" };
       const nextLines = [...lines.slice(0, idx), left, right, ...lines.slice(idx + 1)];
       const ka = keyOf(ln.a);
       const kb = keyOf(ln.b);
