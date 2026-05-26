@@ -2457,6 +2457,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onMdpl={updateLevelMdpl}
             onOpacity={updateLevelOpacity}
             onDelete={deleteLevel}
+            onDuplicate={duplicateLevel}
+            onIncrementTypical={incrementTypical}
+            onSetTypical={setLevelTypical}
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
