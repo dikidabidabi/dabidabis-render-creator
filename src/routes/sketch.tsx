@@ -2269,7 +2269,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </p>
         </>
       )}
-      {fullscreen && <div />}
+      
       </div>
     </aside>
   );
