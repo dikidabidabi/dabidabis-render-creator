@@ -125,6 +125,13 @@ function Header() {
                 Presentasi
               </Link>
               <Link
+                to="/model3d"
+                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
+                activeProps={{ className: "text-foreground font-medium" }}
+              >
+                Model 3D
+              </Link>
+              <Link
                 to="/gallery"
                 className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
                 activeProps={{ className: "text-foreground font-medium" }}
