@@ -176,8 +176,7 @@ function PresentasiBox({
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [printing, setPrinting] = useState(false);
-  const [exporting, setExporting] = useState<null | "pptx">(null);
+  const [exporting, setExporting] = useState<null | "pptx" | "pdf">(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
@@ -203,32 +202,26 @@ function PresentasiBox({
     return () => window.removeEventListener("keydown", onKey);
   }, [full, next, prev]);
 
-  const doPrint = () => {
-    setPrinting(true);
-    // Wait a tick so the print container mounts, then trigger print.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      window.print();
-      setTimeout(() => setPrinting(false), 500);
-    }));
-  };
+  const renderSlideImages = useCallback(async (): Promise<string[]> => {
+    // Wait two frames so the offscreen render mounts at full A3 size.
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    const root = exportRootRef.current;
+    if (!root) throw new Error("Render container tidak siap");
+    const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
+    const { default: html2canvas } = await import("html2canvas-pro");
+    const images: string[] = [];
+    for (const el of pages) {
+      const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
+      images.push(canvas.toDataURL("image/png"));
+    }
+    return images;
+  }, []);
 
   const doExportPptx = useCallback(async () => {
     setExporting("pptx");
     try {
-      // Wait two frames so the offscreen render mounts at full A3 size.
-      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-      const root = exportRootRef.current;
-      if (!root) throw new Error("Render container tidak siap");
-      const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
-      const [{ default: html2canvas }, { default: PptxGenJS }] = await Promise.all([
-        import("html2canvas-pro"),
-        import("pptxgenjs"),
-      ]);
-      const images: string[] = [];
-      for (const el of pages) {
-        const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
-        images.push(canvas.toDataURL("image/png"));
-      }
+      const images = await renderSlideImages();
+      const { default: PptxGenJS } = await import("pptxgenjs");
       const pres = new PptxGenJS();
       // A3 landscape: 420mm x 297mm = 16.54in x 11.69in
       pres.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
@@ -246,7 +239,28 @@ function PresentasiBox({
     } finally {
       setExporting(null);
     }
-  }, [sketch.title]);
+  }, [sketch.title, renderSlideImages]);
+
+  const doExportPdf = useCallback(async () => {
+    setExporting("pdf");
+    try {
+      const images = await renderSlideImages();
+      const { default: jsPDF } = await import("jspdf");
+      // A3 landscape: 420mm x 297mm
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
+      images.forEach((data, i) => {
+        if (i > 0) pdf.addPage("a3", "landscape");
+        pdf.addImage(data, "PNG", 0, 0, 420, 297, undefined, "FAST");
+      });
+      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pdf`;
+      pdf.save(fname);
+    } catch (err) {
+      console.error(err);
+      window.alert("Gagal mengekspor PDF: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExporting(null);
+    }
+  }, [sketch.title, renderSlideImages]);
 
 
   return (
@@ -296,8 +310,9 @@ function PresentasiBox({
                   {idx + 1} / {slides.length} · {slides[idx]?.title}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doPrint} title="Cetak ke kertas atau simpan sebagai PDF">
-                    <Printer className="h-4 w-4" /> PDF
+                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doExportPdf} disabled={exporting === "pdf"} title="Unduh sebagai PDF A3 lanskap">
+                    {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                    PDF
                   </Button>
                   <Button
                     variant="secondary" size="sm" className="h-8 gap-1.5"
@@ -352,22 +367,8 @@ function PresentasiBox({
         />
       )}
 
-      {/* Hidden print container - all slides as A3 pages */}
-      {printing && (
-        <div className="a3-print-root">
-          {slides.map((s) => (
-            <div key={s.id} className="a3-print-page" data-slide-page>
-              <div style={{ width: A3_W, height: A3_H, transform: `scale(${(420 * 3.7795275591) / A3_W})`, transformOrigin: "top left" }}>
-                {/* 420mm = 1587.4px @ 96dpi. Browsers print mm precisely; the scale fits internal canvas to 420mm width. */}
-                <SlideContent slide={s} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Offscreen export container for PPTX rendering (full A3 canvas, captured by html2canvas) */}
-      {exporting === "pptx" && (
+      {/* Offscreen export container (full A3 canvas, captured by html2canvas for both PDF and PPTX) */}
+      {exporting && (
         <div
           ref={exportRootRef}
           className="no-print"
