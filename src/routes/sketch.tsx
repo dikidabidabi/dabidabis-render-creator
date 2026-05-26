@@ -321,6 +321,12 @@ function formatDate(ts: number) {
 
 function newSketch(idx: number): Sketch {
   const now = Date.now();
+  const lvl: Level = {
+    id: `LV${now}_${Math.random().toString(36).slice(2, 6)}`,
+    name: "Level 1",
+    mdpl: 0,
+    opacity: 0.5,
+  };
   return {
     id: `S${now}_${Math.random().toString(36).slice(2, 7)}`,
     title: `Sketsa ${idx}`,
@@ -330,10 +336,54 @@ function newSketch(idx: number): Sketch {
     snap: true,
     lines: [],
     layers: [],
+    levels: [lvl],
+    activeLevelId: lvl.id,
   };
 }
 
-function SketchPage() {
+function normalizeSketch(s: any): Sketch {
+  let levels: Level[] = Array.isArray(s?.levels)
+    ? s.levels.map((lv: any) => ({
+        id: String(lv.id),
+        name: String(lv.name || "Level"),
+        mdpl: Number.isFinite(Number(lv.mdpl)) ? Number(lv.mdpl) : 0,
+        opacity: typeof lv.opacity === "number" ? Math.max(0, Math.min(1, lv.opacity)) : 0.5,
+      }))
+    : [];
+  let lines: Line[] = Array.isArray(s?.lines) ? s.lines : [];
+  let layers: Layer[] = Array.isArray(s?.layers) ? s.layers : [];
+  let activeLevelId: string | null = s?.activeLevelId ?? null;
+  if (levels.length === 0) {
+    const lvl: Level = {
+      id: `LV${s?.id || Date.now()}_1`,
+      name: "Level 1",
+      mdpl: 0,
+      opacity: 0.5,
+    };
+    levels = [lvl];
+    activeLevelId = lvl.id;
+    lines = lines.map((ln) => ({ ...ln, levelId: ln.levelId ?? lvl.id }));
+    layers = layers.map((ly) => ({ ...ly, levelId: ly.levelId ?? lvl.id }));
+  } else if (!activeLevelId || !levels.some((l) => l.id === activeLevelId)) {
+    activeLevelId = levels[0].id;
+  }
+  // Assign any orphan line/layer to first level
+  const fallback = levels[0].id;
+  lines = lines.map((ln) => (ln.levelId && levels.some((l) => l.id === ln.levelId) ? ln : { ...ln, levelId: fallback }));
+  layers = layers.map((ly) => (ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback }));
+  return {
+    id: s?.id,
+    title: s?.title ?? "Sketsa",
+    createdAt: s?.createdAt ?? Date.now(),
+    updatedAt: s?.updatedAt ?? Date.now(),
+    scale: s?.scale ?? "1:100",
+    snap: s?.snap ?? true,
+    lines,
+    layers,
+    levels,
+    activeLevelId,
+  };
+}
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
