@@ -402,6 +402,7 @@ function A3Frame({ children }: { children: React.ReactNode }) {
 // ---------- Slide types ----------
 type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
@@ -433,6 +434,7 @@ function buildSlides(sk: Sketch): Slide[] {
   for (const lv of levels) {
     out.push({ kind: "level", id: `lvl-${lv.id}`, title: lv.name, sketch: sk, level: lv, bounds });
   }
+  out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk });
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
@@ -504,6 +506,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       <SlideHeader slide={slide} />
       <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, display: "flex" }}>
         {slide.kind === "level" && <LevelBody slide={slide} />}
+        {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
         {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
         {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
         {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
@@ -517,6 +520,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
     slide.kind === "level" ? "Sketsa · Level"
+    : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
     : slide.kind === "infografis" ? "Tabulasi · Infografis"
@@ -653,6 +657,119 @@ function linePath(ln: Line): string {
   const c1 = ln.c1 ?? ln.a;
   const c2 = ln.c2 ?? ln.b;
   return `M ${ln.a.x} ${ln.a.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${ln.b.x} ${ln.b.y}`;
+}
+
+// ---- Stacking Diagram (from Model 3D data) ----
+function levelColor(i: number, total: number) {
+  // Warm-to-cool gradient, deterministic per level index.
+  const hue = 18 + (i / Math.max(1, total - 1)) * 200;
+  return `hsl(${hue.toFixed(0)}, 62%, 52%)`;
+}
+
+function StackingBody({ sketch }: { sketch: Sketch }) {
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => b.mdpl - a.mdpl); // top floor first
+  const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const rows = levels.map((lv, i) => {
+    const items = build.filter((l) => l.levelId === lv.id);
+    const area = items.reduce((s, l) => s + (l.areaM2 || 0), 0);
+    return { lv, area, color: levelColor(i, levels.length) };
+  });
+  const maxArea = Math.max(1, ...rows.map((r) => r.area));
+  const totalArea = rows.reduce((s, r) => s + r.area, 0);
+  const ascMdpl = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const ketinggian = ascMdpl.length > 1
+    ? ascMdpl[ascMdpl.length - 1].mdpl - ascMdpl[0].mdpl
+    : 0;
+
+  return (
+    <div style={{ display: "flex", gap: 28, width: "100%" }}>
+      {/* Stack visual */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
+        {rows.length === 0 && (
+          <div style={{ color: "#999", fontSize: 14 }}>Belum ada level untuk ditampilkan.</div>
+        )}
+        {rows.map((r) => {
+          const widthPct = 14 + (r.area / maxArea) * 86; // min 14% so labels are readable
+          return (
+            <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 44 }}>
+              <div style={{ width: 78, textAlign: "right", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
+                {fmt(r.lv.mdpl, 1)} m
+              </div>
+              <div style={{ flex: 1, position: "relative", height: 44 }}>
+                <div
+                  style={{
+                    width: `${widthPct}%`,
+                    height: "100%",
+                    background: r.color,
+                    border: "1px solid rgba(0,0,0,0.25)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0 14px",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", letterSpacing: "-0.01em" }}>
+                    {r.lv.name}
+                  </span>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                    {fmt(r.area)} m²
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {/* Ground line */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
+          <div style={{ width: 78 }} />
+          <div style={{ flex: 1, borderTop: "1px solid #111" }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 78, textAlign: "right", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
+            MDPL
+          </div>
+          <div style={{ flex: 1, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
+            Tanah / Permukaan Acuan
+          </div>
+        </div>
+      </div>
+
+      {/* Legend & summary */}
+      <div style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 10 }}>
+            Legenda Level
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {rows.map((r) => {
+              const pct = totalArea > 0 ? (r.area / totalArea) * 100 : 0;
+              return (
+                <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+                  <span style={{ width: 14, height: 14, background: r.color, border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.lv.name}
+                  </span>
+                  <span style={{ color: "#888", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
+                    {fmt(pct, 1)}%
+                  </span>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 86, textAlign: "right" }}>
+                    {fmt(r.area)} m²
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <BigStat label="Jumlah Lapis" value={String(rows.length)} />
+        <BigStat label="Total Luas Bangunan" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" />
+        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="selisih MDPL antar level" />
+      </div>
+    </div>
+  );
 }
 
 // ---- Modern tiles ----
