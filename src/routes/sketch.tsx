@@ -2218,58 +2218,61 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         </p>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <Magnet className="h-4 w-4 text-ember" />
-          <div>
-            <div className="text-sm font-medium">Snap to Grid</div>
-            <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
+      {!hideSideExtras && (
+        <>
+          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Magnet className="h-4 w-4 text-ember" />
+              <div>
+                <div className="text-sm font-medium">Snap to Grid</div>
+                <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
+              </div>
+            </div>
+            <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
           </div>
-        </div>
-        <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
+
+          <LevelsPanel
+            levels={levels}
+            activeLevelId={activeLvlId}
+            onSetActive={setActiveLevel}
+            onAdd={addLevel}
+            onRename={renameLevel}
+            onMdpl={updateLevelMdpl}
+            onOpacity={updateLevelOpacity}
+            onDelete={deleteLevel}
+            onRenameLayer={renameLayer}
+            onToggleLockLayer={toggleLock}
+            onRemoveLayer={removeLayer}
+            onSetLayerCoefficient={setLayerCoefficient}
+            lines={lines}
+            layers={layers}
+          />
+
+          <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <Ruler className="h-3.5 w-3.5" /> Garis
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Jumlah</span>
+              <span className="font-display text-base font-semibold">{lines.length}</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Panjang</span>
+              <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tip: kunci layer (ikon gembok) agar tidak terhapus saat memakai alat Hapus. Progres
+            tersimpan otomatis.
+          </p>
+        </>
+      )}
+      {fullscreen && <div />}
       </div>
-
-      <LevelsPanel
-        levels={levels}
-        activeLevelId={activeLvlId}
-        onSetActive={setActiveLevel}
-        onAdd={addLevel}
-        onRename={renameLevel}
-        onMdpl={updateLevelMdpl}
-        onOpacity={updateLevelOpacity}
-        onDelete={deleteLevel}
-        onRenameLayer={renameLayer}
-        onToggleLockLayer={toggleLock}
-        onRemoveLayer={removeLayer}
-        onSetLayerCoefficient={setLayerCoefficient}
-        lines={lines}
-        layers={layers}
-      />
-
-      
-
-
-
-      <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-          <Ruler className="h-3.5 w-3.5" /> Garis
-        </div>
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm text-muted-foreground">Jumlah</span>
-          <span className="font-display text-base font-semibold">{lines.length}</span>
-        </div>
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm text-muted-foreground">Panjang</span>
-          <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
-        </div>
-      </div>
-
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        Tip: kunci layer (ikon gembok) agar tidak terhapus saat memakai alat Hapus. Progres
-        tersimpan otomatis.
-      </p>
     </aside>
   );
+
 
   if (fullscreen) {
     return (
