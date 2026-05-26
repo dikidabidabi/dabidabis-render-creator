@@ -1162,6 +1162,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
         ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
         ctx.stroke();
+
+        // GSB inward offset (dashed) untuk layer lahan
+        if (isLahanLayerName(layer.name)) {
+          const n = layer.points.length;
+          ctx.save();
+          ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
+          ctx.lineWidth = 1.3 / s;
+          ctx.setLineDash([6 / s, 4 / s]);
+          for (let i = 0; i < n; i++) {
+            const m = getGsbMeters(layer, i);
+            if (m <= 0) continue;
+            const seg = inwardOffsetSegmentPx(layer.points, i, m * pxPerMeter);
+            ctx.beginPath();
+            ctx.moveTo(seg.a.x, seg.a.y);
+            ctx.lineTo(seg.b.x, seg.b.y);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+          // Label "GSB i (x m)"
+          ctx.fillStyle = "rgba(232, 93, 58, 1)";
+          const fontPx = 11 / s;
+          ctx.font = `600 ${fontPx}px var(--font-display), sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          for (let i = 0; i < n; i++) {
+            const m = getGsbMeters(layer, i);
+            if (m <= 0) continue;
+            const seg = inwardOffsetSegmentPx(layer.points, i, m * pxPerMeter);
+            const label = `GSB ${i + 1} (${m}m)`;
+            // background pill for readability
+            const padX = 4 / s, padY = 2 / s;
+            const tw = ctx.measureText(label).width;
+            ctx.fillStyle = "rgba(246, 239, 227, 0.85)";
+            ctx.fillRect(
+              seg.mid.x - tw / 2 - padX,
+              seg.mid.y - fontPx / 2 - padY,
+              tw + padX * 2,
+              fontPx + padY * 2,
+            );
+            ctx.fillStyle = "rgba(180, 60, 30, 1)";
+            ctx.fillText(label, seg.mid.x, seg.mid.y);
+          }
+          ctx.restore();
+        }
       });
 
       // Lines
