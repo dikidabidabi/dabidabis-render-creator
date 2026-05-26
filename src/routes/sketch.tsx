@@ -2544,7 +2544,48 @@ function LevelsPanel({
                   />
                 </div>
               )}
+
+              {isOpen && hasSubs && (
+                <div className="mt-2 border-t border-border/40 pt-2">
+                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <span>Sub-gambar</span>
+                    <span>{layerCount} ruang</span>
+                  </div>
+                  <div
+                    className={cn(
+                      "rounded-md bg-background/40 pr-1",
+                      needsScroll && "sketch-sub-scroll overflow-y-auto",
+                    )}
+                    style={
+                      needsScroll
+                        ? { maxHeight: `${MAX_VISIBLE * SUB_ITEM_PX}px` }
+                        : undefined
+                    }
+                  >
+                    <ul className="space-y-1 pl-1">
+                      {subLayers.map((sl) => (
+                        <li
+                          key={sl.id}
+                          className="flex items-center gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-background/60"
+                          title={sl.name}
+                        >
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
+                            style={{ background: sl.color.replace("ALPHA", "0.9") }}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{sl.name}</span>
+                          <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
+                            {sl.areaM2.toFixed(1)}
+                            <span className="ml-0.5 text-[9px] font-normal">m²</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </li>
+
           );
         })}
       </ul>
