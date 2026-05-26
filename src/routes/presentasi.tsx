@@ -296,8 +296,17 @@ function PresentasiBox({
                   {idx + 1} / {slides.length} · {slides[idx]?.title}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doPrint} title="Cetak A3">
-                    <Printer className="h-4 w-4" /> Cetak
+                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doPrint} title="Cetak ke kertas atau simpan sebagai PDF">
+                    <Printer className="h-4 w-4" /> PDF
+                  </Button>
+                  <Button
+                    variant="secondary" size="sm" className="h-8 gap-1.5"
+                    onClick={doExportPptx}
+                    disabled={exporting === "pptx"}
+                    title="Unduh sebagai PowerPoint (.pptx)"
+                  >
+                    {exporting === "pptx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Presentation className="h-4 w-4" />}
+                    PPTX
                   </Button>
                   <Button
                     variant="secondary" size="icon" className="h-8 w-8"
@@ -307,6 +316,7 @@ function PresentasiBox({
                     <Maximize2 className="h-4 w-4" />
                   </Button>
                 </div>
+
               </div>
             </div>
             {/* Thumbs */}
