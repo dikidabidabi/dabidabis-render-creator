@@ -2792,8 +2792,10 @@ function LevelsPanel({
   const [gsbDrafts, setGsbDrafts] = useState<Record<string, string>>({});
   const [layerEditId, setLayerEditId] = useState<string | null>(null);
   const [layerDraft, setLayerDraft] = useState("");
+  const [typicalDrafts, setTypicalDrafts] = useState<Record<string, string>>({});
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
 
+  const displayNames = computeLevelDisplayNames(levels);
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
 
   return (
