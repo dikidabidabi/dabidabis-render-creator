@@ -168,6 +168,34 @@ function pointInPolygon(p: Point, poly: Point[]) {
   return inside;
 }
 
+const DEFAULT_GSB_M = 4;
+function isLahanLayerName(n: string) {
+  return n.trim().toLowerCase().startsWith("lahan");
+}
+function getGsbMeters(layer: Layer, sideIndex: number): number {
+  const v = layer.gsb?.[sideIndex];
+  return Number.isFinite(v) && (v as number) >= 0 ? (v as number) : DEFAULT_GSB_M;
+}
+function inwardOffsetSegmentPx(
+  pts: Point[],
+  i: number,
+  distPx: number,
+): { a: Point; b: Point; mid: Point; nx: number; ny: number } {
+  const a = pts[i];
+  const b = pts[(i + 1) % pts.length];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  let nx = -dy / len, ny = dx / len;
+  const probe = { x: (a.x + b.x) / 2 + nx * 0.5, y: (a.y + b.y) / 2 + ny * 0.5 };
+  if (!pointInPolygon(probe, pts)) { nx = -nx; ny = -ny; }
+  return {
+    a: { x: a.x + nx * distPx, y: a.y + ny * distPx },
+    b: { x: b.x + nx * distPx, y: b.y + ny * distPx },
+    mid: { x: (a.x + b.x) / 2 + nx * distPx, y: (a.y + b.y) / 2 + ny * distPx },
+    nx, ny,
+  };
+}
+
 function perpUnit(a: Point, b: Point): Point {
   const dx = b.x - a.x, dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
