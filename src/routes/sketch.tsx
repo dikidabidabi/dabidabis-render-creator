@@ -1380,6 +1380,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       cx /= layer.points.length;
       cy /= layer.points.length;
       const sp = worldToScreen({ x: cx, y: cy });
+      const isLahan = isLahanLayerName(layer.name);
       const nameText = layer.locked ? `🔒 ${layer.name}` : layer.name;
       const areaText = `${layer.areaM2.toFixed(2)} m²`;
       ctx.font = "600 13px Manrope, sans-serif";
@@ -1388,15 +1389,40 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const areaW = ctx.measureText(areaText).width;
       const boxW = Math.max(nameW, areaW) + 16;
       const boxH = 38;
-      ctx.fillStyle = "rgba(26,26,26,0.92)";
-      ctx.fillRect(sp.x - boxW / 2, sp.y - boxH / 2, boxW, boxH);
-      ctx.fillStyle = "#fff";
-      ctx.font = "600 13px Manrope, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(nameText, sp.x, sp.y - 3);
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.font = "700 12px Manrope, sans-serif";
-      ctx.fillText(areaText, sp.x, sp.y + 14);
+      const boxR = 8;
+      if (isLahan) {
+        // Lahan: teks abu-abu muda, tanpa background
+        ctx.fillStyle = "rgba(160,160,160,0.95)";
+        ctx.font = "600 13px Manrope, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(nameText, sp.x, sp.y - 3);
+        ctx.fillStyle = "rgba(160,160,160,0.8)";
+        ctx.font = "700 12px Manrope, sans-serif";
+        ctx.fillText(areaText, sp.x, sp.y + 14);
+      } else {
+        // Ruang: teks hitam, latar putih opacity 50%, sudut curve
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        ctx.beginPath();
+        const bx = sp.x - boxW / 2, by = sp.y - boxH / 2;
+        ctx.moveTo(bx + boxR, by);
+        ctx.lineTo(bx + boxW - boxR, by);
+        ctx.quadraticCurveTo(bx + boxW, by, bx + boxW, by + boxR);
+        ctx.lineTo(bx + boxW, by + boxH - boxR);
+        ctx.quadraticCurveTo(bx + boxW, by + boxH, bx + boxW - boxR, by + boxH);
+        ctx.lineTo(bx + boxR, by + boxH);
+        ctx.quadraticCurveTo(bx, by + boxH, bx, by + boxH - boxR);
+        ctx.lineTo(bx, by + boxR);
+        ctx.quadraticCurveTo(bx, by, bx + boxR, by);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#000";
+        ctx.font = "600 13px Manrope, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(nameText, sp.x, sp.y - 3);
+        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.font = "700 12px Manrope, sans-serif";
+        ctx.fillText(areaText, sp.x, sp.y + 14);
+      }
       ctx.textAlign = "start";
     });
     ctx.globalAlpha = 1;
