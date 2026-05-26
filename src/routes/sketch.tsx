@@ -2367,28 +2367,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-[1fr_340px] lg:p-5">
-      <div
-        ref={wrapRef}
-        className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
-      >
-        <canvas
-          ref={canvasRef}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-          onPointerLeave={() => setHover(null)}
-          className={cn(
-            "block touch-none select-none",
-            tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
-          )}
-        />
-        <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
-          Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
+    <div className="space-y-4 p-4 lg:p-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
+        <div
+          ref={wrapRef}
+          className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
+        >
+          <canvas
+            ref={canvasRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
+            onPointerLeave={() => setHover(null)}
+            className={cn(
+              "block touch-none select-none",
+              tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+            )}
+          />
+          <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
+            Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
+          </div>
         </div>
+        {SidePanel}
       </div>
-      {SidePanel}
+      {RekapPanel}
     </div>
   );
 }
