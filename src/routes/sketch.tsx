@@ -89,6 +89,7 @@ type Layer = {
   locked?: boolean;
   levelId?: string;
   coefficient?: number; // 1 | 0.5 | 0 — pengali luas efektif
+  gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
 };
 
 type Level = {
@@ -165,6 +166,34 @@ function pointInPolygon(p: Point, poly: Point[]) {
     if (intersect) inside = !inside;
   }
   return inside;
+}
+
+const DEFAULT_GSB_M = 4;
+function isLahanLayerName(n: string) {
+  return n.trim().toLowerCase().startsWith("lahan");
+}
+function getGsbMeters(layer: Layer, sideIndex: number): number {
+  const v = layer.gsb?.[sideIndex];
+  return Number.isFinite(v) && (v as number) >= 0 ? (v as number) : DEFAULT_GSB_M;
+}
+function inwardOffsetSegmentPx(
+  pts: Point[],
+  i: number,
+  distPx: number,
+): { a: Point; b: Point; mid: Point; nx: number; ny: number } {
+  const a = pts[i];
+  const b = pts[(i + 1) % pts.length];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  let nx = -dy / len, ny = dx / len;
+  const probe = { x: (a.x + b.x) / 2 + nx * 0.5, y: (a.y + b.y) / 2 + ny * 0.5 };
+  if (!pointInPolygon(probe, pts)) { nx = -nx; ny = -ny; }
+  return {
+    a: { x: a.x + nx * distPx, y: a.y + ny * distPx },
+    b: { x: b.x + nx * distPx, y: b.y + ny * distPx },
+    mid: { x: (a.x + b.x) / 2 + nx * distPx, y: (a.y + b.y) / 2 + ny * distPx },
+    nx, ny,
+  };
 }
 
 function perpUnit(a: Point, b: Point): Point {
@@ -1133,6 +1162,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
         ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
         ctx.stroke();
+
+        // GSB inward offset (dashed) untuk layer lahan
+        if (isLahanLayerName(layer.name)) {
+          const n = layer.points.length;
+          ctx.save();
+          ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
+          ctx.lineWidth = 1.3 / s;
+          ctx.setLineDash([6 / s, 4 / s]);
+          for (let i = 0; i < n; i++) {
+            const m = getGsbMeters(layer, i);
+            if (m <= 0) continue;
+            const seg = inwardOffsetSegmentPx(layer.points, i, m * pxPerMeter);
+            ctx.beginPath();
+            ctx.moveTo(seg.a.x, seg.a.y);
+            ctx.lineTo(seg.b.x, seg.b.y);
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+          // Label "GSB i (x m)"
+          ctx.fillStyle = "rgba(232, 93, 58, 1)";
+          const fontPx = 11 / s;
+          ctx.font = `600 ${fontPx}px var(--font-display), sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          for (let i = 0; i < n; i++) {
+            const m = getGsbMeters(layer, i);
+            if (m <= 0) continue;
+            const seg = inwardOffsetSegmentPx(layer.points, i, m * pxPerMeter);
+            const label = `GSB ${i + 1} (${m}m)`;
+            // background pill for readability
+            const padX = 4 / s, padY = 2 / s;
+            const tw = ctx.measureText(label).width;
+            ctx.fillStyle = "rgba(246, 239, 227, 0.85)";
+            ctx.fillRect(
+              seg.mid.x - tw / 2 - padX,
+              seg.mid.y - fontPx / 2 - padY,
+              tw + padX * 2,
+              fontPx + padY * 2,
+            );
+            ctx.fillStyle = "rgba(180, 60, 30, 1)";
+            ctx.fillText(label, seg.mid.x, seg.mid.y);
+          }
+          ctx.restore();
+        }
       });
 
       // Lines
@@ -1859,6 +1932,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     });
   };
 
+  const setLayerGsbSide = (lid: string, sideIndex: number, meters: number) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
+      toast.error("Buka kunci dulu untuk mengubah GSB");
+      return;
+    }
+    const n = layer.points.length;
+    if (n < 1) return;
+    const safe = Math.max(0, Number.isFinite(meters) ? meters : 0);
+    const next = Array.from({ length: n }, (_, i) =>
+      i === sideIndex ? safe : getGsbMeters(layer, i),
+    );
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, gsb: next } : l)),
+    });
+  };
+
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const totalLengthM = lines.reduce((s, l) => s + lineLengthPx(l), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
@@ -2245,6 +2337,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
             onSetLayerCoefficient={setLayerCoefficient}
+            onSetLayerGsb={setLayerGsbSide}
             lines={lines}
             layers={layers}
           />
@@ -2538,6 +2631,7 @@ function LevelsPanel({
   onToggleLockLayer,
   onRemoveLayer,
   onSetLayerCoefficient,
+  onSetLayerGsb,
   lines,
   layers,
 }: {
@@ -2553,6 +2647,7 @@ function LevelsPanel({
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
+  onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
   lines: Line[];
   layers: Layer[];
 }) {
@@ -2560,6 +2655,8 @@ function LevelsPanel({
   const [draftName, setDraftName] = useState("");
   const [mdplDrafts, setMdplDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [gsbOpen, setGsbOpen] = useState<Record<string, boolean>>({});
+  const [gsbDrafts, setGsbDrafts] = useState<Record<string, string>>({});
   const [layerEditId, setLayerEditId] = useState<string | null>(null);
   const [layerDraft, setLayerDraft] = useState("");
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
@@ -2768,12 +2865,13 @@ function LevelsPanel({
                           <li
                             key={sl.id}
                             className={cn(
-                              "flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] hover:bg-background/60",
+                              "rounded px-1.5 py-1 text-[12px] hover:bg-background/60",
                               lahan && "bg-ember/5",
                               sl.locked && "ring-1 ring-foreground/15",
                             )}
                             title={sl.name}
                           >
+                            <div className="flex items-center gap-1.5">
                             <span
                               className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
                               style={{ background: sl.color.replace("ALPHA", "0.9") }}
@@ -2871,6 +2969,85 @@ function LevelsPanel({
                                 <Trash2 className="h-3 w-3" />
                               </button>
                             )}
+                            </div>
+                            {lahan && sl.points.length >= 3 && (() => {
+                              const open = !!gsbOpen[sl.id];
+                              const n = sl.points.length;
+                              return (
+                                <div className="mt-1 rounded-sm border border-dashed border-ember/40 bg-background/40">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setGsbOpen((s) => ({ ...s, [sl.id]: !s[sl.id] }))
+                                    }
+                                    className="flex w-full items-center justify-between px-1.5 py-1 text-[10px] uppercase tracking-wider text-ember/90 hover:text-ember"
+                                    title="Atur GSB tiap sisi (offset ke dalam)"
+                                  >
+                                    <span className="flex items-center gap-1">
+                                      {open ? (
+                                        <Minus className="h-2.5 w-2.5" />
+                                      ) : (
+                                        <Plus className="h-2.5 w-2.5" />
+                                      )}
+                                      GSB · {n} sisi
+                                    </span>
+                                    <span className="text-[10px] normal-case text-muted-foreground">
+                                      default {DEFAULT_GSB_M}m
+                                    </span>
+                                  </button>
+                                  {open && (
+                                    <div className="grid grid-cols-2 gap-1 px-1.5 pb-1.5">
+                                      {Array.from({ length: n }, (_, i) => {
+                                        const key = `${sl.id}_${i}`;
+                                        const cur = getGsbMeters(sl, i);
+                                        const draft = gsbDrafts[key];
+                                        return (
+                                          <div
+                                            key={key}
+                                            className="flex items-center gap-1 rounded bg-background/60 px-1 py-0.5"
+                                          >
+                                            <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
+                                              GSB {i + 1}
+                                            </span>
+                                            <Input
+                                              type="number"
+                                              inputMode="decimal"
+                                              step="0.1"
+                                              min="0"
+                                              disabled={sl.locked}
+                                              value={draft ?? String(cur)}
+                                              onChange={(e) =>
+                                                setGsbDrafts((d) => ({
+                                                  ...d,
+                                                  [key]: e.target.value,
+                                                }))
+                                              }
+                                              onBlur={() => {
+                                                const v = parseFloat(draft ?? "");
+                                                if (Number.isFinite(v) && v !== cur) {
+                                                  onSetLayerGsb(sl.id, i, v);
+                                                }
+                                                setGsbDrafts((d) => {
+                                                  const nx = { ...d };
+                                                  delete nx[key];
+                                                  return nx;
+                                                });
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter")
+                                                  (e.target as HTMLInputElement).blur();
+                                              }}
+                                              className="h-5 px-1 py-0 text-[11px]"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground">m</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </li>
                         );
                       })}
