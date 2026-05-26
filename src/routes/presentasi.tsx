@@ -487,28 +487,51 @@ function computeStats(sk: Sketch): Stats {
 
 // ============= SLIDE CONTENT (white A3 modern theme) =============
 
-// Scales children down so all content fits inside the available box (never up-scales).
-function FitToBox({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+const SLIDE_SCALE_KEY = "dabidabis_slidescale_v1";
+function loadSlideScale(id: string): number | null {
+  try {
+    const raw = localStorage.getItem(SLIDE_SCALE_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    const n = v?.[id];
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  } catch { return null; }
+}
+function saveSlideScale(id: string, scale: number | null) {
+  try {
+    const raw = localStorage.getItem(SLIDE_SCALE_KEY);
+    const v = raw ? JSON.parse(raw) : {};
+    if (scale == null) delete v[id]; else v[id] = scale;
+    localStorage.setItem(SLIDE_SCALE_KEY, JSON.stringify(v));
+  } catch { /* ignore */ }
+}
+
+// Scales children to fit; user can drag the bottom-right handle to scale manually.
+function ManualScaleBox({
+  slideId, children, style,
+}: { slideId: string; children: React.ReactNode; style?: React.CSSProperties }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const [fitScale, setFitScale] = useState(1);
+  const [userScale, setUserScale] = useState<number | null>(() => loadSlideScale(slideId));
+  const scaleRef = useRef<number>(1);
+
+  useEffect(() => { setUserScale(loadSlideScale(slideId)); }, [slideId]);
 
   useEffect(() => {
     if (!boxRef.current || !innerRef.current) return;
     const measure = () => {
       const box = boxRef.current!.getBoundingClientRect();
-      // Measure natural size at scale=1 by reading scrollWidth/Height of inner content
       const inner = innerRef.current!;
-      const prevTransform = inner.style.transform;
+      const prev = inner.style.transform;
       inner.style.transform = "none";
       const cw = inner.scrollWidth;
       const ch = inner.scrollHeight;
-      inner.style.transform = prevTransform;
+      inner.style.transform = prev;
       if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
-      const s = Math.min(1, box.width / cw, box.height / ch);
       setNatural({ w: cw, h: ch });
-      setScale(s);
+      setFitScale(Math.min(1, box.width / cw, box.height / ch));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -516,6 +539,42 @@ function FitToBox({ children, style }: { children: React.ReactNode; style?: Reac
     ro.observe(innerRef.current);
     return () => ro.disconnect();
   }, [children]);
+
+  const scale = userScale ?? fitScale;
+  scaleRef.current = scale;
+
+  const startDrag = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!natural || !boxRef.current) return;
+    const boxRect = boxRef.current.getBoundingClientRect();
+    const move = (ev: PointerEvent) => {
+      const cx = ev.clientX - boxRect.left;
+      const cy = ev.clientY - boxRect.top;
+      const sx = cx / natural.w;
+      const sy = cy / natural.h;
+      const ns = Math.max(0.1, Math.min(4, Math.min(sx, sy)));
+      scaleRef.current = ns;
+      setUserScale(ns);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      saveSlideScale(slideId, scaleRef.current);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  const resetScale = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setUserScale(null);
+    saveSlideScale(slideId, null);
+  };
+
+  const displayW = natural ? natural.w * scale : 0;
+  const displayH = natural ? natural.h * scale : 0;
 
   return (
     <div ref={boxRef} style={{ ...style, position: "relative", overflow: "hidden" }}>
@@ -534,6 +593,29 @@ function FitToBox({ children, style }: { children: React.ReactNode; style?: Reac
       >
         {children}
       </div>
+      {natural && (
+        <div
+          className="no-print slide-scale-handle"
+          onPointerDown={startDrag}
+          onDoubleClick={resetScale}
+          title="Tarik untuk skala manual · Klik dua kali untuk reset"
+          style={{
+            position: "absolute",
+            left: displayW - 18,
+            top: displayH - 18,
+            width: 22,
+            height: 22,
+            cursor: "nwse-resize",
+            background: "linear-gradient(135deg, transparent 0 50%, #111 50% 60%, transparent 60% 70%, #111 70% 80%, transparent 80%)",
+            border: "1px solid rgba(0,0,0,0.35)",
+            borderRadius: 3,
+            backgroundColor: "rgba(255,255,255,0.85)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+            zIndex: 10,
+            touchAction: "none",
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -556,18 +638,19 @@ function SlideContent({ slide }: { slide?: Slide }) {
       }}
     >
       <SlideHeader slide={slide} />
-      <FitToBox style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28 }}>
+      <ManualScaleBox slideId={slide.id} style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28 }}>
         {slide.kind === "level" && <LevelBody slide={slide} />}
         {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
         {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
         {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
         {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
         {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
-      </FitToBox>
+      </ManualScaleBox>
       <SlideFooter slide={slide} />
     </div>
   );
 }
+
 
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
