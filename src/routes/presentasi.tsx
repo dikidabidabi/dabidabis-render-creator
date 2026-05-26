@@ -367,22 +367,8 @@ function PresentasiBox({
         />
       )}
 
-      {/* Hidden print container - all slides as A3 pages */}
-      {printing && (
-        <div className="a3-print-root">
-          {slides.map((s) => (
-            <div key={s.id} className="a3-print-page" data-slide-page>
-              <div style={{ width: A3_W, height: A3_H, transform: `scale(${(420 * 3.7795275591) / A3_W})`, transformOrigin: "top left" }}>
-                {/* 420mm = 1587.4px @ 96dpi. Browsers print mm precisely; the scale fits internal canvas to 420mm width. */}
-                <SlideContent slide={s} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Offscreen export container for PPTX rendering (full A3 canvas, captured by html2canvas) */}
-      {exporting === "pptx" && (
+      {/* Offscreen export container (full A3 canvas, captured by html2canvas for both PDF and PPTX) */}
+      {exporting && (
         <div
           ref={exportRootRef}
           className="no-print"
