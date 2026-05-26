@@ -722,7 +722,92 @@ type EditorProps = {
 };
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
-  const { id, scale, snap, lines, layers } = sketch;
+  const { id, scale, snap, lines, layers, levels, activeLevelId } = sketch;
+  const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
+
+  // Level management helpers
+  const ensureLevels = useCallback((): { levels: Level[]; activeId: string } => {
+    if (levels.length > 0 && activeLvlId) {
+      return { levels, activeId: activeLvlId };
+    }
+    if (levels.length > 0) {
+      return { levels, activeId: levels[0].id };
+    }
+    const lvl: Level = {
+      id: `LV${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: "Level 1",
+      mdpl: 0,
+      opacity: 0.5,
+    };
+    return { levels: [lvl], activeId: lvl.id };
+  }, [levels, activeLvlId]);
+
+  const setActiveLevel = useCallback(
+    (lvlId: string) => onChange({ activeLevelId: lvlId }),
+    [onChange],
+  );
+
+  const addLevel = useCallback(() => {
+    const maxMdpl = levels.reduce((m, l) => Math.max(m, l.mdpl), 0);
+    const lvl: Level = {
+      id: `LV${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: `Level ${levels.length + 1}`,
+      mdpl: Math.round((maxMdpl + 3) * 100) / 100,
+      opacity: 0.5,
+    };
+    onChange({ levels: [...levels, lvl], activeLevelId: lvl.id });
+    toast.success(`${lvl.name} ditambahkan`);
+  }, [levels, onChange]);
+
+  const renameLevel = useCallback(
+    (lvlId: string, name: string) => {
+      onChange({
+        levels: levels.map((l) =>
+          l.id === lvlId ? { ...l, name: name.trim() || l.name } : l,
+        ),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const updateLevelMdpl = useCallback(
+    (lvlId: string, mdpl: number) => {
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, mdpl } : l)),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const updateLevelOpacity = useCallback(
+    (lvlId: string, opacity: number) => {
+      onChange({
+        levels: levels.map((l) =>
+          l.id === lvlId ? { ...l, opacity: Math.max(0, Math.min(1, opacity)) } : l,
+        ),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const deleteLevel = useCallback(
+    (lvlId: string) => {
+      if (levels.length <= 1) {
+        toast.error("Minimal harus ada satu level");
+        return;
+      }
+      const remaining = levels.filter((l) => l.id !== lvlId);
+      const fallback = remaining[0].id;
+      onChange({
+        levels: remaining,
+        activeLevelId: activeLvlId === lvlId ? fallback : activeLvlId,
+        lines: lines.filter((ln) => ln.levelId !== lvlId),
+        layers: layers.filter((ly) => ly.levelId !== lvlId),
+      });
+      toast.success("Level dihapus");
+    },
+    [levels, lines, layers, activeLvlId, onChange],
+  );
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
