@@ -1671,9 +1671,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </p>
         )}
         {tool === "edit" && (
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser.
-          </p>
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                variant={editMode === "move" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("move")}
+                className={cn("h-8 px-2 text-[11px]", editMode === "move" && "bg-foreground text-background")}
+                title="Geser titik yang sudah ada"
+              >
+                <Move className="mr-1 h-3.5 w-3.5" /> Geser
+              </Button>
+              <Button
+                variant={editMode === "addPoint" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("addPoint")}
+                className={cn("h-8 px-2 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
+                title="Tambah titik baru di sepanjang garis"
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Titik
+              </Button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {editMode === "move"
+                ? "Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser."
+                : "Ketuk di sepanjang garis lurus untuk menambah titik baru yang dapat digeser."}
+            </p>
+          </div>
         )}
         {tool === "line" && (
           <div className="space-y-1.5">
