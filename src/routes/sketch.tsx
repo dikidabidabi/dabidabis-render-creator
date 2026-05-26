@@ -654,7 +654,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "erase">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "erase" | "edit">("line");
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -664,6 +664,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
   const [draggingHandle, setDraggingHandle] = useState<null | "c1" | "c2">(null);
+  // Editing an existing vertex (drag to move). Tracks current key as it moves.
+  const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
+  const [editHover, setEditHover] = useState<Point | null>(null);
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
