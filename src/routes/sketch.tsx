@@ -2000,6 +2000,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
       </div>
 
+      <LevelsPanel
+        levels={levels}
+        activeLevelId={activeLvlId}
+        onSetActive={setActiveLevel}
+        onAdd={addLevel}
+        onRename={renameLevel}
+        onMdpl={updateLevelMdpl}
+        onOpacity={updateLevelOpacity}
+        onDelete={deleteLevel}
+        lines={lines}
+        layers={layers}
+      />
+
       <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
