@@ -108,6 +108,8 @@ type Sketch = {
   layers: Layer[];
   levels: Level[];
   activeLevelId: string | null;
+  kdbPct?: number; // 0..100, prosentase KDB terhadap luas lahan
+  klbCoef?: number; // koefisien KLB, pengali luas lahan
 };
 
 type StoreShape = {
