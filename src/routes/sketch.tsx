@@ -2185,7 +2185,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         layers={layers}
       />
 
-      {fullscreen && RekapPanel}
+      
 
 
 
