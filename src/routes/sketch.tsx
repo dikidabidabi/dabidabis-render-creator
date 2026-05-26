@@ -1155,6 +1155,110 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setDraggingHandle(null);
   }, []);
 
+  // Commit a rectangle from two diagonal corners
+  const commitRect = useCallback(
+    (a: Point, b: Point) => {
+      const minX = Math.min(a.x, b.x);
+      const maxX = Math.max(a.x, b.x);
+      const minY = Math.min(a.y, b.y);
+      const maxY = Math.max(a.y, b.y);
+      if (maxX - minX < 4 || maxY - minY < 4) return;
+      const p1 = { x: minX, y: minY };
+      const p2 = { x: maxX, y: minY };
+      const p3 = { x: maxX, y: maxY };
+      const p4 = { x: minX, y: maxY };
+      const newLines: Line[] = [
+        { a: p1, b: p2, kind: "straight" },
+        { a: p2, b: p3, kind: "straight" },
+        { a: p3, b: p4, kind: "straight" },
+        { a: p4, b: p1, kind: "straight" },
+      ];
+      const pts = [p1, p2, p3, p4];
+      const areaPx = polygonAreaPx(pts);
+      const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+      const idx = layers.length + 1;
+      const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+      const layer: Layer = {
+        id: `L${Date.now()}`,
+        name: `Ruang ${idx}`,
+        points: pts,
+        areaM2,
+        color,
+        locked: false,
+      };
+      pushHistory();
+      onChange({ lines: [...lines, ...newLines], layers: [...layers, layer] });
+      toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+    },
+    [lines, layers, pxPerMeter, pushHistory, onChange],
+  );
+
+  // Find nearest vertex (line endpoint or layer point) within tolerance
+  const findVertexAt = useCallback(
+    (p: Point, tol: number): Point | null => {
+      let best: Point | null = null;
+      let bestD = tol;
+      const consider = (v: Point) => {
+        const d = dist(p, v);
+        if (d < bestD) {
+          bestD = d;
+          best = v;
+        }
+      };
+      lines.forEach((ln) => {
+        consider(ln.a);
+        consider(ln.b);
+      });
+      layers.forEach((l) => l.points.forEach(consider));
+      return best;
+    },
+    [lines, layers],
+  );
+
+  const lockedVertexKeys = useMemo(() => {
+    const s = new Set<string>();
+    layers.forEach((l) => {
+      if (!l.locked) return;
+      l.points.forEach((p) => s.add(keyOf(p)));
+    });
+    return s;
+  }, [layers]);
+
+  // Move every vertex matching origKey to newPos. Returns next state.
+  const moveVertexBy = useCallback(
+    (origKey: string, newPos: Point) => {
+      const nextLines = lines.map((ln) => {
+        let next = ln;
+        if (keyOf(ln.a) === origKey) next = { ...next, a: newPos };
+        if (keyOf(ln.b) === origKey) next = { ...next, b: newPos };
+        // Bezier handles: shift relative to their endpoint move
+        if (next !== ln && next.kind === "bezier") {
+          if (keyOf(ln.a) === origKey && ln.c1) {
+            next = { ...next, c1: { x: ln.c1.x + (newPos.x - ln.a.x), y: ln.c1.y + (newPos.y - ln.a.y) } };
+          }
+          if (keyOf(ln.b) === origKey && ln.c2) {
+            next = { ...next, c2: { x: ln.c2.x + (newPos.x - ln.b.x), y: ln.c2.y + (newPos.y - ln.b.y) } };
+          }
+        }
+        return next;
+      });
+      const nextLayers = layers.map((l) => {
+        let changed = false;
+        const pts = l.points.map((pt) => {
+          if (keyOf(pt) === origKey) {
+            changed = true;
+            return newPos;
+          }
+          return pt;
+        });
+        if (!changed) return l;
+        return { ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) };
+      });
+      onChange({ lines: nextLines, layers: nextLayers });
+    },
+    [lines, layers, pxPerMeter, onChange],
+  );
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, getScreenPos(e));
