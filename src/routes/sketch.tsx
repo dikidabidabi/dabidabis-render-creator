@@ -2344,3 +2344,182 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     </div>
   );
 }
+
+// ============================================================
+// LevelsPanel — manages level groups (rename, MDPL, opacity)
+// ============================================================
+
+function LevelsPanel({
+  levels,
+  activeLevelId,
+  onSetActive,
+  onAdd,
+  onRename,
+  onMdpl,
+  onOpacity,
+  onDelete,
+  lines,
+  layers,
+}: {
+  levels: Level[];
+  activeLevelId: string | null;
+  onSetActive: (id: string) => void;
+  onAdd: () => void;
+  onRename: (id: string, name: string) => void;
+  onMdpl: (id: string, mdpl: number) => void;
+  onOpacity: (id: string, opacity: number) => void;
+  onDelete: (id: string) => void;
+  lines: Line[];
+  layers: Layer[];
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [mdplDrafts, setMdplDrafts] = useState<Record<string, string>>({});
+
+  const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+          <Layers className="h-3.5 w-3.5" /> Level
+        </div>
+        <span className="text-[11px] text-muted-foreground">
+          {levels.length} level · urut MDPL ↓
+        </span>
+      </div>
+
+      <ul className="space-y-2">
+        {sorted.map((lvl) => {
+          const isActive = lvl.id === activeLevelId;
+          const editing = editingId === lvl.id;
+          const lineCount = lines.filter((ln) => ln.levelId === lvl.id).length;
+          const layerCount = layers.filter((ly) => ly.levelId === lvl.id).length;
+          const mdplDraft = mdplDrafts[lvl.id];
+          return (
+            <li
+              key={lvl.id}
+              className={cn(
+                "rounded-md border px-2.5 py-2 transition",
+                isActive
+                  ? "border-ember bg-ember/10 ring-1 ring-ember/40"
+                  : "border-border/50 bg-background/60",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onSetActive(lvl.id)}
+                  className={cn(
+                    "h-3 w-3 shrink-0 rounded-full border-2 transition",
+                    isActive ? "border-ember bg-ember" : "border-foreground/30 bg-background hover:border-ember",
+                  )}
+                  aria-label={isActive ? "Level aktif" : "Aktifkan level"}
+                  title={isActive ? "Level aktif" : "Klik untuk aktifkan"}
+                />
+                {editing ? (
+                  <Input
+                    autoFocus
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onBlur={() => {
+                      onRename(lvl.id, draftName);
+                      setEditingId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        onRename(lvl.id, draftName);
+                        setEditingId(null);
+                      }
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    className="h-7 text-sm"
+                  />
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditingId(lvl.id);
+                      setDraftName(lvl.name);
+                    }}
+                    className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-ember"
+                    title="Klik untuk ganti nama"
+                  >
+                    {lvl.name}
+                  </button>
+                )}
+                <button
+                  onClick={() => onDelete(lvl.id)}
+                  className="shrink-0 text-muted-foreground transition hover:text-ember"
+                  aria-label="Hapus level"
+                  title="Hapus level beserta gambarnya"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="mt-2 flex items-center gap-2">
+                <Label
+                  htmlFor={`mdpl-${lvl.id}`}
+                  className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground"
+                >
+                  MDPL
+                </Label>
+                <Input
+                  id={`mdpl-${lvl.id}`}
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  value={mdplDraft ?? String(lvl.mdpl)}
+                  onChange={(e) =>
+                    setMdplDrafts((d) => ({ ...d, [lvl.id]: e.target.value }))
+                  }
+                  onBlur={() => {
+                    const v = parseFloat(mdplDraft ?? "");
+                    if (Number.isFinite(v)) onMdpl(lvl.id, v);
+                    setMdplDrafts((d) => {
+                      const n = { ...d };
+                      delete n[lvl.id];
+                      return n;
+                    });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                  className="h-7 w-24 text-sm"
+                />
+                <span className="text-[11px] text-muted-foreground">m</span>
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  {layerCount} ruang · {lineCount} garis
+                </span>
+              </div>
+
+              {!isActive && (
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>Opasitas saat tidak aktif</span>
+                    <span className="font-display text-[11px] font-semibold text-foreground">
+                      {Math.round(lvl.opacity * 100)}%
+                    </span>
+                  </div>
+                  <Slider
+                    value={[Math.round(lvl.opacity * 100)]}
+                    min={0}
+                    max={100}
+                    step={5}
+                    onValueChange={(v) => onOpacity(lvl.id, (v[0] ?? 0) / 100)}
+                  />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <button
+        onClick={onAdd}
+        className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-background/40 px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-ember/60 hover:bg-ember/5 hover:text-ember"
+      >
+        <Plus className="h-3.5 w-3.5" /> Tambah Level
+      </button>
+    </div>
+  );
+}
