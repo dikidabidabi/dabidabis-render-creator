@@ -384,6 +384,8 @@ function normalizeSketch(s: any): Sketch {
     activeLevelId,
   };
 }
+
+function SketchPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
