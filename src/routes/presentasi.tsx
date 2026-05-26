@@ -898,7 +898,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
     : 0;
 
   return (
-    <div style={{ display: "flex", gap: 28, width: 1246, height: 800, alignItems: "stretch" }}>
+    <div style={{ display: "flex", gap: 28, width: "100%", height: "100%", alignItems: "stretch" }}>
       {/* Aksonometrik 3D */}
       <div style={{ width: 720, flexShrink: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 8 }}>
