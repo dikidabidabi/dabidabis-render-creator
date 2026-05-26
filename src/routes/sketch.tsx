@@ -742,28 +742,36 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [rekapOffset, setRekapOffset] = useState({ x: 0, y: 0 });
   const [rekapBtnOffset, setRekapBtnOffset] = useState({ x: 0, y: 0 });
 
+  const sideDragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const rekapDragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const rekapBtnDragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+
   const makeDragHandlers = (
-    offset: { x: number; y: number },
+    ref: React.MutableRefObject<{ sx: number; sy: number; ox: number; oy: number } | null>,
+    getOffset: () => { x: number; y: number },
     setOffset: (v: { x: number; y: number }) => void,
-  ) => {
-    let start: { sx: number; sy: number; ox: number; oy: number } | null = null;
-    return {
-      onPointerDown: (e: React.PointerEvent) => {
-        if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        start = { sx: e.clientX, sy: e.clientY, ox: offset.x, oy: offset.y };
-      },
-      onPointerMove: (e: React.PointerEvent) => {
-        if (!start) return;
-        setOffset({ x: start.ox + e.clientX - start.sx, y: start.oy + e.clientY - start.sy });
-      },
-      onPointerUp: (e: React.PointerEvent) => {
-        start = null;
-        try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
-      },
-      onPointerCancel: () => { start = null; },
-    };
-  };
+  ) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const o = getOffset();
+      ref.current = { sx: e.clientX, sy: e.clientY, ox: o.x, oy: o.y };
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const s = ref.current;
+      if (!s) return;
+      setOffset({ x: s.ox + e.clientX - s.sx, y: s.oy + e.clientY - s.sy });
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      ref.current = null;
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    },
+    onPointerCancel: () => { ref.current = null; },
+  });
+
+  const sideDragHandlers = makeDragHandlers(sideDragRef, () => sideOffset, setSideOffset);
+  const rekapDragHandlers = makeDragHandlers(rekapDragRef, () => rekapOffset, setRekapOffset);
+  const rekapBtnDragHandlers = makeDragHandlers(rekapBtnDragRef, () => rekapBtnOffset, setRekapBtnOffset);
 
   // Level management helpers
   const ensureLevels = useCallback((): { levels: Level[]; activeId: string } => {
