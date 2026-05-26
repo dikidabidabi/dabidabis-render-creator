@@ -10,8 +10,11 @@ import {
   Pause,
   Maximize2,
   Printer,
+  FileDown,
+  Presentation,
   X,
   Inbox,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -174,6 +177,8 @@ function PresentasiBox({
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [exporting, setExporting] = useState<null | "pptx">(null);
+  const exportRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
 
@@ -206,6 +211,43 @@ function PresentasiBox({
       setTimeout(() => setPrinting(false), 500);
     }));
   };
+
+  const doExportPptx = useCallback(async () => {
+    setExporting("pptx");
+    try {
+      // Wait two frames so the offscreen render mounts at full A3 size.
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      const root = exportRootRef.current;
+      if (!root) throw new Error("Render container tidak siap");
+      const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
+      const [{ default: html2canvas }, { default: PptxGenJS }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("pptxgenjs"),
+      ]);
+      const images: string[] = [];
+      for (const el of pages) {
+        const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
+        images.push(canvas.toDataURL("image/png"));
+      }
+      const pres = new PptxGenJS();
+      // A3 landscape: 420mm x 297mm = 16.54in x 11.69in
+      pres.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
+      pres.layout = "A3";
+      images.forEach((data) => {
+        const slide = pres.addSlide();
+        slide.background = { color: "FFFFFF" };
+        slide.addImage({ data, x: 0, y: 0, w: 16.54, h: 11.69 });
+      });
+      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
+      await pres.writeFile({ fileName: fname });
+    } catch (err) {
+      console.error(err);
+      window.alert("Gagal mengekspor PPTX: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExporting(null);
+    }
+  }, [sketch.title]);
+
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface/60 shadow-sm">
@@ -254,8 +296,17 @@ function PresentasiBox({
                   {idx + 1} / {slides.length} · {slides[idx]?.title}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doPrint} title="Cetak A3">
-                    <Printer className="h-4 w-4" /> Cetak
+                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doPrint} title="Cetak ke kertas atau simpan sebagai PDF">
+                    <Printer className="h-4 w-4" /> PDF
+                  </Button>
+                  <Button
+                    variant="secondary" size="sm" className="h-8 gap-1.5"
+                    onClick={doExportPptx}
+                    disabled={exporting === "pptx"}
+                    title="Unduh sebagai PowerPoint (.pptx)"
+                  >
+                    {exporting === "pptx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Presentation className="h-4 w-4" />}
+                    PPTX
                   </Button>
                   <Button
                     variant="secondary" size="icon" className="h-8 w-8"
@@ -265,6 +316,7 @@ function PresentasiBox({
                     <Maximize2 className="h-4 w-4" />
                   </Button>
                 </div>
+
               </div>
             </div>
             {/* Thumbs */}
@@ -304,7 +356,7 @@ function PresentasiBox({
       {printing && (
         <div className="a3-print-root">
           {slides.map((s) => (
-            <div key={s.id} className="a3-print-page">
+            <div key={s.id} className="a3-print-page" data-slide-page>
               <div style={{ width: A3_W, height: A3_H, transform: `scale(${(420 * 3.7795275591) / A3_W})`, transformOrigin: "top left" }}>
                 {/* 420mm = 1587.4px @ 96dpi. Browsers print mm precisely; the scale fits internal canvas to 420mm width. */}
                 <SlideContent slide={s} />
@@ -313,9 +365,30 @@ function PresentasiBox({
           ))}
         </div>
       )}
+
+      {/* Offscreen export container for PPTX rendering (full A3 canvas, captured by html2canvas) */}
+      {exporting === "pptx" && (
+        <div
+          ref={exportRootRef}
+          className="no-print"
+          style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
+          aria-hidden
+        >
+          {slides.map((s) => (
+            <div
+              key={s.id}
+              data-slide-page
+              style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}
+            >
+              <SlideContent slide={s} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
 
 function FullscreenSlideshow({
   slides, idx, setIdx, playing, setPlaying, onClose,
