@@ -13,6 +13,7 @@ import { Route as TabulasiRouteImport } from './routes/tabulasi'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as PresentasiRouteImport } from './routes/presentasi'
+import { Route as Model3dRouteImport } from './routes/model3d'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as IndexRouteImport } from './routes/index'
@@ -37,6 +38,11 @@ const PresentasiRoute = PresentasiRouteImport.update({
   path: '/presentasi',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Model3dRoute = Model3dRouteImport.update({
+  id: '/model3d',
+  path: '/model3d',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/model3d': typeof Model3dRoute
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/model3d': typeof Model3dRoute
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/model3d': typeof Model3dRoute
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/gallery'
     | '/login'
+    | '/model3d'
     | '/presentasi'
     | '/sketch'
     | '/studio'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/gallery'
     | '/login'
+    | '/model3d'
     | '/presentasi'
     | '/sketch'
     | '/studio'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/gallery'
     | '/login'
+    | '/model3d'
     | '/presentasi'
     | '/sketch'
     | '/studio'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
+  Model3dRoute: typeof Model3dRoute
   PresentasiRoute: typeof PresentasiRoute
   SketchRoute: typeof SketchRoute
   StudioRoute: typeof StudioRoute
@@ -151,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PresentasiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/model3d': {
+      id: '/model3d'
+      path: '/model3d'
+      fullPath: '/model3d'
+      preLoaderRoute: typeof Model3dRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,
+  Model3dRoute: Model3dRoute,
   PresentasiRoute: PresentasiRoute,
   SketchRoute: SketchRoute,
   StudioRoute: StudioRoute,
