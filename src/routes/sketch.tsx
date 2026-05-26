@@ -2026,6 +2026,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         onRenameLayer={renameLayer}
         onToggleLockLayer={toggleLock}
         onRemoveLayer={removeLayer}
+        onSetLayerCoefficient={setLayerCoefficient}
         lines={lines}
         layers={layers}
       />
