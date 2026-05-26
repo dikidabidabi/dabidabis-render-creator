@@ -737,6 +737,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef } = sketch;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
+  const [sideMinimized, setSideMinimized] = useState(false);
+  const [sideOffset, setSideOffset] = useState({ x: 0, y: 0 });
+  const [rekapOffset, setRekapOffset] = useState({ x: 0, y: 0 });
+  const [rekapBtnOffset, setRekapBtnOffset] = useState({ x: 0, y: 0 });
+
+  const makeDragHandlers = (
+    offset: { x: number; y: number },
+    setOffset: (v: { x: number; y: number }) => void,
+  ) => {
+    let start: { sx: number; sy: number; ox: number; oy: number } | null = null;
+    return {
+      onPointerDown: (e: React.PointerEvent) => {
+        if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        start = { sx: e.clientX, sy: e.clientY, ox: offset.x, oy: offset.y };
+      },
+      onPointerMove: (e: React.PointerEvent) => {
+        if (!start) return;
+        setOffset({ x: start.ox + e.clientX - start.sx, y: start.oy + e.clientY - start.sy });
+      },
+      onPointerUp: (e: React.PointerEvent) => {
+        start = null;
+        try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+      },
+      onPointerCancel: () => { start = null; },
+    };
+  };
 
   // Level management helpers
   const ensureLevels = useCallback((): { levels: Level[]; activeId: string } => {
