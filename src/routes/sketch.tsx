@@ -97,7 +97,32 @@ type Level = {
   name: string;
   mdpl: number;
   opacity: number; // 0..1 — opacity ketika level ini tidak aktif
+  typicalCount?: number; // ≥1, jumlah lantai tipikal yang menggandakan luas + koefisien
 };
+
+// Tinggi default per lantai tipikal (m). Setiap tambahan tipikal menumpuk 3 m.
+const TYPICAL_FLOOR_H = 3;
+
+// Hitung nama tampilan tiap level (Level N atau Level N–M) berdasarkan urutan MDPL
+// dan jumlah tipikal di tiap level. Jika user sudah mengganti nama (tidak cocok pola
+// "Level <angka>" / "Level <angka>-<angka>"), nama kustom tersebut dipertahankan.
+function isAutoLevelName(name: string): boolean {
+  return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
+}
+function computeLevelDisplayNames(levels: { id: string; name: string; mdpl: number; typicalCount?: number }[]): Record<string, string> {
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const out: Record<string, string> = {};
+  let idx = 1;
+  for (const lv of sorted) {
+    const k = Math.max(1, lv.typicalCount ?? 1);
+    const start = idx;
+    const end = idx + k - 1;
+    const auto = k > 1 ? `Level ${start}–${end}` : `Level ${start}`;
+    out[lv.id] = isAutoLevelName(lv.name) ? auto : lv.name;
+    idx = end + 1;
+  }
+  return out;
+}
 
 type Sketch = {
   id: string;
