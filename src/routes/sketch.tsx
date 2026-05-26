@@ -74,6 +74,7 @@ type Line = {
   bulge?: number; // for arc: perpendicular sagitta (signed)
   c1?: Point; // for bezier: tangent control near a
   c2?: Point; // for bezier: tangent control near b
+  levelId?: string;
 };
 type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
 
@@ -84,6 +85,14 @@ type Layer = {
   areaM2: number;
   color: string;
   locked?: boolean;
+  levelId?: string;
+};
+
+type Level = {
+  id: string;
+  name: string;
+  mdpl: number;
+  opacity: number; // 0..1 — opacity ketika level ini tidak aktif
 };
 
 type Sketch = {
@@ -95,6 +104,8 @@ type Sketch = {
   snap: boolean;
   lines: Line[];
   layers: Layer[];
+  levels: Level[];
+  activeLevelId: string | null;
 };
 
 type StoreShape = {
