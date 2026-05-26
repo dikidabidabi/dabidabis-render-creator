@@ -1270,6 +1270,51 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, pxPerMeter, onChange],
   );
 
+  // Insert a new vertex at `p` along line at index `idx` (straight lines only).
+  const splitLineAt = useCallback(
+    (idx: number, p: Point) => {
+      const ln = lines[idx];
+      if (!ln) return;
+      if ((ln.kind ?? "straight") !== "straight") {
+        toast.error("Tambah titik hanya untuk garis lurus");
+        return;
+      }
+      if (isLineLocked(ln)) {
+        toast.error("Garis terkunci");
+        return;
+      }
+      // Avoid duplicates near endpoints
+      const tol = 4;
+      if (dist(p, ln.a) < tol || dist(p, ln.b) < tol) return;
+      pushHistory();
+      const left: Line = { ...ln, id: crypto.randomUUID(), a: ln.a, b: p, kind: "straight" };
+      const right: Line = { ...ln, id: crypto.randomUUID(), a: p, b: ln.b, kind: "straight" };
+      const nextLines = [...lines.slice(0, idx), left, right, ...lines.slice(idx + 1)];
+      const ka = keyOf(ln.a);
+      const kb = keyOf(ln.b);
+      const nextLayers = layers.map((l) => {
+        const n = l.points.length;
+        let inserted = false;
+        const out: Point[] = [];
+        for (let i = 0; i < n; i++) {
+          const cur = l.points[i];
+          const nxt = l.points[(i + 1) % n];
+          out.push(cur);
+          const kc = keyOf(cur);
+          const kn = keyOf(nxt);
+          if (!inserted && ((kc === ka && kn === kb) || (kc === kb && kn === ka))) {
+            out.push(p);
+            inserted = true;
+          }
+        }
+        if (!inserted) return l;
+        return { ...l, points: out, areaM2: polygonAreaPx(out) / (pxPerMeter * pxPerMeter) };
+      });
+      onChange({ lines: nextLines, layers: nextLayers });
+    },
+    [lines, layers, pxPerMeter, pushHistory, onChange, isLineLocked],
+  );
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, getScreenPos(e));
