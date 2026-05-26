@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TabulasiRouteImport } from './routes/tabulasi'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
+import { Route as PresentasiRouteImport } from './routes/presentasi'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +30,11 @@ const StudioRoute = StudioRouteImport.update({
 const SketchRoute = SketchRouteImport.update({
   id: '/sketch',
   path: '/sketch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PresentasiRoute = PresentasiRouteImport.update({
+  id: '/presentasi',
+  path: '/presentasi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
   '/tabulasi': typeof TabulasiRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
   '/tabulasi': typeof TabulasiRoute
@@ -68,20 +76,36 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
   '/tabulasi': typeof TabulasiRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/gallery' | '/login' | '/sketch' | '/studio' | '/tabulasi'
+  fullPaths:
+    | '/'
+    | '/gallery'
+    | '/login'
+    | '/presentasi'
+    | '/sketch'
+    | '/studio'
+    | '/tabulasi'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/gallery' | '/login' | '/sketch' | '/studio' | '/tabulasi'
+  to:
+    | '/'
+    | '/gallery'
+    | '/login'
+    | '/presentasi'
+    | '/sketch'
+    | '/studio'
+    | '/tabulasi'
   id:
     | '__root__'
     | '/'
     | '/gallery'
     | '/login'
+    | '/presentasi'
     | '/sketch'
     | '/studio'
     | '/tabulasi'
@@ -91,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
+  PresentasiRoute: typeof PresentasiRoute
   SketchRoute: typeof SketchRoute
   StudioRoute: typeof StudioRoute
   TabulasiRoute: typeof TabulasiRoute
@@ -117,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/sketch'
       fullPath: '/sketch'
       preLoaderRoute: typeof SketchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/presentasi': {
+      id: '/presentasi'
+      path: '/presentasi'
+      fullPath: '/presentasi'
+      preLoaderRoute: typeof PresentasiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -147,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,
+  PresentasiRoute: PresentasiRoute,
   SketchRoute: SketchRoute,
   StudioRoute: StudioRoute,
   TabulasiRoute: TabulasiRoute,
