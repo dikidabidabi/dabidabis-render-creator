@@ -434,6 +434,7 @@ function buildSlides(sk: Sketch): Slide[] {
   for (const lv of levels) {
     out.push({ kind: "level", id: `lvl-${lv.id}`, title: lv.name, sketch: sk, level: lv, bounds });
   }
+  out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk });
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
