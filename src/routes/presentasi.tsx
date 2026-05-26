@@ -625,7 +625,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const totalLuas = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
 
   return (
-    <div style={{ display: "flex", gap: 32, width: 1246, height: 800, alignItems: "stretch" }}>
+    <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <svg
           viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`}
