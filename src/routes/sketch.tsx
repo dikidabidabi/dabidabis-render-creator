@@ -2019,6 +2019,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          {tool === "edit" && (
+            <>
+              <div className="h-6 w-px bg-border/60" />
+              <Button
+                variant={editMode === "move" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setEditMode("move")}
+                title="Geser titik"
+              >
+                <Move className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={editMode === "addPoint" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setEditMode("addPoint")}
+                title="Tambah titik di sepanjang garis"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           {tool === "line" && (
             <>
               <div className="h-6 w-px bg-border/60" />
