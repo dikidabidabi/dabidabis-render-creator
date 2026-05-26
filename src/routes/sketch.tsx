@@ -2176,6 +2176,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </SelectContent>
         </Select>
       </div>
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fungsi</Label>
+        <Select value={fungsi ?? ""} onValueChange={(v) => onChange({ fungsi: v || undefined })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Pilih fungsi bangunan" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Hotel">Hotel</SelectItem>
+            <SelectItem value="Apartment">Apartment</SelectItem>
+            <SelectItem value="Komersil">Komersil</SelectItem>
+            <SelectItem value="Rumah Sakit">Rumah Sakit</SelectItem>
+            <SelectItem value="Bandara">Bandara</SelectItem>
+            <SelectItem value="Bangunan Khusus">Bangunan Khusus</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="space-y-2">
         <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
