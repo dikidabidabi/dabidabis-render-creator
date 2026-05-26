@@ -487,6 +487,58 @@ function computeStats(sk: Sketch): Stats {
 
 // ============= SLIDE CONTENT (white A3 modern theme) =============
 
+// Scales children down so all content fits inside the available box (never up-scales).
+function FitToBox({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    if (!boxRef.current || !innerRef.current) return;
+    const measure = () => {
+      const box = boxRef.current!.getBoundingClientRect();
+      // Measure natural size at scale=1 by reading scrollWidth/Height of inner content
+      const inner = innerRef.current!;
+      const prevTransform = inner.style.transform;
+      inner.style.transform = "none";
+      const cw = inner.scrollWidth;
+      const ch = inner.scrollHeight;
+      inner.style.transform = prevTransform;
+      if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
+      const s = Math.min(1, box.width / cw, box.height / ch);
+      setNatural({ w: cw, h: ch });
+      setScale(s);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(boxRef.current);
+    ro.observe(innerRef.current);
+    return () => ro.disconnect();
+  }, [children]);
+
+  return (
+    <div ref={boxRef} style={{ ...style, position: "relative", overflow: "hidden" }}>
+      <div
+        ref={innerRef}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: natural ? natural.w : "100%",
+          height: natural ? natural.h : "100%",
+          display: "flex",
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+
 function SlideContent({ slide }: { slide?: Slide }) {
   if (!slide) return null;
   // Inner padded "safe area" inside the 1414x1000 canvas, 2.5cm inset.
