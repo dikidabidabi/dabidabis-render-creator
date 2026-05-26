@@ -1802,6 +1802,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       toast.success(`${final} ditandai sebagai acuan KDB/KLB`);
   };
 
+  const setLayerCoefficient = (lid: string, coef: number) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
+      toast.error("Buka kunci dulu untuk mengubah koefisien");
+      return;
+    }
+    if (layer.coefficient === coef) return;
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, coefficient: coef } : l)),
+    });
+  };
+
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const totalLengthM = lines.reduce((s, l) => s + lineLengthPx(l), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
