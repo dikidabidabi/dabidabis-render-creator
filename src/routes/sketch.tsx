@@ -2754,6 +2754,9 @@ function LevelsPanel({
   onMdpl,
   onOpacity,
   onDelete,
+  onDuplicate,
+  onIncrementTypical,
+  onSetTypical,
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
@@ -2770,6 +2773,9 @@ function LevelsPanel({
   onMdpl: (id: string, mdpl: number) => void;
   onOpacity: (id: string, opacity: number) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onIncrementTypical: (id: string) => void;
+  onSetTypical: (id: string, count: number) => void;
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
