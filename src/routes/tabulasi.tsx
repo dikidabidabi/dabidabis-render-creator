@@ -390,37 +390,40 @@ function InfographicSection({ data, sketch }: { data: Stats; sketch: Sketch }) {
   });
 
   return (
-    <div className="space-y-4 text-sm">
+    <div className="space-y-5 text-sm">
       <div>
-        <div className="mb-1 text-xs font-medium text-muted-foreground">Fungsi Ruang</div>
-        <StackedBar
-          segments={[
-            { label: "Efektif", value: pctEfektif, color: "bg-emerald-500" },
-            { label: "Semi", value: pctSetengah, color: "bg-amber-500" },
-            { label: "Sarana", value: pctSarana, color: "bg-sky-500" },
-          ]}
+        <div className="mb-2 text-xs font-medium text-muted-foreground">Fungsi Ruang</div>
+        <div className="flex items-center gap-4">
+          <DonutMulti
+            size={120}
+            thickness={8}
+            segments={[
+              { label: "Efektif", value: pctEfektif, color: "hsl(152 65% 45%)" },
+              { label: "Semi", value: pctSetengah, color: "hsl(38 92% 55%)" },
+              { label: "Sarana", value: pctSarana, color: "hsl(200 85% 55%)" },
+            ]}
+            centerValue={`${fmt(pctEfektif, 0)}%`}
+            centerLabel="Efektif"
+          />
+          <div className="flex-1 space-y-1.5 text-xs">
+            <LegendItem color="bg-emerald-500" label="Efektif" pct={pctEfektif} />
+            <LegendItem color="bg-amber-500" label="Semi" pct={pctSetengah} />
+            <LegendItem color="bg-sky-500" label="Sarana" pct={pctSarana} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <RingStat
+          label="KDB"
+          value={kdbUsage}
+          caption={data.kdbLimitM2 > 0 ? `${fmt(data.kdbRencanaM2, 0)} / ${fmt(data.kdbLimitM2, 0)} m²` : "Belum diatur"}
         />
-        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-          <LegendItem color="bg-emerald-500" label="Efektif" pct={pctEfektif} />
-          <LegendItem color="bg-amber-500" label="Semi" pct={pctSetengah} />
-          <LegendItem color="bg-sky-500" label="Sarana" pct={pctSarana} />
-        </div>
-      </div>
-
-      <div>
-        <div className="mb-1 flex items-center justify-between text-xs">
-          <span className="font-medium text-muted-foreground">Pemanfaatan KDB</span>
-          <span className="font-mono tabular-nums">{fmt(kdbUsage, 1)}%</span>
-        </div>
-        <Gauge value={kdbUsage} />
-      </div>
-
-      <div>
-        <div className="mb-1 flex items-center justify-between text-xs">
-          <span className="font-medium text-muted-foreground">Pemanfaatan KLB</span>
-          <span className="font-mono tabular-nums">{fmt(klbUsage, 1)}%</span>
-        </div>
-        <Gauge value={klbUsage} />
+        <RingStat
+          label="KLB"
+          value={klbUsage}
+          caption={data.klbLimitM2 > 0 ? `${fmt(data.klbRencanaM2, 0)} / ${fmt(data.klbLimitM2, 0)} m²` : "Belum diatur"}
+        />
       </div>
 
       {perLevel.length > 0 && (
@@ -447,22 +450,6 @@ function InfographicSection({ data, sketch }: { data: Stats; sketch: Sketch }) {
   );
 }
 
-function StackedBar({ segments }: { segments: { label: string; value: number; color: string }[] }) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
-  return (
-    <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
-      {segments.map((s) => (
-        <div
-          key={s.label}
-          className={s.color}
-          style={{ width: `${(s.value / total) * 100}%` }}
-          title={`${s.label}: ${fmt(s.value, 1)}%`}
-        />
-      ))}
-    </div>
-  );
-}
-
 function LegendItem({ color, label, pct }: { color: string; label: string; pct: number }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -473,15 +460,87 @@ function LegendItem({ color, label, pct }: { color: string; label: string; pct: 
   );
 }
 
-function Gauge({ value }: { value: number }) {
-  const over = value > 100;
-  const pct = Math.min(100, value);
+function DonutMulti({
+  segments,
+  size = 120,
+  thickness = 8,
+  centerValue,
+  centerLabel,
+}: {
+  segments: { label: string; value: number; color: string }[];
+  size?: number;
+  thickness?: number;
+  centerValue?: string;
+  centerLabel?: string;
+}) {
+  const r = (size - thickness) / 2;
+  const c = 2 * Math.PI * r;
+  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+  let offset = 0;
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-      <div
-        className={cn("h-full rounded-full transition-all", over ? "bg-red-500" : value > 85 ? "bg-amber-500" : "bg-emerald-500")}
-        style={{ width: `${pct}%` }}
-      />
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth={thickness} opacity={0.35} />
+        {segments.map((s) => {
+          const len = (s.value / total) * c;
+          const dash = `${len} ${c - len}`;
+          const el = (
+            <circle
+              key={s.label}
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={thickness}
+              strokeDasharray={dash}
+              strokeDashoffset={-offset}
+              strokeLinecap="butt"
+            />
+          );
+          offset += len;
+          return el;
+        })}
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center leading-tight">
+        {centerValue && <span className="font-mono text-lg font-semibold tabular-nums">{centerValue}</span>}
+        {centerLabel && <span className="text-[10px] text-muted-foreground">{centerLabel}</span>}
+      </div>
+    </div>
+  );
+}
+
+function RingStat({ label, value, caption }: { label: string; value: number; caption?: string }) {
+  const over = value > 100;
+  const pct = Math.max(0, Math.min(100, value));
+  const size = 84;
+  const thickness = 6;
+  const r = (size - thickness) / 2;
+  const c = 2 * Math.PI * r;
+  const dash = (pct / 100) * c;
+  const color = over ? "hsl(0 84% 60%)" : value > 85 ? "hsl(38 92% 55%)" : "hsl(152 65% 45%)";
+  return (
+    <div className="flex flex-col items-center rounded-lg border border-border/60 bg-background/40 p-2">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth={thickness} opacity={0.35} />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={thickness}
+            strokeDasharray={`${dash} ${c - dash}`}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center leading-tight">
+          <span className="font-mono text-sm font-semibold tabular-nums">{fmt(value, 0)}%</span>
+          <span className="text-[10px] text-muted-foreground">{label}</span>
+        </div>
+      </div>
+      {caption && <div className="mt-1 text-center text-[10px] text-muted-foreground">{caption}</div>}
     </div>
   );
 }
