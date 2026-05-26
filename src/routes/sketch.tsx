@@ -2584,9 +2584,10 @@ function LevelsPanel({
                   title="Total luas ruang di level ini (sudah dikalikan koefisien)"
                 >
                   {subLayers
+                    .filter((ly) => !isLahanName(ly.name))
                     .reduce((s, ly) => s + ly.areaM2 * (ly.coefficient ?? 1), 0)
                     .toFixed(2)}
-                  <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m² efektif</span>
+                  <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m² ruang</span>
                 </span>
               </div>
 
