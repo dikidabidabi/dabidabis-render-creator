@@ -2263,6 +2263,9 @@ function LevelsPanel({
   onMdpl,
   onOpacity,
   onDelete,
+  onRenameLayer,
+  onToggleLockLayer,
+  onRemoveLayer,
   lines,
   layers,
 }: {
@@ -2274,6 +2277,9 @@ function LevelsPanel({
   onMdpl: (id: string, mdpl: number) => void;
   onOpacity: (id: string, opacity: number) => void;
   onDelete: (id: string) => void;
+  onRenameLayer: (id: string, name: string) => void;
+  onToggleLockLayer: (id: string) => void;
+  onRemoveLayer: (id: string) => void;
   lines: Line[];
   layers: Layer[];
 }) {
@@ -2281,6 +2287,9 @@ function LevelsPanel({
   const [draftName, setDraftName] = useState("");
   const [mdplDrafts, setMdplDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [layerEditId, setLayerEditId] = useState<string | null>(null);
+  const [layerDraft, setLayerDraft] = useState("");
+  const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
 
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
 
