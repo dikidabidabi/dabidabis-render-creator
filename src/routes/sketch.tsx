@@ -1254,6 +1254,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Layer labels (vertical: name on top, area below) drawn upright
     layers.forEach((layer) => {
       if (layer.points.length < 3) return;
+      const lvl = levels.find((l) => l.id === layer.levelId);
+      const labelAlpha = !lvl || activeLvlId == null || lvl.id === activeLvlId ? 1 : lvl.opacity;
+      if (labelAlpha <= 0.001) return;
+      ctx.globalAlpha = labelAlpha;
       let cx = 0, cy = 0;
       layer.points.forEach((p) => { cx += p.x; cy += p.y; });
       cx /= layer.points.length;
@@ -1278,6 +1282,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillText(areaText, sp.x, sp.y + 14);
       ctx.textAlign = "start";
     });
+    ctx.globalAlpha = 1;
 
     // Active line length label, screen-space
     if (drawing) {
