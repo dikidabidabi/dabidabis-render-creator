@@ -41,9 +41,38 @@ type Sketch = {
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
 const STORAGE_KEY = "dabidabis_sketch_v2";
+const COST_KEY = "dabidabis_cost_v1";
 
 function isLahan(name: string) {
   return name.trim().toLowerCase().startsWith("lahan");
+}
+
+function isVoid(name: string) {
+  return name.trim().toLowerCase() === "void";
+}
+
+function loadCostMap(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(COST_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCostMap(map: Record<string, number>) {
+  try {
+    localStorage.setItem(COST_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+function fmtRp(n: number) {
+  if (!Number.isFinite(n)) return "Rp 0";
+  return "Rp " + Math.round(n).toLocaleString("id-ID");
 }
 
 function fmt(n: number, d = 2) {
