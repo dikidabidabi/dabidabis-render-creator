@@ -2581,7 +2581,7 @@ function LevelsPanel({
                 <span className="text-[11px] text-muted-foreground">m</span>
                 <span
                   className="ml-auto font-display text-[11px] font-semibold text-foreground"
-                  title="Total luas ruang di level ini (sudah dikalikan koefisien)"
+                  title="Total luas ruang di level ini (tanpa lahan, sudah dikalikan koefisien)"
                 >
                   {subLayers
                     .filter((ly) => !isLahanName(ly.name))
