@@ -625,12 +625,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const totalLuas = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
 
   return (
-    <div style={{ display: "flex", gap: 28, width: "100%" }}>
+    <div style={{ display: "flex", gap: 32, width: 1246, height: 800, alignItems: "stretch" }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <svg
           viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`}
           preserveAspectRatio="xMidYMid meet"
-          style={{ width: "100%", height: "100%" }}
+          style={{ width: "100%", height: "100%", display: "block" }}
         >
           {lahanAll.map((l) => (
             <polygon
@@ -676,7 +676,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           ))}
         </svg>
       </div>
-      <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
         <BigStat label="Level" value={level.name} hint={`${fmt(level.mdpl, 1)} mdpl`} />
         <BigStat label="Jumlah Ruang" value={String(layers.filter((l) => !isLahan(l.name)).length)} />
         <BigStat label="Total Luas" value={`${fmt(totalLuas)} m²`} />
@@ -898,13 +898,13 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
     : 0;
 
   return (
-    <div style={{ display: "flex", gap: 24, width: "100%" }}>
+    <div style={{ display: "flex", gap: 28, width: 1246, height: 800, alignItems: "stretch" }}>
       {/* Aksonometrik 3D */}
-      <div style={{ width: 560, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ width: 720, flexShrink: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 8 }}>
           Aksonometrik · Model 3D
         </div>
-        <div style={{ flex: 1, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 10 }}>
+        <div style={{ flex: 1, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <AxonometricView sketch={sketch} colorOf={colorOf} />
         </div>
         <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#999", marginTop: 6 }}>
