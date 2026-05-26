@@ -666,36 +666,212 @@ function levelColor(i: number, total: number) {
   return `hsl(${hue.toFixed(0)}, 62%, 52%)`;
 }
 
-function StackingBody({ sketch }: { sketch: Sketch }) {
-  const levels = [...(sketch.levels ?? [])].sort((a, b) => b.mdpl - a.mdpl); // top floor first
+function shadeHsl(hsl: string, deltaL: number) {
+  const m = hsl.match(/hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%,\s*(\d+(?:\.\d+)?)%\)/);
+  if (!m) return hsl;
+  const L = Math.max(0, Math.min(100, parseFloat(m[3]) + deltaL));
+  return `hsl(${m[1]}, ${m[2]}%, ${L.toFixed(0)}%)`;
+}
+
+const STACK_MAJOR_M: Record<string, number> = {
+  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10,
+};
+function stackMetersPerPx(scale: string) {
+  // matches sketch grid: 8px minor × 10 minors per major
+  return (STACK_MAJOR_M[scale] ?? 1) / 80;
+}
+
+// Axonometric (isometric-style) projection of stacked floors.
+function AxonometricView({
+  sketch,
+  colorOf,
+}: {
+  sketch: Sketch;
+  colorOf: (levelId: string) => string;
+}) {
+  const mPerPx = stackMetersPerPx(sketch.scale);
+  const ascLevels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+
+  if (ascLevels.length === 0) {
+    return (
+      <div style={{ color: "#999", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+        Belum ada level untuk diproyeksikan.
+      </div>
+    );
+  }
+
+  const baseMdpl = ascLevels[0].mdpl;
+  const withH = ascLevels.map((lv, i) => {
+    const next = ascLevels[i + 1];
+    const h = next ? Math.max(0.1, next.mdpl - lv.mdpl) : 4;
+    return { ...lv, base: lv.mdpl - baseMdpl, height: h };
+  });
+
+  // Plan origin = bbox centroid of all layer points (in px space)
+  let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
+  for (const l of sketch.layers ?? []) {
+    for (const p of l.points) {
+      if (p.x < minPx) minPx = p.x;
+      if (p.y < minPy) minPy = p.y;
+      if (p.x > maxPx) maxPx = p.x;
+      if (p.y > maxPy) maxPy = p.y;
+    }
+  }
+  if (!Number.isFinite(minPx)) { minPx = 0; minPy = 0; maxPx = 0; maxPy = 0; }
+  const ox = (minPx + maxPx) / 2;
+  const oy = (minPy + maxPy) / 2;
+
+  // Isometric projection: x→right, z→back, y→up
+  const COS = Math.cos(Math.PI / 6); // 0.866
+  const SIN = Math.sin(Math.PI / 6); // 0.5
+  const project = (mx: number, mz: number, my: number) => ({
+    x: (mx - mz) * COS,
+    y: (mx + mz) * SIN - my,
+  });
+
+  type Face = {
+    pts: { x: number; y: number }[];
+    fill: string;
+    stroke: string;
+    depth: number;
+    sw: number;
+  };
+  const faces: Face[] = [];
+
+  const lahan = (sketch.layers ?? []).filter((l) => isLahan(l.name));
   const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
-  const rows = levels.map((lv, i) => {
+
+  // Ground plane (lahan) at y=0
+  for (const ly of lahan) {
+    const pm = ly.points.map((p) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx }));
+    const top = pm.map((p) => project(p.x, p.z, 0));
+    const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / Math.max(1, pm.length);
+    faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4 });
+  }
+
+  // Floors
+  for (const lv of withH) {
+    const top = colorOf(lv.id);
+    const side = shadeHsl(top, -18);
+    const layers = build.filter((l) => l.levelId === lv.id);
+    for (const ly of layers) {
+      const pm = ly.points.map((p) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx }));
+      if (pm.length < 3) continue;
+      const yBot = lv.base;
+      const yTop = lv.base + lv.height;
+      // Side quads
+      for (let i = 0; i < pm.length; i++) {
+        const a = pm[i];
+        const b = pm[(i + 1) % pm.length];
+        const quad = [
+          project(a.x, a.z, yBot),
+          project(b.x, b.z, yBot),
+          project(b.x, b.z, yTop),
+          project(a.x, a.z, yTop),
+        ];
+        const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
+        faces.push({ pts: quad, fill: side, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5 });
+      }
+      // Top face
+      const topPts = pm.map((p) => project(p.x, p.z, yTop));
+      const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
+      faces.push({
+        pts: topPts,
+        fill: top,
+        stroke: "rgba(0,0,0,0.55)",
+        depth: avg + yTop * 100 + 1,
+        sw: 0.7,
+      });
+    }
+  }
+
+  faces.sort((a, b) => a.depth - b.depth);
+
+  // Compute viewBox
+  let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
+  for (const f of faces) for (const p of f.pts) {
+    if (p.x < vx0) vx0 = p.x;
+    if (p.y < vy0) vy0 = p.y;
+    if (p.x > vx1) vx1 = p.x;
+    if (p.y > vy1) vy1 = p.y;
+  }
+  if (!Number.isFinite(vx0)) { vx0 = -10; vy0 = -10; vx1 = 10; vy1 = 10; }
+  const w = vx1 - vx0;
+  const h = vy1 - vy0;
+  const pad = Math.max(w, h, 1) * 0.06;
+  const vb = `${vx0 - pad} ${vy0 - pad} ${w + pad * 2} ${h + pad * 2}`;
+  const baseStroke = Math.max(w, h) * 0.0015;
+
+  return (
+    <svg
+      viewBox={vb}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ width: "100%", height: "100%", display: "block" }}
+    >
+      {faces.map((f, i) => (
+        <polygon
+          key={i}
+          points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+          fill={f.fill}
+          stroke={f.stroke}
+          strokeWidth={baseStroke * f.sw * 2}
+          strokeLinejoin="round"
+          opacity={0.96}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function StackingBody({ sketch }: { sketch: Sketch }) {
+  const levelsDesc = [...(sketch.levels ?? [])].sort((a, b) => b.mdpl - a.mdpl); // top first for bars
+  const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+
+  // Color map keyed by level id, indexed by ascending mdpl (so axonometric & legend match).
+  const colorMap = new Map<string, string>();
+  levelsAsc.forEach((lv, i) => colorMap.set(lv.id, levelColor(i, levelsAsc.length)));
+  const colorOf = (id: string) => colorMap.get(id) ?? "#888";
+
+  const rows = levelsDesc.map((lv) => {
     const items = build.filter((l) => l.levelId === lv.id);
     const area = items.reduce((s, l) => s + (l.areaM2 || 0), 0);
-    return { lv, area, color: levelColor(i, levels.length) };
+    return { lv, area, color: colorOf(lv.id) };
   });
   const maxArea = Math.max(1, ...rows.map((r) => r.area));
   const totalArea = rows.reduce((s, r) => s + r.area, 0);
-  const ascMdpl = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-  const ketinggian = ascMdpl.length > 1
-    ? ascMdpl[ascMdpl.length - 1].mdpl - ascMdpl[0].mdpl
+  const ketinggian = levelsAsc.length > 1
+    ? levelsAsc[levelsAsc.length - 1].mdpl - levelsAsc[0].mdpl
     : 0;
 
   return (
-    <div style={{ display: "flex", gap: 28, width: "100%" }}>
+    <div style={{ display: "flex", gap: 24, width: "100%" }}>
+      {/* Aksonometrik 3D */}
+      <div style={{ width: 560, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 8 }}>
+          Aksonometrik · Model 3D
+        </div>
+        <div style={{ flex: 1, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 10 }}>
+          <AxonometricView sketch={sketch} colorOf={colorOf} />
+        </div>
+        <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#999", marginTop: 6 }}>
+          Proyeksi isometrik 30° · skala {sketch.scale}
+        </div>
+      </div>
+
       {/* Stack visual */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
         {rows.length === 0 && (
           <div style={{ color: "#999", fontSize: 14 }}>Belum ada level untuk ditampilkan.</div>
         )}
         {rows.map((r) => {
-          const widthPct = 14 + (r.area / maxArea) * 86; // min 14% so labels are readable
+          const widthPct = 14 + (r.area / maxArea) * 86;
           return (
-            <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 44 }}>
-              <div style={{ width: 78, textAlign: "right", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
+            <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36 }}>
+              <div style={{ width: 62, textAlign: "right", fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
                 {fmt(r.lv.mdpl, 1)} m
               </div>
-              <div style={{ flex: 1, position: "relative", height: 44 }}>
+              <div style={{ flex: 1, position: "relative", height: 36 }}>
                 <div
                   style={{
                     width: `${widthPct}%`,
@@ -705,17 +881,16 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "0 14px",
+                    padding: "0 12px",
                     color: "#fff",
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: 600,
-                    boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
                   }}
                 >
-                  <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", letterSpacing: "-0.01em" }}>
+                  <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.lv.name}
                   </span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>
                     {fmt(r.area)} m²
                   </span>
                 </div>
@@ -723,40 +898,39 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
             </div>
           );
         })}
-        {/* Ground line */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 4 }}>
-          <div style={{ width: 78 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+          <div style={{ width: 62 }} />
           <div style={{ flex: 1, borderTop: "1px solid #111" }} />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 78, textAlign: "right", fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 62, textAlign: "right", fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
             MDPL
           </div>
-          <div style={{ flex: 1, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
+          <div style={{ flex: 1, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
             Tanah / Permukaan Acuan
           </div>
         </div>
       </div>
 
       {/* Legend & summary */}
-      <div style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 10 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 8 }}>
             Legenda Level
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {rows.map((r) => {
               const pct = totalArea > 0 ? (r.area / totalArea) * 100 : 0;
               return (
-                <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                  <span style={{ width: 14, height: 14, background: r.color, border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
+                <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <span style={{ width: 12, height: 12, background: r.color, border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {r.lv.name}
                   </span>
-                  <span style={{ color: "#888", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
+                  <span style={{ color: "#888", fontSize: 10, fontVariantNumeric: "tabular-nums" }}>
                     {fmt(pct, 1)}%
                   </span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 86, textAlign: "right" }}>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 70, textAlign: "right" }}>
                     {fmt(r.area)} m²
                   </span>
                 </div>
@@ -765,12 +939,13 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
           </div>
         </div>
         <BigStat label="Jumlah Lapis" value={String(rows.length)} />
-        <BigStat label="Total Luas Bangunan" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" />
-        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="selisih MDPL antar level" />
+        <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" />
+        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="selisih MDPL" />
       </div>
     </div>
   );
 }
+
 
 // ---- Modern tiles ----
 function BigStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
