@@ -944,18 +944,64 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.lineWidth = 2 / s;
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
-      ctx.moveTo(drawing.a.x, drawing.a.y);
-      if (lineKind === "arc") {
-        const C = arcControlPoint({
-          a: drawing.a, b: drawing.b, kind: "arc",
-          bulge: defaultBulgePx(drawing.a, drawing.b),
-        });
-        ctx.quadraticCurveTo(C.x, C.y, drawing.b.x, drawing.b.y);
+      if (tool === "rect") {
+        const x = Math.min(drawing.a.x, drawing.b.x);
+        const y = Math.min(drawing.a.y, drawing.b.y);
+        const w = Math.abs(drawing.b.x - drawing.a.x);
+        const h = Math.abs(drawing.b.y - drawing.a.y);
+        ctx.rect(x, y, w, h);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(232, 93, 58, 0.10)";
+        ctx.fill();
       } else {
-        ctx.lineTo(drawing.b.x, drawing.b.y);
+        ctx.moveTo(drawing.a.x, drawing.a.y);
+        if (lineKind === "arc") {
+          const C = arcControlPoint({
+            a: drawing.a, b: drawing.b, kind: "arc",
+            bulge: defaultBulgePx(drawing.a, drawing.b),
+          });
+          ctx.quadraticCurveTo(C.x, C.y, drawing.b.x, drawing.b.y);
+        } else {
+          ctx.lineTo(drawing.b.x, drawing.b.y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // Edit-mode vertex markers (all unique vertices, highlighted)
+    if (tool === "edit") {
+      const seen = new Set<string>();
+      const verts: { p: Point; locked: boolean }[] = [];
+      const lockedKeys = new Set<string>();
+      layers.forEach((l) => {
+        if (!l.locked) return;
+        l.points.forEach((p) => lockedKeys.add(keyOf(p)));
+      });
+      const pushVert = (p: Point) => {
+        const k = keyOf(p);
+        if (seen.has(k)) return;
+        seen.add(k);
+        verts.push({ p, locked: lockedKeys.has(k) });
+      };
+      lines.forEach((ln) => { pushVert(ln.a); pushVert(ln.b); });
+      layers.forEach((l) => l.points.forEach(pushVert));
+      verts.forEach((v) => {
+        ctx.beginPath();
+        ctx.arc(v.p.x, v.p.y, 6 / s, 0, Math.PI * 2);
+        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : "#fff";
+        ctx.fill();
+        ctx.lineWidth = 2 / s;
+        ctx.strokeStyle = v.locked ? "#666" : "rgba(232,93,58,1)";
+        ctx.stroke();
+      });
+      if (editHover) {
+        ctx.beginPath();
+        ctx.arc(editHover.x, editHover.y, 10 / s, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(232,93,58,0.9)";
+        ctx.lineWidth = 2 / s;
+        ctx.stroke();
+      }
     }
 
     // Pending bezier (with two adjustable tangent handles)
