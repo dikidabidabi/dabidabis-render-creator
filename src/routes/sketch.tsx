@@ -733,7 +733,7 @@ type EditorProps = {
 };
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
-  const { id, scale, snap, lines, layers, levels, activeLevelId } = sketch;
+  const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef } = sketch;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
 
   // Level management helpers
