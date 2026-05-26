@@ -24,6 +24,8 @@ import {
   Minus,
   Spline,
   PenTool,
+  Square,
+  Move,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -652,7 +654,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "erase">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "erase" | "edit">("line");
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -662,6 +664,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
   const [draggingHandle, setDraggingHandle] = useState<null | "c1" | "c2">(null);
+  // Editing an existing vertex (drag to move). Tracks current key as it moves.
+  const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
+  const [editHover, setEditHover] = useState<Point | null>(null);
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
@@ -939,18 +944,64 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.lineWidth = 2 / s;
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
-      ctx.moveTo(drawing.a.x, drawing.a.y);
-      if (lineKind === "arc") {
-        const C = arcControlPoint({
-          a: drawing.a, b: drawing.b, kind: "arc",
-          bulge: defaultBulgePx(drawing.a, drawing.b),
-        });
-        ctx.quadraticCurveTo(C.x, C.y, drawing.b.x, drawing.b.y);
+      if (tool === "rect") {
+        const x = Math.min(drawing.a.x, drawing.b.x);
+        const y = Math.min(drawing.a.y, drawing.b.y);
+        const w = Math.abs(drawing.b.x - drawing.a.x);
+        const h = Math.abs(drawing.b.y - drawing.a.y);
+        ctx.rect(x, y, w, h);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(232, 93, 58, 0.10)";
+        ctx.fill();
       } else {
-        ctx.lineTo(drawing.b.x, drawing.b.y);
+        ctx.moveTo(drawing.a.x, drawing.a.y);
+        if (lineKind === "arc") {
+          const C = arcControlPoint({
+            a: drawing.a, b: drawing.b, kind: "arc",
+            bulge: defaultBulgePx(drawing.a, drawing.b),
+          });
+          ctx.quadraticCurveTo(C.x, C.y, drawing.b.x, drawing.b.y);
+        } else {
+          ctx.lineTo(drawing.b.x, drawing.b.y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // Edit-mode vertex markers (all unique vertices, highlighted)
+    if (tool === "edit") {
+      const seen = new Set<string>();
+      const verts: { p: Point; locked: boolean }[] = [];
+      const lockedKeys = new Set<string>();
+      layers.forEach((l) => {
+        if (!l.locked) return;
+        l.points.forEach((p) => lockedKeys.add(keyOf(p)));
+      });
+      const pushVert = (p: Point) => {
+        const k = keyOf(p);
+        if (seen.has(k)) return;
+        seen.add(k);
+        verts.push({ p, locked: lockedKeys.has(k) });
+      };
+      lines.forEach((ln) => { pushVert(ln.a); pushVert(ln.b); });
+      layers.forEach((l) => l.points.forEach(pushVert));
+      verts.forEach((v) => {
+        ctx.beginPath();
+        ctx.arc(v.p.x, v.p.y, 6 / s, 0, Math.PI * 2);
+        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : "#fff";
+        ctx.fill();
+        ctx.lineWidth = 2 / s;
+        ctx.strokeStyle = v.locked ? "#666" : "rgba(232,93,58,1)";
+        ctx.stroke();
+      });
+      if (editHover) {
+        ctx.beginPath();
+        ctx.arc(editHover.x, editHover.y, 10 / s, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(232,93,58,0.9)";
+        ctx.lineWidth = 2 / s;
+        ctx.stroke();
+      }
     }
 
     // Pending bezier (with two adjustable tangent handles)
@@ -1044,7 +1095,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -1104,6 +1155,110 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setDraggingHandle(null);
   }, []);
 
+  // Commit a rectangle from two diagonal corners
+  const commitRect = useCallback(
+    (a: Point, b: Point) => {
+      const minX = Math.min(a.x, b.x);
+      const maxX = Math.max(a.x, b.x);
+      const minY = Math.min(a.y, b.y);
+      const maxY = Math.max(a.y, b.y);
+      if (maxX - minX < 4 || maxY - minY < 4) return;
+      const p1 = { x: minX, y: minY };
+      const p2 = { x: maxX, y: minY };
+      const p3 = { x: maxX, y: maxY };
+      const p4 = { x: minX, y: maxY };
+      const newLines: Line[] = [
+        { a: p1, b: p2, kind: "straight" },
+        { a: p2, b: p3, kind: "straight" },
+        { a: p3, b: p4, kind: "straight" },
+        { a: p4, b: p1, kind: "straight" },
+      ];
+      const pts = [p1, p2, p3, p4];
+      const areaPx = polygonAreaPx(pts);
+      const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+      const idx = layers.length + 1;
+      const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+      const layer: Layer = {
+        id: `L${Date.now()}`,
+        name: `Ruang ${idx}`,
+        points: pts,
+        areaM2,
+        color,
+        locked: false,
+      };
+      pushHistory();
+      onChange({ lines: [...lines, ...newLines], layers: [...layers, layer] });
+      toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+    },
+    [lines, layers, pxPerMeter, pushHistory, onChange],
+  );
+
+  // Find nearest vertex (line endpoint or layer point) within tolerance
+  const findVertexAt = useCallback(
+    (p: Point, tol: number): Point | null => {
+      let best: Point | null = null;
+      let bestD = tol;
+      const consider = (v: Point) => {
+        const d = dist(p, v);
+        if (d < bestD) {
+          bestD = d;
+          best = v;
+        }
+      };
+      lines.forEach((ln) => {
+        consider(ln.a);
+        consider(ln.b);
+      });
+      layers.forEach((l) => l.points.forEach(consider));
+      return best;
+    },
+    [lines, layers],
+  );
+
+  const lockedVertexKeys = useMemo(() => {
+    const s = new Set<string>();
+    layers.forEach((l) => {
+      if (!l.locked) return;
+      l.points.forEach((p) => s.add(keyOf(p)));
+    });
+    return s;
+  }, [layers]);
+
+  // Move every vertex matching origKey to newPos. Returns next state.
+  const moveVertexBy = useCallback(
+    (origKey: string, newPos: Point) => {
+      const nextLines = lines.map((ln) => {
+        let next = ln;
+        if (keyOf(ln.a) === origKey) next = { ...next, a: newPos };
+        if (keyOf(ln.b) === origKey) next = { ...next, b: newPos };
+        // Bezier handles: shift relative to their endpoint move
+        if (next !== ln && next.kind === "bezier") {
+          if (keyOf(ln.a) === origKey && ln.c1) {
+            next = { ...next, c1: { x: ln.c1.x + (newPos.x - ln.a.x), y: ln.c1.y + (newPos.y - ln.a.y) } };
+          }
+          if (keyOf(ln.b) === origKey && ln.c2) {
+            next = { ...next, c2: { x: ln.c2.x + (newPos.x - ln.b.x), y: ln.c2.y + (newPos.y - ln.b.y) } };
+          }
+        }
+        return next;
+      });
+      const nextLayers = layers.map((l) => {
+        let changed = false;
+        const pts = l.points.map((pt) => {
+          if (keyOf(pt) === origKey) {
+            changed = true;
+            return newPos;
+          }
+          return pt;
+        });
+        if (!changed) return l;
+        return { ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) };
+      });
+      onChange({ lines: nextLines, layers: nextLayers });
+    },
+    [lines, layers, pxPerMeter, onChange],
+  );
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, getScreenPos(e));
@@ -1133,8 +1288,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     const p = getWorldPos(e);
-    if (tool === "line") {
+    if (tool === "line" || tool === "rect") {
       setDrawing({ a: p, b: p });
+    } else if (tool === "edit") {
+      const raw = getWorldPosRaw(e);
+      const tol = 14 / view.s;
+      const v = findVertexAt(raw, tol);
+      if (!v) return;
+      const k = keyOf(v);
+      if (lockedVertexKeys.has(k)) {
+        toast.error("Titik terkunci");
+        return;
+      }
+      pushHistory();
+      setEditDrag({ key: k });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => pointInPolygon(p, l.points));
       if (hitLayer) {
@@ -1184,8 +1351,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (editDrag) {
+      const newPos = getWorldPos(e);
+      moveVertexBy(editDrag.key, newPos);
+      setEditDrag({ key: keyOf(newPos) });
+      setEditHover(newPos);
+      return;
+    }
+
     const p = getWorldPos(e);
     setHover(p);
+    if (tool === "edit") {
+      const raw = getWorldPosRaw(e);
+      const tol = 14 / view.s;
+      const v = findVertexAt(raw, tol);
+      setEditHover(v);
+    }
     if (drawing) setDrawing({ a: drawing.a, b: p });
   };
 
@@ -1208,6 +1389,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setDraggingHandle(null);
       return;
     }
+    if (editDrag) {
+      setEditDrag(null);
+      return;
+    }
     if (!drawing) return;
     if (dist(drawing.a, drawing.b) < 4) {
       setDrawing(null);
@@ -1215,7 +1400,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     const a = drawing.a;
     const b = drawing.b;
+    const curTool = tool;
     setDrawing(null);
+
+    if (curTool === "rect") {
+      commitRect(a, b);
+      return;
+    }
 
     if (lineKind === "bezier") {
       // Defer commit: open tangent handles for adjustment
@@ -1235,6 +1426,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     endPointer(e);
     setDrawing(null);
     setDraggingHandle(null);
+    setEditDrag(null);
   };
 
   const handleUndo = () => {
@@ -1334,19 +1526,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button
             variant={tool === "line" ? "default" : "outline"}
             size="sm"
-            onClick={() => setTool("line")}
+            onClick={() => { cancelPendingCurve(); setTool("line"); }}
             className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
           >
             <Pencil className="mr-1.5 h-4 w-4" /> Garis
           </Button>
           <Button
+            variant={tool === "rect" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("rect"); }}
+            className={cn(tool === "rect" && "bg-gradient-ember shadow-ember")}
+          >
+            <Square className="mr-1.5 h-4 w-4" /> Persegi
+          </Button>
+          <Button
+            variant={tool === "edit" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("edit"); }}
+            className={cn(tool === "edit" && "bg-gradient-ember shadow-ember")}
+          >
+            <Move className="mr-1.5 h-4 w-4" /> Edit Titik
+          </Button>
+          <Button
             variant={tool === "erase" ? "default" : "outline"}
             size="sm"
-            onClick={() => setTool("erase")}
+            onClick={() => { cancelPendingCurve(); setTool("erase"); }}
           >
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
         </div>
+        {tool === "rect" && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tarik diagonal untuk membentuk persegi/persegi panjang. Ruang otomatis terbentuk.
+          </p>
+        )}
+        {tool === "edit" && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser.
+          </p>
+        )}
         {tool === "line" && (
           <div className="space-y-1.5">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -1609,7 +1827,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" ? "cursor-crosshair" : "cursor-pointer",
+              tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
         </div>
@@ -1635,15 +1853,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button
             variant={tool === "line" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setTool("line")}
+            onClick={() => { cancelPendingCurve(); setTool("line"); }}
             className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
+            title="Garis"
           >
             <Pencil className="h-4 w-4" />
           </Button>
           <Button
+            variant={tool === "rect" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("rect"); }}
+            className={cn(tool === "rect" && "bg-gradient-ember shadow-ember")}
+            title="Persegi (tarik diagonal)"
+          >
+            <Square className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "edit" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("edit"); }}
+            className={cn(tool === "edit" && "bg-gradient-ember shadow-ember")}
+            title="Edit titik (geser vertex)"
+          >
+            <Move className="h-4 w-4" />
+          </Button>
+          <Button
             variant={tool === "erase" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setTool("erase")}
+            onClick={() => { cancelPendingCurve(); setTool("erase"); }}
+            title="Hapus"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -1726,7 +1964,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           onPointerLeave={() => setHover(null)}
           className={cn(
             "block touch-none select-none",
-            tool === "line" ? "cursor-crosshair" : "cursor-pointer",
+            tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
           )}
         />
         <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
