@@ -2459,8 +2459,14 @@ function LevelsPanel({
                   className="h-7 w-24 text-sm"
                 />
                 <span className="text-[11px] text-muted-foreground">m</span>
-                <span className="ml-auto text-[10px] text-muted-foreground">
-                  {layerCount} ruang · {lineCount} garis
+                <span
+                  className="ml-auto font-display text-[11px] font-semibold text-foreground"
+                  title="Total luas ruang di level ini (sudah dikalikan koefisien)"
+                >
+                  {subLayers
+                    .reduce((s, ly) => s + ly.areaM2 * (ly.coefficient ?? 1), 0)
+                    .toFixed(2)}
+                  <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m² efektif</span>
                 </span>
               </div>
 
