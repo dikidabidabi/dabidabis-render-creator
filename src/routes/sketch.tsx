@@ -1779,27 +1779,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     });
   };
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-
-  const startRename = (l: Layer) => {
-    if (l.locked) {
+  const renameLayer = (lid: string, name: string) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
       toast.error("Buka kunci dulu untuk mengganti nama");
       return;
     }
-    setEditingId(l.id);
-    setEditingName(l.name);
-  };
-  const commitRename = () => {
-    if (!editingId) return;
-    const name = editingName.trim() || "Ruang";
+    const final = name.trim() || "Ruang";
+    if (final === layer.name) return;
     pushHistory();
     onChange({
-      layers: layers.map((l) => (l.id === editingId ? { ...l, name } : l)),
+      layers: layers.map((l) => (l.id === lid ? { ...l, name: final } : l)),
     });
-    const isLahan = name.toLowerCase().startsWith("lahan");
-    if (isLahan) toast.success(`${name} ditandai sebagai acuan KDB/KLB`);
-    setEditingId(null);
+    if (final.toLowerCase().startsWith("lahan"))
+      toast.success(`${final} ditandai sebagai acuan KDB/KLB`);
   };
 
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
