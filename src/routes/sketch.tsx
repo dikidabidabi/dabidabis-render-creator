@@ -2865,12 +2865,13 @@ function LevelsPanel({
                           <li
                             key={sl.id}
                             className={cn(
-                              "flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] hover:bg-background/60",
+                              "rounded px-1.5 py-1 text-[12px] hover:bg-background/60",
                               lahan && "bg-ember/5",
                               sl.locked && "ring-1 ring-foreground/15",
                             )}
                             title={sl.name}
                           >
+                            <div className="flex items-center gap-1.5">
                             <span
                               className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
                               style={{ background: sl.color.replace("ALPHA", "0.9") }}
