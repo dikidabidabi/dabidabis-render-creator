@@ -1407,6 +1407,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         color,
         locked: false,
         levelId: activeId,
+        coefficient: 1,
       };
       pushHistory();
       const patch: Partial<Sketch> = {
