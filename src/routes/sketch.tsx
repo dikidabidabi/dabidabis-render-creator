@@ -2969,6 +2969,85 @@ function LevelsPanel({
                                 <Trash2 className="h-3 w-3" />
                               </button>
                             )}
+                            </div>
+                            {lahan && sl.points.length >= 3 && (() => {
+                              const open = !!gsbOpen[sl.id];
+                              const n = sl.points.length;
+                              return (
+                                <div className="mt-1 rounded-sm border border-dashed border-ember/40 bg-background/40">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setGsbOpen((s) => ({ ...s, [sl.id]: !s[sl.id] }))
+                                    }
+                                    className="flex w-full items-center justify-between px-1.5 py-1 text-[10px] uppercase tracking-wider text-ember/90 hover:text-ember"
+                                    title="Atur GSB tiap sisi (offset ke dalam)"
+                                  >
+                                    <span className="flex items-center gap-1">
+                                      {open ? (
+                                        <Minus className="h-2.5 w-2.5" />
+                                      ) : (
+                                        <Plus className="h-2.5 w-2.5" />
+                                      )}
+                                      GSB · {n} sisi
+                                    </span>
+                                    <span className="text-[10px] normal-case text-muted-foreground">
+                                      default {DEFAULT_GSB_M}m
+                                    </span>
+                                  </button>
+                                  {open && (
+                                    <div className="grid grid-cols-2 gap-1 px-1.5 pb-1.5">
+                                      {Array.from({ length: n }, (_, i) => {
+                                        const key = `${sl.id}_${i}`;
+                                        const cur = getGsbMeters(sl, i);
+                                        const draft = gsbDrafts[key];
+                                        return (
+                                          <div
+                                            key={key}
+                                            className="flex items-center gap-1 rounded bg-background/60 px-1 py-0.5"
+                                          >
+                                            <span className="w-10 shrink-0 text-[10px] text-muted-foreground">
+                                              GSB {i + 1}
+                                            </span>
+                                            <Input
+                                              type="number"
+                                              inputMode="decimal"
+                                              step="0.1"
+                                              min="0"
+                                              disabled={sl.locked}
+                                              value={draft ?? String(cur)}
+                                              onChange={(e) =>
+                                                setGsbDrafts((d) => ({
+                                                  ...d,
+                                                  [key]: e.target.value,
+                                                }))
+                                              }
+                                              onBlur={() => {
+                                                const v = parseFloat(draft ?? "");
+                                                if (Number.isFinite(v) && v !== cur) {
+                                                  onSetLayerGsb(sl.id, i, v);
+                                                }
+                                                setGsbDrafts((d) => {
+                                                  const nx = { ...d };
+                                                  delete nx[key];
+                                                  return nx;
+                                                });
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter")
+                                                  (e.target as HTMLInputElement).blur();
+                                              }}
+                                              className="h-5 px-1 py-0 text-[11px]"
+                                            />
+                                            <span className="text-[10px] text-muted-foreground">m</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </li>
                         );
                       })}
