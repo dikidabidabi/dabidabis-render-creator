@@ -816,7 +816,8 @@ function AxonometricView({
           stroke={f.stroke}
           strokeWidth={baseStroke * f.sw * 2}
           strokeLinejoin="round"
-          opacity={0.96}
+          opacity={1}
+          fillOpacity={1}
         />
       ))}
     </svg>
