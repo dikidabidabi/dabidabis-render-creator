@@ -112,6 +112,7 @@ type Sketch = {
   activeLevelId: string | null;
   kdbPct?: number; // 0..100, prosentase KDB terhadap luas lahan
   klbCoef?: number; // koefisien KLB, pengali luas lahan
+  fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
 };
 
 type StoreShape = {
