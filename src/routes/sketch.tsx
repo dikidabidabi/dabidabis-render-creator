@@ -2003,6 +2003,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         onMdpl={updateLevelMdpl}
         onOpacity={updateLevelOpacity}
         onDelete={deleteLevel}
+        onRenameLayer={renameLayer}
+        onToggleLockLayer={toggleLock}
+        onRemoveLayer={removeLayer}
         lines={lines}
         layers={layers}
       />
