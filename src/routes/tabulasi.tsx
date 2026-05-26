@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/tabulasi")({
   head: () => ({
@@ -40,9 +41,38 @@ type Sketch = {
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
 const STORAGE_KEY = "dabidabis_sketch_v2";
+const COST_KEY = "dabidabis_cost_v1";
 
 function isLahan(name: string) {
   return name.trim().toLowerCase().startsWith("lahan");
+}
+
+function isVoid(name: string) {
+  return name.trim().toLowerCase() === "void";
+}
+
+function loadCostMap(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(COST_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCostMap(map: Record<string, number>) {
+  try {
+    localStorage.setItem(COST_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+function fmtRp(n: number) {
+  if (!Number.isFinite(n)) return "Rp 0";
+  return "Rp " + Math.round(n).toLocaleString("id-ID");
 }
 
 function fmt(n: number, d = 2) {
@@ -170,6 +200,9 @@ function TabulasiBox({
             </Section>
             <Section title="Infografis" icon={<PieChart className="h-4 w-4" />}>
               <InfographicSection data={data} sketch={sketch} />
+            </Section>
+            <Section title="Estimasi Biaya" icon={<Wallet className="h-4 w-4" />}>
+              <CostEstimateSection sketch={sketch} />
             </Section>
           </div>
         </div>
@@ -541,6 +574,70 @@ function RingStat({ label, value, caption }: { label: string; value: number; cap
         </div>
       </div>
       {caption && <div className="mt-1 text-center text-[10px] text-muted-foreground">{caption}</div>}
+    </div>
+  );
+}
+
+function CostEstimateSection({ sketch }: { sketch: Sketch }) {
+  const totalM2 = useMemo(() => {
+    return (sketch.layers ?? [])
+      .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+      .reduce((s, l) => s + (l.areaM2 || 0), 0);
+  }, [sketch]);
+
+  const [rate, setRate] = useState<number>(0);
+  const [rateStr, setRateStr] = useState<string>("");
+
+  useEffect(() => {
+    const map = loadCostMap();
+    const v = map[sketch.id] ?? 0;
+    setRate(v);
+    setRateStr(v ? String(v) : "");
+  }, [sketch.id]);
+
+  const update = useCallback(
+    (v: number) => {
+      setRate(v);
+      const map = loadCostMap();
+      if (v > 0) map[sketch.id] = v;
+      else delete map[sketch.id];
+      saveCostMap(map);
+    },
+    [sketch.id],
+  );
+
+  const total = totalM2 * rate;
+
+  return (
+    <div className="space-y-3 text-sm">
+      <div>
+        <label className="mb-1 block text-xs text-muted-foreground">Acuan biaya per m² (Rp)</label>
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={rateStr}
+          placeholder="contoh: 7500000"
+          onChange={(e) => {
+            setRateStr(e.target.value);
+            const n = parseFloat(e.target.value);
+            update(Number.isFinite(n) && n >= 0 ? n : 0);
+          }}
+          className="h-8 text-sm"
+        />
+      </div>
+      <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2">
+        <Row label="Total Luas Terhitung" value={`${fmt(totalM2)} m²`} />
+        <Row label="Biaya per m²" value={fmtRp(rate)} />
+        <div className="my-1 h-px bg-border" />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimasi Total</span>
+          <span className="font-mono text-base font-semibold tabular-nums">{fmtRp(total)}</span>
+        </div>
+      </div>
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        Tidak termasuk layer "Lahan" dan layer bernama "void".
+      </p>
     </div>
   );
 }
