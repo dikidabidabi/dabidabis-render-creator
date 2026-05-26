@@ -1526,19 +1526,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button
             variant={tool === "line" ? "default" : "outline"}
             size="sm"
-            onClick={() => setTool("line")}
+            onClick={() => { cancelPendingCurve(); setTool("line"); }}
             className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
           >
             <Pencil className="mr-1.5 h-4 w-4" /> Garis
           </Button>
           <Button
+            variant={tool === "rect" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("rect"); }}
+            className={cn(tool === "rect" && "bg-gradient-ember shadow-ember")}
+          >
+            <Square className="mr-1.5 h-4 w-4" /> Persegi
+          </Button>
+          <Button
+            variant={tool === "edit" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("edit"); }}
+            className={cn(tool === "edit" && "bg-gradient-ember shadow-ember")}
+          >
+            <Move className="mr-1.5 h-4 w-4" /> Edit Titik
+          </Button>
+          <Button
             variant={tool === "erase" ? "default" : "outline"}
             size="sm"
-            onClick={() => setTool("erase")}
+            onClick={() => { cancelPendingCurve(); setTool("erase"); }}
           >
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
         </div>
+        {tool === "rect" && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tarik diagonal untuk membentuk persegi/persegi panjang. Ruang otomatis terbentuk.
+          </p>
+        )}
+        {tool === "edit" && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser.
+          </p>
+        )}
         {tool === "line" && (
           <div className="space-y-1.5">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
