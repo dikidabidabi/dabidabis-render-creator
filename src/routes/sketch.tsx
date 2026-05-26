@@ -1964,7 +1964,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           onPointerLeave={() => setHover(null)}
           className={cn(
             "block touch-none select-none",
-            tool === "line" ? "cursor-crosshair" : "cursor-pointer",
+            tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
           )}
         />
         <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
