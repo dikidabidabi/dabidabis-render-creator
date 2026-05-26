@@ -1013,6 +1013,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 2 / s;
         ctx.stroke();
       }
+      if (addPointPreview) {
+        ctx.beginPath();
+        ctx.arc(addPointPreview.x, addPointPreview.y, 7 / s, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(232,93,58,0.9)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(addPointPreview.x, addPointPreview.y, 12 / s, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(232,93,58,0.7)";
+        ctx.lineWidth = 1.5 / s;
+        ctx.setLineDash([4 / s, 3 / s]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // Pending bezier (with two adjustable tangent handles)
