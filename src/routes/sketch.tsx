@@ -1853,15 +1853,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button
             variant={tool === "line" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setTool("line")}
+            onClick={() => { cancelPendingCurve(); setTool("line"); }}
             className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
+            title="Garis"
           >
             <Pencil className="h-4 w-4" />
           </Button>
           <Button
+            variant={tool === "rect" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("rect"); }}
+            className={cn(tool === "rect" && "bg-gradient-ember shadow-ember")}
+            title="Persegi (tarik diagonal)"
+          >
+            <Square className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "edit" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("edit"); }}
+            className={cn(tool === "edit" && "bg-gradient-ember shadow-ember")}
+            title="Edit titik (geser vertex)"
+          >
+            <Move className="h-4 w-4" />
+          </Button>
+          <Button
             variant={tool === "erase" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setTool("erase")}
+            onClick={() => { cancelPendingCurve(); setTool("erase"); }}
+            title="Hapus"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
