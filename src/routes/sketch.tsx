@@ -26,6 +26,7 @@ import {
   PenTool,
   Square,
   Move,
+  GripHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -736,6 +737,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef } = sketch;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
+  const [sideMinimized, setSideMinimized] = useState(false);
+  const [sideOffset, setSideOffset] = useState({ x: 0, y: 0 });
+  const [rekapOffset, setRekapOffset] = useState({ x: 0, y: 0 });
+  const [rekapBtnOffset, setRekapBtnOffset] = useState({ x: 0, y: 0 });
+
+  const sideDragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const rekapDragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const rekapBtnDragRef = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null);
+
+  const makeDragHandlers = (
+    ref: React.MutableRefObject<{ sx: number; sy: number; ox: number; oy: number } | null>,
+    getOffset: () => { x: number; y: number },
+    setOffset: (v: { x: number; y: number }) => void,
+  ) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const o = getOffset();
+      ref.current = { sx: e.clientX, sy: e.clientY, ox: o.x, oy: o.y };
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const s = ref.current;
+      if (!s) return;
+      setOffset({ x: s.ox + e.clientX - s.sx, y: s.oy + e.clientY - s.sy });
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      ref.current = null;
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    },
+    onPointerCancel: () => { ref.current = null; },
+  });
+
+  const sideDragHandlers = makeDragHandlers(sideDragRef, () => sideOffset, setSideOffset);
+  const rekapDragHandlers = makeDragHandlers(rekapDragRef, () => rekapOffset, setRekapOffset);
+  const rekapBtnDragHandlers = makeDragHandlers(rekapBtnDragRef, () => rekapBtnOffset, setRekapBtnOffset);
 
   // Level management helpers
   const ensureLevels = useCallback((): { levels: Level[]; activeId: string } => {
@@ -1978,13 +2014,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   })();
 
   // Side panel content (reused for normal and fullscreen)
+  const hideSideExtras = fullscreen && sideMinimized;
   const SidePanel = (
     <aside
       className={cn(
-        "space-y-5 rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-soft backdrop-blur",
-        fullscreen && "max-h-[calc(100vh-40px)] overflow-y-auto",
+        "rounded-2xl border border-border/60 bg-surface/80 shadow-soft backdrop-blur",
+        fullscreen ? "flex flex-col overflow-hidden" : "",
+        fullscreen && !sideMinimized && "max-h-[calc(100vh-40px)]",
       )}
     >
+      {fullscreen && (
+        <div
+          {...sideDragHandlers}
+          className="flex cursor-move touch-none select-none items-center justify-between gap-2 border-b border-border/60 px-3 py-2"
+        >
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+            <GripHorizontal className="h-3.5 w-3.5" /> Panel Gambar
+          </div>
+          <Button
+            data-no-drag
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => setSideMinimized((v) => !v)}
+            title={sideMinimized ? "Perbesar panel" : "Minimalkan panel"}
+          >
+            {sideMinimized ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+      )}
+      <div className={cn("space-y-5", fullscreen ? "overflow-y-auto p-4" : "p-5")}>
+
+
       <div className="space-y-2">
         <Label className="text-xs uppercase tracking-wider text-muted-foreground">Skala</Label>
         <Select value={scale} onValueChange={(v) => onChange({ scale: v as Scale })}>
@@ -2158,58 +2219,61 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         </p>
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <Magnet className="h-4 w-4 text-ember" />
-          <div>
-            <div className="text-sm font-medium">Snap to Grid</div>
-            <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
+      {!hideSideExtras && (
+        <>
+          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Magnet className="h-4 w-4 text-ember" />
+              <div>
+                <div className="text-sm font-medium">Snap to Grid</div>
+                <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
+              </div>
+            </div>
+            <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
           </div>
-        </div>
-        <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
-      </div>
 
-      <LevelsPanel
-        levels={levels}
-        activeLevelId={activeLvlId}
-        onSetActive={setActiveLevel}
-        onAdd={addLevel}
-        onRename={renameLevel}
-        onMdpl={updateLevelMdpl}
-        onOpacity={updateLevelOpacity}
-        onDelete={deleteLevel}
-        onRenameLayer={renameLayer}
-        onToggleLockLayer={toggleLock}
-        onRemoveLayer={removeLayer}
-        onSetLayerCoefficient={setLayerCoefficient}
-        lines={lines}
-        layers={layers}
-      />
+          <LevelsPanel
+            levels={levels}
+            activeLevelId={activeLvlId}
+            onSetActive={setActiveLevel}
+            onAdd={addLevel}
+            onRename={renameLevel}
+            onMdpl={updateLevelMdpl}
+            onOpacity={updateLevelOpacity}
+            onDelete={deleteLevel}
+            onRenameLayer={renameLayer}
+            onToggleLockLayer={toggleLock}
+            onRemoveLayer={removeLayer}
+            onSetLayerCoefficient={setLayerCoefficient}
+            lines={lines}
+            layers={layers}
+          />
 
+          <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <Ruler className="h-3.5 w-3.5" /> Garis
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Jumlah</span>
+              <span className="font-display text-base font-semibold">{lines.length}</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Panjang</span>
+              <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tip: kunci layer (ikon gembok) agar tidak terhapus saat memakai alat Hapus. Progres
+            tersimpan otomatis.
+          </p>
+        </>
+      )}
       
-
-
-
-      <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-          <Ruler className="h-3.5 w-3.5" /> Garis
-        </div>
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm text-muted-foreground">Jumlah</span>
-          <span className="font-display text-base font-semibold">{lines.length}</span>
-        </div>
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm text-muted-foreground">Panjang</span>
-          <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
-        </div>
       </div>
-
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        Tip: kunci layer (ikon gembok) agar tidak terhapus saat memakai alat Hapus. Progres
-        tersimpan otomatis.
-      </p>
     </aside>
   );
+
 
   if (fullscreen) {
     return (
@@ -2361,34 +2425,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           {sketch.title} · Skala {scale} · 1 kotak besar = {METERS_PER_MAJOR[scale]} m
         </div>
 
-        {/* Floating side panel on the right */}
-        <div className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]">{SidePanel}</div>
+        {/* Floating draggable side panel on the right */}
+        <div
+          className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]"
+          style={{ transform: `translate(${sideOffset.x}px, ${sideOffset.y}px)` }}
+        >
+          {SidePanel}
+        </div>
 
-        {/* Floating minimizable Rekapitulasi at the bottom */}
-        <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 flex justify-center">
-          <div
-            className={cn(
-              "pointer-events-auto w-full max-w-[1100px] rounded-2xl border border-border/60 bg-background/85 shadow-elevated backdrop-blur transition-all",
-              rekapMinimized ? "p-1.5" : "p-2",
-            )}
-          >
-            <div className="flex items-center justify-between gap-2 px-2 py-1">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+        {/* Floating Rekapitulasi: full bar (draggable) when expanded, small button (draggable) when minimized */}
+        {!rekapMinimized ? (
+          <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 flex justify-center">
+            <div
+              className="pointer-events-auto w-full max-w-[1100px] rounded-2xl border border-border/60 bg-background/85 p-2 shadow-elevated backdrop-blur"
+              style={{ transform: `translate(${rekapOffset.x}px, ${rekapOffset.y}px)` }}
+            >
+              <div
+                {...rekapDragHandlers}
+                className="flex cursor-move touch-none select-none items-center justify-between gap-2 px-2 py-1"
+              >
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  <GripHorizontal className="h-3.5 w-3.5" />
+                  <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+                </div>
+                <Button
+                  data-no-drag
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setRekapMinimized(true)}
+                  title="Minimalkan"
+                >
+                  <Minimize2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
+              <div className="px-1 pb-1">{RekapPanel}</div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="absolute bottom-4 left-4 z-10"
+            style={{ transform: `translate(${rekapBtnOffset.x}px, ${rekapBtnOffset.y}px)` }}
+          >
+            <div
+              {...rekapBtnDragHandlers}
+              className="flex cursor-move touch-none select-none items-center gap-1.5 rounded-full border border-border/60 bg-background/85 px-2 py-1 shadow-soft backdrop-blur"
+            >
+              <GripHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
               <Button
+                data-no-drag
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2"
-                onClick={() => setRekapMinimized((v) => !v)}
-                title={rekapMinimized ? "Perluas" : "Minimalkan"}
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={() => setRekapMinimized(false)}
+                title="Tampilkan rekapitulasi"
               >
-                {rekapMinimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+                <Maximize2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-            {!rekapMinimized && <div className="px-1 pb-1">{RekapPanel}</div>}
           </div>
-        </div>
+        )}
+
       </div>
     );
   }
