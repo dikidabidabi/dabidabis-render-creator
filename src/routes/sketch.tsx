@@ -87,6 +87,7 @@ type Layer = {
   color: string;
   locked?: boolean;
   levelId?: string;
+  coefficient?: number; // 1 | 0.5 | 0 — pengali luas efektif
 };
 
 type Level = {
@@ -371,7 +372,12 @@ function normalizeSketch(s: any): Sketch {
   // Assign any orphan line/layer to first level
   const fallback = levels[0].id;
   lines = lines.map((ln) => (ln.levelId && levels.some((l) => l.id === ln.levelId) ? ln : { ...ln, levelId: fallback }));
-  layers = layers.map((ly) => (ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback }));
+  layers = layers.map((ly) => {
+    const base = ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback };
+    const c = typeof (base as any).coefficient === "number" ? (base as any).coefficient : 1;
+    const coef = c === 0 || c === 0.5 || c === 1 ? c : 1;
+    return { ...base, coefficient: coef };
+  });
   return {
     id: s?.id,
     title: s?.title ?? "Sketsa",
@@ -1333,6 +1339,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             color,
             locked: false,
             levelId: activeId,
+            coefficient: 1,
           };
           nextLayers = [...layers, layer];
           toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
@@ -1400,6 +1407,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         color,
         locked: false,
         levelId: activeId,
+        coefficient: 1,
       };
       pushHistory();
       const patch: Partial<Sketch> = {
@@ -1796,6 +1804,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       toast.success(`${final} ditandai sebagai acuan KDB/KLB`);
   };
 
+  const setLayerCoefficient = (lid: string, coef: number) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
+      toast.error("Buka kunci dulu untuk mengubah koefisien");
+      return;
+    }
+    if (layer.coefficient === coef) return;
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, coefficient: coef } : l)),
+    });
+  };
+
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const totalLengthM = lines.reduce((s, l) => s + lineLengthPx(l), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
@@ -2006,6 +2028,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         onRenameLayer={renameLayer}
         onToggleLockLayer={toggleLock}
         onRemoveLayer={removeLayer}
+        onSetLayerCoefficient={setLayerCoefficient}
         lines={lines}
         layers={layers}
       />
@@ -2266,6 +2289,7 @@ function LevelsPanel({
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
+  onSetLayerCoefficient,
   lines,
   layers,
 }: {
@@ -2280,6 +2304,7 @@ function LevelsPanel({
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
+  onSetLayerCoefficient: (id: string, coef: number) => void;
   lines: Line[];
   layers: Layer[];
 }) {
@@ -2436,8 +2461,14 @@ function LevelsPanel({
                   className="h-7 w-24 text-sm"
                 />
                 <span className="text-[11px] text-muted-foreground">m</span>
-                <span className="ml-auto text-[10px] text-muted-foreground">
-                  {layerCount} ruang · {lineCount} garis
+                <span
+                  className="ml-auto font-display text-[11px] font-semibold text-foreground"
+                  title="Total luas ruang di level ini (sudah dikalikan koefisien)"
+                >
+                  {subLayers
+                    .reduce((s, ly) => s + ly.areaM2 * (ly.coefficient ?? 1), 0)
+                    .toFixed(2)}
+                  <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m² efektif</span>
                 </span>
               </div>
 
@@ -2524,8 +2555,30 @@ function LevelsPanel({
                                 <span className="truncate">{sl.name}</span>
                               </button>
                             )}
-                            <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
-                              {sl.areaM2.toFixed(1)}
+                            <Select
+                              value={String(sl.coefficient ?? 1)}
+                              onValueChange={(v) =>
+                                onSetLayerCoefficient(sl.id, parseFloat(v))
+                              }
+                              disabled={sl.locked}
+                            >
+                              <SelectTrigger
+                                className="h-6 w-[58px] shrink-0 px-1.5 py-0 text-[10px]"
+                                title="Koefisien pengali luas"
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">×1</SelectItem>
+                                <SelectItem value="0.5">×0,5</SelectItem>
+                                <SelectItem value="0">×0</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <span
+                              className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground"
+                              title={`Luas asli ${sl.areaM2.toFixed(2)} m² · efektif ${(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)} m²`}
+                            >
+                              {(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(1)}
                               <span className="ml-0.5 text-[9px] font-normal">m²</span>
                             </span>
                             <button
