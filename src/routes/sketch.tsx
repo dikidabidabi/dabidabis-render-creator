@@ -1339,6 +1339,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             color,
             locked: false,
             levelId: activeId,
+            coefficient: 1,
           };
           nextLayers = [...layers, layer];
           toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
