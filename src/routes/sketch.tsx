@@ -1050,53 +1050,77 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     ctx.stroke();
 
-    // Layers
-    layers.forEach((layer) => {
-      if (layer.points.length < 3) return;
-      ctx.beginPath();
-      ctx.moveTo(layer.points[0].x, layer.points[0].y);
-      for (let i = 1; i < layer.points.length; i++) {
-        ctx.lineTo(layer.points[i].x, layer.points[i].y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
-      ctx.fill();
-      ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
-      ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
-      ctx.stroke();
+    // Group + sort by Level MDPL (lowest = bottom, highest = top)
+    const sortedLevels = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+    const fallbackLvl = sortedLevels[0]?.id ?? "";
+    const layersByLvl = new Map<string, Layer[]>();
+    layers.forEach((ly) => {
+      const k = ly.levelId && sortedLevels.some((l) => l.id === ly.levelId) ? ly.levelId : fallbackLvl;
+      if (!layersByLvl.has(k)) layersByLvl.set(k, []);
+      layersByLvl.get(k)!.push(ly);
+    });
+    const linesByLvl = new Map<string, Line[]>();
+    lines.forEach((ln) => {
+      const k = ln.levelId && sortedLevels.some((l) => l.id === ln.levelId) ? ln.levelId : fallbackLvl;
+      if (!linesByLvl.has(k)) linesByLvl.set(k, []);
+      linesByLvl.get(k)!.push(ln);
     });
 
-    // Lines
-    ctx.lineCap = "round";
-    for (const ln of lines) {
-      const locked = isLineLocked(ln);
-      const kind = ln.kind ?? "straight";
-      ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
-      ctx.lineWidth = (locked ? 2.6 : 2) / s;
-      ctx.beginPath();
-      ctx.moveTo(ln.a.x, ln.a.y);
-      if (kind === "straight") {
-        ctx.lineTo(ln.b.x, ln.b.y);
-      } else if (kind === "arc") {
-        const C = arcControlPoint(ln);
-        ctx.quadraticCurveTo(C.x, C.y, ln.b.x, ln.b.y);
-      } else {
-        const c1 = ln.c1 ?? ln.a;
-        const c2 = ln.c2 ?? ln.b;
-        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
-      }
-      ctx.stroke();
-    }
+    for (const lvl of sortedLevels) {
+      const alpha = activeLvlId == null || lvl.id === activeLvlId ? 1 : lvl.opacity;
+      if (alpha <= 0.001) continue;
+      ctx.globalAlpha = alpha;
 
-    // Endpoints
-    ctx.fillStyle = "#1a1a1a";
-    for (const ln of lines) {
-      for (const p of [ln.a, ln.b]) {
+      // Layers
+      (layersByLvl.get(lvl.id) || []).forEach((layer) => {
+        if (layer.points.length < 3) return;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 3 / s, 0, Math.PI * 2);
+        ctx.moveTo(layer.points[0].x, layer.points[0].y);
+        for (let i = 1; i < layer.points.length; i++) {
+          ctx.lineTo(layer.points[i].x, layer.points[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
         ctx.fill();
+        ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
+        ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
+        ctx.stroke();
+      });
+
+      // Lines
+      ctx.lineCap = "round";
+      const lvlLines = linesByLvl.get(lvl.id) || [];
+      for (const ln of lvlLines) {
+        const locked = isLineLocked(ln);
+        const kind = ln.kind ?? "straight";
+        ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
+        ctx.lineWidth = (locked ? 2.6 : 2) / s;
+        ctx.beginPath();
+        ctx.moveTo(ln.a.x, ln.a.y);
+        if (kind === "straight") {
+          ctx.lineTo(ln.b.x, ln.b.y);
+        } else if (kind === "arc") {
+          const C = arcControlPoint(ln);
+          ctx.quadraticCurveTo(C.x, C.y, ln.b.x, ln.b.y);
+        } else {
+          const c1 = ln.c1 ?? ln.a;
+          const c2 = ln.c2 ?? ln.b;
+          ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
+        }
+        ctx.stroke();
+      }
+
+      // Endpoints
+      ctx.fillStyle = "#1a1a1a";
+      for (const ln of lvlLines) {
+        for (const p of [ln.a, ln.b]) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3 / s, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
+    ctx.globalAlpha = 1;
 
     // Active drawing preview (during drag)
     if (drawing) {
