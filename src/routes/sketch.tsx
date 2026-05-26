@@ -1288,8 +1288,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     const p = getWorldPos(e);
-    if (tool === "line") {
+    if (tool === "line" || tool === "rect") {
       setDrawing({ a: p, b: p });
+    } else if (tool === "edit") {
+      const raw = getWorldPosRaw(e);
+      const tol = 14 / view.s;
+      const v = findVertexAt(raw, tol);
+      if (!v) return;
+      const k = keyOf(v);
+      if (lockedVertexKeys.has(k)) {
+        toast.error("Titik terkunci");
+        return;
+      }
+      pushHistory();
+      setEditDrag({ key: k });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => pointInPolygon(p, l.points));
       if (hitLayer) {
@@ -1339,8 +1351,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (editDrag) {
+      const newPos = getWorldPos(e);
+      moveVertexBy(editDrag.key, newPos);
+      setEditDrag({ key: keyOf(newPos) });
+      setEditHover(newPos);
+      return;
+    }
+
     const p = getWorldPos(e);
     setHover(p);
+    if (tool === "edit") {
+      const raw = getWorldPosRaw(e);
+      const tol = 14 / view.s;
+      const v = findVertexAt(raw, tol);
+      setEditHover(v);
+    }
     if (drawing) setDrawing({ a: drawing.a, b: p });
   };
 
@@ -1363,6 +1389,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setDraggingHandle(null);
       return;
     }
+    if (editDrag) {
+      setEditDrag(null);
+      return;
+    }
     if (!drawing) return;
     if (dist(drawing.a, drawing.b) < 4) {
       setDrawing(null);
@@ -1370,7 +1400,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     const a = drawing.a;
     const b = drawing.b;
+    const curTool = tool;
     setDrawing(null);
+
+    if (curTool === "rect") {
+      commitRect(a, b);
+      return;
+    }
 
     if (lineKind === "bezier") {
       // Defer commit: open tangent handles for adjustment
@@ -1390,6 +1426,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     endPointer(e);
     setDrawing(null);
     setDraggingHandle(null);
+    setEditDrag(null);
   };
 
   const handleUndo = () => {
