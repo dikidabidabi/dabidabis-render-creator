@@ -52,7 +52,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/sketch")({
   head: () => ({
     meta: [
-      { title: "Sketsa Batas Lahan — Dabidabi's" },
+      { title: "Sketsa Konseptual — Dabidabi's" },
       {
         name: "description",
         content:
@@ -417,7 +417,7 @@ function SketchPage() {
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
       <div className="mb-4">
         <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-          Sketsa Batas Lahan
+          Sketsa Konseptual
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Kertas milimeter block digital — multi-tab, tersimpan otomatis di perangkat ini.
