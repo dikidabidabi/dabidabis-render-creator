@@ -1349,6 +1349,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     } else if (tool === "edit") {
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
+      if (editMode === "addPoint") {
+        // Find nearest straight line within tolerance and split there
+        const tolPx = 12 / view.s;
+        let bestIdx = -1;
+        let bestD = Infinity;
+        let bestProj: Point | null = null;
+        lines.forEach((ln, i) => {
+          if ((ln.kind ?? "straight") !== "straight") return;
+          if (isLineLocked(ln)) return;
+          const proj = projectOnSegment(raw, ln.a, ln.b);
+          const d = dist(raw, proj);
+          if (d < bestD) {
+            bestD = d;
+            bestIdx = i;
+            bestProj = proj;
+          }
+        });
+        if (bestIdx >= 0 && bestProj && bestD <= tolPx) {
+          splitLineAt(bestIdx, bestProj);
+        }
+        return;
+      }
       const v = findVertexAt(raw, tol);
       if (!v) return;
       const k = keyOf(v);
