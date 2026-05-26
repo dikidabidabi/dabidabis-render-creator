@@ -2425,34 +2425,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           {sketch.title} · Skala {scale} · 1 kotak besar = {METERS_PER_MAJOR[scale]} m
         </div>
 
-        {/* Floating side panel on the right */}
-        <div className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]">{SidePanel}</div>
+        {/* Floating draggable side panel on the right */}
+        <div
+          className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]"
+          style={{ transform: `translate(${sideOffset.x}px, ${sideOffset.y}px)` }}
+        >
+          {SidePanel}
+        </div>
 
-        {/* Floating minimizable Rekapitulasi at the bottom */}
-        <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 flex justify-center">
-          <div
-            className={cn(
-              "pointer-events-auto w-full max-w-[1100px] rounded-2xl border border-border/60 bg-background/85 shadow-elevated backdrop-blur transition-all",
-              rekapMinimized ? "p-1.5" : "p-2",
-            )}
-          >
-            <div className="flex items-center justify-between gap-2 px-2 py-1">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+        {/* Floating Rekapitulasi: full bar (draggable) when expanded, small button (draggable) when minimized */}
+        {!rekapMinimized ? (
+          <div className="pointer-events-none absolute inset-x-4 bottom-4 z-10 flex justify-center">
+            <div
+              className="pointer-events-auto w-full max-w-[1100px] rounded-2xl border border-border/60 bg-background/85 p-2 shadow-elevated backdrop-blur"
+              style={{ transform: `translate(${rekapOffset.x}px, ${rekapOffset.y}px)` }}
+            >
+              <div
+                {...rekapDragHandlers}
+                className="flex cursor-move touch-none select-none items-center justify-between gap-2 px-2 py-1"
+              >
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  <GripHorizontal className="h-3.5 w-3.5" />
+                  <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+                </div>
+                <Button
+                  data-no-drag
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setRekapMinimized(true)}
+                  title="Minimalkan"
+                >
+                  <Minimize2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
+              <div className="px-1 pb-1">{RekapPanel}</div>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="absolute bottom-4 left-4 z-10"
+            style={{ transform: `translate(${rekapBtnOffset.x}px, ${rekapBtnOffset.y}px)` }}
+          >
+            <div
+              {...rekapBtnDragHandlers}
+              className="flex cursor-move touch-none select-none items-center gap-1.5 rounded-full border border-border/60 bg-background/85 px-2 py-1 shadow-soft backdrop-blur"
+            >
+              <GripHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
               <Button
+                data-no-drag
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2"
-                onClick={() => setRekapMinimized((v) => !v)}
-                title={rekapMinimized ? "Perluas" : "Minimalkan"}
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={() => setRekapMinimized(false)}
+                title="Tampilkan rekapitulasi"
               >
-                {rekapMinimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+                <Maximize2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-            {!rekapMinimized && <div className="px-1 pb-1">{RekapPanel}</div>}
           </div>
-        </div>
+        )}
+
       </div>
     );
   }
