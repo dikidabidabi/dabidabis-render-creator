@@ -2337,6 +2337,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
             onSetLayerCoefficient={setLayerCoefficient}
+            onSetLayerGsb={setLayerGsbSide}
             lines={lines}
             layers={layers}
           />
