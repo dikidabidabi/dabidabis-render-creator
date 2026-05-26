@@ -399,8 +399,9 @@ function SketchPage() {
       if (raw) {
         const s = JSON.parse(raw) as StoreShape;
         if (s && Array.isArray(s.sketches)) {
-          setSketches(s.sketches);
-          setOpenId(s.openId ?? s.sketches[0]?.id ?? null);
+          const normalized = s.sketches.map((x) => normalizeSketch(x));
+          setSketches(normalized);
+          setOpenId(s.openId ?? normalized[0]?.id ?? null);
           setLoaded(true);
           return;
         }
@@ -409,7 +410,7 @@ function SketchPage() {
       const legacy = localStorage.getItem(LEGACY_KEY);
       if (legacy) {
         const ls = JSON.parse(legacy);
-        const migrated: Sketch = {
+        const migrated = normalizeSketch({
           id: `S${Date.now()}`,
           title: ls.title ?? "Sketsa 1",
           createdAt: ls.createdAt ?? Date.now(),
@@ -418,7 +419,7 @@ function SketchPage() {
           snap: ls.snap ?? true,
           lines: Array.isArray(ls.lines) ? ls.lines : [],
           layers: Array.isArray(ls.layers) ? ls.layers : [],
-        };
+        });
         setSketches([migrated]);
         setOpenId(migrated.id);
       } else {
