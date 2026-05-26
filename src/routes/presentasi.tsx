@@ -310,8 +310,9 @@ function PresentasiBox({
                   {idx + 1} / {slides.length} · {slides[idx]?.title}
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doPrint} title="Cetak ke kertas atau simpan sebagai PDF">
-                    <Printer className="h-4 w-4" /> PDF
+                  <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doExportPdf} disabled={exporting === "pdf"} title="Unduh sebagai PDF A3 lanskap">
+                    {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                    PDF
                   </Button>
                   <Button
                     variant="secondary" size="sm" className="h-8 gap-1.5"
