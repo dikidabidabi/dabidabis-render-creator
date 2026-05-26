@@ -577,3 +577,67 @@ function RingStat({ label, value, caption }: { label: string; value: number; cap
     </div>
   );
 }
+
+function CostEstimateSection({ sketch }: { sketch: Sketch }) {
+  const totalM2 = useMemo(() => {
+    return (sketch.layers ?? [])
+      .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+      .reduce((s, l) => s + (l.areaM2 || 0), 0);
+  }, [sketch]);
+
+  const [rate, setRate] = useState<number>(0);
+  const [rateStr, setRateStr] = useState<string>("");
+
+  useEffect(() => {
+    const map = loadCostMap();
+    const v = map[sketch.id] ?? 0;
+    setRate(v);
+    setRateStr(v ? String(v) : "");
+  }, [sketch.id]);
+
+  const update = useCallback(
+    (v: number) => {
+      setRate(v);
+      const map = loadCostMap();
+      if (v > 0) map[sketch.id] = v;
+      else delete map[sketch.id];
+      saveCostMap(map);
+    },
+    [sketch.id],
+  );
+
+  const total = totalM2 * rate;
+
+  return (
+    <div className="space-y-3 text-sm">
+      <div>
+        <label className="mb-1 block text-xs text-muted-foreground">Acuan biaya per m² (Rp)</label>
+        <Input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={rateStr}
+          placeholder="contoh: 7500000"
+          onChange={(e) => {
+            setRateStr(e.target.value);
+            const n = parseFloat(e.target.value);
+            update(Number.isFinite(n) && n >= 0 ? n : 0);
+          }}
+          className="h-8 text-sm"
+        />
+      </div>
+      <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2">
+        <Row label="Total Luas Terhitung" value={`${fmt(totalM2)} m²`} />
+        <Row label="Biaya per m²" value={fmtRp(rate)} />
+        <div className="my-1 h-px bg-border" />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimasi Total</span>
+          <span className="font-mono text-base font-semibold tabular-nums">{fmtRp(total)}</span>
+        </div>
+      </div>
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        Tidak termasuk layer "Lahan" dan layer bernama "void".
+      </p>
+    </div>
+  );
+}
