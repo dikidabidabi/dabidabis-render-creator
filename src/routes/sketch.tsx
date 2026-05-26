@@ -1779,27 +1779,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     });
   };
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-
-  const startRename = (l: Layer) => {
-    if (l.locked) {
+  const renameLayer = (lid: string, name: string) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
       toast.error("Buka kunci dulu untuk mengganti nama");
       return;
     }
-    setEditingId(l.id);
-    setEditingName(l.name);
-  };
-  const commitRename = () => {
-    if (!editingId) return;
-    const name = editingName.trim() || "Ruang";
+    const final = name.trim() || "Ruang";
+    if (final === layer.name) return;
     pushHistory();
     onChange({
-      layers: layers.map((l) => (l.id === editingId ? { ...l, name } : l)),
+      layers: layers.map((l) => (l.id === lid ? { ...l, name: final } : l)),
     });
-    const isLahan = name.toLowerCase().startsWith("lahan");
-    if (isLahan) toast.success(`${name} ditandai sebagai acuan KDB/KLB`);
-    setEditingId(null);
+    if (final.toLowerCase().startsWith("lahan"))
+      toast.success(`${final} ditandai sebagai acuan KDB/KLB`);
   };
 
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
@@ -2009,6 +2003,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         onMdpl={updateLevelMdpl}
         onOpacity={updateLevelOpacity}
         onDelete={deleteLevel}
+        onRenameLayer={renameLayer}
+        onToggleLockLayer={toggleLock}
+        onRemoveLayer={removeLayer}
         lines={lines}
         layers={layers}
       />
@@ -2023,103 +2020,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </span>
         </div>
 
-        {layers.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-[11px] text-muted-foreground">
-            Sambungkan garis hingga membentuk poligon tertutup untuk membuat ruang. Ubah nama menjadi
-            "Lahan ..." untuk menjadikannya acuan KDB/KLB.
-          </div>
-        ) : (
-          <ul className="space-y-1.5">
-            {layers.map((l) => {
-              const lahan = isLahanName(l.name);
-              const editing = editingId === l.id;
-              return (
-                <li
-                  key={l.id}
-                  className={cn(
-                    "rounded-md border px-2.5 py-2",
-                    lahan ? "border-ember/60 bg-ember/5" : "border-border/50 bg-background/60",
-                    l.locked && "ring-1 ring-foreground/15",
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-sm border border-foreground/20"
-                      style={{ background: l.color.replace("ALPHA", "0.9") }}
-                    />
-                    {editing ? (
-                      <Input
-                        autoFocus
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onBlur={commitRename}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitRename();
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                        className="h-7 text-sm"
-                      />
-                    ) : (
-                      <button
-                        onClick={() => startRename(l)}
-                        className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-left text-sm font-medium hover:text-ember"
-                        title={l.locked ? "Layer terkunci" : "Klik untuk ganti nama"}
-                      >
-                        {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
-                        <span className="truncate">{l.name}</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => toggleLock(l.id)}
-                      className={cn(
-                        "shrink-0 rounded p-1 transition",
-                        l.locked
-                          ? "text-ember hover:bg-ember/10"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                      aria-label={l.locked ? "Buka kunci" : "Kunci layer"}
-                      title={l.locked ? "Buka kunci" : "Kunci layer agar aman dari hapus"}
-                    >
-                      {l.locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
-                    </button>
-
-                    {editing ? (
-                      <button
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={commitRename}
-                        className="text-ember"
-                        aria-label="Simpan nama"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => removeLayer(l.id)}
-                        className={cn(
-                          "shrink-0 transition",
-                          l.locked
-                            ? "cursor-not-allowed text-muted-foreground/40"
-                            : "text-muted-foreground hover:text-ember",
-                        )}
-                        aria-label="Hapus layer"
-                        disabled={l.locked}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-1 pl-5 font-display text-sm font-semibold">
-                    {l.areaM2.toFixed(2)}{" "}
-                    <span className="text-[10px] font-normal text-muted-foreground">m²</span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        <div className="space-y-2 border-t border-border/60 pt-3">
+        <div className="space-y-2">
           <div className="flex items-baseline justify-between">
             <span className="text-xs uppercase tracking-wider text-muted-foreground">
               Total seluruh ruang
@@ -2139,6 +2040,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             </span>
           </div>
         </div>
+
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Atur nama, kunci, atau hapus tiap ruang langsung dari sub-gambar pada panel Level di atas.
+        </p>
       </div>
 
       <div className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4">
@@ -2358,6 +2263,9 @@ function LevelsPanel({
   onMdpl,
   onOpacity,
   onDelete,
+  onRenameLayer,
+  onToggleLockLayer,
+  onRemoveLayer,
   lines,
   layers,
 }: {
@@ -2369,6 +2277,9 @@ function LevelsPanel({
   onMdpl: (id: string, mdpl: number) => void;
   onOpacity: (id: string, opacity: number) => void;
   onDelete: (id: string) => void;
+  onRenameLayer: (id: string, name: string) => void;
+  onToggleLockLayer: (id: string) => void;
+  onRemoveLayer: (id: string) => void;
   lines: Line[];
   layers: Layer[];
 }) {
@@ -2376,6 +2287,9 @@ function LevelsPanel({
   const [draftName, setDraftName] = useState("");
   const [mdplDrafts, setMdplDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [layerEditId, setLayerEditId] = useState<string | null>(null);
+  const [layerDraft, setLayerDraft] = useState("");
+  const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
 
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
 
@@ -2563,23 +2477,101 @@ function LevelsPanel({
                     }
                   >
                     <ul className="space-y-1 pl-1">
-                      {subLayers.map((sl) => (
-                        <li
-                          key={sl.id}
-                          className="flex items-center gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-background/60"
-                          title={sl.name}
-                        >
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
-                            style={{ background: sl.color.replace("ALPHA", "0.9") }}
-                          />
-                          <span className="min-w-0 flex-1 truncate">{sl.name}</span>
-                          <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
-                            {sl.areaM2.toFixed(1)}
-                            <span className="ml-0.5 text-[9px] font-normal">m²</span>
-                          </span>
-                        </li>
-                      ))}
+                      {subLayers.map((sl) => {
+                        const lahan = isLahanName(sl.name);
+                        const editing = layerEditId === sl.id;
+                        const commit = () => {
+                          onRenameLayer(sl.id, layerDraft);
+                          setLayerEditId(null);
+                        };
+                        return (
+                          <li
+                            key={sl.id}
+                            className={cn(
+                              "flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] hover:bg-background/60",
+                              lahan && "bg-ember/5",
+                              sl.locked && "ring-1 ring-foreground/15",
+                            )}
+                            title={sl.name}
+                          >
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
+                              style={{ background: sl.color.replace("ALPHA", "0.9") }}
+                            />
+                            {editing ? (
+                              <Input
+                                autoFocus
+                                value={layerDraft}
+                                onChange={(e) => setLayerDraft(e.target.value)}
+                                onBlur={commit}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") commit();
+                                  if (e.key === "Escape") setLayerEditId(null);
+                                }}
+                                className="h-6 flex-1 text-xs"
+                              />
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  if (sl.locked) return;
+                                  setLayerEditId(sl.id);
+                                  setLayerDraft(sl.name);
+                                }}
+                                className="flex min-w-0 flex-1 items-center gap-1 truncate text-left hover:text-ember"
+                                title={sl.locked ? "Buka kunci untuk ganti nama" : "Klik untuk ganti nama"}
+                              >
+                                {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
+                                <span className="truncate">{sl.name}</span>
+                              </button>
+                            )}
+                            <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
+                              {sl.areaM2.toFixed(1)}
+                              <span className="ml-0.5 text-[9px] font-normal">m²</span>
+                            </span>
+                            <button
+                              onClick={() => onToggleLockLayer(sl.id)}
+                              className={cn(
+                                "shrink-0 rounded p-0.5 transition",
+                                sl.locked
+                                  ? "text-ember hover:bg-ember/10"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                              aria-label={sl.locked ? "Buka kunci" : "Kunci layer"}
+                              title={sl.locked ? "Buka kunci" : "Kunci layer agar aman dari hapus"}
+                            >
+                              {sl.locked ? (
+                                <Lock className="h-3 w-3" />
+                              ) : (
+                                <LockOpen className="h-3 w-3" />
+                              )}
+                            </button>
+                            {editing ? (
+                              <button
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={commit}
+                                className="shrink-0 text-ember"
+                                aria-label="Simpan nama"
+                              >
+                                <Check className="h-3 w-3" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onRemoveLayer(sl.id)}
+                                disabled={sl.locked}
+                                className={cn(
+                                  "shrink-0 transition",
+                                  sl.locked
+                                    ? "cursor-not-allowed text-muted-foreground/40"
+                                    : "text-muted-foreground hover:text-ember",
+                                )}
+                                aria-label="Hapus layer"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 </div>
