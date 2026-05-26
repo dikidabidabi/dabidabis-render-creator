@@ -424,6 +424,7 @@ function normalizeSketch(s: any): Sketch {
     activeLevelId,
     kdbPct: Number.isFinite(Number(s?.kdbPct)) ? Math.max(0, Math.min(100, Number(s.kdbPct))) : undefined,
     klbCoef: Number.isFinite(Number(s?.klbCoef)) ? Math.max(0, Number(s.klbCoef)) : undefined,
+    fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
   };
 }
 
