@@ -27,6 +27,7 @@ import {
   Square,
   Move,
   GripHorizontal,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
