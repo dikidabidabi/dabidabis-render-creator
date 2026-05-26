@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TabulasiRouteImport } from './routes/tabulasi'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TabulasiRoute = TabulasiRouteImport.update({
+  id: '/tabulasi',
+  path: '/tabulasi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
+  '/tabulasi': typeof TabulasiRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
+  '/tabulasi': typeof TabulasiRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,21 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
+  '/tabulasi': typeof TabulasiRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/gallery' | '/login' | '/sketch' | '/studio'
+  fullPaths: '/' | '/gallery' | '/login' | '/sketch' | '/studio' | '/tabulasi'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/gallery' | '/login' | '/sketch' | '/studio'
-  id: '__root__' | '/' | '/gallery' | '/login' | '/sketch' | '/studio'
+  to: '/' | '/gallery' | '/login' | '/sketch' | '/studio' | '/tabulasi'
+  id:
+    | '__root__'
+    | '/'
+    | '/gallery'
+    | '/login'
+    | '/sketch'
+    | '/studio'
+    | '/tabulasi'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,10 +93,18 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SketchRoute: typeof SketchRoute
   StudioRoute: typeof StudioRoute
+  TabulasiRoute: typeof TabulasiRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tabulasi': {
+      id: '/tabulasi'
+      path: '/tabulasi'
+      fullPath: '/tabulasi'
+      preLoaderRoute: typeof TabulasiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studio': {
       id: '/studio'
       path: '/studio'
@@ -125,16 +149,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SketchRoute: SketchRoute,
   StudioRoute: StudioRoute,
+  TabulasiRoute: TabulasiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
