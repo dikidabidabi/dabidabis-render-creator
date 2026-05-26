@@ -1,0 +1,589 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Grid, Edges } from "@react-three/drei";
+import * as THREE from "three";
+import {
+  ChevronDown,
+  ChevronUp,
+  Box,
+  Inbox,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/model3d")({
+  head: () => ({
+    meta: [
+      { title: "Model 3D — Dabidabi's" },
+      {
+        name: "description",
+        content:
+          "Generator model 3D dari sketsa milimeter block. Ekstrusi polygon per-lantai berdasarkan MDPL dengan tampilan interaktif.",
+      },
+    ],
+  }),
+  component: Model3DPage,
+});
+
+// ---------- Types (synced with sketch.tsx) ----------
+type Point = { x: number; y: number };
+type Layer = {
+  id: string;
+  name: string;
+  points: Point[];
+  areaM2: number;
+  color: string;
+  levelId?: string;
+  coefficient?: number;
+};
+type Level = { id: string; name: string; mdpl: number; opacity: number };
+type Sketch = {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  scale: "1:100" | "1:200" | "1:500" | "1:1000" | string;
+  layers: Layer[];
+  levels: Level[];
+};
+type StoreShape = { sketches: Sketch[]; openId: string | null };
+
+const STORAGE_KEY = "dabidabis_sketch_v2";
+const MINOR_PX = 8;
+const MAJOR_EVERY = 10;
+const METERS_PER_MAJOR: Record<string, number> = {
+  "1:100": 1,
+  "1:200": 2,
+  "1:500": 5,
+  "1:1000": 10,
+};
+
+function metersPerPx(scale: string) {
+  const m = METERS_PER_MAJOR[scale] ?? 1;
+  return m / (MINOR_PX * MAJOR_EVERY);
+}
+function isLahan(n: string) {
+  return n.trim().toLowerCase().startsWith("lahan");
+}
+function isVoid(n: string) {
+  return n.trim().toLowerCase() === "void";
+}
+function fmt(n: number, d = 2) {
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString("id-ID", { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+// Compute origin (centroid of all relevant layer points) for nice centering.
+function computeOrigin(sketch: Sketch): Point {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let count = 0;
+  for (const ly of sketch.layers) {
+    for (const p of ly.points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+      count++;
+    }
+  }
+  if (!count) return { x: 0, y: 0 };
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+}
+
+// Sort levels by MDPL ascending. Compute floor heights from gaps.
+function levelsWithHeights(levels: Level[]) {
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  return sorted.map((lv, i) => {
+    const next = sorted[i + 1];
+    const height = next ? Math.max(0, next.mdpl - lv.mdpl) : 4; // top level default 4m
+    return { ...lv, height };
+  });
+}
+
+// ---------- 3D scene helpers ----------
+function ExtrudedFloor({
+  points,
+  origin,
+  mPerPx,
+  baseY,
+  height,
+  color,
+  highlighted,
+}: {
+  points: Point[];
+  origin: Point;
+  mPerPx: number;
+  baseY: number;
+  height: number;
+  color: string;
+  highlighted: boolean;
+}) {
+  const geometry = useMemo(() => {
+    if (points.length < 3 || height <= 0) return null;
+    const shape = new THREE.Shape();
+    points.forEach((p, i) => {
+      const x = (p.x - origin.x) * mPerPx;
+      const z = (p.y - origin.y) * mPerPx; // flip handled by rotation below
+      if (i === 0) shape.moveTo(x, z);
+      else shape.lineTo(x, z);
+    });
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: height,
+      bevelEnabled: false,
+    });
+    // Shape lies in XY plane, extruded along +Z. Rotate so extrusion becomes +Y (up).
+    geo.rotateX(-Math.PI / 2);
+    return geo;
+  }, [points, origin.x, origin.y, mPerPx, height]);
+
+  if (!geometry) return null;
+
+  return (
+    <group position={[0, baseY, 0]}>
+      <mesh geometry={geometry}>
+        <meshPhysicalMaterial
+          color={color}
+          transparent
+          opacity={highlighted ? 0.45 : 0.22}
+          roughness={0.15}
+          metalness={0.05}
+          transmission={0.4}
+          thickness={0.5}
+          side={THREE.DoubleSide}
+        />
+        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#222"} />
+      </mesh>
+    </group>
+  );
+}
+
+function GroundPlane({
+  points,
+  origin,
+  mPerPx,
+}: {
+  points: Point[];
+  origin: Point;
+  mPerPx: number;
+}) {
+  const geometry = useMemo(() => {
+    if (points.length < 3) return null;
+    const shape = new THREE.Shape();
+    points.forEach((p, i) => {
+      const x = (p.x - origin.x) * mPerPx;
+      const z = (p.y - origin.y) * mPerPx;
+      if (i === 0) shape.moveTo(x, z);
+      else shape.lineTo(x, z);
+    });
+    shape.closePath();
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    return geo;
+  }, [points, origin.x, origin.y, mPerPx]);
+  if (!geometry) return null;
+  return (
+    <mesh geometry={geometry} position={[0, -0.02, 0]} receiveShadow>
+      <meshStandardMaterial color="#e7e5e0" side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
+function Scene({
+  sketch,
+  highlightLevelId,
+}: {
+  sketch: Sketch;
+  highlightLevelId: string | null;
+}) {
+  const mPerPx = metersPerPx(sketch.scale);
+  const origin = useMemo(() => computeOrigin(sketch), [sketch]);
+  const levels = useMemo(() => levelsWithHeights(sketch.levels), [sketch.levels]);
+  const baseMdpl = levels[0]?.mdpl ?? 0;
+
+  // Lahan layers (any level) -> flat ground
+  const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
+  const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
+
+  return (
+    <>
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[30, 50, 20]} intensity={0.9} castShadow />
+      <directionalLight position={[-20, 30, -20]} intensity={0.35} />
+
+      {lahanLayers.map((ly) => (
+        <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} />
+      ))}
+
+      <Grid
+        args={[200, 200]}
+        cellSize={1}
+        cellThickness={0.5}
+        cellColor="#cfcfcf"
+        sectionSize={10}
+        sectionThickness={1}
+        sectionColor="#9a9a9a"
+        position={[0, -0.01, 0]}
+        fadeDistance={120}
+        fadeStrength={1}
+        infiniteGrid
+      />
+
+      {levels.map((lv) => {
+        const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.id);
+        return layersOfLevel.map((ly, idx) => (
+          <ExtrudedFloor
+            key={`${lv.id}_${ly.id}_${idx}`}
+            points={ly.points}
+            origin={origin}
+            mPerPx={mPerPx}
+            baseY={lv.mdpl - baseMdpl}
+            height={lv.height}
+            color={ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+              const parts = body.split(",").map((s: string) => s.trim());
+              return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+            }) || "#e85d3a"}
+            highlighted={highlightLevelId === lv.id}
+          />
+        ));
+      })}
+    </>
+  );
+}
+
+// ---------- Per-sketch viewer card ----------
+function SketchViewer({
+  sketch,
+  onChange,
+}: {
+  sketch: Sketch;
+  onChange: (patch: Partial<Sketch>) => void;
+}) {
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const orbitRef = useRef<any>(null);
+
+  const sortedLevels = useMemo(
+    () => levelsWithHeights(sketch.levels),
+    [sketch.levels],
+  );
+  const baseMdpl = sortedLevels[0]?.mdpl ?? 0;
+  const topMdpl = sortedLevels.length
+    ? sortedLevels[sortedLevels.length - 1].mdpl + sortedLevels[sortedLevels.length - 1].height
+    : 0;
+  const totalHeight = topMdpl - baseMdpl;
+
+  const mPerPx = metersPerPx(sketch.scale);
+
+  // Volume per level: sum of layer areas × floor height
+  const volumeData = useMemo(() => {
+    const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
+    return sortedLevels.map((lv) => {
+      const layers = buildLayers.filter((l) => l.levelId === lv.id);
+      const area = layers.reduce((s, l) => s + (l.areaM2 || 0), 0);
+      return { id: lv.id, name: lv.name, mdpl: lv.mdpl, height: lv.height, area, volume: area * lv.height };
+    });
+  }, [sketch.layers, sortedLevels]);
+
+  const totalArea = volumeData.reduce((s, v) => s + v.area, 0);
+  const totalVolume = volumeData.reduce((s, v) => s + v.volume, 0);
+
+  const updateLevel = (id: string, patch: Partial<Level>) => {
+    onChange({
+      levels: sketch.levels.map((lv) => (lv.id === id ? { ...lv, ...patch } : lv)),
+    });
+  };
+
+  const resetCamera = () => {
+    if (orbitRef.current?.reset) orbitRef.current.reset();
+  };
+
+  return (
+    <div
+      className={cn(
+        "grid gap-4",
+        fullscreen ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-[320px_1fr]",
+      )}
+    >
+      {/* Panel manajemen level */}
+      {!fullscreen && (
+        <div className="rounded-lg border border-border bg-card/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (MDPL)</h3>
+          </div>
+          <div className="space-y-3">
+            {sortedLevels.length === 0 && (
+              <p className="text-xs text-muted-foreground">Belum ada level.</p>
+            )}
+            {sortedLevels.map((lv, i) => (
+              <div
+                key={lv.id}
+                className={cn(
+                  "rounded-md border border-border/60 bg-background/40 p-2",
+                  highlight === lv.id && "ring-1 ring-primary",
+                )}
+                onMouseEnter={() => setHighlight(lv.id)}
+                onMouseLeave={() => setHighlight(null)}
+              >
+                <div className="grid grid-cols-[1fr_90px] gap-2">
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Nama Lantai
+                    </Label>
+                    <Input
+                      value={lv.name}
+                      onChange={(e) => updateLevel(lv.id, { name: e.target.value })}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      MDPL (m)
+                    </Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={lv.mdpl}
+                      onChange={(e) =>
+                        updateLevel(lv.id, { mdpl: parseFloat(e.target.value) || 0 })
+                      }
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>
+                    Tinggi:{" "}
+                    <span className="font-medium text-foreground">{fmt(lv.height)} m</span>
+                    {!sortedLevels[i + 1] && (
+                      <span className="ml-1 italic">(default)</span>
+                    )}
+                  </span>
+                  <span>
+                    Luas:{" "}
+                    <span className="font-medium text-foreground">
+                      {fmt(volumeData[i]?.area || 0)} m²
+                    </span>
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 space-y-1 rounded-md bg-muted/40 p-3 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tinggi total</span>
+              <span className="font-semibold">{fmt(totalHeight)} m</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total luas lantai</span>
+              <span className="font-semibold">{fmt(totalArea)} m²</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total volume</span>
+              <span className="font-semibold">{fmt(totalVolume)} m³</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Skala sumber</span>
+              <span className="font-mono">{sketch.scale}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Canvas 3D */}
+      <div
+        ref={canvasRef}
+        className={cn(
+          "relative rounded-lg border border-border bg-gradient-to-b from-slate-100 to-slate-300 overflow-hidden",
+          fullscreen ? "h-[80vh]" : "h-[520px]",
+        )}
+      >
+        <Canvas
+          shadows
+          camera={{ position: [25, 22, 25], fov: 45, near: 0.1, far: 1000 }}
+          dpr={[1, 2]}
+        >
+          <color attach="background" args={["#eef1f4"]} />
+          <Scene sketch={sketch} highlightLevelId={highlight} />
+          <OrbitControls
+            ref={orbitRef}
+            enableDamping
+            dampingFactor={0.08}
+            makeDefault
+          />
+        </Canvas>
+
+        <div className="absolute right-2 top-2 flex gap-1">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={resetCamera}
+          >
+            <RotateCcw className="h-3 w-3" /> Reset
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => setFullscreen((v) => !v)}
+          >
+            {fullscreen ? (
+              <>
+                <Minimize2 className="h-3 w-3" /> Kecil
+              </>
+            ) : (
+              <>
+                <Maximize2 className="h-3 w-3" /> Besar
+              </>
+            )}
+          </Button>
+        </div>
+
+        <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-slate-700 shadow-sm">
+          Drag = rotasi · Shift+Drag = pan · Scroll = zoom · 1 unit = 1 m ·{" "}
+          {fmt(mPerPx, 4)} m/px
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Page ----------
+function Model3DPage() {
+  const [sketches, setSketches] = useState<Sketch[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const load = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        setSketches([]);
+        return;
+      }
+      const s = JSON.parse(raw) as StoreShape;
+      if (s && Array.isArray(s.sketches)) {
+        setSketches(s.sketches as Sketch[]);
+        setOpenId((prev) => {
+          if (prev && s.sketches.some((x) => x.id === prev)) return prev;
+          return s.openId ?? s.sketches[0]?.id ?? null;
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    setLoaded(true);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) load();
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", load);
+    const iv = window.setInterval(load, 2000);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", load);
+      window.clearInterval(iv);
+    };
+  }, [load]);
+
+  const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
+    setSketches((prev) => {
+      const next = prev.map((s) =>
+        s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s,
+      );
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ sketches: next, openId } as StoreShape),
+        );
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, [openId]);
+
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 py-8">
+      <div className="mb-6 flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-ember shadow-ember">
+          <Box className="h-4 w-4 text-primary-foreground" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Model 3D</h1>
+          <p className="text-sm text-muted-foreground">
+            Ekstrusi otomatis dari sketsa milimeter block. Tiap lantai diposisikan sesuai MDPL.
+          </p>
+        </div>
+      </div>
+
+      {loaded && sketches.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+          <Inbox className="mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Belum ada sketsa. Buat sketsa terlebih dahulu di halaman Sketsa.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {sketches.map((s) => {
+          const isOpen = openId === s.id;
+          return (
+            <div
+              key={s.id}
+              className="rounded-lg border border-border bg-card/30 overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setOpenId(isOpen ? null : s.id)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-card/60"
+              >
+                <div className="flex items-center gap-3">
+                  <Box className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <div className="text-sm font-medium">{s.title}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {s.levels.length} level · {s.layers.length} layer · skala {s.scale}
+                    </div>
+                  </div>
+                </div>
+                {isOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+              {isOpen && (
+                <div className="border-t border-border bg-background/30 p-4">
+                  <SketchViewer
+                    sketch={s}
+                    onChange={(patch) => updateSketch(s.id, patch)}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
