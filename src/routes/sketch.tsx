@@ -2631,6 +2631,7 @@ function LevelsPanel({
   onToggleLockLayer,
   onRemoveLayer,
   onSetLayerCoefficient,
+  onSetLayerGsb,
   lines,
   layers,
 }: {
@@ -2646,6 +2647,7 @@ function LevelsPanel({
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
+  onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
   lines: Line[];
   layers: Layer[];
 }) {
@@ -2653,6 +2655,8 @@ function LevelsPanel({
   const [draftName, setDraftName] = useState("");
   const [mdplDrafts, setMdplDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [gsbOpen, setGsbOpen] = useState<Record<string, boolean>>({});
+  const [gsbDrafts, setGsbDrafts] = useState<Record<string, string>>({});
   const [layerEditId, setLayerEditId] = useState<string | null>(null);
   const [layerDraft, setLayerDraft] = useState("");
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
