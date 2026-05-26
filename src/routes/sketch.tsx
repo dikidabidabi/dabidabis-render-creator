@@ -2892,14 +2892,35 @@ function LevelsPanel({
                   <button
                     onClick={() => {
                       setEditingId(lvl.id);
-                      setDraftName(lvl.name);
+                      setDraftName(displayNames[lvl.id] ?? lvl.name);
                     }}
                     className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-ember"
                     title="Klik untuk ganti nama"
                   >
-                    {lvl.name}
+                    {displayNames[lvl.id] ?? lvl.name}
+                    {(lvl.typicalCount ?? 1) > 1 && (
+                      <span className="ml-1 rounded bg-ember/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ember">
+                        tipikal {lvl.typicalCount}×
+                      </span>
+                    )}
                   </button>
                 )}
+                <button
+                  onClick={() => onDuplicate(lvl.id)}
+                  className="shrink-0 text-muted-foreground transition hover:text-ember"
+                  aria-label="Duplikat level"
+                  title="Duplikat: buat level baru dengan salinan sub-gambar (dapat diedit terpisah)"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => onIncrementTypical(lvl.id)}
+                  className="shrink-0 rounded px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition hover:bg-ember/10 hover:text-ember"
+                  aria-label="Tambah lantai tipikal"
+                  title="Tipikal: gandakan luas + koefisien lantai ini (+3 m MDPL per tambahan)"
+                >
+                  +tip
+                </button>
                 <button
                   onClick={() => onDelete(lvl.id)}
                   className="shrink-0 text-muted-foreground transition hover:text-ember"
@@ -2938,20 +2959,52 @@ function LevelsPanel({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   }}
-                  className="h-7 w-24 text-sm"
+                  className="h-7 w-20 text-sm"
                 />
                 <span className="text-[11px] text-muted-foreground">m</span>
+                {(lvl.typicalCount ?? 1) > 1 && (
+                  <>
+                    <span className="text-[10px] uppercase tracking-wider text-ember/80">×</span>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={99}
+                      step={1}
+                      value={typicalDrafts[lvl.id] ?? String(lvl.typicalCount ?? 1)}
+                      onChange={(e) =>
+                        setTypicalDrafts((d) => ({ ...d, [lvl.id]: e.target.value }))
+                      }
+                      onBlur={() => {
+                        const v = parseInt(typicalDrafts[lvl.id] ?? "", 10);
+                        if (Number.isFinite(v)) onSetTypical(lvl.id, v);
+                        setTypicalDrafts((d) => {
+                          const n = { ...d };
+                          delete n[lvl.id];
+                          return n;
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                      className="h-7 w-14 text-sm text-ember"
+                      title="Jumlah lantai tipikal — luas & koefisien dikalikan nilai ini"
+                    />
+                    <span className="text-[10px] text-ember/80">tip</span>
+                  </>
+                )}
                 <span
                   className="ml-auto font-display text-[11px] font-semibold text-foreground"
-                  title="Total luas ruang di level ini (tanpa lahan, sudah dikalikan koefisien)"
+                  title="Total luas ruang di level ini (tanpa lahan, sudah dikalikan koefisien dan jumlah tipikal)"
                 >
-                  {subLayers
+                  {(subLayers
                     .filter((ly) => !isLahanName(ly.name))
-                    .reduce((s, ly) => s + ly.areaM2 * (ly.coefficient ?? 1), 0)
+                    .reduce((s, ly) => s + ly.areaM2 * (ly.coefficient ?? 1), 0) * (lvl.typicalCount ?? 1))
                     .toFixed(2)}
                   <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m² ruang</span>
                 </span>
               </div>
+
 
               {!isActive && (
                 <div className="mt-2 space-y-1">
