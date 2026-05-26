@@ -2287,6 +2287,7 @@ function LevelsPanel({
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
+  onSetLayerCoefficient,
   lines,
   layers,
 }: {
@@ -2301,6 +2302,7 @@ function LevelsPanel({
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
+  onSetLayerCoefficient: (id: string, coef: number) => void;
   lines: Line[];
   layers: Layer[];
 }) {
