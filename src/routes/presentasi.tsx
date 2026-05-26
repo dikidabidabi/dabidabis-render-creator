@@ -356,7 +356,7 @@ function PresentasiBox({
       {printing && (
         <div className="a3-print-root">
           {slides.map((s) => (
-            <div key={s.id} className="a3-print-page">
+            <div key={s.id} className="a3-print-page" data-slide-page>
               <div style={{ width: A3_W, height: A3_H, transform: `scale(${(420 * 3.7795275591) / A3_W})`, transformOrigin: "top left" }}>
                 {/* 420mm = 1587.4px @ 96dpi. Browsers print mm precisely; the scale fits internal canvas to 420mm width. */}
                 <SlideContent slide={s} />
@@ -365,9 +365,30 @@ function PresentasiBox({
           ))}
         </div>
       )}
+
+      {/* Offscreen export container for PPTX rendering (full A3 canvas, captured by html2canvas) */}
+      {exporting === "pptx" && (
+        <div
+          ref={exportRootRef}
+          className="no-print"
+          style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
+          aria-hidden
+        >
+          {slides.map((s) => (
+            <div
+              key={s.id}
+              data-slide-page
+              style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}
+            >
+              <SlideContent slide={s} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
 
 function FullscreenSlideshow({
   slides, idx, setIdx, playing, setPlaying, onClose,
