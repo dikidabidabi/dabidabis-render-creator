@@ -913,6 +913,64 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     },
     [levels, lines, layers, activeLvlId, onChange],
   );
+
+  const duplicateLevel = useCallback(
+    (lvlId: string) => {
+      const src = levels.find((l) => l.id === lvlId);
+      if (!src) return;
+      const maxMdpl = levels.reduce((m, l) => Math.max(m, l.mdpl), 0);
+      const newId = `LV${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const newLvl: Level = {
+        id: newId,
+        name: `Level ${levels.length + 1}`,
+        mdpl: Math.round((maxMdpl + TYPICAL_FLOOR_H) * 100) / 100,
+        opacity: src.opacity,
+        typicalCount: 1,
+      };
+      const idMap = new Map<string, string>();
+      const newLayers: Layer[] = layers
+        .filter((ly) => ly.levelId === lvlId)
+        .map((ly) => {
+          const nid = `L${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          idMap.set(ly.id, nid);
+          return { ...ly, id: nid, levelId: newId, points: ly.points.map((p) => ({ ...p })) };
+        });
+      const newLines: Line[] = lines
+        .filter((ln) => ln.levelId === lvlId)
+        .map((ln) => ({ ...ln, a: { ...ln.a }, b: { ...ln.b }, c1: ln.c1 ? { ...ln.c1 } : undefined, c2: ln.c2 ? { ...ln.c2 } : undefined, levelId: newId }));
+      onChange({
+        levels: [...levels, newLvl],
+        layers: [...layers, ...newLayers],
+        lines: [...lines, ...newLines],
+        activeLevelId: newId,
+      });
+      toast.success(`${newLvl.name} hasil duplikat`);
+    },
+    [levels, layers, lines, onChange],
+  );
+
+  const setLevelTypical = useCallback(
+    (lvlId: string, count: number) => {
+      const k = Math.max(1, Math.min(99, Math.round(count)));
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalCount: k } : l)),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const incrementTypical = useCallback(
+    (lvlId: string) => {
+      const src = levels.find((l) => l.id === lvlId);
+      if (!src) return;
+      const next = Math.min(99, (src.typicalCount ?? 1) + 1);
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalCount: next } : l)),
+      });
+      toast.success(`Lantai tipikal: ${next}×`);
+    },
+    [levels, onChange],
+  );
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
