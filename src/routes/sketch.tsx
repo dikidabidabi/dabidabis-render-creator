@@ -1283,7 +1283,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Commit a finished line into state, run cycle detection, push history.
   const commitLine = useCallback(
     (newLine: Line) => {
-      const nextLines = [...lines, newLine];
+      const { levels: nextLevelsBase, activeId } = ensureLevels();
+      const taggedLine: Line = { ...newLine, levelId: newLine.levelId ?? activeId };
+      const nextLines = [...lines, taggedLine];
       const newIdx = nextLines.length - 1;
       const cycle = findCycleWithLine(nextLines, newIdx);
       let nextLayers = layers;
@@ -1300,15 +1302,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             areaM2,
             color,
             locked: false,
+            levelId: activeId,
           };
           nextLayers = [...layers, layer];
           toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
         }
       }
       pushHistory();
-      onChange({ lines: nextLines, layers: nextLayers });
+      const patch: Partial<Sketch> = { lines: nextLines, layers: nextLayers };
+      if (nextLevelsBase !== levels) {
+        patch.levels = nextLevelsBase;
+        patch.activeLevelId = activeId;
+      } else if (!activeLvlId) {
+        patch.activeLevelId = activeId;
+      }
+      onChange(patch);
     },
-    [lines, layers, pxPerMeter, pushHistory, onChange],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
   );
 
   const commitPendingCurve = useCallback(() => {
@@ -1340,11 +1350,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const p2 = { x: maxX, y: minY };
       const p3 = { x: maxX, y: maxY };
       const p4 = { x: minX, y: maxY };
+      const { levels: nextLevelsBase, activeId } = ensureLevels();
       const newLines: Line[] = [
-        { a: p1, b: p2, kind: "straight" },
-        { a: p2, b: p3, kind: "straight" },
-        { a: p3, b: p4, kind: "straight" },
-        { a: p4, b: p1, kind: "straight" },
+        { a: p1, b: p2, kind: "straight", levelId: activeId },
+        { a: p2, b: p3, kind: "straight", levelId: activeId },
+        { a: p3, b: p4, kind: "straight", levelId: activeId },
+        { a: p4, b: p1, kind: "straight", levelId: activeId },
       ];
       const pts = [p1, p2, p3, p4];
       const areaPx = polygonAreaPx(pts);
@@ -1358,12 +1369,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         areaM2,
         color,
         locked: false,
+        levelId: activeId,
       };
       pushHistory();
-      onChange({ lines: [...lines, ...newLines], layers: [...layers, layer] });
+      const patch: Partial<Sketch> = {
+        lines: [...lines, ...newLines],
+        layers: [...layers, layer],
+      };
+      if (nextLevelsBase !== levels) {
+        patch.levels = nextLevelsBase;
+        patch.activeLevelId = activeId;
+      } else if (!activeLvlId) {
+        patch.activeLevelId = activeId;
+      }
+      onChange(patch);
       toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
     },
-    [lines, layers, pxPerMeter, pushHistory, onChange],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
   );
 
   // Find nearest vertex (line endpoint or layer point) within tolerance
