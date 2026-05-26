@@ -2375,6 +2375,7 @@ function LevelsPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [mdplDrafts, setMdplDrafts] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
 
@@ -2393,9 +2394,16 @@ function LevelsPanel({
         {sorted.map((lvl) => {
           const isActive = lvl.id === activeLevelId;
           const editing = editingId === lvl.id;
+          const subLayers = layers.filter((ly) => ly.levelId === lvl.id);
           const lineCount = lines.filter((ln) => ln.levelId === lvl.id).length;
-          const layerCount = layers.filter((ly) => ly.levelId === lvl.id).length;
+          const layerCount = subLayers.length;
           const mdplDraft = mdplDrafts[lvl.id];
+          const isOpen = !!expanded[lvl.id];
+          const hasSubs = layerCount > 0;
+          // Tinggi 1 item sub kira-kira 36px; batasi area visual ke 5 item
+          const SUB_ITEM_PX = 36;
+          const MAX_VISIBLE = 5;
+          const needsScroll = layerCount > MAX_VISIBLE;
           return (
             <li
               key={lvl.id}
@@ -2408,6 +2416,32 @@ function LevelsPanel({
             >
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() =>
+                    setExpanded((e) => ({ ...e, [lvl.id]: !e[lvl.id] }))
+                  }
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition",
+                    hasSubs
+                      ? "border-border/60 bg-background/60 text-foreground hover:border-ember hover:text-ember"
+                      : "cursor-not-allowed border-border/40 bg-background/30 text-muted-foreground/40",
+                  )}
+                  aria-label={isOpen ? "Sembunyikan sub" : "Tampilkan sub"}
+                  title={
+                    !hasSubs
+                      ? "Belum ada sub-gambar di level ini"
+                      : isOpen
+                        ? "Sembunyikan sub-gambar"
+                        : "Tampilkan sub-gambar"
+                  }
+                  disabled={!hasSubs}
+                >
+                  {isOpen ? (
+                    <Minus className="h-3 w-3" />
+                  ) : (
+                    <Plus className="h-3 w-3" />
+                  )}
+                </button>
+                <button
                   onClick={() => onSetActive(lvl.id)}
                   className={cn(
                     "h-3 w-3 shrink-0 rounded-full border-2 transition",
@@ -2416,6 +2450,7 @@ function LevelsPanel({
                   aria-label={isActive ? "Level aktif" : "Aktifkan level"}
                   title={isActive ? "Level aktif" : "Klik untuk aktifkan"}
                 />
+
                 {editing ? (
                   <Input
                     autoFocus
@@ -2509,7 +2544,48 @@ function LevelsPanel({
                   />
                 </div>
               )}
+
+              {isOpen && hasSubs && (
+                <div className="mt-2 border-t border-border/40 pt-2">
+                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <span>Sub-gambar</span>
+                    <span>{layerCount} ruang</span>
+                  </div>
+                  <div
+                    className={cn(
+                      "rounded-md bg-background/40 pr-1",
+                      needsScroll && "sketch-sub-scroll overflow-y-auto",
+                    )}
+                    style={
+                      needsScroll
+                        ? { maxHeight: `${MAX_VISIBLE * SUB_ITEM_PX}px` }
+                        : undefined
+                    }
+                  >
+                    <ul className="space-y-1 pl-1">
+                      {subLayers.map((sl) => (
+                        <li
+                          key={sl.id}
+                          className="flex items-center gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-background/60"
+                          title={sl.name}
+                        >
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
+                            style={{ background: sl.color.replace("ALPHA", "0.9") }}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{sl.name}</span>
+                          <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
+                            {sl.areaM2.toFixed(1)}
+                            <span className="ml-0.5 text-[9px] font-normal">m²</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
             </li>
+
           );
         })}
       </ul>
