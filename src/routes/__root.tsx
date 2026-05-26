@@ -111,6 +111,13 @@ function Header() {
                 Sketsa
               </Link>
               <Link
+                to="/tabulasi"
+                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
+                activeProps={{ className: "text-foreground font-medium" }}
+              >
+                Tabulasi
+              </Link>
+              <Link
                 to="/gallery"
                 className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
                 activeProps={{ className: "text-foreground font-medium" }}
