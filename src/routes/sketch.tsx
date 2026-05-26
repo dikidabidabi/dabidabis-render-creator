@@ -1932,6 +1932,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     });
   };
 
+  const setLayerGsbSide = (lid: string, sideIndex: number, meters: number) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
+      toast.error("Buka kunci dulu untuk mengubah GSB");
+      return;
+    }
+    const n = layer.points.length;
+    if (n < 1) return;
+    const safe = Math.max(0, Number.isFinite(meters) ? meters : 0);
+    const next = Array.from({ length: n }, (_, i) =>
+      i === sideIndex ? safe : getGsbMeters(layer, i),
+    );
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, gsb: next } : l)),
+    });
+  };
+
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const totalLengthM = lines.reduce((s, l) => s + lineLengthPx(l), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
