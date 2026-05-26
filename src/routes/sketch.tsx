@@ -372,7 +372,12 @@ function normalizeSketch(s: any): Sketch {
   // Assign any orphan line/layer to first level
   const fallback = levels[0].id;
   lines = lines.map((ln) => (ln.levelId && levels.some((l) => l.id === ln.levelId) ? ln : { ...ln, levelId: fallback }));
-  layers = layers.map((ly) => (ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback }));
+  layers = layers.map((ly) => {
+    const base = ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback };
+    const c = typeof (base as any).coefficient === "number" ? (base as any).coefficient : 1;
+    const coef = c === 0 || c === 0.5 || c === 1 ? c : 1;
+    return { ...base, coefficient: coef };
+  });
   return {
     id: s?.id,
     title: s?.title ?? "Sketsa",
