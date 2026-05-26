@@ -2477,23 +2477,101 @@ function LevelsPanel({
                     }
                   >
                     <ul className="space-y-1 pl-1">
-                      {subLayers.map((sl) => (
-                        <li
-                          key={sl.id}
-                          className="flex items-center gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-background/60"
-                          title={sl.name}
-                        >
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
-                            style={{ background: sl.color.replace("ALPHA", "0.9") }}
-                          />
-                          <span className="min-w-0 flex-1 truncate">{sl.name}</span>
-                          <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
-                            {sl.areaM2.toFixed(1)}
-                            <span className="ml-0.5 text-[9px] font-normal">m²</span>
-                          </span>
-                        </li>
-                      ))}
+                      {subLayers.map((sl) => {
+                        const lahan = isLahanName(sl.name);
+                        const editing = layerEditId === sl.id;
+                        const commit = () => {
+                          onRenameLayer(sl.id, layerDraft);
+                          setLayerEditId(null);
+                        };
+                        return (
+                          <li
+                            key={sl.id}
+                            className={cn(
+                              "flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] hover:bg-background/60",
+                              lahan && "bg-ember/5",
+                              sl.locked && "ring-1 ring-foreground/15",
+                            )}
+                            title={sl.name}
+                          >
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
+                              style={{ background: sl.color.replace("ALPHA", "0.9") }}
+                            />
+                            {editing ? (
+                              <Input
+                                autoFocus
+                                value={layerDraft}
+                                onChange={(e) => setLayerDraft(e.target.value)}
+                                onBlur={commit}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") commit();
+                                  if (e.key === "Escape") setLayerEditId(null);
+                                }}
+                                className="h-6 flex-1 text-xs"
+                              />
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  if (sl.locked) return;
+                                  setLayerEditId(sl.id);
+                                  setLayerDraft(sl.name);
+                                }}
+                                className="flex min-w-0 flex-1 items-center gap-1 truncate text-left hover:text-ember"
+                                title={sl.locked ? "Buka kunci untuk ganti nama" : "Klik untuk ganti nama"}
+                              >
+                                {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
+                                <span className="truncate">{sl.name}</span>
+                              </button>
+                            )}
+                            <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
+                              {sl.areaM2.toFixed(1)}
+                              <span className="ml-0.5 text-[9px] font-normal">m²</span>
+                            </span>
+                            <button
+                              onClick={() => onToggleLockLayer(sl.id)}
+                              className={cn(
+                                "shrink-0 rounded p-0.5 transition",
+                                sl.locked
+                                  ? "text-ember hover:bg-ember/10"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                              aria-label={sl.locked ? "Buka kunci" : "Kunci layer"}
+                              title={sl.locked ? "Buka kunci" : "Kunci layer agar aman dari hapus"}
+                            >
+                              {sl.locked ? (
+                                <Lock className="h-3 w-3" />
+                              ) : (
+                                <LockOpen className="h-3 w-3" />
+                              )}
+                            </button>
+                            {editing ? (
+                              <button
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={commit}
+                                className="shrink-0 text-ember"
+                                aria-label="Simpan nama"
+                              >
+                                <Check className="h-3 w-3" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onRemoveLayer(sl.id)}
+                                disabled={sl.locked}
+                                className={cn(
+                                  "shrink-0 transition",
+                                  sl.locked
+                                    ? "cursor-not-allowed text-muted-foreground/40"
+                                    : "text-muted-foreground hover:text-ember",
+                                )}
+                                aria-label="Hapus layer"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 </div>
