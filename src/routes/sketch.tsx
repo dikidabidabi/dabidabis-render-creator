@@ -89,6 +89,7 @@ type Layer = {
   locked?: boolean;
   levelId?: string;
   coefficient?: number; // 1 | 0.5 | 0 — pengali luas efektif
+  gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
 };
 
 type Level = {
