@@ -2553,8 +2553,30 @@ function LevelsPanel({
                                 <span className="truncate">{sl.name}</span>
                               </button>
                             )}
-                            <span className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground">
-                              {sl.areaM2.toFixed(1)}
+                            <Select
+                              value={String(sl.coefficient ?? 1)}
+                              onValueChange={(v) =>
+                                onSetLayerCoefficient(sl.id, parseFloat(v))
+                              }
+                              disabled={sl.locked}
+                            >
+                              <SelectTrigger
+                                className="h-6 w-[58px] shrink-0 px-1.5 py-0 text-[10px]"
+                                title="Koefisien pengali luas"
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">×1</SelectItem>
+                                <SelectItem value="0.5">×0,5</SelectItem>
+                                <SelectItem value="0">×0</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <span
+                              className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground"
+                              title={`Luas asli ${sl.areaM2.toFixed(2)} m² · efektif ${(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)} m²`}
+                            >
+                              {(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(1)}
                               <span className="ml-0.5 text-[9px] font-normal">m²</span>
                             </span>
                             <button
