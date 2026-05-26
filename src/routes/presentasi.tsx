@@ -402,6 +402,7 @@ function A3Frame({ children }: { children: React.ReactNode }) {
 // ---------- Slide types ----------
 type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
