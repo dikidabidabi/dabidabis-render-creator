@@ -408,6 +408,7 @@ function normalizeSketch(s: any): Sketch {
         name: String(lv.name || "Level"),
         mdpl: Number.isFinite(Number(lv.mdpl)) ? Number(lv.mdpl) : 0,
         opacity: typeof lv.opacity === "number" ? Math.max(0, Math.min(1, lv.opacity)) : 0.5,
+        typicalCount: Number.isFinite(Number(lv.typicalCount)) ? Math.max(1, Math.round(Number(lv.typicalCount))) : 1,
       }))
     : [];
   let lines: Line[] = Array.isArray(s?.lines) ? s.lines : [];
