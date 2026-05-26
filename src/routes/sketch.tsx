@@ -112,6 +112,7 @@ type Sketch = {
   activeLevelId: string | null;
   kdbPct?: number; // 0..100, prosentase KDB terhadap luas lahan
   klbCoef?: number; // koefisien KLB, pengali luas lahan
+  fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
 };
 
 type StoreShape = {
@@ -423,6 +424,7 @@ function normalizeSketch(s: any): Sketch {
     activeLevelId,
     kdbPct: Number.isFinite(Number(s?.kdbPct)) ? Math.max(0, Math.min(100, Number(s.kdbPct))) : undefined,
     klbCoef: Number.isFinite(Number(s?.klbCoef)) ? Math.max(0, Number(s.klbCoef)) : undefined,
+    fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
   };
 }
 
@@ -763,7 +765,7 @@ type EditorProps = {
 };
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
-  const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef } = sketch;
+  const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, fungsi } = sketch;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
@@ -2171,6 +2173,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <SelectItem value="1:200">1 : 200 (1 kotak besar = 2 m)</SelectItem>
             <SelectItem value="1:500">1 : 500 (1 kotak besar = 5 m)</SelectItem>
             <SelectItem value="1:1000">1 : 1000 (1 kotak besar = 10 m)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fungsi</Label>
+        <Select value={fungsi ?? ""} onValueChange={(v) => onChange({ fungsi: v || undefined })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Pilih fungsi bangunan" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Hotel">Hotel</SelectItem>
+            <SelectItem value="Apartment">Apartment</SelectItem>
+            <SelectItem value="Komersil">Komersil</SelectItem>
+            <SelectItem value="Rumah Sakit">Rumah Sakit</SelectItem>
+            <SelectItem value="Bandara">Bandara</SelectItem>
+            <SelectItem value="Bangunan Khusus">Bangunan Khusus</SelectItem>
           </SelectContent>
         </Select>
       </div>
