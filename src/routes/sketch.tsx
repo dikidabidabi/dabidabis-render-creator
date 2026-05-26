@@ -765,7 +765,7 @@ type EditorProps = {
 };
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
-  const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef } = sketch;
+  const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, fungsi } = sketch;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
