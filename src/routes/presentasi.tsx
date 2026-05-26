@@ -177,6 +177,8 @@ function PresentasiBox({
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [exporting, setExporting] = useState<null | "pptx">(null);
+  const exportRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
 
@@ -209,6 +211,43 @@ function PresentasiBox({
       setTimeout(() => setPrinting(false), 500);
     }));
   };
+
+  const doExportPptx = useCallback(async () => {
+    setExporting("pptx");
+    try {
+      // Wait two frames so the offscreen render mounts at full A3 size.
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      const root = exportRootRef.current;
+      if (!root) throw new Error("Render container tidak siap");
+      const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
+      const [{ default: html2canvas }, { default: PptxGenJS }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("pptxgenjs"),
+      ]);
+      const images: string[] = [];
+      for (const el of pages) {
+        const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
+        images.push(canvas.toDataURL("image/png"));
+      }
+      const pres = new PptxGenJS();
+      // A3 landscape: 420mm x 297mm = 16.54in x 11.69in
+      pres.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
+      pres.layout = "A3";
+      images.forEach((data) => {
+        const slide = pres.addSlide();
+        slide.background = { color: "FFFFFF" };
+        slide.addImage({ data, x: 0, y: 0, w: 16.54, h: 11.69 });
+      });
+      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
+      await pres.writeFile({ fileName: fname });
+    } catch (err) {
+      console.error(err);
+      window.alert("Gagal mengekspor PPTX: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExporting(null);
+    }
+  }, [sketch.title]);
+
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface/60 shadow-sm">
