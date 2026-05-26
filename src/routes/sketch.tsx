@@ -1828,6 +1828,154 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const lahanLayers = layers.filter((l) => isLahanName(l.name));
   const totalLahanM2 = lahanLayers.reduce((s, l) => s + l.areaM2, 0);
 
+  // Rekapitulasi panel (rendered below canvas in normal mode, inside SidePanel in fullscreen)
+  const RekapPanel = (() => {
+    const groundLevel = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
+    const ruangLayers = layers.filter((l) => !isLahanName(l.name));
+    const kdbRencana = groundLevel
+      ? ruangLayers.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
+      : 0;
+    const klbRencana = ruangLayers.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+    const kdbLimit = (kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : 0;
+    const klbLimit = (klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : 0;
+    const kdbDev = kdbRencana - kdbLimit;
+    const klbDev = klbRencana - klbLimit;
+    const fmt = (v: number) => v.toFixed(2);
+    const devNode = (dev: number, hasLimit: boolean) => {
+      if (!hasLimit) return <span className="text-muted-foreground">—</span>;
+      const over = dev > 0.005;
+      const under = dev < -0.005;
+      const color = over ? "text-red-500" : under ? "text-green-500" : "text-muted-foreground";
+      const sign = over ? "+" : under ? "−" : "";
+      return (
+        <span className={cn("font-display font-semibold", color)}>
+          {sign}
+          {fmt(Math.abs(dev))}
+          <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+        </span>
+      );
+    };
+    return (
+      <div className="rounded-2xl border border-border/60 bg-surface/80 p-4 shadow-soft backdrop-blur">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+            <Layers className="h-3.5 w-3.5" /> Rekapitulasi
+          </div>
+          <span className="text-[11px] text-muted-foreground">
+            {layers.length} ruang · {lahanLayers.length} lahan
+          </span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {/* Totals */}
+          <div className="space-y-2 rounded-md border border-border/50 bg-background/40 p-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                Total seluruh ruang
+              </span>
+              <span className="font-display text-xl font-semibold">
+                {totalAreaM2 > 0 ? totalAreaM2.toFixed(2) : "—"}
+                <span className="ml-1 text-xs text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between rounded-md bg-ember/10 px-2.5 py-2">
+              <span className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-ember">
+                <MapPin className="h-3 w-3" /> Luas Lahan
+              </span>
+              <span className="font-display text-2xl font-semibold text-ember">
+                {totalLahanM2 > 0 ? totalLahanM2.toFixed(2) : "—"}
+                <span className="ml-1 text-xs text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Acuan KDB/KLB. Atur ruang langsung dari sub-gambar pada panel Level.
+            </p>
+          </div>
+
+          {/* KDB */}
+          <div className="space-y-2 rounded-md border border-border/50 bg-background/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">KDB</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  placeholder="0"
+                  value={kdbPct ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onChange({ kdbPct: v === "" ? undefined : Math.max(0, Math.min(100, Number(v))) });
+                  }}
+                  className="h-7 w-16 text-right text-xs"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">Maksimum (KDB × Lahan)</span>
+              <span className="font-display text-sm font-semibold">
+                {kdbLimit > 0 ? fmt(kdbLimit) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">KDB Rencana (Level dasar)</span>
+              <span className="font-display text-sm font-semibold">
+                {kdbRencana > 0 ? fmt(kdbRencana) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between border-t border-border/40 pt-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Deviasi</span>
+              {devNode(kdbDev, kdbLimit > 0)}
+            </div>
+          </div>
+
+          {/* KLB */}
+          <div className="space-y-2 rounded-md border border-border/50 bg-background/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">KLB</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  placeholder="0"
+                  value={klbCoef ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onChange({ klbCoef: v === "" ? undefined : Math.max(0, Number(v)) });
+                  }}
+                  className="h-7 w-16 text-right text-xs"
+                />
+                <span className="text-xs text-muted-foreground">×</span>
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">Maksimum (KLB × Lahan)</span>
+              <span className="font-display text-sm font-semibold">
+                {klbLimit > 0 ? fmt(klbLimit) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">KLB Rencana (semua level × koef)</span>
+              <span className="font-display text-sm font-semibold">
+                {klbRencana > 0 ? fmt(klbRencana) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between border-t border-border/40 pt-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Deviasi</span>
+              {devNode(klbDev, klbLimit > 0)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  })();
+
   // Side panel content (reused for normal and fullscreen)
   const SidePanel = (
     <aside
