@@ -1442,8 +1442,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     if (tool === "edit") {
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
-      const v = findVertexAt(raw, tol);
-      setEditHover(v);
+      if (editMode === "addPoint") {
+        const tolPx = 12 / view.s;
+        let bestD = Infinity;
+        let bestProj: Point | null = null;
+        lines.forEach((ln) => {
+          if ((ln.kind ?? "straight") !== "straight") return;
+          if (isLineLocked(ln)) return;
+          const proj = projectOnSegment(raw, ln.a, ln.b);
+          const d = dist(raw, proj);
+          if (d < bestD) {
+            bestD = d;
+            bestProj = proj;
+          }
+        });
+        setAddPointPreview(bestProj && bestD <= tolPx ? bestProj : null);
+        setEditHover(null);
+      } else {
+        const v = findVertexAt(raw, tol);
+        setEditHover(v);
+        setAddPointPreview(null);
+      }
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
   };
