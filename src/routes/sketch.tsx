@@ -219,6 +219,15 @@ function pointToSegment(p: Point, a: Point, b: Point) {
   t = Math.max(0, Math.min(1, t));
   return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
 }
+function projectOnSegment(p: Point, a: Point, b: Point): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { x: a.x, y: a.y };
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
 function pointToLine(p: Point, ln: Line): number {
   if ((ln.kind ?? "straight") === "straight") return pointToSegment(p, ln.a, ln.b);
   const pts = sampleLine(ln, 20);
@@ -667,6 +676,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Editing an existing vertex (drag to move). Tracks current key as it moves.
   const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
+  const [editMode, setEditMode] = useState<"move" | "addPoint">("move");
+  const [addPointPreview, setAddPointPreview] = useState<Point | null>(null);
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
@@ -1002,6 +1013,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 2 / s;
         ctx.stroke();
       }
+      if (addPointPreview) {
+        ctx.beginPath();
+        ctx.arc(addPointPreview.x, addPointPreview.y, 7 / s, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(232,93,58,0.9)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(addPointPreview.x, addPointPreview.y, 12 / s, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(232,93,58,0.7)";
+        ctx.lineWidth = 1.5 / s;
+        ctx.setLineDash([4 / s, 3 / s]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // Pending bezier (with two adjustable tangent handles)
@@ -1095,7 +1119,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -1259,6 +1283,51 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, pxPerMeter, onChange],
   );
 
+  // Insert a new vertex at `p` along line at index `idx` (straight lines only).
+  const splitLineAt = useCallback(
+    (idx: number, p: Point) => {
+      const ln = lines[idx];
+      if (!ln) return;
+      if ((ln.kind ?? "straight") !== "straight") {
+        toast.error("Tambah titik hanya untuk garis lurus");
+        return;
+      }
+      if (isLineLocked(ln)) {
+        toast.error("Garis terkunci");
+        return;
+      }
+      // Avoid duplicates near endpoints
+      const tol = 4;
+      if (dist(p, ln.a) < tol || dist(p, ln.b) < tol) return;
+      pushHistory();
+      const left: Line = { ...ln, a: ln.a, b: p, kind: "straight" };
+      const right: Line = { ...ln, a: p, b: ln.b, kind: "straight" };
+      const nextLines = [...lines.slice(0, idx), left, right, ...lines.slice(idx + 1)];
+      const ka = keyOf(ln.a);
+      const kb = keyOf(ln.b);
+      const nextLayers = layers.map((l) => {
+        const n = l.points.length;
+        let inserted = false;
+        const out: Point[] = [];
+        for (let i = 0; i < n; i++) {
+          const cur = l.points[i];
+          const nxt = l.points[(i + 1) % n];
+          out.push(cur);
+          const kc = keyOf(cur);
+          const kn = keyOf(nxt);
+          if (!inserted && ((kc === ka && kn === kb) || (kc === kb && kn === ka))) {
+            out.push(p);
+            inserted = true;
+          }
+        }
+        if (!inserted) return l;
+        return { ...l, points: out, areaM2: polygonAreaPx(out) / (pxPerMeter * pxPerMeter) };
+      });
+      onChange({ lines: nextLines, layers: nextLayers });
+    },
+    [lines, layers, pxPerMeter, pushHistory, onChange, isLineLocked],
+  );
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, getScreenPos(e));
@@ -1293,6 +1362,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     } else if (tool === "edit") {
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
+      if (editMode === "addPoint") {
+        // Find nearest straight line within tolerance and split there
+        const tolPx = 12 / view.s;
+        let bestIdx = -1;
+        let bestD = Infinity;
+        let bestProj: Point | null = null;
+        lines.forEach((ln, i) => {
+          if ((ln.kind ?? "straight") !== "straight") return;
+          if (isLineLocked(ln)) return;
+          const proj = projectOnSegment(raw, ln.a, ln.b);
+          const d = dist(raw, proj);
+          if (d < bestD) {
+            bestD = d;
+            bestIdx = i;
+            bestProj = proj;
+          }
+        });
+        if (bestIdx >= 0 && bestProj && bestD <= tolPx) {
+          splitLineAt(bestIdx, bestProj);
+        }
+        return;
+      }
       const v = findVertexAt(raw, tol);
       if (!v) return;
       const k = keyOf(v);
@@ -1364,8 +1455,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     if (tool === "edit") {
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
-      const v = findVertexAt(raw, tol);
-      setEditHover(v);
+      if (editMode === "addPoint") {
+        const tolPx = 12 / view.s;
+        let bestD = Infinity;
+        let bestProj: Point | null = null;
+        lines.forEach((ln) => {
+          if ((ln.kind ?? "straight") !== "straight") return;
+          if (isLineLocked(ln)) return;
+          const proj = projectOnSegment(raw, ln.a, ln.b);
+          const d = dist(raw, proj);
+          if (d < bestD) {
+            bestD = d;
+            bestProj = proj;
+          }
+        });
+        setAddPointPreview(bestProj && bestD <= tolPx ? bestProj : null);
+        setEditHover(null);
+      } else {
+        const v = findVertexAt(raw, tol);
+        setEditHover(v);
+        setAddPointPreview(null);
+      }
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
   };
@@ -1561,9 +1671,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </p>
         )}
         {tool === "edit" && (
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser.
-          </p>
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                variant={editMode === "move" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("move")}
+                className={cn("h-8 px-2 text-[11px]", editMode === "move" && "bg-foreground text-background")}
+                title="Geser titik yang sudah ada"
+              >
+                <Move className="mr-1 h-3.5 w-3.5" /> Geser
+              </Button>
+              <Button
+                variant={editMode === "addPoint" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("addPoint")}
+                className={cn("h-8 px-2 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
+                title="Tambah titik baru di sepanjang garis"
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Titik
+              </Button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {editMode === "move"
+                ? "Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser."
+                : "Ketuk di sepanjang garis lurus untuk menambah titik baru yang dapat digeser."}
+            </p>
+          </div>
         )}
         {tool === "line" && (
           <div className="space-y-1.5">
@@ -1885,6 +2019,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          {tool === "edit" && (
+            <>
+              <div className="h-6 w-px bg-border/60" />
+              <Button
+                variant={editMode === "move" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setEditMode("move")}
+                title="Geser titik"
+              >
+                <Move className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={editMode === "addPoint" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setEditMode("addPoint")}
+                title="Tambah titik di sepanjang garis"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           {tool === "line" && (
             <>
               <div className="h-6 w-px bg-border/60" />
