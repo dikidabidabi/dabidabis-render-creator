@@ -201,6 +201,9 @@ function TabulasiBox({
             <Section title="Infografis" icon={<PieChart className="h-4 w-4" />}>
               <InfographicSection data={data} sketch={sketch} />
             </Section>
+            <Section title="Estimasi Biaya" icon={<Wallet className="h-4 w-4" />}>
+              <CostEstimateSection sketch={sketch} />
+            </Section>
           </div>
         </div>
       )}
