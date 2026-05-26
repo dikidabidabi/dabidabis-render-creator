@@ -27,6 +27,7 @@ import {
   Square,
   Move,
   GripHorizontal,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,7 +98,32 @@ type Level = {
   name: string;
   mdpl: number;
   opacity: number; // 0..1 — opacity ketika level ini tidak aktif
+  typicalCount?: number; // ≥1, jumlah lantai tipikal yang menggandakan luas + koefisien
 };
+
+// Tinggi default per lantai tipikal (m). Setiap tambahan tipikal menumpuk 3 m.
+const TYPICAL_FLOOR_H = 3;
+
+// Hitung nama tampilan tiap level (Level N atau Level N–M) berdasarkan urutan MDPL
+// dan jumlah tipikal di tiap level. Jika user sudah mengganti nama (tidak cocok pola
+// "Level <angka>" / "Level <angka>-<angka>"), nama kustom tersebut dipertahankan.
+function isAutoLevelName(name: string): boolean {
+  return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
+}
+function computeLevelDisplayNames(levels: { id: string; name: string; mdpl: number; typicalCount?: number }[]): Record<string, string> {
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const out: Record<string, string> = {};
+  let idx = 1;
+  for (const lv of sorted) {
+    const k = Math.max(1, lv.typicalCount ?? 1);
+    const start = idx;
+    const end = idx + k - 1;
+    const auto = k > 1 ? `Level ${start}–${end}` : `Level ${start}`;
+    out[lv.id] = isAutoLevelName(lv.name) ? auto : lv.name;
+    idx = end + 1;
+  }
+  return out;
+}
 
 type Sketch = {
   id: string;
@@ -383,6 +409,7 @@ function normalizeSketch(s: any): Sketch {
         name: String(lv.name || "Level"),
         mdpl: Number.isFinite(Number(lv.mdpl)) ? Number(lv.mdpl) : 0,
         opacity: typeof lv.opacity === "number" ? Math.max(0, Math.min(1, lv.opacity)) : 0.5,
+        typicalCount: Number.isFinite(Number(lv.typicalCount)) ? Math.max(1, Math.round(Number(lv.typicalCount))) : 1,
       }))
     : [];
   let lines: Line[] = Array.isArray(s?.lines) ? s.lines : [];
@@ -886,6 +913,64 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       toast.success("Level dihapus");
     },
     [levels, lines, layers, activeLvlId, onChange],
+  );
+
+  const duplicateLevel = useCallback(
+    (lvlId: string) => {
+      const src = levels.find((l) => l.id === lvlId);
+      if (!src) return;
+      const maxMdpl = levels.reduce((m, l) => Math.max(m, l.mdpl), 0);
+      const newId = `LV${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const newLvl: Level = {
+        id: newId,
+        name: `Level ${levels.length + 1}`,
+        mdpl: Math.round((maxMdpl + TYPICAL_FLOOR_H) * 100) / 100,
+        opacity: src.opacity,
+        typicalCount: 1,
+      };
+      const idMap = new Map<string, string>();
+      const newLayers: Layer[] = layers
+        .filter((ly) => ly.levelId === lvlId)
+        .map((ly) => {
+          const nid = `L${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          idMap.set(ly.id, nid);
+          return { ...ly, id: nid, levelId: newId, points: ly.points.map((p) => ({ ...p })) };
+        });
+      const newLines: Line[] = lines
+        .filter((ln) => ln.levelId === lvlId)
+        .map((ln) => ({ ...ln, a: { ...ln.a }, b: { ...ln.b }, c1: ln.c1 ? { ...ln.c1 } : undefined, c2: ln.c2 ? { ...ln.c2 } : undefined, levelId: newId }));
+      onChange({
+        levels: [...levels, newLvl],
+        layers: [...layers, ...newLayers],
+        lines: [...lines, ...newLines],
+        activeLevelId: newId,
+      });
+      toast.success(`${newLvl.name} hasil duplikat`);
+    },
+    [levels, layers, lines, onChange],
+  );
+
+  const setLevelTypical = useCallback(
+    (lvlId: string, count: number) => {
+      const k = Math.max(1, Math.min(99, Math.round(count)));
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalCount: k } : l)),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const incrementTypical = useCallback(
+    (lvlId: string) => {
+      const src = levels.find((l) => l.id === lvlId);
+      if (!src) return;
+      const next = Math.min(99, (src.typicalCount ?? 1) + 1);
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalCount: next } : l)),
+      });
+      toast.success(`Lantai tipikal: ${next}×`);
+    },
+    [levels, onChange],
   );
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2373,6 +2458,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onMdpl={updateLevelMdpl}
             onOpacity={updateLevelOpacity}
             onDelete={deleteLevel}
+            onDuplicate={duplicateLevel}
+            onIncrementTypical={incrementTypical}
+            onSetTypical={setLevelTypical}
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
@@ -2667,6 +2755,9 @@ function LevelsPanel({
   onMdpl,
   onOpacity,
   onDelete,
+  onDuplicate,
+  onIncrementTypical,
+  onSetTypical,
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
@@ -2683,6 +2774,9 @@ function LevelsPanel({
   onMdpl: (id: string, mdpl: number) => void;
   onOpacity: (id: string, opacity: number) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onIncrementTypical: (id: string) => void;
+  onSetTypical: (id: string, count: number) => void;
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
@@ -2699,8 +2793,10 @@ function LevelsPanel({
   const [gsbDrafts, setGsbDrafts] = useState<Record<string, string>>({});
   const [layerEditId, setLayerEditId] = useState<string | null>(null);
   const [layerDraft, setLayerDraft] = useState("");
+  const [typicalDrafts, setTypicalDrafts] = useState<Record<string, string>>({});
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
 
+  const displayNames = computeLevelDisplayNames(levels);
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
 
   return (
@@ -2797,14 +2893,35 @@ function LevelsPanel({
                   <button
                     onClick={() => {
                       setEditingId(lvl.id);
-                      setDraftName(lvl.name);
+                      setDraftName(displayNames[lvl.id] ?? lvl.name);
                     }}
                     className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-ember"
                     title="Klik untuk ganti nama"
                   >
-                    {lvl.name}
+                    {displayNames[lvl.id] ?? lvl.name}
+                    {(lvl.typicalCount ?? 1) > 1 && (
+                      <span className="ml-1 rounded bg-ember/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ember">
+                        tipikal {lvl.typicalCount}×
+                      </span>
+                    )}
                   </button>
                 )}
+                <button
+                  onClick={() => onDuplicate(lvl.id)}
+                  className="shrink-0 text-muted-foreground transition hover:text-ember"
+                  aria-label="Duplikat level"
+                  title="Duplikat: buat level baru dengan salinan sub-gambar (dapat diedit terpisah)"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => onIncrementTypical(lvl.id)}
+                  className="shrink-0 rounded px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition hover:bg-ember/10 hover:text-ember"
+                  aria-label="Tambah lantai tipikal"
+                  title="Tipikal: gandakan luas + koefisien lantai ini (+3 m MDPL per tambahan)"
+                >
+                  +tip
+                </button>
                 <button
                   onClick={() => onDelete(lvl.id)}
                   className="shrink-0 text-muted-foreground transition hover:text-ember"
@@ -2843,20 +2960,52 @@ function LevelsPanel({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   }}
-                  className="h-7 w-24 text-sm"
+                  className="h-7 w-20 text-sm"
                 />
                 <span className="text-[11px] text-muted-foreground">m</span>
+                {(lvl.typicalCount ?? 1) > 1 && (
+                  <>
+                    <span className="text-[10px] uppercase tracking-wider text-ember/80">×</span>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={99}
+                      step={1}
+                      value={typicalDrafts[lvl.id] ?? String(lvl.typicalCount ?? 1)}
+                      onChange={(e) =>
+                        setTypicalDrafts((d) => ({ ...d, [lvl.id]: e.target.value }))
+                      }
+                      onBlur={() => {
+                        const v = parseInt(typicalDrafts[lvl.id] ?? "", 10);
+                        if (Number.isFinite(v)) onSetTypical(lvl.id, v);
+                        setTypicalDrafts((d) => {
+                          const n = { ...d };
+                          delete n[lvl.id];
+                          return n;
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                      className="h-7 w-14 text-sm text-ember"
+                      title="Jumlah lantai tipikal — luas & koefisien dikalikan nilai ini"
+                    />
+                    <span className="text-[10px] text-ember/80">tip</span>
+                  </>
+                )}
                 <span
                   className="ml-auto font-display text-[11px] font-semibold text-foreground"
-                  title="Total luas ruang di level ini (tanpa lahan, sudah dikalikan koefisien)"
+                  title="Total luas ruang di level ini (tanpa lahan, sudah dikalikan koefisien dan jumlah tipikal)"
                 >
-                  {subLayers
+                  {(subLayers
                     .filter((ly) => !isLahanName(ly.name))
-                    .reduce((s, ly) => s + ly.areaM2 * (ly.coefficient ?? 1), 0)
+                    .reduce((s, ly) => s + ly.areaM2 * (ly.coefficient ?? 1), 0) * (lvl.typicalCount ?? 1))
                     .toFixed(2)}
                   <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m² ruang</span>
                 </span>
               </div>
+
 
               {!isActive && (
                 <div className="mt-2 space-y-1">

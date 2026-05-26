@@ -26,7 +26,7 @@ type Layer = {
   levelId?: string;
   coefficient?: number;
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
 type Sketch = {
   id: string;
   title: string;
@@ -244,31 +244,37 @@ type Stats = {
 function computeStats(sk: Sketch): Stats {
   const layers = sk.layers ?? [];
   const levels = sk.levels ?? [];
+  const tipMul: Record<string, number> = {};
+  for (const lv of levels) tipMul[lv.id] = Math.max(1, lv.typicalCount ?? 1);
+  const mul = (l: Layer) => (l.levelId ? tipMul[l.levelId] ?? 1 : 1);
   const lahan = layers.filter((l) => isLahan(l.name));
   const ruang = layers.filter((l) => !isLahan(l.name));
   const totalLahanM2 = lahan.reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1).reduce((s, l) => s + l.areaM2, 0);
-  const totalSaranaM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0).reduce((s, l) => s + l.areaM2, 0);
-  const totalSetengahM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0.5).reduce((s, l) => s + l.areaM2, 0);
+  const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0) * mul(l), 0);
+  const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1).reduce((s, l) => s + l.areaM2 * mul(l), 0);
+  const totalSaranaM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0).reduce((s, l) => s + l.areaM2 * mul(l), 0);
+  const totalSetengahM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0.5).reduce((s, l) => s + l.areaM2 * mul(l), 0);
 
   const kdbLimitM2 = (sk.kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdbPct! / 100) * totalLahanM2 : 0;
   const klbLimitM2 = (sk.klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? sk.klbCoef! * totalLahanM2 : 0;
 
-  // KDB Rencana: total luas Level 1 (level dengan mdpl terendah) tanpa koefisien
+  // KDB Rencana: footprint level dasar (tidak digandakan tipikal)
   let kdbRencanaM2 = 0;
   if (levels.length > 0) {
     const ground = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
     kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
   }
-  // KLB Rencana: total ruang * koefisien
-  const klbRencanaM2 = ruang.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+  // KLB Rencana: total ruang * koefisien * tipikal
+  const klbRencanaM2 = ruang.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1) * mul(l), 0);
 
-  const jumlahLapis = levels.length;
+  const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, lv.typicalCount ?? 1), 0);
+  const typicalExtra = levels.reduce((s, lv) => s + (Math.max(1, lv.typicalCount ?? 1) - 1) * 3, 0);
   const ketinggianM =
-    levels.length > 1
+    (levels.length > 1
       ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl))
-      : 0;
+      : 0) + typicalExtra;
+
+
 
   return {
     totalLahanM2,
