@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +75,7 @@ type Line = {
   bulge?: number; // for arc: perpendicular sagitta (signed)
   c1?: Point; // for bezier: tangent control near a
   c2?: Point; // for bezier: tangent control near b
+  levelId?: string;
 };
 type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
 
@@ -84,6 +86,14 @@ type Layer = {
   areaM2: number;
   color: string;
   locked?: boolean;
+  levelId?: string;
+};
+
+type Level = {
+  id: string;
+  name: string;
+  mdpl: number;
+  opacity: number; // 0..1 — opacity ketika level ini tidak aktif
 };
 
 type Sketch = {
@@ -95,6 +105,8 @@ type Sketch = {
   snap: boolean;
   lines: Line[];
   layers: Layer[];
+  levels: Level[];
+  activeLevelId: string | null;
 };
 
 type StoreShape = {
@@ -310,6 +322,12 @@ function formatDate(ts: number) {
 
 function newSketch(idx: number): Sketch {
   const now = Date.now();
+  const lvl: Level = {
+    id: `LV${now}_${Math.random().toString(36).slice(2, 6)}`,
+    name: "Level 1",
+    mdpl: 0,
+    opacity: 0.5,
+  };
   return {
     id: `S${now}_${Math.random().toString(36).slice(2, 7)}`,
     title: `Sketsa ${idx}`,
@@ -319,6 +337,52 @@ function newSketch(idx: number): Sketch {
     snap: true,
     lines: [],
     layers: [],
+    levels: [lvl],
+    activeLevelId: lvl.id,
+  };
+}
+
+function normalizeSketch(s: any): Sketch {
+  let levels: Level[] = Array.isArray(s?.levels)
+    ? s.levels.map((lv: any) => ({
+        id: String(lv.id),
+        name: String(lv.name || "Level"),
+        mdpl: Number.isFinite(Number(lv.mdpl)) ? Number(lv.mdpl) : 0,
+        opacity: typeof lv.opacity === "number" ? Math.max(0, Math.min(1, lv.opacity)) : 0.5,
+      }))
+    : [];
+  let lines: Line[] = Array.isArray(s?.lines) ? s.lines : [];
+  let layers: Layer[] = Array.isArray(s?.layers) ? s.layers : [];
+  let activeLevelId: string | null = s?.activeLevelId ?? null;
+  if (levels.length === 0) {
+    const lvl: Level = {
+      id: `LV${s?.id || Date.now()}_1`,
+      name: "Level 1",
+      mdpl: 0,
+      opacity: 0.5,
+    };
+    levels = [lvl];
+    activeLevelId = lvl.id;
+    lines = lines.map((ln) => ({ ...ln, levelId: ln.levelId ?? lvl.id }));
+    layers = layers.map((ly) => ({ ...ly, levelId: ly.levelId ?? lvl.id }));
+  } else if (!activeLevelId || !levels.some((l) => l.id === activeLevelId)) {
+    activeLevelId = levels[0].id;
+  }
+  // Assign any orphan line/layer to first level
+  const fallback = levels[0].id;
+  lines = lines.map((ln) => (ln.levelId && levels.some((l) => l.id === ln.levelId) ? ln : { ...ln, levelId: fallback }));
+  layers = layers.map((ly) => (ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback }));
+  return {
+    id: s?.id,
+    title: s?.title ?? "Sketsa",
+    createdAt: s?.createdAt ?? Date.now(),
+    updatedAt: s?.updatedAt ?? Date.now(),
+    scale: s?.scale ?? "1:100",
+    snap: s?.snap ?? true,
+    lines,
+    layers,
+    levels,
+    activeLevelId,
   };
 }
 
@@ -336,8 +400,9 @@ function SketchPage() {
       if (raw) {
         const s = JSON.parse(raw) as StoreShape;
         if (s && Array.isArray(s.sketches)) {
-          setSketches(s.sketches);
-          setOpenId(s.openId ?? s.sketches[0]?.id ?? null);
+          const normalized = s.sketches.map((x) => normalizeSketch(x));
+          setSketches(normalized);
+          setOpenId(s.openId ?? normalized[0]?.id ?? null);
           setLoaded(true);
           return;
         }
@@ -346,7 +411,7 @@ function SketchPage() {
       const legacy = localStorage.getItem(LEGACY_KEY);
       if (legacy) {
         const ls = JSON.parse(legacy);
-        const migrated: Sketch = {
+        const migrated = normalizeSketch({
           id: `S${Date.now()}`,
           title: ls.title ?? "Sketsa 1",
           createdAt: ls.createdAt ?? Date.now(),
@@ -355,7 +420,7 @@ function SketchPage() {
           snap: ls.snap ?? true,
           lines: Array.isArray(ls.lines) ? ls.lines : [],
           layers: Array.isArray(ls.layers) ? ls.layers : [],
-        };
+        });
         setSketches([migrated]);
         setOpenId(migrated.id);
       } else {
@@ -658,7 +723,92 @@ type EditorProps = {
 };
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
-  const { id, scale, snap, lines, layers } = sketch;
+  const { id, scale, snap, lines, layers, levels, activeLevelId } = sketch;
+  const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
+
+  // Level management helpers
+  const ensureLevels = useCallback((): { levels: Level[]; activeId: string } => {
+    if (levels.length > 0 && activeLvlId) {
+      return { levels, activeId: activeLvlId };
+    }
+    if (levels.length > 0) {
+      return { levels, activeId: levels[0].id };
+    }
+    const lvl: Level = {
+      id: `LV${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: "Level 1",
+      mdpl: 0,
+      opacity: 0.5,
+    };
+    return { levels: [lvl], activeId: lvl.id };
+  }, [levels, activeLvlId]);
+
+  const setActiveLevel = useCallback(
+    (lvlId: string) => onChange({ activeLevelId: lvlId }),
+    [onChange],
+  );
+
+  const addLevel = useCallback(() => {
+    const maxMdpl = levels.reduce((m, l) => Math.max(m, l.mdpl), 0);
+    const lvl: Level = {
+      id: `LV${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: `Level ${levels.length + 1}`,
+      mdpl: Math.round((maxMdpl + 3) * 100) / 100,
+      opacity: 0.5,
+    };
+    onChange({ levels: [...levels, lvl], activeLevelId: lvl.id });
+    toast.success(`${lvl.name} ditambahkan`);
+  }, [levels, onChange]);
+
+  const renameLevel = useCallback(
+    (lvlId: string, name: string) => {
+      onChange({
+        levels: levels.map((l) =>
+          l.id === lvlId ? { ...l, name: name.trim() || l.name } : l,
+        ),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const updateLevelMdpl = useCallback(
+    (lvlId: string, mdpl: number) => {
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, mdpl } : l)),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const updateLevelOpacity = useCallback(
+    (lvlId: string, opacity: number) => {
+      onChange({
+        levels: levels.map((l) =>
+          l.id === lvlId ? { ...l, opacity: Math.max(0, Math.min(1, opacity)) } : l,
+        ),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const deleteLevel = useCallback(
+    (lvlId: string) => {
+      if (levels.length <= 1) {
+        toast.error("Minimal harus ada satu level");
+        return;
+      }
+      const remaining = levels.filter((l) => l.id !== lvlId);
+      const fallback = remaining[0].id;
+      onChange({
+        levels: remaining,
+        activeLevelId: activeLvlId === lvlId ? fallback : activeLvlId,
+        lines: lines.filter((ln) => ln.levelId !== lvlId),
+        layers: layers.filter((ly) => ly.levelId !== lvlId),
+      });
+      toast.success("Level dihapus");
+    },
+    [levels, lines, layers, activeLvlId, onChange],
+  );
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -901,53 +1051,77 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     ctx.stroke();
 
-    // Layers
-    layers.forEach((layer) => {
-      if (layer.points.length < 3) return;
-      ctx.beginPath();
-      ctx.moveTo(layer.points[0].x, layer.points[0].y);
-      for (let i = 1; i < layer.points.length; i++) {
-        ctx.lineTo(layer.points[i].x, layer.points[i].y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
-      ctx.fill();
-      ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
-      ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
-      ctx.stroke();
+    // Group + sort by Level MDPL (lowest = bottom, highest = top)
+    const sortedLevels = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+    const fallbackLvl = sortedLevels[0]?.id ?? "";
+    const layersByLvl = new Map<string, Layer[]>();
+    layers.forEach((ly) => {
+      const k = ly.levelId && sortedLevels.some((l) => l.id === ly.levelId) ? ly.levelId : fallbackLvl;
+      if (!layersByLvl.has(k)) layersByLvl.set(k, []);
+      layersByLvl.get(k)!.push(ly);
+    });
+    const linesByLvl = new Map<string, Line[]>();
+    lines.forEach((ln) => {
+      const k = ln.levelId && sortedLevels.some((l) => l.id === ln.levelId) ? ln.levelId : fallbackLvl;
+      if (!linesByLvl.has(k)) linesByLvl.set(k, []);
+      linesByLvl.get(k)!.push(ln);
     });
 
-    // Lines
-    ctx.lineCap = "round";
-    for (const ln of lines) {
-      const locked = isLineLocked(ln);
-      const kind = ln.kind ?? "straight";
-      ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
-      ctx.lineWidth = (locked ? 2.6 : 2) / s;
-      ctx.beginPath();
-      ctx.moveTo(ln.a.x, ln.a.y);
-      if (kind === "straight") {
-        ctx.lineTo(ln.b.x, ln.b.y);
-      } else if (kind === "arc") {
-        const C = arcControlPoint(ln);
-        ctx.quadraticCurveTo(C.x, C.y, ln.b.x, ln.b.y);
-      } else {
-        const c1 = ln.c1 ?? ln.a;
-        const c2 = ln.c2 ?? ln.b;
-        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
-      }
-      ctx.stroke();
-    }
+    for (const lvl of sortedLevels) {
+      const alpha = activeLvlId == null || lvl.id === activeLvlId ? 1 : lvl.opacity;
+      if (alpha <= 0.001) continue;
+      ctx.globalAlpha = alpha;
 
-    // Endpoints
-    ctx.fillStyle = "#1a1a1a";
-    for (const ln of lines) {
-      for (const p of [ln.a, ln.b]) {
+      // Layers
+      (layersByLvl.get(lvl.id) || []).forEach((layer) => {
+        if (layer.points.length < 3) return;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 3 / s, 0, Math.PI * 2);
+        ctx.moveTo(layer.points[0].x, layer.points[0].y);
+        for (let i = 1; i < layer.points.length; i++) {
+          ctx.lineTo(layer.points[i].x, layer.points[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
         ctx.fill();
+        ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
+        ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
+        ctx.stroke();
+      });
+
+      // Lines
+      ctx.lineCap = "round";
+      const lvlLines = linesByLvl.get(lvl.id) || [];
+      for (const ln of lvlLines) {
+        const locked = isLineLocked(ln);
+        const kind = ln.kind ?? "straight";
+        ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
+        ctx.lineWidth = (locked ? 2.6 : 2) / s;
+        ctx.beginPath();
+        ctx.moveTo(ln.a.x, ln.a.y);
+        if (kind === "straight") {
+          ctx.lineTo(ln.b.x, ln.b.y);
+        } else if (kind === "arc") {
+          const C = arcControlPoint(ln);
+          ctx.quadraticCurveTo(C.x, C.y, ln.b.x, ln.b.y);
+        } else {
+          const c1 = ln.c1 ?? ln.a;
+          const c2 = ln.c2 ?? ln.b;
+          ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
+        }
+        ctx.stroke();
+      }
+
+      // Endpoints
+      ctx.fillStyle = "#1a1a1a";
+      for (const ln of lvlLines) {
+        for (const p of [ln.a, ln.b]) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3 / s, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
+    ctx.globalAlpha = 1;
 
     // Active drawing preview (during drag)
     if (drawing) {
@@ -1081,6 +1255,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Layer labels (vertical: name on top, area below) drawn upright
     layers.forEach((layer) => {
       if (layer.points.length < 3) return;
+      const lvl = levels.find((l) => l.id === layer.levelId);
+      const labelAlpha = !lvl || activeLvlId == null || lvl.id === activeLvlId ? 1 : lvl.opacity;
+      if (labelAlpha <= 0.001) return;
+      ctx.globalAlpha = labelAlpha;
       let cx = 0, cy = 0;
       layer.points.forEach((p) => { cx += p.x; cy += p.y; });
       cx /= layer.points.length;
@@ -1105,6 +1283,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillText(areaText, sp.x, sp.y + 14);
       ctx.textAlign = "start";
     });
+    ctx.globalAlpha = 1;
 
     // Active line length label, screen-space
     if (drawing) {
@@ -1119,7 +1298,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -1134,7 +1313,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Commit a finished line into state, run cycle detection, push history.
   const commitLine = useCallback(
     (newLine: Line) => {
-      const nextLines = [...lines, newLine];
+      const { levels: nextLevelsBase, activeId } = ensureLevels();
+      const taggedLine: Line = { ...newLine, levelId: newLine.levelId ?? activeId };
+      const nextLines = [...lines, taggedLine];
       const newIdx = nextLines.length - 1;
       const cycle = findCycleWithLine(nextLines, newIdx);
       let nextLayers = layers;
@@ -1151,15 +1332,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             areaM2,
             color,
             locked: false,
+            levelId: activeId,
           };
           nextLayers = [...layers, layer];
           toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
         }
       }
       pushHistory();
-      onChange({ lines: nextLines, layers: nextLayers });
+      const patch: Partial<Sketch> = { lines: nextLines, layers: nextLayers };
+      if (nextLevelsBase !== levels) {
+        patch.levels = nextLevelsBase;
+        patch.activeLevelId = activeId;
+      } else if (!activeLvlId) {
+        patch.activeLevelId = activeId;
+      }
+      onChange(patch);
     },
-    [lines, layers, pxPerMeter, pushHistory, onChange],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
   );
 
   const commitPendingCurve = useCallback(() => {
@@ -1191,11 +1380,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const p2 = { x: maxX, y: minY };
       const p3 = { x: maxX, y: maxY };
       const p4 = { x: minX, y: maxY };
+      const { levels: nextLevelsBase, activeId } = ensureLevels();
       const newLines: Line[] = [
-        { a: p1, b: p2, kind: "straight" },
-        { a: p2, b: p3, kind: "straight" },
-        { a: p3, b: p4, kind: "straight" },
-        { a: p4, b: p1, kind: "straight" },
+        { a: p1, b: p2, kind: "straight", levelId: activeId },
+        { a: p2, b: p3, kind: "straight", levelId: activeId },
+        { a: p3, b: p4, kind: "straight", levelId: activeId },
+        { a: p4, b: p1, kind: "straight", levelId: activeId },
       ];
       const pts = [p1, p2, p3, p4];
       const areaPx = polygonAreaPx(pts);
@@ -1209,12 +1399,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         areaM2,
         color,
         locked: false,
+        levelId: activeId,
       };
       pushHistory();
-      onChange({ lines: [...lines, ...newLines], layers: [...layers, layer] });
+      const patch: Partial<Sketch> = {
+        lines: [...lines, ...newLines],
+        layers: [...layers, layer],
+      };
+      if (nextLevelsBase !== levels) {
+        patch.levels = nextLevelsBase;
+        patch.activeLevelId = activeId;
+      } else if (!activeLvlId) {
+        patch.activeLevelId = activeId;
+      }
+      onChange(patch);
       toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
     },
-    [lines, layers, pxPerMeter, pushHistory, onChange],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
   );
 
   // Find nearest vertex (line endpoint or layer point) within tolerance
@@ -1799,6 +2000,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
       </div>
 
+      <LevelsPanel
+        levels={levels}
+        activeLevelId={activeLvlId}
+        onSetActive={setActiveLevel}
+        onAdd={addLevel}
+        onRename={renameLevel}
+        onMdpl={updateLevelMdpl}
+        onOpacity={updateLevelOpacity}
+        onDelete={deleteLevel}
+        lines={lines}
+        layers={layers}
+      />
+
       <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
@@ -2127,6 +2341,185 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         </div>
       </div>
       {SidePanel}
+    </div>
+  );
+}
+
+// ============================================================
+// LevelsPanel — manages level groups (rename, MDPL, opacity)
+// ============================================================
+
+function LevelsPanel({
+  levels,
+  activeLevelId,
+  onSetActive,
+  onAdd,
+  onRename,
+  onMdpl,
+  onOpacity,
+  onDelete,
+  lines,
+  layers,
+}: {
+  levels: Level[];
+  activeLevelId: string | null;
+  onSetActive: (id: string) => void;
+  onAdd: () => void;
+  onRename: (id: string, name: string) => void;
+  onMdpl: (id: string, mdpl: number) => void;
+  onOpacity: (id: string, opacity: number) => void;
+  onDelete: (id: string) => void;
+  lines: Line[];
+  layers: Layer[];
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [mdplDrafts, setMdplDrafts] = useState<Record<string, string>>({});
+
+  const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+          <Layers className="h-3.5 w-3.5" /> Level
+        </div>
+        <span className="text-[11px] text-muted-foreground">
+          {levels.length} level · urut MDPL ↓
+        </span>
+      </div>
+
+      <ul className="space-y-2">
+        {sorted.map((lvl) => {
+          const isActive = lvl.id === activeLevelId;
+          const editing = editingId === lvl.id;
+          const lineCount = lines.filter((ln) => ln.levelId === lvl.id).length;
+          const layerCount = layers.filter((ly) => ly.levelId === lvl.id).length;
+          const mdplDraft = mdplDrafts[lvl.id];
+          return (
+            <li
+              key={lvl.id}
+              className={cn(
+                "rounded-md border px-2.5 py-2 transition",
+                isActive
+                  ? "border-ember bg-ember/10 ring-1 ring-ember/40"
+                  : "border-border/50 bg-background/60",
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onSetActive(lvl.id)}
+                  className={cn(
+                    "h-3 w-3 shrink-0 rounded-full border-2 transition",
+                    isActive ? "border-ember bg-ember" : "border-foreground/30 bg-background hover:border-ember",
+                  )}
+                  aria-label={isActive ? "Level aktif" : "Aktifkan level"}
+                  title={isActive ? "Level aktif" : "Klik untuk aktifkan"}
+                />
+                {editing ? (
+                  <Input
+                    autoFocus
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onBlur={() => {
+                      onRename(lvl.id, draftName);
+                      setEditingId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        onRename(lvl.id, draftName);
+                        setEditingId(null);
+                      }
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    className="h-7 text-sm"
+                  />
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditingId(lvl.id);
+                      setDraftName(lvl.name);
+                    }}
+                    className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-ember"
+                    title="Klik untuk ganti nama"
+                  >
+                    {lvl.name}
+                  </button>
+                )}
+                <button
+                  onClick={() => onDelete(lvl.id)}
+                  className="shrink-0 text-muted-foreground transition hover:text-ember"
+                  aria-label="Hapus level"
+                  title="Hapus level beserta gambarnya"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="mt-2 flex items-center gap-2">
+                <Label
+                  htmlFor={`mdpl-${lvl.id}`}
+                  className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground"
+                >
+                  MDPL
+                </Label>
+                <Input
+                  id={`mdpl-${lvl.id}`}
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  value={mdplDraft ?? String(lvl.mdpl)}
+                  onChange={(e) =>
+                    setMdplDrafts((d) => ({ ...d, [lvl.id]: e.target.value }))
+                  }
+                  onBlur={() => {
+                    const v = parseFloat(mdplDraft ?? "");
+                    if (Number.isFinite(v)) onMdpl(lvl.id, v);
+                    setMdplDrafts((d) => {
+                      const n = { ...d };
+                      delete n[lvl.id];
+                      return n;
+                    });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                  className="h-7 w-24 text-sm"
+                />
+                <span className="text-[11px] text-muted-foreground">m</span>
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  {layerCount} ruang · {lineCount} garis
+                </span>
+              </div>
+
+              {!isActive && (
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>Opasitas saat tidak aktif</span>
+                    <span className="font-display text-[11px] font-semibold text-foreground">
+                      {Math.round(lvl.opacity * 100)}%
+                    </span>
+                  </div>
+                  <Slider
+                    value={[Math.round(lvl.opacity * 100)]}
+                    min={0}
+                    max={100}
+                    step={5}
+                    onValueChange={(v) => onOpacity(lvl.id, (v[0] ?? 0) / 100)}
+                  />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <button
+        onClick={onAdd}
+        className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border/60 bg-background/40 px-3 py-2 text-xs font-medium text-muted-foreground transition hover:border-ember/60 hover:bg-ember/5 hover:text-ember"
+      >
+        <Plus className="h-3.5 w-3.5" /> Tambah Level
+      </button>
     </div>
   );
 }
