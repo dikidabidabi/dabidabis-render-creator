@@ -10,8 +10,11 @@ import {
   Pause,
   Maximize2,
   Printer,
+  FileDown,
+  Presentation,
   X,
   Inbox,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
