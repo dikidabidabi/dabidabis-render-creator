@@ -219,6 +219,15 @@ function pointToSegment(p: Point, a: Point, b: Point) {
   t = Math.max(0, Math.min(1, t));
   return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
 }
+function projectOnSegment(p: Point, a: Point, b: Point): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { x: a.x, y: a.y };
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
 function pointToLine(p: Point, ln: Line): number {
   if ((ln.kind ?? "straight") === "straight") return pointToSegment(p, ln.a, ln.b);
   const pts = sampleLine(ln, 20);
