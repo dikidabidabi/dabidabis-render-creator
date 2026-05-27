@@ -42,7 +42,7 @@ type Level = { id: string; name: string; mdpl: number; opacity: number; typicalC
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
-  kdbPct?: number; klbCoef?: number; fungsi?: string;
+  kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -854,6 +854,26 @@ function SlideFooter({ slide }: { slide: Slide }) {
   );
 }
 
+function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
+  const r = ((rotation % 360) + 360) % 360;
+  return (
+    <div style={{ position: "absolute", right: 8, bottom: 8, width: size, height: size, pointerEvents: "none" }}>
+      <div style={{ width: size, height: size, transform: `rotate(${r}deg)` }}>
+        <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
+          <circle cx="50" cy="50" r="46" fill="rgba(255,255,255,0.92)" stroke="#0a0a0a" strokeWidth="2" />
+          <circle cx="50" cy="50" r="2.5" fill="#0a0a0a" />
+          <polygon points="50,8 42,52 50,46 58,52" fill="#e85d3a" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
+          <polygon points="50,92 44,54 50,58 56,54" fill="#ffffff" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
+          <text x="50" y="22" textAnchor="middle" fontSize="14" fontWeight="800" fill="#0a0a0a" fontFamily="Sora, sans-serif">U</text>
+          <text x="50" y="86" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">S</text>
+          <text x="84" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">T</text>
+          <text x="16" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">B</text>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // ---- Level body ----
 function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const { sketch, level, bounds } = slide;
@@ -870,7 +890,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
 
   return (
     <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
         <svg
           viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`}
           preserveAspectRatio="xMidYMid meet"
@@ -919,6 +939,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             />
           ))}
         </svg>
+        <SlideCompass rotation={Number(sketch.northRotation) || 0} />
       </div>
       <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
         <BigStat

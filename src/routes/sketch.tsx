@@ -140,6 +140,7 @@ type Sketch = {
   kdbPct?: number; // 0..100, prosentase KDB terhadap luas lahan
   klbCoef?: number; // koefisien KLB, pengali luas lahan
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
+  northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
 };
 
 type StoreShape = {
@@ -505,6 +506,7 @@ function normalizeSketch(s: any): Sketch {
     kdbPct: Number.isFinite(Number(s?.kdbPct)) ? Math.max(0, Math.min(100, Number(s.kdbPct))) : undefined,
     klbCoef: Number.isFinite(Number(s?.klbCoef)) ? Math.max(0, Number(s.klbCoef)) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
+    northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
   };
 }
 
@@ -837,6 +839,34 @@ function FullscreenSketch({
 // SketchEditor — drawing surface + side panel
 // ============================================================
 
+function CompassMarker({ rotation, size = 64 }: { rotation: number; size?: number }) {
+  const r = ((rotation % 360) + 360) % 360;
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        transform: `rotate(${r}deg)`,
+        transition: "transform 120ms ease-out",
+      }}
+    >
+      <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
+        <circle cx="50" cy="50" r="46" fill="rgba(255,255,255,0.92)" stroke="#0a0a0a" strokeWidth="2" />
+        <circle cx="50" cy="50" r="2.5" fill="#0a0a0a" />
+        {/* North arrow */}
+        <polygon points="50,8 42,52 50,46 58,52" fill="#e85d3a" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
+        {/* South tail */}
+        <polygon points="50,92 44,54 50,58 56,54" fill="#ffffff" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
+        {/* Cardinal labels */}
+        <text x="50" y="22" textAnchor="middle" fontSize="14" fontWeight="800" fill="#0a0a0a" fontFamily="Sora, sans-serif">U</text>
+        <text x="50" y="86" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">S</text>
+        <text x="84" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">T</text>
+        <text x="16" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">B</text>
+      </svg>
+    </div>
+  );
+}
+
 type EditorProps = {
   sketch: Sketch;
   onChange: (patch: Partial<Sketch>) => void;
@@ -846,6 +876,7 @@ type EditorProps = {
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, fungsi } = sketch;
+  const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
@@ -2455,6 +2486,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       </div>
 
       <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Arah Utara</Label>
+        <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background/40 p-2.5">
+          <CompassMarker rotation={northRotation} size={56} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                step="1"
+                value={Number.isFinite(northRotation) ? northRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onChange({ northRotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-8 text-sm"
+              />
+              <span className="text-xs text-muted-foreground">°</span>
+            </div>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: ((northRotation - 15) % 360 + 360) % 360 })}>−15°</Button>
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: 0 })}>0°</Button>
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: ((northRotation + 15) % 360 + 360) % 360 })}>+15°</Button>
+            </div>
+          </div>
+        </div>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          0° = utara ke atas. Rotasi searah jarum jam. Muncul di kanan bawah tiap denah pada slide.
+        </p>
+      </div>
+
+
+
+      <div className="space-y-2">
         <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
         <div className="grid grid-cols-2 gap-2">
           <Button
@@ -2699,6 +2765,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
+          <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
+            <CompassMarker rotation={northRotation} size={72} />
+          </div>
         </div>
 
         {/* Top-left controls: escape, undo, redo */}
@@ -2920,6 +2989,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           />
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
             Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
+          </div>
+          <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
+            <CompassMarker rotation={northRotation} size={64} />
           </div>
         </div>
         {SidePanel}
