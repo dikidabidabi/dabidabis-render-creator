@@ -1059,9 +1059,9 @@ function AxonometricView({
 
   // Floors
   for (const lv of withH) {
-    const top = colorOf(lv.id);
+    const top = colorOf(lv.sourceId);
     const side = shadeHsl(top, -18);
-    const layers = build.filter((l) => l.levelId === lv.id);
+    const layers = build.filter((l) => l.levelId === lv.sourceId);
     for (const ly of layers) {
       const pm = ly.points.map((p) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx }));
       if (pm.length < 3) continue;
