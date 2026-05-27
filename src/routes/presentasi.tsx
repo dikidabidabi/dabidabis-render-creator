@@ -876,6 +876,15 @@ function SlideFooter({ slide }: { slide: Slide }) {
   );
 }
 
+// Effective compass: northRotation (sketch's chosen north) digabung dengan
+// rotasi peta sehingga panah Utara selalu mengikuti map underlay. Ini juga
+// dipakai sebagai referensi tunggal untuk analisis matahari.
+function effectiveNorthDeg(sketch: Sketch): number {
+  const n = Number(sketch.northRotation) || 0;
+  const m = Number(sketch.geo?.mapRotation) || 0;
+  return ((n - m) % 360 + 360) % 360;
+}
+
 function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
   const r = ((rotation % 360) + 360) % 360;
   return (
