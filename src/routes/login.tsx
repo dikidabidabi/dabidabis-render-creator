@@ -9,8 +9,8 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    mode: (search.mode as string) === "signup" ? "signup" : ("signin" as "signin" | "signup"),
+  validateSearch: (search: Record<string, unknown>): { mode?: "signin" | "signup" } => ({
+    mode: (search.mode as string) === "signup" ? "signup" : "signin",
   }),
   component: LoginPage,
 });
@@ -22,13 +22,13 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"signin" | "signup">(mode);
+  const [tab, setTab] = useState<"signin" | "signup">(mode ?? "signin");
 
   useEffect(() => {
     if (user) navigate({ to: "/studio" });
   }, [user, navigate]);
 
-  useEffect(() => setTab(mode), [mode]);
+  useEffect(() => setTab(mode ?? "signin"), [mode]);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
