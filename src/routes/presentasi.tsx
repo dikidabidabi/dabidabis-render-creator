@@ -265,6 +265,7 @@ function PresentasiBox({
   }, [full, next, prev]);
 
   const renderSlideImages = useCallback(async (): Promise<string[]> => {
+    if (import.meta.env.SSR) return [];
     // Wait two frames so the offscreen render mounts at full A3 size.
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     const root = exportRootRef.current;
@@ -280,6 +281,7 @@ function PresentasiBox({
   }, []);
 
   const doExportPptx = useCallback(async () => {
+    if (import.meta.env.SSR) return;
     setExporting("pptx");
     try {
       const images = await renderSlideImages();
@@ -304,6 +306,7 @@ function PresentasiBox({
   }, [sketch.title, renderSlideImages]);
 
   const doExportPdf = useCallback(async () => {
+    if (import.meta.env.SSR) return;
     setExporting("pdf");
     try {
       const images = await renderSlideImages();
