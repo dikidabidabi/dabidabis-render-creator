@@ -818,6 +818,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
     slide.kind === "level" ? "Sketsa · Level"
+    : slide.kind === "matahari" ? "Analisa · Matahari"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
