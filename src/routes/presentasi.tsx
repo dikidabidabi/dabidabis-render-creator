@@ -1185,9 +1185,9 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
         {rows.map((r) => {
           const widthPct = 14 + (r.area / maxArea) * 86;
           return (
-            <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36 }}>
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36 }}>
               <div style={{ width: 62, textAlign: "right", fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
-                {fmt(r.lv.mdpl, 1)} m
+                {fmt(r.mdpl, 1)} m
               </div>
               <div style={{ flex: 1, position: "relative", height: 36 }}>
                 <div
@@ -1206,7 +1206,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
                   }}
                 >
                   <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.lv.name}
+                    {r.label}
                   </span>
                   <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>
                     {fmt(r.area)} m²
