@@ -1237,28 +1237,34 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
             Legenda Level
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {rows.map((r) => {
-              const pct = totalArea > 0 ? (r.area / totalArea) * 100 : 0;
+            {levelsAsc.slice().reverse().map((lv) => {
+              const baseArea = build
+                .filter((l) => l.levelId === lv.id)
+                .reduce((s, l) => s + (l.areaM2 || 0), 0);
+              const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+              const total = baseArea * k;
+              const pct = totalArea > 0 ? (total / totalArea) * 100 : 0;
+              const name = displayNames[lv.id] ?? lv.name;
               return (
-                <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <span style={{ width: 12, height: 12, background: r.color, border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
+                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <span style={{ width: 12, height: 12, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.lv.name}
+                    {name}{k > 1 ? ` · ${k}×` : ""}
                   </span>
                   <span style={{ color: "#888", fontSize: 10, fontVariantNumeric: "tabular-nums" }}>
                     {fmt(pct, 1)}%
                   </span>
                   <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 70, textAlign: "right" }}>
-                    {fmt(r.area)} m²
+                    {fmt(total)} m²
                   </span>
                 </div>
               );
             })}
           </div>
         </div>
-        <BigStat label="Jumlah Lapis" value={String(rows.length)} />
+        <BigStat label="Jumlah Lapis" value={String(totalFloors)} />
         <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" />
-        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="selisih MDPL" />
+        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="termasuk tipikal" />
       </div>
     </div>
   );
