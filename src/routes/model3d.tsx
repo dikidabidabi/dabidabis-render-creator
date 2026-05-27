@@ -504,7 +504,7 @@ function SketchViewer({
           dpr={[1, 2]}
         >
           <color attach="background" args={["#eef1f4"]} />
-          <Scene sketch={sketch} highlightLevelId={highlight} />
+          <Scene sketch={sketch} highlightLevelId={highlight} sunHour={sunHour} />
           <OrbitControls
             ref={orbitRef}
             enableDamping
