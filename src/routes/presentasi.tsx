@@ -140,11 +140,14 @@ function PresentasiPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const lastRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { setSketches([]); return; }
+      if (raw === lastRawRef.current) return;
+      lastRawRef.current = raw;
+      if (!raw) { setSketches([]); setOpenId(null); return; }
       const s = JSON.parse(raw) as StoreShape;
       if (s && Array.isArray(s.sketches)) {
         setSketches(s.sketches as Sketch[]);
@@ -700,8 +703,9 @@ function ManualScaleBox({
       const ch = inner.scrollHeight;
       inner.style.transform = prev;
       if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
-      setNatural({ w: cw, h: ch });
-      setFitScale(Math.min(1, box.width / cw, box.height / ch));
+      setNatural((prev) => (prev && prev.w === cw && prev.h === ch ? prev : { w: cw, h: ch }));
+      const nextFit = Math.min(1, box.width / cw, box.height / ch);
+      setFitScale((prev) => (Math.abs(prev - nextFit) < 0.001 ? prev : nextFit));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -793,6 +797,19 @@ function ManualScaleBox({
 
 function SlideContent({ slide }: { slide?: Slide }) {
   if (!slide) return null;
+  const body = (
+    <>
+      {slide.kind === "level" && <LevelBody slide={slide} />}
+      {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
+      {slide.kind === "matahari" && <MatahariBody slide={slide} />}
+      {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
+      {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
+      {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
+    </>
+  );
+  const fixedLayout = slide.kind === "level" || slide.kind === "matahari";
   // Inner padded "safe area" inside the 1414x1000 canvas, 2.5cm inset.
   return (
     <div
@@ -808,16 +825,15 @@ function SlideContent({ slide }: { slide?: Slide }) {
       }}
     >
       <SlideHeader slide={slide} />
-      <ManualScaleBox slideId={slide.id} style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28 }}>
-        {slide.kind === "level" && <LevelBody slide={slide} />}
-        {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
-        {slide.kind === "matahari" && <MatahariBody slide={slide} />}
-        {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
-        {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
-        {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
-        {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
-        {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
-      </ManualScaleBox>
+      {fixedLayout ? (
+        <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
+          {body}
+        </div>
+      ) : (
+        <ManualScaleBox slideId={slide.id} style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28 }}>
+          {body}
+        </ManualScaleBox>
+      )}
       <SlideFooter slide={slide} />
     </div>
   );
