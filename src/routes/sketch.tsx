@@ -2496,7 +2496,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         )}
         {tool === "edit" && (
           <div className="space-y-1.5">
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               <Button
                 variant={editMode === "move" ? "default" : "outline"}
                 size="sm"
@@ -2513,13 +2513,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 className={cn("h-8 px-2 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
                 title="Tambah titik baru di sepanjang garis"
               >
-                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Titik
+                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah
+              </Button>
+              <Button
+                variant={editMode === "delete" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("delete")}
+                className={cn("h-8 px-2 text-[11px]", editMode === "delete" && "bg-destructive text-destructive-foreground")}
+                title="Hapus titik atau edge pada level aktif"
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus
               </Button>
             </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {editMode === "move"
-                ? "Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser."
-                : "Ketuk di sepanjang garis lurus untuk menambah titik baru yang dapat digeser."}
+                ? "Tarik titik (vertex) pada level aktif ke posisi baru. Titik terkunci tidak dapat digeser."
+                : editMode === "addPoint"
+                  ? "Ketuk di sepanjang garis lurus pada level aktif untuk menambah titik baru."
+                  : "Ketuk titik untuk menghapusnya, atau ketuk edge (termasuk yang sudah tidak terhitung) untuk menghapus garis. Hanya berlaku pada level aktif."}
             </p>
           </div>
         )}
