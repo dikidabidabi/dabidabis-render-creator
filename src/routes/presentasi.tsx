@@ -876,13 +876,14 @@ function SlideFooter({ slide }: { slide: Slide }) {
   );
 }
 
-// Effective compass: northRotation (sketch's chosen north) digabung dengan
-// rotasi peta sehingga panah Utara selalu mengikuti map underlay. Ini juga
-// dipakai sebagai referensi tunggal untuk analisis matahari.
+// Sudut arah Utara nyata pada frame sketsa (CW dari sketsa-atas).
+// Di Sketsa, user merotasi peta CW sebesar mapRotation supaya jalan/garis
+// peta menempel pada tapak; otomatis Utara nyata berada di sudut mapRotation
+// dari sketsa-atas. Inilah satu-satunya acuan untuk kompas & analisa matahari
+// agar konsisten dengan superimpose di sketsa.
 function effectiveNorthDeg(sketch: Sketch): number {
-  const n = Number(sketch.northRotation) || 0;
   const m = Number(sketch.geo?.mapRotation) || 0;
-  return ((n - m) % 360 + 360) % 360;
+  return ((m % 360) + 360) % 360;
 }
 
 function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
