@@ -1838,6 +1838,36 @@ function centroid(pts: Point[]): Point {
   return { x: x / pts.length, y: y / pts.length };
 }
 
+const DEFAULT_GSB_M_PRES = 4;
+function getLayerGsbM(layer: Layer, i: number): number {
+  const v = layer.gsb?.[i];
+  return Number.isFinite(v) && (v as number) >= 0 ? (v as number) : DEFAULT_GSB_M_PRES;
+}
+function pointInPolyPres(p: Point, poly: Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > p.y) !== (yj > p.y)) &&
+      (p.x < ((xj - xi) * (p.y - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+function inwardOffsetSegPx(pts: Point[], i: number, distPx: number): { a: Point; b: Point; mid: Point } {
+  const a = pts[i];
+  const b = pts[(i + 1) % pts.length];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  let nx = -dy / len, ny = dx / len;
+  const probe = { x: (a.x + b.x) / 2 + nx * 0.5, y: (a.y + b.y) / 2 + ny * 0.5 };
+  if (!pointInPolyPres(probe, pts)) { nx = -nx; ny = -ny; }
+  return {
+    a: { x: a.x + nx * distPx, y: a.y + ny * distPx },
+    b: { x: b.x + nx * distPx, y: b.y + ny * distPx },
+    mid: { x: (a.x + b.x) / 2 + nx * distPx, y: (a.y + b.y) / 2 + ny * distPx },
+  };
+}
+
 function linePath(ln: Line): string {
   const kind = ln.kind ?? "straight";
   if (kind === "straight") return `M ${ln.a.x} ${ln.a.y} L ${ln.b.x} ${ln.b.y}`;
