@@ -1719,9 +1719,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         coefficient: 1,
       };
       pushHistory();
+      const carved = applySubtractionToLayers(layers, pts, activeId);
       const patch: Partial<Sketch> = {
         lines: [...lines, ...newLines],
-        layers: [...layers, layer],
+        layers: [...carved, layer],
       };
       if (nextLevelsBase !== levels) {
         patch.levels = nextLevelsBase;
@@ -1732,7 +1733,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange(patch);
       toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
     },
-    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
   // Find nearest vertex (line endpoint or layer point) within tolerance
