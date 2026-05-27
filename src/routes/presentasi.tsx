@@ -935,6 +935,17 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const totalLuas = luasPerLantai * k;
   const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
   const displayName = displayNames[level.id] ?? level.name;
+  // Level 1 = level dengan mdpl terendah. GSB & radius EVK hanya muncul di Level 1.
+  const minMdpl = (sketch.levels ?? []).length
+    ? Math.min(...(sketch.levels ?? []).map((l) => l.mdpl))
+    : level.mdpl;
+  const isGround = level.mdpl === minMdpl;
+  const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
+  const pxPerM = 1 / mPerSPx;
+  const evkRooms = isGround
+    ? layers.filter((l) => l.name.trim().toLowerCase() === "tangga evk" && l.points.length >= 3)
+    : [];
+  const sw = Math.max(w, h);
 
   return (
     <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
@@ -944,15 +955,37 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           preserveAspectRatio="xMidYMid meet"
           style={{ width: "100%", height: "100%", display: "block" }}
         >
-          {lahanAll.map((l) => (
-            <polygon
-              key={`lhn-${l.id}`}
-              points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
-              fill="rgba(0,0,0,0.04)"
-              stroke="rgba(0,0,0,0.55)"
-              strokeWidth={Math.max(w, h) * 0.0015}
-              strokeDasharray={`${Math.max(w, h) * 0.006} ${Math.max(w, h) * 0.004}`}
-            />
+          {isGround && lahanAll.map((l) => (
+            <g key={`lhn-${l.id}`}>
+              <polygon
+                points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="rgba(0,0,0,0.04)"
+                stroke="rgba(0,0,0,0.55)"
+                strokeWidth={sw * 0.0015}
+              />
+              {l.points.map((_, i) => {
+                const seg = inwardOffsetSegPx(l.points, i, getLayerGsbM(l, i) * pxPerM);
+                if (getLayerGsbM(l, i) <= 0) return null;
+                return (
+                  <g key={`gsb-${l.id}-${i}`}>
+                    <line
+                      x1={seg.a.x} y1={seg.a.y} x2={seg.b.x} y2={seg.b.y}
+                      stroke="rgba(0,0,0,0.9)"
+                      strokeWidth={sw * 0.0012}
+                      strokeDasharray={`${sw * 0.006} ${sw * 0.004}`}
+                    />
+                    <text
+                      x={seg.mid.x} y={seg.mid.y}
+                      textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={600} fill="#0a0a0a"
+                      style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.006 } as React.CSSProperties}
+                    >
+                      {`GSB ${i + 1} (${getLayerGsbM(l, i)}m)`}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
           ))}
           {layers.filter((l) => !isLahan(l.name)).map((l) => (
             <g key={l.id}>
@@ -960,17 +993,17 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill={l.color.replace("ALPHA", "0.28")}
                 stroke={l.color.replace("ALPHA", "1")}
-                strokeWidth={Math.max(w, h) * 0.002}
+                strokeWidth={sw * 0.002}
               />
               <text
                 x={centroid(l.points).x}
                 y={centroid(l.points).y}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={Math.max(w, h) * 0.02}
+                fontSize={sw * 0.02}
                 fontWeight={600}
                 fill="#0a0a0a"
-                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: Math.max(w, h) * 0.01 } as React.CSSProperties}
+                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: sw * 0.01 } as React.CSSProperties}
               >
                 {l.name}
               </text>
@@ -981,11 +1014,39 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               key={i}
               d={linePath(ln)}
               stroke="#0a0a0a"
-              strokeWidth={Math.max(w, h) * 0.003}
+              strokeWidth={sw * 0.003}
               fill="none"
               strokeLinecap="round"
             />
           ))}
+          {evkRooms.map((l) => {
+            const c = centroid(l.points);
+            const rPx = 38 * pxPerM;
+            return (
+              <g key={`evk-${l.id}`}>
+                <circle
+                  cx={c.x} cy={c.y} r={rPx}
+                  fill="none"
+                  stroke="rgba(232,93,58,0.95)"
+                  strokeWidth={sw * 0.0018}
+                  strokeDasharray={`${sw * 0.008} ${sw * 0.005}`}
+                />
+                <line
+                  x1={c.x} y1={c.y} x2={c.x + rPx} y2={c.y}
+                  stroke="rgba(0,0,0,0.85)"
+                  strokeWidth={sw * 0.0009}
+                />
+                <text
+                  x={c.x + rPx / 2} y={c.y - sw * 0.004}
+                  textAnchor="middle" dominantBaseline="alphabetic"
+                  fontSize={sw * 0.015} fontWeight={700} fill="#0a0a0a"
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.006 } as React.CSSProperties}
+                >
+                  38 m
+                </text>
+              </g>
+            );
+          })}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} />
       </div>
