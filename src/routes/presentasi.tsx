@@ -280,6 +280,7 @@ function PresentasiBox({
   }, []);
 
   const doExportPptx = useCallback(async () => {
+    if (import.meta.env.SSR) return;
     setExporting("pptx");
     try {
       const images = await renderSlideImages();
@@ -304,6 +305,7 @@ function PresentasiBox({
   }, [sketch.title, renderSlideImages]);
 
   const doExportPdf = useCallback(async () => {
+    if (import.meta.env.SSR) return;
     setExporting("pdf");
     try {
       const images = await renderSlideImages();
