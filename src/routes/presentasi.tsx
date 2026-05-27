@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import SunCalc from "suncalc";
-import { drawOsmTiles as _drawOsmTiles } from "@/lib/geo";
+import { drawOsmTiles } from "@/lib/geo";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
@@ -876,6 +876,15 @@ function SlideFooter({ slide }: { slide: Slide }) {
   );
 }
 
+// Effective compass: northRotation (sketch's chosen north) digabung dengan
+// rotasi peta sehingga panah Utara selalu mengikuti map underlay. Ini juga
+// dipakai sebagai referensi tunggal untuk analisis matahari.
+function effectiveNorthDeg(sketch: Sketch): number {
+  const n = Number(sketch.northRotation) || 0;
+  const m = Number(sketch.geo?.mapRotation) || 0;
+  return ((n - m) % 360 + 360) % 360;
+}
+
 function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
   const r = ((rotation % 360) + 360) % 360;
   return (
@@ -961,7 +970,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             />
           ))}
         </svg>
-        <SlideCompass rotation={Number(sketch.northRotation) || 0} />
+        <SlideCompass rotation={effectiveNorthDeg(sketch)} />
       </div>
       <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
         <BigStat
@@ -1084,7 +1093,7 @@ function SiteMapCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, width / 2 * dpr, height / 2 * dpr);
       const worldPxPerMeter = (Math.min(width, height) / 2) / radiusM;
       const halfW = width / 2, halfH = height / 2;
-      _drawOsmTiles(ctx, {
+      drawOsmTiles(ctx, {
         lat, lon, worldPxPerMeter, opacity, grayscale,
         bounds: { minX: -halfW, minY: -halfH, maxX: halfW, maxY: halfH },
         onTileLoad: () => { if (!cancelled) requestAnimationFrame(draw); },
@@ -1128,7 +1137,7 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
   const geo = sketch.geo;
   const lat = geo?.lat ?? -6.2;
   const lon = geo?.lon ?? 106.816666;
-  const northDeg = Number(sketch.northRotation) || 0;
+  const northDeg = effectiveNorthDeg(sketch);
   // Radius peta tergantung view.
   const radiusM = view === "lokasi" ? 600 : view === "akses" ? 700 : view === "fasilitas" ? 1000 : 900;
 
@@ -1528,7 +1537,7 @@ function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: num
 function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
   const { sketch, bounds } = slide;
   const geo = sketch.geo;
-  const northDeg = Number(sketch.northRotation) || 0;
+  const northDeg = effectiveNorthDeg(sketch);
   const lat = geo?.lat ?? -6.2;
   const lon = geo?.lon ?? 106.816666;
   // Use equinox (≈ 21 Maret) sebagai dasar analisis tahunan netral.
