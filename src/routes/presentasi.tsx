@@ -1408,7 +1408,13 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
-  const totalAll = ruang.reduce((s, l) => s + l.areaM2, 0) || 1;
+  const displayNames = computeLevelDisplayNames(levels);
+  const perLevel = levels.map((lv) => {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const sum = ruang.filter((r) => r.levelId === lv.id).reduce((s, l) => s + l.areaM2, 0) * k;
+    return { lv, sum, k, name: displayNames[lv.id] ?? lv.name };
+  });
+  const totalAll = perLevel.reduce((s, r) => s + r.sum, 0) || 1;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, width: "100%" }}>
@@ -1440,13 +1446,14 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       </Panel>
       <Panel title="Distribusi per Level">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {levels.map((lv) => {
-            const sum = ruang.filter((r) => r.levelId === lv.id).reduce((s, l) => s + l.areaM2, 0);
+          {perLevel.map(({ lv, sum, k, name }) => {
             const pct = (sum / totalAll) * 100;
             return (
               <div key={lv.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>{lv.name}</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {name}{k > 1 ? ` · ${k}×` : ""}
+                  </span>
                   <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>
                     {fmt(sum)} m² · {fmt(pct, 1)}%
                   </span>
