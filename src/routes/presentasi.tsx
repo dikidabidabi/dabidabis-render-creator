@@ -970,7 +970,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             />
           ))}
         </svg>
-        <SlideCompass rotation={Number(sketch.northRotation) || 0} />
+        <SlideCompass rotation={effectiveNorthDeg(sketch)} />
       </div>
       <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
         <BigStat
@@ -1137,7 +1137,7 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
   const geo = sketch.geo;
   const lat = geo?.lat ?? -6.2;
   const lon = geo?.lon ?? 106.816666;
-  const northDeg = Number(sketch.northRotation) || 0;
+  const northDeg = effectiveNorthDeg(sketch);
   // Radius peta tergantung view.
   const radiusM = view === "lokasi" ? 600 : view === "akses" ? 700 : view === "fasilitas" ? 1000 : 900;
 
@@ -1537,7 +1537,7 @@ function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: num
 function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
   const { sketch, bounds } = slide;
   const geo = sketch.geo;
-  const northDeg = Number(sketch.northRotation) || 0;
+  const northDeg = effectiveNorthDeg(sketch);
   const lat = geo?.lat ?? -6.2;
   const lon = geo?.lon ?? 106.816666;
   // Use equinox (≈ 21 Maret) sebagai dasar analisis tahunan netral.
