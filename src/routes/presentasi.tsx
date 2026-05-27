@@ -562,9 +562,17 @@ function buildSlides(sk: Sketch): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
+  const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
   for (const lv of levels) {
-    out.push({ kind: "level", id: `lvl-${lv.id}`, title: lv.name, sketch: sk, level: lv, bounds });
+    out.push({
+      kind: "level",
+      id: `lvl-${lv.id}`,
+      title: displayNames[lv.id] ?? lv.name,
+      sketch: sk,
+      level: lv,
+      bounds,
+    });
   }
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
@@ -590,25 +598,42 @@ function computeStats(sk: Sketch): Stats {
   const levels = sk.levels ?? [];
   const lahan = layers.filter((l) => isLahan(l.name));
   const ruang = layers.filter((l) => !isLahan(l.name));
+  // Build a multiplier lookup per source level (default 1).
+  const mul: Record<string, number> = {};
+  for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
+  const kOf = (lid?: string) => (lid && mul[lid]) || 1;
+
   const totalLahanM2 = lahan.reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1).reduce((s, l) => s + l.areaM2, 0);
-  const totalSaranaM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0).reduce((s, l) => s + l.areaM2, 0);
-  const totalSetengahM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0.5).reduce((s, l) => s + l.areaM2, 0);
+  const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
+  const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1)
+    .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
+  const totalSaranaM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0)
+    .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
+  const totalSetengahM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0.5)
+    .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
   const kdbLimitM2 = (sk.kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdbPct! / 100) * totalLahanM2 : 0;
   const klbLimitM2 = (sk.klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? sk.klbCoef! * totalLahanM2 : 0;
+  // KDB = footprint at ground only (no multiplier — ground floor is a single footprint)
   let kdbRencanaM2 = 0;
   if (levels.length > 0) {
     const ground = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
     kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
   }
-  const klbRencanaM2 = ruang.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
-  const jumlahLapis = levels.length;
-  const ketinggianM =
+  const klbRencanaM2 = ruang.reduce(
+    (s, l) => s + l.areaM2 * (l.coefficient ?? 1) * kOf(l.levelId),
+    0,
+  );
+  const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, Math.round(lv.typicalCount ?? 1)), 0);
+  const baseHeight =
     levels.length > 1 ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl)) : 0;
+  const typicalExtra = levels.reduce(
+    (s, lv) => s + (Math.max(1, Math.round(lv.typicalCount ?? 1)) - 1) * TYPICAL_FLOOR_H,
+    0,
+  );
+  const ketinggianM = baseHeight + typicalExtra;
   const totalTerhitungM2 = layers
     .filter((l) => !isLahan(l.name) && !isVoid(l.name))
-    .reduce((s, l) => s + (l.areaM2 || 0), 0);
+    .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
   return {
     totalLahanM2, totalRuangM2, totalEfektifM2, totalSaranaM2, totalSetengahM2,
     kdbPct: sk.kdbPct, klbCoef: sk.klbCoef,
