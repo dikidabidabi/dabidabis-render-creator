@@ -504,7 +504,7 @@ function SketchViewer({
           dpr={[1, 2]}
         >
           <color attach="background" args={["#eef1f4"]} />
-          <Scene sketch={sketch} highlightLevelId={highlight} />
+          <Scene sketch={sketch} highlightLevelId={highlight} sunHour={sunHour} />
           <OrbitControls
             ref={orbitRef}
             enableDamping
@@ -544,6 +544,24 @@ function SketchViewer({
           Drag = rotasi · Shift+Drag = pan · Scroll = zoom · 1 unit = 1 m ·{" "}
           {fmt(mPerPx, 4)} m/px
         </div>
+        {sketch.geo?.locked && (
+          <div className="absolute left-2 top-2 w-56 rounded-md bg-white/85 p-2 shadow-sm backdrop-blur">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-slate-700">
+              <span>Jam Matahari</span>
+              <span className="font-mono">
+                {String(Math.floor(sunHour)).padStart(2, "0")}.
+                {String(Math.round((sunHour % 1) * 60)).padStart(2, "0")}
+              </span>
+            </div>
+            <Slider
+              min={6}
+              max={18}
+              step={0.25}
+              value={[sunHour]}
+              onValueChange={(v) => setSunHour(v[0] ?? 12)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
