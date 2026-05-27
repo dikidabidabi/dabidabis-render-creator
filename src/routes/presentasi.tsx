@@ -1060,7 +1060,7 @@ function elLatLon(el: OverpassEl): { lat: number; lon: number } | null {
 }
 
 // Canvas-based OSM tile map. Center at (lat,lon), radiusM half-width.
-import { drawOsmTiles as _drawOsmTiles, metersPerMapPx as _mppMap } from "@/lib/geo";
+
 function SiteMapCanvas({
   lat, lon, radiusM, width, height, grayscale = true, opacity = 1,
 }: {
