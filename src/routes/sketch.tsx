@@ -506,6 +506,7 @@ function normalizeSketch(s: any): Sketch {
     kdbPct: Number.isFinite(Number(s?.kdbPct)) ? Math.max(0, Math.min(100, Number(s.kdbPct))) : undefined,
     klbCoef: Number.isFinite(Number(s?.klbCoef)) ? Math.max(0, Number(s.klbCoef)) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
+    northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
   };
 }
 
