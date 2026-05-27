@@ -1996,7 +1996,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       pushHistory();
       setEditDrag({ key: k });
     } else if (tool === "erase") {
-      const hitLayer = [...layers].reverse().find((l) => pointInPolygon(p, l.points));
+      const hitLayer = [...layers].reverse().find((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return false;
+        return pointInPolygon(p, l.points);
+      });
       if (hitLayer) {
         if (hitLayer.locked) {
           toast.error(`${hitLayer.name} terkunci`);
@@ -2011,6 +2014,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       let bestIdx = -1;
       let bestD = Infinity;
       lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
         if (isLineLocked(ln)) return;
         const d = pointToLine(p, ln);
         if (d < bestD) {
@@ -2022,7 +2026,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         pushHistory();
         onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
       } else {
-        const hitLocked = lines.find((ln) => isLineLocked(ln) && pointToLine(p, ln) <= tol);
+        const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
         if (hitLocked) toast.error("Garis terkunci");
       }
     }
