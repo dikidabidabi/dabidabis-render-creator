@@ -1133,25 +1133,34 @@ function AxonometricView({
 }
 
 function StackingBody({ sketch }: { sketch: Sketch }) {
-  const levelsDesc = [...(sketch.levels ?? [])].sort((a, b) => b.mdpl - a.mdpl); // top first for bars
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const displayNames = computeLevelDisplayNames(levelsAsc);
 
-  // Color map keyed by level id, indexed by ascending mdpl (so axonometric & legend match).
+  // Color map keyed by source level id (matches axonometric)
   const colorMap = new Map<string, string>();
   levelsAsc.forEach((lv, i) => colorMap.set(lv.id, levelColor(i, levelsAsc.length)));
   const colorOf = (id: string) => colorMap.get(id) ?? "#888";
 
-  const rows = levelsDesc.map((lv) => {
-    const items = build.filter((l) => l.levelId === lv.id);
+  // Expand into visible floors so typical copies appear as separate bars.
+  const expanded = expandLevelsForView(levelsAsc);
+  const expandedDesc = [...expanded].reverse();
+  const totalFloors = expanded.length;
+  const ketinggian = expanded.length
+    ? expanded[expanded.length - 1].mdpl + expanded[expanded.length - 1].height - expanded[0].mdpl
+    : 0;
+
+  const rows = expandedDesc.map((f) => {
+    const items = build.filter((l) => l.levelId === f.sourceId);
     const area = items.reduce((s, l) => s + (l.areaM2 || 0), 0);
-    return { lv, area, color: colorOf(lv.id) };
+    const baseName = displayNames[f.sourceId] ?? f.name;
+    const label = f.typicalTotal > 1
+      ? `${baseName} · tip ${f.typicalIndex + 1}/${f.typicalTotal}`
+      : baseName;
+    return { id: f.id, sourceId: f.sourceId, label, mdpl: f.mdpl, area, color: colorOf(f.sourceId) };
   });
   const maxArea = Math.max(1, ...rows.map((r) => r.area));
   const totalArea = rows.reduce((s, r) => s + r.area, 0);
-  const ketinggian = levelsAsc.length > 1
-    ? levelsAsc[levelsAsc.length - 1].mdpl - levelsAsc[0].mdpl
-    : 0;
 
   return (
     <div style={{ display: "flex", gap: 28, width: "100%", height: "100%", alignItems: "stretch" }}>
