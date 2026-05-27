@@ -1006,12 +1006,14 @@ function AxonometricView({
     );
   }
 
-  const baseMdpl = ascLevels[0].mdpl;
-  const withH = ascLevels.map((lv, i) => {
-    const next = ascLevels[i + 1];
-    const h = next ? Math.max(0.1, next.mdpl - lv.mdpl) : 4;
-    return { ...lv, base: lv.mdpl - baseMdpl, height: h };
-  });
+  const expanded = expandLevelsForView(ascLevels);
+  const baseMdpl = expanded[0]?.mdpl ?? 0;
+  const withH = expanded.map((f) => ({
+    id: f.id,
+    sourceId: f.sourceId,
+    base: f.mdpl - baseMdpl,
+    height: f.height,
+  }));
 
   // Plan origin = bbox centroid of all layer points (in px space)
   let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
