@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid, Edges } from "@react-three/drei";
 import * as THREE from "three";
+import SunCalc from "suncalc";
+import { Slider } from "@/components/ui/slider";
 import {
   ChevronDown,
   ChevronUp,
@@ -43,6 +45,7 @@ type Layer = {
   coefficient?: number;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
+type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; label?: string };
 type Sketch = {
   id: string;
   title: string;
@@ -51,6 +54,8 @@ type Sketch = {
   scale: "1:100" | "1:200" | "1:500" | "1:1000" | string;
   layers: Layer[];
   levels: Level[];
+  geo?: Geo;
+  northRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -233,9 +238,11 @@ function GroundPlane({
 function Scene({
   sketch,
   highlightLevelId,
+  sunHour,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
+  sunHour: number;
 }) {
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
@@ -245,11 +252,48 @@ function Scene({
   const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
   const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
 
+  // Sun position from SunCalc using geo + current date + chosen hour.
+  // North rotation rotates the world so we counter-rotate sun azimuth.
+  const sunPos = useMemo(() => {
+    const geo = sketch.geo;
+    if (!geo || !geo.locked) {
+      // Fallback static sun
+      return { x: 30, y: 60, z: 20, intensity: 1.05 };
+    }
+    const d = new Date();
+    d.setHours(Math.floor(sunHour), Math.round((sunHour % 1) * 60), 0, 0);
+    const sc = SunCalc.getPosition(d, geo.lat, geo.lon);
+    // SunCalc azimuth: south=0, west=+π/2 (clockwise from south). Convert to north-clockwise.
+    const azNorthCW = sc.azimuth + Math.PI;
+    const north = ((Number(sketch.northRotation) || 0) * Math.PI) / 180;
+    const az = azNorthCW - north;
+    const alt = Math.max(0.01, sc.altitude);
+    const dist = 80;
+    const horiz = Math.cos(alt) * dist;
+    // In our scene: +Z = south (canvas y grows south), +X = east, +Y = up
+    const x = Math.sin(az) * horiz;
+    const z = -Math.cos(az) * horiz;
+    const y = Math.sin(alt) * dist;
+    const intensity = Math.max(0.05, Math.min(1.3, Math.sin(alt) * 1.4));
+    return { x, y, z, intensity };
+  }, [sketch.geo, sketch.northRotation, sunHour]);
+
   return (
     <>
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[30, 50, 20]} intensity={1.05} castShadow />
-      <directionalLight position={[-20, 30, -20]} intensity={0.4} />
+      <ambientLight intensity={0.35} />
+      <directionalLight
+        position={[sunPos.x, sunPos.y, sunPos.z]}
+        intensity={sunPos.intensity}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-camera-left={-60}
+        shadow-camera-right={60}
+        shadow-camera-top={60}
+        shadow-camera-bottom={-60}
+        shadow-camera-near={0.5}
+        shadow-camera-far={300}
+      />
       <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
 
       {lahanLayers.map((ly) => (
@@ -302,6 +346,7 @@ function SketchViewer({
 }) {
   const [highlight, setHighlight] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [sunHour, setSunHour] = useState(12);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
