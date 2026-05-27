@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import SunCalc from "suncalc";
+import { drawOsmTiles as _drawOsmTiles } from "@/lib/geo";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
@@ -535,8 +536,10 @@ function A3Frame({ children }: { children: React.ReactNode }) {
 }
 
 // ---------- Slide types ----------
+type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
 type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
@@ -568,6 +571,11 @@ function buildSlides(sk: Sketch): Slide[] {
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
+  // 4 slide analisa site di awal — selalu ada (pakai koordinat default jika belum dikunci).
+  out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
+  out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
+  out.push({ kind: "site", id: "site-fasilitas", title: "Fasilitas Sekitar & Radius Pencapaian", sketch: sk, bounds, view: "fasilitas" });
+  out.push({ kind: "site", id: "site-lingkungan", title: "Blue–Green & Lalu Lintas", sketch: sk, bounds, view: "lingkungan" });
   for (const lv of levels) {
     out.push({
       kind: "level",
@@ -802,6 +810,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       <SlideHeader slide={slide} />
       <ManualScaleBox slideId={slide.id} style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28 }}>
         {slide.kind === "level" && <LevelBody slide={slide} />}
+        {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
         {slide.kind === "matahari" && <MatahariBody slide={slide} />}
         {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
         {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
@@ -818,6 +827,12 @@ function SlideContent({ slide }: { slide?: Slide }) {
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
     slide.kind === "level" ? "Sketsa · Level"
+    : slide.kind === "site" ? (
+        slide.view === "lokasi" ? "Analisa · Lokasi"
+        : slide.view === "akses" ? "Analisa · Akses"
+        : slide.view === "fasilitas" ? "Analisa · Fasilitas"
+        : "Analisa · Lingkungan"
+      )
     : slide.kind === "matahari" ? "Analisa · Matahari"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
@@ -965,6 +980,547 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         {sketch.fungsi && <BigStat label="Fungsi" value={sketch.fungsi} />}
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// ---- Site analysis (4 slide pertama): peta OSM + Overpass ----
+// ============================================================
+
+type OverpassEl = {
+  type: "node" | "way" | "relation";
+  id: number;
+  lat?: number;
+  lon?: number;
+  center?: { lat: number; lon: number };
+  tags?: Record<string, string>;
+};
+type OverpassResult = { elements: OverpassEl[] };
+
+const overpassCache = new Map<string, Promise<OverpassResult>>();
+function overpassFetch(query: string): Promise<OverpassResult> {
+  const key = query;
+  const c = overpassCache.get(key);
+  if (c) return c;
+  const p = (async () => {
+    const endpoints = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+    ];
+    let lastErr: unknown;
+    for (const url of endpoints) {
+      try {
+        const r = await fetch(url, {
+          method: "POST",
+          body: "data=" + encodeURIComponent(query),
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        });
+        if (!r.ok) throw new Error(`overpass ${r.status}`);
+        return (await r.json()) as OverpassResult;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr ?? new Error("overpass failed");
+  })();
+  overpassCache.set(key, p);
+  p.catch(() => overpassCache.delete(key));
+  return p;
+}
+
+function useOverpass(query: string | null) {
+  const [data, setData] = useState<OverpassResult | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!query) return;
+    let alive = true;
+    setErr(null);
+    overpassFetch(query)
+      .then((d) => { if (alive) setData(d); })
+      .catch((e) => { if (alive) setErr(String(e?.message ?? e)); });
+    return () => { alive = false; };
+  }, [query]);
+  return { data, err };
+}
+
+// Haversine distance in meters.
+function distMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
+  const R = 6378137;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLon = ((bLon - aLon) * Math.PI) / 180;
+  const la1 = (aLat * Math.PI) / 180, la2 = (bLat * Math.PI) / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function elLatLon(el: OverpassEl): { lat: number; lon: number } | null {
+  if (el.lat != null && el.lon != null) return { lat: el.lat, lon: el.lon };
+  if (el.center) return el.center;
+  return null;
+}
+
+// Canvas-based OSM tile map. Center at (lat,lon), radiusM half-width.
+
+function SiteMapCanvas({
+  lat, lon, radiusM, width, height, grayscale = true, opacity = 1,
+}: {
+  lat: number; lon: number; radiusM: number; width: number; height: number;
+  grayscale?: boolean; opacity?: number;
+}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current; if (!c) return;
+    const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio) || 1);
+    c.width = Math.round(width * dpr);
+    c.height = Math.round(height * dpr);
+    const ctx = c.getContext("2d"); if (!ctx) return;
+    let cancelled = false;
+    const draw = () => {
+      if (cancelled || !ctx) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.fillStyle = "#fafafa";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.setTransform(dpr, 0, 0, dpr, width / 2 * dpr, height / 2 * dpr);
+      const worldPxPerMeter = (Math.min(width, height) / 2) / radiusM;
+      const halfW = width / 2, halfH = height / 2;
+      _drawOsmTiles(ctx, {
+        lat, lon, worldPxPerMeter, opacity, grayscale,
+        bounds: { minX: -halfW, minY: -halfH, maxX: halfW, maxY: halfH },
+        onTileLoad: () => { if (!cancelled) requestAnimationFrame(draw); },
+      });
+    };
+    draw();
+    return () => { cancelled = true; };
+  }, [lat, lon, radiusM, width, height, grayscale, opacity]);
+  return <canvas ref={ref} style={{ width, height, display: "block" }} />;
+}
+
+// Compute the site footprint convex extent (in meters) relative to a center coordinate.
+// We assume sketch world units are CANVAS pixels under sketch scale. Use `scale` mapping.
+function sketchMetersPerSketchPx(scale: string): number {
+  // mirror stackMetersPerPx logic.
+  const major: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10 };
+  return (major[scale] ?? 1) / 80;
+}
+
+// Project a (lat,lon) to local meters offset from a center.
+function projectM(centerLat: number, centerLon: number, lat: number, lon: number) {
+  const R = 6378137;
+  const meanLat = ((centerLat + lat) / 2) * (Math.PI / 180);
+  const dx = ((lon - centerLon) * Math.PI / 180) * Math.cos(meanLat) * R;
+  const dy = -((lat - centerLat) * Math.PI / 180) * R;
+  return { x: dx, y: dy };
+}
+
+// POI category palette + queries.
+const POI_CATS: Array<{ key: string; label: string; color: string; q: string }> = [
+  { key: "edu",   label: "Pendidikan",  color: "#1f9d55", q: 'node["amenity"~"school|university|college|kindergarten"]' },
+  { key: "med",   label: "Kesehatan",   color: "#c0392b", q: 'node["amenity"~"hospital|clinic|doctors|pharmacy"]' },
+  { key: "shop",  label: "Komersial",   color: "#d6a423", q: 'node["shop"];node["amenity"~"marketplace|mall"]' },
+  { key: "food",  label: "Kuliner",     color: "#e85d3a", q: 'node["amenity"~"restaurant|cafe|fast_food|food_court"]' },
+  { key: "trans", label: "Transportasi",color: "#2d6cdf", q: 'node["highway"="bus_stop"];node["railway"~"station|halt"];node["amenity"="bus_station"]' },
+  { key: "wor",   label: "Ibadah",      color: "#8b5cf6", q: 'node["amenity"="place_of_worship"]' },
+];
+
+function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }) {
+  const { sketch, view } = slide;
+  const geo = sketch.geo;
+  const lat = geo?.lat ?? -6.2;
+  const lon = geo?.lon ?? 106.816666;
+  const northDeg = Number(sketch.northRotation) || 0;
+  // Radius peta tergantung view.
+  const radiusM = view === "lokasi" ? 600 : view === "akses" ? 700 : view === "fasilitas" ? 1000 : 900;
+
+  // Site footprint in meters relative to map center (assumes site centroid = geo).
+  const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
+  const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
+  const buildAll = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const allPts = [...lahanAll, ...buildAll].flatMap((l) => l.points);
+  let centerSx = 0, centerSy = 0;
+  if (allPts.length) {
+    for (const p of allPts) { centerSx += p.x; centerSy += p.y; }
+    centerSx /= allPts.length; centerSy /= allPts.length;
+  }
+  const cos = Math.cos((-northDeg * Math.PI) / 180);
+  const sin = Math.sin((-northDeg * Math.PI) / 180);
+  const toMeters = (p: Point) => {
+    const dx = (p.x - centerSx) * mPerSPx;
+    const dy = (p.y - centerSy) * mPerSPx;
+    // Rotate sketch coords so north on sketch aligns with map north.
+    return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+  };
+
+  // ---------- Overpass queries per view ----------
+  const radius = view === "fasilitas" ? 1200 : view === "akses" ? 900 : view === "lingkungan" ? 1100 : 500;
+  const q = useMemo(() => {
+    if (view === "akses") {
+      return `[out:json][timeout:25];(way["highway"~"motorway|trunk|primary|secondary|tertiary|residential|unclassified|service"](around:${radius},${lat},${lon}););out tags center;`;
+    }
+    if (view === "fasilitas") {
+      const inner = POI_CATS.map((c) => `${c.q}(around:${radius},${lat},${lon});`).join("");
+      return `[out:json][timeout:25];(${inner});out tags center;`;
+    }
+    if (view === "lingkungan") {
+      return `[out:json][timeout:25];(way["leisure"~"park|garden|nature_reserve"](around:${radius},${lat},${lon});way["landuse"~"forest|grass|recreation_ground|meadow|cemetery"](around:${radius},${lat},${lon});way["natural"~"water|wood|scrub"](around:${radius},${lat},${lon});way["waterway"~"river|stream|canal"](around:${radius},${lat},${lon}););out tags center;`;
+    }
+    // lokasi → minimal context (nearest road for orientation)
+    return `[out:json][timeout:25];(way["highway"~"primary|secondary|tertiary|residential"](around:400,${lat},${lon}););out tags center 30;`;
+  }, [view, radius, lat, lon]);
+  const { data, err } = useOverpass(q);
+
+  // Map size — leave room for right info column.
+  const MAP_W = 760, MAP_H = 740;
+  const pxPerM = (Math.min(MAP_W, MAP_H) / 2) / radiusM;
+
+  // Render site footprint overlay (SVG over canvas), centered on map.
+  const sitePolys = (lahanAll.length ? lahanAll : buildAll).map((l) => ({
+    color: lahanAll.includes(l) ? "rgba(232,93,58,0.18)" : "rgba(232,93,58,0.55)",
+    stroke: "#0a0a0a",
+    pts: l.points.map(toMeters),
+  }));
+
+  // ---------- View-specific overlays ----------
+  const els = data?.elements ?? [];
+  const elsWithLL = els
+    .map((e) => ({ e, ll: elLatLon(e) }))
+    .filter((x): x is { e: OverpassEl; ll: { lat: number; lon: number } } => !!x.ll);
+
+  // Akses: extract road tier list + nearest distance per tier.
+  const roadTiers: Array<{ key: string; label: string; color: string }> = [
+    { key: "primary",   label: "Primer",   color: "#c0392b" },
+    { key: "secondary", label: "Sekunder", color: "#e85d3a" },
+    { key: "tertiary",  label: "Tersier",  color: "#d6a423" },
+    { key: "residential", label: "Lokal",  color: "#1f9d55" },
+  ];
+  const roadsByTier: Record<string, Array<{ name: string; dist: number; ll: { lat: number; lon: number } }>> = {};
+  if (view === "akses") {
+    for (const { e, ll } of elsWithLL) {
+      const hw = e.tags?.highway ?? "";
+      const tier =
+        /^motorway|trunk|primary/.test(hw) ? "primary" :
+        /^secondary/.test(hw) ? "secondary" :
+        /^tertiary/.test(hw) ? "tertiary" :
+        /^residential|unclassified|service/.test(hw) ? "residential" : null;
+      if (!tier) continue;
+      const arr = roadsByTier[tier] ?? (roadsByTier[tier] = []);
+      arr.push({
+        name: e.tags?.name ?? `(jalan ${hw})`,
+        dist: distMeters(lat, lon, ll.lat, ll.lon),
+        ll,
+      });
+    }
+  }
+
+  // Fasilitas: closest 3 per category and radius ring counts.
+  const facsByCat = POI_CATS.map((c) => {
+    const items: Array<{ name: string; dist: number; ll: { lat: number; lon: number } }> = [];
+    if (view === "fasilitas") {
+      for (const { e, ll } of elsWithLL) {
+        const tags = e.tags ?? {};
+        const m =
+          (c.key === "edu" && /school|university|college|kindergarten/.test(tags.amenity ?? "")) ||
+          (c.key === "med" && /hospital|clinic|doctors|pharmacy/.test(tags.amenity ?? "")) ||
+          (c.key === "shop" && (tags.shop || /marketplace|mall/.test(tags.amenity ?? ""))) ||
+          (c.key === "food" && /restaurant|cafe|fast_food|food_court/.test(tags.amenity ?? "")) ||
+          (c.key === "trans" && (tags.highway === "bus_stop" || /station|halt/.test(tags.railway ?? "") || tags.amenity === "bus_station")) ||
+          (c.key === "wor" && tags.amenity === "place_of_worship");
+        if (!m) continue;
+        items.push({
+          name: tags.name ?? `(${c.label.toLowerCase()})`,
+          dist: distMeters(lat, lon, ll.lat, ll.lon),
+          ll,
+        });
+      }
+    }
+    items.sort((a, b) => a.dist - b.dist);
+    return { cat: c, items };
+  });
+
+  // Lingkungan: split blue & green ways.
+  const greenWays: OverpassEl[] = [];
+  const blueWays: OverpassEl[] = [];
+  if (view === "lingkungan") {
+    for (const e of els) {
+      const t = e.tags ?? {};
+      const isBlue = t.natural === "water" || t.waterway || /water/.test(t.landuse ?? "");
+      if (isBlue) blueWays.push(e); else greenWays.push(e);
+    }
+  }
+  const greenAreaApprox = greenWays.length; // count proxy
+  const blueAreaApprox = blueWays.length;
+
+  // ---------- Render ----------
+  return (
+    <div style={{ display: "flex", gap: 28, width: "100%", height: "100%" }}>
+      {/* Kiri: peta */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ border: "1px solid #111", padding: 10, position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 6 }}>
+            Peta · {lat.toFixed(4)}°, {lon.toFixed(4)}° · radius {radiusM} m
+          </div>
+          <div style={{ position: "relative", width: MAP_W, height: MAP_H, alignSelf: "center" }}>
+            <SiteMapCanvas lat={lat} lon={lon} radiusM={radiusM} width={MAP_W} height={MAP_H}
+              grayscale={view !== "lingkungan"} opacity={0.95} />
+            <svg viewBox={`-${MAP_W / 2} -${MAP_H / 2} ${MAP_W} ${MAP_H}`}
+              style={{ position: "absolute", inset: 0, width: MAP_W, height: MAP_H }}
+              preserveAspectRatio="none">
+              {/* Radius rings (fasilitas/lingkungan/akses) */}
+              {view !== "lokasi" && [250, 500, 800].filter((r) => r <= radiusM).map((r) => (
+                <g key={r}>
+                  <circle cx={0} cy={0} r={r * pxPerM} fill="none" stroke="#0a0a0a"
+                    strokeOpacity={0.35} strokeDasharray="6 5" strokeWidth={1} />
+                  <text x={0} y={-r * pxPerM - 4} textAnchor="middle" fontSize={10} fill="#0a0a0a"
+                    style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3 } as React.CSSProperties}>
+                    {r} m
+                  </text>
+                </g>
+              ))}
+
+              {/* Akses: jalan + label tier */}
+              {view === "akses" && elsWithLL.map(({ e, ll }) => {
+                const hw = e.tags?.highway ?? "";
+                const tier = roadTiers.find((t) =>
+                  (t.key === "primary" && /^motorway|trunk|primary/.test(hw)) ||
+                  (t.key === "secondary" && /^secondary/.test(hw)) ||
+                  (t.key === "tertiary" && /^tertiary/.test(hw)) ||
+                  (t.key === "residential" && /^residential|unclassified|service/.test(hw))
+                );
+                if (!tier) return null;
+                const p = projectM(lat, lon, ll.lat, ll.lon);
+                return (
+                  <circle key={e.id} cx={p.x * pxPerM} cy={p.y * pxPerM} r={3} fill={tier.color}
+                    stroke="#fff" strokeWidth={1} />
+                );
+              })}
+
+              {/* Fasilitas: titik POI berwarna per kategori */}
+              {view === "fasilitas" && facsByCat.flatMap(({ cat, items }) =>
+                items.map((it) => {
+                  const p = projectM(lat, lon, it.ll.lat, it.ll.lon);
+                  return (
+                    <circle key={`${cat.key}-${it.ll.lat}-${it.ll.lon}`}
+                      cx={p.x * pxPerM} cy={p.y * pxPerM} r={4}
+                      fill={cat.color} stroke="#0a0a0a" strokeWidth={0.8} />
+                  );
+                })
+              )}
+
+              {/* Lingkungan: hijau & biru sebagai titik */}
+              {view === "lingkungan" && elsWithLL.map(({ e, ll }) => {
+                const t = e.tags ?? {};
+                const isBlue = t.natural === "water" || t.waterway || /water/.test(t.landuse ?? "");
+                const p = projectM(lat, lon, ll.lat, ll.lon);
+                return (
+                  <circle key={e.id} cx={p.x * pxPerM} cy={p.y * pxPerM} r={5}
+                    fill={isBlue ? "rgba(45,108,223,0.55)" : "rgba(31,157,85,0.55)"}
+                    stroke={isBlue ? "#2d6cdf" : "#1f9d55"} strokeWidth={1} />
+                );
+              })}
+
+              {/* Site footprint overlay */}
+              {sitePolys.map((poly, i) => (
+                <polygon key={i}
+                  points={poly.pts.map((p) => `${p.x * pxPerM},${p.y * pxPerM}`).join(" ")}
+                  fill={poly.color} stroke={poly.stroke} strokeWidth={1.5} />
+              ))}
+              {/* Marker pusat */}
+              <g>
+                <circle cx={0} cy={0} r={7} fill="#e85d3a" stroke="#0a0a0a" strokeWidth={1.5} />
+                <circle cx={0} cy={0} r={2} fill="#0a0a0a" />
+              </g>
+            </svg>
+            <SlideCompass rotation={northDeg} size={68} />
+            {!data && !err && (
+              <div style={{ position: "absolute", left: 10, bottom: 10, fontSize: 10, color: "#666",
+                background: "rgba(255,255,255,0.85)", padding: "3px 8px", border: "1px solid #ddd" }}>
+                Memuat data OpenStreetMap…
+              </div>
+            )}
+            {err && (
+              <div style={{ position: "absolute", left: 10, bottom: 10, fontSize: 10, color: "#c0392b",
+                background: "rgba(255,255,255,0.9)", padding: "3px 8px", border: "1px solid #c0392b" }}>
+                Data Overpass gagal dimuat — coba ulang slide.
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 11, color: "#444", flexWrap: "wrap" }}>
+            <LegendDot color="#e85d3a" label="Posisi tapak" />
+            {view === "akses" && roadTiers.map((t) => <LegendDot key={t.key} color={t.color} label={`Jl. ${t.label}`} />)}
+            {view === "fasilitas" && POI_CATS.map((c) => <LegendDot key={c.key} color={c.color} label={c.label} />)}
+            {view === "lingkungan" && (<>
+              <LegendDot color="#1f9d55" label="Ruang hijau" />
+              <LegendDot color="#2d6cdf" label="Badan air" />
+            </>)}
+            <span style={{ color: "#888" }}>· © OpenStreetMap contributors</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Kanan: narasi & data */}
+      <div style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        <BigStat
+          label="Koordinat"
+          value={geo?.locked ? `${lat.toFixed(4)}°, ${lon.toFixed(4)}°` : `${lat.toFixed(4)}°, ${lon.toFixed(4)}° (belum dikunci)`}
+          hint={geo?.label || "Set di Sketsa → Lokasi & Peta"}
+        />
+
+        {view === "lokasi" && <LokasiPanel sketch={sketch} lahanCount={lahanAll.length} buildCount={buildAll.length} mPerSPx={mPerSPx} />}
+        {view === "akses" && <AksesPanel roadTiers={roadTiers} roadsByTier={roadsByTier} />}
+        {view === "fasilitas" && <FasilitasPanel facsByCat={facsByCat} />}
+        {view === "lingkungan" && <LingkunganPanel greenN={greenAreaApprox} blueN={blueAreaApprox} radius={radius} />}
+      </div>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ width: 9, height: 9, borderRadius: 999, background: color, border: "1px solid rgba(0,0,0,0.35)" }} />
+      {label}
+    </span>
+  );
+}
+
+function LokasiPanel({ sketch, lahanCount, buildCount, mPerSPx }: {
+  sketch: Sketch; lahanCount: number; buildCount: number; mPerSPx: number;
+}) {
+  const lahanM2 = (sketch.layers ?? []).filter((l) => isLahan(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
+  const buildM2 = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <BigStat label="Luas Lahan" value={`${fmt(lahanM2)} m²`} hint={`${lahanCount} polygon`} />
+        <BigStat label="Tapak Bangun" value={`${fmt(buildM2)} m²`} hint={`${buildCount} massa`} />
+      </div>
+      <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800, marginBottom: 6 }}>
+          Konteks Lokasi
+        </div>
+        <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 20, lineHeight: 1.25, fontWeight: 600, marginBottom: 6 }}>
+          {sketch.geo?.label || "Lokasi tapak"}
+        </div>
+        <div style={{ fontSize: 12, color: "#cfcfcf", lineHeight: 1.5 }}>
+          Marker oranye menandai pusat tapak pada peta OpenStreetMap. Outline polygon tapak diproyeksikan
+          presisi sesuai skala sketsa ({sketch.scale}, 1 px ≈ {mPerSPx.toFixed(3)} m) dan arah utara denah.
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AksesPanel({ roadTiers, roadsByTier }: {
+  roadTiers: Array<{ key: string; label: string; color: string }>;
+  roadsByTier: Record<string, Array<{ name: string; dist: number; ll: { lat: number; lon: number } }>>;
+}) {
+  return (
+    <div style={{ border: "1px solid #111", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700 }}>
+        Jalan Terdekat per Tier
+      </div>
+      {roadTiers.map((t) => {
+        const arr = (roadsByTier[t.key] ?? []).sort((a, b) => a.dist - b.dist).slice(0, 3);
+        const nearest = arr[0];
+        return (
+          <div key={t.key} style={{ borderTop: "1px solid #eee", paddingTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, background: t.color }} />
+                Jl. {t.label}
+              </span>
+              <span style={{ fontVariantNumeric: "tabular-nums", fontSize: 13, color: nearest ? "#0a0a0a" : "#999", fontWeight: 700 }}>
+                {nearest ? `${Math.round(nearest.dist)} m` : "—"}
+              </span>
+            </div>
+            {arr.length > 0 ? (
+              <div style={{ fontSize: 11, color: "#555", marginTop: 4, lineHeight: 1.4 }}>
+                {arr.map((r, i) => (
+                  <div key={i}>• {r.name} — {Math.round(r.dist)} m</div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>Tidak ada dalam radius.</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FasilitasPanel({ facsByCat }: {
+  facsByCat: Array<{ cat: { key: string; label: string; color: string }; items: Array<{ name: string; dist: number }> }>;
+}) {
+  return (
+    <div style={{ border: "1px solid #111", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700 }}>
+        Fasilitas Terdekat (3 per kategori)
+      </div>
+      {facsByCat.map(({ cat, items }) => {
+        const top = items.slice(0, 3);
+        return (
+          <div key={cat.key} style={{ borderTop: "1px solid #eee", paddingTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, background: cat.color }} />
+                {cat.label}
+              </span>
+              <span style={{ fontSize: 11, color: "#888" }}>{items.length} titik</span>
+            </div>
+            {top.length > 0 ? (
+              <div style={{ fontSize: 11, color: "#555", marginTop: 4, lineHeight: 1.4 }}>
+                {top.map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>• {it.name}</span>
+                    <span style={{ color: "#0a0a0a", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{Math.round(it.dist)} m</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: "#999", marginTop: 4 }}>—</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: number; radius: number }) {
+  const total = greenN + blueN;
+  const greenPct = total > 0 ? Math.round((greenN / total) * 100) : 0;
+  const bluePct = total > 0 ? 100 - greenPct : 0;
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <BigStat label="Ruang hijau" value={String(greenN)} hint="elemen OSM" />
+        <BigStat label="Badan air" value={String(blueN)} hint="elemen OSM" />
+      </div>
+      <div style={{ border: "1px solid #111", padding: 14 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
+          Komposisi Blue–Green (radius {radius} m)
+        </div>
+        <div style={{ height: 14, background: "#eee", display: "flex", overflow: "hidden", borderRadius: 2 }}>
+          <div style={{ width: `${greenPct}%`, background: "#1f9d55" }} />
+          <div style={{ width: `${bluePct}%`, background: "#2d6cdf" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginTop: 6 }}>
+          <span>🟩 Hijau {greenPct}%</span>
+          <span>🟦 Biru {bluePct}%</span>
+        </div>
+      </div>
+      <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800, marginBottom: 6 }}>
+          Catatan Lalu Lintas
+        </div>
+        <div style={{ fontSize: 12, color: "#cfcfcf", lineHeight: 1.5 }}>
+          Kepadatan lalu lintas didekati dari kerapatan jalan tier primer/sekunder di sekitar tapak
+          (lihat slide Akses). Untuk data real-time, integrasikan layer Mapillary atau survei lapangan.
+          Ruang hijau & badan air diturunkan dari tag <em>leisure/landuse/natural/waterway</em> OpenStreetMap.
+        </div>
+      </div>
+    </>
   );
 }
 
