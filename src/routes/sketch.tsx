@@ -515,6 +515,7 @@ function normalizeSketch(s: any): Sketch {
           lon: Number(s.geo.lon),
           locked: Boolean(s.geo.locked),
           mapOpacity: Number.isFinite(Number(s.geo.mapOpacity)) ? Math.max(0, Math.min(1, Number(s.geo.mapOpacity))) : 0.55,
+          mapRotation: Number.isFinite(Number(s.geo.mapRotation)) ? Number(s.geo.mapRotation) : 0,
           label: typeof s.geo.label === "string" ? s.geo.label : "",
         }
       : undefined,
