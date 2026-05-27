@@ -1410,13 +1410,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.setLineDash([]);
     }
 
-    // Edit-mode vertex markers (all unique vertices, highlighted)
+    // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
       const seen = new Set<string>();
       const verts: { p: Point; locked: boolean }[] = [];
       const lockedKeys = new Set<string>();
       layers.forEach((l) => {
         if (!l.locked) return;
+        if (activeLvlId && l.levelId !== activeLvlId) return;
         l.points.forEach((p) => lockedKeys.add(keyOf(p)));
       });
       const pushVert = (p: Point) => {
@@ -1425,21 +1426,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         seen.add(k);
         verts.push({ p, locked: lockedKeys.has(k) });
       };
-      lines.forEach((ln) => { pushVert(ln.a); pushVert(ln.b); });
-      layers.forEach((l) => l.points.forEach(pushVert));
+      lines.forEach((ln) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        pushVert(ln.a); pushVert(ln.b);
+      });
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach(pushVert);
+      });
+      const deleteMode = editMode === "delete";
       verts.forEach((v) => {
         ctx.beginPath();
         ctx.arc(v.p.x, v.p.y, 6 / s, 0, Math.PI * 2);
-        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : "#fff";
+        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : (deleteMode ? "rgba(220,40,40,0.95)" : "#fff");
         ctx.fill();
         ctx.lineWidth = 2 / s;
-        ctx.strokeStyle = v.locked ? "#666" : "rgba(232,93,58,1)";
+        ctx.strokeStyle = v.locked ? "#666" : (deleteMode ? "#7a1010" : "rgba(232,93,58,1)");
         ctx.stroke();
       });
       if (editHover) {
         ctx.beginPath();
         ctx.arc(editHover.x, editHover.y, 10 / s, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(232,93,58,0.9)";
+        ctx.strokeStyle = deleteMode ? "rgba(220,40,40,0.95)" : "rgba(232,93,58,0.9)";
         ctx.lineWidth = 2 / s;
         ctx.stroke();
       }
