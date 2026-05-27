@@ -535,8 +535,10 @@ function A3Frame({ children }: { children: React.ReactNode }) {
 }
 
 // ---------- Slide types ----------
+type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
 type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
@@ -568,6 +570,11 @@ function buildSlides(sk: Sketch): Slide[] {
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
+  // 4 slide analisa site di awal — selalu ada (pakai koordinat default jika belum dikunci).
+  out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
+  out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
+  out.push({ kind: "site", id: "site-fasilitas", title: "Fasilitas Sekitar & Radius Pencapaian", sketch: sk, bounds, view: "fasilitas" });
+  out.push({ kind: "site", id: "site-lingkungan", title: "Blue–Green & Lalu Lintas", sketch: sk, bounds, view: "lingkungan" });
   for (const lv of levels) {
     out.push({
       kind: "level",
