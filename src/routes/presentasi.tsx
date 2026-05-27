@@ -42,7 +42,7 @@ type Level = { id: string; name: string; mdpl: number; opacity: number; typicalC
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
-  kdbPct?: number; klbCoef?: number; fungsi?: string;
+  kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
