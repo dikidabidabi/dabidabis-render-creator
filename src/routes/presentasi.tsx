@@ -38,7 +38,7 @@ type Line = {
 type Layer = {
   id: string; name: string; points: Point[]; areaM2: number; color: string; levelId?: string; coefficient?: number;
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
@@ -56,6 +56,64 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
+
+// Typical floor logic — kept in sync with sketch.tsx
+const TYPICAL_FLOOR_H = 3;
+function isAutoLevelName(name: string): boolean {
+  return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
+}
+function computeLevelDisplayNames(levels: Level[]): Record<string, string> {
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const out: Record<string, string> = {};
+  let idx = 1;
+  for (const lv of sorted) {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const start = idx;
+    const end = idx + k - 1;
+    const auto = k > 1 ? `Level ${start}–${end}` : `Level ${start}`;
+    out[lv.id] = isAutoLevelName(lv.name) ? auto : lv.name;
+    idx = end + 1;
+  }
+  return out;
+}
+// Expand source levels into individual visible floors (one per typical copy)
+type ExpandedFloor = {
+  id: string; sourceId: string; name: string;
+  mdpl: number; height: number;
+  typicalIndex: number; typicalTotal: number;
+};
+function expandLevelsForView(levels: Level[]): ExpandedFloor[] {
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  let shift = 0;
+  const adjusted = sorted.map((lv) => {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const base = lv.mdpl + shift;
+    shift += (k - 1) * TYPICAL_FLOOR_H;
+    return { lv, k, base };
+  });
+  const out: ExpandedFloor[] = [];
+  for (let i = 0; i < adjusted.length; i++) {
+    const { lv, k, base } = adjusted[i];
+    const next = adjusted[i + 1];
+    if (k === 1) {
+      const h = next ? Math.max(0.1, next.base - base) : 4;
+      out.push({ id: lv.id, sourceId: lv.id, name: lv.name, mdpl: base, height: h, typicalIndex: 0, typicalTotal: 1 });
+    } else {
+      for (let j = 0; j < k; j++) {
+        out.push({
+          id: `${lv.id}__t${j}`,
+          sourceId: lv.id,
+          name: lv.name,
+          mdpl: base + j * TYPICAL_FLOOR_H,
+          height: TYPICAL_FLOOR_H,
+          typicalIndex: j,
+          typicalTotal: k,
+        });
+      }
+    }
+  }
+  return out;
+}
 function fmt(n: number, d = 2) {
   if (!Number.isFinite(n)) return "0";
   return n.toLocaleString("id-ID", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -504,9 +562,17 @@ function buildSlides(sk: Sketch): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
+  const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
   for (const lv of levels) {
-    out.push({ kind: "level", id: `lvl-${lv.id}`, title: lv.name, sketch: sk, level: lv, bounds });
+    out.push({
+      kind: "level",
+      id: `lvl-${lv.id}`,
+      title: displayNames[lv.id] ?? lv.name,
+      sketch: sk,
+      level: lv,
+      bounds,
+    });
   }
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
@@ -532,25 +598,42 @@ function computeStats(sk: Sketch): Stats {
   const levels = sk.levels ?? [];
   const lahan = layers.filter((l) => isLahan(l.name));
   const ruang = layers.filter((l) => !isLahan(l.name));
+  // Build a multiplier lookup per source level (default 1).
+  const mul: Record<string, number> = {};
+  for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
+  const kOf = (lid?: string) => (lid && mul[lid]) || 1;
+
   const totalLahanM2 = lahan.reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1).reduce((s, l) => s + l.areaM2, 0);
-  const totalSaranaM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0).reduce((s, l) => s + l.areaM2, 0);
-  const totalSetengahM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0.5).reduce((s, l) => s + l.areaM2, 0);
+  const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
+  const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1)
+    .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
+  const totalSaranaM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0)
+    .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
+  const totalSetengahM2 = ruang.filter((l) => (l.coefficient ?? 1) === 0.5)
+    .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
   const kdbLimitM2 = (sk.kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdbPct! / 100) * totalLahanM2 : 0;
   const klbLimitM2 = (sk.klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? sk.klbCoef! * totalLahanM2 : 0;
+  // KDB = footprint at ground only (no multiplier — ground floor is a single footprint)
   let kdbRencanaM2 = 0;
   if (levels.length > 0) {
     const ground = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
     kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
   }
-  const klbRencanaM2 = ruang.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
-  const jumlahLapis = levels.length;
-  const ketinggianM =
+  const klbRencanaM2 = ruang.reduce(
+    (s, l) => s + l.areaM2 * (l.coefficient ?? 1) * kOf(l.levelId),
+    0,
+  );
+  const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, Math.round(lv.typicalCount ?? 1)), 0);
+  const baseHeight =
     levels.length > 1 ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl)) : 0;
+  const typicalExtra = levels.reduce(
+    (s, lv) => s + (Math.max(1, Math.round(lv.typicalCount ?? 1)) - 1) * TYPICAL_FLOOR_H,
+    0,
+  );
+  const ketinggianM = baseHeight + typicalExtra;
   const totalTerhitungM2 = layers
     .filter((l) => !isLahan(l.name) && !isVoid(l.name))
-    .reduce((s, l) => s + (l.areaM2 || 0), 0);
+    .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
   return {
     totalLahanM2, totalRuangM2, totalEfektifM2, totalSaranaM2, totalSetengahM2,
     kdbPct: sk.kdbPct, klbCoef: sk.klbCoef,
@@ -779,7 +862,11 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const layers = (sketch.layers ?? []).filter((l) => l.levelId === level.id);
   const lines = (sketch.lines ?? []).filter((l) => l.levelId === level.id);
   const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
-  const totalLuas = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
+  const k = Math.max(1, Math.round(level.typicalCount ?? 1));
+  const luasPerLantai = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
+  const totalLuas = luasPerLantai * k;
+  const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
+  const displayName = displayNames[level.id] ?? level.name;
 
   return (
     <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
@@ -834,9 +921,19 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         </svg>
       </div>
       <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
-        <BigStat label="Level" value={level.name} hint={`${fmt(level.mdpl, 1)} mdpl`} />
+        <BigStat
+          label="Level"
+          value={displayName}
+          hint={k > 1
+            ? `${fmt(level.mdpl, 1)} mdpl · tipikal ${k}×`
+            : `${fmt(level.mdpl, 1)} mdpl`}
+        />
         <BigStat label="Jumlah Ruang" value={String(layers.filter((l) => !isLahan(l.name)).length)} />
-        <BigStat label="Total Luas" value={`${fmt(totalLuas)} m²`} />
+        <BigStat
+          label="Total Luas"
+          value={`${fmt(totalLuas)} m²`}
+          hint={k > 1 ? `${fmt(luasPerLantai)} m² × ${k} lantai` : undefined}
+        />
         {sketch.fungsi && <BigStat label="Fungsi" value={sketch.fungsi} />}
       </div>
     </div>
@@ -909,12 +1006,14 @@ function AxonometricView({
     );
   }
 
-  const baseMdpl = ascLevels[0].mdpl;
-  const withH = ascLevels.map((lv, i) => {
-    const next = ascLevels[i + 1];
-    const h = next ? Math.max(0.1, next.mdpl - lv.mdpl) : 4;
-    return { ...lv, base: lv.mdpl - baseMdpl, height: h };
-  });
+  const expanded = expandLevelsForView(ascLevels);
+  const baseMdpl = expanded[0]?.mdpl ?? 0;
+  const withH = expanded.map((f) => ({
+    id: f.id,
+    sourceId: f.sourceId,
+    base: f.mdpl - baseMdpl,
+    height: f.height,
+  }));
 
   // Plan origin = bbox centroid of all layer points (in px space)
   let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
@@ -960,9 +1059,9 @@ function AxonometricView({
 
   // Floors
   for (const lv of withH) {
-    const top = colorOf(lv.id);
+    const top = colorOf(lv.sourceId);
     const side = shadeHsl(top, -18);
-    const layers = build.filter((l) => l.levelId === lv.id);
+    const layers = build.filter((l) => l.levelId === lv.sourceId);
     for (const ly of layers) {
       const pm = ly.points.map((p) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx }));
       if (pm.length < 3) continue;
@@ -1034,25 +1133,34 @@ function AxonometricView({
 }
 
 function StackingBody({ sketch }: { sketch: Sketch }) {
-  const levelsDesc = [...(sketch.levels ?? [])].sort((a, b) => b.mdpl - a.mdpl); // top first for bars
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const displayNames = computeLevelDisplayNames(levelsAsc);
 
-  // Color map keyed by level id, indexed by ascending mdpl (so axonometric & legend match).
+  // Color map keyed by source level id (matches axonometric)
   const colorMap = new Map<string, string>();
   levelsAsc.forEach((lv, i) => colorMap.set(lv.id, levelColor(i, levelsAsc.length)));
   const colorOf = (id: string) => colorMap.get(id) ?? "#888";
 
-  const rows = levelsDesc.map((lv) => {
-    const items = build.filter((l) => l.levelId === lv.id);
+  // Expand into visible floors so typical copies appear as separate bars.
+  const expanded = expandLevelsForView(levelsAsc);
+  const expandedDesc = [...expanded].reverse();
+  const totalFloors = expanded.length;
+  const ketinggian = expanded.length
+    ? expanded[expanded.length - 1].mdpl + expanded[expanded.length - 1].height - expanded[0].mdpl
+    : 0;
+
+  const rows = expandedDesc.map((f) => {
+    const items = build.filter((l) => l.levelId === f.sourceId);
     const area = items.reduce((s, l) => s + (l.areaM2 || 0), 0);
-    return { lv, area, color: colorOf(lv.id) };
+    const baseName = displayNames[f.sourceId] ?? f.name;
+    const label = f.typicalTotal > 1
+      ? `${baseName} · tip ${f.typicalIndex + 1}/${f.typicalTotal}`
+      : baseName;
+    return { id: f.id, sourceId: f.sourceId, label, mdpl: f.mdpl, area, color: colorOf(f.sourceId) };
   });
   const maxArea = Math.max(1, ...rows.map((r) => r.area));
   const totalArea = rows.reduce((s, r) => s + r.area, 0);
-  const ketinggian = levelsAsc.length > 1
-    ? levelsAsc[levelsAsc.length - 1].mdpl - levelsAsc[0].mdpl
-    : 0;
 
   return (
     <div style={{ display: "flex", gap: 28, width: "100%", height: "100%", alignItems: "stretch" }}>
@@ -1077,9 +1185,9 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
         {rows.map((r) => {
           const widthPct = 14 + (r.area / maxArea) * 86;
           return (
-            <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36 }}>
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36 }}>
               <div style={{ width: 62, textAlign: "right", fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
-                {fmt(r.lv.mdpl, 1)} m
+                {fmt(r.mdpl, 1)} m
               </div>
               <div style={{ flex: 1, position: "relative", height: 36 }}>
                 <div
@@ -1098,7 +1206,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
                   }}
                 >
                   <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.lv.name}
+                    {r.label}
                   </span>
                   <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>
                     {fmt(r.area)} m²
@@ -1129,28 +1237,34 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
             Legenda Level
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {rows.map((r) => {
-              const pct = totalArea > 0 ? (r.area / totalArea) * 100 : 0;
+            {levelsAsc.slice().reverse().map((lv) => {
+              const baseArea = build
+                .filter((l) => l.levelId === lv.id)
+                .reduce((s, l) => s + (l.areaM2 || 0), 0);
+              const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+              const total = baseArea * k;
+              const pct = totalArea > 0 ? (total / totalArea) * 100 : 0;
+              const name = displayNames[lv.id] ?? lv.name;
               return (
-                <div key={r.lv.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <span style={{ width: 12, height: 12, background: r.color, border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
+                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <span style={{ width: 12, height: 12, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.lv.name}
+                    {name}{k > 1 ? ` · ${k}×` : ""}
                   </span>
                   <span style={{ color: "#888", fontSize: 10, fontVariantNumeric: "tabular-nums" }}>
                     {fmt(pct, 1)}%
                   </span>
                   <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 70, textAlign: "right" }}>
-                    {fmt(r.area)} m²
+                    {fmt(total)} m²
                   </span>
                 </div>
               );
             })}
           </div>
         </div>
-        <BigStat label="Jumlah Lapis" value={String(rows.length)} />
+        <BigStat label="Jumlah Lapis" value={String(totalFloors)} />
         <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" />
-        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="selisih MDPL" />
+        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="termasuk tipikal" />
       </div>
     </div>
   );
@@ -1210,6 +1324,7 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 function RincianBody({ sketch }: { sketch: Sketch }) {
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
+  const displayNames = computeLevelDisplayNames(levels);
   return (
     <div style={{ width: "100%", overflow: "hidden", display: "flex", flexDirection: "column", gap: 18 }}>
       <div style={{
@@ -1219,13 +1334,22 @@ function RincianBody({ sketch }: { sketch: Sketch }) {
       }}>
         {levels.map((lv) => {
           const items = ruang.filter((l) => l.levelId === lv.id);
-          const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
-          const totalEf = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+          const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+          const totalAsliPer = items.reduce((s, l) => s + l.areaM2, 0);
+          const totalEfPer = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+          const totalAsli = totalAsliPer * k;
+          const totalEf = totalEfPer * k;
+          const name = displayNames[lv.id] ?? lv.name;
           return (
             <div key={lv.id} style={{ breakInside: "avoid", marginBottom: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1px solid #111", paddingBottom: 6, marginBottom: 8 }}>
                 <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em" }}>
-                  {lv.name}
+                  {name}
+                  {k > 1 && (
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#e85d3a", textTransform: "uppercase" }}>
+                      tipikal {k}×
+                    </span>
+                  )}
                 </span>
                 <span style={{ fontSize: 12, letterSpacing: "0.18em", textTransform: "uppercase", color: "#888" }}>
                   {fmt(lv.mdpl, 1)} mdpl · {fmt(totalEf)} m² efektif
@@ -1246,12 +1370,14 @@ function RincianBody({ sketch }: { sketch: Sketch }) {
                   <tbody>
                     {items.map((r) => {
                       const coef = r.coefficient ?? 1;
+                      const luas = r.areaM2 * k;
+                      const ef = luas * coef;
                       return (
                         <tr key={r.id} style={{ borderTop: "1px solid #f0f0f0" }}>
                           <td style={{ padding: "6px 0" }}>{r.name}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{coef}</td>
-                          <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(r.areaM2)}</td>
-                          <td style={{ padding: "6px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(r.areaM2 * coef)}</td>
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(luas)}</td>
+                          <td style={{ padding: "6px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(ef)}</td>
                         </tr>
                       );
                     })}
@@ -1282,7 +1408,13 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
-  const totalAll = ruang.reduce((s, l) => s + l.areaM2, 0) || 1;
+  const displayNames = computeLevelDisplayNames(levels);
+  const perLevel = levels.map((lv) => {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const sum = ruang.filter((r) => r.levelId === lv.id).reduce((s, l) => s + l.areaM2, 0) * k;
+    return { lv, sum, k, name: displayNames[lv.id] ?? lv.name };
+  });
+  const totalAll = perLevel.reduce((s, r) => s + r.sum, 0) || 1;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, width: "100%" }}>
@@ -1314,13 +1446,14 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       </Panel>
       <Panel title="Distribusi per Level">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {levels.map((lv) => {
-            const sum = ruang.filter((r) => r.levelId === lv.id).reduce((s, l) => s + l.areaM2, 0);
+          {perLevel.map(({ lv, sum, k, name }) => {
             const pct = (sum / totalAll) * 100;
             return (
               <div key={lv.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 600 }}>{lv.name}</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {name}{k > 1 ? ` · ${k}×` : ""}
+                  </span>
                   <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>
                     {fmt(sum)} m² · {fmt(pct, 1)}%
                   </span>

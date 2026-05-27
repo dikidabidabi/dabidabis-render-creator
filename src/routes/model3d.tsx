@@ -96,14 +96,51 @@ function computeOrigin(sketch: Sketch): Point {
   return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
 }
 
-// Sort levels by MDPL ascending. Compute floor heights from gaps.
-function levelsWithHeights(levels: Level[]) {
+// Sort levels by MDPL ascending. Expand typical groups into individual 3m
+// floors and shift upper levels accordingly.
+const TYPICAL_FLOOR_H = 3;
+type ExpandedFloor = Level & {
+  height: number;
+  baseMdpl: number;
+  sourceId: string;
+  typicalIndex: number;
+  typicalTotal: number;
+};
+function expandLevels(levels: Level[]): ExpandedFloor[] {
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-  return sorted.map((lv, i) => {
-    const next = sorted[i + 1];
-    const height = next ? Math.max(0, next.mdpl - lv.mdpl) : 4; // top level default 4m
-    return { ...lv, height };
+  let shift = 0;
+  const adjusted = sorted.map((lv) => {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const base = lv.mdpl + shift;
+    shift += (k - 1) * TYPICAL_FLOOR_H;
+    return { lv, k, base };
   });
+  const out: ExpandedFloor[] = [];
+  for (let i = 0; i < adjusted.length; i++) {
+    const { lv, k, base } = adjusted[i];
+    const next = adjusted[i + 1];
+    if (k === 1) {
+      const h = next ? Math.max(0.1, next.base - base) : 4;
+      out.push({ ...lv, baseMdpl: base, height: h, sourceId: lv.id, typicalIndex: 0, typicalTotal: 1 });
+    } else {
+      for (let j = 0; j < k; j++) {
+        out.push({
+          ...lv,
+          id: `${lv.id}__t${j}`,
+          baseMdpl: base + j * TYPICAL_FLOOR_H,
+          height: TYPICAL_FLOOR_H,
+          sourceId: lv.id,
+          typicalIndex: j,
+          typicalTotal: k,
+        });
+      }
+    }
+  }
+  return out;
+}
+function levelsWithHeights(levels: Level[]) {
+  // Kept for backward-compatibility: returns expanded floors with `height`.
+  return expandLevels(levels);
 }
 
 // ---------- 3D scene helpers ----------
@@ -147,18 +184,16 @@ function ExtrudedFloor({
 
   return (
     <group position={[0, baseY, 0]}>
-      <mesh geometry={geometry}>
-        <meshPhysicalMaterial
+      <mesh geometry={geometry} castShadow receiveShadow>
+        <meshStandardMaterial
           color={color}
-          transparent
-          opacity={highlighted ? 0.45 : 0.22}
-          roughness={0.15}
+          roughness={0.7}
           metalness={0.05}
-          transmission={0.4}
-          thickness={0.5}
           side={THREE.DoubleSide}
+          emissive={highlighted ? color : "#000000"}
+          emissiveIntensity={highlighted ? 0.18 : 0}
         />
-        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#222"} />
+        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#1a1a1a"} />
       </mesh>
     </group>
   );
@@ -204,18 +239,18 @@ function Scene({
 }) {
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
-  const levels = useMemo(() => levelsWithHeights(sketch.levels), [sketch.levels]);
-  const baseMdpl = levels[0]?.mdpl ?? 0;
+  const floors = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
+  const baseMdpl = floors[0]?.baseMdpl ?? 0;
 
-  // Lahan layers (any level) -> flat ground
   const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
   const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
 
   return (
     <>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[30, 50, 20]} intensity={0.9} castShadow />
-      <directionalLight position={[-20, 30, -20]} intensity={0.35} />
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[30, 50, 20]} intensity={1.05} castShadow />
+      <directionalLight position={[-20, 30, -20]} intensity={0.4} />
+      <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
 
       {lahanLayers.map((ly) => (
         <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} />
@@ -235,21 +270,21 @@ function Scene({
         infiniteGrid
       />
 
-      {levels.map((lv) => {
-        const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.id);
+      {floors.map((lv) => {
+        const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
         return layersOfLevel.map((ly, idx) => (
           <ExtrudedFloor
             key={`${lv.id}_${ly.id}_${idx}`}
             points={ly.points}
             origin={origin}
             mPerPx={mPerPx}
-            baseY={lv.mdpl - baseMdpl}
+            baseY={lv.baseMdpl - baseMdpl}
             height={lv.height}
             color={ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
               const parts = body.split(",").map((s: string) => s.trim());
               return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
             }) || "#e85d3a"}
-            highlighted={highlightLevelId === lv.id}
+            highlighted={highlightLevelId === lv.sourceId}
           />
         ));
       })}
@@ -270,27 +305,34 @@ function SketchViewer({
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
-  const sortedLevels = useMemo(
-    () => levelsWithHeights(sketch.levels),
-    [sketch.levels],
-  );
-  const baseMdpl = sortedLevels[0]?.mdpl ?? 0;
-  const topMdpl = sortedLevels.length
-    ? sortedLevels[sortedLevels.length - 1].mdpl + sortedLevels[sortedLevels.length - 1].height
+  const expanded = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
+  const baseMdpl = expanded[0]?.baseMdpl ?? 0;
+  const topMdpl = expanded.length
+    ? expanded[expanded.length - 1].baseMdpl + expanded[expanded.length - 1].height
     : 0;
   const totalHeight = topMdpl - baseMdpl;
 
+  // Source levels (one row per user-defined level), sorted by MDPL
+  const sourceLevels = useMemo(
+    () => [...sketch.levels].sort((a, b) => a.mdpl - b.mdpl),
+    [sketch.levels],
+  );
+
   const mPerPx = metersPerPx(sketch.scale);
 
-  // Volume per level: sum of layer areas × floor height
+  // Volume per source level, accounting for typicalCount.
   const volumeData = useMemo(() => {
     const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
-    return sortedLevels.map((lv) => {
+    return sourceLevels.map((lv) => {
+      const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
       const layers = buildLayers.filter((l) => l.levelId === lv.id);
-      const area = layers.reduce((s, l) => s + (l.areaM2 || 0), 0);
-      return { id: lv.id, name: lv.name, mdpl: lv.mdpl, height: lv.height, area, volume: area * lv.height };
+      const area = layers.reduce((s, l) => s + (l.areaM2 || 0), 0) * k;
+      // total height occupied by this source group in 3D
+      const floors = expanded.filter((f) => f.sourceId === lv.id);
+      const groupHeight = floors.reduce((s, f) => s + f.height, 0);
+      return { id: lv.id, name: lv.name, mdpl: lv.mdpl, height: groupHeight, area, volume: area * (groupHeight / Math.max(1, k)), k };
     });
-  }, [sketch.layers, sortedLevels]);
+  }, [sketch.layers, sourceLevels, expanded]);
 
   const totalArea = volumeData.reduce((s, v) => s + v.area, 0);
   const totalVolume = volumeData.reduce((s, v) => s + v.volume, 0);
@@ -319,63 +361,68 @@ function SketchViewer({
             <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (MDPL)</h3>
           </div>
           <div className="space-y-3">
-            {sortedLevels.length === 0 && (
+            {sourceLevels.length === 0 && (
               <p className="text-xs text-muted-foreground">Belum ada level.</p>
             )}
-            {sortedLevels.map((lv, i) => (
-              <div
-                key={lv.id}
-                className={cn(
-                  "rounded-md border border-border/60 bg-background/40 p-2",
-                  highlight === lv.id && "ring-1 ring-primary",
-                )}
-                onMouseEnter={() => setHighlight(lv.id)}
-                onMouseLeave={() => setHighlight(null)}
-              >
-                <div className="grid grid-cols-[1fr_90px] gap-2">
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Nama Lantai
-                    </Label>
-                    <Input
-                      value={lv.name}
-                      onChange={(e) => updateLevel(lv.id, { name: e.target.value })}
-                      className="h-8 text-sm"
-                    />
+            {sourceLevels.map((lv, i) => {
+              const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+              const vd = volumeData[i];
+              return (
+                <div
+                  key={lv.id}
+                  className={cn(
+                    "rounded-md border border-border/60 bg-background/40 p-2",
+                    highlight === lv.id && "ring-1 ring-primary",
+                  )}
+                  onMouseEnter={() => setHighlight(lv.id)}
+                  onMouseLeave={() => setHighlight(null)}
+                >
+                  <div className="grid grid-cols-[1fr_90px] gap-2">
+                    <div>
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Nama Lantai
+                      </Label>
+                      <Input
+                        value={lv.name}
+                        onChange={(e) => updateLevel(lv.id, { name: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        MDPL (m)
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={lv.mdpl}
+                        onChange={(e) =>
+                          updateLevel(lv.id, { mdpl: parseFloat(e.target.value) || 0 })
+                        }
+                        className="h-8 text-sm"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      MDPL (m)
-                    </Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={lv.mdpl}
-                      onChange={(e) =>
-                        updateLevel(lv.id, { mdpl: parseFloat(e.target.value) || 0 })
-                      }
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>
-                    Tinggi:{" "}
-                    <span className="font-medium text-foreground">{fmt(lv.height)} m</span>
-                    {!sortedLevels[i + 1] && (
-                      <span className="ml-1 italic">(default)</span>
-                    )}
-                  </span>
-                  <span>
-                    Luas:{" "}
-                    <span className="font-medium text-foreground">
-                      {fmt(volumeData[i]?.area || 0)} m²
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>
+                      Tinggi:{" "}
+                      <span className="font-medium text-foreground">{fmt(vd?.height || 0)} m</span>
+                      {k > 1 && (
+                        <span className="ml-1 text-primary">· tipikal {k}×</span>
+                      )}
                     </span>
-                  </span>
+                    <span>
+                      Luas:{" "}
+                      <span className="font-medium text-foreground">
+                        {fmt(vd?.area || 0)} m²
+                      </span>
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
 
           <div className="mt-4 space-y-1 rounded-md bg-muted/40 p-3 text-xs">
             <div className="flex justify-between">
