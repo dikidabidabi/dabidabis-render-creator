@@ -540,7 +540,8 @@ type Slide =
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
-  | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats };
+  | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "eksisting"; id: string; title: string; sketch: Sketch };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -566,6 +567,9 @@ function buildSlides(sk: Sketch): Slide[] {
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
+  if (sk.geo && sk.geo.locked) {
+    out.push({ kind: "eksisting", id: "eksisting", title: "Analisis Eksisting (Makro Kawasan)", sketch: sk });
+  }
   for (const lv of levels) {
     out.push({
       kind: "level",
@@ -804,6 +808,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
         {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
         {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
         {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
+        {slide.kind === "eksisting" && <EksistingBody sketch={slide.sketch} />}
       </ManualScaleBox>
       <SlideFooter slide={slide} />
     </div>
