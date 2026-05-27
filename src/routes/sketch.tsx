@@ -1042,7 +1042,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Editing an existing vertex (drag to move). Tracks current key as it moves.
   const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
-  const [editMode, setEditMode] = useState<"move" | "addPoint">("move");
+  const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete">("move");
   const [addPointPreview, setAddPointPreview] = useState<Point | null>(null);
 
   // Undo/redo history snapshots: {lines, layers}
@@ -1410,13 +1410,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.setLineDash([]);
     }
 
-    // Edit-mode vertex markers (all unique vertices, highlighted)
+    // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
       const seen = new Set<string>();
       const verts: { p: Point; locked: boolean }[] = [];
       const lockedKeys = new Set<string>();
       layers.forEach((l) => {
         if (!l.locked) return;
+        if (activeLvlId && l.levelId !== activeLvlId) return;
         l.points.forEach((p) => lockedKeys.add(keyOf(p)));
       });
       const pushVert = (p: Point) => {
@@ -1425,21 +1426,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         seen.add(k);
         verts.push({ p, locked: lockedKeys.has(k) });
       };
-      lines.forEach((ln) => { pushVert(ln.a); pushVert(ln.b); });
-      layers.forEach((l) => l.points.forEach(pushVert));
+      lines.forEach((ln) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        pushVert(ln.a); pushVert(ln.b);
+      });
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach(pushVert);
+      });
+      const deleteMode = editMode === "delete";
       verts.forEach((v) => {
         ctx.beginPath();
         ctx.arc(v.p.x, v.p.y, 6 / s, 0, Math.PI * 2);
-        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : "#fff";
+        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : (deleteMode ? "rgba(220,40,40,0.95)" : "#fff");
         ctx.fill();
         ctx.lineWidth = 2 / s;
-        ctx.strokeStyle = v.locked ? "#666" : "rgba(232,93,58,1)";
+        ctx.strokeStyle = v.locked ? "#666" : (deleteMode ? "#7a1010" : "rgba(232,93,58,1)");
         ctx.stroke();
       });
       if (editHover) {
         ctx.beginPath();
         ctx.arc(editHover.x, editHover.y, 10 / s, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(232,93,58,0.9)";
+        ctx.strokeStyle = deleteMode ? "rgba(220,40,40,0.95)" : "rgba(232,93,58,0.9)";
         ctx.lineWidth = 2 / s;
         ctx.stroke();
       }
@@ -1580,7 +1588,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -1736,7 +1744,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
-  // Find nearest vertex (line endpoint or layer point) within tolerance
+  // Find nearest vertex on the ACTIVE level (line endpoint or layer point) within tolerance
   const findVertexAt = useCallback(
     (p: Point, tol: number): Point | null => {
       let best: Point | null = null;
@@ -1749,13 +1757,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
       };
       lines.forEach((ln) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
         consider(ln.a);
         consider(ln.b);
       });
-      layers.forEach((l) => l.points.forEach(consider));
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach(consider);
+      });
       return best;
     },
-    [lines, layers],
+    [lines, layers, activeLvlId],
   );
 
   const lockedVertexKeys = useMemo(() => {
@@ -1847,6 +1859,65 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, pxPerMeter, pushHistory, onChange, isLineLocked],
   );
 
+  // Delete a vertex on the active level: removes it from layer polygons
+  // (recomputing area, dropping the layer if it collapses) and removes any
+  // active-level lines that touch it.
+  const deleteVertexAt = useCallback(
+    (key: string) => {
+      if (lockedVertexKeys.has(key)) {
+        toast.error("Titik terkunci");
+        return;
+      }
+      pushHistory();
+      const nextLines = lines.filter((ln) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return true;
+        return keyOf(ln.a) !== key && keyOf(ln.b) !== key;
+      });
+      const nextLayers: Layer[] = [];
+      let removedLayer: string | null = null;
+      for (const l of layers) {
+        if (activeLvlId && l.levelId !== activeLvlId) {
+          nextLayers.push(l);
+          continue;
+        }
+        const pts = l.points.filter((pt) => keyOf(pt) !== key);
+        if (pts.length === l.points.length) {
+          nextLayers.push(l);
+          continue;
+        }
+        if (pts.length < 3) {
+          removedLayer = l.name;
+          continue;
+        }
+        nextLayers.push({ ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) });
+      }
+      onChange({ lines: nextLines, layers: nextLayers });
+      if (removedLayer) toast.message(`${removedLayer} dihapus karena titiknya tidak cukup`);
+      else toast.success("Titik dihapus");
+    },
+    [lines, layers, activeLvlId, lockedVertexKeys, pxPerMeter, pushHistory, onChange],
+  );
+
+  // Delete the nearest active-level edge/line near point p (within tolerance px in world)
+  const deleteEdgeAt = useCallback(
+    (p: Point, tolPx: number): boolean => {
+      let bestIdx = -1;
+      let bestD = Infinity;
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        if (isLineLocked(ln)) return;
+        const d = pointToLine(p, ln);
+        if (d < bestD) { bestD = d; bestIdx = i; }
+      });
+      if (bestIdx < 0 || bestD > tolPx) return false;
+      pushHistory();
+      onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
+      toast.success("Edge dihapus");
+      return true;
+    },
+    [lines, activeLvlId, isLineLocked, pushHistory, onChange],
+  );
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, getScreenPos(e));
@@ -1882,12 +1953,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
       if (editMode === "addPoint") {
-        // Find nearest straight line within tolerance and split there
+        // Find nearest straight line on the active level within tolerance and split there
         const tolPx = 12 / view.s;
         let bestIdx = -1;
         let bestD = Infinity;
         let bestProj: Point | null = null;
         lines.forEach((ln, i) => {
+          if (activeLvlId && ln.levelId !== activeLvlId) return;
           if ((ln.kind ?? "straight") !== "straight") return;
           if (isLineLocked(ln)) return;
           const proj = projectOnSegment(raw, ln.a, ln.b);
@@ -1903,6 +1975,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         return;
       }
+      if (editMode === "delete") {
+        // Prefer hitting a vertex first; fall back to edges on the active level
+        const v = findVertexAt(raw, tol);
+        if (v) {
+          deleteVertexAt(keyOf(v));
+          return;
+        }
+        const tolPx = 10 / view.s;
+        deleteEdgeAt(raw, tolPx);
+        return;
+      }
       const v = findVertexAt(raw, tol);
       if (!v) return;
       const k = keyOf(v);
@@ -1913,7 +1996,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       pushHistory();
       setEditDrag({ key: k });
     } else if (tool === "erase") {
-      const hitLayer = [...layers].reverse().find((l) => pointInPolygon(p, l.points));
+      const hitLayer = [...layers].reverse().find((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return false;
+        return pointInPolygon(p, l.points);
+      });
       if (hitLayer) {
         if (hitLayer.locked) {
           toast.error(`${hitLayer.name} terkunci`);
@@ -1928,6 +2014,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       let bestIdx = -1;
       let bestD = Infinity;
       lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
         if (isLineLocked(ln)) return;
         const d = pointToLine(p, ln);
         if (d < bestD) {
@@ -1939,7 +2026,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         pushHistory();
         onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
       } else {
-        const hitLocked = lines.find((ln) => isLineLocked(ln) && pointToLine(p, ln) <= tol);
+        const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
         if (hitLocked) toast.error("Garis terkunci");
       }
     }
@@ -1979,7 +2066,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         let bestD = Infinity;
         let bestProj: Point | null = null;
         lines.forEach((ln) => {
+          if (activeLvlId && ln.levelId !== activeLvlId) return;
           if ((ln.kind ?? "straight") !== "straight") return;
+          if (isLineLocked(ln)) return;
           if (isLineLocked(ln)) return;
           const proj = projectOnSegment(raw, ln.a, ln.b);
           const d = dist(raw, proj);
@@ -2407,7 +2496,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         )}
         {tool === "edit" && (
           <div className="space-y-1.5">
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               <Button
                 variant={editMode === "move" ? "default" : "outline"}
                 size="sm"
@@ -2424,13 +2513,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 className={cn("h-8 px-2 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
                 title="Tambah titik baru di sepanjang garis"
               >
-                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Titik
+                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah
+              </Button>
+              <Button
+                variant={editMode === "delete" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("delete")}
+                className={cn("h-8 px-2 text-[11px]", editMode === "delete" && "bg-destructive text-destructive-foreground")}
+                title="Hapus titik atau edge pada level aktif"
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus
               </Button>
             </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {editMode === "move"
-                ? "Tarik titik (vertex) ke posisi baru. Titik milik layer terkunci tidak dapat digeser."
-                : "Ketuk di sepanjang garis lurus untuk menambah titik baru yang dapat digeser."}
+                ? "Tarik titik (vertex) pada level aktif ke posisi baru. Titik terkunci tidak dapat digeser."
+                : editMode === "addPoint"
+                  ? "Ketuk di sepanjang garis lurus pada level aktif untuk menambah titik baru."
+                  : "Ketuk titik untuk menghapusnya, atau ketuk edge (termasuk yang sudah tidak terhitung) untuk menghapus garis. Hanya berlaku pada level aktif."}
             </p>
           </div>
         )}
