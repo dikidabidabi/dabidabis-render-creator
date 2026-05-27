@@ -703,8 +703,9 @@ function ManualScaleBox({
       const ch = inner.scrollHeight;
       inner.style.transform = prev;
       if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
-      setNatural({ w: cw, h: ch });
-      setFitScale(Math.min(1, box.width / cw, box.height / ch));
+      setNatural((prev) => (prev && prev.w === cw && prev.h === ch ? prev : { w: cw, h: ch }));
+      const nextFit = Math.min(1, box.width / cw, box.height / ch);
+      setFitScale((prev) => (Math.abs(prev - nextFit) < 0.001 ? prev : nextFit));
     };
     measure();
     const ro = new ResizeObserver(measure);
