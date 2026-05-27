@@ -184,18 +184,16 @@ function ExtrudedFloor({
 
   return (
     <group position={[0, baseY, 0]}>
-      <mesh geometry={geometry}>
-        <meshPhysicalMaterial
+      <mesh geometry={geometry} castShadow receiveShadow>
+        <meshStandardMaterial
           color={color}
-          transparent
-          opacity={highlighted ? 0.45 : 0.22}
-          roughness={0.15}
+          roughness={0.7}
           metalness={0.05}
-          transmission={0.4}
-          thickness={0.5}
           side={THREE.DoubleSide}
+          emissive={highlighted ? color : "#000000"}
+          emissiveIntensity={highlighted ? 0.18 : 0}
         />
-        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#222"} />
+        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#1a1a1a"} />
       </mesh>
     </group>
   );
