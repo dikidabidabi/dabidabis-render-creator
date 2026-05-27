@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import SunCalc from "suncalc";
+import { drawOsmTiles as _drawOsmTiles } from "@/lib/geo";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
