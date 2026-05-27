@@ -802,6 +802,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       <SlideHeader slide={slide} />
       <ManualScaleBox slideId={slide.id} style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28 }}>
         {slide.kind === "level" && <LevelBody slide={slide} />}
+        {slide.kind === "matahari" && <MatahariBody slide={slide} />}
         {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
         {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
         {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
