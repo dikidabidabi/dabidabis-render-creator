@@ -39,10 +39,12 @@ type Layer = {
   id: string; name: string; points: Point[]; areaM2: number; color: string; levelId?: string; coefficient?: number;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
+type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; label?: string };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
   kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
+  geo?: Geo;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
