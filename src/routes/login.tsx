@@ -9,8 +9,8 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    mode: (search.mode as string) === "signup" ? "signup" : ("signin" as "signin" | "signup"),
+  validateSearch: (search: Record<string, unknown>): { mode?: "signin" | "signup" } => ({
+    mode: (search.mode as string) === "signup" ? "signup" : "signin",
   }),
   component: LoginPage,
 });
