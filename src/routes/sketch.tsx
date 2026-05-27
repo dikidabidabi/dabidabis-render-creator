@@ -2990,6 +2990,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
             Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
           </div>
+          <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
+            <CompassMarker rotation={northRotation} size={64} />
+          </div>
         </div>
         {SidePanel}
       </div>
