@@ -1550,10 +1550,11 @@ function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }
     const d = new Date(baseDate);
     d.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
     const p = SunCalc.getPosition(d, lat, lon);
-    // SunCalc azimuth: 0 = south, +CW. Convert to north-CW.
+    // SunCalc azimuth: 0 = south, +CW. Convert to north-CW (azimuth nyata).
     const azNorthCW = (p.azimuth + Math.PI) * (180 / Math.PI);
-    // Counter-rotate dengan north arah denah
-    const az = ((azNorthCW - northDeg) % 360 + 360) % 360;
+    // Konversi ke sudut pada frame sketsa: Utara nyata berada di sudut
+    // `northDeg` (= mapRotation) dari sketsa-atas, jadi az_sketch = az_real + northDeg.
+    const az = ((azNorthCW + northDeg) % 360 + 360) % 360;
     const alt = (p.altitude * 180) / Math.PI;
     return { az, alt };
   };
