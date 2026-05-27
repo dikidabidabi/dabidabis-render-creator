@@ -1324,6 +1324,7 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 function RincianBody({ sketch }: { sketch: Sketch }) {
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
+  const displayNames = computeLevelDisplayNames(levels);
   return (
     <div style={{ width: "100%", overflow: "hidden", display: "flex", flexDirection: "column", gap: 18 }}>
       <div style={{
@@ -1333,13 +1334,22 @@ function RincianBody({ sketch }: { sketch: Sketch }) {
       }}>
         {levels.map((lv) => {
           const items = ruang.filter((l) => l.levelId === lv.id);
-          const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
-          const totalEf = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+          const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+          const totalAsliPer = items.reduce((s, l) => s + l.areaM2, 0);
+          const totalEfPer = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+          const totalAsli = totalAsliPer * k;
+          const totalEf = totalEfPer * k;
+          const name = displayNames[lv.id] ?? lv.name;
           return (
             <div key={lv.id} style={{ breakInside: "avoid", marginBottom: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1px solid #111", paddingBottom: 6, marginBottom: 8 }}>
                 <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em" }}>
-                  {lv.name}
+                  {name}
+                  {k > 1 && (
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#e85d3a", textTransform: "uppercase" }}>
+                      tipikal {k}×
+                    </span>
+                  )}
                 </span>
                 <span style={{ fontSize: 12, letterSpacing: "0.18em", textTransform: "uppercase", color: "#888" }}>
                   {fmt(lv.mdpl, 1)} mdpl · {fmt(totalEf)} m² efektif
@@ -1360,12 +1370,14 @@ function RincianBody({ sketch }: { sketch: Sketch }) {
                   <tbody>
                     {items.map((r) => {
                       const coef = r.coefficient ?? 1;
+                      const luas = r.areaM2 * k;
+                      const ef = luas * coef;
                       return (
                         <tr key={r.id} style={{ borderTop: "1px solid #f0f0f0" }}>
                           <td style={{ padding: "6px 0" }}>{r.name}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{coef}</td>
-                          <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(r.areaM2)}</td>
-                          <td style={{ padding: "6px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(r.areaM2 * coef)}</td>
+                          <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(luas)}</td>
+                          <td style={{ padding: "6px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(ef)}</td>
                         </tr>
                       );
                     })}
