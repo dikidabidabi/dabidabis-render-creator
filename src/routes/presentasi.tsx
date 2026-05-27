@@ -826,6 +826,12 @@ function SlideContent({ slide }: { slide?: Slide }) {
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
     slide.kind === "level" ? "Sketsa · Level"
+    : slide.kind === "site" ? (
+        slide.view === "lokasi" ? "Analisa · Lokasi"
+        : slide.view === "akses" ? "Analisa · Akses"
+        : slide.view === "fasilitas" ? "Analisa · Fasilitas"
+        : "Analisa · Lingkungan"
+      )
     : slide.kind === "matahari" ? "Analisa · Matahari"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
