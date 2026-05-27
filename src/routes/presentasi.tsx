@@ -38,7 +38,7 @@ type Line = {
 type Layer = {
   id: string; name: string; points: Point[]; areaM2: number; color: string; levelId?: string; coefficient?: number;
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
