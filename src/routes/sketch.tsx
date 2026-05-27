@@ -2486,6 +2486,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       </div>
 
       <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Arah Utara</Label>
+        <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background/40 p-2.5">
+          <CompassMarker rotation={northRotation} size={56} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                step="1"
+                value={Number.isFinite(northRotation) ? northRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onChange({ northRotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-8 text-sm"
+              />
+              <span className="text-xs text-muted-foreground">°</span>
+            </div>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: ((northRotation - 15) % 360 + 360) % 360 })}>−15°</Button>
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: 0 })}>0°</Button>
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: ((northRotation + 15) % 360 + 360) % 360 })}>+15°</Button>
+            </div>
+          </div>
+        </div>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          0° = utara ke atas. Rotasi searah jarum jam. Muncul di kanan bawah tiap denah pada slide.
+        </p>
+      </div>
+
+
+
+      <div className="space-y-2">
         <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
         <div className="grid grid-cols-2 gap-2">
           <Button
