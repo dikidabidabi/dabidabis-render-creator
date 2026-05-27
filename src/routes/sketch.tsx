@@ -515,6 +515,7 @@ function normalizeSketch(s: any): Sketch {
           lon: Number(s.geo.lon),
           locked: Boolean(s.geo.locked),
           mapOpacity: Number.isFinite(Number(s.geo.mapOpacity)) ? Math.max(0, Math.min(1, Number(s.geo.mapOpacity))) : 0.55,
+          mapRotation: Number.isFinite(Number(s.geo.mapRotation)) ? Number(s.geo.mapRotation) : 0,
           label: typeof s.geo.label === "string" ? s.geo.label : "",
         }
       : undefined,
@@ -989,6 +990,30 @@ function GeoPanel({
             onValueChange={(v) => setG({ mapOpacity: (v[0] ?? 0) / 100 })}
           />
         </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Rotasi peta</span>
+            <span className="font-medium text-foreground">{Math.round(((Number(g.mapRotation) || 0) % 360 + 360) % 360)}°</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              value={Number(g.mapRotation) || 0}
+              onChange={(e) => setG({ mapRotation: Number(e.target.value) || 0 })}
+              className="h-7 w-16 text-xs"
+              step={1}
+            />
+            <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]"
+              onClick={() => setG({ mapRotation: (Number(g.mapRotation) || 0) - 15 })}>−15°</Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]"
+              onClick={() => setG({ mapRotation: 0 })}>0°</Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]"
+              onClick={() => setG({ mapRotation: (Number(g.mapRotation) || 0) + 15 })}>+15°</Button>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Hanya merotasi peta. Skala & grid milimeter block tidak berubah.
+          </p>
+        </div>
         {g.label && (
           <p className="truncate text-[10px] text-muted-foreground" title={g.label}>
             {g.label}
@@ -1406,16 +1431,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const x0 = Math.floor(minX / MINOR_PX) * MINOR_PX;
     const y0 = Math.floor(minY / MINOR_PX) * MINOR_PX;
 
-    // OSM tile underlay (anchored at geo lat/lon → world 0,0)
+    // OSM tile underlay (anchored at geo lat/lon → world 0,0).
+    // mapRotation hanya berdampak pada peta; grid milimeter block & skala tetap.
     if (sketch.geo && sketch.geo.locked && sketch.geo.mapOpacity > 0.01) {
+      const rotDeg = Number(sketch.geo.mapRotation) || 0;
+      const rotRad = (rotDeg * Math.PI) / 180;
+      // Rotated bounds: corners of the world-space viewport, rotated by -rotRad
+      // (peta-frame). Cari AABB-nya supaya semua tile yang terlihat ter-render.
+      const cos = Math.cos(-rotRad), sin = Math.sin(-rotRad);
+      const cs = [
+        { x: minX, y: minY }, { x: maxX, y: minY },
+        { x: maxX, y: maxY }, { x: minX, y: maxY },
+      ].map((p) => ({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
+      const rb = {
+        minX: Math.min(...cs.map((p) => p.x)),
+        maxX: Math.max(...cs.map((p) => p.x)),
+        minY: Math.min(...cs.map((p) => p.y)),
+        maxY: Math.max(...cs.map((p) => p.y)),
+      };
+      ctx.save();
+      ctx.rotate(rotRad);
       drawOsmTiles(ctx, {
         lat: sketch.geo.lat,
         lon: sketch.geo.lon,
         worldPxPerMeter: pxPerMeter,
-        bounds: { minX, minY, maxX, maxY },
+        bounds: rb,
         opacity: sketch.geo.mapOpacity,
         onTileLoad,
       });
+      ctx.restore();
     }
 
     // Minor grid (in world units)

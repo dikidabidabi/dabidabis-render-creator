@@ -6,6 +6,7 @@ export type Geo = {
   lon: number;
   locked: boolean;
   mapOpacity: number; // 0..1
+  mapRotation?: number; // derajat, searah jarum jam — hanya merotasi peta, tidak skala/grid
   label?: string;
 };
 
@@ -14,6 +15,7 @@ export const DEFAULT_GEO: Geo = {
   lon: 106.816666,
   locked: false,
   mapOpacity: 0.55,
+  mapRotation: 0,
   label: "",
 };
 
