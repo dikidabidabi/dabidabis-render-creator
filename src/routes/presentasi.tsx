@@ -876,13 +876,14 @@ function SlideFooter({ slide }: { slide: Slide }) {
   );
 }
 
-// Effective compass: northRotation (sketch's chosen north) digabung dengan
-// rotasi peta sehingga panah Utara selalu mengikuti map underlay. Ini juga
-// dipakai sebagai referensi tunggal untuk analisis matahari.
+// Sudut arah Utara nyata pada frame sketsa (CW dari sketsa-atas).
+// Di Sketsa, user merotasi peta CW sebesar mapRotation supaya jalan/garis
+// peta menempel pada tapak; otomatis Utara nyata berada di sudut mapRotation
+// dari sketsa-atas. Inilah satu-satunya acuan untuk kompas & analisa matahari
+// agar konsisten dengan superimpose di sketsa.
 function effectiveNorthDeg(sketch: Sketch): number {
-  const n = Number(sketch.northRotation) || 0;
   const m = Number(sketch.geo?.mapRotation) || 0;
-  return ((n - m) % 360 + 360) % 360;
+  return ((m % 360) + 360) % 360;
 }
 
 function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
@@ -1137,7 +1138,7 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
   const geo = sketch.geo;
   const lat = geo?.lat ?? -6.2;
   const lon = geo?.lon ?? 106.816666;
-  const northDeg = effectiveNorthDeg(sketch);
+  const northDeg = effectiveNorthDeg(sketch); // = mapRotation
   // Radius peta tergantung view.
   const radiusM = view === "lokasi" ? 600 : view === "akses" ? 700 : view === "fasilitas" ? 1000 : 900;
 
@@ -1151,12 +1152,14 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
     for (const p of allPts) { centerSx += p.x; centerSy += p.y; }
     centerSx /= allPts.length; centerSy /= allPts.length;
   }
-  const cos = Math.cos((-northDeg * Math.PI) / 180);
-  const sin = Math.sin((-northDeg * Math.PI) / 180);
+  // Sketsa diputar -mapRotation supaya superimpose ke peta utara-ke-atas
+  // identik dengan tampilan di Sketsa (peta diputar +mapRotation, sketsa diam).
+  const rotRad = (-northDeg * Math.PI) / 180;
+  const cos = Math.cos(rotRad);
+  const sin = Math.sin(rotRad);
   const toMeters = (p: Point) => {
     const dx = (p.x - centerSx) * mPerSPx;
     const dy = (p.y - centerSy) * mPerSPx;
-    // Rotate sketch coords so north on sketch aligns with map north.
     return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
   };
 
@@ -1339,7 +1342,7 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
                 <circle cx={0} cy={0} r={2} fill="#0a0a0a" />
               </g>
             </svg>
-            <SlideCompass rotation={northDeg} size={68} />
+            <SlideCompass rotation={0} size={68} />
             {!data && !err && (
               <div style={{ position: "absolute", left: 10, bottom: 10, fontSize: 10, color: "#666",
                 background: "rgba(255,255,255,0.85)", padding: "3px 8px", border: "1px solid #ddd" }}>
@@ -1547,10 +1550,11 @@ function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }
     const d = new Date(baseDate);
     d.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
     const p = SunCalc.getPosition(d, lat, lon);
-    // SunCalc azimuth: 0 = south, +CW. Convert to north-CW.
+    // SunCalc azimuth: 0 = south, +CW. Convert to north-CW (azimuth nyata).
     const azNorthCW = (p.azimuth + Math.PI) * (180 / Math.PI);
-    // Counter-rotate dengan north arah denah
-    const az = ((azNorthCW - northDeg) % 360 + 360) % 360;
+    // Konversi ke sudut pada frame sketsa: Utara nyata berada di sudut
+    // `northDeg` (= mapRotation) dari sketsa-atas, jadi az_sketch = az_real + northDeg.
+    const az = ((azNorthCW + northDeg) % 360 + 360) % 360;
     const alt = (p.altitude * 180) / Math.PI;
     return { az, alt };
   };
