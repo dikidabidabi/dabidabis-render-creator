@@ -56,6 +56,64 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
+
+// Typical floor logic — kept in sync with sketch.tsx
+const TYPICAL_FLOOR_H = 3;
+function isAutoLevelName(name: string): boolean {
+  return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
+}
+function computeLevelDisplayNames(levels: Level[]): Record<string, string> {
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const out: Record<string, string> = {};
+  let idx = 1;
+  for (const lv of sorted) {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const start = idx;
+    const end = idx + k - 1;
+    const auto = k > 1 ? `Level ${start}–${end}` : `Level ${start}`;
+    out[lv.id] = isAutoLevelName(lv.name) ? auto : lv.name;
+    idx = end + 1;
+  }
+  return out;
+}
+// Expand source levels into individual visible floors (one per typical copy)
+type ExpandedFloor = {
+  id: string; sourceId: string; name: string;
+  mdpl: number; height: number;
+  typicalIndex: number; typicalTotal: number;
+};
+function expandLevelsForView(levels: Level[]): ExpandedFloor[] {
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  let shift = 0;
+  const adjusted = sorted.map((lv) => {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const base = lv.mdpl + shift;
+    shift += (k - 1) * TYPICAL_FLOOR_H;
+    return { lv, k, base };
+  });
+  const out: ExpandedFloor[] = [];
+  for (let i = 0; i < adjusted.length; i++) {
+    const { lv, k, base } = adjusted[i];
+    const next = adjusted[i + 1];
+    if (k === 1) {
+      const h = next ? Math.max(0.1, next.base - base) : 4;
+      out.push({ id: lv.id, sourceId: lv.id, name: lv.name, mdpl: base, height: h, typicalIndex: 0, typicalTotal: 1 });
+    } else {
+      for (let j = 0; j < k; j++) {
+        out.push({
+          id: `${lv.id}__t${j}`,
+          sourceId: lv.id,
+          name: lv.name,
+          mdpl: base + j * TYPICAL_FLOOR_H,
+          height: TYPICAL_FLOOR_H,
+          typicalIndex: j,
+          typicalTotal: k,
+        });
+      }
+    }
+  }
+  return out;
+}
 function fmt(n: number, d = 2) {
   if (!Number.isFinite(n)) return "0";
   return n.toLocaleString("id-ID", { minimumFractionDigits: d, maximumFractionDigits: d });
