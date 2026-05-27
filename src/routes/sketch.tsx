@@ -1953,12 +1953,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
       if (editMode === "addPoint") {
-        // Find nearest straight line within tolerance and split there
+        // Find nearest straight line on the active level within tolerance and split there
         const tolPx = 12 / view.s;
         let bestIdx = -1;
         let bestD = Infinity;
         let bestProj: Point | null = null;
         lines.forEach((ln, i) => {
+          if (activeLvlId && ln.levelId !== activeLvlId) return;
           if ((ln.kind ?? "straight") !== "straight") return;
           if (isLineLocked(ln)) return;
           const proj = projectOnSegment(raw, ln.a, ln.b);
@@ -1972,6 +1973,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         if (bestIdx >= 0 && bestProj && bestD <= tolPx) {
           splitLineAt(bestIdx, bestProj);
         }
+        return;
+      }
+      if (editMode === "delete") {
+        // Prefer hitting a vertex first; fall back to edges on the active level
+        const v = findVertexAt(raw, tol);
+        if (v) {
+          deleteVertexAt(keyOf(v));
+          return;
+        }
+        const tolPx = 10 / view.s;
+        deleteEdgeAt(raw, tolPx);
         return;
       }
       const v = findVertexAt(raw, tol);
