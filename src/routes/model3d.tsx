@@ -239,18 +239,18 @@ function Scene({
 }) {
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
-  const levels = useMemo(() => levelsWithHeights(sketch.levels), [sketch.levels]);
-  const baseMdpl = levels[0]?.mdpl ?? 0;
+  const floors = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
+  const baseMdpl = floors[0]?.baseMdpl ?? 0;
 
-  // Lahan layers (any level) -> flat ground
   const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
   const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
 
   return (
     <>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[30, 50, 20]} intensity={0.9} castShadow />
-      <directionalLight position={[-20, 30, -20]} intensity={0.35} />
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[30, 50, 20]} intensity={1.05} castShadow />
+      <directionalLight position={[-20, 30, -20]} intensity={0.4} />
+      <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
 
       {lahanLayers.map((ly) => (
         <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} />
@@ -270,21 +270,21 @@ function Scene({
         infiniteGrid
       />
 
-      {levels.map((lv) => {
-        const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.id);
+      {floors.map((lv) => {
+        const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
         return layersOfLevel.map((ly, idx) => (
           <ExtrudedFloor
             key={`${lv.id}_${ly.id}_${idx}`}
             points={ly.points}
             origin={origin}
             mPerPx={mPerPx}
-            baseY={lv.mdpl - baseMdpl}
+            baseY={lv.baseMdpl - baseMdpl}
             height={lv.height}
             color={ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
               const parts = body.split(",").map((s: string) => s.trim());
               return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
             }) || "#e85d3a"}
-            highlighted={highlightLevelId === lv.id}
+            highlighted={highlightLevelId === lv.sourceId}
           />
         ));
       })}
