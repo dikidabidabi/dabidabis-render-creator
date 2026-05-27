@@ -251,6 +251,7 @@ function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null 
 function isLahanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("lahan");
 }
+const DEFAULT_GSB_M = 4;
 function getGsbMeters(layer: Layer, sideIndex: number): number {
   const v = layer.gsb?.[sideIndex];
   return Number.isFinite(v) && (v as number) >= 0 ? (v as number) : DEFAULT_GSB_M;
