@@ -361,63 +361,68 @@ function SketchViewer({
             <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (MDPL)</h3>
           </div>
           <div className="space-y-3">
-            {sortedLevels.length === 0 && (
+            {sourceLevels.length === 0 && (
               <p className="text-xs text-muted-foreground">Belum ada level.</p>
             )}
-            {sortedLevels.map((lv, i) => (
-              <div
-                key={lv.id}
-                className={cn(
-                  "rounded-md border border-border/60 bg-background/40 p-2",
-                  highlight === lv.id && "ring-1 ring-primary",
-                )}
-                onMouseEnter={() => setHighlight(lv.id)}
-                onMouseLeave={() => setHighlight(null)}
-              >
-                <div className="grid grid-cols-[1fr_90px] gap-2">
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Nama Lantai
-                    </Label>
-                    <Input
-                      value={lv.name}
-                      onChange={(e) => updateLevel(lv.id, { name: e.target.value })}
-                      className="h-8 text-sm"
-                    />
+            {sourceLevels.map((lv, i) => {
+              const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+              const vd = volumeData[i];
+              return (
+                <div
+                  key={lv.id}
+                  className={cn(
+                    "rounded-md border border-border/60 bg-background/40 p-2",
+                    highlight === lv.id && "ring-1 ring-primary",
+                  )}
+                  onMouseEnter={() => setHighlight(lv.id)}
+                  onMouseLeave={() => setHighlight(null)}
+                >
+                  <div className="grid grid-cols-[1fr_90px] gap-2">
+                    <div>
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Nama Lantai
+                      </Label>
+                      <Input
+                        value={lv.name}
+                        onChange={(e) => updateLevel(lv.id, { name: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        MDPL (m)
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={lv.mdpl}
+                        onChange={(e) =>
+                          updateLevel(lv.id, { mdpl: parseFloat(e.target.value) || 0 })
+                        }
+                        className="h-8 text-sm"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      MDPL (m)
-                    </Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={lv.mdpl}
-                      onChange={(e) =>
-                        updateLevel(lv.id, { mdpl: parseFloat(e.target.value) || 0 })
-                      }
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>
-                    Tinggi:{" "}
-                    <span className="font-medium text-foreground">{fmt(lv.height)} m</span>
-                    {!sortedLevels[i + 1] && (
-                      <span className="ml-1 italic">(default)</span>
-                    )}
-                  </span>
-                  <span>
-                    Luas:{" "}
-                    <span className="font-medium text-foreground">
-                      {fmt(volumeData[i]?.area || 0)} m²
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>
+                      Tinggi:{" "}
+                      <span className="font-medium text-foreground">{fmt(vd?.height || 0)} m</span>
+                      {k > 1 && (
+                        <span className="ml-1 text-primary">· tipikal {k}×</span>
+                      )}
                     </span>
-                  </span>
+                    <span>
+                      Luas:{" "}
+                      <span className="font-medium text-foreground">
+                        {fmt(vd?.area || 0)} m²
+                      </span>
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
 
           <div className="mt-4 space-y-1 rounded-md bg-muted/40 p-3 text-xs">
             <div className="flex justify-between">
