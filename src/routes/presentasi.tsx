@@ -921,9 +921,19 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         </svg>
       </div>
       <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
-        <BigStat label="Level" value={level.name} hint={`${fmt(level.mdpl, 1)} mdpl`} />
+        <BigStat
+          label="Level"
+          value={displayName}
+          hint={k > 1
+            ? `${fmt(level.mdpl, 1)} mdpl · tipikal ${k}×`
+            : `${fmt(level.mdpl, 1)} mdpl`}
+        />
         <BigStat label="Jumlah Ruang" value={String(layers.filter((l) => !isLahan(l.name)).length)} />
-        <BigStat label="Total Luas" value={`${fmt(totalLuas)} m²`} />
+        <BigStat
+          label="Total Luas"
+          value={`${fmt(totalLuas)} m²`}
+          hint={k > 1 ? `${fmt(luasPerLantai)} m² × ${k} lantai` : undefined}
+        />
         {sketch.fungsi && <BigStat label="Fungsi" value={sketch.fungsi} />}
       </div>
     </div>
