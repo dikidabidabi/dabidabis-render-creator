@@ -196,7 +196,58 @@ function pointInPolygon(p: Point, poly: Point[]) {
   return inside;
 }
 
-const DEFAULT_GSB_M = 4;
+// Convert points -> polygon-clipping ring (closed). Drop near-duplicate consecutive points.
+function ptsToRing(pts: Point[]): [number, number][] {
+  const ring: [number, number][] = [];
+  for (const p of pts) {
+    const last = ring[ring.length - 1];
+    if (!last || Math.hypot(last[0] - p.x, last[1] - p.y) > 0.001) ring.push([p.x, p.y]);
+  }
+  if (ring.length >= 2) {
+    const f = ring[0], l = ring[ring.length - 1];
+    if (Math.hypot(f[0] - l[0], f[1] - l[1]) > 0.001) ring.push([f[0], f[1]]);
+  }
+  return ring;
+}
+function ringToPts(ring: [number, number][]): Point[] {
+  const out: Point[] = ring.map(([x, y]) => ({ x, y }));
+  // remove last if it equals first (closing point)
+  if (out.length >= 2) {
+    const f = out[0], l = out[out.length - 1];
+    if (Math.hypot(f.x - l.x, f.y - l.y) < 0.001) out.pop();
+  }
+  return out;
+}
+
+// Subtract `subtractor` polygon from `subject` polygon. Returns the largest
+// resulting outer ring (holes are dropped). Returns null if nothing remains.
+function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null {
+  if (subject.length < 3 || subtractor.length < 3) return subject;
+  try {
+    const result = polygonClipping.difference(
+      [[ptsToRing(subject)]],
+      [[ptsToRing(subtractor)]],
+    );
+    if (!result || result.length === 0) return null;
+    // Pick the polygon with the largest outer ring area.
+    let bestPts: Point[] | null = null;
+    let bestArea = 0;
+    for (const poly of result) {
+      const outer = poly[0];
+      if (!outer || outer.length < 4) continue;
+      const pts = ringToPts(outer);
+      const a = polygonAreaPx(pts);
+      if (a > bestArea) {
+        bestArea = a;
+        bestPts = pts;
+      }
+    }
+    return bestPts;
+  } catch {
+    return subject;
+  }
+}
+
 function isLahanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("lahan");
 }
