@@ -1407,16 +1407,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const x0 = Math.floor(minX / MINOR_PX) * MINOR_PX;
     const y0 = Math.floor(minY / MINOR_PX) * MINOR_PX;
 
-    // OSM tile underlay (anchored at geo lat/lon → world 0,0)
+    // OSM tile underlay (anchored at geo lat/lon → world 0,0).
+    // mapRotation hanya berdampak pada peta; grid milimeter block & skala tetap.
     if (sketch.geo && sketch.geo.locked && sketch.geo.mapOpacity > 0.01) {
+      const rotDeg = Number(sketch.geo.mapRotation) || 0;
+      const rotRad = (rotDeg * Math.PI) / 180;
+      // Rotated bounds: corners of the world-space viewport, rotated by -rotRad
+      // (peta-frame). Cari AABB-nya supaya semua tile yang terlihat ter-render.
+      const cos = Math.cos(-rotRad), sin = Math.sin(-rotRad);
+      const cs = [
+        { x: minX, y: minY }, { x: maxX, y: minY },
+        { x: maxX, y: maxY }, { x: minX, y: maxY },
+      ].map((p) => ({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
+      const rb = {
+        minX: Math.min(...cs.map((p) => p.x)),
+        maxX: Math.max(...cs.map((p) => p.x)),
+        minY: Math.min(...cs.map((p) => p.y)),
+        maxY: Math.max(...cs.map((p) => p.y)),
+      };
+      ctx.save();
+      ctx.rotate(rotRad);
       drawOsmTiles(ctx, {
         lat: sketch.geo.lat,
         lon: sketch.geo.lon,
         worldPxPerMeter: pxPerMeter,
-        bounds: { minX, minY, maxX, maxY },
+        bounds: rb,
         opacity: sketch.geo.mapOpacity,
         onTileLoad,
       });
+      ctx.restore();
     }
 
     // Minor grid (in world units)
