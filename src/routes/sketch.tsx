@@ -1859,6 +1859,65 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, pxPerMeter, pushHistory, onChange, isLineLocked],
   );
 
+  // Delete a vertex on the active level: removes it from layer polygons
+  // (recomputing area, dropping the layer if it collapses) and removes any
+  // active-level lines that touch it.
+  const deleteVertexAt = useCallback(
+    (key: string) => {
+      if (lockedVertexKeys.has(key)) {
+        toast.error("Titik terkunci");
+        return;
+      }
+      pushHistory();
+      const nextLines = lines.filter((ln) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return true;
+        return keyOf(ln.a) !== key && keyOf(ln.b) !== key;
+      });
+      const nextLayers: Layer[] = [];
+      let removedLayer: string | null = null;
+      for (const l of layers) {
+        if (activeLvlId && l.levelId !== activeLvlId) {
+          nextLayers.push(l);
+          continue;
+        }
+        const pts = l.points.filter((pt) => keyOf(pt) !== key);
+        if (pts.length === l.points.length) {
+          nextLayers.push(l);
+          continue;
+        }
+        if (pts.length < 3) {
+          removedLayer = l.name;
+          continue;
+        }
+        nextLayers.push({ ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) });
+      }
+      onChange({ lines: nextLines, layers: nextLayers });
+      if (removedLayer) toast.message(`${removedLayer} dihapus karena titiknya tidak cukup`);
+      else toast.success("Titik dihapus");
+    },
+    [lines, layers, activeLvlId, lockedVertexKeys, pxPerMeter, pushHistory, onChange],
+  );
+
+  // Delete the nearest active-level edge/line near point p (within tolerance px in world)
+  const deleteEdgeAt = useCallback(
+    (p: Point, tolPx: number): boolean => {
+      let bestIdx = -1;
+      let bestD = Infinity;
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        if (isLineLocked(ln)) return;
+        const d = pointToLine(p, ln);
+        if (d < bestD) { bestD = d; bestIdx = i; }
+      });
+      if (bestIdx < 0 || bestD > tolPx) return false;
+      pushHistory();
+      onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
+      toast.success("Edge dihapus");
+      return true;
+    },
+    [lines, activeLvlId, isLineLocked, pushHistory, onChange],
+  );
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, getScreenPos(e));
