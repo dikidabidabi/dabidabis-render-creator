@@ -1567,6 +1567,36 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
           ctx.restore();
         }
+
+        // "Tangga EVK" — radius 38 m lingkaran putus-putus + label
+        if (layer.name.trim().toLowerCase() === "tangga evk") {
+          const cx = layer.points.reduce((a, p) => a + p.x, 0) / layer.points.length;
+          const cy = layer.points.reduce((a, p) => a + p.y, 0) / layer.points.length;
+          const rPx = 38 * pxPerMeter;
+          ctx.save();
+          ctx.strokeStyle = "rgba(232,93,58,0.95)";
+          ctx.lineWidth = 1.5 / s;
+          ctx.setLineDash([8 / s, 5 / s]);
+          ctx.beginPath();
+          ctx.arc(cx, cy, rPx, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // Garis tipis dari tepi ke pusat
+          ctx.strokeStyle = "rgba(0,0,0,0.85)";
+          ctx.lineWidth = 0.8 / s;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx + rPx, cy);
+          ctx.stroke();
+          // Label "38 m"
+          const fontPx = 11 / s;
+          ctx.font = `600 ${fontPx}px var(--font-display), sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillStyle = "rgba(0,0,0,1)";
+          ctx.fillText("38 m", cx + rPx / 2, cy - 2 / s);
+          ctx.restore();
+        }
       });
 
       // Lines
