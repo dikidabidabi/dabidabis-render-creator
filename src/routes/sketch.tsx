@@ -2765,6 +2765,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
+          <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
+            <CompassMarker rotation={northRotation} size={72} />
+          </div>
         </div>
 
         {/* Top-left controls: escape, undo, redo */}
