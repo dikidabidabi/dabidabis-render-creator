@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import polygonClipping from "polygon-clipping";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -195,10 +196,62 @@ function pointInPolygon(p: Point, poly: Point[]) {
   return inside;
 }
 
-const DEFAULT_GSB_M = 4;
+// Convert points -> polygon-clipping ring (closed). Drop near-duplicate consecutive points.
+function ptsToRing(pts: Point[]): [number, number][] {
+  const ring: [number, number][] = [];
+  for (const p of pts) {
+    const last = ring[ring.length - 1];
+    if (!last || Math.hypot(last[0] - p.x, last[1] - p.y) > 0.001) ring.push([p.x, p.y]);
+  }
+  if (ring.length >= 2) {
+    const f = ring[0], l = ring[ring.length - 1];
+    if (Math.hypot(f[0] - l[0], f[1] - l[1]) > 0.001) ring.push([f[0], f[1]]);
+  }
+  return ring;
+}
+function ringToPts(ring: [number, number][]): Point[] {
+  const out: Point[] = ring.map(([x, y]) => ({ x, y }));
+  // remove last if it equals first (closing point)
+  if (out.length >= 2) {
+    const f = out[0], l = out[out.length - 1];
+    if (Math.hypot(f.x - l.x, f.y - l.y) < 0.001) out.pop();
+  }
+  return out;
+}
+
+// Subtract `subtractor` polygon from `subject` polygon. Returns the largest
+// resulting outer ring (holes are dropped). Returns null if nothing remains.
+function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null {
+  if (subject.length < 3 || subtractor.length < 3) return subject;
+  try {
+    const result = polygonClipping.difference(
+      [[ptsToRing(subject)]],
+      [[ptsToRing(subtractor)]],
+    );
+    if (!result || result.length === 0) return null;
+    // Pick the polygon with the largest outer ring area.
+    let bestPts: Point[] | null = null;
+    let bestArea = 0;
+    for (const poly of result) {
+      const outer = poly[0];
+      if (!outer || outer.length < 4) continue;
+      const pts = ringToPts(outer);
+      const a = polygonAreaPx(pts);
+      if (a > bestArea) {
+        bestArea = a;
+        bestPts = pts;
+      }
+    }
+    return bestPts;
+  } catch {
+    return subject;
+  }
+}
+
 function isLahanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("lahan");
 }
+const DEFAULT_GSB_M = 4;
 function getGsbMeters(layer: Layer, sideIndex: number): number {
   const v = layer.gsb?.[sideIndex];
   return Number.isFinite(v) && (v as number) >= 0 ? (v as number) : DEFAULT_GSB_M;
@@ -1540,6 +1593,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
 
   // Commit a finished line into state, run cycle detection, push history.
+  // Apply boolean subtraction: new polygon carves out overlapping area from
+  // any existing same-level non-lahan layer.
+  const applySubtractionToLayers = useCallback(
+    (existing: Layer[], newPoly: Point[], levelId: string | undefined): Layer[] => {
+      if (newPoly.length < 3) return existing;
+      const out: Layer[] = [];
+      for (const ly of existing) {
+        const sameLevel = (ly.levelId ?? undefined) === (levelId ?? undefined);
+        if (!sameLevel || isLahanLayerName(ly.name) || ly.points.length < 3) {
+          out.push(ly);
+          continue;
+        }
+        const before = polygonAreaPx(ly.points);
+        const result = subtractPolygon(ly.points, newPoly);
+        if (!result || result.length < 3) {
+          // Fully covered — remove.
+          toast.message(`${ly.name} terhapus karena tertutup ruang baru`);
+          continue;
+        }
+        const after = polygonAreaPx(result);
+        if (Math.abs(after - before) < 0.5) {
+          out.push(ly);
+          continue;
+        }
+        const newArea = after / (pxPerMeter * pxPerMeter);
+        out.push({ ...ly, points: result, areaM2: newArea });
+      }
+      return out;
+    },
+    [pxPerMeter],
+  );
+
   const commitLine = useCallback(
     (newLine: Line) => {
       const { levels: nextLevelsBase, activeId } = ensureLevels();
@@ -1564,7 +1649,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             levelId: activeId,
             coefficient: 1,
           };
-          nextLayers = [...layers, layer];
+          const carved = applySubtractionToLayers(layers, cycle, activeId);
+          nextLayers = [...carved, layer];
           toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
         }
       }
@@ -1578,7 +1664,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       onChange(patch);
     },
-    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
   const commitPendingCurve = useCallback(() => {
@@ -1633,9 +1719,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         coefficient: 1,
       };
       pushHistory();
+      const carved = applySubtractionToLayers(layers, pts, activeId);
       const patch: Partial<Sketch> = {
         lines: [...lines, ...newLines],
-        layers: [...layers, layer],
+        layers: [...carved, layer],
       };
       if (nextLevelsBase !== levels) {
         patch.levels = nextLevelsBase;
@@ -1646,7 +1733,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange(patch);
       toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
     },
-    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
   // Find nearest vertex (line endpoint or layer point) within tolerance
