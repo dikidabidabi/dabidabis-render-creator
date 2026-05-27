@@ -1593,6 +1593,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
 
   // Commit a finished line into state, run cycle detection, push history.
+  // Apply boolean subtraction: new polygon carves out overlapping area from
+  // any existing same-level non-lahan layer.
+  const applySubtractionToLayers = useCallback(
+    (existing: Layer[], newPoly: Point[], levelId: string | undefined): Layer[] => {
+      if (newPoly.length < 3) return existing;
+      const out: Layer[] = [];
+      for (const ly of existing) {
+        const sameLevel = (ly.levelId ?? undefined) === (levelId ?? undefined);
+        if (!sameLevel || isLahanLayerName(ly.name) || ly.points.length < 3) {
+          out.push(ly);
+          continue;
+        }
+        const before = polygonAreaPx(ly.points);
+        const result = subtractPolygon(ly.points, newPoly);
+        if (!result || result.length < 3) {
+          // Fully covered — remove.
+          toast.message(`${ly.name} terhapus karena tertutup ruang baru`);
+          continue;
+        }
+        const after = polygonAreaPx(result);
+        if (Math.abs(after - before) < 0.5) {
+          out.push(ly);
+          continue;
+        }
+        const newArea = after / (pxPerMeter * pxPerMeter);
+        out.push({ ...ly, points: result, areaM2: newArea });
+      }
+      return out;
+    },
+    [pxPerMeter],
+  );
+
   const commitLine = useCallback(
     (newLine: Line) => {
       const { levels: nextLevelsBase, activeId } = ensureLevels();
@@ -1617,7 +1649,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             levelId: activeId,
             coefficient: 1,
           };
-          nextLayers = [...layers, layer];
+          const carved = applySubtractionToLayers(layers, cycle, activeId);
+          nextLayers = [...carved, layer];
           toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
         }
       }
@@ -1631,7 +1664,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       onChange(patch);
     },
-    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
   const commitPendingCurve = useCallback(() => {
