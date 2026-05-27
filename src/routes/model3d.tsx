@@ -346,6 +346,7 @@ function SketchViewer({
 }) {
   const [highlight, setHighlight] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [sunHour, setSunHour] = useState(12);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
