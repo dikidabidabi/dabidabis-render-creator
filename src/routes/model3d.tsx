@@ -96,14 +96,51 @@ function computeOrigin(sketch: Sketch): Point {
   return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
 }
 
-// Sort levels by MDPL ascending. Compute floor heights from gaps.
-function levelsWithHeights(levels: Level[]) {
+// Sort levels by MDPL ascending. Expand typical groups into individual 3m
+// floors and shift upper levels accordingly.
+const TYPICAL_FLOOR_H = 3;
+type ExpandedFloor = Level & {
+  height: number;
+  baseMdpl: number;
+  sourceId: string;
+  typicalIndex: number;
+  typicalTotal: number;
+};
+function expandLevels(levels: Level[]): ExpandedFloor[] {
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-  return sorted.map((lv, i) => {
-    const next = sorted[i + 1];
-    const height = next ? Math.max(0, next.mdpl - lv.mdpl) : 4; // top level default 4m
-    return { ...lv, height };
+  let shift = 0;
+  const adjusted = sorted.map((lv) => {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const base = lv.mdpl + shift;
+    shift += (k - 1) * TYPICAL_FLOOR_H;
+    return { lv, k, base };
   });
+  const out: ExpandedFloor[] = [];
+  for (let i = 0; i < adjusted.length; i++) {
+    const { lv, k, base } = adjusted[i];
+    const next = adjusted[i + 1];
+    if (k === 1) {
+      const h = next ? Math.max(0.1, next.base - base) : 4;
+      out.push({ ...lv, baseMdpl: base, height: h, sourceId: lv.id, typicalIndex: 0, typicalTotal: 1 });
+    } else {
+      for (let j = 0; j < k; j++) {
+        out.push({
+          ...lv,
+          id: `${lv.id}__t${j}`,
+          baseMdpl: base + j * TYPICAL_FLOOR_H,
+          height: TYPICAL_FLOOR_H,
+          sourceId: lv.id,
+          typicalIndex: j,
+          typicalTotal: k,
+        });
+      }
+    }
+  }
+  return out;
+}
+function levelsWithHeights(levels: Level[]) {
+  // Kept for backward-compatibility: returns expanded floors with `height`.
+  return expandLevels(levels);
 }
 
 // ---------- 3D scene helpers ----------
