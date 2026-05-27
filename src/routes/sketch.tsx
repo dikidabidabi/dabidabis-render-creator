@@ -990,6 +990,30 @@ function GeoPanel({
             onValueChange={(v) => setG({ mapOpacity: (v[0] ?? 0) / 100 })}
           />
         </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Rotasi peta</span>
+            <span className="font-medium text-foreground">{Math.round(((Number(g.mapRotation) || 0) % 360 + 360) % 360)}°</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              value={Number(g.mapRotation) || 0}
+              onChange={(e) => setG({ mapRotation: Number(e.target.value) || 0 })}
+              className="h-7 w-16 text-xs"
+              step={1}
+            />
+            <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]"
+              onClick={() => setG({ mapRotation: (Number(g.mapRotation) || 0) - 15 })}>−15°</Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]"
+              onClick={() => setG({ mapRotation: 0 })}>0°</Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-[10px]"
+              onClick={() => setG({ mapRotation: (Number(g.mapRotation) || 0) + 15 })}>+15°</Button>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Hanya merotasi peta. Skala & grid milimeter block tidak berubah.
+          </p>
+        </div>
         {g.label && (
           <p className="truncate text-[10px] text-muted-foreground" title={g.label}>
             {g.label}
