@@ -862,7 +862,11 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const layers = (sketch.layers ?? []).filter((l) => l.levelId === level.id);
   const lines = (sketch.lines ?? []).filter((l) => l.levelId === level.id);
   const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
-  const totalLuas = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
+  const k = Math.max(1, Math.round(level.typicalCount ?? 1));
+  const luasPerLantai = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
+  const totalLuas = luasPerLantai * k;
+  const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
+  const displayName = displayNames[level.id] ?? level.name;
 
   return (
     <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
