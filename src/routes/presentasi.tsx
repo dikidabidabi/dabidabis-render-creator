@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import SunCalc from "suncalc";
+import { drawOsmTiles, geoOffsetToWorld } from "@/lib/geo";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
@@ -39,10 +41,12 @@ type Layer = {
   id: string; name: string; points: Point[]; areaM2: number; color: string; levelId?: string; coefficient?: number;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
+type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; label?: string };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
   kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
+  geo?: Geo;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -538,7 +542,8 @@ type Slide =
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
-  | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats };
+  | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "eksisting"; id: string; title: string; sketch: Sketch };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -564,6 +569,9 @@ function buildSlides(sk: Sketch): Slide[] {
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
+  if (sk.geo && sk.geo.locked) {
+    out.push({ kind: "eksisting", id: "eksisting", title: "Analisis Eksisting (Makro Kawasan)", sketch: sk });
+  }
   for (const lv of levels) {
     out.push({
       kind: "level",
@@ -802,6 +810,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
         {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
         {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
         {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
+        {slide.kind === "eksisting" && <EksistingBody sketch={slide.sketch} />}
       </ManualScaleBox>
       <SlideFooter slide={slide} />
     </div>
@@ -1617,6 +1626,174 @@ function Ring({ value, label }: { value: number; label: string }) {
       </div>
       <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888", fontWeight: 600 }}>
         {label}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// EksistingBody — slide analisis eksisting (peta kawasan + narasi)
+// ============================================================
+function EksistingBody({ sketch }: { sketch: Sketch }) {
+  const geo = sketch.geo;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const MAP_W = 760;
+  const MAP_H = 760;
+  // 1 km radius visible → ~2.2 km canvas → pick px/m so 1km ~ 280px
+  const pxPerMeter = 0.35; // 280 px / 800 m radius nyaman tampil 500m & 1km
+  const radius500 = 500 * pxPerMeter;
+  const radius1000 = 1000 * pxPerMeter;
+
+  useEffect(() => {
+    if (!geo) return;
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = MAP_W * dpr;
+    cv.height = MAP_H * dpr;
+    cv.style.width = `${MAP_W}px`;
+    cv.style.height = `${MAP_H}px`;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, MAP_W, MAP_H);
+    ctx.fillStyle = "#f5f5f4";
+    ctx.fillRect(0, 0, MAP_W, MAP_H);
+    // World-origin = center of canvas, where geo is anchored
+    ctx.save();
+    ctx.translate(MAP_W / 2, MAP_H / 2);
+    const bounds = {
+      minX: -MAP_W / 2,
+      minY: -MAP_H / 2,
+      maxX: MAP_W / 2,
+      maxY: MAP_H / 2,
+    };
+    drawOsmTiles(ctx, {
+      lat: geo.lat,
+      lon: geo.lon,
+      worldPxPerMeter: pxPerMeter,
+      bounds,
+      opacity: 1,
+      grayscale: true,
+      onTileLoad: () => {
+        // Re-trigger draw when tile loads
+        requestAnimationFrame(() => {
+          // Force component re-effect by toggling a tiny state via DOM
+          const c = canvasRef.current;
+          if (c) {
+            const evt = new Event("__retick");
+            c.dispatchEvent(evt);
+          }
+        });
+      },
+    });
+    ctx.restore();
+  });
+
+  // Re-render after tile loads
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const h = () => setTick((n) => n + 1);
+    c.addEventListener("__retick", h);
+    return () => c.removeEventListener("__retick", h);
+  }, []);
+
+  // Compute sun-based fasad orientation hint (least thermal load = north/south facing usually).
+  const fasadSaran = useMemo(() => {
+    if (!geo) return "—";
+    // Compute average azimuth of sun at solar noon over equinox days
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    const sc = SunCalc.getPosition(d, geo.lat, geo.lon);
+    const altDeg = (sc.altitude * 180) / Math.PI;
+    // Pada lintang negatif (selatan), matahari condong ke utara → bukaan ideal menghadap selatan
+    if (geo.lat < 0) return "Bukaan utama disarankan menghadap Selatan & Tenggara (beban termal terkecil).";
+    if (geo.lat > 0) return "Bukaan utama disarankan menghadap Utara & Timur Laut (beban termal terkecil).";
+    return `Altitude matahari tengah hari ${altDeg.toFixed(1)}°. Bukaan menghadap Timur–Barat dihindari.`;
+  }, [geo]);
+
+  if (!geo || !geo.locked) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-sm text-stone-500">
+        Kunci koordinat lokasi di halaman Sketsa untuk mengaktifkan slide ini.
+      </div>
+    );
+  }
+
+  const north = Number(sketch.northRotation) || 0;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, height: "100%" }}>
+      <div style={{ position: "relative", border: "1px solid #d6d3d1", borderRadius: 8, overflow: "hidden", background: "#fafaf9" }}>
+        <canvas ref={canvasRef} style={{ display: "block", width: MAP_W, height: MAP_H, maxWidth: "100%", maxHeight: "100%" }} />
+        {/* SVG overlay: buffer rings + north arrow + scale */}
+        <svg
+          viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+        >
+          <g transform={`translate(${MAP_W / 2}, ${MAP_H / 2})`}>
+            <circle r={radius500} fill="none" stroke="#e85d3a" strokeWidth={2} strokeDasharray="6 4" />
+            <circle r={radius1000} fill="none" stroke="#0a0a0a" strokeWidth={2} strokeDasharray="10 6" />
+            <text x={0} y={-radius500 - 6} textAnchor="middle" fontSize="11" fontWeight="700" fill="#e85d3a">500 m</text>
+            <text x={0} y={-radius1000 - 6} textAnchor="middle" fontSize="11" fontWeight="700" fill="#0a0a0a">1 km</text>
+            <circle r={5} fill="#e85d3a" stroke="#fff" strokeWidth={2} />
+            {/* Arah sirkulasi indikatif (jalan utama N-S & E-W) */}
+            <g stroke="#0a0a0a" strokeWidth={2.5} fill="#0a0a0a" opacity={0.7}>
+              <line x1={-radius1000 * 0.95} y1={0} x2={radius1000 * 0.95} y2={0} markerEnd="url(#arr)" markerStart="url(#arr)" />
+              <line x1={0} y1={-radius1000 * 0.95} x2={0} y2={radius1000 * 0.95} markerEnd="url(#arr)" markerStart="url(#arr)" />
+            </g>
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#0a0a0a" />
+              </marker>
+            </defs>
+          </g>
+          {/* North compass top-right */}
+          <g transform={`translate(${MAP_W - 50}, 50) rotate(${north})`}>
+            <circle r={28} fill="rgba(255,255,255,0.9)" stroke="#0a0a0a" strokeWidth={1.5} />
+            <polygon points="0,-22 -6,4 0,0 6,4" fill="#e85d3a" stroke="#0a0a0a" strokeWidth={1} />
+            <text y={-10} textAnchor="middle" fontSize="10" fontWeight="800" fill="#0a0a0a">U</text>
+          </g>
+        </svg>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, fontSize: 13, color: "#1c1917" }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#78716c" }}>Lokasi</div>
+          <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{geo.label || "Tapak Proyek"}</div>
+          <div style={{ fontFamily: "ui-monospace, monospace", color: "#57534e", marginTop: 4 }}>
+            {geo.lat.toFixed(6)}°, {geo.lon.toFixed(6)}°
+          </div>
+        </div>
+        <div style={{ borderTop: "1px solid #e7e5e4", paddingTop: 12 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#78716c", marginBottom: 6 }}>
+            Buffer Pencapaian
+          </div>
+          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+            <tbody>
+              <tr><td style={{ padding: "4px 0", color: "#e85d3a", fontWeight: 700 }}>● 500 m</td><td>Walkable zone — fasilitas harian, ± 6 menit jalan kaki</td></tr>
+              <tr><td style={{ padding: "4px 0", fontWeight: 700 }}>● 1.000 m</td><td>Sub-distrik — fasilitas publik, transportasi umum</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style={{ borderTop: "1px solid #e7e5e4", paddingTop: 12 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#78716c", marginBottom: 6 }}>
+            Orientasi Fasad
+          </div>
+          <p style={{ margin: 0, lineHeight: 1.6 }}>{fasadSaran}</p>
+          <p style={{ margin: "6px 0 0", lineHeight: 1.6, color: "#57534e" }}>
+            Rotasi utara kompas tapak: <b>{north}°</b>. Sirkulasi utama diasumsikan mengikuti sumbu Utara–Selatan & Timur–Barat.
+          </p>
+        </div>
+        <div style={{ borderTop: "1px solid #e7e5e4", paddingTop: 12 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#78716c", marginBottom: 6 }}>
+            Catatan
+          </div>
+          <p style={{ margin: 0, lineHeight: 1.6, color: "#57534e" }}>
+            Peta dasar © OpenStreetMap contributors. Analisis matahari dihitung otomatis dari koordinat dengan SunCalc.
+          </p>
+        </div>
       </div>
     </div>
   );
