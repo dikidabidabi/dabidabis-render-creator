@@ -1744,7 +1744,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
-  // Find nearest vertex (line endpoint or layer point) within tolerance
+  // Find nearest vertex on the ACTIVE level (line endpoint or layer point) within tolerance
   const findVertexAt = useCallback(
     (p: Point, tol: number): Point | null => {
       let best: Point | null = null;
@@ -1757,13 +1757,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
       };
       lines.forEach((ln) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
         consider(ln.a);
         consider(ln.b);
       });
-      layers.forEach((l) => l.points.forEach(consider));
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach(consider);
+      });
       return best;
     },
-    [lines, layers],
+    [lines, layers, activeLvlId],
   );
 
   const lockedVertexKeys = useMemo(() => {
