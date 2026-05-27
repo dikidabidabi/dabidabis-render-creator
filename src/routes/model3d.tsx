@@ -540,10 +540,25 @@ function SketchViewer({
           </Button>
         </div>
 
-        <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-slate-700 shadow-sm">
-          Drag = rotasi · Shift+Drag = pan · Scroll = zoom · 1 unit = 1 m ·{" "}
-          {fmt(mPerPx, 4)} m/px
+        <div className="absolute bottom-2 left-2 right-2 flex items-center gap-3 rounded-md bg-white/85 px-3 py-2 text-[11px] text-slate-700 shadow-sm backdrop-blur">
+          <span className="whitespace-nowrap font-semibold">
+            ☀ {String(Math.floor(sunHour)).padStart(2, "0")}:{String(Math.round((sunHour % 1) * 60)).padStart(2, "0")}
+          </span>
+          <Slider
+            value={[sunHour]}
+            min={6}
+            max={18}
+            step={0.25}
+            onValueChange={(v) => setSunHour(v[0] ?? 12)}
+            className="flex-1"
+          />
+          <span className="whitespace-nowrap text-slate-500">
+            {sketch.geo?.locked
+              ? `${sketch.geo.lat.toFixed(4)}°, ${sketch.geo.lon.toFixed(4)}°`
+              : "kunci koordinat di sketsa"}
+          </span>
         </div>
+
       </div>
     </div>
   );
