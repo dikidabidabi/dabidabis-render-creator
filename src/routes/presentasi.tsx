@@ -140,11 +140,14 @@ function PresentasiPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const lastRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { setSketches([]); return; }
+      if (raw === lastRawRef.current) return;
+      lastRawRef.current = raw;
+      if (!raw) { setSketches([]); setOpenId(null); return; }
       const s = JSON.parse(raw) as StoreShape;
       if (s && Array.isArray(s.sketches)) {
         setSketches(s.sketches as Sketch[]);
