@@ -305,27 +305,34 @@ function SketchViewer({
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
-  const sortedLevels = useMemo(
-    () => levelsWithHeights(sketch.levels),
-    [sketch.levels],
-  );
-  const baseMdpl = sortedLevels[0]?.mdpl ?? 0;
-  const topMdpl = sortedLevels.length
-    ? sortedLevels[sortedLevels.length - 1].mdpl + sortedLevels[sortedLevels.length - 1].height
+  const expanded = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
+  const baseMdpl = expanded[0]?.baseMdpl ?? 0;
+  const topMdpl = expanded.length
+    ? expanded[expanded.length - 1].baseMdpl + expanded[expanded.length - 1].height
     : 0;
   const totalHeight = topMdpl - baseMdpl;
 
+  // Source levels (one row per user-defined level), sorted by MDPL
+  const sourceLevels = useMemo(
+    () => [...sketch.levels].sort((a, b) => a.mdpl - b.mdpl),
+    [sketch.levels],
+  );
+
   const mPerPx = metersPerPx(sketch.scale);
 
-  // Volume per level: sum of layer areas × floor height
+  // Volume per source level, accounting for typicalCount.
   const volumeData = useMemo(() => {
     const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
-    return sortedLevels.map((lv) => {
+    return sourceLevels.map((lv) => {
+      const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
       const layers = buildLayers.filter((l) => l.levelId === lv.id);
-      const area = layers.reduce((s, l) => s + (l.areaM2 || 0), 0);
-      return { id: lv.id, name: lv.name, mdpl: lv.mdpl, height: lv.height, area, volume: area * lv.height };
+      const area = layers.reduce((s, l) => s + (l.areaM2 || 0), 0) * k;
+      // total height occupied by this source group in 3D
+      const floors = expanded.filter((f) => f.sourceId === lv.id);
+      const groupHeight = floors.reduce((s, f) => s + f.height, 0);
+      return { id: lv.id, name: lv.name, mdpl: lv.mdpl, height: groupHeight, area, volume: area * (groupHeight / Math.max(1, k)), k };
     });
-  }, [sketch.layers, sortedLevels]);
+  }, [sketch.layers, sourceLevels, expanded]);
 
   const totalArea = volumeData.reduce((s, v) => s + v.area, 0);
   const totalVolume = volumeData.reduce((s, v) => s + v.volume, 0);
