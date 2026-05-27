@@ -1138,7 +1138,7 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
   const geo = sketch.geo;
   const lat = geo?.lat ?? -6.2;
   const lon = geo?.lon ?? 106.816666;
-  const northDeg = effectiveNorthDeg(sketch);
+  const northDeg = effectiveNorthDeg(sketch); // = mapRotation
   // Radius peta tergantung view.
   const radiusM = view === "lokasi" ? 600 : view === "akses" ? 700 : view === "fasilitas" ? 1000 : 900;
 
@@ -1152,12 +1152,14 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
     for (const p of allPts) { centerSx += p.x; centerSy += p.y; }
     centerSx /= allPts.length; centerSy /= allPts.length;
   }
-  const cos = Math.cos((-northDeg * Math.PI) / 180);
-  const sin = Math.sin((-northDeg * Math.PI) / 180);
+  // Sketsa diputar -mapRotation supaya superimpose ke peta utara-ke-atas
+  // identik dengan tampilan di Sketsa (peta diputar +mapRotation, sketsa diam).
+  const rotRad = (-northDeg * Math.PI) / 180;
+  const cos = Math.cos(rotRad);
+  const sin = Math.sin(rotRad);
   const toMeters = (p: Point) => {
     const dx = (p.x - centerSx) * mPerSPx;
     const dy = (p.y - centerSy) * mPerSPx;
-    // Rotate sketch coords so north on sketch aligns with map north.
     return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
   };
 
