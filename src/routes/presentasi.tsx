@@ -919,6 +919,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             />
           ))}
         </svg>
+        <SlideCompass rotation={Number(sketch.northRotation) || 0} />
       </div>
       <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
         <BigStat
