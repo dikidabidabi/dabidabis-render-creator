@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import SunCalc from "suncalc";
-import { drawOsmTiles as _drawOsmTiles } from "@/lib/geo";
+import { drawOsmTiles } from "@/lib/geo";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
@@ -1084,7 +1084,7 @@ function SiteMapCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, width / 2 * dpr, height / 2 * dpr);
       const worldPxPerMeter = (Math.min(width, height) / 2) / radiusM;
       const halfW = width / 2, halfH = height / 2;
-      _drawOsmTiles(ctx, {
+      drawOsmTiles(ctx, {
         lat, lon, worldPxPerMeter, opacity, grayscale,
         bounds: { minX: -halfW, minY: -halfH, maxX: halfW, maxY: halfH },
         onTileLoad: () => { if (!cancelled) requestAnimationFrame(draw); },
