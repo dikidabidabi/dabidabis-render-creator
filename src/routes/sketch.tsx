@@ -54,6 +54,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import polygonClipping from "polygon-clipping";
+import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -141,6 +142,7 @@ type Sketch = {
   klbCoef?: number; // koefisien KLB, pengali luas lahan
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
+  geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
 };
 
 type StoreShape = {
@@ -507,6 +509,15 @@ function normalizeSketch(s: any): Sketch {
     klbCoef: Number.isFinite(Number(s?.klbCoef)) ? Math.max(0, Number(s.klbCoef)) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
+    geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
+      ? {
+          lat: Number(s.geo.lat),
+          lon: Number(s.geo.lon),
+          locked: Boolean(s.geo.locked),
+          mapOpacity: Number.isFinite(Number(s.geo.mapOpacity)) ? Math.max(0, Math.min(1, Number(s.geo.mapOpacity))) : 0.55,
+          label: typeof s.geo.label === "string" ? s.geo.label : "",
+        }
+      : undefined,
   };
 }
 
@@ -867,6 +878,130 @@ function CompassMarker({ rotation, size = 64 }: { rotation: number; size?: numbe
   );
 }
 
+function GeoPanel({
+  geo,
+  onChange,
+}: {
+  geo: Geo | undefined;
+  onChange: (g: Geo | undefined) => void;
+}) {
+  const g = geo ?? DEFAULT_GEO;
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [hits, setHits] = useState<{ display_name: string; lat: string; lon: string }[]>([]);
+  const setG = (patch: Partial<Geo>) => onChange({ ...g, ...patch });
+  const doSearch = async () => {
+    if (!q.trim()) return;
+    setBusy(true);
+    try {
+      const res = await nominatimSearch(q.trim(), 6);
+      setHits(res);
+      if (!res.length) toast.info("Lokasi tidak ditemukan.");
+    } catch {
+      toast.error("Gagal mencari lokasi (OSM Nominatim).");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs uppercase tracking-wider text-muted-foreground">Lokasi (Peta OSM)</Label>
+      <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+        <div className="flex gap-1.5">
+          <Input
+            placeholder="Cari nama wilayah / alamat"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); doSearch(); } }}
+            className="h-8 text-sm"
+          />
+          <Button size="sm" variant="outline" className="h-8 px-2" onClick={doSearch} disabled={busy}>
+            {busy ? "…" : "Cari"}
+          </Button>
+        </div>
+        {hits.length > 0 && (
+          <div className="max-h-32 space-y-1 overflow-y-auto rounded border border-border/60 bg-background/60 p-1">
+            {hits.map((h, i) => (
+              <button
+                key={i}
+                type="button"
+                className="block w-full truncate rounded px-1.5 py-1 text-left text-[11px] hover:bg-muted"
+                onClick={() => {
+                  setG({ lat: parseFloat(h.lat), lon: parseFloat(h.lon), label: h.display_name, locked: true });
+                  setHits([]);
+                  setQ("");
+                  toast.success("Lokasi dikunci ke koordinat OSM.");
+                }}
+                title={h.display_name}
+              >
+                {h.display_name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Latitude</Label>
+            <Input
+              type="number"
+              step="0.000001"
+              value={g.lat}
+              onChange={(e) => setG({ lat: parseFloat(e.target.value) || 0 })}
+              className="h-8 text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Longitude</Label>
+            <Input
+              type="number"
+              step="0.000001"
+              value={g.lon}
+              onChange={(e) => setG({ lon: parseFloat(e.target.value) || 0 })}
+              className="h-8 text-sm"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            size="sm"
+            variant={g.locked ? "default" : "outline"}
+            className={cn("h-7 flex-1 text-[11px]", g.locked && "bg-gradient-ember shadow-ember")}
+            onClick={() => setG({ locked: !g.locked })}
+          >
+            {g.locked ? <><Lock className="mr-1 h-3 w-3" /> Terkunci</> : <><LockOpen className="mr-1 h-3 w-3" /> Kunci koordinat</>}
+          </Button>
+          {geo && (
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => onChange(undefined)}>
+              <X className="mr-1 h-3 w-3" /> Hapus
+            </Button>
+          )}
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>Opacity peta</span>
+            <span className="font-medium text-foreground">{Math.round(g.mapOpacity * 100)}%</span>
+          </div>
+          <Slider
+            value={[Math.round(g.mapOpacity * 100)]}
+            min={0}
+            max={100}
+            step={1}
+            onValueChange={(v) => setG({ mapOpacity: (v[0] ?? 0) / 100 })}
+          />
+        </div>
+        {g.label && (
+          <p className="truncate text-[10px] text-muted-foreground" title={g.label}>
+            {g.label}
+          </p>
+        )}
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          Skala kanvas = meter riil. Grid milimeter block berfungsi sebagai meter di atas peta OSM. Origin peta = titik (0,0) kanvas.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 type EditorProps = {
   sketch: Sketch;
   onChange: (patch: Partial<Sketch>) => void;
@@ -1094,6 +1229,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // ===== Viewport transform (pan/zoom/rotate) =====
   // World (where lines/layers are stored) -> screen via: rotate(r) -> scale(s) -> translate(tx,ty)
   const [view, setView] = useState({ s: 1, r: 0, tx: 0, ty: 0 });
+  // Force re-render when OSM tile finishes loading
+  const [tileTick, setTileTick] = useState(0);
+  const onTileLoad = useCallback(() => setTileTick((n) => n + 1), []);
   // Reset view when switching sketch
   useEffect(() => {
     setView({ s: 1, r: 0, tx: 0, ty: 0 });
@@ -1267,6 +1405,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const major = MINOR_PX * MAJOR_EVERY;
     const x0 = Math.floor(minX / MINOR_PX) * MINOR_PX;
     const y0 = Math.floor(minY / MINOR_PX) * MINOR_PX;
+
+    // OSM tile underlay (anchored at geo lat/lon → world 0,0)
+    if (sketch.geo && sketch.geo.locked && sketch.geo.mapOpacity > 0.01) {
+      drawOsmTiles(ctx, {
+        lat: sketch.geo.lat,
+        lon: sketch.geo.lon,
+        worldPxPerMeter: pxPerMeter,
+        bounds: { minX, minY, maxX, maxY },
+        opacity: sketch.geo.mapOpacity,
+        onTileLoad,
+      });
+    }
 
     // Minor grid (in world units)
     ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
@@ -1619,7 +1769,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, tileTick, onTileLoad]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -2403,7 +2553,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 {klbLimit > 0 ? fmt(klbLimit) : "—"}
                 <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
               </span>
-            </div>
+      </div>
+
+      <GeoPanel geo={sketch.geo} onChange={(g) => onChange({ geo: g })} />
+
+
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] text-muted-foreground">KLB Rencana (semua level × koef)</span>
               <span className="font-display text-sm font-semibold">
