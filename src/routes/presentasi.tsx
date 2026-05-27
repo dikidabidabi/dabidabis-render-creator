@@ -968,6 +968,223 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   );
 }
 
+// ---- Sun analysis body ----
+function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
+  const { sketch, bounds } = slide;
+  const geo = sketch.geo;
+  const northDeg = Number(sketch.northRotation) || 0;
+  const lat = geo?.lat ?? -6.2;
+  const lon = geo?.lon ?? 106.816666;
+  // Use equinox (≈ 21 Maret) sebagai dasar analisis tahunan netral.
+  const baseDate = new Date(new Date().getFullYear(), 2, 21, 12, 0, 0);
+  const times = SunCalc.getTimes(baseDate, lat, lon);
+  const sunPos = (hour: number) => {
+    const d = new Date(baseDate);
+    d.setHours(Math.floor(hour), Math.round((hour % 1) * 60), 0, 0);
+    const p = SunCalc.getPosition(d, lat, lon);
+    // SunCalc azimuth: 0 = south, +CW. Convert to north-CW.
+    const azNorthCW = (p.azimuth + Math.PI) * (180 / Math.PI);
+    // Counter-rotate dengan north arah denah
+    const az = ((azNorthCW - northDeg) % 360 + 360) % 360;
+    const alt = (p.altitude * 180) / Math.PI;
+    return { az, alt };
+  };
+  const hours = [6, 8, 10, 12, 14, 16, 18];
+  const path = hours.map((h) => ({ h, ...sunPos(h) })).filter((p) => p.alt > 0);
+  const noon = sunPos(12);
+  // Build a hemispherical "sun path" diagram (top-down, 0° utara).
+  const R = 230;
+  const cx = 260, cy = 260;
+  const pt = (az: number, alt: number) => {
+    const r = R * (1 - Math.max(0, Math.min(90, alt)) / 90);
+    const a = (az - 90) * (Math.PI / 180); // 0°=utara → atas
+    return { x: cx + r * Math.cos(a + Math.PI / 2), y: cy - r * Math.sin(a + Math.PI / 2) };
+  };
+  const pathPts = path.map((p) => pt(p.az, p.alt));
+  // Orientasi bukaan: di Indonesia (tropis), sisi N/S menerima beban termal terendah,
+  // sisi B (barat) tertinggi karena matahari sore. Rekomendasi disesuaikan dengan lat.
+  const facadeRanking: Array<{ label: string; az: number; load: "rendah" | "sedang" | "tinggi"; note: string }> = [
+    { label: "Utara", az: 0, load: lat < 0 ? "rendah" : "tinggi", note: lat < 0 ? "Sinar miring sepanjang tahun, ideal bukaan lebar." : "Beban tinggi pada musim panas; gunakan shading horizontal." },
+    { label: "Timur", az: 90, load: "sedang", note: "Sinar pagi hangat & lembut, baik untuk ruang aktif pagi." },
+    { label: "Selatan", az: 180, load: lat < 0 ? "tinggi" : "rendah", note: lat < 0 ? "Beban tertinggi tengah hari; pertimbangkan louvre vertikal." : "Bukaan terbesar dengan overhang sedang sangat ideal." },
+    { label: "Barat", az: 270, load: "tinggi", note: "Silau & panas sore; minimalkan bukaan atau pakai secondary skin." },
+  ];
+  const best = facadeRanking.filter((f) => f.load === "rendah").map((f) => f.label).join(" & ") || "Utara & Timur";
+  const avoid = facadeRanking.filter((f) => f.load === "tinggi").map((f) => f.label).join(" & ") || "Barat";
+
+  // Build a top-down silhouette of all building footprints (union seperti stacking).
+  const w = bounds.maxX - bounds.minX, h = bounds.maxY - bounds.minY;
+  const buildLayers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
+  const fmtTime = (d: Date) => d && !isNaN(d.getTime())
+    ? `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`
+    : "—";
+  const daylight = times.sunrise && times.sunset
+    ? ((times.sunset.getTime() - times.sunrise.getTime()) / 3.6e6).toFixed(2) + " jam"
+    : "—";
+
+  return (
+    <div style={{ display: "flex", gap: 28, width: "100%", height: "100%" }}>
+      {/* Kiri: diagram sun-path + silhouette denah dengan panah matahari */}
+      <div style={{ flex: 1.1, minWidth: 0, display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ border: "1px solid #111", padding: 12, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 6 }}>
+            Sun Path · Equinox 21 Mar · {lat.toFixed(3)}°, {lon.toFixed(3)}°
+          </div>
+          <svg viewBox="0 0 520 520" preserveAspectRatio="xMidYMid meet" style={{ width: "100%", flex: 1 }}>
+            {/* hemisphere rings */}
+            {[0, 30, 60].map((a) => (
+              <circle key={a} cx={cx} cy={cy} r={R * (1 - a / 90)} fill="none" stroke="#e5e5e5" strokeWidth={1} />
+            ))}
+            {/* cardinal axes */}
+            <line x1={cx - R} y1={cy} x2={cx + R} y2={cy} stroke="#cfcfcf" />
+            <line x1={cx} y1={cy - R} x2={cx} y2={cy + R} stroke="#cfcfcf" />
+            <text x={cx} y={cy - R - 8} textAnchor="middle" fontSize={14} fontWeight={700} fill="#0a0a0a">U</text>
+            <text x={cx} y={cy + R + 18} textAnchor="middle" fontSize={14} fontWeight={700} fill="#666">S</text>
+            <text x={cx + R + 12} y={cy + 5} textAnchor="middle" fontSize={14} fontWeight={700} fill="#666">T</text>
+            <text x={cx - R - 12} y={cy + 5} textAnchor="middle" fontSize={14} fontWeight={700} fill="#666">B</text>
+            {/* sun path arc */}
+            {pathPts.length >= 2 && (
+              <polyline
+                points={pathPts.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="none"
+                stroke="#e85d3a"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+              />
+            )}
+            {path.map((p, i) => {
+              const q = pathPts[i];
+              return (
+                <g key={p.h}>
+                  <circle cx={q.x} cy={q.y} r={5} fill="#e85d3a" stroke="#0a0a0a" strokeWidth={1.2} />
+                  <text x={q.x + 8} y={q.y - 6} fontSize={11} fontWeight={700} fill="#0a0a0a">{String(p.h).padStart(2, "0")}.00</text>
+                </g>
+              );
+            })}
+            {/* noon highlight */}
+            {noon.alt > 0 && (() => {
+              const q = pt(noon.az, noon.alt);
+              return (
+                <g>
+                  <line x1={cx} y1={cy} x2={q.x} y2={q.y} stroke="#0a0a0a" strokeWidth={1} strokeDasharray="3 3" />
+                  <text x={cx + 6} y={cy - 8} fontSize={10} fill="#666">Solar noon: {noon.alt.toFixed(0)}° / az {noon.az.toFixed(0)}°</text>
+                </g>
+              );
+            })()}
+          </svg>
+        </div>
+        {/* Denah ringkas dengan panah matahari noon */}
+        <div style={{ border: "1px solid #111", padding: 12, height: 260, display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 6 }}>
+            Tapak · Arah matahari tengah hari
+          </div>
+          <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+            <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+              {lahanAll.map((l) => (
+                <polygon key={l.id} points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="rgba(0,0,0,0.04)" stroke="rgba(0,0,0,0.45)"
+                  strokeWidth={Math.max(w, h) * 0.0015}
+                  strokeDasharray={`${Math.max(w, h) * 0.006} ${Math.max(w, h) * 0.004}`} />
+              ))}
+              {buildLayers.map((l) => (
+                <polygon key={l.id} points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="rgba(232,93,58,0.18)" stroke="#0a0a0a"
+                  strokeWidth={Math.max(w, h) * 0.0018} />
+              ))}
+              {/* matahari arrows for 09, 12, 15 */}
+              {[9, 12, 15].map((hh) => {
+                const sp = sunPos(hh);
+                if (sp.alt <= 0) return null;
+                const cxw = (bounds.minX + bounds.maxX) / 2;
+                const cyw = (bounds.minY + bounds.maxY) / 2;
+                const len = Math.max(w, h) * 0.42;
+                // az 0 = utara (y- pada kanvas). dx = sin(az), dy = -cos(az)
+                const ar = (sp.az * Math.PI) / 180;
+                // matahari berada DI arah az; sinar datang dari arah itu → panah menunjuk ke pusat
+                const sx = cxw + Math.sin(ar) * len;
+                const sy = cyw - Math.cos(ar) * len;
+                const color = hh === 12 ? "#e85d3a" : "#0a0a0a";
+                return (
+                  <g key={hh}>
+                    <line x1={sx} y1={sy} x2={cxw} y2={cyw} stroke={color} strokeWidth={Math.max(w, h) * 0.0025}
+                      markerEnd={`url(#sun-arrow-${hh})`} />
+                    <text x={sx} y={sy} fontSize={Math.max(w, h) * 0.025} fontWeight={700} fill={color}
+                      textAnchor="middle" dominantBaseline="central"
+                      style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: Math.max(w, h) * 0.012 } as React.CSSProperties}>
+                      {hh}.00
+                    </text>
+                    <defs>
+                      <marker id={`sun-arrow-${hh}`} viewBox="0 0 10 10" refX="9" refY="5"
+                        markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M0,0 L10,5 L0,10 z" fill={color} />
+                      </marker>
+                    </defs>
+                  </g>
+                );
+              })}
+            </svg>
+            <SlideCompass rotation={northDeg} size={72} />
+          </div>
+        </div>
+      </div>
+
+      {/* Kanan: ringkasan data + rekomendasi bukaan */}
+      <div style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+        <BigStat
+          label="Koordinat"
+          value={geo?.locked ? `${lat.toFixed(4)}°, ${lon.toFixed(4)}°` : "Belum dikunci"}
+          hint={geo?.label || "Set di Sketsa → Lokasi & Peta"}
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <BigStat label="Terbit" value={fmtTime(times.sunrise)} />
+          <BigStat label="Tenggelam" value={fmtTime(times.sunset)} />
+          <BigStat label="Solar noon" value={fmtTime(times.solarNoon)} hint={`alt ${noon.alt.toFixed(0)}°`} />
+          <BigStat label="Durasi siang" value={daylight} />
+        </div>
+        <div style={{ border: "1px solid #111", padding: 12 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
+            Beban Termal per Fasad
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {facadeRanking.map((f) => {
+              const dot = f.load === "rendah" ? "#1f9d55" : f.load === "sedang" ? "#d6a423" : "#c0392b";
+              return (
+                <div key={f.label} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, lineHeight: 1.35 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 999, background: dot, marginTop: 4, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#0a0a0a" }}>
+                      {f.label} <span style={{ color: "#888", fontWeight: 500 }}>· beban {f.load}</span>
+                    </div>
+                    <div style={{ color: "#444" }}>{f.note}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800, marginBottom: 6 }}>
+            Usulan Bukaan
+          </div>
+          <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, lineHeight: 1.2, fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 6 }}>
+            Maksimalkan ke <span style={{ color: "#e85d3a" }}>{best}</span>
+          </div>
+          <div style={{ fontSize: 12, color: "#cfcfcf", lineHeight: 1.45 }}>
+            Hindari bukaan lebar di sisi <strong style={{ color: "#fff" }}>{avoid}</strong>. Gunakan shading horizontal untuk Utara/Selatan dan louvre vertikal / secondary skin pada Barat. Orientasi memanjang bangunan disarankan sejajar sumbu Timur–Barat agar fasad terbesar menghadap U/S.
+          </div>
+        </div>
+        {!geo?.locked && (
+          <div style={{ fontSize: 11, color: "#888", lineHeight: 1.5 }}>
+            Catatan: koordinat default Jakarta digunakan. Kunci koordinat di halaman <strong>Sketsa → Lokasi & Peta</strong> untuk analisis presisi.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function centroid(pts: Point[]): Point {
   if (pts.length === 0) return { x: 0, y: 0 };
   let x = 0, y = 0;
