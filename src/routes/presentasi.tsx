@@ -1342,7 +1342,7 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
                 <circle cx={0} cy={0} r={2} fill="#0a0a0a" />
               </g>
             </svg>
-            <SlideCompass rotation={northDeg} size={68} />
+            <SlideCompass rotation={0} size={68} />
             {!data && !err && (
               <div style={{ position: "absolute", left: 10, bottom: 10, fontSize: 10, color: "#666",
                 background: "rgba(255,255,255,0.85)", padding: "3px 8px", border: "1px solid #ddd" }}>
