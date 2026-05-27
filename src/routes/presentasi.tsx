@@ -265,6 +265,7 @@ function PresentasiBox({
   }, [full, next, prev]);
 
   const renderSlideImages = useCallback(async (): Promise<string[]> => {
+    if (import.meta.env.SSR) return [];
     // Wait two frames so the offscreen render mounts at full A3 size.
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     const root = exportRootRef.current;
