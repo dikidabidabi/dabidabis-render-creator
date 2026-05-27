@@ -2062,7 +2062,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         let bestD = Infinity;
         let bestProj: Point | null = null;
         lines.forEach((ln) => {
+          if (activeLvlId && ln.levelId !== activeLvlId) return;
           if ((ln.kind ?? "straight") !== "straight") return;
+          if (isLineLocked(ln)) return;
           if (isLineLocked(ln)) return;
           const proj = projectOnSegment(raw, ln.a, ln.b);
           const d = dist(raw, proj);
