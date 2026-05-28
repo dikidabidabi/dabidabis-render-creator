@@ -2959,6 +2959,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onDuplicate={duplicateLevel}
             onIncrementTypical={incrementTypical}
             onSetTypical={setLevelTypical}
+            onSetTypicalHeight={setLevelTypicalHeight}
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
