@@ -118,6 +118,13 @@ function Header() {
                 Tabulasi
               </Link>
               <Link
+                to="/narasi"
+                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
+                activeProps={{ className: "text-foreground font-medium" }}
+              >
+                Narasi
+              </Link>
+              <Link
                 to="/presentasi"
                 className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
                 activeProps={{ className: "text-foreground font-medium" }}
