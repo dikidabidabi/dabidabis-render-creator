@@ -597,6 +597,8 @@ type Slide =
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
+  | { kind: "shadow-seasonal"; id: string; title: string; sketch: Sketch; bounds: Bounds }
+  | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch }
@@ -656,6 +658,8 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
     });
   }
   out.push({ kind: "matahari", id: "matahari", title: "Analisa Matahari & Bukaan", sketch: sk, bounds });
+  out.push({ kind: "shadow-seasonal", id: "shadow-seasonal", title: "Studi Bayangan Tahunan · 15.00 WIB", sketch: sk, bounds });
+  out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk });
@@ -874,6 +878,8 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
       {slide.kind === "matahari" && <MatahariBody slide={slide} />}
+      {slide.kind === "shadow-seasonal" && <ShadowSeasonalBody slide={slide} />}
+      {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
@@ -881,7 +887,12 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
   );
-  const fixedLayout = slide.kind === "level" || slide.kind === "matahari" || slide.kind === "konsep";
+  const fixedLayout =
+    slide.kind === "level" ||
+    slide.kind === "matahari" ||
+    slide.kind === "konsep" ||
+    slide.kind === "shadow-seasonal" ||
+    slide.kind === "facade-zoning";
   // Inner padded "safe area" inside the 1414x1000 canvas, 2.5cm inset.
   return (
     <div
@@ -922,6 +933,8 @@ function SlideHeader({ slide }: { slide: Slide }) {
         : "Analisa · Lingkungan"
       )
     : slide.kind === "matahari" ? "Analisa · Matahari"
+    : slide.kind === "shadow-seasonal" ? "Analisa · Bayangan Tahunan"
+    : slide.kind === "facade-zoning" ? "Analisa · Zonasi Fasad"
     : slide.kind === "konsep" ? "Konsep · Narasi"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
@@ -2815,3 +2828,465 @@ function Ring({ value, label }: { value: number; label: string }) {
     </div>
   );
 }
+
+// ============================================================
+// Analisa Bayangan Tahunan & Zonasi Fasad (lokal, tanpa AI)
+// ============================================================
+
+// pxPerMeter — mirror dari sketch.tsx
+const METERS_PER_MAJOR_SCALE: Record<string, number> = {
+  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10,
+};
+function pxPerMeterFor(scale: string): number {
+  return 80 / (METERS_PER_MAJOR_SCALE[scale] ?? 1);
+}
+
+// Posisi matahari dalam frame sketsa (az: 0=sketsa-atas, CW; alt: derajat di atas horizon)
+function sunPosSketch(date: Date, lat: number, lon: number, northDeg: number) {
+  const p = SunCalc.getPosition(date, lat, lon);
+  const azNorthCW = (p.azimuth + Math.PI) * (180 / Math.PI);
+  const az = ((azNorthCW + northDeg) % 360 + 360) % 360;
+  const alt = (p.altitude * 180) / Math.PI;
+  return { az, alt };
+}
+
+// Pukul 15.00 WIB (UTC+7) → 08.00 UTC
+function critDate(year: number, monthIdx0: number, day: number): Date {
+  return new Date(Date.UTC(year, monthIdx0, day, 8, 0, 0));
+}
+
+// Tinggi tumpukan bangunan di atas footprint sebuah layer.
+// Asumsi: layer berdiri pada level-nya (mdpl) — tinggi total volume yang dibayangi
+// adalah penjumlahan tinggi semua expanded floor mulai dari level layer ke atas
+// yang ber-sourceId sama (typical floors). Bila tidak ditemukan, fallback 3 m.
+function layerStackHeight(layer: Layer, expanded: ExpandedFloor[]): number {
+  if (!layer.levelId) return 3;
+  const own = expanded.filter((e) => e.sourceId === layer.levelId);
+  if (own.length === 0) return 3;
+  // Tinggi total dari base layer-nya sampai top stack typical floor-nya.
+  const base = Math.min(...own.map((e) => e.mdpl));
+  const top = Math.max(...own.map((e) => e.mdpl + e.height));
+  return Math.max(0.5, top - base);
+}
+
+// Convex hull (Andrew's monotone chain) untuk membentuk bayangan
+// gabungan footprint + footprint-yang-digeser-oleh-vektor-bayangan.
+// (convexHull sudah didefinisikan di atas — reuse)
+
+
+// Bayangan satu layer (top-down) — gabungan footprint + footprint digeser
+// sejauh (h / tan(alt)) ke arah berlawanan matahari.
+function shadowPolygonFor(
+  layer: Layer,
+  sun: { az: number; alt: number },
+  height: number,
+  pxPerM: number,
+): Point[] | null {
+  if (sun.alt <= 2) return null; // matahari sangat rendah → bayangan tak terhingga
+  const altRad = (sun.alt * Math.PI) / 180;
+  const lenM = height / Math.tan(altRad);
+  // Cap panjang bayangan agar tidak meledak saat matahari rendah.
+  const capM = Math.max(height * 12, 60);
+  const lenMc = Math.min(lenM, capM);
+  const lenPx = lenMc * pxPerM;
+  // Arah matahari (di mana matahari berada) pada frame sketsa: az diukur CW dari sketsa-atas.
+  // Posisi matahari: (sin az, -cos az). Vektor bayangan = berlawanan = (-sin az, cos az).
+  const ar = (sun.az * Math.PI) / 180;
+  const dx = -Math.sin(ar) * lenPx;
+  const dy = Math.cos(ar) * lenPx;
+  const shifted = layer.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+  return convexHull([...layer.points, ...shifted]);
+}
+
+function ShadowSeasonalBody({ slide }: { slide: Extract<Slide, { kind: "shadow-seasonal" }> }) {
+  const { sketch, bounds } = slide;
+  const geo = sketch.geo;
+  const lat = geo?.lat ?? -6.2;
+  const lon = geo?.lon ?? 106.816666;
+  const northDeg = effectiveNorthDeg(sketch);
+  const year = new Date().getFullYear();
+  const dates = [
+    { label: "21 Maret", sub: "Equinox musim semi", date: critDate(year, 2, 21) },
+    { label: "22 Juni", sub: "Solstice utara (winter di selatan)", date: critDate(year, 5, 22) },
+    { label: "23 September", sub: "Equinox musim gugur", date: critDate(year, 8, 23) },
+    { label: "22 Desember", sub: "Solstice selatan (summer di selatan)", date: critDate(year, 11, 22) },
+  ];
+  const pxPerM = pxPerMeterFor(sketch.scale);
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const expanded = expandLevelsForView(levels);
+  const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
+  const buildLayers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+
+  // Perluas viewBox untuk menampung bayangan terpanjang.
+  const margin = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.55;
+  const vbX = bounds.minX - margin;
+  const vbY = bounds.minY - margin;
+  const vbW = (bounds.maxX - bounds.minX) + margin * 2;
+  const vbH = (bounds.maxY - bounds.minY) + margin * 2;
+  const strokeBase = Math.max(vbW, vbH);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, width: "100%", height: "100%" }}>
+      <div style={{ fontSize: 13, color: "#444", lineHeight: 1.5, maxWidth: 1100 }}>
+        Matriks pergerakan bayangan empat titik balik matahari tahunan pada pukul <strong>15.00 WIB</strong>.
+        Dihitung lokal dengan SunCalc dari koordinat {lat.toFixed(3)}°, {lon.toFixed(3)}° · arah Utara {northDeg.toFixed(0)}° dari atas sketsa.
+        Geometri bayangan = gabungan footprint dengan proyeksi puncak masa pada bidang tanah.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, flex: 1, minHeight: 0 }}>
+        {dates.map((d) => {
+          const sun = sunPosSketch(d.date, lat, lon, northDeg);
+          const shadows = buildLayers
+            .map((l) => ({ l, poly: shadowPolygonFor(l, sun, layerStackHeight(l, expanded), pxPerM) }))
+            .filter((s) => s.poly && s.poly.length >= 3);
+          return (
+            <div key={d.label} style={{ border: "1px solid #111", padding: 10, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>
+                  {d.label}
+                </div>
+                <div style={{ fontSize: 10, color: "#888", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 700 }}>
+                  15.00
+                </div>
+              </div>
+              <div style={{ fontSize: 10.5, color: "#666", marginBottom: 6, lineHeight: 1.25 }}>{d.sub}</div>
+              <div style={{ position: "relative", flex: 1, minHeight: 0, background: "#fafafa", border: "1px solid #eee" }}>
+                <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+                  {/* lahan */}
+                  {lahanAll.map((l) => (
+                    <polygon key={l.id} points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                      fill="rgba(0,0,0,0.03)" stroke="rgba(0,0,0,0.45)"
+                      strokeWidth={strokeBase * 0.0014}
+                      strokeDasharray={`${strokeBase * 0.006} ${strokeBase * 0.004}`} />
+                  ))}
+                  {/* shadows */}
+                  {shadows.map((s, i) => (
+                    <polygon key={`sh-${i}`}
+                      points={s.poly!.map((p) => `${p.x},${p.y}`).join(" ")}
+                      fill="rgba(20,20,30,0.32)" stroke="none" />
+                  ))}
+                  {/* buildings */}
+                  {buildLayers.map((l) => (
+                    <polygon key={l.id} points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                      fill="rgba(232,93,58,0.85)" stroke="#0a0a0a"
+                      strokeWidth={strokeBase * 0.0018} />
+                  ))}
+                  {/* sun arrow */}
+                  {sun.alt > 0 && (() => {
+                    const cxw = (bounds.minX + bounds.maxX) / 2;
+                    const cyw = (bounds.minY + bounds.maxY) / 2;
+                    const len = Math.max(vbW, vbH) * 0.32;
+                    const ar = (sun.az * Math.PI) / 180;
+                    const sx = cxw + Math.sin(ar) * len;
+                    const sy = cyw - Math.cos(ar) * len;
+                    return (
+                      <g>
+                        <circle cx={sx} cy={sy} r={strokeBase * 0.012} fill="#f5b400" stroke="#0a0a0a" strokeWidth={strokeBase * 0.002} />
+                        <line x1={sx} y1={sy} x2={cxw} y2={cyw} stroke="#f5b400" strokeWidth={strokeBase * 0.0025} strokeDasharray={`${strokeBase * 0.008} ${strokeBase * 0.005}`} />
+                      </g>
+                    );
+                  })()}
+                </svg>
+                <SlideCompass rotation={northDeg} size={48} />
+              </div>
+              <div style={{ marginTop: 6, fontSize: 10.5, color: "#333", display: "flex", justifyContent: "space-between" }}>
+                <span>Azimut <strong>{sun.alt > 0 ? sun.az.toFixed(0) + "°" : "—"}</strong></span>
+                <span>Altitud <strong>{sun.alt.toFixed(0)}°</strong></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#444", alignItems: "center" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 14, height: 14, background: "rgba(232,93,58,0.85)", border: "1px solid #0a0a0a" }} /> Footprint massa
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 14, height: 14, background: "rgba(20,20,30,0.32)" }} /> Bayangan 15.00 WIB
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 14, height: 14, background: "#f5b400", border: "1px solid #0a0a0a", borderRadius: 999 }} /> Posisi matahari
+        </span>
+        <span style={{ color: "#888" }}>Skala {sketch.scale} · 1 m = {pxPerM} px · lat {lat.toFixed(3)}°</span>
+      </div>
+    </div>
+  );
+}
+
+// --- Klasifikasi fasad berdasarkan arah hadap (kompas asli) ---
+type FacadeDir = "N" | "S" | "E" | "W";
+function classifyBearing(bearingDeg: number): FacadeDir {
+  const b = ((bearingDeg % 360) + 360) % 360;
+  if (b >= 315 || b < 45) return "N";
+  if (b >= 45 && b < 135) return "E";
+  if (b >= 135 && b < 225) return "S";
+  return "W";
+}
+function polygonSignedArea(pts: Point[]): number {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return 0.5 * s;
+}
+// Outward normal vector (sketch coords, y-down) untuk satu sisi poligon.
+function outwardNormal(a: Point, b: Point, ccw: boolean): { x: number; y: number } {
+  const ex = b.x - a.x, ey = b.y - a.y;
+  // perpendicular kanan dari arah edge: (ey, -ex)
+  // Pada kanvas y-down + winding CCW (signed area > 0 di y-up, < 0 di y-down):
+  // gunakan tanda yang menghasilkan normal ke luar.
+  const nx = ey, ny = -ex;
+  const sign = ccw ? -1 : 1;
+  const L = Math.hypot(nx, ny) || 1;
+  return { x: (sign * nx) / L, y: (sign * ny) / L };
+}
+// Bearing kompas (0=Utara, CW) dari vektor sketsa diberi northDeg (mapRotation).
+function bearingFromSketchVec(vx: number, vy: number, northDeg: number): number {
+  // Sudut vektor dari sketsa-atas, CW: atan2(vx, -vy)
+  const angSketchTop = (Math.atan2(vx, -vy) * 180) / Math.PI;
+  // Utara nyata berada di sudut northDeg CW dari sketsa-atas → bearing = ang - northDeg.
+  return ((angSketchTop - northDeg) % 360 + 360) % 360;
+}
+
+const FACADE_COLORS: Record<FacadeDir, { fill: string; stroke: string; label: string; kind: "massif" | "glaze" }> = {
+  E: { fill: "rgba(120,40,40,0.92)", stroke: "#3a0d0d", label: "Timur", kind: "massif" },
+  W: { fill: "rgba(120,40,40,0.92)", stroke: "#3a0d0d", label: "Barat", kind: "massif" },
+  N: { fill: "rgba(95,168,211,0.55)", stroke: "#2a5e7a", label: "Utara", kind: "glaze" },
+  S: { fill: "rgba(95,168,211,0.55)", stroke: "#2a5e7a", label: "Selatan", kind: "glaze" },
+};
+
+function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zoning" }> }) {
+  const { sketch, bounds } = slide;
+  const northDeg = effectiveNorthDeg(sketch);
+  const pxPerM = pxPerMeterFor(sketch.scale);
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const expanded = expandLevelsForView(levels);
+  const buildLayers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
+
+  // Proyeksi dimetric 30° (axonometric bird-eye), pusat = tengah bounds.
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const cos30 = Math.cos(Math.PI / 6);
+  const sin30 = Math.sin(Math.PI / 6);
+  // zScale: tinggi (m) → px sketsa; gunakan pxPerM langsung agar konsisten skala.
+  const project = (x: number, y: number, zMeters: number) => {
+    const dx = x - cx;
+    const dy = y - cy;
+    const zPx = zMeters * pxPerM;
+    return { x: (dx - dy) * cos30, y: (dx + dy) * sin30 - zPx };
+  };
+
+  // Kumpulkan semua wall quads + top faces untuk diurutkan dan dirender.
+  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; dir?: FacadeDir };
+  const quads: Quad[] = [];
+
+  // Lahan (ground polygon, tipis di z=0).
+  for (const l of lahanAll) {
+    const pts = l.points.map((p) => project(p.x, p.y, 0));
+    quads.push({
+      pts,
+      depth: -1e9, // selalu paling belakang
+      fill: "rgba(0,0,0,0.04)",
+      stroke: "rgba(0,0,0,0.35)",
+      sw: 1.2,
+    });
+  }
+
+  for (const layer of buildLayers) {
+    const own = expanded.filter((e) => e.sourceId === layer.levelId);
+    if (own.length === 0) continue;
+    const baseMdpl = Math.min(...own.map((e) => e.mdpl));
+    const topMdpl = Math.max(...own.map((e) => e.mdpl + e.height));
+    // Relative heights (bangunan diasumsikan duduk di z=0 site).
+    const baseRel = baseMdpl - Math.min(...expanded.map((e) => e.mdpl));
+    const topRel = topMdpl - Math.min(...expanded.map((e) => e.mdpl));
+
+    const ccw = polygonSignedArea(layer.points) > 0;
+    // Wall quads per edge.
+    for (let i = 0; i < layer.points.length; i++) {
+      const a = layer.points[i];
+      const b = layer.points[(i + 1) % layer.points.length];
+      const n = outwardNormal(a, b, ccw);
+      const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
+      const dir = classifyBearing(bearing);
+      const col = FACADE_COLORS[dir];
+      const p1 = project(a.x, a.y, baseRel);
+      const p2 = project(b.x, b.y, baseRel);
+      const p3 = project(b.x, b.y, topRel);
+      const p4 = project(a.x, a.y, topRel);
+      // Depth: midpoint of edge in world (a+b)/2 → (x+y). Lebih besar = lebih dekat ke kamera.
+      const mx = (a.x + b.x) / 2 - cx;
+      const my = (a.y + b.y) / 2 - cy;
+      const depth = mx + my;
+      quads.push({
+        pts: [p1, p2, p3, p4],
+        depth,
+        fill: col.fill,
+        stroke: col.stroke,
+        sw: 1.4,
+        dir,
+      });
+    }
+    // Top face polygon (atap rata).
+    const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
+    quads.push({
+      pts: topPts,
+      depth: 1e8, // selalu paling depan/atas
+      fill: "rgba(40,40,40,0.55)",
+      stroke: "#0a0a0a",
+      sw: 1.4,
+    });
+  }
+
+  quads.sort((a, b) => a.depth - b.depth);
+
+  // Tentukan bounding viewBox proyeksi.
+  const allPts = quads.flatMap((q) => q.pts);
+  let pxMin = Infinity, pyMin = Infinity, pxMax = -Infinity, pyMax = -Infinity;
+  for (const p of allPts) {
+    if (p.x < pxMin) pxMin = p.x;
+    if (p.y < pyMin) pyMin = p.y;
+    if (p.x > pxMax) pxMax = p.x;
+    if (p.y > pyMax) pyMax = p.y;
+  }
+  if (!Number.isFinite(pxMin)) { pxMin = -100; pxMax = 100; pyMin = -100; pyMax = 100; }
+  const padP = Math.max(pxMax - pxMin, pyMax - pyMin) * 0.18 + 40;
+  const vbX = pxMin - padP, vbY = pyMin - padP;
+  const vbW = (pxMax - pxMin) + padP * 2, vbH = (pyMax - pyMin) + padP * 2;
+  const sb = Math.max(vbW, vbH);
+
+  // Leader lines: untuk setiap arah, cari satu sisi representatif (terpanjang) di seluruh bangunan,
+  // tarik garis penunjuk dari midpoint sisi (di top) ke pinggir kanvas dengan label keterangan.
+  type Lead = { dir: FacadeDir; mid: { x: number; y: number }; lenPx: number; label: string };
+  const leads: Record<FacadeDir, Lead | null> = { N: null, S: null, E: null, W: null };
+  for (const layer of buildLayers) {
+    const own = expanded.filter((e) => e.sourceId === layer.levelId);
+    if (own.length === 0) continue;
+    const topMdpl = Math.max(...own.map((e) => e.mdpl + e.height));
+    const topRel = topMdpl - Math.min(...expanded.map((e) => e.mdpl));
+    const ccw = polygonSignedArea(layer.points) > 0;
+    for (let i = 0; i < layer.points.length; i++) {
+      const a = layer.points[i], b = layer.points[(i + 1) % layer.points.length];
+      const n = outwardNormal(a, b, ccw);
+      const dir = classifyBearing(bearingFromSketchVec(n.x, n.y, northDeg));
+      const lenPx = Math.hypot(b.x - a.x, b.y - a.y);
+      if (!leads[dir] || lenPx > leads[dir]!.lenPx) {
+        const ma = project((a.x + b.x) / 2, (a.y + b.y) / 2, topRel);
+        leads[dir] = {
+          dir,
+          mid: ma,
+          lenPx,
+          label: FACADE_COLORS[dir].label,
+        };
+      }
+    }
+  }
+
+  // Anchor leader labels di tepi kiri/kanan kanvas berdasar arah kompas.
+  // N → kiri-atas, S → kanan-bawah, E → kanan-atas, W → kiri-bawah (jaga keterbacaan).
+  const anchors: Record<FacadeDir, { x: number; y: number; tA: "start" | "end" }> = {
+    N: { x: vbX + sb * 0.04, y: vbY + sb * 0.12, tA: "start" },
+    E: { x: vbX + vbW - sb * 0.04, y: vbY + sb * 0.12, tA: "end" },
+    S: { x: vbX + vbW - sb * 0.04, y: vbY + vbH - sb * 0.06, tA: "end" },
+    W: { x: vbX + sb * 0.04, y: vbY + vbH - sb * 0.06, tA: "start" },
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 24, width: "100%", height: "100%" }}>
+      {/* Kiri: axonometric */}
+      <div style={{ flex: 1.4, minWidth: 0, border: "1px solid #111", padding: 12, display: "flex", flexDirection: "column" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 6 }}>
+          Axonometric bird-eye · zonasi fasad otomatis
+        </div>
+        <div style={{ position: "relative", flex: 1, minHeight: 0, background: "#fafafa" }}>
+          <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+            {/* Quads (already sorted back-to-front) */}
+            {quads.map((q, i) => (
+              <polygon key={i}
+                points={q.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill={q.fill} stroke={q.stroke} strokeWidth={q.sw}
+                strokeLinejoin="round" />
+            ))}
+            {/* Leader lines */}
+            {(Object.keys(leads) as FacadeDir[]).map((d) => {
+              const L = leads[d];
+              if (!L) return null;
+              const A = anchors[d];
+              const col = FACADE_COLORS[d];
+              return (
+                <g key={`lead-${d}`}>
+                  <line x1={L.mid.x} y1={L.mid.y} x2={A.x} y2={A.y}
+                    stroke={col.stroke} strokeWidth={1.4} strokeDasharray="6 4" />
+                  <circle cx={L.mid.x} cy={L.mid.y} r={3.5} fill={col.stroke} />
+                  <text x={A.x + (A.tA === "start" ? 6 : -6)} y={A.y - 4}
+                    textAnchor={A.tA} fontSize={13} fontWeight={800} fill="#0a0a0a"
+                    fontFamily="Sora, sans-serif"
+                    style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3 } as React.CSSProperties}>
+                    Fasad {L.label}
+                  </text>
+                  <text x={A.x + (A.tA === "start" ? 6 : -6)} y={A.y + 12}
+                    textAnchor={A.tA} fontSize={10.5} fill="#444"
+                    style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3 } as React.CSSProperties}>
+                    {col.kind === "massif" ? "Dinding masif · blok radiasi" : "Bukaan kaca · cahaya tak langsung"}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          <SlideCompass rotation={northDeg} size={72} />
+        </div>
+      </div>
+
+      {/* Kanan: legenda + rantai logika */}
+      <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ border: "1px solid #111", padding: 12 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
+            Legenda Strategi Pasif
+          </div>
+          <LegendRow swatch="rgba(120,40,40,0.92)" border="#3a0d0d"
+            title="Dinding Masif (Massive Wall / Bare Concrete)"
+            body="Fasad Timur & Barat ditutup masa solid untuk memblokir radiasi matahari ekstrem pagi & sore. Mengurangi beban pendinginan dalam ruang." />
+          <LegendRow swatch="rgba(95,168,211,0.55)" border="#2a5e7a"
+            title="Bukaan Kaca (Glazing / Open Facade)"
+            body="Fasad Utara & Selatan terbuka untuk pencahayaan alami tak langsung sepanjang tahun. Orientasi visual utama ke arah landmark regional via sisi Utara." />
+        </div>
+
+        <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14, flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800 }}>
+            Rantai Logika (Chain of Logic)
+          </div>
+          <ChainStep n={1} body="Input koordinat & rotasi peta menentukan arah Utara nyata pada sketsa." />
+          <ChainStep n={2} body="SunCalc menghitung azimut & altitud matahari pada 4 titik balik tahunan pukul 15.00 WIB." />
+          <ChainStep n={3} body="Setiap sisi poligon ruang dievaluasi normal arah hadapnya terhadap kompas asli." />
+          <ChainStep n={4} body="Sisi Timur/Barat → masif (beban termal tinggi). Sisi Utara/Selatan → bukaan kaca (cahaya sejuk)." />
+          <ChainStep n={5} body="Hasil menjadi strategi passive cooling: bayangan masif memotong radiasi puncak, fasad terbuka memaksimalkan daylight." />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LegendRow({ swatch, border, title, body }: { swatch: string; border: string; title: string; body: string }) {
+  return (
+    <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+      <div style={{ width: 22, height: 22, background: swatch, border: `1.5px solid ${border}`, flexShrink: 0, marginTop: 2 }} />
+      <div style={{ fontSize: 12, lineHeight: 1.35, color: "#222" }}>
+        <div style={{ fontWeight: 800, color: "#0a0a0a", marginBottom: 2 }}>{title}</div>
+        <div style={{ color: "#444" }}>{body}</div>
+      </div>
+    </div>
+  );
+}
+
+function ChainStep({ n, body }: { n: number; body: string }) {
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <div style={{ width: 22, height: 22, borderRadius: 999, background: "#e85d3a", color: "#0a0a0a", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0 }}>
+        {n}
+      </div>
+      <div style={{ fontSize: 12, lineHeight: 1.4, color: "#e8e8e8" }}>{body}</div>
+    </div>
+  );
+}
+
