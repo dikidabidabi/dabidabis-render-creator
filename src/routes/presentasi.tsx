@@ -1026,6 +1026,47 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               strokeLinecap="round"
             />
           ))}
+          {hull.length >= 2 && (() => {
+            const hc = centroid(hull);
+            return hull.map((_, i) => {
+              const a = hull[i];
+              const b = hull[(i + 1) % hull.length];
+              const dx = b.x - a.x, dy = b.y - a.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const lengthM = len * mPerSPx;
+              if (lengthM < 0.5) return null;
+              // outward normal (away from hull centroid)
+              let nx = -dy / len, ny = dx / len;
+              const midE = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+              if ((midE.x - hc.x) * nx + (midE.y - hc.y) * ny < 0) { nx = -nx; ny = -ny; }
+              const oa = { x: a.x + nx * dimOffsetPx, y: a.y + ny * dimOffsetPx };
+              const ob = { x: b.x + nx * dimOffsetPx, y: b.y + ny * dimOffsetPx };
+              const mid = { x: (oa.x + ob.x) / 2, y: (oa.y + ob.y) / 2 };
+              let angle = (Math.atan2(ob.y - oa.y, ob.x - oa.x) * 180) / Math.PI;
+              if (angle > 90) angle -= 180;
+              if (angle < -90) angle += 180;
+              const tick = sw * 0.006;
+              return (
+                <g key={`dim-${i}`}>
+                  <line x1={a.x} y1={a.y} x2={oa.x + nx * tick} y2={oa.y + ny * tick}
+                    stroke="rgba(0,0,0,0.55)" strokeWidth={sw * 0.0008} />
+                  <line x1={b.x} y1={b.y} x2={ob.x + nx * tick} y2={ob.y + ny * tick}
+                    stroke="rgba(0,0,0,0.55)" strokeWidth={sw * 0.0008} />
+                  <line x1={oa.x} y1={oa.y} x2={ob.x} y2={ob.y}
+                    stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
+                  <text
+                    x={mid.x} y={mid.y}
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize={sw * 0.02} fontWeight={600} fill="#0a0a0a"
+                    transform={`rotate(${angle} ${mid.x} ${mid.y}) translate(0 ${-sw * 0.008})`}
+                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.008 } as React.CSSProperties}
+                  >
+                    {`${fmt(lengthM, 1)} m`}
+                  </text>
+                </g>
+              );
+            });
+          })()}
           {evkRooms.map((l) => {
             const c = centroid(l.points);
             const rPx = 38 * pxPerM;
