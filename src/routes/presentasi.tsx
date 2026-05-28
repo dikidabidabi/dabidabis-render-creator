@@ -1730,7 +1730,12 @@ function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: num
           Ruang hijau & badan air diturunkan dari tag <em>leisure/landuse/natural/waterway</em> OpenStreetMap.
         </div>
       </div>
+    </>
+  );
+}
+
 function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
+
   const imgs = slide.narasi.images.filter((s): s is string => typeof s === "string" && s.length > 0);
   const text = slide.narasi.text.trim();
   // Pisahkan judul gagasan (baris pertama) dengan badan narasi.
