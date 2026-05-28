@@ -101,10 +101,15 @@ type Level = {
   mdpl: number;
   opacity: number; // 0..1 — opacity ketika level ini tidak aktif
   typicalCount?: number; // ≥1, jumlah lantai tipikal yang menggandakan luas + koefisien
+  typicalHeight?: number; // m, tinggi tiap lantai tipikal (default TYPICAL_FLOOR_H)
 };
 
 // Tinggi default per lantai tipikal (m). Setiap tambahan tipikal menumpuk 3 m.
 const TYPICAL_FLOOR_H = 3;
+function tipicalHeightOf(lv: { typicalHeight?: number }): number {
+  const h = Number(lv.typicalHeight);
+  return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
+}
 
 // Hitung nama tampilan tiap level (Level N atau Level N–M) berdasarkan urutan MDPL
 // dan jumlah tipikal di tiap level. Jika user sudah mengganti nama (tidak cocok pola
@@ -466,6 +471,7 @@ function normalizeSketch(s: any): Sketch {
         mdpl: Number.isFinite(Number(lv.mdpl)) ? Number(lv.mdpl) : 0,
         opacity: typeof lv.opacity === "number" ? Math.max(0, Math.min(1, lv.opacity)) : 0.5,
         typicalCount: Number.isFinite(Number(lv.typicalCount)) ? Math.max(1, Math.round(Number(lv.typicalCount))) : 1,
+        typicalHeight: Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : undefined,
       }))
     : [];
   let lines: Line[] = Array.isArray(s?.lines) ? s.lines : [];
@@ -1199,6 +1205,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const k = Math.max(1, Math.min(99, Math.round(count)));
       onChange({
         levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalCount: k } : l)),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const setLevelTypicalHeight = useCallback(
+    (lvlId: string, meters: number) => {
+      if (!Number.isFinite(meters) || meters <= 0) return;
+      const h = Math.round(Math.max(0.1, Math.min(99, meters)) * 100) / 100;
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalHeight: h } : l)),
       });
     },
     [levels, onChange],
@@ -2942,6 +2959,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onDuplicate={duplicateLevel}
             onIncrementTypical={incrementTypical}
             onSetTypical={setLevelTypical}
+            onSetTypicalHeight={setLevelTypicalHeight}
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
@@ -3245,6 +3263,7 @@ function LevelsPanel({
   onDuplicate,
   onIncrementTypical,
   onSetTypical,
+  onSetTypicalHeight,
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
@@ -3264,6 +3283,7 @@ function LevelsPanel({
   onDuplicate: (id: string) => void;
   onIncrementTypical: (id: string) => void;
   onSetTypical: (id: string, count: number) => void;
+  onSetTypicalHeight: (id: string, meters: number) => void;
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
@@ -3479,6 +3499,33 @@ function LevelsPanel({
                       title="Jumlah lantai tipikal — luas & koefisien dikalikan nilai ini"
                     />
                     <span className="text-[10px] text-ember/80">tip</span>
+                    <span className="text-[10px] text-ember/80">@</span>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={0.1}
+                      max={99}
+                      step={0.1}
+                      value={typicalDrafts[`${lvl.id}__h`] ?? String(tipicalHeightOf(lvl))}
+                      onChange={(e) =>
+                        setTypicalDrafts((d) => ({ ...d, [`${lvl.id}__h`]: e.target.value }))
+                      }
+                      onBlur={() => {
+                        const v = parseFloat(typicalDrafts[`${lvl.id}__h`] ?? "");
+                        if (Number.isFinite(v) && v > 0) onSetTypicalHeight(lvl.id, v);
+                        setTypicalDrafts((d) => {
+                          const n = { ...d };
+                          delete n[`${lvl.id}__h`];
+                          return n;
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                      className="h-7 w-16 text-sm text-ember"
+                      title="Tinggi tiap lantai tipikal (m)"
+                    />
+                    <span className="text-[10px] text-ember/80">m/lt</span>
                   </>
                 )}
                 <span

@@ -40,7 +40,7 @@ type Line = {
 type Layer = {
   id: string; name: string; points: Point[]; areaM2: number; color: string; levelId?: string; coefficient?: number; gsb?: number[];
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
@@ -63,6 +63,10 @@ function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
 
 // Typical floor logic — kept in sync with sketch.tsx
 const TYPICAL_FLOOR_H = 3;
+function tipH(lv: { typicalHeight?: number }): number {
+  const h = Number(lv.typicalHeight);
+  return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
+}
 function isAutoLevelName(name: string): boolean {
   return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
 }
@@ -91,25 +95,26 @@ function expandLevelsForView(levels: Level[]): ExpandedFloor[] {
   let shift = 0;
   const adjusted = sorted.map((lv) => {
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const h = tipH(lv);
     const base = lv.mdpl + shift;
-    shift += (k - 1) * TYPICAL_FLOOR_H;
-    return { lv, k, base };
+    shift += (k - 1) * h;
+    return { lv, k, base, h };
   });
   const out: ExpandedFloor[] = [];
   for (let i = 0; i < adjusted.length; i++) {
-    const { lv, k, base } = adjusted[i];
+    const { lv, k, base, h } = adjusted[i];
     const next = adjusted[i + 1];
     if (k === 1) {
-      const h = next ? Math.max(0.1, next.base - base) : 4;
-      out.push({ id: lv.id, sourceId: lv.id, name: lv.name, mdpl: base, height: h, typicalIndex: 0, typicalTotal: 1 });
+      const hh = next ? Math.max(0.1, next.base - base) : 4;
+      out.push({ id: lv.id, sourceId: lv.id, name: lv.name, mdpl: base, height: hh, typicalIndex: 0, typicalTotal: 1 });
     } else {
       for (let j = 0; j < k; j++) {
         out.push({
           id: `${lv.id}__t${j}`,
           sourceId: lv.id,
           name: lv.name,
-          mdpl: base + j * TYPICAL_FLOOR_H,
-          height: TYPICAL_FLOOR_H,
+          mdpl: base + j * h,
+          height: h,
           typicalIndex: j,
           typicalTotal: k,
         });
@@ -643,7 +648,7 @@ function computeStats(sk: Sketch): Stats {
   const baseHeight =
     levels.length > 1 ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl)) : 0;
   const typicalExtra = levels.reduce(
-    (s, lv) => s + (Math.max(1, Math.round(lv.typicalCount ?? 1)) - 1) * TYPICAL_FLOOR_H,
+    (s, lv) => s + (Math.max(1, Math.round(lv.typicalCount ?? 1)) - 1) * tipH(lv),
     0,
   );
   const ketinggianM = baseHeight + typicalExtra;
