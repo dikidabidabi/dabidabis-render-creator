@@ -2557,6 +2557,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     onChange({ layers: layers.filter((l) => l.id !== lid) });
   };
 
+  // Duplikat (copy-paste) sebuah ruang/layer beserta garis-garis tepinya,
+  // digeser sejauh 1 meter ke kanan-bawah agar terlihat terpisah.
+  const duplicateLayer = (lid: string) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    const dx = pxPerMeter * 1;
+    const dy = pxPerMeter * 1;
+    const eps = Math.max(0.5, pxPerMeter * 0.01);
+    const near = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) <= eps;
+    const isVertex = (p: Point) => layer.points.some((v) => near(p, v));
+    const shift = (p: Point): Point => ({ x: p.x + dx, y: p.y + dy });
+
+    const newPoints = layer.points.map(shift);
+    const now = Date.now();
+    const newLayer: Layer = {
+      ...layer,
+      id: `L${now}_${Math.random().toString(36).slice(2, 6)}`,
+      name: `${layer.name} (salin)`,
+      points: newPoints,
+      areaM2: polygonAreaPx(newPoints) / (pxPerMeter * pxPerMeter),
+      locked: false,
+      gsb: layer.gsb ? [...layer.gsb] : undefined,
+    };
+
+    // Duplikat garis-garis yang merupakan tepi polygon (kedua ujung berada
+    // pada vertex polygon), termasuk lengkung/bezier — pada level yang sama.
+    const newLines: Line[] = [];
+    for (const ln of lines) {
+      if (layer.levelId && ln.levelId !== layer.levelId) continue;
+      if (!isVertex(ln.a) || !isVertex(ln.b)) continue;
+      newLines.push({
+        ...ln,
+        a: shift(ln.a),
+        b: shift(ln.b),
+        c1: ln.c1 ? shift(ln.c1) : undefined,
+        c2: ln.c2 ? shift(ln.c2) : undefined,
+      });
+    }
+
+    pushHistory();
+    onChange({ layers: [...layers, newLayer], lines: [...lines, ...newLines] });
+    toast.success(`${layer.name} disalin`);
+  };
+
   const toggleLock = (lid: string) => {
     pushHistory();
     onChange({
