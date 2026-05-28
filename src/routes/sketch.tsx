@@ -3140,6 +3140,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
+            onDuplicateLayer={duplicateLayer}
             onSetLayerCoefficient={setLayerCoefficient}
             onSetLayerGsb={setLayerGsbSide}
             lines={lines}
