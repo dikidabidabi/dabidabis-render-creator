@@ -2498,9 +2498,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
     if (editDrag) {
       const newPos = getWorldPos(e);
-      const oldPos = { x: parseFloat(editDrag.key.split(",")[0]), y: parseFloat(editDrag.key.split(",")[1]) };
-      moveVertexTarget(editDrag.target, oldPos, newPos);
-      setEditDrag({ key: keyOf(newPos), target: editDrag.target });
+      moveVertexTarget(editDrag.target, editDrag.coord, newPos);
+      setEditDrag({ key: keyOf(newPos), coord: newPos, target: editDrag.target });
       setEditHover(newPos);
       return;
     }
