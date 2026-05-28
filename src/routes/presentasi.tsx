@@ -947,6 +947,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
     : [];
   const sw = Math.max(w, h);
 
+  // Convex hull of all non-lahan room vertices for outer dimensions
+  const roomLayers = layers.filter((l) => !isLahan(l.name));
+  const allPts: Point[] = roomLayers.flatMap((l) => l.points);
+  const hull = convexHull(allPts);
+  const dimOffsetPx = sw * 0.018;
+
   return (
     <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
@@ -955,15 +961,16 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           preserveAspectRatio="xMidYMid meet"
           style={{ width: "100%", height: "100%", display: "block" }}
         >
-          {isGround && lahanAll.map((l) => (
+          {lahanAll.map((l) => (
             <g key={`lhn-${l.id}`}>
               <polygon
                 points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill="rgba(0,0,0,0.04)"
+                fill={isGround ? "rgba(0,0,0,0.04)" : "none"}
                 stroke="rgba(0,0,0,0.55)"
                 strokeWidth={sw * 0.0015}
+                strokeDasharray={isGround ? undefined : `${sw * 0.008} ${sw * 0.005}`}
               />
-              {l.points.map((_, i) => {
+              {isGround && l.points.map((_, i) => {
                 const seg = inwardOffsetSegPx(l.points, i, getLayerGsbM(l, i) * pxPerM);
                 if (getLayerGsbM(l, i) <= 0) return null;
                 return (
@@ -1019,6 +1026,47 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               strokeLinecap="round"
             />
           ))}
+          {hull.length >= 2 && (() => {
+            const hc = centroid(hull);
+            return hull.map((_, i) => {
+              const a = hull[i];
+              const b = hull[(i + 1) % hull.length];
+              const dx = b.x - a.x, dy = b.y - a.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const lengthM = len * mPerSPx;
+              if (lengthM < 0.5) return null;
+              // outward normal (away from hull centroid)
+              let nx = -dy / len, ny = dx / len;
+              const midE = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+              if ((midE.x - hc.x) * nx + (midE.y - hc.y) * ny < 0) { nx = -nx; ny = -ny; }
+              const oa = { x: a.x + nx * dimOffsetPx, y: a.y + ny * dimOffsetPx };
+              const ob = { x: b.x + nx * dimOffsetPx, y: b.y + ny * dimOffsetPx };
+              const mid = { x: (oa.x + ob.x) / 2, y: (oa.y + ob.y) / 2 };
+              let angle = (Math.atan2(ob.y - oa.y, ob.x - oa.x) * 180) / Math.PI;
+              if (angle > 90) angle -= 180;
+              if (angle < -90) angle += 180;
+              const tick = sw * 0.006;
+              return (
+                <g key={`dim-${i}`}>
+                  <line x1={a.x} y1={a.y} x2={oa.x + nx * tick} y2={oa.y + ny * tick}
+                    stroke="rgba(0,0,0,0.55)" strokeWidth={sw * 0.0008} />
+                  <line x1={b.x} y1={b.y} x2={ob.x + nx * tick} y2={ob.y + ny * tick}
+                    stroke="rgba(0,0,0,0.55)" strokeWidth={sw * 0.0008} />
+                  <line x1={oa.x} y1={oa.y} x2={ob.x} y2={ob.y}
+                    stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
+                  <text
+                    x={mid.x} y={mid.y}
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize={sw * 0.02} fontWeight={600} fill="#0a0a0a"
+                    transform={`rotate(${angle} ${mid.x} ${mid.y}) translate(0 ${-sw * 0.008})`}
+                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.008 } as React.CSSProperties}
+                  >
+                    {`${fmt(lengthM, 1)} m`}
+                  </text>
+                </g>
+              );
+            });
+          })()}
           {evkRooms.map((l) => {
             const c = centroid(l.points);
             const rPx = 38 * pxPerM;
@@ -1867,6 +1915,27 @@ function inwardOffsetSegPx(pts: Point[], i: number, distPx: number): { a: Point;
     mid: { x: (a.x + b.x) / 2 + nx * distPx, y: (a.y + b.y) / 2 + ny * distPx },
   };
 }
+
+function convexHull(pts: Point[]): Point[] {
+  const ps = pts.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (ps.length < 3) return ps.slice();
+  const sorted = [...ps].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Point, a: Point, b: Point) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: Point[] = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: Point[] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+
 
 function linePath(ln: Line): string {
   const kind = ln.kind ?? "straight";
