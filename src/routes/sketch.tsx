@@ -3832,6 +3832,14 @@ function LevelsPanel({
                               <span className="ml-0.5 text-[9px] font-normal">m²</span>
                             </span>
                             <button
+                              onClick={() => onDuplicateLayer(sl.id)}
+                              className="shrink-0 rounded p-0.5 text-muted-foreground transition hover:bg-ember/10 hover:text-ember"
+                              aria-label="Salin ruang"
+                              title="Salin ruang (digeser 1 m)"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                            <button
                               onClick={() => onToggleLockLayer(sl.id)}
                               className={cn(
                                 "shrink-0 rounded p-0.5 transition",
