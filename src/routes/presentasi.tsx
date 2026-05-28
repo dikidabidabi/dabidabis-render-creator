@@ -176,21 +176,31 @@ function PresentasiPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [narasiStore, setNarasiStore] = useState<NarasiStore>({});
   const lastRawRef = useRef<string | null>(null);
+  const lastNarasiRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw === lastRawRef.current) return;
-      lastRawRef.current = raw;
-      if (!raw) { setSketches([]); setOpenId(null); return; }
-      const s = JSON.parse(raw) as StoreShape;
-      if (s && Array.isArray(s.sketches)) {
-        setSketches(s.sketches as Sketch[]);
-        setOpenId((prev) => {
-          if (prev && s.sketches.some((x) => x.id === prev)) return prev;
-          return s.openId ?? s.sketches[0]?.id ?? null;
-        });
+      if (raw !== lastRawRef.current) {
+        lastRawRef.current = raw;
+        if (!raw) { setSketches([]); setOpenId(null); }
+        else {
+          const s = JSON.parse(raw) as StoreShape;
+          if (s && Array.isArray(s.sketches)) {
+            setSketches(s.sketches as Sketch[]);
+            setOpenId((prev) => {
+              if (prev && s.sketches.some((x) => x.id === prev)) return prev;
+              return s.openId ?? s.sketches[0]?.id ?? null;
+            });
+          }
+        }
+      }
+      const nraw = localStorage.getItem(NARASI_KEY);
+      if (nraw !== lastNarasiRawRef.current) {
+        lastNarasiRawRef.current = nraw;
+        setNarasiStore(loadNarasiStore());
       }
     } catch { /* ignore */ }
   };
@@ -198,7 +208,9 @@ function PresentasiPage() {
   useEffect(() => {
     load();
     setLoaded(true);
-    const onStorage = (e: StorageEvent) => { if (e.key === STORAGE_KEY) load(); };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY || e.key === NARASI_KEY) load();
+    };
     const onVis = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("storage", onStorage);
     document.addEventListener("visibilitychange", onVis);
@@ -211,6 +223,7 @@ function PresentasiPage() {
       window.clearInterval(iv);
     };
   }, []);
+
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
