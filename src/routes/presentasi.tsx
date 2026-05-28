@@ -758,27 +758,32 @@ function ManualScaleBox({
 
   useEffect(() => { setUserScale(loadSlideScale(slideId)); }, [slideId]);
 
+  // Measure ONCE on mount (and when slideId changes). Slides are static:
+  // no ResizeObserver, no auto re-fit on data change. Only the user's manual
+  // drag handle can change scale after the initial fit.
   useEffect(() => {
     if (!boxRef.current || !innerRef.current) return;
+    let raf1 = 0, raf2 = 0;
     const measure = () => {
-      const box = boxRef.current!.getBoundingClientRect();
-      const inner = innerRef.current!;
+      if (!boxRef.current || !innerRef.current) return;
+      const box = boxRef.current.getBoundingClientRect();
+      const inner = innerRef.current;
       const prev = inner.style.transform;
       inner.style.transform = "none";
       const cw = inner.scrollWidth;
       const ch = inner.scrollHeight;
       inner.style.transform = prev;
       if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
-      setNatural((prev) => (prev && prev.w === cw && prev.h === ch ? prev : { w: cw, h: ch }));
-      const nextFit = Math.min(1, box.width / cw, box.height / ch);
-      setFitScale((prev) => (Math.abs(prev - nextFit) < 0.001 ? prev : nextFit));
+      setNatural({ w: cw, h: ch });
+      setFitScale(Math.min(1, box.width / cw, box.height / ch));
     };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(boxRef.current);
-    ro.observe(innerRef.current);
-    return () => ro.disconnect();
-  }, [children]);
+    // Two RAFs to let fonts/images settle before measuring once.
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(measure);
+    });
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+  }, [slideId]);
+
 
   const scale = userScale ?? fitScale;
   scaleRef.current = scale;
@@ -1729,94 +1734,118 @@ function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: num
   );
 }
 
-// ---- Sun analysis body ----
 function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
+
   const imgs = slide.narasi.images.filter((s): s is string => typeof s === "string" && s.length > 0);
-  const n = imgs.length;
-  // Grid template: 1=>1col, 2=>2col, 3=>3col, 4=>2x2
-  const cols = n <= 1 ? 1 : n === 2 ? 2 : n === 3 ? 3 : 2;
-  const rows = n <= 3 ? 1 : 2;
-  const gap = 18;
   const text = slide.narasi.text.trim();
+  // Pisahkan judul gagasan (baris pertama) dengan badan narasi.
+  const firstBreak = text.indexOf("\n");
+  const heading = firstBreak === -1 ? text : text.slice(0, firstBreak).trim();
+  const body = firstBreak === -1 ? "" : text.slice(firstBreak + 1).trim();
+
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 22 }}>
-      {/* Tabel Narasi — gagasan utama (lanskap) */}
-      <div
-        style={{
-          border: "1px solid #111",
-          borderRadius: 6,
-          padding: "18px 22px",
-          background: "#fafafa",
-          minHeight: 160,
-        }}
-      >
-        <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
+    <div style={{ height: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, alignItems: "stretch" }}>
+      {/* Kiri: narasi */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 18, paddingRight: 8, minWidth: 0 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 600 }}>
           Gagasan Utama · Narasi {slide.index + 1}
         </div>
+        {heading && (
+          <div
+            style={{
+              fontFamily: "var(--font-display, Sora, sans-serif)",
+              fontSize: 30,
+              lineHeight: 1.2,
+              color: "#0a0a0a",
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
+              wordBreak: "break-word",
+            }}
+          >
+            {heading}
+          </div>
+        )}
         <div
           style={{
-            fontFamily: "var(--font-display, Sora, sans-serif)",
-            fontSize: 26,
-            lineHeight: 1.35,
-            color: text ? "#0a0a0a" : "#bbb",
-            fontWeight: 500,
+            fontFamily: "var(--font-body, Manrope, sans-serif)",
+            fontSize: 16,
+            lineHeight: 1.55,
+            color: text ? "#222" : "#bbb",
+            fontWeight: 400,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
           }}
         >
-          {text || "Tulis gagasan utama narasi di halaman Narasi."}
+          {body || (heading ? "" : "Tulis gagasan utama narasi di halaman Narasi.")}
         </div>
       </div>
-      {/* Grid gambar */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "grid",
-          gridTemplateColumns: `repeat(${cols}, 1fr)`,
-          gridTemplateRows: `repeat(${rows}, 1fr)`,
-          gap,
-        }}
-      >
-        {n === 0 ? (
+
+      {/* Kanan: gambar persegi dalam satu deret horizontal */}
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
+        {imgs.length === 0 ? (
           <div
             style={{
+              aspectRatio: "1 / 1",
+              width: "100%",
               border: "1px dashed #bbb",
               borderRadius: 6,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "#999",
-              fontSize: 16,
+              fontSize: 13,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
+              textAlign: "center",
+              padding: 12,
             }}
           >
             Unggah gambar di halaman Narasi
           </div>
         ) : (
-          imgs.map((src, i) => (
-            <div
-              key={i}
-              style={{
-                border: "1px solid #e5e5e5",
-                borderRadius: 6,
-                overflow: "hidden",
-                background: "#f5f5f5",
-              }}
-            >
-              <img
-                src={src}
-                alt={`Konsep ${slide.index + 1} gambar ${i + 1}`}
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
-            </div>
-          ))
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${imgs.length}, 1fr)`,
+              gap: 12,
+              width: "100%",
+            }}
+          >
+            {imgs.map((src, i) => (
+              <div
+                key={i}
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  aspectRatio: "1 / 1",
+                  border: "1px solid #e5e5e5",
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  background: "#f5f5f5",
+                }}
+              >
+                <img
+                  src={src}
+                  alt={`Konsep ${slide.index + 1} gambar ${i + 1}`}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
   );
 }
+
+
 
 function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
   const { sketch, bounds } = slide;
