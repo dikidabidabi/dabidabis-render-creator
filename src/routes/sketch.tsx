@@ -2557,6 +2557,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     onChange({ layers: layers.filter((l) => l.id !== lid) });
   };
 
+  // Duplikat (copy-paste) sebuah ruang/layer beserta garis-garis tepinya,
+  // digeser sejauh 1 meter ke kanan-bawah agar terlihat terpisah.
+  const duplicateLayer = (lid: string) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    const dx = pxPerMeter * 1;
+    const dy = pxPerMeter * 1;
+    const eps = Math.max(0.5, pxPerMeter * 0.01);
+    const near = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) <= eps;
+    const isVertex = (p: Point) => layer.points.some((v) => near(p, v));
+    const shift = (p: Point): Point => ({ x: p.x + dx, y: p.y + dy });
+
+    const newPoints = layer.points.map(shift);
+    const now = Date.now();
+    const newLayer: Layer = {
+      ...layer,
+      id: `L${now}_${Math.random().toString(36).slice(2, 6)}`,
+      name: `${layer.name} (salin)`,
+      points: newPoints,
+      areaM2: polygonAreaPx(newPoints) / (pxPerMeter * pxPerMeter),
+      locked: false,
+      gsb: layer.gsb ? [...layer.gsb] : undefined,
+    };
+
+    // Duplikat garis-garis yang merupakan tepi polygon (kedua ujung berada
+    // pada vertex polygon), termasuk lengkung/bezier — pada level yang sama.
+    const newLines: Line[] = [];
+    for (const ln of lines) {
+      if (layer.levelId && ln.levelId !== layer.levelId) continue;
+      if (!isVertex(ln.a) || !isVertex(ln.b)) continue;
+      newLines.push({
+        ...ln,
+        a: shift(ln.a),
+        b: shift(ln.b),
+        c1: ln.c1 ? shift(ln.c1) : undefined,
+        c2: ln.c2 ? shift(ln.c2) : undefined,
+      });
+    }
+
+    pushHistory();
+    onChange({ layers: [...layers, newLayer], lines: [...lines, ...newLines] });
+    toast.success(`${layer.name} disalin`);
+  };
+
   const toggleLock = (lid: string) => {
     pushHistory();
     onChange({
@@ -3096,6 +3140,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
             onRemoveLayer={removeLayer}
+            onDuplicateLayer={duplicateLayer}
             onSetLayerCoefficient={setLayerCoefficient}
             onSetLayerGsb={setLayerGsbSide}
             lines={lines}
@@ -3400,6 +3445,7 @@ function LevelsPanel({
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
+  onDuplicateLayer,
   onSetLayerCoefficient,
   onSetLayerGsb,
   lines,
@@ -3420,6 +3466,7 @@ function LevelsPanel({
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
+  onDuplicateLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
   onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
   lines: Line[];
@@ -3784,6 +3831,14 @@ function LevelsPanel({
                               {(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(1)}
                               <span className="ml-0.5 text-[9px] font-normal">m²</span>
                             </span>
+                            <button
+                              onClick={() => onDuplicateLayer(sl.id)}
+                              className="shrink-0 rounded p-0.5 text-muted-foreground transition hover:bg-ember/10 hover:text-ember"
+                              aria-label="Salin ruang"
+                              title="Salin ruang (digeser 1 m)"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
                             <button
                               onClick={() => onToggleLockLayer(sl.id)}
                               className={cn(
