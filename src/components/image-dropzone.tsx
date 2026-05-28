@@ -107,8 +107,16 @@ export function ImageDropzone({ label, hint, value, onChange, className, compres
           </button>
         )}
       </div>
-      <label
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => inputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -163,7 +171,7 @@ export function ImageDropzone({ label, hint, value, onChange, className, compres
             if (f) handleFile(f);
           }}
         />
-      </label>
+      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
