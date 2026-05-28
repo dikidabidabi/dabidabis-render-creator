@@ -40,7 +40,7 @@ type Line = {
 type Layer = {
   id: string; name: string; points: Point[]; areaM2: number; color: string; levelId?: string; coefficient?: number; gsb?: number[];
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
