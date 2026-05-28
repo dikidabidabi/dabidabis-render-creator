@@ -1250,7 +1250,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Editing an existing vertex (drag to move). Tracks current key as it moves.
   const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
-  const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete">("move");
+  const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
+  const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
+  const [filletSegments] = useState<number>(10);
   const [addPointPreview, setAddPointPreview] = useState<Point | null>(null);
 
   // Undo/redo history snapshots: {lines, layers}
@@ -2190,6 +2192,94 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, activeLvlId, isLineLocked, pushHistory, onChange],
   );
 
+  // Fillet a vertex: replace it with a smooth arc of `filletRadiusM` between
+  // the two adjacent polygon edges. Approximated as N short line segments.
+  const filletVertexAt = useCallback(
+    (key: string) => {
+      if (lockedVertexKeys.has(key)) { toast.error("Titik terkunci"); return; }
+      let target: { layer: Layer; idx: number } | null = null;
+      for (const l of layers) {
+        if (activeLvlId && l.levelId !== activeLvlId) continue;
+        const idx = l.points.findIndex((p) => keyOf(p) === key);
+        if (idx >= 0 && l.points.length >= 3) { target = { layer: l, idx }; break; }
+      }
+      if (!target) { toast.error("Pilih titik pada poligon"); return; }
+      const { layer, idx } = target;
+      const n = layer.points.length;
+      const V = layer.points[idx];
+      const A = layer.points[(idx - 1 + n) % n];
+      const B = layer.points[(idx + 1) % n];
+      const vax = A.x - V.x, vay = A.y - V.y;
+      const vbx = B.x - V.x, vby = B.y - V.y;
+      const la = Math.hypot(vax, vay), lb = Math.hypot(vbx, vby);
+      if (la < 1 || lb < 1) { toast.error("Edge terlalu pendek"); return; }
+      const uax = vax / la, uay = vay / la;
+      const ubx = vbx / lb, uby = vby / lb;
+      const cosA = Math.max(-1, Math.min(1, uax * ubx + uay * uby));
+      const ang = Math.acos(cosA);
+      if (ang < 0.05 || Math.PI - ang < 0.05) { toast.error("Sudut tidak bisa difillet"); return; }
+      const rPxRaw = Math.max(0.01, filletRadiusM) * pxPerMeter;
+      const halfTan = Math.tan(ang / 2);
+      let d = rPxRaw / halfTan;
+      d = Math.min(d, la * 0.49, lb * 0.49);
+      const rEff = d * halfTan;
+      const P1 = { x: V.x + uax * d, y: V.y + uay * d };
+      const P2 = { x: V.x + ubx * d, y: V.y + uby * d };
+      const bx = uax + ubx, by = uay + uby;
+      const bl = Math.hypot(bx, by) || 1;
+      const nbx = bx / bl, nby = by / bl;
+      const cDist = rEff / Math.sin(ang / 2);
+      const C = { x: V.x + nbx * cDist, y: V.y + nby * cDist };
+      const a1 = Math.atan2(P1.y - C.y, P1.x - C.x);
+      const a2 = Math.atan2(P2.y - C.y, P2.x - C.x);
+      let da = a2 - a1;
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      const seg = Math.max(2, filletSegments);
+      const arcPts: Point[] = [];
+      for (let i = 1; i < seg; i++) {
+        const t = i / seg;
+        const a = a1 + da * t;
+        arcPts.push({ x: C.x + rEff * Math.cos(a), y: C.y + rEff * Math.sin(a) });
+      }
+      const newPts: Point[] = [P1, ...arcPts, P2];
+      pushHistory();
+      const ka = keyOf(A), kb = keyOf(B);
+      const nextLayers = layers.map((l) => {
+        const i2 = l.points.findIndex((p) => keyOf(p) === key);
+        if (i2 < 0) return l;
+        const m = l.points.length;
+        const prev = l.points[(i2 - 1 + m) % m];
+        const next = l.points[(i2 + 1) % m];
+        const kp = keyOf(prev), kn = keyOf(next);
+        const forward = kp === ka && kn === kb;
+        const reverse = kp === kb && kn === ka;
+        if (!forward && !reverse) return l;
+        const seq = reverse ? [...newPts].reverse() : newPts;
+        const out = [...l.points.slice(0, i2), ...seq, ...l.points.slice(i2 + 1)];
+        return { ...l, points: out, areaM2: polygonAreaPx(out) / (pxPerMeter * pxPerMeter) };
+      });
+      const midP: Point = { x: (P1.x + P2.x) / 2, y: (P1.y + P2.y) / 2 };
+      const snapEnd = (end: Point, other: Point): Point => {
+        if (keyOf(end) !== key) return end;
+        const ko = keyOf(other);
+        if (ko === ka) return P1;
+        if (ko === kb) return P2;
+        return midP;
+      };
+      const nextLines = lines.map((ln) => {
+        const na = snapEnd(ln.a, ln.b);
+        const nb = snapEnd(ln.b, ln.a);
+        if (na === ln.a && nb === ln.b) return ln;
+        return { ...ln, a: na, b: nb };
+      });
+      onChange({ layers: nextLayers, lines: nextLines });
+      toast.success("Titik difillet");
+    },
+    [layers, lines, activeLvlId, lockedVertexKeys, pxPerMeter, filletRadiusM, filletSegments, pushHistory, onChange],
+  );
+
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture(e.pointerId);
     pointersRef.current.set(e.pointerId, getScreenPos(e));
@@ -2256,6 +2346,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         const tolPx = 10 / view.s;
         deleteEdgeAt(raw, tolPx);
+        return;
+      }
+      if (editMode === "fillet") {
+        const v = findVertexAt(raw, tol);
+        if (!v) return;
+        filletVertexAt(keyOf(v));
         return;
       }
       const v = findVertexAt(raw, tol);
@@ -2807,12 +2903,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         )}
         {tool === "edit" && (
           <div className="space-y-1.5">
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5">
               <Button
                 variant={editMode === "move" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setEditMode("move")}
-                className={cn("h-8 px-2 text-[11px]", editMode === "move" && "bg-foreground text-background")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "move" && "bg-foreground text-background")}
                 title="Geser titik yang sudah ada"
               >
                 <Move className="mr-1 h-3.5 w-3.5" /> Geser
@@ -2821,27 +2917,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 variant={editMode === "addPoint" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setEditMode("addPoint")}
-                className={cn("h-8 px-2 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
                 title="Tambah titik baru di sepanjang garis"
               >
                 <Plus className="mr-1 h-3.5 w-3.5" /> Tambah
               </Button>
               <Button
+                variant={editMode === "fillet" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("fillet")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "fillet" && "bg-foreground text-background")}
+                title="Bulatkan (fillet) sudut pada titik"
+              >
+                <Spline className="mr-1 h-3.5 w-3.5" /> Fillet
+              </Button>
+              <Button
                 variant={editMode === "delete" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setEditMode("delete")}
-                className={cn("h-8 px-2 text-[11px]", editMode === "delete" && "bg-destructive text-destructive-foreground")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "delete" && "bg-destructive text-destructive-foreground")}
                 title="Hapus titik atau edge pada level aktif"
               >
                 <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus
               </Button>
             </div>
+            {editMode === "fillet" && (
+              <div className="flex items-center gap-2 rounded-md border border-border bg-background/40 px-2 py-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Radius
+                </span>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0.05"
+                  value={filletRadiusM}
+                  onChange={(e) => setFilletRadiusM(Math.max(0.05, parseFloat(e.target.value) || 0.05))}
+                  className="h-7 w-20 text-xs"
+                />
+                <span className="text-[11px] text-muted-foreground">m</span>
+              </div>
+            )}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {editMode === "move"
                 ? "Tarik titik (vertex) pada level aktif ke posisi baru. Titik terkunci tidak dapat digeser."
                 : editMode === "addPoint"
                   ? "Ketuk di sepanjang garis lurus pada level aktif untuk menambah titik baru."
-                  : "Ketuk titik untuk menghapusnya, atau ketuk edge (termasuk yang sudah tidak terhitung) untuk menghapus garis. Hanya berlaku pada level aktif."}
+                  : editMode === "fillet"
+                    ? "Ketuk titik pada sudut poligon untuk membulatkannya dengan radius di atas. Radius otomatis diperkecil bila sisi terlalu pendek."
+                    : "Ketuk titik untuk menghapusnya, atau ketuk edge (termasuk yang sudah tidak terhitung) untuk menghapus garis. Hanya berlaku pada level aktif."}
             </p>
           </div>
         )}
