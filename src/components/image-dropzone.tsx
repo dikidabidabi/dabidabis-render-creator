@@ -108,6 +108,7 @@ export function ImageDropzone({ label, hint, value, onChange, className, compres
         )}
       </div>
       <label
+        onClick={() => inputRef.current?.click()}
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -150,10 +151,12 @@ export function ImageDropzone({ label, hint, value, onChange, className, compres
           </div>
         )}
         <input
+          ref={inputRef}
           type="file"
           accept="image/*"
-          className="sr-only"
+          className="hidden"
           disabled={loading}
+          onClick={(e) => e.stopPropagation()}
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = "";
