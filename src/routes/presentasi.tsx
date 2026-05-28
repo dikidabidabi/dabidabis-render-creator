@@ -286,9 +286,10 @@ function PrintStyles() {
 
 // ---------- Sketch Box ----------
 function PresentasiBox({
-  sketch, open, onToggle,
-}: { sketch: Sketch; open: boolean; onToggle: () => void }) {
-  const slides = useMemo(() => buildSlides(sketch), [sketch]);
+  sketch, narasi, open, onToggle,
+}: { sketch: Sketch; narasi: NarasiItem[]; open: boolean; onToggle: () => void }) {
+  const slides = useMemo(() => buildSlides(sketch, narasi), [sketch, narasi]);
+
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
