@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Upload, X, ImageIcon } from "lucide-react";
+import { useState } from "react";
+import { Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -11,17 +11,32 @@ type Props = {
 };
 
 export function ImageDropzone({ label, hint, value, onChange, className }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFile = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 8 * 1024 * 1024) {
-      alert("Maksimal 8MB");
+    setError(null);
+    if (!file.type.startsWith("image/")) {
+      setError("Berkas harus berupa gambar");
       return;
     }
+    if (file.size > 8 * 1024 * 1024) {
+      setError("Maksimal 8MB");
+      return;
+    }
+    setLoading(true);
     const reader = new FileReader();
-    reader.onload = (e) => onChange(e.target?.result as string);
+    reader.onload = (e) => {
+      const result = typeof e.target?.result === "string" ? e.target.result : null;
+      if (result) onChange(result);
+      else setError("Gambar tidak dapat dibaca");
+      setLoading(false);
+    };
+    reader.onerror = () => {
+      setError("Gagal membaca gambar");
+      setLoading(false);
+    };
     reader.readAsDataURL(file);
   };
 
