@@ -2430,9 +2430,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       if (editMode === "fillet") {
-        const v = findVertexAt(raw, tol);
-        if (!v) return;
-        filletVertexAt(keyOf(v));
+        const hit = findVertexTargetAt(raw, tol);
+        if (!hit) return;
+        filletVertexAt(hit.target, hit.coord);
         return;
       }
       const hit = findVertexTargetAt(raw, tol);
