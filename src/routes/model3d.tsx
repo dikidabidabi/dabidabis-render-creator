@@ -169,29 +169,32 @@ function ExtrudedFloor({
   mPerPx: number;
   baseY: number;
   height: number;
+  color: string;
+  highlighted: boolean;
+}) {
+  const geometry = useMemo(() => {
+    if (points.length < 3 || height <= 0) return null;
+    const shape = new THREE.Shape();
     points.forEach((p, i) => {
       const x = (p.x - origin.x) * mPerPx;
-      // Sketsa: +y ke bawah. Untuk cocok dengan tampilan 3D top-down
-      // (sumbu +Z di scene = arah selatan/bawah pada sketsa), pakai +y apa adanya
-      // pada shape lalu rotateX(+π/2) di bawah agar tidak ter-mirror.
+      // Sketsa: +x kanan, +y bawah. Pakai +y apa adanya pada shape lalu
+      // rotateX(+π/2) agar +y(sketsa) menjadi +Z(scene) — tidak ter-mirror.
       const y = (p.y - origin.y) * mPerPx;
       if (i === 0) shape.moveTo(x, y);
       else shape.lineTo(x, y);
-    });
-
-      const x = (p.x - origin.x) * mPerPx;
-      const z = (p.y - origin.y) * mPerPx; // flip handled by rotation below
-      if (i === 0) shape.moveTo(x, z);
-      else shape.lineTo(x, z);
     });
     shape.closePath();
     const geo = new THREE.ExtrudeGeometry(shape, {
       depth: height,
       bevelEnabled: false,
     });
-    // Shape lies in XY plane, extruded along +Z. Rotate so extrusion becomes +Y (up).
-    geo.rotateX(-Math.PI / 2);
+    // rotateX(+π/2): shape (x,y) → world (x, 0, y); ekstrusi +z → world -y.
+    // Lalu balik tanda baseY dengan scale.y = -1 supaya bangunan naik ke atas.
+    geo.rotateX(Math.PI / 2);
+    geo.scale(1, -1, 1);
     return geo;
+  }, [points, origin.x, origin.y, mPerPx, height]);
+
   }, [points, origin.x, origin.y, mPerPx, height]);
 
   if (!geometry) return null;
