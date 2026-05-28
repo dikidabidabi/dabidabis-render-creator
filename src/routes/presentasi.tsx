@@ -621,7 +621,7 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -632,6 +632,19 @@ function buildSlides(sk: Sketch): Slide[] {
   out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
   out.push({ kind: "site", id: "site-fasilitas", title: "Fasilitas Sekitar & Radius Pencapaian", sketch: sk, bounds, view: "fasilitas" });
   out.push({ kind: "site", id: "site-lingkungan", title: "Blue–Green & Lalu Lintas", sketch: sk, bounds, view: "lingkungan" });
+  // Slide Konsep — satu per narasi (minimal 1, sesuai default di halaman Narasi).
+  const narasiList = narasi.length > 0 ? narasi : [{ id: `default-${sk.id}`, text: "", images: [null, null, null, null] }];
+  narasiList.forEach((n, i) => {
+    out.push({
+      kind: "konsep",
+      id: `konsep-${n.id}`,
+      title: narasiList.length > 1 ? `Konsep ${i + 1}` : "Konsep",
+      sketch: sk,
+      narasi: n,
+      index: i,
+      total: narasiList.length,
+    });
+  });
   for (const lv of levels) {
     out.push({
       kind: "level",
