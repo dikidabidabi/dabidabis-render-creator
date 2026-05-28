@@ -1248,7 +1248,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   >(null);
   const [draggingHandle, setDraggingHandle] = useState<null | "c1" | "c2">(null);
   // Editing an existing vertex (drag to move). Tracks current key as it moves.
-  const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
+  type EditTarget =
+    | { kind: "layer"; layerId: string; idx: number }
+    | { kind: "line"; lineIdx: number; end: "a" | "b" };
+  const [editDrag, setEditDrag] = useState<{ key: string; target: EditTarget } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
   const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
