@@ -878,6 +878,8 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
       {slide.kind === "matahari" && <MatahariBody slide={slide} />}
+      {slide.kind === "shadow-seasonal" && <ShadowSeasonalBody slide={slide} />}
+      {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
@@ -885,7 +887,12 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
   );
-  const fixedLayout = slide.kind === "level" || slide.kind === "matahari" || slide.kind === "konsep";
+  const fixedLayout =
+    slide.kind === "level" ||
+    slide.kind === "matahari" ||
+    slide.kind === "konsep" ||
+    slide.kind === "shadow-seasonal" ||
+    slide.kind === "facade-zoning";
   // Inner padded "safe area" inside the 1414x1000 canvas, 2.5cm inset.
   return (
     <div
