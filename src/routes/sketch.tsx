@@ -2442,7 +2442,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       pushHistory();
-      setEditDrag({ key: k, target: hit.target });
+      setEditDrag({ key: k, coord: hit.coord, target: hit.target });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
