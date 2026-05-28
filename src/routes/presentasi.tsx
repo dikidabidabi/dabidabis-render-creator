@@ -648,7 +648,8 @@ function computeStats(sk: Sketch): Stats {
   const baseHeight =
     levels.length > 1 ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl)) : 0;
   const typicalExtra = levels.reduce(
-    (s, lv) => s + (Math.max(1, Math.round(lv.typicalCount ?? 1)) - 1) * TYPICAL_FLOOR_H,
+  const typicalExtra = levels.reduce(
+    (s, lv) => s + (Math.max(1, Math.round(lv.typicalCount ?? 1)) - 1) * tipH(lv),
     0,
   );
   const ketinggianM = baseHeight + typicalExtra;
