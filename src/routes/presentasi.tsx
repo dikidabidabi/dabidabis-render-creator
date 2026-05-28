@@ -947,6 +947,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
     : [];
   const sw = Math.max(w, h);
 
+  // Convex hull of all non-lahan room vertices for outer dimensions
+  const roomLayers = layers.filter((l) => !isLahan(l.name));
+  const allPts: Point[] = roomLayers.flatMap((l) => l.points);
+  const hull = convexHull(allPts);
+  const dimOffsetPx = sw * 0.018;
+
   return (
     <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
@@ -955,15 +961,16 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           preserveAspectRatio="xMidYMid meet"
           style={{ width: "100%", height: "100%", display: "block" }}
         >
-          {isGround && lahanAll.map((l) => (
+          {lahanAll.map((l) => (
             <g key={`lhn-${l.id}`}>
               <polygon
                 points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill="rgba(0,0,0,0.04)"
+                fill={isGround ? "rgba(0,0,0,0.04)" : "none"}
                 stroke="rgba(0,0,0,0.55)"
                 strokeWidth={sw * 0.0015}
+                strokeDasharray={isGround ? undefined : `${sw * 0.008} ${sw * 0.005}`}
               />
-              {l.points.map((_, i) => {
+              {isGround && l.points.map((_, i) => {
                 const seg = inwardOffsetSegPx(l.points, i, getLayerGsbM(l, i) * pxPerM);
                 if (getLayerGsbM(l, i) <= 0) return null;
                 return (
