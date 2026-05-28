@@ -1248,7 +1248,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   >(null);
   const [draggingHandle, setDraggingHandle] = useState<null | "c1" | "c2">(null);
   // Editing an existing vertex (drag to move). Tracks current key as it moves.
-  const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
+  type EditTarget =
+    | { kind: "layer"; layerId: string; idx: number }
+    | { kind: "line"; lineIdx: number; end: "a" | "b" };
+  const [editDrag, setEditDrag] = useState<{ key: string; coord: Point; target: EditTarget } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
   const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
@@ -2044,6 +2047,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, activeLvlId],
   );
 
+  // Pick a vertex while remembering which polygon (layer) or free line it
+  // belongs to, so subsequent edits affect only that occurrence — vertices
+  // from other polygons or other levels that share the same coordinate are
+  // left untouched.
+  const findVertexTargetAt = useCallback(
+    (p: Point, tol: number): { coord: Point; target: EditTarget } | null => {
+      let best: { coord: Point; target: EditTarget } | null = null;
+      let bestD = tol;
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach((pt, i) => {
+          const d = dist(p, pt);
+          if (d < bestD) {
+            bestD = d;
+            best = { coord: pt, target: { kind: "layer", layerId: l.id, idx: i } };
+          }
+        });
+      });
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        const da = dist(p, ln.a);
+        if (da < bestD) {
+          bestD = da;
+          best = { coord: ln.a, target: { kind: "line", lineIdx: i, end: "a" } };
+        }
+        const db = dist(p, ln.b);
+        if (db < bestD) {
+          bestD = db;
+          best = { coord: ln.b, target: { kind: "line", lineIdx: i, end: "b" } };
+        }
+      });
+      return best;
+    },
+    [lines, layers, activeLvlId],
+  );
+
   const lockedVertexKeys = useMemo(() => {
     const s = new Set<string>();
     layers.forEach((l) => {
@@ -2053,35 +2092,66 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return s;
   }, [layers]);
 
-  // Move every vertex matching origKey to newPos. Returns next state.
-  const moveVertexBy = useCallback(
-    (origKey: string, newPos: Point) => {
-      const nextLines = lines.map((ln) => {
-        let next = ln;
-        if (keyOf(ln.a) === origKey) next = { ...next, a: newPos };
-        if (keyOf(ln.b) === origKey) next = { ...next, b: newPos };
-        // Bezier handles: shift relative to their endpoint move
-        if (next !== ln && next.kind === "bezier") {
-          if (keyOf(ln.a) === origKey && ln.c1) {
+  // Move a single targeted vertex to newPos. For a layer target, only that
+  // polygon's vertex at the recorded index is moved; lines on the same level
+  // are updated only when their endpoint matches the old coordinate AND the
+  // other endpoint coincides with an adjacent vertex of the target polygon
+  // (so it can be considered an edge of THAT polygon). Lines on other levels
+  // and vertices on other polygons that happen to share the same coordinate
+  // are left untouched.
+  const moveVertexTarget = useCallback(
+    (target: EditTarget, oldPos: Point, newPos: Point) => {
+      const oldKey = keyOf(oldPos);
+      let nextLayers = layers;
+      let layerLevelId: string | null | undefined = null;
+      const neighborKeys = new Set<string>();
+      if (target.kind === "layer") {
+        nextLayers = layers.map((l) => {
+          if (l.id !== target.layerId) return l;
+          const n = l.points.length;
+          if (target.idx < 0 || target.idx >= n) return l;
+          const prev = l.points[(target.idx - 1 + n) % n];
+          const nxt = l.points[(target.idx + 1) % n];
+          neighborKeys.add(keyOf(prev));
+          neighborKeys.add(keyOf(nxt));
+          layerLevelId = l.levelId;
+          const pts = l.points.slice();
+          pts[target.idx] = newPos;
+          return { ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) };
+        });
+      }
+      const nextLines = lines.map((ln, i) => {
+        if (target.kind === "line") {
+          if (i !== target.lineIdx) return ln;
+          if (target.end === "a") {
+            let next: Line = { ...ln, a: newPos };
+            if (ln.kind === "bezier" && ln.c1) {
+              next = { ...next, c1: { x: ln.c1.x + (newPos.x - ln.a.x), y: ln.c1.y + (newPos.y - ln.a.y) } };
+            }
+            return next;
+          }
+          let next: Line = { ...ln, b: newPos };
+          if (ln.kind === "bezier" && ln.c2) {
+            next = { ...next, c2: { x: ln.c2.x + (newPos.x - ln.b.x), y: ln.c2.y + (newPos.y - ln.b.y) } };
+          }
+          return next;
+        }
+        // layer target: only same-level lines that form an edge of the target polygon
+        if (layerLevelId && ln.levelId !== layerLevelId) return ln;
+        let next: Line = ln;
+        if (keyOf(ln.a) === oldKey && neighborKeys.has(keyOf(ln.b))) {
+          next = { ...next, a: newPos };
+          if (next.kind === "bezier" && ln.c1) {
             next = { ...next, c1: { x: ln.c1.x + (newPos.x - ln.a.x), y: ln.c1.y + (newPos.y - ln.a.y) } };
           }
-          if (keyOf(ln.b) === origKey && ln.c2) {
+        }
+        if (keyOf(ln.b) === oldKey && neighborKeys.has(keyOf(ln.a))) {
+          next = { ...next, b: newPos };
+          if (next.kind === "bezier" && ln.c2) {
             next = { ...next, c2: { x: ln.c2.x + (newPos.x - ln.b.x), y: ln.c2.y + (newPos.y - ln.b.y) } };
           }
         }
         return next;
-      });
-      const nextLayers = layers.map((l) => {
-        let changed = false;
-        const pts = l.points.map((pt) => {
-          if (keyOf(pt) === origKey) {
-            changed = true;
-            return newPos;
-          }
-          return pt;
-        });
-        if (!changed) return l;
-        return { ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) };
       });
       onChange({ lines: nextLines, layers: nextLayers });
     },
@@ -2195,17 +2265,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Fillet a vertex: replace it with a smooth arc of `filletRadiusM` between
   // the two adjacent polygon edges. Approximated as N short line segments.
   const filletVertexAt = useCallback(
-    (key: string) => {
+    (target: EditTarget, coord: Point) => {
+      const key = keyOf(coord);
       if (lockedVertexKeys.has(key)) { toast.error("Titik terkunci"); return; }
-      let target: { layer: Layer; idx: number } | null = null;
-      for (const l of layers) {
-        if (activeLvlId && l.levelId !== activeLvlId) continue;
-        const idx = l.points.findIndex((p) => keyOf(p) === key);
-        if (idx >= 0 && l.points.length >= 3) { target = { layer: l, idx }; break; }
-      }
-      if (!target) { toast.error("Pilih titik pada poligon"); return; }
-      const { layer, idx } = target;
+      if (target.kind !== "layer") { toast.error("Pilih titik pada poligon"); return; }
+      const layer = layers.find((l) => l.id === target.layerId);
+      if (!layer || layer.points.length < 3) { toast.error("Pilih titik pada poligon"); return; }
+      const idx = target.idx;
       const n = layer.points.length;
+      if (idx < 0 || idx >= n) return;
       const V = layer.points[idx];
       const A = layer.points[(idx - 1 + n) % n];
       const B = layer.points[(idx + 1) % n];
@@ -2245,32 +2313,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const newPts: Point[] = [P1, ...arcPts, P2];
       pushHistory();
       const ka = keyOf(A), kb = keyOf(B);
+      // Only modify the target polygon — other polygons sharing this vertex
+      // (even on the same level) are left untouched.
       const nextLayers = layers.map((l) => {
-        const i2 = l.points.findIndex((p) => keyOf(p) === key);
-        if (i2 < 0) return l;
-        const m = l.points.length;
-        const prev = l.points[(i2 - 1 + m) % m];
-        const next = l.points[(i2 + 1) % m];
-        const kp = keyOf(prev), kn = keyOf(next);
-        const forward = kp === ka && kn === kb;
-        const reverse = kp === kb && kn === ka;
-        if (!forward && !reverse) return l;
-        const seq = reverse ? [...newPts].reverse() : newPts;
-        const out = [...l.points.slice(0, i2), ...seq, ...l.points.slice(i2 + 1)];
+        if (l.id !== target.layerId) return l;
+        const out = [...l.points.slice(0, idx), ...newPts, ...l.points.slice(idx + 1)];
         return { ...l, points: out, areaM2: polygonAreaPx(out) / (pxPerMeter * pxPerMeter) };
       });
-      const midP: Point = { x: (P1.x + P2.x) / 2, y: (P1.y + P2.y) / 2 };
-      const snapEnd = (end: Point, other: Point): Point => {
-        if (keyOf(end) !== key) return end;
-        const ko = keyOf(other);
-        if (ko === ka) return P1;
-        if (ko === kb) return P2;
-        return midP;
-      };
+      // Snap only same-level lines that form an edge of THIS polygon
+      // (endpoint equals the filleted vertex AND other endpoint equals an
+      // adjacent vertex of this polygon).
+      const layerLevel = layer.levelId;
       let nextLines = lines.map((ln) => {
-        const na = snapEnd(ln.a, ln.b);
-        const nb = snapEnd(ln.b, ln.a);
-        if (na === ln.a && nb === ln.b) return ln;
+        if (layerLevel && ln.levelId !== layerLevel) return ln;
+        const aIsV = keyOf(ln.a) === key;
+        const bIsV = keyOf(ln.b) === key;
+        if (!aIsV && !bIsV) return ln;
+        let na = ln.a, nb = ln.b;
+        if (aIsV) {
+          const ko = keyOf(ln.b);
+          if (ko === ka) na = P1;
+          else if (ko === kb) na = P2;
+          else return ln;
+        }
+        if (bIsV) {
+          const ko = keyOf(ln.a);
+          if (ko === ka) nb = P1;
+          else if (ko === kb) nb = P2;
+          else return ln;
+        }
         return { ...ln, a: na, b: nb };
       });
       // Tambahkan garis hitam untuk setiap segmen lengkung fillet
@@ -2286,7 +2357,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange({ layers: nextLayers, lines: nextLines });
       toast.success("Titik difillet");
     },
-    [layers, lines, activeLvlId, lockedVertexKeys, pxPerMeter, filletRadiusM, filletSegments, pushHistory, onChange],
+    [layers, lines, lockedVertexKeys, pxPerMeter, filletRadiusM, filletSegments, pushHistory, onChange],
   );
 
 
@@ -2359,20 +2430,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       if (editMode === "fillet") {
-        const v = findVertexAt(raw, tol);
-        if (!v) return;
-        filletVertexAt(keyOf(v));
+        const hit = findVertexTargetAt(raw, tol);
+        if (!hit) return;
+        filletVertexAt(hit.target, hit.coord);
         return;
       }
-      const v = findVertexAt(raw, tol);
-      if (!v) return;
-      const k = keyOf(v);
+      const hit = findVertexTargetAt(raw, tol);
+      if (!hit) return;
+      const k = keyOf(hit.coord);
       if (lockedVertexKeys.has(k)) {
         toast.error("Titik terkunci");
         return;
       }
       pushHistory();
-      setEditDrag({ key: k });
+      setEditDrag({ key: k, coord: hit.coord, target: hit.target });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
@@ -2428,8 +2499,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
     if (editDrag) {
       const newPos = getWorldPos(e);
-      moveVertexBy(editDrag.key, newPos);
-      setEditDrag({ key: keyOf(newPos) });
+      moveVertexTarget(editDrag.target, editDrag.coord, newPos);
+      setEditDrag({ key: keyOf(newPos), coord: newPos, target: editDrag.target });
       setEditHover(newPos);
       return;
     }
