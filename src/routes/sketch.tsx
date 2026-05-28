@@ -2348,6 +2348,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         deleteEdgeAt(raw, tolPx);
         return;
       }
+      if (editMode === "fillet") {
+        const v = findVertexAt(raw, tol);
+        if (!v) return;
+        filletVertexAt(keyOf(v));
+        return;
+      }
       const v = findVertexAt(raw, tol);
       if (!v) return;
       const k = keyOf(v);
