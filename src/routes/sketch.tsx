@@ -2092,35 +2092,66 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return s;
   }, [layers]);
 
-  // Move every vertex matching origKey to newPos. Returns next state.
-  const moveVertexBy = useCallback(
-    (origKey: string, newPos: Point) => {
-      const nextLines = lines.map((ln) => {
-        let next = ln;
-        if (keyOf(ln.a) === origKey) next = { ...next, a: newPos };
-        if (keyOf(ln.b) === origKey) next = { ...next, b: newPos };
-        // Bezier handles: shift relative to their endpoint move
-        if (next !== ln && next.kind === "bezier") {
-          if (keyOf(ln.a) === origKey && ln.c1) {
+  // Move a single targeted vertex to newPos. For a layer target, only that
+  // polygon's vertex at the recorded index is moved; lines on the same level
+  // are updated only when their endpoint matches the old coordinate AND the
+  // other endpoint coincides with an adjacent vertex of the target polygon
+  // (so it can be considered an edge of THAT polygon). Lines on other levels
+  // and vertices on other polygons that happen to share the same coordinate
+  // are left untouched.
+  const moveVertexTarget = useCallback(
+    (target: EditTarget, oldPos: Point, newPos: Point) => {
+      const oldKey = keyOf(oldPos);
+      let nextLayers = layers;
+      let layerLevelId: string | null = null;
+      const neighborKeys = new Set<string>();
+      if (target.kind === "layer") {
+        nextLayers = layers.map((l) => {
+          if (l.id !== target.layerId) return l;
+          const n = l.points.length;
+          if (target.idx < 0 || target.idx >= n) return l;
+          const prev = l.points[(target.idx - 1 + n) % n];
+          const nxt = l.points[(target.idx + 1) % n];
+          neighborKeys.add(keyOf(prev));
+          neighborKeys.add(keyOf(nxt));
+          layerLevelId = l.levelId;
+          const pts = l.points.slice();
+          pts[target.idx] = newPos;
+          return { ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) };
+        });
+      }
+      const nextLines = lines.map((ln, i) => {
+        if (target.kind === "line") {
+          if (i !== target.lineIdx) return ln;
+          if (target.end === "a") {
+            let next: Line = { ...ln, a: newPos };
+            if (ln.kind === "bezier" && ln.c1) {
+              next = { ...next, c1: { x: ln.c1.x + (newPos.x - ln.a.x), y: ln.c1.y + (newPos.y - ln.a.y) } };
+            }
+            return next;
+          }
+          let next: Line = { ...ln, b: newPos };
+          if (ln.kind === "bezier" && ln.c2) {
+            next = { ...next, c2: { x: ln.c2.x + (newPos.x - ln.b.x), y: ln.c2.y + (newPos.y - ln.b.y) } };
+          }
+          return next;
+        }
+        // layer target: only same-level lines that form an edge of the target polygon
+        if (layerLevelId && ln.levelId !== layerLevelId) return ln;
+        let next: Line = ln;
+        if (keyOf(ln.a) === oldKey && neighborKeys.has(keyOf(ln.b))) {
+          next = { ...next, a: newPos };
+          if (next.kind === "bezier" && ln.c1) {
             next = { ...next, c1: { x: ln.c1.x + (newPos.x - ln.a.x), y: ln.c1.y + (newPos.y - ln.a.y) } };
           }
-          if (keyOf(ln.b) === origKey && ln.c2) {
+        }
+        if (keyOf(ln.b) === oldKey && neighborKeys.has(keyOf(ln.a))) {
+          next = { ...next, b: newPos };
+          if (next.kind === "bezier" && ln.c2) {
             next = { ...next, c2: { x: ln.c2.x + (newPos.x - ln.b.x), y: ln.c2.y + (newPos.y - ln.b.y) } };
           }
         }
         return next;
-      });
-      const nextLayers = layers.map((l) => {
-        let changed = false;
-        const pts = l.points.map((pt) => {
-          if (keyOf(pt) === origKey) {
-            changed = true;
-            return newPos;
-          }
-          return pt;
-        });
-        if (!changed) return l;
-        return { ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) };
       });
       onChange({ lines: nextLines, layers: nextLayers });
     },
