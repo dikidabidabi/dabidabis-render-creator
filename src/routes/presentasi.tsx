@@ -1875,6 +1875,27 @@ function inwardOffsetSegPx(pts: Point[], i: number, distPx: number): { a: Point;
   };
 }
 
+function convexHull(pts: Point[]): Point[] {
+  const ps = pts.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (ps.length < 3) return ps.slice();
+  const sorted = [...ps].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Point, a: Point, b: Point) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: Point[] = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: Point[] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+
+
 function linePath(ln: Line): string {
   const kind = ln.kind ?? "straight";
   if (kind === "straight") return `M ${ln.a.x} ${ln.a.y} L ${ln.b.x} ${ln.b.y}`;
