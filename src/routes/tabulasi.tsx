@@ -268,7 +268,7 @@ function computeStats(sk: Sketch): Stats {
   const klbRencanaM2 = ruang.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1) * mul(l), 0);
 
   const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, lv.typicalCount ?? 1), 0);
-  const typicalExtra = levels.reduce((s, lv) => s + (Math.max(1, lv.typicalCount ?? 1) - 1) * 3, 0);
+  const typicalExtra = levels.reduce((s, lv) => s + (Math.max(1, lv.typicalCount ?? 1) - 1) * (Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : 3), 0);
   const ketinggianM =
     (levels.length > 1
       ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl))
