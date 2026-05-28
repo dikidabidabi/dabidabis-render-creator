@@ -2265,17 +2265,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Fillet a vertex: replace it with a smooth arc of `filletRadiusM` between
   // the two adjacent polygon edges. Approximated as N short line segments.
   const filletVertexAt = useCallback(
-    (key: string) => {
+    (target: EditTarget, coord: Point) => {
+      const key = keyOf(coord);
       if (lockedVertexKeys.has(key)) { toast.error("Titik terkunci"); return; }
-      let target: { layer: Layer; idx: number } | null = null;
-      for (const l of layers) {
-        if (activeLvlId && l.levelId !== activeLvlId) continue;
-        const idx = l.points.findIndex((p) => keyOf(p) === key);
-        if (idx >= 0 && l.points.length >= 3) { target = { layer: l, idx }; break; }
-      }
-      if (!target) { toast.error("Pilih titik pada poligon"); return; }
-      const { layer, idx } = target;
+      if (target.kind !== "layer") { toast.error("Pilih titik pada poligon"); return; }
+      const layer = layers.find((l) => l.id === target.layerId);
+      if (!layer || layer.points.length < 3) { toast.error("Pilih titik pada poligon"); return; }
+      const idx = target.idx;
       const n = layer.points.length;
+      if (idx < 0 || idx >= n) return;
       const V = layer.points[idx];
       const A = layer.points[(idx - 1 + n) % n];
       const B = layer.points[(idx + 1) % n];
@@ -2315,32 +2313,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const newPts: Point[] = [P1, ...arcPts, P2];
       pushHistory();
       const ka = keyOf(A), kb = keyOf(B);
+      // Only modify the target polygon — other polygons sharing this vertex
+      // (even on the same level) are left untouched.
       const nextLayers = layers.map((l) => {
-        const i2 = l.points.findIndex((p) => keyOf(p) === key);
-        if (i2 < 0) return l;
-        const m = l.points.length;
-        const prev = l.points[(i2 - 1 + m) % m];
-        const next = l.points[(i2 + 1) % m];
-        const kp = keyOf(prev), kn = keyOf(next);
-        const forward = kp === ka && kn === kb;
-        const reverse = kp === kb && kn === ka;
-        if (!forward && !reverse) return l;
-        const seq = reverse ? [...newPts].reverse() : newPts;
-        const out = [...l.points.slice(0, i2), ...seq, ...l.points.slice(i2 + 1)];
+        if (l.id !== target.layerId) return l;
+        const out = [...l.points.slice(0, idx), ...newPts, ...l.points.slice(idx + 1)];
         return { ...l, points: out, areaM2: polygonAreaPx(out) / (pxPerMeter * pxPerMeter) };
       });
-      const midP: Point = { x: (P1.x + P2.x) / 2, y: (P1.y + P2.y) / 2 };
-      const snapEnd = (end: Point, other: Point): Point => {
-        if (keyOf(end) !== key) return end;
-        const ko = keyOf(other);
-        if (ko === ka) return P1;
-        if (ko === kb) return P2;
-        return midP;
-      };
+      // Snap only same-level lines that form an edge of THIS polygon
+      // (endpoint equals the filleted vertex AND other endpoint equals an
+      // adjacent vertex of this polygon).
+      const layerLevel = layer.levelId;
       let nextLines = lines.map((ln) => {
-        const na = snapEnd(ln.a, ln.b);
-        const nb = snapEnd(ln.b, ln.a);
-        if (na === ln.a && nb === ln.b) return ln;
+        if (layerLevel && ln.levelId !== layerLevel) return ln;
+        const aIsV = keyOf(ln.a) === key;
+        const bIsV = keyOf(ln.b) === key;
+        if (!aIsV && !bIsV) return ln;
+        let na = ln.a, nb = ln.b;
+        if (aIsV) {
+          const ko = keyOf(ln.b);
+          if (ko === ka) na = P1;
+          else if (ko === kb) na = P2;
+          else return ln;
+        }
+        if (bIsV) {
+          const ko = keyOf(ln.a);
+          if (ko === ka) nb = P1;
+          else if (ko === kb) nb = P2;
+          else return ln;
+        }
         return { ...ln, a: na, b: nb };
       });
       // Tambahkan garis hitam untuk setiap segmen lengkung fillet
@@ -2356,7 +2357,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange({ layers: nextLayers, lines: nextLines });
       toast.success("Titik difillet");
     },
-    [layers, lines, activeLvlId, lockedVertexKeys, pxPerMeter, filletRadiusM, filletSegments, pushHistory, onChange],
+    [layers, lines, lockedVertexKeys, pxPerMeter, filletRadiusM, filletSegments, pushHistory, onChange],
   );
 
 
