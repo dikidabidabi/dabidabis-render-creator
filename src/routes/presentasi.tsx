@@ -95,25 +95,26 @@ function expandLevelsForView(levels: Level[]): ExpandedFloor[] {
   let shift = 0;
   const adjusted = sorted.map((lv) => {
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const h = tipH(lv);
     const base = lv.mdpl + shift;
-    shift += (k - 1) * TYPICAL_FLOOR_H;
-    return { lv, k, base };
+    shift += (k - 1) * h;
+    return { lv, k, base, h };
   });
   const out: ExpandedFloor[] = [];
   for (let i = 0; i < adjusted.length; i++) {
-    const { lv, k, base } = adjusted[i];
+    const { lv, k, base, h } = adjusted[i];
     const next = adjusted[i + 1];
     if (k === 1) {
-      const h = next ? Math.max(0.1, next.base - base) : 4;
-      out.push({ id: lv.id, sourceId: lv.id, name: lv.name, mdpl: base, height: h, typicalIndex: 0, typicalTotal: 1 });
+      const hh = next ? Math.max(0.1, next.base - base) : 4;
+      out.push({ id: lv.id, sourceId: lv.id, name: lv.name, mdpl: base, height: hh, typicalIndex: 0, typicalTotal: 1 });
     } else {
       for (let j = 0; j < k; j++) {
         out.push({
           id: `${lv.id}__t${j}`,
           sourceId: lv.id,
           name: lv.name,
-          mdpl: base + j * TYPICAL_FLOOR_H,
-          height: TYPICAL_FLOOR_H,
+          mdpl: base + j * h,
+          height: h,
           typicalIndex: j,
           typicalTotal: k,
         });
