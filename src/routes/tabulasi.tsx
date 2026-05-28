@@ -26,7 +26,7 @@ type Layer = {
   levelId?: string;
   coefficient?: number;
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Sketch = {
   id: string;
   title: string;
