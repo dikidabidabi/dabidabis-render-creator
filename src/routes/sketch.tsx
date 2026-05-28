@@ -1251,7 +1251,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   type EditTarget =
     | { kind: "layer"; layerId: string; idx: number }
     | { kind: "line"; lineIdx: number; end: "a" | "b" };
-  const [editDrag, setEditDrag] = useState<{ key: string; target: EditTarget } | null>(null);
+  const [editDrag, setEditDrag] = useState<{ key: string; coord: Point; target: EditTarget } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
   const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
