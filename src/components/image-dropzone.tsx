@@ -54,8 +54,7 @@ export function ImageDropzone({ label, hint, value, onChange, className }: Props
           </button>
         )}
       </div>
-      <div
-        onClick={() => inputRef.current?.click()}
+      <label
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -70,6 +69,7 @@ export function ImageDropzone({ label, hint, value, onChange, className }: Props
         className={cn(
           "group relative flex aspect-[4/3] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border/60 bg-surface/40 transition-all hover:border-ember/60 hover:bg-surface/60",
           dragOver && "border-ember bg-ember/5",
+          loading && "pointer-events-none opacity-70",
         )}
       >
         {value ? (
@@ -87,21 +87,28 @@ export function ImageDropzone({ label, hint, value, onChange, className }: Props
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ember/10 text-ember">
               <Upload className="h-5 w-5" />
             </div>
-            <p className="text-sm font-medium">Klik atau drop gambar</p>
+            <p className="text-sm font-medium">{loading ? "Mengunggah…" : "Klik atau drop gambar"}</p>
             <p className="text-xs text-muted-foreground">{hint}</p>
           </div>
         )}
+        {loading && value && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-sm font-medium backdrop-blur-sm">
+            Mengunggah…
+          </div>
+        )}
         <input
-          ref={inputRef}
           type="file"
           accept="image/*"
-          className="hidden"
+          className="sr-only"
+          disabled={loading}
           onChange={(e) => {
             const f = e.target.files?.[0];
+            e.target.value = "";
             if (f) handleFile(f);
           }}
         />
-      </div>
+      </label>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
