@@ -2267,12 +2267,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         if (ko === kb) return P2;
         return midP;
       };
-      const nextLines = lines.map((ln) => {
+      let nextLines = lines.map((ln) => {
         const na = snapEnd(ln.a, ln.b);
         const nb = snapEnd(ln.b, ln.a);
         if (na === ln.a && nb === ln.b) return ln;
         return { ...ln, a: na, b: nb };
       });
+      // Tambahkan garis hitam untuk setiap segmen lengkung fillet
+      const arcLinePts = [P1, ...arcPts, P2];
+      for (let i = 0; i < arcLinePts.length - 1; i++) {
+        nextLines.push({
+          a: arcLinePts[i],
+          b: arcLinePts[i + 1],
+          kind: "straight" as const,
+          levelId: layer.levelId,
+        });
+      }
       onChange({ layers: nextLayers, lines: nextLines });
       toast.success("Titik difillet");
     },
