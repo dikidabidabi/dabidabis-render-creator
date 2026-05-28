@@ -3466,6 +3466,7 @@ function LevelsPanel({
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
+  onDuplicateLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
   onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
   lines: Line[];
