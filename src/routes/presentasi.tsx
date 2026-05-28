@@ -52,6 +52,37 @@ type StoreShape = { sketches: Sketch[]; openId: string | null };
 
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const COST_KEY = "dabidabis_cost_v1";
+const NARASI_KEY = "dabidabis_narasi_v1";
+
+// ---------- Narasi store (sinkron dengan halaman /narasi) ----------
+type NarasiItem = { id: string; text: string; images: (string | null)[] };
+type NarasiStore = Record<string, NarasiItem[]>;
+function loadNarasiStore(): NarasiStore {
+  try {
+    const raw = localStorage.getItem(NARASI_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== "object") return {};
+    const out: NarasiStore = {};
+    for (const k of Object.keys(v)) {
+      const arr = (v as any)[k];
+      if (!Array.isArray(arr)) continue;
+      out[k] = arr.map((n: any) => ({
+        id: String(n?.id ?? `${k}_${Math.random().toString(36).slice(2, 7)}`),
+        text: typeof n?.text === "string" ? n.text : "",
+        images: Array.isArray(n?.images)
+          ? [0, 1, 2, 3].map((i) => (typeof n.images[i] === "string" ? n.images[i] : null))
+          : [null, null, null, null],
+      }));
+    }
+    return out;
+  } catch { return {}; }
+}
+function narasiForSketch(store: NarasiStore, sketchId: string): NarasiItem[] {
+  const arr = store[sketchId];
+  if (arr && arr.length > 0) return arr;
+  return [{ id: `default-${sketchId}`, text: "", images: [null, null, null, null] }];
+}
 
 // A3 landscape: 420 × 297 mm. Internal slide canvas in px (proportional, 1mm ≈ 3.3674px).
 const A3_W = 1414;
@@ -145,21 +176,31 @@ function PresentasiPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [narasiStore, setNarasiStore] = useState<NarasiStore>({});
   const lastRawRef = useRef<string | null>(null);
+  const lastNarasiRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw === lastRawRef.current) return;
-      lastRawRef.current = raw;
-      if (!raw) { setSketches([]); setOpenId(null); return; }
-      const s = JSON.parse(raw) as StoreShape;
-      if (s && Array.isArray(s.sketches)) {
-        setSketches(s.sketches as Sketch[]);
-        setOpenId((prev) => {
-          if (prev && s.sketches.some((x) => x.id === prev)) return prev;
-          return s.openId ?? s.sketches[0]?.id ?? null;
-        });
+      if (raw !== lastRawRef.current) {
+        lastRawRef.current = raw;
+        if (!raw) { setSketches([]); setOpenId(null); }
+        else {
+          const s = JSON.parse(raw) as StoreShape;
+          if (s && Array.isArray(s.sketches)) {
+            setSketches(s.sketches as Sketch[]);
+            setOpenId((prev) => {
+              if (prev && s.sketches.some((x) => x.id === prev)) return prev;
+              return s.openId ?? s.sketches[0]?.id ?? null;
+            });
+          }
+        }
+      }
+      const nraw = localStorage.getItem(NARASI_KEY);
+      if (nraw !== lastNarasiRawRef.current) {
+        lastNarasiRawRef.current = nraw;
+        setNarasiStore(loadNarasiStore());
       }
     } catch { /* ignore */ }
   };
@@ -167,7 +208,9 @@ function PresentasiPage() {
   useEffect(() => {
     load();
     setLoaded(true);
-    const onStorage = (e: StorageEvent) => { if (e.key === STORAGE_KEY) load(); };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY || e.key === NARASI_KEY) load();
+    };
     const onVis = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("storage", onStorage);
     document.addEventListener("visibilitychange", onVis);
@@ -180,6 +223,7 @@ function PresentasiPage() {
       window.clearInterval(iv);
     };
   }, []);
+
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -204,12 +248,14 @@ function PresentasiPage() {
             <PresentasiBox
               key={sk.id}
               sketch={sk}
+              narasi={narasiForSketch(narasiStore, sk.id)}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
             />
           ))}
         </div>
       )}
+
     </div>
   );
 }
@@ -240,9 +286,10 @@ function PrintStyles() {
 
 // ---------- Sketch Box ----------
 function PresentasiBox({
-  sketch, open, onToggle,
-}: { sketch: Sketch; open: boolean; onToggle: () => void }) {
-  const slides = useMemo(() => buildSlides(sketch), [sketch]);
+  sketch, narasi, open, onToggle,
+}: { sketch: Sketch; narasi: NarasiItem[]; open: boolean; onToggle: () => void }) {
+  const slides = useMemo(() => buildSlides(sketch, narasi), [sketch, narasi]);
+
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -548,6 +595,7 @@ type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
 type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
+  | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
@@ -573,7 +621,7 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -584,6 +632,19 @@ function buildSlides(sk: Sketch): Slide[] {
   out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
   out.push({ kind: "site", id: "site-fasilitas", title: "Fasilitas Sekitar & Radius Pencapaian", sketch: sk, bounds, view: "fasilitas" });
   out.push({ kind: "site", id: "site-lingkungan", title: "Blue–Green & Lalu Lintas", sketch: sk, bounds, view: "lingkungan" });
+  // Slide Konsep — satu per narasi (minimal 1, sesuai default di halaman Narasi).
+  const narasiList = narasi.length > 0 ? narasi : [{ id: `default-${sk.id}`, text: "", images: [null, null, null, null] }];
+  narasiList.forEach((n, i) => {
+    out.push({
+      kind: "konsep",
+      id: `konsep-${n.id}`,
+      title: narasiList.length > 1 ? `Konsep ${i + 1}` : "Konsep",
+      sketch: sk,
+      narasi: n,
+      index: i,
+      total: narasiList.length,
+    });
+  });
   for (const lv of levels) {
     out.push({
       kind: "level",
@@ -806,6 +867,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
     <>
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
+      {slide.kind === "konsep" && <KonsepBody slide={slide} />}
       {slide.kind === "matahari" && <MatahariBody slide={slide} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
@@ -814,7 +876,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
   );
-  const fixedLayout = slide.kind === "level" || slide.kind === "matahari";
+  const fixedLayout = slide.kind === "level" || slide.kind === "matahari" || slide.kind === "konsep";
   // Inner padded "safe area" inside the 1414x1000 canvas, 2.5cm inset.
   return (
     <div
@@ -855,6 +917,7 @@ function SlideHeader({ slide }: { slide: Slide }) {
         : "Analisa · Lingkungan"
       )
     : slide.kind === "matahari" ? "Analisa · Matahari"
+    : slide.kind === "konsep" ? "Konsep · Narasi"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
@@ -1667,6 +1730,94 @@ function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: num
 }
 
 // ---- Sun analysis body ----
+function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
+  const imgs = slide.narasi.images.filter((s): s is string => typeof s === "string" && s.length > 0);
+  const n = imgs.length;
+  // Grid template: 1=>1col, 2=>2col, 3=>3col, 4=>2x2
+  const cols = n <= 1 ? 1 : n === 2 ? 2 : n === 3 ? 3 : 2;
+  const rows = n <= 3 ? 1 : 2;
+  const gap = 18;
+  const text = slide.narasi.text.trim();
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 22 }}>
+      {/* Tabel Narasi — gagasan utama (lanskap) */}
+      <div
+        style={{
+          border: "1px solid #111",
+          borderRadius: 6,
+          padding: "18px 22px",
+          background: "#fafafa",
+          minHeight: 160,
+        }}
+      >
+        <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
+          Gagasan Utama · Narasi {slide.index + 1}
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-display, Sora, sans-serif)",
+            fontSize: 26,
+            lineHeight: 1.35,
+            color: text ? "#0a0a0a" : "#bbb",
+            fontWeight: 500,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {text || "Tulis gagasan utama narasi di halaman Narasi."}
+        </div>
+      </div>
+      {/* Grid gambar */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "grid",
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
+          gap,
+        }}
+      >
+        {n === 0 ? (
+          <div
+            style={{
+              border: "1px dashed #bbb",
+              borderRadius: 6,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#999",
+              fontSize: 16,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            Unggah gambar di halaman Narasi
+          </div>
+        ) : (
+          imgs.map((src, i) => (
+            <div
+              key={i}
+              style={{
+                border: "1px solid #e5e5e5",
+                borderRadius: 6,
+                overflow: "hidden",
+                background: "#f5f5f5",
+              }}
+            >
+              <img
+                src={src}
+                alt={`Konsep ${slide.index + 1} gambar ${i + 1}`}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
   const { sketch, bounds } = slide;
   const geo = sketch.geo;

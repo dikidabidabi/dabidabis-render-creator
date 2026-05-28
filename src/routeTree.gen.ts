@@ -13,6 +13,7 @@ import { Route as TabulasiRouteImport } from './routes/tabulasi'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as PresentasiRouteImport } from './routes/presentasi'
+import { Route as NarasiRouteImport } from './routes/narasi'
 import { Route as Model3dRouteImport } from './routes/model3d'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
@@ -36,6 +37,11 @@ const SketchRoute = SketchRouteImport.update({
 const PresentasiRoute = PresentasiRouteImport.update({
   id: '/presentasi',
   path: '/presentasi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NarasiRoute = NarasiRouteImport.update({
+  id: '/narasi',
+  path: '/narasi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const Model3dRoute = Model3dRouteImport.update({
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/model3d': typeof Model3dRoute
+  '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/model3d': typeof Model3dRoute
+  '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/model3d': typeof Model3dRoute
+  '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/gallery'
     | '/login'
     | '/model3d'
+    | '/narasi'
     | '/presentasi'
     | '/sketch'
     | '/studio'
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/gallery'
     | '/login'
     | '/model3d'
+    | '/narasi'
     | '/presentasi'
     | '/sketch'
     | '/studio'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/gallery'
     | '/login'
     | '/model3d'
+    | '/narasi'
     | '/presentasi'
     | '/sketch'
     | '/studio'
@@ -128,6 +140,7 @@ export interface RootRouteChildren {
   GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
   Model3dRoute: typeof Model3dRoute
+  NarasiRoute: typeof NarasiRoute
   PresentasiRoute: typeof PresentasiRoute
   SketchRoute: typeof SketchRoute
   StudioRoute: typeof StudioRoute
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/presentasi'
       fullPath: '/presentasi'
       preLoaderRoute: typeof PresentasiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/narasi': {
+      id: '/narasi'
+      path: '/narasi'
+      fullPath: '/narasi'
+      preLoaderRoute: typeof NarasiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/model3d': {
@@ -200,6 +220,7 @@ const rootRouteChildren: RootRouteChildren = {
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,
   Model3dRoute: Model3dRoute,
+  NarasiRoute: NarasiRoute,
   PresentasiRoute: PresentasiRoute,
   SketchRoute: SketchRoute,
   StudioRoute: StudioRoute,
@@ -208,12 +229,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
