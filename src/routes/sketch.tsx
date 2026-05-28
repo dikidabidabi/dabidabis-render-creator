@@ -101,10 +101,15 @@ type Level = {
   mdpl: number;
   opacity: number; // 0..1 — opacity ketika level ini tidak aktif
   typicalCount?: number; // ≥1, jumlah lantai tipikal yang menggandakan luas + koefisien
+  typicalHeight?: number; // m, tinggi tiap lantai tipikal (default TYPICAL_FLOOR_H)
 };
 
 // Tinggi default per lantai tipikal (m). Setiap tambahan tipikal menumpuk 3 m.
 const TYPICAL_FLOOR_H = 3;
+function tipicalHeightOf(lv: { typicalHeight?: number }): number {
+  const h = Number(lv.typicalHeight);
+  return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
+}
 
 // Hitung nama tampilan tiap level (Level N atau Level N–M) berdasarkan urutan MDPL
 // dan jumlah tipikal di tiap level. Jika user sudah mengganti nama (tidak cocok pola
