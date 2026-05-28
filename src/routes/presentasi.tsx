@@ -2871,25 +2871,8 @@ function layerStackHeight(layer: Layer, expanded: ExpandedFloor[]): number {
 
 // Convex hull (Andrew's monotone chain) untuk membentuk bayangan
 // gabungan footprint + footprint-yang-digeser-oleh-vektor-bayangan.
-function convexHull(pts: Point[]): Point[] {
-  const ps = pts.slice().sort((a, b) => (a.x - b.x) || (a.y - b.y));
-  if (ps.length < 3) return ps;
-  const cross = (o: Point, a: Point, b: Point) =>
-    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-  const lower: Point[] = [];
-  for (const p of ps) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
-    lower.push(p);
-  }
-  const upper: Point[] = [];
-  for (let i = ps.length - 1; i >= 0; i--) {
-    const p = ps[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
-    upper.push(p);
-  }
-  upper.pop(); lower.pop();
-  return lower.concat(upper);
-}
+// (convexHull sudah didefinisikan di atas — reuse)
+
 
 // Bayangan satu layer (top-down) — gabungan footprint + footprint digeser
 // sejauh (h / tan(alt)) ke arah berlawanan matahari.
