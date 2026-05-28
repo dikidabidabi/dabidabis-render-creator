@@ -2103,7 +2103,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     (target: EditTarget, oldPos: Point, newPos: Point) => {
       const oldKey = keyOf(oldPos);
       let nextLayers = layers;
-      let layerLevelId: string | null = null;
+      let layerLevelId: string | null | undefined = null;
       const neighborKeys = new Set<string>();
       if (target.kind === "layer") {
         nextLayers = layers.map((l) => {
