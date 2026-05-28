@@ -75,28 +75,36 @@ async function fileToCompressedDataUrl(file: File): Promise<string> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
+    r.onerror = () => reject(new Error("FileReader gagal membaca berkas"));
     r.readAsDataURL(file);
   });
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = reject;
-    i.src = dataUrl;
-  });
-  const maxDim = 1600;
-  let w = img.naturalWidth, h = img.naturalHeight;
-  if (Math.max(w, h) > maxDim) {
-    const k = maxDim / Math.max(w, h);
-    w = Math.round(w * k); h = Math.round(h * k);
+  // Try canvas compression; if it fails for any reason, fall back to original dataURL.
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Gambar tidak dapat dimuat"));
+      i.src = dataUrl;
+    });
+    const maxDim = 1600;
+    let w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return dataUrl;
+    if (Math.max(w, h) > maxDim) {
+      const k = maxDim / Math.max(w, h);
+      w = Math.round(w * k); h = Math.round(h * k);
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch (err) {
+    console.warn("[narasi] kompresi gagal, pakai dataURL asli", err);
+    return dataUrl;
   }
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return dataUrl;
-  ctx.drawImage(img, 0, 0, w, h);
-  return canvas.toDataURL("image/jpeg", 0.82);
 }
+
 
 function NarasiPage() {
   const [sketches, setSketches] = useState<SketchLite[]>([]);
@@ -281,15 +289,22 @@ function NarasiEditor({
       onChange({ images: next });
       return;
     }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Berkas bukan gambar.");
+      return;
+    }
     try {
       const url = await fileToCompressedDataUrl(file);
       const next = item.images.slice();
       next[slot] = url;
       onChange({ images: next });
-    } catch {
-      toast.error("Gagal memuat gambar.");
+      toast.success(`Gambar ${slot + 1} diunggah`);
+    } catch (err) {
+      console.error("[narasi] setImage gagal", err);
+      toast.error(`Gagal memuat gambar: ${(err as Error)?.message ?? "unknown"}`);
     }
   };
+
 
   return (
     <div className="rounded-lg border border-border/60 bg-background/60 p-4">
