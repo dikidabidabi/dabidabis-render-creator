@@ -3263,6 +3263,7 @@ function LevelsPanel({
   onDuplicate,
   onIncrementTypical,
   onSetTypical,
+  onSetTypicalHeight,
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
