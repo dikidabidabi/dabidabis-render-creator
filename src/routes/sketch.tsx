@@ -1250,7 +1250,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Editing an existing vertex (drag to move). Tracks current key as it moves.
   const [editDrag, setEditDrag] = useState<{ key: string } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
-  const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete">("move");
+  const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
+  const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
+  const [filletSegments] = useState<number>(10);
   const [addPointPreview, setAddPointPreview] = useState<Point | null>(null);
 
   // Undo/redo history snapshots: {lines, layers}
