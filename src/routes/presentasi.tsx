@@ -52,6 +52,37 @@ type StoreShape = { sketches: Sketch[]; openId: string | null };
 
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const COST_KEY = "dabidabis_cost_v1";
+const NARASI_KEY = "dabidabis_narasi_v1";
+
+// ---------- Narasi store (sinkron dengan halaman /narasi) ----------
+type NarasiItem = { id: string; text: string; images: (string | null)[] };
+type NarasiStore = Record<string, NarasiItem[]>;
+function loadNarasiStore(): NarasiStore {
+  try {
+    const raw = localStorage.getItem(NARASI_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== "object") return {};
+    const out: NarasiStore = {};
+    for (const k of Object.keys(v)) {
+      const arr = (v as any)[k];
+      if (!Array.isArray(arr)) continue;
+      out[k] = arr.map((n: any) => ({
+        id: String(n?.id ?? `${k}_${Math.random().toString(36).slice(2, 7)}`),
+        text: typeof n?.text === "string" ? n.text : "",
+        images: Array.isArray(n?.images)
+          ? [0, 1, 2, 3].map((i) => (typeof n.images[i] === "string" ? n.images[i] : null))
+          : [null, null, null, null],
+      }));
+    }
+    return out;
+  } catch { return {}; }
+}
+function narasiForSketch(store: NarasiStore, sketchId: string): NarasiItem[] {
+  const arr = store[sketchId];
+  if (arr && arr.length > 0) return arr;
+  return [{ id: `default-${sketchId}`, text: "", images: [null, null, null, null] }];
+}
 
 // A3 landscape: 420 × 297 mm. Internal slide canvas in px (proportional, 1mm ≈ 3.3674px).
 const A3_W = 1414;
