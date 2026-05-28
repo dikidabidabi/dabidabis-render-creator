@@ -3283,6 +3283,7 @@ function LevelsPanel({
   onDuplicate: (id: string) => void;
   onIncrementTypical: (id: string) => void;
   onSetTypical: (id: string, count: number) => void;
+  onSetTypicalHeight: (id: string, meters: number) => void;
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
