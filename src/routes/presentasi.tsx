@@ -917,6 +917,7 @@ function SlideHeader({ slide }: { slide: Slide }) {
         : "Analisa · Lingkungan"
       )
     : slide.kind === "matahari" ? "Analisa · Matahari"
+    : slide.kind === "konsep" ? "Konsep · Narasi"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
