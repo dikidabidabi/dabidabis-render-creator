@@ -282,6 +282,7 @@ function NarasiEditor({
   onRemove: () => void;
   canRemove: boolean;
 }) {
+  const [busy, setBusy] = useState<Record<number, boolean>>({});
   const setImage = async (slot: number, file: File | null) => {
     if (!file) {
       const next = item.images.slice();
@@ -293,6 +294,7 @@ function NarasiEditor({
       toast.error("Berkas bukan gambar.");
       return;
     }
+    setBusy((b) => ({ ...b, [slot]: true }));
     try {
       const url = await fileToCompressedDataUrl(file);
       const next = item.images.slice();
@@ -302,9 +304,10 @@ function NarasiEditor({
     } catch (err) {
       console.error("[narasi] setImage gagal", err);
       toast.error(`Gagal memuat gambar: ${(err as Error)?.message ?? "unknown"}`);
+    } finally {
+      setBusy((b) => ({ ...b, [slot]: false }));
     }
   };
-
 
   return (
     <div className="rounded-lg border border-border/60 bg-background/60 p-4">
@@ -330,6 +333,7 @@ function NarasiEditor({
           <ImageSlot
             key={slot}
             value={item.images[slot]}
+            busy={!!busy[slot]}
             onChange={(f) => setImage(slot, f)}
             label={`Gambar ${slot + 1}`}
           />
@@ -340,50 +344,73 @@ function NarasiEditor({
 }
 
 function ImageSlot({
-  value, onChange, label,
-}: { value: string | null; onChange: (f: File | null) => void; label: string }) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  value, busy, onChange, label,
+}: { value: string | null; busy: boolean; onChange: (f: File | null) => void; label: string }) {
   return (
     <div className="relative">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0] ?? null;
-          onChange(f);
-          if (inputRef.current) inputRef.current.value = "";
-        }}
-      />
       {value ? (
         <div className="group relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-black/40">
           <img src={value} alt={label} className="h-full w-full object-cover" />
+          {busy && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-white">
+              Mengunggah…
+            </div>
+          )}
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+            disabled={busy}
+            className="absolute right-1 top-1 z-10 rounded-full bg-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
             aria-label="Hapus gambar"
           >
             <X className="h-3 w-3" />
           </button>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
+          <label
             className="absolute inset-0 cursor-pointer"
             aria-label={`Ganti ${label}`}
-          />
+          >
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                e.target.value = "";
+                if (f) onChange(f);
+              }}
+            />
+          </label>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-background/60 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:bg-background hover:text-foreground"
+        <label
+          className={cn(
+            "flex aspect-[4/3] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-background/60 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:bg-background hover:text-foreground",
+            busy && "pointer-events-none opacity-70",
+          )}
         >
-          <ImagePlus className="h-4 w-4" />
-          <span>Unggah {label}</span>
-        </button>
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              e.target.value = "";
+              if (f) onChange(f);
+            }}
+          />
+          {busy ? (
+            <span>Mengunggah…</span>
+          ) : (
+            <>
+              <ImagePlus className="h-4 w-4" />
+              <span>Unggah {label}</span>
+            </>
+          )}
+        </label>
       )}
     </div>
   );
 }
+
