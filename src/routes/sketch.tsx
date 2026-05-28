@@ -1210,6 +1210,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [levels, onChange],
   );
 
+  const setLevelTypicalHeight = useCallback(
+    (lvlId: string, meters: number) => {
+      if (!Number.isFinite(meters) || meters <= 0) return;
+      const h = Math.round(Math.max(0.1, Math.min(99, meters)) * 100) / 100;
+      onChange({
+        levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalHeight: h } : l)),
+      });
+    },
+    [levels, onChange],
+  );
+
   const incrementTypical = useCallback(
     (lvlId: string) => {
       const src = levels.find((l) => l.id === lvlId);
