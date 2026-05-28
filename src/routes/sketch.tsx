@@ -3499,6 +3499,33 @@ function LevelsPanel({
                       title="Jumlah lantai tipikal — luas & koefisien dikalikan nilai ini"
                     />
                     <span className="text-[10px] text-ember/80">tip</span>
+                    <span className="text-[10px] text-ember/80">@</span>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={0.1}
+                      max={99}
+                      step={0.1}
+                      value={typicalDrafts[`${lvl.id}__h`] ?? String(tipicalHeightOf(lvl))}
+                      onChange={(e) =>
+                        setTypicalDrafts((d) => ({ ...d, [`${lvl.id}__h`]: e.target.value }))
+                      }
+                      onBlur={() => {
+                        const v = parseFloat(typicalDrafts[`${lvl.id}__h`] ?? "");
+                        if (Number.isFinite(v) && v > 0) onSetTypicalHeight(lvl.id, v);
+                        setTypicalDrafts((d) => {
+                          const n = { ...d };
+                          delete n[`${lvl.id}__h`];
+                          return n;
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      }}
+                      className="h-7 w-16 text-sm text-ember"
+                      title="Tinggi tiap lantai tipikal (m)"
+                    />
+                    <span className="text-[10px] text-ember/80">m/lt</span>
                   </>
                 )}
                 <span
