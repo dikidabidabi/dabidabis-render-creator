@@ -169,13 +169,16 @@ function ExtrudedFloor({
   mPerPx: number;
   baseY: number;
   height: number;
-  color: string;
-  highlighted: boolean;
-}) {
-  const geometry = useMemo(() => {
-    if (points.length < 3 || height <= 0) return null;
-    const shape = new THREE.Shape();
     points.forEach((p, i) => {
+      const x = (p.x - origin.x) * mPerPx;
+      // Sketsa: +y ke bawah. Untuk cocok dengan tampilan 3D top-down
+      // (sumbu +Z di scene = arah selatan/bawah pada sketsa), pakai +y apa adanya
+      // pada shape lalu rotateX(+π/2) di bawah agar tidak ter-mirror.
+      const y = (p.y - origin.y) * mPerPx;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    });
+
       const x = (p.x - origin.x) * mPerPx;
       const z = (p.y - origin.y) * mPerPx; // flip handled by rotation below
       if (i === 0) shape.moveTo(x, z);
