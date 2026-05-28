@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { Upload, X, ImageIcon } from "lucide-react";
+import { useState } from "react";
+import { Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -11,17 +11,32 @@ type Props = {
 };
 
 export function ImageDropzone({ label, hint, value, onChange, className }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFile = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 8 * 1024 * 1024) {
-      alert("Maksimal 8MB");
+    setError(null);
+    if (!file.type.startsWith("image/")) {
+      setError("Berkas harus berupa gambar");
       return;
     }
+    if (file.size > 8 * 1024 * 1024) {
+      setError("Maksimal 8MB");
+      return;
+    }
+    setLoading(true);
     const reader = new FileReader();
-    reader.onload = (e) => onChange(e.target?.result as string);
+    reader.onload = (e) => {
+      const result = typeof e.target?.result === "string" ? e.target.result : null;
+      if (result) onChange(result);
+      else setError("Gambar tidak dapat dibaca");
+      setLoading(false);
+    };
+    reader.onerror = () => {
+      setError("Gagal membaca gambar");
+      setLoading(false);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -39,8 +54,7 @@ export function ImageDropzone({ label, hint, value, onChange, className }: Props
           </button>
         )}
       </div>
-      <div
-        onClick={() => inputRef.current?.click()}
+      <label
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -55,6 +69,7 @@ export function ImageDropzone({ label, hint, value, onChange, className }: Props
         className={cn(
           "group relative flex aspect-[4/3] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border/60 bg-surface/40 transition-all hover:border-ember/60 hover:bg-surface/60",
           dragOver && "border-ember bg-ember/5",
+          loading && "pointer-events-none opacity-70",
         )}
       >
         {value ? (
@@ -72,21 +87,28 @@ export function ImageDropzone({ label, hint, value, onChange, className }: Props
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ember/10 text-ember">
               <Upload className="h-5 w-5" />
             </div>
-            <p className="text-sm font-medium">Klik atau drop gambar</p>
+            <p className="text-sm font-medium">{loading ? "Mengunggah…" : "Klik atau drop gambar"}</p>
             <p className="text-xs text-muted-foreground">{hint}</p>
           </div>
         )}
+        {loading && value && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-sm font-medium backdrop-blur-sm">
+            Mengunggah…
+          </div>
+        )}
         <input
-          ref={inputRef}
           type="file"
           accept="image/*"
-          className="hidden"
+          className="sr-only"
+          disabled={loading}
           onChange={(e) => {
             const f = e.target.files?.[0];
+            e.target.value = "";
             if (f) handleFile(f);
           }}
         />
-      </div>
+      </label>
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
