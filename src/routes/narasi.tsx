@@ -279,6 +279,7 @@ function NarasiEditor({
             value={item.images[slot]}
             label={`Gambar ${slot + 1}`}
             hint="Maksimal 8MB"
+            compress
             onChange={(value) => setImage(slot, value)}
           />
         ))}
