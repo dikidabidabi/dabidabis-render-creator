@@ -248,12 +248,14 @@ function PresentasiPage() {
             <PresentasiBox
               key={sk.id}
               sketch={sk}
+              narasi={narasiForSketch(narasiStore, sk.id)}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
             />
           ))}
         </div>
       )}
+
     </div>
   );
 }
