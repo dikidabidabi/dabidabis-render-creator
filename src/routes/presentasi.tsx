@@ -1518,9 +1518,10 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
               {view !== "lokasi" && [250, 500, 800].filter((r) => r <= radiusM).map((r) => (
                 <g key={r}>
                   <circle cx={0} cy={0} r={r * pxPerM} fill="none" stroke="#0a0a0a"
-                    strokeOpacity={0.35} strokeDasharray="6 5" strokeWidth={1} />
-                  <text x={0} y={-r * pxPerM - 4} textAnchor="middle" fontSize={10} fill="#0a0a0a"
-                    style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3 } as React.CSSProperties}>
+                    strokeOpacity={0.7} strokeDasharray="8 4" strokeWidth={1.6} />
+                  <text x={0} y={-r * pxPerM - 6} textAnchor="middle" fontSize={13} fontWeight={700}
+                    fill="#0a0a0a" fontFamily="Sora, sans-serif"
+                    style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 4 } as React.CSSProperties}>
                     {r} m
                   </text>
                 </g>
