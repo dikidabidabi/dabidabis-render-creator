@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2, X, Inbox } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Trash2, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ImageDropzone } from "@/components/image-dropzone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -69,42 +70,6 @@ function saveNarasiStore(s: NarasiStore) {
     toast.error("Gagal menyimpan: ukuran data melebihi kuota browser.");
   }
 }
-
-// Reduce image to JPEG data URL, max dim 1600, quality 0.82
-async function fileToCompressedDataUrl(file: File): Promise<string> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(new Error("FileReader gagal membaca berkas"));
-    r.readAsDataURL(file);
-  });
-  // Try canvas compression; if it fails for any reason, fall back to original dataURL.
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = () => reject(new Error("Gambar tidak dapat dimuat"));
-      i.src = dataUrl;
-    });
-    const maxDim = 1600;
-    let w = img.naturalWidth, h = img.naturalHeight;
-    if (!w || !h) return dataUrl;
-    if (Math.max(w, h) > maxDim) {
-      const k = maxDim / Math.max(w, h);
-      w = Math.round(w * k); h = Math.round(h * k);
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return dataUrl;
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.82);
-  } catch (err) {
-    console.warn("[narasi] kompresi gagal, pakai dataURL asli", err);
-    return dataUrl;
-  }
-}
-
 
 function NarasiPage() {
   const [sketches, setSketches] = useState<SketchLite[]>([]);
