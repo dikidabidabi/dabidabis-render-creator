@@ -274,14 +274,6 @@ function NarasiBox({
 }
 
 function NarasiEditor({
-  index, item, onChange, onRemove, canRemove,
-}: {
-  index: number;
-  item: NarasiItem;
-  onChange: (patch: Partial<NarasiItem>) => void;
-  onRemove: () => void;
-  canRemove: boolean;
-}) {
   const setImage = async (slot: number, file: File | null) => {
     if (!file) {
       const next = item.images.slice();
@@ -289,7 +281,22 @@ function NarasiEditor({
       onChange({ images: next });
       return;
     }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Berkas bukan gambar.");
+      return;
+    }
     try {
+      const url = await fileToCompressedDataUrl(file);
+      const next = item.images.slice();
+      next[slot] = url;
+      onChange({ images: next });
+      toast.success(`Gambar ${slot + 1} diunggah`);
+    } catch (err) {
+      console.error("[narasi] setImage gagal", err);
+      toast.error(`Gagal memuat gambar: ${(err as Error)?.message ?? "unknown"}`);
+    }
+  };
+
       const url = await fileToCompressedDataUrl(file);
       const next = item.images.slice();
       next[slot] = url;
