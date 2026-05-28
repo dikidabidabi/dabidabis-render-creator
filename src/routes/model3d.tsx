@@ -229,14 +229,16 @@ function GroundPlane({
     const shape = new THREE.Shape();
     points.forEach((p, i) => {
       const x = (p.x - origin.x) * mPerPx;
-      const z = (p.y - origin.y) * mPerPx;
-      if (i === 0) shape.moveTo(x, z);
-      else shape.lineTo(x, z);
+      const y = (p.y - origin.y) * mPerPx;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
     });
     shape.closePath();
     const geo = new THREE.ShapeGeometry(shape);
-    geo.rotateX(-Math.PI / 2);
+    geo.rotateX(Math.PI / 2);
+    geo.scale(1, -1, 1);
     return geo;
+
   }, [points, origin.x, origin.y, mPerPx]);
   if (!geometry) return null;
   return (
