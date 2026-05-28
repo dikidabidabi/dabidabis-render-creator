@@ -758,27 +758,32 @@ function ManualScaleBox({
 
   useEffect(() => { setUserScale(loadSlideScale(slideId)); }, [slideId]);
 
+  // Measure ONCE on mount (and when slideId changes). Slides are static:
+  // no ResizeObserver, no auto re-fit on data change. Only the user's manual
+  // drag handle can change scale after the initial fit.
   useEffect(() => {
     if (!boxRef.current || !innerRef.current) return;
+    let raf1 = 0, raf2 = 0;
     const measure = () => {
-      const box = boxRef.current!.getBoundingClientRect();
-      const inner = innerRef.current!;
+      if (!boxRef.current || !innerRef.current) return;
+      const box = boxRef.current.getBoundingClientRect();
+      const inner = innerRef.current;
       const prev = inner.style.transform;
       inner.style.transform = "none";
       const cw = inner.scrollWidth;
       const ch = inner.scrollHeight;
       inner.style.transform = prev;
       if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
-      setNatural((prev) => (prev && prev.w === cw && prev.h === ch ? prev : { w: cw, h: ch }));
-      const nextFit = Math.min(1, box.width / cw, box.height / ch);
-      setFitScale((prev) => (Math.abs(prev - nextFit) < 0.001 ? prev : nextFit));
+      setNatural({ w: cw, h: ch });
+      setFitScale(Math.min(1, box.width / cw, box.height / ch));
     };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(boxRef.current);
-    ro.observe(innerRef.current);
-    return () => ro.disconnect();
-  }, [children]);
+    // Two RAFs to let fonts/images settle before measuring once.
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(measure);
+    });
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+  }, [slideId]);
+
 
   const scale = userScale ?? fitScale;
   scaleRef.current = scale;
