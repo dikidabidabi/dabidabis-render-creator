@@ -101,9 +101,14 @@ function computeOrigin(sketch: Sketch): Point {
   return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
 }
 
-// Sort levels by MDPL ascending. Expand typical groups into individual 3m
-// floors and shift upper levels accordingly.
+// Sort levels by MDPL ascending. Expand typical groups into individual floors
+// using each level's own typicalHeight (default 3 m), shifting upper levels.
+// Selaras dengan presentasi.tsx & tabulasi.tsx.
 const TYPICAL_FLOOR_H = 3;
+function tipH(lv: { typicalHeight?: number }): number {
+  const h = Number(lv.typicalHeight);
+  return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
+}
 type ExpandedFloor = Level & {
   height: number;
   baseMdpl: number;
@@ -116,24 +121,25 @@ function expandLevels(levels: Level[]): ExpandedFloor[] {
   let shift = 0;
   const adjusted = sorted.map((lv) => {
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const h = tipH(lv);
     const base = lv.mdpl + shift;
-    shift += (k - 1) * TYPICAL_FLOOR_H;
-    return { lv, k, base };
+    shift += (k - 1) * h;
+    return { lv, k, base, h };
   });
   const out: ExpandedFloor[] = [];
   for (let i = 0; i < adjusted.length; i++) {
-    const { lv, k, base } = adjusted[i];
+    const { lv, k, base, h } = adjusted[i];
     const next = adjusted[i + 1];
     if (k === 1) {
-      const h = next ? Math.max(0.1, next.base - base) : 4;
-      out.push({ ...lv, baseMdpl: base, height: h, sourceId: lv.id, typicalIndex: 0, typicalTotal: 1 });
+      const hh = next ? Math.max(0.1, next.base - base) : 4;
+      out.push({ ...lv, baseMdpl: base, height: hh, sourceId: lv.id, typicalIndex: 0, typicalTotal: 1 });
     } else {
       for (let j = 0; j < k; j++) {
         out.push({
           ...lv,
           id: `${lv.id}__t${j}`,
-          baseMdpl: base + j * TYPICAL_FLOOR_H,
-          height: TYPICAL_FLOOR_H,
+          baseMdpl: base + j * h,
+          height: h,
           sourceId: lv.id,
           typicalIndex: j,
           typicalTotal: k,
@@ -144,9 +150,9 @@ function expandLevels(levels: Level[]): ExpandedFloor[] {
   return out;
 }
 function levelsWithHeights(levels: Level[]) {
-  // Kept for backward-compatibility: returns expanded floors with `height`.
   return expandLevels(levels);
 }
+
 
 // ---------- 3D scene helpers ----------
 function ExtrudedFloor({
