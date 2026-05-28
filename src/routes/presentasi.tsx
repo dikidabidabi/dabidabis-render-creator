@@ -63,6 +63,10 @@ function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
 
 // Typical floor logic — kept in sync with sketch.tsx
 const TYPICAL_FLOOR_H = 3;
+function tipH(lv: { typicalHeight?: number }): number {
+  const h = Number(lv.typicalHeight);
+  return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
+}
 function isAutoLevelName(name: string): boolean {
   return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
 }
