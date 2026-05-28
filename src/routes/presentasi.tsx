@@ -1100,7 +1100,15 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             />
           ))}
           {hull.length >= 2 && (() => {
+            // Bounding box dari hull — dipakai sebagai acuan garis dimensi
+            // tiap sisi (top/right/bottom/left) supaya semua label sejajar.
+            const hxs = hull.map((p) => p.x);
+            const hys = hull.map((p) => p.y);
+            const bx0 = Math.min(...hxs), bx1 = Math.max(...hxs);
+            const by0 = Math.min(...hys), by1 = Math.max(...hys);
             const hc = centroid(hull);
+            const tick = sw * 0.006;
+            const labelGap = sw * 0.012;
             return hull.map((_, i) => {
               const a = hull[i];
               const b = hull[(i + 1) % hull.length];
@@ -1112,27 +1120,58 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               let nx = -dy / len, ny = dx / len;
               const midE = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
               if ((midE.x - hc.x) * nx + (midE.y - hc.y) * ny < 0) { nx = -nx; ny = -ny; }
-              const oa = { x: a.x + nx * dimOffsetPx, y: a.y + ny * dimOffsetPx };
-              const ob = { x: b.x + nx * dimOffsetPx, y: b.y + ny * dimOffsetPx };
-              const mid = { x: (oa.x + ob.x) / 2, y: (oa.y + ob.y) / 2 };
-              let angle = (Math.atan2(ob.y - oa.y, ob.x - oa.x) * 180) / Math.PI;
-              if (angle > 90) angle -= 180;
-              if (angle < -90) angle += 180;
-              const tick = sw * 0.006;
+              // Pilih sisi dominan berdasarkan arah normal terbesar.
+              const horizontal = Math.abs(nx) > Math.abs(ny);
+              let oa: Point, ob: Point, labelX: number, labelY: number, labelDy: number;
+              if (horizontal) {
+                // sisi kiri/kanan — garis dimensi vertikal, label horizontal
+                const x = nx > 0 ? bx1 + dimOffsetPx : bx0 - dimOffsetPx;
+                oa = { x, y: a.y };
+                ob = { x, y: b.y };
+                labelX = x + (nx > 0 ? labelGap : -labelGap);
+                labelY = (a.y + b.y) / 2;
+                labelDy = 0;
+              } else {
+                // sisi atas/bawah — garis dimensi horizontal, label horizontal
+                const y = ny > 0 ? by1 + dimOffsetPx : by0 - dimOffsetPx;
+                oa = { x: a.x, y };
+                ob = { x: b.x, y };
+                labelX = (a.x + b.x) / 2;
+                labelY = y + (ny > 0 ? labelGap : -labelGap);
+                labelDy = 0;
+              }
               return (
                 <g key={`dim-${i}`}>
-                  <line x1={a.x} y1={a.y} x2={oa.x + nx * tick} y2={oa.y + ny * tick}
-                    stroke="rgba(0,0,0,0.55)" strokeWidth={sw * 0.0008} />
-                  <line x1={b.x} y1={b.y} x2={ob.x + nx * tick} y2={ob.y + ny * tick}
-                    stroke="rgba(0,0,0,0.55)" strokeWidth={sw * 0.0008} />
-                  <line x1={oa.x} y1={oa.y} x2={ob.x} y2={ob.y}
+                  <line x1={a.x} y1={a.y} x2={oa.x} y2={oa.y}
+                    stroke="rgba(0,0,0,0.45)" strokeWidth={sw * 0.0008}
+                    strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+                  <line x1={b.x} y1={b.y} x2={ob.x} y2={ob.y}
+                    stroke="rgba(0,0,0,0.45)" strokeWidth={sw * 0.0008}
+                    strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+                  <line x1={oa.x - (horizontal ? 0 : 0)} y1={oa.y} x2={ob.x} y2={ob.y}
                     stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
+                  {/* tick marks pada ujung garis dimensi */}
+                  {horizontal ? (
+                    <>
+                      <line x1={oa.x - tick / 2} y1={oa.y} x2={oa.x + tick / 2} y2={oa.y}
+                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
+                      <line x1={ob.x - tick / 2} y1={ob.y} x2={ob.x + tick / 2} y2={ob.y}
+                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
+                    </>
+                  ) : (
+                    <>
+                      <line x1={oa.x} y1={oa.y - tick / 2} x2={oa.x} y2={oa.y + tick / 2}
+                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
+                      <line x1={ob.x} y1={ob.y - tick / 2} x2={ob.x} y2={ob.y + tick / 2}
+                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
+                    </>
+                  )}
                   <text
-                    x={mid.x} y={mid.y}
-                    textAnchor="middle" dominantBaseline="central"
+                    x={labelX} y={labelY} dy={labelDy}
+                    textAnchor={horizontal ? (nx > 0 ? "start" : "end") : "middle"}
+                    dominantBaseline={horizontal ? "central" : (ny > 0 ? "hanging" : "auto")}
                     fontSize={sw * 0.02} fontWeight={600} fill="#0a0a0a"
-                    transform={`rotate(${angle} ${mid.x} ${mid.y}) translate(0 ${-sw * 0.008})`}
-                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.008 } as React.CSSProperties}
+                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.008 } as React.CSSProperties}
                   >
                     {`${fmt(lengthM, 1)} m`}
                   </text>
@@ -1479,9 +1518,10 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
               {view !== "lokasi" && [250, 500, 800].filter((r) => r <= radiusM).map((r) => (
                 <g key={r}>
                   <circle cx={0} cy={0} r={r * pxPerM} fill="none" stroke="#0a0a0a"
-                    strokeOpacity={0.35} strokeDasharray="6 5" strokeWidth={1} />
-                  <text x={0} y={-r * pxPerM - 4} textAnchor="middle" fontSize={10} fill="#0a0a0a"
-                    style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3 } as React.CSSProperties}>
+                    strokeOpacity={0.7} strokeDasharray="8 4" strokeWidth={1.6} />
+                  <text x={0} y={-r * pxPerM - 6} textAnchor="middle" fontSize={13} fontWeight={700}
+                    fill="#0a0a0a" fontFamily="Sora, sans-serif"
+                    style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 4 } as React.CSSProperties}>
                     {r} m
                   </text>
                 </g>
