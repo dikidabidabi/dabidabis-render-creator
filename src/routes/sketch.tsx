@@ -3445,6 +3445,7 @@ function LevelsPanel({
   onRenameLayer,
   onToggleLockLayer,
   onRemoveLayer,
+  onDuplicateLayer,
   onSetLayerCoefficient,
   onSetLayerGsb,
   lines,
