@@ -2047,6 +2047,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, activeLvlId],
   );
 
+  // Pick a vertex while remembering which polygon (layer) or free line it
+  // belongs to, so subsequent edits affect only that occurrence — vertices
+  // from other polygons or other levels that share the same coordinate are
+  // left untouched.
+  const findVertexTargetAt = useCallback(
+    (p: Point, tol: number): { coord: Point; target: EditTarget } | null => {
+      let best: { coord: Point; target: EditTarget } | null = null;
+      let bestD = tol;
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach((pt, i) => {
+          const d = dist(p, pt);
+          if (d < bestD) {
+            bestD = d;
+            best = { coord: pt, target: { kind: "layer", layerId: l.id, idx: i } };
+          }
+        });
+      });
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        const da = dist(p, ln.a);
+        if (da < bestD) {
+          bestD = da;
+          best = { coord: ln.a, target: { kind: "line", lineIdx: i, end: "a" } };
+        }
+        const db = dist(p, ln.b);
+        if (db < bestD) {
+          bestD = db;
+          best = { coord: ln.b, target: { kind: "line", lineIdx: i, end: "b" } };
+        }
+      });
+      return best;
+    },
+    [lines, layers, activeLvlId],
+  );
+
   const lockedVertexKeys = useMemo(() => {
     const s = new Set<string>();
     layers.forEach((l) => {
