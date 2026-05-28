@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2, X, Inbox } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Plus, Trash2, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ImageDropzone } from "@/components/image-dropzone";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -69,42 +70,6 @@ function saveNarasiStore(s: NarasiStore) {
     toast.error("Gagal menyimpan: ukuran data melebihi kuota browser.");
   }
 }
-
-// Reduce image to JPEG data URL, max dim 1600, quality 0.82
-async function fileToCompressedDataUrl(file: File): Promise<string> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = () => reject(new Error("FileReader gagal membaca berkas"));
-    r.readAsDataURL(file);
-  });
-  // Try canvas compression; if it fails for any reason, fall back to original dataURL.
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = () => reject(new Error("Gambar tidak dapat dimuat"));
-      i.src = dataUrl;
-    });
-    const maxDim = 1600;
-    let w = img.naturalWidth, h = img.naturalHeight;
-    if (!w || !h) return dataUrl;
-    if (Math.max(w, h) > maxDim) {
-      const k = maxDim / Math.max(w, h);
-      w = Math.round(w * k); h = Math.round(h * k);
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return dataUrl;
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.82);
-  } catch (err) {
-    console.warn("[narasi] kompresi gagal, pakai dataURL asli", err);
-    return dataUrl;
-  }
-}
-
 
 function NarasiPage() {
   const [sketches, setSketches] = useState<SketchLite[]>([]);
@@ -282,31 +247,10 @@ function NarasiEditor({
   onRemove: () => void;
   canRemove: boolean;
 }) {
-  const [busy, setBusy] = useState<Record<number, boolean>>({});
-  const setImage = async (slot: number, file: File | null) => {
-    if (!file) {
-      const next = item.images.slice();
-      next[slot] = null;
-      onChange({ images: next });
-      return;
-    }
-    if (!file.type.startsWith("image/")) {
-      toast.error("Berkas bukan gambar.");
-      return;
-    }
-    setBusy((b) => ({ ...b, [slot]: true }));
-    try {
-      const url = await fileToCompressedDataUrl(file);
-      const next = item.images.slice();
-      next[slot] = url;
-      onChange({ images: next });
-      toast.success(`Gambar ${slot + 1} diunggah`);
-    } catch (err) {
-      console.error("[narasi] setImage gagal", err);
-      toast.error(`Gagal memuat gambar: ${(err as Error)?.message ?? "unknown"}`);
-    } finally {
-      setBusy((b) => ({ ...b, [slot]: false }));
-    }
+  const setImage = (slot: number, value: string | null) => {
+    const next = item.images.slice();
+    next[slot] = value;
+    onChange({ images: next });
   };
 
   return (
@@ -330,86 +274,15 @@ function NarasiEditor({
       />
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[0, 1, 2, 3].map((slot) => (
-          <ImageSlot
+          <ImageDropzone
             key={slot}
             value={item.images[slot]}
-            busy={!!busy[slot]}
-            onChange={(f) => setImage(slot, f)}
             label={`Gambar ${slot + 1}`}
+            hint="Maksimal 8MB"
+            onChange={(value) => setImage(slot, value)}
           />
         ))}
       </div>
-    </div>
-  );
-}
-
-function ImageSlot({
-  value, busy, onChange, label,
-}: { value: string | null; busy: boolean; onChange: (f: File | null) => void; label: string }) {
-  return (
-    <div className="relative">
-      {value ? (
-        <div className="group relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-black/40">
-          <img src={value} alt={label} className="h-full w-full object-cover" />
-          {busy && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-white">
-              Mengunggah…
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            disabled={busy}
-            className="absolute right-1 top-1 z-10 rounded-full bg-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
-            aria-label="Hapus gambar"
-          >
-            <X className="h-3 w-3" />
-          </button>
-          <label
-            className="absolute inset-0 cursor-pointer"
-            aria-label={`Ganti ${label}`}
-          >
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                e.target.value = "";
-                if (f) onChange(f);
-              }}
-            />
-          </label>
-        </div>
-      ) : (
-        <label
-          className={cn(
-            "flex aspect-[4/3] w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-background/60 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:bg-background hover:text-foreground",
-            busy && "pointer-events-none opacity-70",
-          )}
-        >
-          <input
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              e.target.value = "";
-              if (f) onChange(f);
-            }}
-          />
-          {busy ? (
-            <span>Mengunggah…</span>
-          ) : (
-            <>
-              <ImagePlus className="h-4 w-4" />
-              <span>Unggah {label}</span>
-            </>
-          )}
-        </label>
-      )}
     </div>
   );
 }
