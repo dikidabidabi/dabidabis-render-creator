@@ -2903,12 +2903,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         )}
         {tool === "edit" && (
           <div className="space-y-1.5">
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5">
               <Button
                 variant={editMode === "move" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setEditMode("move")}
-                className={cn("h-8 px-2 text-[11px]", editMode === "move" && "bg-foreground text-background")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "move" && "bg-foreground text-background")}
                 title="Geser titik yang sudah ada"
               >
                 <Move className="mr-1 h-3.5 w-3.5" /> Geser
@@ -2917,27 +2917,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 variant={editMode === "addPoint" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setEditMode("addPoint")}
-                className={cn("h-8 px-2 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "addPoint" && "bg-foreground text-background")}
                 title="Tambah titik baru di sepanjang garis"
               >
                 <Plus className="mr-1 h-3.5 w-3.5" /> Tambah
               </Button>
               <Button
+                variant={editMode === "fillet" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditMode("fillet")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "fillet" && "bg-foreground text-background")}
+                title="Bulatkan (fillet) sudut pada titik"
+              >
+                <Spline className="mr-1 h-3.5 w-3.5" /> Fillet
+              </Button>
+              <Button
                 variant={editMode === "delete" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setEditMode("delete")}
-                className={cn("h-8 px-2 text-[11px]", editMode === "delete" && "bg-destructive text-destructive-foreground")}
+                className={cn("h-8 px-1.5 text-[11px]", editMode === "delete" && "bg-destructive text-destructive-foreground")}
                 title="Hapus titik atau edge pada level aktif"
               >
                 <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus
               </Button>
             </div>
+            {editMode === "fillet" && (
+              <div className="flex items-center gap-2 rounded-md border border-border bg-background/40 px-2 py-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Radius
+                </span>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0.05"
+                  value={filletRadiusM}
+                  onChange={(e) => setFilletRadiusM(Math.max(0.05, parseFloat(e.target.value) || 0.05))}
+                  className="h-7 w-20 text-xs"
+                />
+                <span className="text-[11px] text-muted-foreground">m</span>
+              </div>
+            )}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {editMode === "move"
                 ? "Tarik titik (vertex) pada level aktif ke posisi baru. Titik terkunci tidak dapat digeser."
                 : editMode === "addPoint"
                   ? "Ketuk di sepanjang garis lurus pada level aktif untuk menambah titik baru."
-                  : "Ketuk titik untuk menghapusnya, atau ketuk edge (termasuk yang sudah tidak terhitung) untuk menghapus garis. Hanya berlaku pada level aktif."}
+                  : editMode === "fillet"
+                    ? "Ketuk titik pada sudut poligon untuk membulatkannya dengan radius di atas. Radius otomatis diperkecil bila sisi terlalu pendek."
+                    : "Ketuk titik untuk menghapusnya, atau ketuk edge (termasuk yang sudah tidak terhitung) untuk menghapus garis. Hanya berlaku pada level aktif."}
             </p>
           </div>
         )}
