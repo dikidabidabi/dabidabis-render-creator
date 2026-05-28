@@ -1840,11 +1840,7 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
   );
 }
 
-        )}
-      </div>
-    </div>
-  );
-}
+
 
 function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
   const { sketch, bounds } = slide;
