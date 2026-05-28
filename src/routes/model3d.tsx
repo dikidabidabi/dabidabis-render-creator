@@ -195,7 +195,6 @@ function ExtrudedFloor({
     return geo;
   }, [points, origin.x, origin.y, mPerPx, height]);
 
-  }, [points, origin.x, origin.y, mPerPx, height]);
 
   if (!geometry) return null;
 
