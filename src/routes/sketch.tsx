@@ -2434,15 +2434,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         filletVertexAt(keyOf(v));
         return;
       }
-      const v = findVertexAt(raw, tol);
-      if (!v) return;
-      const k = keyOf(v);
+      const hit = findVertexTargetAt(raw, tol);
+      if (!hit) return;
+      const k = keyOf(hit.coord);
       if (lockedVertexKeys.has(k)) {
         toast.error("Titik terkunci");
         return;
       }
       pushHistory();
-      setEditDrag({ key: k });
+      setEditDrag({ key: k, target: hit.target });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
