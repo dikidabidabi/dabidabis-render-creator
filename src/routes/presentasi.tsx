@@ -2728,29 +2728,54 @@ function BiayaBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
         <GridStat label="Biaya per m²" value={fmtRp(rate)} hint="diatur di halaman Tabulasi" />
         <GridStat label="Fungsi" value={sketch.fungsi ?? "—"} />
       </div>
-      <div style={{
-        display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start",
-        padding: 36, border: "1px solid #111", borderRadius: 4, background: "#0a0a0a", color: "#fff",
-      }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#bbb", fontWeight: 600 }}>
-          Estimasi Total
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{
-          fontFamily: "var(--font-display, Sora, sans-serif)",
-          fontSize: 72, fontWeight: 600, letterSpacing: "-0.03em",
-          marginTop: 12, fontVariantNumeric: "tabular-nums", lineHeight: 1.05,
+          display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-start",
+          padding: 36, border: "1px solid #111", borderRadius: 4, background: "#0a0a0a", color: "#fff",
         }}>
-          {fmtRp(total)}
-        </div>
-        {rate <= 0 && (
-          <div style={{ marginTop: 16, fontSize: 13, color: "#bbb" }}>
-            Atur biaya per m² di halaman Tabulasi untuk melihat estimasi.
+          <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#bbb", fontWeight: 600 }}>
+            Estimasi Total
           </div>
-        )}
+          <div style={{
+            fontFamily: "var(--font-display, Sora, sans-serif)",
+            fontSize: 64, fontWeight: 600, letterSpacing: "-0.03em",
+            marginTop: 12, fontVariantNumeric: "tabular-nums", lineHeight: 1.05,
+          }}>
+            {fmtRp(total)}
+          </div>
+          {rate <= 0 && (
+            <div style={{ marginTop: 16, fontSize: 13, color: "#bbb" }}>
+              Atur biaya per m² di halaman Tabulasi untuk melihat estimasi.
+            </div>
+          )}
+        </div>
+        <div style={{ border: "1px solid #ececec", borderRadius: 4, background: "#fafafa", padding: 18 }}>
+          <div style={{ fontSize: 10, letterSpacing: "0.24em", textTransform: "uppercase", color: "#888", fontWeight: 700, marginBottom: 10 }}>
+            Pareto Biaya
+          </div>
+          {[
+            { label: "Arsitektur", pct: 0.25, color: "#1e3a8a" },
+            { label: "Struktur", pct: 0.35, color: "#0a0a0a" },
+            { label: "MEP", pct: 0.40, color: "#e85d3a" },
+          ].map((p) => (
+            <div key={p.label} style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                <span style={{ color: "#444" }}>
+                  {p.label} <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>({(p.pct * 100).toFixed(0)}%)</span>
+                </span>
+                <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{fmtRp(total * p.pct)}</span>
+              </div>
+              <div style={{ height: 6, background: "#eee", borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ width: `${p.pct * 100}%`, height: "100%", background: p.color }} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
+
 
 // ---- Charts ----
 function Donut({
