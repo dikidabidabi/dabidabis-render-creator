@@ -623,6 +623,8 @@ function computeBounds(sk: Sketch): Bounds {
   const w = maxX - minX, h = maxY - minY;
   const pad = Math.max(w, h, 1) * 0.08;
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+}
+
 function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
