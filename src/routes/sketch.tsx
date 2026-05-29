@@ -2799,7 +2799,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Rekapitulasi panel (rendered below canvas in normal mode, inside SidePanel in fullscreen)
   const RekapPanel = (() => {
     const groundLevel = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
-    const ruangLayers = layers.filter((l) => !isLahanName(l.name));
+    const ruangLayers = layers.filter((l) => !isLahanName(l.name) && !isVoidLayerName(l.name));
     const kdbRencana = groundLevel
       ? ruangLayers.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
       : 0;
