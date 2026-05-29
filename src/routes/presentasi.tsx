@@ -927,10 +927,6 @@ function SlideContent({ slide }: { slide?: Slide }) {
   );
 }
 
-
-function SlideHeader({ slide }: { slide: Slide }) {
-
-
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
     slide.kind === "level" ? "Sketsa · Level"
