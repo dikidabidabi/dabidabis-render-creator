@@ -926,8 +926,9 @@ function SlideContent({ slide }: { slide?: Slide }) {
     </div>
   );
 }
-  );
-}
+
+
+function SlideHeader({ slide }: { slide: Slide }) {
 
 
 function SlideHeader({ slide }: { slide: Slide }) {
