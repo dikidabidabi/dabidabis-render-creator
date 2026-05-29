@@ -1549,17 +1549,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         ctx.closePath();
         const isLahan = isLahanLayerName(layer.name);
-        if (isLahan) {
+        const isVoidLy = isVoidLayerName(layer.name);
+        if (isVoidLy) {
+          // Void: no fill, thin border, plus diagonal crossing lines (bbox X)
+          ctx.strokeStyle = "rgba(0,0,0,0.85)";
+          ctx.lineWidth = 1 / s;
+          ctx.stroke();
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const p of layer.points) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+          }
+          ctx.save();
+          ctx.clip();
+          ctx.strokeStyle = "rgba(0,0,0,0.7)";
+          ctx.lineWidth = 0.7 / s;
+          ctx.beginPath();
+          ctx.moveTo(minX, minY);
+          ctx.lineTo(maxX, maxY);
+          ctx.moveTo(maxX, minY);
+          ctx.lineTo(minX, maxY);
+          ctx.stroke();
+          ctx.restore();
+        } else if (isLahan) {
           ctx.fillStyle = layer.locked ? "rgba(200,200,200,0.35)" : "rgba(210,210,210,0.28)";
           ctx.fill();
           ctx.strokeStyle = "rgba(170,170,170,0.95)";
+          ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
+          ctx.stroke();
         } else {
           ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
           ctx.fill();
           ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
+          ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
+          ctx.stroke();
         }
-        ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
-        ctx.stroke();
+
 
         // GSB inward offset (dashed) untuk layer lahan
         if (isLahan) {
