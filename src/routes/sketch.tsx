@@ -2720,12 +2720,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const final = name.trim() || "Ruang";
     if (final === layer.name) return;
     pushHistory();
-    onChange({
-      layers: layers.map((l) => (l.id === lid ? { ...l, name: final } : l)),
-    });
+    const becameVoid = isVoidLayerName(final) && !isVoidLayerName(layer.name);
+    let nextLayers = layers.map((l) =>
+      l.id === lid
+        ? { ...l, name: final, coefficient: isVoidLayerName(final) ? 0 : l.coefficient }
+        : l,
+    );
+    if (becameVoid && layer.points.length >= 3) {
+      const voidPts = layer.points;
+      const lvlId = layer.levelId;
+      const carved: Layer[] = [];
+      for (const ly of nextLayers) {
+        if (ly.id === lid) { carved.push(ly); continue; }
+        const sameLevel = (ly.levelId ?? undefined) === (lvlId ?? undefined);
+        if (!sameLevel || isLahanLayerName(ly.name) || isVoidLayerName(ly.name) || ly.points.length < 3) {
+          carved.push(ly);
+          continue;
+        }
+        const before = polygonAreaPx(ly.points);
+        const result = subtractPolygon(ly.points, voidPts);
+        if (!result || result.length < 3) {
+          toast.message(`${ly.name} terhapus — tertutup void`);
+          continue;
+        }
+        const after = polygonAreaPx(result);
+        if (Math.abs(after - before) < 0.5) { carved.push(ly); continue; }
+        carved.push({ ...ly, points: result, areaM2: after / (pxPerMeter * pxPerMeter) });
+      }
+      nextLayers = carved;
+    }
+    onChange({ layers: nextLayers });
     if (final.toLowerCase().startsWith("lahan"))
       toast.success(`${final} ditandai sebagai acuan KDB/KLB`);
+    else if (becameVoid)
+      toast.success(`Void aktif — koefisien 0 & ruang lain dikurangi`);
   };
+
 
   const setLayerCoefficient = (lid: string, coef: number) => {
     const layer = layers.find((l) => l.id === lid);
