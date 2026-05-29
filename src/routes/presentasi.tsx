@@ -870,12 +870,13 @@ function ManualScaleBox({
     </div>
   );
 }
-
-
 function SlideContent({ slide }: { slide?: Slide }) {
   if (!slide) return null;
+  const isSpecial = slide.kind === "title" || slide.kind === "closing";
   const body = (
     <>
+      {slide.kind === "title" && <TitleBody slide={slide} />}
+      {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
@@ -890,6 +891,8 @@ function SlideContent({ slide }: { slide?: Slide }) {
     </>
   );
   const fixedLayout =
+    slide.kind === "title" ||
+    slide.kind === "closing" ||
     slide.kind === "level" ||
     slide.kind === "matahari" ||
     slide.kind === "konsep" ||
@@ -904,14 +907,14 @@ function SlideContent({ slide }: { slide?: Slide }) {
         background: "#ffffff",
         color: "#0a0a0a",
         fontFamily: "var(--font-sans, Manrope, sans-serif)",
-        padding: PAD,
+        padding: isSpecial ? 0 : PAD,
         display: "flex",
         flexDirection: "column",
       }}
     >
-      <SlideHeader slide={slide} />
+      {!isSpecial && <SlideHeader slide={slide} />}
       {fixedLayout ? (
-        <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
+        <div style={{ flex: 1, minHeight: 0, marginTop: isSpecial ? 0 : 28, marginBottom: isSpecial ? 0 : 28, overflow: "hidden" }}>
           {body}
         </div>
       ) : (
@@ -919,8 +922,10 @@ function SlideContent({ slide }: { slide?: Slide }) {
           {body}
         </ManualScaleBox>
       )}
-      <SlideFooter slide={slide} />
+      {!isSpecial && <SlideFooter slide={slide} />}
     </div>
+  );
+}
   );
 }
 
