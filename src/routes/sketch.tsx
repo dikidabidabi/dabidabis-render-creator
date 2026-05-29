@@ -259,6 +259,10 @@ function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null 
 function isLahanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("lahan");
 }
+function isVoidLayerName(n: string) {
+  return n.trim().toLowerCase() === "void";
+}
+
 const DEFAULT_GSB_M = 4;
 function getGsbMeters(layer: Layer, sideIndex: number): number {
   const v = layer.gsb?.[sideIndex];
@@ -1545,17 +1549,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         ctx.closePath();
         const isLahan = isLahanLayerName(layer.name);
-        if (isLahan) {
+        const isVoidLy = isVoidLayerName(layer.name);
+        if (isVoidLy) {
+          // Void: no fill, thin border, plus diagonal crossing lines (bbox X)
+          ctx.strokeStyle = "rgba(0,0,0,0.85)";
+          ctx.lineWidth = 1 / s;
+          ctx.stroke();
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const p of layer.points) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+          }
+          ctx.save();
+          ctx.clip();
+          ctx.strokeStyle = "rgba(0,0,0,0.7)";
+          ctx.lineWidth = 0.7 / s;
+          ctx.beginPath();
+          ctx.moveTo(minX, minY);
+          ctx.lineTo(maxX, maxY);
+          ctx.moveTo(maxX, minY);
+          ctx.lineTo(minX, maxY);
+          ctx.stroke();
+          ctx.restore();
+        } else if (isLahan) {
           ctx.fillStyle = layer.locked ? "rgba(200,200,200,0.35)" : "rgba(210,210,210,0.28)";
           ctx.fill();
           ctx.strokeStyle = "rgba(170,170,170,0.95)";
+          ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
+          ctx.stroke();
         } else {
           ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
           ctx.fill();
           ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
+          ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
+          ctx.stroke();
         }
-        ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
-        ctx.stroke();
+
 
         // GSB inward offset (dashed) untuk layer lahan
         if (isLahan) {
@@ -2689,12 +2720,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const final = name.trim() || "Ruang";
     if (final === layer.name) return;
     pushHistory();
-    onChange({
-      layers: layers.map((l) => (l.id === lid ? { ...l, name: final } : l)),
-    });
+    const becameVoid = isVoidLayerName(final) && !isVoidLayerName(layer.name);
+    let nextLayers = layers.map((l) =>
+      l.id === lid
+        ? { ...l, name: final, coefficient: isVoidLayerName(final) ? 0 : l.coefficient }
+        : l,
+    );
+    if (becameVoid && layer.points.length >= 3) {
+      const voidPts = layer.points;
+      const lvlId = layer.levelId;
+      const carved: Layer[] = [];
+      for (const ly of nextLayers) {
+        if (ly.id === lid) { carved.push(ly); continue; }
+        const sameLevel = (ly.levelId ?? undefined) === (lvlId ?? undefined);
+        if (!sameLevel || isLahanLayerName(ly.name) || isVoidLayerName(ly.name) || ly.points.length < 3) {
+          carved.push(ly);
+          continue;
+        }
+        const before = polygonAreaPx(ly.points);
+        const result = subtractPolygon(ly.points, voidPts);
+        if (!result || result.length < 3) {
+          toast.message(`${ly.name} terhapus — tertutup void`);
+          continue;
+        }
+        const after = polygonAreaPx(result);
+        if (Math.abs(after - before) < 0.5) { carved.push(ly); continue; }
+        carved.push({ ...ly, points: result, areaM2: after / (pxPerMeter * pxPerMeter) });
+      }
+      nextLayers = carved;
+    }
+    onChange({ layers: nextLayers });
     if (final.toLowerCase().startsWith("lahan"))
       toast.success(`${final} ditandai sebagai acuan KDB/KLB`);
+    else if (becameVoid)
+      toast.success(`Void aktif — koefisien 0 & ruang lain dikurangi`);
   };
+
 
   const setLayerCoefficient = (lid: string, coef: number) => {
     const layer = layers.find((l) => l.id === lid);
@@ -2738,7 +2799,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Rekapitulasi panel (rendered below canvas in normal mode, inside SidePanel in fullscreen)
   const RekapPanel = (() => {
     const groundLevel = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
-    const ruangLayers = layers.filter((l) => !isLahanName(l.name));
+    const ruangLayers = layers.filter((l) => !isLahanName(l.name) && !isVoidLayerName(l.name));
     const kdbRencana = groundLevel
       ? ruangLayers.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
       : 0;

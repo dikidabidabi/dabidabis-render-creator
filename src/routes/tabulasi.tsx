@@ -641,9 +641,27 @@ function CostEstimateSection({ sketch }: { sketch: Sketch }) {
           <span className="font-mono text-base font-semibold tabular-nums">{fmtRp(total)}</span>
         </div>
       </div>
+      <div className="space-y-1 rounded-md border border-border/60 bg-background/40 p-2">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Pareto Biaya
+        </div>
+        {[
+          { label: "Arsitektur", pct: 0.25 },
+          { label: "Struktur", pct: 0.35 },
+          { label: "MEP", pct: 0.40 },
+        ].map((p) => (
+          <div key={p.label} className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-muted-foreground">
+              {p.label} <span className="font-mono">({(p.pct * 100).toFixed(0)}%)</span>
+            </span>
+            <span className="font-mono tabular-nums">{fmtRp(total * p.pct)}</span>
+          </div>
+        ))}
+      </div>
       <p className="text-[10px] leading-relaxed text-muted-foreground">
         Tidak termasuk layer "Lahan" dan layer bernama "void".
       </p>
     </div>
   );
 }
+
