@@ -623,15 +623,15 @@ function computeBounds(sk: Sketch): Bounds {
   const w = maxX - minX, h = maxY - minY;
   const pad = Math.max(w, h, 1) * 0.08;
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
-}
-
 function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
-  // 4 slide analisa site di awal — selalu ada (pakai koordinat default jika belum dikunci).
+  // Slide judul (paling awal)
+  out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
+  // 4 slide analisa site — selalu ada (pakai koordinat default jika belum dikunci).
   out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
   out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
   out.push({ kind: "site", id: "site-fasilitas", title: "Fasilitas Sekitar & Radius Pencapaian", sketch: sk, bounds, view: "fasilitas" });
@@ -667,6 +667,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk });
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
+  // Slide penutup
+  out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
+  return out;
+}
   return out;
 }
 
