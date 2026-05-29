@@ -593,6 +593,8 @@ function A3Frame({ children }: { children: React.ReactNode }) {
 // ---------- Slide types ----------
 type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
 type Slide =
+  | { kind: "title"; id: string; title: string; sketch: Sketch }
+  | { kind: "closing"; id: string; title: string; sketch: Sketch }
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
@@ -629,7 +631,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels);
   const out: Slide[] = [];
-  // 4 slide analisa site di awal — selalu ada (pakai koordinat default jika belum dikunci).
+  // Slide judul (paling awal)
+  out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
+  // 4 slide analisa site — selalu ada (pakai koordinat default jika belum dikunci).
   out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
   out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
   out.push({ kind: "site", id: "site-fasilitas", title: "Fasilitas Sekitar & Radius Pencapaian", sketch: sk, bounds, view: "fasilitas" });
@@ -665,6 +669,8 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk });
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
+  // Slide penutup
+  out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
   return out;
 }
 
@@ -868,12 +874,13 @@ function ManualScaleBox({
     </div>
   );
 }
-
-
 function SlideContent({ slide }: { slide?: Slide }) {
   if (!slide) return null;
+  const isSpecial = slide.kind === "title" || slide.kind === "closing";
   const body = (
     <>
+      {slide.kind === "title" && <TitleBody slide={slide} />}
+      {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
@@ -888,6 +895,8 @@ function SlideContent({ slide }: { slide?: Slide }) {
     </>
   );
   const fixedLayout =
+    slide.kind === "title" ||
+    slide.kind === "closing" ||
     slide.kind === "level" ||
     slide.kind === "matahari" ||
     slide.kind === "konsep" ||
@@ -902,14 +911,14 @@ function SlideContent({ slide }: { slide?: Slide }) {
         background: "#ffffff",
         color: "#0a0a0a",
         fontFamily: "var(--font-sans, Manrope, sans-serif)",
-        padding: PAD,
+        padding: isSpecial ? 0 : PAD,
         display: "flex",
         flexDirection: "column",
       }}
     >
-      <SlideHeader slide={slide} />
+      {!isSpecial && <SlideHeader slide={slide} />}
       {fixedLayout ? (
-        <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
+        <div style={{ flex: 1, minHeight: 0, marginTop: isSpecial ? 0 : 28, marginBottom: isSpecial ? 0 : 28, overflow: "hidden" }}>
           {body}
         </div>
       ) : (
@@ -917,11 +926,10 @@ function SlideContent({ slide }: { slide?: Slide }) {
           {body}
         </ManualScaleBox>
       )}
-      <SlideFooter slide={slide} />
+      {!isSpecial && <SlideFooter slide={slide} />}
     </div>
   );
 }
-
 
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
@@ -1003,6 +1011,96 @@ function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number
           <text x="84" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">T</text>
           <text x="16" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">B</text>
         </svg>
+      </div>
+    </div>
+  );
+}
+// ---- Title body ----
+function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
+  const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        padding: PAD,
+        background: "#ffffff",
+        position: "relative",
+      }}
+    >
+      <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 600, marginBottom: 28 }}>
+        Presentasi Proyek
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-display, Sora, sans-serif)",
+          fontSize: 92,
+          lineHeight: 1.05,
+          letterSpacing: "-0.04em",
+          fontWeight: 700,
+          color: "#0a0a0a",
+          maxWidth: 1100,
+        }}
+      >
+        {slide.sketch.title || "Proyek"}
+      </div>
+      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 36, marginBottom: 36 }} />
+      <div style={{ fontSize: 22, color: "#555", letterSpacing: "0.02em" }}>
+        {dateStr}
+      </div>
+      <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
+        <span style={{ fontWeight: 700, color: "#111" }}>Dabidabi's</span>
+        <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
+        <span>A3 · 420 × 297 mm</span>
+      </div>
+    </div>
+  );
+}
+
+// ---- Closing body ----
+function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        padding: PAD,
+        background: "#0a0a0a",
+        color: "#ffffff",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-display, Sora, sans-serif)",
+          fontSize: 104,
+          lineHeight: 1.05,
+          letterSpacing: "-0.03em",
+          fontWeight: 700,
+        }}
+      >
+        Terima Kasih
+      </div>
+      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 40, marginBottom: 40 }} />
+      <div style={{ fontSize: 24, color: "#aaa", letterSpacing: "0.02em", maxWidth: 800 }}>
+        Atas perhatian dan kerja samanya dalam pembahasan desain proyek ini.
+      </div>
+      <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
+        <span style={{ fontWeight: 700, color: "#fff" }}>Dabidabi's</span>
+        <span style={{ color: "#888" }}>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
+        <span style={{ color: "#888" }}>A3 · 420 × 297 mm</span>
       </div>
     </div>
   );
