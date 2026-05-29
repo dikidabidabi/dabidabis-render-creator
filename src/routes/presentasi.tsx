@@ -671,8 +671,6 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
   return out;
 }
-  return out;
-}
 
 // ---------- Stats ----------
 type Stats = {
