@@ -1015,6 +1015,96 @@ function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number
     </div>
   );
 }
+// ---- Title body ----
+function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
+  const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        padding: PAD,
+        background: "#ffffff",
+        position: "relative",
+      }}
+    >
+      <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 600, marginBottom: 28 }}>
+        Presentasi Proyek
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-display, Sora, sans-serif)",
+          fontSize: 92,
+          lineHeight: 1.05,
+          letterSpacing: "-0.04em",
+          fontWeight: 700,
+          color: "#0a0a0a",
+          maxWidth: 1100,
+        }}
+      >
+        {slide.sketch.title || "Proyek"}
+      </div>
+      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 36, marginBottom: 36 }} />
+      <div style={{ fontSize: 22, color: "#555", letterSpacing: "0.02em" }}>
+        {dateStr}
+      </div>
+      <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
+        <span style={{ fontWeight: 700, color: "#111" }}>Dabidabi's</span>
+        <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
+        <span>A3 · 420 × 297 mm</span>
+      </div>
+    </div>
+  );
+}
+
+// ---- Closing body ----
+function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        padding: PAD,
+        background: "#0a0a0a",
+        color: "#ffffff",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "var(--font-display, Sora, sans-serif)",
+          fontSize: 104,
+          lineHeight: 1.05,
+          letterSpacing: "-0.03em",
+          fontWeight: 700,
+        }}
+      >
+        Terima Kasih
+      </div>
+      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 40, marginBottom: 40 }} />
+      <div style={{ fontSize: 24, color: "#aaa", letterSpacing: "0.02em", maxWidth: 800 }}>
+        Atas perhatian dan kerja samanya dalam pembahasan desain proyek ini.
+      </div>
+      <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
+        <span style={{ fontWeight: 700, color: "#fff" }}>Dabidabi's</span>
+        <span style={{ color: "#888" }}>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
+        <span style={{ color: "#888" }}>A3 · 420 × 297 mm</span>
+      </div>
+    </div>
+  );
+}
 
 // ---- Level body ----
 function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
