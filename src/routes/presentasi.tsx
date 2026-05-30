@@ -592,6 +592,15 @@ function A3Frame({ children }: { children: React.ReactNode }) {
 
 // ---------- Slide types ----------
 type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
+type RincianSection = {
+  level: Level;
+  items: Layer[];
+  k: number;
+  partIndex: number;
+  partCount: number;
+  totalAsliPer: number;
+  totalEfPer: number;
+};
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
   | { kind: "closing"; id: string; title: string; sketch: Sketch }
