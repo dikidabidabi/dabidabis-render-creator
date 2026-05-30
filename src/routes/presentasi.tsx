@@ -1409,7 +1409,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
               return (
                 <g key={`${b.id}-${i}`}>
-                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.8} />
+                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
                   {w > 28 && h > 18 && (
                     <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
                       style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
