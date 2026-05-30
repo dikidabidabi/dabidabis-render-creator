@@ -1332,11 +1332,12 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const drawW = cutLenM * scalePxPerM;
   const drawH = totalHM * scalePxPerM;
   const offsetX = (AREA_W - drawW) / 2;
+  const offsetY = (AREA_H - drawH) / 2;
   // Map meter X (0..cutLenM) to svg px.
   const mx = (m: number) => offsetX + m * scalePxPerM;
-  // Map meter elevation (mdpl) to svg px (y down). y=0 at top (maxMdpl + padTop).
+  // Map meter elevation (mdpl) to svg px (y down). Drawing is centered vertically.
   const topMdpl = maxMdpl + padTopM;
-  const my = (mdpl: number) => (topMdpl - mdpl) * scalePxPerM;
+  const my = (mdpl: number) => offsetY + (topMdpl - mdpl) * scalePxPerM;
 
   // mm grid: 1cm major, 1mm minor — drawn over the entire AREA, light.
   const gridMajor = scalePxPerM * 1; // 1 m grid major (looks like cm at print)
