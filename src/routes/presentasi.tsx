@@ -2706,33 +2706,35 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 }
 
 // ---- Rincian ----
-function RincianBody({ sketch }: { sketch: Sketch }) {
-  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
-  const displayNames = computeLevelDisplayNames(levels);
+function RincianBody({ slide }: { slide: Extract<Slide, { kind: "rincian" }> }) {
+  const { sketch, sections } = slide;
+  const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
+  if (sections.length === 0) {
+    return (
+      <div style={{ fontSize: 14, color: "#999", padding: "8px 0" }}>Belum ada ruang.</div>
+    );
+  }
   return (
     <div style={{ width: "100%", overflow: "hidden", display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{
-        columnCount: levels.length > 2 ? 2 : 1,
-        columnGap: 28,
-        width: "100%",
-      }}>
-        {levels.map((lv) => {
-          const items = ruang.filter((l) => l.levelId === lv.id);
-          const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
-          const totalAsliPer = items.reduce((s, l) => s + l.areaM2, 0);
-          const totalEfPer = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+      <div style={{ width: "100%" }}>
+        {sections.map((sec, idx) => {
+          const { level: lv, items, k, partIndex, partCount, totalAsliPer, totalEfPer } = sec;
           const totalAsli = totalAsliPer * k;
           const totalEf = totalEfPer * k;
           const name = displayNames[lv.id] ?? lv.name;
           return (
-            <div key={lv.id} style={{ breakInside: "avoid", marginBottom: 22 }}>
+            <div key={`${lv.id}-${partIndex}-${idx}`} style={{ breakInside: "avoid", marginBottom: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1px solid #111", paddingBottom: 6, marginBottom: 8 }}>
                 <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em" }}>
                   {name}
                   {k > 1 && (
                     <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#e85d3a", textTransform: "uppercase" }}>
                       tipikal {k}×
+                    </span>
+                  )}
+                  {partCount > 1 && (
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#888", textTransform: "uppercase" }}>
+                      bag. {partIndex}/{partCount}
                     </span>
                   )}
                 </span>
@@ -2766,11 +2768,13 @@ function RincianBody({ sketch }: { sketch: Sketch }) {
                         </tr>
                       );
                     })}
-                    <tr style={{ borderTop: "1px solid #111", fontWeight: 600 }}>
-                      <td style={{ padding: "8px 0" }} colSpan={2}>Total</td>
-                      <td style={{ padding: "8px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAsli)}</td>
-                      <td style={{ padding: "8px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalEf)}</td>
-                    </tr>
+                    {partIndex === partCount && (
+                      <tr style={{ borderTop: "1px solid #111", fontWeight: 600 }}>
+                        <td style={{ padding: "8px 0" }} colSpan={2}>Total</td>
+                        <td style={{ padding: "8px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAsli)}</td>
+                        <td style={{ padding: "8px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalEf)}</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               )}
