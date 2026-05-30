@@ -141,6 +141,25 @@ type SectionCut = {
   updatedAt?: number;
 };
 
+// Label otomatis: A-A, B-B, ..., Z-Z, AA-AA, AB-AB, ...
+function sectionLabelFor(index: number): string {
+  let n = index;
+  let s = "";
+  do {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return `${s}-${s}`;
+}
+function nextSectionLabel(existing: SectionCut[]): string {
+  const used = new Set(existing.map((c) => (c.label || "").toUpperCase()));
+  for (let i = 0; i < 500; i++) {
+    const lbl = sectionLabelFor(i);
+    if (!used.has(lbl.toUpperCase())) return lbl;
+  }
+  return `X-${existing.length + 1}`;
+}
+
 type Sketch = {
   id: string;
   title: string;
