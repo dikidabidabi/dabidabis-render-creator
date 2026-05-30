@@ -3216,6 +3216,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Square className="mr-1.5 h-4 w-4" /> Persegi
           </Button>
           <Button
+            variant={tool === "polyline" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setPolyDraft(null); setTool("polyline"); }}
+            className={cn(tool === "polyline" && "bg-gradient-ember shadow-ember")}
+          >
+            <Waypoints className="mr-1.5 h-4 w-4" /> Polyline
+          </Button>
+          <Button
             variant={tool === "edit" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("edit"); }}
@@ -3231,6 +3239,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
         </div>
+        {tool === "polyline" && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tarik stylus tanpa jeda. Setiap belokan menjadi titik baru. Lepas stylus untuk berhenti, atau kembali ke titik awal untuk menutup polygon.
+          </p>
+        )}
         {tool === "rect" && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Tarik diagonal untuk membentuk persegi/persegi panjang. Ruang otomatis terbentuk.
