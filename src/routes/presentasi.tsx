@@ -2002,14 +2002,30 @@ function projectM(centerLat: number, centerLon: number, lat: number, lon: number
   return { x: dx, y: dy };
 }
 
-// POI category palette + queries.
-const POI_CATS: Array<{ key: string; label: string; color: string; q: string }> = [
-  { key: "edu",   label: "Pendidikan",  color: "#1f9d55", q: 'node["amenity"~"school|university|college|kindergarten"]' },
-  { key: "med",   label: "Kesehatan",   color: "#c0392b", q: 'node["amenity"~"hospital|clinic|doctors|pharmacy"]' },
-  { key: "shop",  label: "Komersial",   color: "#d6a423", q: 'node["shop"];node["amenity"~"marketplace|mall"]' },
-  { key: "food",  label: "Kuliner",     color: "#e85d3a", q: 'node["amenity"~"restaurant|cafe|fast_food|food_court"]' },
-  { key: "trans", label: "Transportasi",color: "#2d6cdf", q: 'node["highway"="bus_stop"];node["railway"~"station|halt"];node["amenity"="bus_station"]' },
-  { key: "wor",   label: "Ibadah",      color: "#8b5cf6", q: 'node["amenity"="place_of_worship"]' },
+// POI category palette + queries + SVG glyph (path within a 24x24 viewBox).
+type PoiCat = { key: string; label: string; color: string; q: string; glyph: string };
+const POI_CATS: Array<PoiCat> = [
+  { key: "edu",   label: "Pendidikan",  color: "#1f9d55",
+    q: 'node["amenity"~"school|university|college|kindergarten"]',
+    glyph: "M12 3 2 8l10 5 8-4v6h2V8L12 3zm-6 9.2V16c0 2 3 4 6 4s6-2 6-4v-3.8l-6 3-6-3z" },
+  { key: "med",   label: "Kesehatan",   color: "#c0392b",
+    q: 'node["amenity"~"hospital|clinic|doctors|pharmacy"]',
+    glyph: "M10 3h4v6h6v4h-6v8h-4v-8H4V9h6V3z" },
+  { key: "shop",  label: "Komersial",   color: "#d6a423",
+    q: 'node["shop"];node["amenity"~"marketplace|mall"]',
+    glyph: "M6 7V6a4 4 0 1 1 8 0v1h3l1 13H2L3 7h3zm2 0h4V6a2 2 0 1 0-4 0v1z" },
+  { key: "food",  label: "Kuliner",     color: "#e85d3a",
+    q: 'node["amenity"~"restaurant|cafe|fast_food|food_court"]',
+    glyph: "M7 2v8a2 2 0 0 0 2 2v10h2V12a2 2 0 0 0 2-2V2h-1v7h-1V2h-1v7H9V2H7zm10 0c-2 0-3 3-3 6 0 2 1 3 2 3v11h2V2h-1z" },
+  { key: "trans", label: "Transportasi",color: "#2d6cdf",
+    q: 'node["highway"="bus_stop"];node["railway"~"station|halt"];node["amenity"="bus_station"]',
+    glyph: "M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2v2h-2v-2H7v2H5v-2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v5h14V8H5zm2 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm10 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" },
+  { key: "wor",   label: "Ibadah",      color: "#8b5cf6",
+    q: 'node["amenity"="place_of_worship"]',
+    glyph: "M11 2h2v3h3v2h-3v3h-2V7H8V5h3V2zm-7 9 8-4 8 4v11h-5v-5h-6v5H4V11z" },
+  { key: "park",  label: "Parkir",      color: "#555f6b",
+    q: 'node["amenity"="parking"];way["amenity"="parking"]',
+    glyph: "M5 3h8a6 6 0 0 1 0 12h-4v6H5V3zm4 4v4h4a2 2 0 1 0 0-4H9z" },
 ];
 
 function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }) {
