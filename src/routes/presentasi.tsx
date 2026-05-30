@@ -675,7 +675,57 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
-  out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk });
+  // Rincian per Level — paginated jika tidak muat satu slide.
+  {
+    const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name));
+    const MAX_ROWS_PER_CHUNK = 18;
+    const SECTION_OVERHEAD = 130; // px (header + thead + total row + margin)
+    const ROW_HEIGHT = 28;
+    const BUDGET = 700;
+    const allSections: RincianSection[] = [];
+    for (const lv of levels) {
+      const items = ruangAll.filter((l) => l.levelId === lv.id);
+      const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+      const totalAsliPer = items.reduce((s, l) => s + l.areaM2, 0);
+      const totalEfPer = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+      if (items.length === 0) {
+        allSections.push({ level: lv, items, k, partIndex: 1, partCount: 1, totalAsliPer, totalEfPer });
+        continue;
+      }
+      const partCount = Math.max(1, Math.ceil(items.length / MAX_ROWS_PER_CHUNK));
+      for (let p = 0; p < partCount; p++) {
+        const chunk = items.slice(p * MAX_ROWS_PER_CHUNK, (p + 1) * MAX_ROWS_PER_CHUNK);
+        allSections.push({ level: lv, items: chunk, k, partIndex: p + 1, partCount, totalAsliPer, totalEfPer });
+      }
+    }
+    // Pack sections into pages by height budget
+    const pages: RincianSection[][] = [];
+    let cur: RincianSection[] = [];
+    let curH = 0;
+    for (const s of allSections) {
+      const h = SECTION_OVERHEAD + ROW_HEIGHT * Math.max(1, s.items.length);
+      if (cur.length > 0 && curH + h > BUDGET) {
+        pages.push(cur); cur = []; curH = 0;
+      }
+      cur.push(s); curH += h;
+    }
+    if (cur.length > 0) pages.push(cur);
+    const pageCount = Math.max(1, pages.length);
+    pages.forEach((sections, i) => {
+      out.push({
+        kind: "rincian",
+        id: pageCount > 1 ? `rincian-${i + 1}` : "rincian",
+        title: pageCount > 1 ? `Rincian per Level (${i + 1}/${pageCount})` : "Rincian per Level",
+        sketch: sk,
+        sections,
+        pageIndex: i + 1,
+        pageCount,
+      });
+    });
+    if (pages.length === 0) {
+      out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk, sections: [], pageIndex: 1, pageCount: 1 });
+    }
+  }
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   // Slide penutup
