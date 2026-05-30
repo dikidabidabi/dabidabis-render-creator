@@ -3165,7 +3165,7 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 // ---- Rincian ----
 function RincianBody({ slide }: { slide: Extract<Slide, { kind: "rincian" }> }) {
   const { sketch, sections } = slide;
-  const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
+  const displayNames = computeLevelDisplayNames(sketch.levels ?? [], sketch.layers ?? []);
   if (sections.length === 0) {
     return (
       <div style={{ fontSize: 14, color: "#999", padding: "8px 0" }}>Belum ada ruang.</div>
