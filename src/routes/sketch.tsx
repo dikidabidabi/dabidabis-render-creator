@@ -3410,17 +3410,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {tool === "section" && (
           <div className="space-y-1.5">
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Tarik satu garis lurus untuk menentukan bidang irisan. Anak panah menunjukkan arah pandang (ke kanan dari A → A'). Lepas stylus untuk menyimpan — slide
-              <span className="font-medium text-foreground"> Potongan Prinsip Skematik A-A</span> otomatis dibuat tepat setelah slide denah.
+              Tarik garis lurus untuk menentukan bidang irisan. Setiap potongan baru otomatis diberi label berurutan
+              (<span className="font-medium text-foreground">A-A</span>, <span className="font-medium text-foreground">B-B</span>, <span className="font-medium text-foreground">C-C</span>, …) dan menjadi slide tersendiri pada presentasi.
             </p>
-            {sketch.sectionCut && (
+            {(sketch.sectionCuts ?? []).length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Daftar Potongan ({(sketch.sectionCuts ?? []).length})
+                </div>
+                {(sketch.sectionCuts ?? []).map((c, i) => (
+                  <div
+                    key={`${c.label}-${i}`}
+                    className="flex items-center justify-between gap-1.5 rounded border border-border/60 bg-surface/40 px-2 py-1"
+                  >
+                    <span className="text-[11px] font-medium">{c.label || sectionLabelFor(i)}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[10px]"
+                      onClick={() => {
+                        const next = (sketch.sectionCuts ?? []).filter((_, idx) => idx !== i);
+                        onChange({ sectionCuts: next, sectionCut: undefined });
+                      }}
+                      title="Hapus potongan ini"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 w-full text-[11px] bg-gradient-ember shadow-ember"
+              onClick={() => { cancelPendingCurve(); setTool("section"); }}
+              title="Tarik garis berikutnya di kanvas — label otomatis (B-B, C-C, …)"
+            >
+              <Scissors className="mr-1 h-3.5 w-3.5" />
+              Tambah Potongan {nextSectionLabel(sketch.sectionCuts ?? [])}
+            </Button>
+            {(sketch.sectionCuts ?? []).length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 className="h-7 w-full text-[11px]"
-                onClick={() => onChange({ sectionCut: undefined })}
+                onClick={() => onChange({ sectionCuts: [], sectionCut: undefined })}
               >
-                <X className="mr-1 h-3.5 w-3.5" /> Hapus garis potong
+                <X className="mr-1 h-3.5 w-3.5" /> Hapus semua potongan
               </Button>
             )}
           </div>
