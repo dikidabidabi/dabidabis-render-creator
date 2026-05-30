@@ -1424,29 +1424,69 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
 
-          {/* Level boxes — floor slabs (horizontals) tebal, dinding (verticals) tipis */}
-          {boxes.map((b) => {
-            const x = mx(0);
-            const y = my(b.topM);
-            const w = cutLenM * scalePxPerM;
-            const h = (b.topM - b.baseM) * scalePxPerM;
-            return (
-              <g key={b.id}>
-                <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="none" />
-                {/* Dinding kiri & kanan — tipis */}
-                <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} />
-                <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} />
-                {/* Pelat lantai atas & bawah — tebal */}
-                <line x1={x} y1={y} x2={x + w} y2={y} stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
-                <line x1={x} y1={y + h} x2={x + w} y2={y + h} stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
-                {/* Pelat lantai tipikal (split) — tebal sebagai garis lantai */}
-                {Array.from({ length: b.count - 1 }).map((_, i) => {
-                  const yy = my(b.baseM + (i + 1) * b.floorH);
-                  return <line key={i} x1={x} y1={yy} x2={x + w} y2={yy} stroke="#111" strokeWidth={2} strokeLinecap="square" />;
-                })}
-              </g>
-            );
-          })}
+          {/* Level boxes — pelat lantai tebal HANYA di bawah ruang;
+              di luar ruang berupa garis putus-putus tipis */}
+          {(() => {
+            const roomIntervalsByBox = new Map<string, Array<[number, number]>>();
+            for (const b of boxes) {
+              const arr: Array<[number, number]> = b.slices.map((s) => [s.x0, s.x1]);
+              arr.sort((a, c) => a[0] - c[0]);
+              const merged: Array<[number, number]> = [];
+              for (const iv of arr) {
+                if (merged.length && iv[0] <= merged[merged.length - 1][1]) {
+                  merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], iv[1]);
+                } else merged.push([iv[0], iv[1]]);
+              }
+              roomIntervalsByBox.set(b.id, merged);
+            }
+            const renderFloorLine = (key: string, yy: number, underBoxId: string | null) => {
+              const rooms = underBoxId ? (roomIntervalsByBox.get(underBoxId) ?? []) : [];
+              const segs: Array<{ a: number; b: number; thick: boolean }> = [];
+              let cursor = 0;
+              for (const [r0, r1] of rooms) {
+                const a = Math.max(0, r0);
+                const b2 = Math.min(cutLenM, r1);
+                if (b2 <= a) continue;
+                if (a > cursor) segs.push({ a: cursor, b: a, thick: false });
+                segs.push({ a, b: b2, thick: true });
+                cursor = b2;
+              }
+              if (cursor < cutLenM) segs.push({ a: cursor, b: cutLenM, thick: false });
+              return (
+                <g key={key}>
+                  {segs.map((s, i) =>
+                    s.thick ? (
+                      <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
+                        stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
+                    ) : (
+                      <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
+                        stroke="#111" strokeWidth={0.6} strokeDasharray="3 3" />
+                    )
+                  )}
+                </g>
+              );
+            };
+            return boxes.map((b) => {
+              const x = mx(0);
+              const y = my(b.topM);
+              const w = cutLenM * scalePxPerM;
+              const h = (b.topM - b.baseM) * scalePxPerM;
+              const upper = boxes.find((o) => Math.abs(o.baseM - b.topM) < 1e-3);
+              return (
+                <g key={b.id}>
+                  <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="none" />
+                  <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} />
+                  <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} />
+                  {renderFloorLine(`${b.id}-top`, y, upper ? upper.id : null)}
+                  {renderFloorLine(`${b.id}-bot`, y + h, b.id)}
+                  {Array.from({ length: b.count - 1 }).map((_, i) => {
+                    const yy = my(b.baseM + (i + 1) * b.floorH);
+                    return renderFloorLine(`${b.id}-mid-${i}`, yy, b.id);
+                  })}
+                </g>
+              );
+            });
+          })()}
 
           {/* Room slices per level */}
           {boxes.map((b) =>
