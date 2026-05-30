@@ -948,7 +948,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
-      {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
+      {slide.kind === "rincian" && <RincianBody slide={slide} />}
       {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
