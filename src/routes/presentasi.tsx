@@ -1368,10 +1368,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 <text
                   x={c.x + rPx / 2} y={c.y - sw * 0.004}
                   textAnchor="middle" dominantBaseline="alphabetic"
-                  fontSize={sw * 0.015} fontWeight={700} fill="#0a0a0a"
-                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.006 } as React.CSSProperties}
+                  fontSize={sw * 0.0075} fontWeight={700} fill="#0a0a0a"
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.003 } as React.CSSProperties}
                 >
-                  38 m
+                  38000 mm
                 </text>
               </g>
             );
