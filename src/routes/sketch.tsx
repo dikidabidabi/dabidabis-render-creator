@@ -2486,6 +2486,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const p = getWorldPos(e);
     if (tool === "line" || tool === "rect") {
       setDrawing({ a: p, b: p });
+    } else if (tool === "polyline") {
+      setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
