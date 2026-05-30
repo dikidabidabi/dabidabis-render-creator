@@ -1397,27 +1397,31 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         {(() => {
           const roomList = layers.filter((l) => !isLahan(l.name));
           if (roomList.length === 0) return null;
-          // Two columns when many rooms
-          const twoCol = roomList.length > 10;
+          const n = roomList.length;
+          const cols = n > 24 ? 3 : n > 10 ? 2 : 1;
+          const fontPx = n > 36 ? 9 : n > 20 ? 10 : 11;
+          const gapPx = n > 24 ? 2 : 3;
           return (
-            <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "0 1 auto", overflow: "hidden" }}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8 }}>
+            <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8, flexShrink: 0 }}>
                 Legenda Ruang
               </div>
               <ol style={{
                 listStyle: "none",
                 margin: 0,
                 padding: 0,
-                columnCount: twoCol ? 2 : 1,
-                columnGap: 12,
-                fontSize: 11,
-                lineHeight: 1.4,
+                columnCount: cols,
+                columnGap: 10,
+                fontSize: fontPx,
+                lineHeight: 1.35,
+                flex: "1 1 auto",
+                overflow: "hidden",
               }}>
                 {roomList.map((r, i) => (
-                  <li key={r.id} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: 3 }}>
+                  <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: gapPx }}>
                     <span style={{
                       flexShrink: 0,
-                      minWidth: 18,
+                      minWidth: 16,
                       fontWeight: 700,
                       color: r.color.replace("ALPHA", "1"),
                       fontVariantNumeric: "tabular-nums",
