@@ -419,6 +419,53 @@ function SketchViewer({
     if (orbitRef.current?.reset) orbitRef.current.reset();
   };
 
+  const origin = useMemo(() => computeOrigin(sketch), [sketch]);
+  const baseMdpl0 = expanded[0]?.baseMdpl ?? 0;
+
+  const buildExportInputs = useCallback((): MeshInput[] => {
+    const buildLayers = sketch.layers.filter(
+      (l) => !isLahan(l.name) && !isVoid(l.name),
+    );
+    const inputs: MeshInput[] = [];
+    for (const lv of expanded) {
+      const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
+      for (const ly of layersOfLevel) {
+        const rgb = ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+          const parts = body.split(",").map((s: string) => s.trim());
+          return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+        }) || "#e85d3a";
+        inputs.push({
+          name: `${lv.name}_${ly.name}`,
+          points: ly.points,
+          origin,
+          mPerPx,
+          baseY: lv.baseMdpl - baseMdpl0,
+          height: lv.height,
+          color: rgb,
+        });
+      }
+    }
+    return inputs;
+  }, [sketch.layers, expanded, origin, mPerPx, baseMdpl0]);
+
+  const safeTitle = (sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 40) || "model";
+
+  const handleExport = useCallback((fmt: "obj" | "3ds") => {
+    const meshes = buildMeshes(buildExportInputs());
+    if (!meshes.length) {
+      alert("Tidak ada geometri yang bisa diekspor.");
+      return;
+    }
+    if (fmt === "obj") {
+      const { obj, mtl, mtlName } = meshesToObj(meshes, safeTitle);
+      triggerDownload(obj, `${safeTitle}.obj`, "text/plain");
+      triggerDownload(mtl, mtlName, "text/plain");
+    } else {
+      const data = meshesTo3ds(meshes);
+      triggerDownload(data, `${safeTitle}.3ds`, "application/octet-stream");
+    }
+  }, [buildExportInputs, safeTitle]);
+
   return (
     <div
       className={cn(
