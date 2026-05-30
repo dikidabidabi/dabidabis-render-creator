@@ -2131,7 +2131,8 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
           (c.key === "shop" && (tags.shop || /marketplace|mall/.test(tags.amenity ?? ""))) ||
           (c.key === "food" && /restaurant|cafe|fast_food|food_court/.test(tags.amenity ?? "")) ||
           (c.key === "trans" && (tags.highway === "bus_stop" || /station|halt/.test(tags.railway ?? "") || tags.amenity === "bus_station")) ||
-          (c.key === "wor" && tags.amenity === "place_of_worship");
+          (c.key === "wor" && tags.amenity === "place_of_worship") ||
+          (c.key === "park" && tags.amenity === "parking");
         if (!m) continue;
         items.push({
           name: tags.name ?? `(${c.label.toLowerCase()})`,
