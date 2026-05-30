@@ -48,7 +48,8 @@ type Sketch = {
   lines?: Line[]; layers: Layer[]; levels: Level[];
   kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
   geo?: Geo;
-  sectionCut?: SectionCut;
+  sectionCut?: SectionCut; // legacy
+  sectionCuts?: SectionCut[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
