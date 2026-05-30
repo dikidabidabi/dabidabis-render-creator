@@ -3394,7 +3394,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             className={cn("col-span-2", tool === "section" && "bg-gradient-ember shadow-ember")}
             title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
           >
-            <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong A-A
+            <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
           </Button>
         </div>
         {tool === "polyline" && (
