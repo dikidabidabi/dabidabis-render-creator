@@ -3341,6 +3341,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
+          <Button
+            variant={tool === "section" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("section"); }}
+            className={cn("col-span-2", tool === "section" && "bg-gradient-ember shadow-ember")}
+            title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
+          >
+            <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong A-A
+          </Button>
         </div>
         {tool === "polyline" && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -3352,6 +3361,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             Tarik diagonal untuk membentuk persegi/persegi panjang. Ruang otomatis terbentuk.
           </p>
         )}
+        {tool === "section" && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Tarik satu garis lurus untuk menentukan bidang irisan. Anak panah menunjukkan arah pandang (ke kanan dari A → A'). Lepas stylus untuk menyimpan — slide
+              <span className="font-medium text-foreground"> Potongan Prinsip Skematik A-A</span> otomatis dibuat tepat setelah slide denah.
+            </p>
+            {sketch.sectionCut && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-full text-[11px]"
+                onClick={() => onChange({ sectionCut: undefined })}
+              >
+                <X className="mr-1 h-3.5 w-3.5" /> Hapus garis potong
+              </Button>
+            )}
+          </div>
+        )}
+
         {tool === "edit" && (
           <div className="space-y-1.5">
             <div className="grid grid-cols-4 gap-1.5">
