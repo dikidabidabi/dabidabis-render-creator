@@ -1374,7 +1374,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
 
-          {/* Level boxes (outline + floor lines for typical count) */}
+          {/* Level boxes — floor slabs (horizontals) tebal, dinding (verticals) tipis */}
           {boxes.map((b) => {
             const x = mx(0);
             const y = my(b.topM);
@@ -1382,11 +1382,17 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const h = (b.topM - b.baseM) * scalePxPerM;
             return (
               <g key={b.id}>
-                <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="#111" strokeWidth={1.2} />
-                {/* Typical floor split lines */}
+                <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="none" />
+                {/* Dinding kiri & kanan — tipis */}
+                <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} />
+                <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} />
+                {/* Pelat lantai atas & bawah — tebal */}
+                <line x1={x} y1={y} x2={x + w} y2={y} stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
+                <line x1={x} y1={y + h} x2={x + w} y2={y + h} stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
+                {/* Pelat lantai tipikal (split) — tebal sebagai garis lantai */}
                 {Array.from({ length: b.count - 1 }).map((_, i) => {
                   const yy = my(b.baseM + (i + 1) * b.floorH);
-                  return <line key={i} x1={x} y1={yy} x2={x + w} y2={yy} stroke="#999" strokeWidth={0.6} strokeDasharray="3 3" />;
+                  return <line key={i} x1={x} y1={yy} x2={x + w} y2={yy} stroke="#111" strokeWidth={2} strokeLinecap="square" />;
                 })}
               </g>
             );
