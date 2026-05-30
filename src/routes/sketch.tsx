@@ -559,18 +559,38 @@ function normalizeSketch(s: any): Sketch {
           label: typeof s.geo.label === "string" ? s.geo.label : "",
         }
       : undefined,
-    sectionCut:
-      s?.sectionCut &&
-      s.sectionCut.p1 && s.sectionCut.p2 &&
-      Number.isFinite(Number(s.sectionCut.p1.x)) && Number.isFinite(Number(s.sectionCut.p1.y)) &&
-      Number.isFinite(Number(s.sectionCut.p2.x)) && Number.isFinite(Number(s.sectionCut.p2.y))
-        ? {
-            p1: { x: Number(s.sectionCut.p1.x), y: Number(s.sectionCut.p1.y) },
-            p2: { x: Number(s.sectionCut.p2.x), y: Number(s.sectionCut.p2.y) },
-            label: typeof s.sectionCut.label === "string" ? s.sectionCut.label : "A-A",
-            updatedAt: Number.isFinite(Number(s.sectionCut.updatedAt)) ? Number(s.sectionCut.updatedAt) : Date.now(),
-          }
-        : undefined,
+    sectionCuts: (() => {
+      const valid = (c: any): SectionCut | null => {
+        if (!c || !c.p1 || !c.p2) return null;
+        if (!Number.isFinite(Number(c.p1.x)) || !Number.isFinite(Number(c.p1.y))) return null;
+        if (!Number.isFinite(Number(c.p2.x)) || !Number.isFinite(Number(c.p2.y))) return null;
+        return {
+          p1: { x: Number(c.p1.x), y: Number(c.p1.y) },
+          p2: { x: Number(c.p2.x), y: Number(c.p2.y) },
+          label: typeof c.label === "string" && c.label.trim() ? c.label : "A-A",
+          updatedAt: Number.isFinite(Number(c.updatedAt)) ? Number(c.updatedAt) : Date.now(),
+        };
+      };
+      const arr: SectionCut[] = [];
+      if (Array.isArray(s?.sectionCuts)) {
+        for (const c of s.sectionCuts) { const v = valid(c); if (v) arr.push(v); }
+      }
+      // migrasi legacy: single sectionCut → array
+      if (arr.length === 0) {
+        const v = valid(s?.sectionCut);
+        if (v) arr.push(v);
+      }
+      // pastikan label unik & berurutan jika duplikat/kosong
+      const seen = new Set<string>();
+      return arr.map((c, i) => {
+        let lbl = (c.label || "").trim() || sectionLabelFor(i);
+        const key = lbl.toUpperCase();
+        if (seen.has(key)) lbl = sectionLabelFor(i);
+        seen.add(lbl.toUpperCase());
+        return { ...c, label: lbl };
+      });
+    })(),
+    sectionCut: undefined,
   };
 }
 
