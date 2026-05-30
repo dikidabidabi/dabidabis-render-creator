@@ -2111,6 +2111,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange(patch);
     },
     [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
+  );
+
+
 
   // Find nearest vertex on the ACTIVE level (line endpoint or layer point) within tolerance
   const findVertexAt = useCallback(
