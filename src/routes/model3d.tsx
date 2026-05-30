@@ -233,10 +233,12 @@ function GroundPlane({
   points,
   origin,
   mPerPx,
+  y,
 }: {
   points: Point[];
   origin: Point;
   mPerPx: number;
+  y: number;
 }) {
   const geometry = useMemo(() => {
     if (points.length < 3) return null;
@@ -256,7 +258,7 @@ function GroundPlane({
   }, [points, origin.x, origin.y, mPerPx]);
   if (!geometry) return null;
   return (
-    <mesh geometry={geometry} position={[0, -0.02, 0]} receiveShadow>
+    <mesh geometry={geometry} position={[0, y, 0]} receiveShadow>
       <meshStandardMaterial color="#e7e5e0" side={THREE.DoubleSide} />
     </mesh>
   );
@@ -275,6 +277,7 @@ function Scene({
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
   const floors = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
   const baseMdpl = floors[0]?.baseMdpl ?? 0;
+  const groundY = 0 - baseMdpl;
 
   const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
   const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
@@ -324,7 +327,7 @@ function Scene({
       <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
 
       {lahanLayers.map((ly) => (
-        <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} />
+        <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
       ))}
 
       <Grid
@@ -335,7 +338,7 @@ function Scene({
         sectionSize={10}
         sectionThickness={1}
         sectionColor="#9a9a9a"
-        position={[0, -0.01, 0]}
+        position={[0, groundY - 0.01, 0]}
         fadeDistance={120}
         fadeStrength={1}
         infiniteGrid
