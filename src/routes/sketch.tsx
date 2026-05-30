@@ -1262,6 +1262,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
   const [filletSegments] = useState<number>(10);
   const [addPointPreview, setAddPointPreview] = useState<Point | null>(null);
+  // Polyline live-draw: stylus turuns membentuk vertex baru otomatis saat berbelok.
+  // points = vertex yang sudah ter-commit; lastSample = posisi stylus terbaru sebelum cursor;
+  // cursor = posisi stylus saat ini. Selesai saat pointer up atau cursor menyentuh points[0].
+  const [polyDraft, setPolyDraft] = useState<
+    | { points: Point[]; lastSample: Point; cursor: Point; closed?: boolean }
+    | null
+  >(null);
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
