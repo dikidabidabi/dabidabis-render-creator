@@ -3523,6 +3523,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Persegi (tarik diagonal)"
           >
             <Square className="h-4 w-4" />
+          </Button>
           <Button
             variant={tool === "polyline" ? "default" : "ghost"}
             size="sm"
