@@ -1332,11 +1332,12 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const drawW = cutLenM * scalePxPerM;
   const drawH = totalHM * scalePxPerM;
   const offsetX = (AREA_W - drawW) / 2;
+  const offsetY = (AREA_H - drawH) / 2;
   // Map meter X (0..cutLenM) to svg px.
   const mx = (m: number) => offsetX + m * scalePxPerM;
-  // Map meter elevation (mdpl) to svg px (y down). y=0 at top (maxMdpl + padTop).
+  // Map meter elevation (mdpl) to svg px (y down). Drawing is centered vertically.
   const topMdpl = maxMdpl + padTopM;
-  const my = (mdpl: number) => (topMdpl - mdpl) * scalePxPerM;
+  const my = (mdpl: number) => offsetY + (topMdpl - mdpl) * scalePxPerM;
 
   // mm grid: 1cm major, 1mm minor — drawn over the entire AREA, light.
   const gridMajor = scalePxPerM * 1; // 1 m grid major (looks like cm at print)
@@ -1373,7 +1374,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
 
-          {/* Level boxes (outline + floor lines for typical count) */}
+          {/* Level boxes — floor slabs (horizontals) tebal, dinding (verticals) tipis */}
           {boxes.map((b) => {
             const x = mx(0);
             const y = my(b.topM);
@@ -1381,11 +1382,17 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const h = (b.topM - b.baseM) * scalePxPerM;
             return (
               <g key={b.id}>
-                <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="#111" strokeWidth={1.2} />
-                {/* Typical floor split lines */}
+                <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="none" />
+                {/* Dinding kiri & kanan — tipis */}
+                <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} />
+                <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} />
+                {/* Pelat lantai atas & bawah — tebal */}
+                <line x1={x} y1={y} x2={x + w} y2={y} stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
+                <line x1={x} y1={y + h} x2={x + w} y2={y + h} stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
+                {/* Pelat lantai tipikal (split) — tebal sebagai garis lantai */}
                 {Array.from({ length: b.count - 1 }).map((_, i) => {
                   const yy = my(b.baseM + (i + 1) * b.floorH);
-                  return <line key={i} x1={x} y1={yy} x2={x + w} y2={yy} stroke="#999" strokeWidth={0.6} strokeDasharray="3 3" />;
+                  return <line key={i} x1={x} y1={yy} x2={x + w} y2={yy} stroke="#111" strokeWidth={2} strokeLinecap="square" />;
                 })}
               </g>
             );
@@ -1402,7 +1409,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
               return (
                 <g key={`${b.id}-${i}`}>
-                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.8} />
+                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
                   {w > 28 && h > 18 && (
                     <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
                       style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
@@ -1440,7 +1447,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const y1 = my(b.topM);
             const y2 = my(b.baseM);
             const cy = (y1 + y2) / 2;
-            const dim = (b.topM - b.baseM).toFixed(2);
+            const dim = Math.round((b.topM - b.baseM) * 1000);
             return (
               <g key={`dim-${b.id}`}>
                 <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111" strokeWidth={0.8} />
@@ -1448,7 +1455,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#111" strokeWidth={0.8} />
                 <text x={x + 8} y={cy + 3} fontSize={9} fill="#111"
                   style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
-                  {dim} m
+                  {dim} mm
                 </text>
               </g>
             );
@@ -1718,28 +1725,28 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               const tipY = mid.y + py * arrowLen;
               return (
                 <g key={`cut-${idx}`} pointerEvents="none">
-                  {/* Dashed section line */}
+                  {/* Dashed section line — tipis, hitam */}
                   <line
                     x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                    stroke="#e85d3a"
-                    strokeWidth={sw * 0.0028}
-                    strokeDasharray={`${sw * 0.014} ${sw * 0.006} ${sw * 0.003} ${sw * 0.006}`}
+                    stroke="#0a0a0a"
+                    strokeWidth={sw * 0.0014}
+                    strokeDasharray={`${sw * 0.012} ${sw * 0.006} ${sw * 0.0025} ${sw * 0.006}`}
                     strokeLinecap="round"
                   />
                   {/* Viewing-direction arrow at mid */}
                   <line
                     x1={mid.x} y1={mid.y} x2={tipX} y2={tipY}
-                    stroke="#e85d3a" strokeWidth={sw * 0.002} strokeLinecap="round"
+                    stroke="#0a0a0a" strokeWidth={sw * 0.0014} strokeLinecap="round"
                   />
                   <polygon
                     points={`${tipX},${tipY} ${tipX - px * arrowHead + py * arrowHead * 0.7},${tipY - py * arrowHead - px * arrowHead * 0.7} ${tipX - px * arrowHead - py * arrowHead * 0.7},${tipY - py * arrowHead + px * arrowHead * 0.7}`}
-                    fill="#e85d3a"
+                    fill="#0a0a0a"
                   />
                   {/* Endpoint label bubbles */}
                   {[{ pt: bA, txt: tag }, { pt: bB, txt: `${tag}'` }].map((b, j) => (
                     <g key={j}>
                       <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
-                        fill="#ffffff" stroke="#e85d3a" strokeWidth={sw * 0.002} />
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0016} />
                       <text x={b.pt.x} y={b.pt.y}
                         textAnchor="middle" dominantBaseline="central"
                         fontSize={sw * 0.018} fontWeight={800} fill="#0a0a0a"
