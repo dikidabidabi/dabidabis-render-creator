@@ -134,6 +134,13 @@ function computeLevelDisplayNames(levels: { id: string; name: string; mdpl: numb
   return out;
 }
 
+type SectionCut = {
+  p1: Point;
+  p2: Point;
+  label?: string;
+  updatedAt?: number;
+};
+
 type Sketch = {
   id: string;
   title: string;
@@ -150,6 +157,7 @@ type Sketch = {
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
+  sectionCut?: SectionCut; // Garis Potong A-A (dinamis, men-trigger slide potongan)
 };
 
 type StoreShape = {
