@@ -1364,7 +1364,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
-  // Ground = minMdpl. Drawing area extents in meters:
+  const groundMdpl = findMdplZeroLevel(lvls) ? 0 : minMdpl;
+  // Drawing area extents in meters:
   const padTopM = Math.max(0.5, (maxMdpl - minMdpl) * 0.08);
   const padBotM = Math.max(0.5, (maxMdpl - minMdpl) * 0.05);
   const totalHM = (maxMdpl - minMdpl) + padTopM + padBotM;
@@ -1409,13 +1410,16 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           </defs>
           <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
 
-          {/* Ground line */}
-          <line x1={mx(0) - 30} y1={my(minMdpl)} x2={mx(cutLenM) + 30} y2={my(minMdpl)} stroke="#111" strokeWidth={1.6} />
-          {/* Hatching ground */}
+          {/* Lahan / ground line — terikat MDPL 0 */}
+          <line x1={mx(0) - 30} y1={my(groundMdpl)} x2={mx(cutLenM) + 30} y2={my(groundMdpl)} stroke="#111" strokeWidth={1.6} />
+          <text x={mx(0) - 36} y={my(groundMdpl) - 5} fontSize={10} textAnchor="end" fill="#111" style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700 }}>
+            Lahan ±0 mdpl
+          </text>
+          {/* Hatching lahan */}
           {Array.from({ length: 18 }).map((_, i) => {
             const x = mx(0) - 20 + i * ((cutLenM * scalePxPerM + 40) / 18);
             return (
-              <line key={i} x1={x} y1={my(minMdpl)} x2={x - 8} y2={my(minMdpl) + 10}
+              <line key={i} x1={x} y1={my(groundMdpl)} x2={x - 8} y2={my(groundMdpl) + 10}
                 stroke="#111" strokeWidth={0.7} />
             );
           })}
