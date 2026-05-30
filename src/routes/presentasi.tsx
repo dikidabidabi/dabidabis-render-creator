@@ -1339,10 +1339,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     x={labelX} y={labelY} dy={labelDy}
                     textAnchor={horizontal ? (nx > 0 ? "start" : "end") : "middle"}
                     dominantBaseline={horizontal ? "central" : (ny > 0 ? "hanging" : "auto")}
-                    fontSize={sw * 0.02} fontWeight={600} fill="#0a0a0a"
-                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.008 } as React.CSSProperties}
+                    fontSize={sw * 0.01} fontWeight={600} fill="#0a0a0a"
+                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.004 } as React.CSSProperties}
                   >
-                    {`${fmt(lengthM, 1)} m`}
+                    {`${fmt(lengthM * 1000, 0)} mm`}
                   </text>
                 </g>
               );
@@ -1368,10 +1368,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 <text
                   x={c.x + rPx / 2} y={c.y - sw * 0.004}
                   textAnchor="middle" dominantBaseline="alphabetic"
-                  fontSize={sw * 0.015} fontWeight={700} fill="#0a0a0a"
-                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.006 } as React.CSSProperties}
+                  fontSize={sw * 0.0075} fontWeight={700} fill="#0a0a0a"
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.003 } as React.CSSProperties}
                 >
-                  38 m
+                  38000 mm
                 </text>
               </g>
             );
@@ -1397,27 +1397,31 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         {(() => {
           const roomList = layers.filter((l) => !isLahan(l.name));
           if (roomList.length === 0) return null;
-          // Two columns when many rooms
-          const twoCol = roomList.length > 10;
+          const n = roomList.length;
+          const cols = n > 24 ? 3 : n > 10 ? 2 : 1;
+          const fontPx = n > 36 ? 9 : n > 20 ? 10 : 11;
+          const gapPx = n > 24 ? 2 : 3;
           return (
-            <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "0 1 auto", overflow: "hidden" }}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8 }}>
+            <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8, flexShrink: 0 }}>
                 Legenda Ruang
               </div>
               <ol style={{
                 listStyle: "none",
                 margin: 0,
                 padding: 0,
-                columnCount: twoCol ? 2 : 1,
-                columnGap: 12,
-                fontSize: 11,
-                lineHeight: 1.4,
+                columnCount: cols,
+                columnGap: 10,
+                fontSize: fontPx,
+                lineHeight: 1.35,
+                flex: "1 1 auto",
+                overflow: "hidden",
               }}>
                 {roomList.map((r, i) => (
-                  <li key={r.id} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: 3 }}>
+                  <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: gapPx }}>
                     <span style={{
                       flexShrink: 0,
-                      minWidth: 18,
+                      minWidth: 16,
                       fontWeight: 700,
                       color: r.color.replace("ALPHA", "1"),
                       fontVariantNumeric: "tabular-nums",

@@ -13,11 +13,25 @@ import {
   Maximize2,
   Minimize2,
   RotateCcw,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import {
+  buildMeshes,
+  meshesToObj,
+  meshesTo3ds,
+  triggerDownload,
+  type MeshInput,
+} from "@/lib/model3d-export";
 
 export const Route = createFileRoute("/model3d")({
   head: () => ({
@@ -405,6 +419,53 @@ function SketchViewer({
     if (orbitRef.current?.reset) orbitRef.current.reset();
   };
 
+  const origin = useMemo(() => computeOrigin(sketch), [sketch]);
+  const baseMdpl0 = expanded[0]?.baseMdpl ?? 0;
+
+  const buildExportInputs = useCallback((): MeshInput[] => {
+    const buildLayers = sketch.layers.filter(
+      (l) => !isLahan(l.name) && !isVoid(l.name),
+    );
+    const inputs: MeshInput[] = [];
+    for (const lv of expanded) {
+      const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
+      for (const ly of layersOfLevel) {
+        const rgb = ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+          const parts = body.split(",").map((s: string) => s.trim());
+          return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+        }) || "#e85d3a";
+        inputs.push({
+          name: `${lv.name}_${ly.name}`,
+          points: ly.points,
+          origin,
+          mPerPx,
+          baseY: lv.baseMdpl - baseMdpl0,
+          height: lv.height,
+          color: rgb,
+        });
+      }
+    }
+    return inputs;
+  }, [sketch.layers, expanded, origin, mPerPx, baseMdpl0]);
+
+  const safeTitle = (sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 40) || "model";
+
+  const handleExport = useCallback((fmt: "obj" | "3ds") => {
+    const meshes = buildMeshes(buildExportInputs());
+    if (!meshes.length) {
+      alert("Tidak ada geometri yang bisa diekspor.");
+      return;
+    }
+    if (fmt === "obj") {
+      const { obj, mtl, mtlName } = meshesToObj(meshes, safeTitle);
+      triggerDownload(obj, `${safeTitle}.obj`, "text/plain");
+      triggerDownload(mtl, mtlName, "text/plain");
+    } else {
+      const data = meshesTo3ds(meshes);
+      triggerDownload(data, `${safeTitle}.3ds`, "application/octet-stream");
+    }
+  }, [buildExportInputs, safeTitle]);
+
   return (
     <div
       className={cn(
@@ -551,6 +612,21 @@ function SketchViewer({
               </>
             )}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary" size="sm" className="h-7 gap-1 px-2 text-xs">
+                <Download className="h-3 w-3" /> Unduh
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuItem onClick={() => handleExport("obj")}>
+                Wavefront (.obj + .mtl)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("3ds")}>
+                Autodesk (.3ds)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-slate-700 shadow-sm">
