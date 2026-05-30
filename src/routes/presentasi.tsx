@@ -1237,7 +1237,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               })}
             </g>
           ))}
-          {layers.filter((l) => !isLahan(l.name)).map((l) => (
+          {layers.filter((l) => !isLahan(l.name)).map((l, i) => (
             <g key={l.id}>
               <polygon
                 points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
@@ -1250,12 +1250,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 y={centroid(l.points).y}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={sw * 0.02}
-                fontWeight={600}
+                fontSize={sw * 0.028}
+                fontWeight={700}
                 fill="#0a0a0a"
-                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: sw * 0.01 } as React.CSSProperties}
+                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.012 } as React.CSSProperties}
               >
-                {l.name}
+                {i + 1}
               </text>
             </g>
           ))}
