@@ -1339,10 +1339,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     x={labelX} y={labelY} dy={labelDy}
                     textAnchor={horizontal ? (nx > 0 ? "start" : "end") : "middle"}
                     dominantBaseline={horizontal ? "central" : (ny > 0 ? "hanging" : "auto")}
-                    fontSize={sw * 0.02} fontWeight={600} fill="#0a0a0a"
-                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.008 } as React.CSSProperties}
+                    fontSize={sw * 0.01} fontWeight={600} fill="#0a0a0a"
+                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.004 } as React.CSSProperties}
                   >
-                    {`${fmt(lengthM, 1)} m`}
+                    {`${fmt(lengthM * 1000, 0)} mm`}
                   </text>
                 </g>
               );
