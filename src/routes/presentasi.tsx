@@ -2377,11 +2377,50 @@ function AksesPanel({ roadTiers, roadsByTier }: {
 function FasilitasPanel({ facsByCat }: {
   facsByCat: Array<{ cat: { key: string; label: string; color: string }; items: Array<{ name: string; dist: number }> }>;
 }) {
+  // Narasi otomatis: hitung jumlah fasilitas per kategori dalam radius 500 m (walkable).
+  const WALK = 500;
+  const counts = facsByCat
+    .map(({ cat, items }) => ({ cat, n: items.filter((i) => i.dist <= WALK).length }))
+    .filter((c) => c.n > 0);
+  const phraseMap: Record<string, (n: number) => string> = {
+    edu:   (n) => `${n} fasilitas pendidikan`,
+    med:   (n) => `${n} fasilitas kesehatan`,
+    shop:  (n) => `${n} ${n === 1 ? "area komersial" : "area komersial"}`,
+    food:  (n) => `${n} titik kuliner`,
+    trans: (n) => `${n} titik transportasi publik`,
+    wor:   (n) => `${n} tempat ibadah`,
+    park:  (n) => `${n} area parkir`,
+  };
+  const phrases = counts.map(({ cat, n }) => (phraseMap[cat.key]?.(n) ?? `${n} ${cat.label.toLowerCase()}`));
+  let narrative = `Dalam radius berjalan kaki (${WALK} m) belum terdeteksi fasilitas signifikan dari data OpenStreetMap.`;
+  if (phrases.length === 1) narrative = `Dalam radius berjalan kaki (${WALK} m), terdapat ${phrases[0]}.`;
+  else if (phrases.length === 2) narrative = `Dalam radius berjalan kaki (${WALK} m), terdapat ${phrases[0]} dan ${phrases[1]}.`;
+  else if (phrases.length > 2) {
+    const head = phrases.slice(0, -1).join(", ");
+    narrative = `Dalam radius berjalan kaki (${WALK} m), terdapat ${head}, dan ${phrases[phrases.length - 1]}.`;
+  }
+  const totalWalk = counts.reduce((s, c) => s + c.n, 0);
+
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Narasi otomatis dari Overpass (≤500 m) */}
+      <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800, marginBottom: 6 }}>
+          Pencapaian Pejalan Kaki · {totalWalk} POI ≤ {WALK} m
+        </div>
+        <div style={{ fontFamily: "var(--font-body, Manrope, sans-serif)", fontSize: 13.5, lineHeight: 1.55, color: "#f1f1f1" }}>
+          {narrative}
+        </div>
+        <div style={{ fontSize: 10, color: "#888", marginTop: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Sumber: Overpass API · OpenStreetMap
+        </div>
+      </div>
+
     <div style={{ border: "1px solid #111", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700 }}>
         Fasilitas Terdekat (3 per kategori)
       </div>
+
       {facsByCat.map(({ cat, items }) => {
         const top = items.slice(0, 3);
         return (
