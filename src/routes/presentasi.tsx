@@ -674,17 +674,24 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
       bounds,
     });
   }
-  // Slide Potongan Prinsip A-A (otomatis muncul setelah slide denah ketika
-  // user menarik garis potong di kanvas sketsa).
-  if (sk.sectionCut && sk.sectionCut.p1 && sk.sectionCut.p2) {
-    const lbl = sk.sectionCut.label || "A-A";
-    out.push({
-      kind: "section",
-      id: "section-cut",
-      title: `Potongan Prinsip Skematik ${lbl}`,
-      sketch: sk,
-      cut: sk.sectionCut,
-    });
+  // Slide Potongan Prinsip (A-A, B-B, …) — otomatis muncul setelah slide denah
+  // ketika user menarik garis potong di kanvas sketsa.
+  {
+    const cuts: SectionCut[] = Array.isArray(sk.sectionCuts) && sk.sectionCuts.length > 0
+      ? sk.sectionCuts
+      : (sk.sectionCut ? [sk.sectionCut] : []);
+    for (let i = 0; i < cuts.length; i++) {
+      const c = cuts[i];
+      if (!c?.p1 || !c?.p2) continue;
+      const lbl = c.label || `Potongan ${i + 1}`;
+      out.push({
+        kind: "section",
+        id: `section-cut-${i}-${lbl}`,
+        title: `Potongan Prinsip Skematik ${lbl}`,
+        sketch: sk,
+        cut: c,
+      });
+    }
   }
   out.push({ kind: "matahari", id: "matahari", title: "Analisa Matahari & Bukaan", sketch: sk, bounds });
   out.push({ kind: "shadow-seasonal", id: "shadow-seasonal", title: "Studi Bayangan Tahunan · 15.00 WIB", sketch: sk, bounds });
