@@ -1447,7 +1447,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const y1 = my(b.topM);
             const y2 = my(b.baseM);
             const cy = (y1 + y2) / 2;
-            const dim = (b.topM - b.baseM).toFixed(2);
+            const dim = Math.round((b.topM - b.baseM) * 1000);
             return (
               <g key={`dim-${b.id}`}>
                 <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111" strokeWidth={0.8} />
@@ -1455,7 +1455,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#111" strokeWidth={0.8} />
                 <text x={x + 8} y={cy + 3} fontSize={9} fill="#111"
                   style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
-                  {dim} m
+                  {dim} mm
                 </text>
               </g>
             );
