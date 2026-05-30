@@ -585,6 +585,7 @@ function normalizeSketch(s: any): Sketch {
     const coef = c === 0 || c === 0.5 || c === 1 ? c : 1;
     return { ...base, coefficient: coef };
   });
+  ({ levels, layers } = bindLahanLayersToMdplZero(levels, layers));
   return {
     id: s?.id,
     title: s?.title ?? "Sketsa",
