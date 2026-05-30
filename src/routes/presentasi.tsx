@@ -102,13 +102,40 @@ function tipH(lv: { typicalHeight?: number }): number {
   return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
 }
 function isAutoLevelName(name: string): boolean {
-  return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
+  const n = name.trim();
+  if (/^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(n)) return true;
+  if (/^B\d+(?:\s*[-–]\s*B?\d+)?$/i.test(n)) return true;
+  return false;
 }
-function computeLevelDisplayNames(levels: Level[]): Record<string, string> {
-  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+function computeLevelDisplayNames(
+  levels: Level[],
+  layers?: { name: string; levelId?: string }[],
+): Record<string, string> {
   const out: Record<string, string> = {};
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+
+  let lahanLevelId: string | null = null;
+  if (layers && layers.length) {
+    const ids = new Set<string>();
+    for (const ly of layers) {
+      if (ly.levelId && isLahan(ly.name)) ids.add(ly.levelId);
+    }
+    const cand = sorted.filter((l) => ids.has(l.id));
+    if (cand.length) lahanLevelId = cand[0].id;
+  }
+  const lahanIdx = lahanLevelId ? sorted.findIndex((l) => l.id === lahanLevelId) : -1;
+
+  if (lahanIdx > 0) {
+    let bn = 1;
+    for (let i = lahanIdx - 1; i >= 0; i--) {
+      const lv = sorted[i];
+      out[lv.id] = isAutoLevelName(lv.name) ? `B${bn}` : lv.name;
+      bn++;
+    }
+  }
   let idx = 1;
-  for (const lv of sorted) {
+  for (let i = Math.max(0, lahanIdx); i < sorted.length; i++) {
+    const lv = sorted[i];
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
     const start = idx;
     const end = idx + k - 1;
