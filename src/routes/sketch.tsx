@@ -3523,6 +3523,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Persegi (tarik diagonal)"
           >
             <Square className="h-4 w-4" />
+          <Button
+            variant={tool === "polyline" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setPolyDraft(null); setTool("polyline"); }}
+            className={cn(tool === "polyline" && "bg-gradient-ember shadow-ember")}
+            title="Polyline (tarik tanpa jeda, berbelok = titik baru)"
+          >
+            <Waypoints className="h-4 w-4" />
           </Button>
           <Button
             variant={tool === "edit" ? "default" : "ghost"}
