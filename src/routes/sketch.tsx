@@ -711,7 +711,12 @@ function SketchPage() {
 
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s)),
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        const merged = { ...s, ...patch, updatedAt: Date.now() };
+        const bound = bindLahanLayersToMdplZero(merged.levels, merged.layers);
+        return { ...merged, levels: bound.levels, layers: bound.layers };
+      }),
     );
   }, []);
 
