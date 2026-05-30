@@ -230,7 +230,7 @@ function PresentasiPage() {
         else {
           const s = JSON.parse(raw) as StoreShape;
           if (s && Array.isArray(s.sketches)) {
-            setSketches(s.sketches as Sketch[]);
+            setSketches((s.sketches as Sketch[]).map(bindLahanToMdplZero));
             setOpenId((prev) => {
               if (prev && s.sketches.some((x) => x.id === prev)) return prev;
               return s.openId ?? s.sketches[0]?.id ?? null;
