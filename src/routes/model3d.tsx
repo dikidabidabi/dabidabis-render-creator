@@ -93,6 +93,26 @@ function isLahan(n: string) {
 function isVoid(n: string) {
   return n.trim().toLowerCase() === "void";
 }
+const MDPL_ZERO_EPS = 0.0001;
+function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
+  return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
+}
+function bindLahanToMdplZero(sketch: Sketch): Sketch {
+  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) return sketch;
+  const zero = findMdplZeroLevel(sketch.levels ?? []);
+  const zeroLevel = zero ?? {
+    id: `LV_${sketch.id}_MDPL0`,
+    name: "Level 1",
+    mdpl: 0,
+    opacity: 0.5,
+  };
+  const levels = zero ? sketch.levels : [...(sketch.levels ?? []), zeroLevel];
+  return {
+    ...sketch,
+    levels,
+    layers: (sketch.layers ?? []).map((ly) => (isLahan(ly.name) ? { ...ly, levelId: zeroLevel.id } : ly)),
+  };
+}
 function fmt(n: number, d = 2) {
   if (!Number.isFinite(n)) return "0";
   return n.toLocaleString("id-ID", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -233,10 +253,12 @@ function GroundPlane({
   points,
   origin,
   mPerPx,
+  y,
 }: {
   points: Point[];
   origin: Point;
   mPerPx: number;
+  y: number;
 }) {
   const geometry = useMemo(() => {
     if (points.length < 3) return null;
@@ -256,7 +278,7 @@ function GroundPlane({
   }, [points, origin.x, origin.y, mPerPx]);
   if (!geometry) return null;
   return (
-    <mesh geometry={geometry} position={[0, -0.02, 0]} receiveShadow>
+    <mesh geometry={geometry} position={[0, y, 0]} receiveShadow>
       <meshStandardMaterial color="#e7e5e0" side={THREE.DoubleSide} />
     </mesh>
   );
@@ -275,6 +297,7 @@ function Scene({
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
   const floors = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
   const baseMdpl = floors[0]?.baseMdpl ?? 0;
+  const groundY = 0 - baseMdpl;
 
   const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
   const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
@@ -324,7 +347,7 @@ function Scene({
       <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
 
       {lahanLayers.map((ly) => (
-        <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} />
+        <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
       ))}
 
       <Grid
@@ -335,7 +358,7 @@ function Scene({
         sectionSize={10}
         sectionThickness={1}
         sectionColor="#9a9a9a"
-        position={[0, -0.01, 0]}
+        position={[0, groundY - 0.01, 0]}
         fadeDistance={120}
         fadeStrength={1}
         infiniteGrid
@@ -671,7 +694,7 @@ function Model3DPage() {
       }
       const s = JSON.parse(raw) as StoreShape;
       if (s && Array.isArray(s.sketches)) {
-        setSketches(s.sketches as Sketch[]);
+        setSketches((s.sketches as Sketch[]).map(bindLahanToMdplZero));
         setOpenId((prev) => {
           if (prev && s.sketches.some((x) => x.id === prev)) return prev;
           return s.openId ?? s.sketches[0]?.id ?? null;
@@ -706,7 +729,7 @@ function Model3DPage() {
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) => {
       const next = prev.map((s) =>
-        s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s,
+        s.id === id ? bindLahanToMdplZero({ ...s, ...patch, updatedAt: Date.now() }) : s,
       );
       try {
         localStorage.setItem(

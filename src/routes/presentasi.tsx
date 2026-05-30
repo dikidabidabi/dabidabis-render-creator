@@ -94,6 +94,26 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
+const MDPL_ZERO_EPS = 0.0001;
+function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
+  return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
+}
+function bindLahanToMdplZero(sketch: Sketch): Sketch {
+  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) return sketch;
+  const zero = findMdplZeroLevel(sketch.levels ?? []);
+  const zeroLevel = zero ?? {
+    id: `LV_${sketch.id}_MDPL0`,
+    name: "Level 1",
+    mdpl: 0,
+    opacity: 0.5,
+  };
+  const levels = zero ? sketch.levels : [...(sketch.levels ?? []), zeroLevel];
+  return {
+    ...sketch,
+    levels,
+    layers: (sketch.layers ?? []).map((ly) => (isLahan(ly.name) ? { ...ly, levelId: zeroLevel.id } : ly)),
+  };
+}
 
 // Typical floor logic — kept in sync with sketch.tsx
 const TYPICAL_FLOOR_H = 3;
@@ -109,21 +129,12 @@ function isAutoLevelName(name: string): boolean {
 }
 function computeLevelDisplayNames(
   levels: Level[],
-  layers?: { name: string; levelId?: string }[],
+  _layers?: { name: string; levelId?: string }[],
 ): Record<string, string> {
   const out: Record<string, string> = {};
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-
-  let lahanLevelId: string | null = null;
-  if (layers && layers.length) {
-    const ids = new Set<string>();
-    for (const ly of layers) {
-      if (ly.levelId && isLahan(ly.name)) ids.add(ly.levelId);
-    }
-    const cand = sorted.filter((l) => ids.has(l.id));
-    if (cand.length) lahanLevelId = cand[0].id;
-  }
-  const lahanIdx = lahanLevelId ? sorted.findIndex((l) => l.id === lahanLevelId) : -1;
+  const zeroLevel = findMdplZeroLevel(sorted);
+  const lahanIdx = zeroLevel ? sorted.findIndex((l) => l.id === zeroLevel.id) : 0;
 
   if (lahanIdx > 0) {
     let bn = 1;
@@ -219,7 +230,7 @@ function PresentasiPage() {
         else {
           const s = JSON.parse(raw) as StoreShape;
           if (s && Array.isArray(s.sketches)) {
-            setSketches(s.sketches as Sketch[]);
+            setSketches((s.sketches as Sketch[]).map(bindLahanToMdplZero));
             setOpenId((prev) => {
               if (prev && s.sketches.some((x) => x.id === prev)) return prev;
               return s.openId ?? s.sketches[0]?.id ?? null;
@@ -817,7 +828,7 @@ function computeStats(sk: Sketch): Stats {
   // KDB = footprint at ground only (no multiplier — ground floor is a single footprint)
   let kdbRencanaM2 = 0;
   if (levels.length > 0) {
-    const ground = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
+    const ground = findMdplZeroLevel(levels) ?? [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
     kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
   }
   const klbRencanaM2 = ruang.reduce(
@@ -1353,7 +1364,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
-  // Ground = minMdpl. Drawing area extents in meters:
+  const groundMdpl = findMdplZeroLevel(lvls) ? 0 : minMdpl;
+  // Drawing area extents in meters:
   const padTopM = Math.max(0.5, (maxMdpl - minMdpl) * 0.08);
   const padBotM = Math.max(0.5, (maxMdpl - minMdpl) * 0.05);
   const totalHM = (maxMdpl - minMdpl) + padTopM + padBotM;
@@ -1398,13 +1410,16 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           </defs>
           <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
 
-          {/* Ground line */}
-          <line x1={mx(0) - 30} y1={my(minMdpl)} x2={mx(cutLenM) + 30} y2={my(minMdpl)} stroke="#111" strokeWidth={1.6} />
-          {/* Hatching ground */}
+          {/* Lahan / ground line — terikat MDPL 0 */}
+          <line x1={mx(0) - 30} y1={my(groundMdpl)} x2={mx(cutLenM) + 30} y2={my(groundMdpl)} stroke="#111" strokeWidth={1.6} />
+          <text x={mx(0) - 36} y={my(groundMdpl) - 5} fontSize={10} textAnchor="end" fill="#111" style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700 }}>
+            Lahan ±0 mdpl
+          </text>
+          {/* Hatching lahan */}
           {Array.from({ length: 18 }).map((_, i) => {
             const x = mx(0) - 20 + i * ((cutLenM * scalePxPerM + 40) / 18);
             return (
-              <line key={i} x1={x} y1={my(minMdpl)} x2={x - 8} y2={my(minMdpl) + 10}
+              <line key={i} x1={x} y1={my(groundMdpl)} x2={x - 8} y2={my(groundMdpl) + 10}
                 stroke="#111" strokeWidth={0.7} />
             );
           })}
@@ -1537,11 +1552,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const totalLuas = luasPerLantai * k;
   const displayNames = computeLevelDisplayNames(sketch.levels ?? [], sketch.layers ?? []);
   const displayName = displayNames[level.id] ?? level.name;
-  // Level 1 = level dengan mdpl terendah. GSB & radius EVK hanya muncul di Level 1.
-  const minMdpl = (sketch.levels ?? []).length
-    ? Math.min(...(sketch.levels ?? []).map((l) => l.mdpl))
-    : level.mdpl;
-  const isGround = level.mdpl === minMdpl;
+  // Lahan & GSB hanya terikat pada level MDPL 0, bukan level terendah/basement.
+  const groundLevel = findMdplZeroLevel(sketch.levels ?? []);
+  const isGround = groundLevel ? level.id === groundLevel.id : Math.abs(level.mdpl) <= MDPL_ZERO_EPS;
   const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
   const pxPerM = 1 / mPerSPx;
   const evkRooms = isGround
@@ -1563,14 +1576,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           preserveAspectRatio="xMidYMid meet"
           style={{ width: "100%", height: "100%", display: "block" }}
         >
-          {lahanAll.map((l) => (
+          {isGround && lahanAll.map((l) => (
             <g key={`lhn-${l.id}`}>
               <polygon
                 points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill={isGround ? "rgba(0,0,0,0.04)" : "none"}
+                fill="rgba(0,0,0,0.04)"
                 stroke="rgba(0,0,0,0.55)"
                 strokeWidth={sw * 0.0015}
-                strokeDasharray={isGround ? undefined : `${sw * 0.008} ${sw * 0.005}`}
               />
               {isGround && l.points.map((_, i) => {
                 const seg = inwardOffsetSegPx(l.points, i, getLayerGsbM(l, i) * pxPerM);
