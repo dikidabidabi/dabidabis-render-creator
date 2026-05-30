@@ -2889,17 +2889,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     if (curTool === "section") {
-      // Garis Potong A-A: simpan bidang irisan ke sketch.
-      // Slide presentasi "Potongan Prinsip Skematik A-A" akan otomatis muncul.
-      onChange({
-        sectionCut: {
-          p1: a,
-          p2: b,
-          label: "A-A",
-          updatedAt: Date.now(),
-        },
-      });
-      toast.success("Garis Potong A-A tersimpan · slide potongan otomatis dibuat", { duration: 2500 });
+      // Garis Potong: simpan bidang irisan baru ke sketch (A-A, B-B, …).
+      // Slide presentasi "Potongan Prinsip Skematik X-X" akan otomatis muncul.
+      const existing = sketch.sectionCuts ?? [];
+      const label = nextSectionLabel(existing);
+      const next: SectionCut[] = [
+        ...existing,
+        { p1: a, p2: b, label, updatedAt: Date.now() },
+      ];
+      onChange({ sectionCuts: next, sectionCut: undefined });
+      toast.success(`Garis Potong ${label} tersimpan · slide potongan otomatis dibuat`, { duration: 2500 });
       return;
     }
 
