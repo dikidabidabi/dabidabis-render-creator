@@ -13,11 +13,25 @@ import {
   Maximize2,
   Minimize2,
   RotateCcw,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import {
+  buildMeshes,
+  meshesToObj,
+  meshesTo3ds,
+  triggerDownload,
+  type MeshInput,
+} from "@/lib/model3d-export";
 
 export const Route = createFileRoute("/model3d")({
   head: () => ({
