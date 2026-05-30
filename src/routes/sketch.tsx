@@ -2775,6 +2775,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (curTool === "section") {
+      // Garis Potong A-A: simpan bidang irisan ke sketch.
+      // Slide presentasi "Potongan Prinsip Skematik A-A" akan otomatis muncul.
+      onChange({
+        sectionCut: {
+          p1: a,
+          p2: b,
+          label: "A-A",
+          updatedAt: Date.now(),
+        },
+      });
+      toast.success("Garis Potong A-A tersimpan · slide potongan otomatis dibuat", { duration: 2500 });
+      return;
+    }
+
+
     if (lineKind === "bezier") {
       // Defer commit: open tangent handles for adjustment
       setPendingCurve({ a, b, ...defaultBezierHandles(a, b) });
