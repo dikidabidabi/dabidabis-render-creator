@@ -2683,6 +2683,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setEditDrag(null);
       return;
     }
+    if (polyDraft && tool === "polyline") {
+      // Tambahkan sample terakhir bila cukup jauh dari vertex terakhir
+      const pts = polyDraft.points.slice();
+      const last = pts[pts.length - 1];
+      const minTailPx = 8 / view.s;
+      const closeTolPx = 14 / view.s;
+      const closing = pts.length >= 3 && dist(polyDraft.cursor, pts[0]) <= closeTolPx;
+      if (!closing && dist(polyDraft.cursor, last) > minTailPx) {
+        pts.push(polyDraft.cursor);
+      }
+      setPolyDraft(null);
+      commitPolyline(pts, closing);
+      return;
+    }
     if (!drawing) return;
     if (dist(drawing.a, drawing.b) < 4) {
       setDrawing(null);
@@ -2717,6 +2731,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setDrawing(null);
     setDraggingHandle(null);
     setEditDrag(null);
+    setPolyDraft(null);
   };
 
   const handleUndo = () => {
