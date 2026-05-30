@@ -2631,6 +2631,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
+    if (polyDraft && tool === "polyline") {
+      const cur = p;
+      const pts = polyDraft.points;
+      const lastV = pts[pts.length - 1];
+      const ls = polyDraft.lastSample;
+      const minSegPx = 10 / view.s;
+      const closeTolPx = 14 / view.s;
+      // Auto-close: cursor menyentuh titik awal
+      if (pts.length >= 3 && dist(cur, pts[0]) <= closeTolPx) {
+        commitPolyline(pts, true);
+        setPolyDraft(null);
+        return;
+      }
+      // Deteksi belokan: bandingkan arah lastV→lastSample vs lastSample→cursor
+      const v1x = ls.x - lastV.x, v1y = ls.y - lastV.y;
+      const v2x = cur.x - ls.x, v2y = cur.y - ls.y;
+      const n1 = Math.hypot(v1x, v1y), n2 = Math.hypot(v2x, v2y);
+      if (n1 > minSegPx && n2 > minSegPx / 2) {
+        const cos = (v1x * v2x + v1y * v2y) / (n1 * n2);
+        // ~22 derajat → cos ≈ 0.927
+        if (cos < 0.927) {
+          setPolyDraft({ points: [...pts, ls], lastSample: cur, cursor: cur });
+          return;
+        }
+      }
+      setPolyDraft({ ...polyDraft, lastSample: n2 > minSegPx / 3 ? cur : ls, cursor: cur });
+    }
   };
 
   const endPointer = (e: React.PointerEvent) => {
