@@ -2697,12 +2697,17 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
 
 
 // ---- Modern tiles ----
-function BigStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function BigStat({ label, value, hint, compact }: { label: string; value: string; hint?: string; compact?: boolean }) {
+  const pad = compact ? "10px 14px" : "18px 20px";
+  const gap = compact ? 3 : 6;
+  const labelSize = compact ? 9 : 11;
+  const valueSize = compact ? 18 : 28;
+  const hintSize = compact ? 10 : 12;
   return (
-    <div style={{ padding: "18px 20px", borderTop: "1px solid #111", display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600 }}>{label}</div>
-      <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em", color: "#0a0a0a" }}>{value}</div>
-      {hint && <div style={{ fontSize: 12, color: "#888" }}>{hint}</div>}
+    <div style={{ padding: pad, borderTop: "1px solid #111", display: "flex", flexDirection: "column", gap }}>
+      <div style={{ fontSize: labelSize, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: valueSize, fontWeight: 600, letterSpacing: "-0.02em", color: "#0a0a0a", lineHeight: 1.15 }}>{value}</div>
+      {hint && <div style={{ fontSize: hintSize, color: "#888" }}>{hint}</div>}
     </div>
   );
 }
