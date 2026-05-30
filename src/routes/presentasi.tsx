@@ -2203,17 +2203,33 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
                 );
               })}
 
-              {/* Fasilitas: titik POI berwarna per kategori */}
+              {/* Fasilitas: custom SVG marker per kategori (pin + ikon) */}
               {view === "fasilitas" && facsByCat.flatMap(({ cat, items }) =>
                 items.map((it) => {
                   const p = projectM(lat, lon, it.ll.lat, it.ll.lon);
+                  const cx = p.x * pxPerM;
+                  const cy = p.y * pxPerM;
+                  const size = 22;
+                  const within = it.dist <= 500;
                   return (
-                    <circle key={`${cat.key}-${it.ll.lat}-${it.ll.lon}`}
-                      cx={p.x * pxPerM} cy={p.y * pxPerM} r={4}
-                      fill={cat.color} stroke="#0a0a0a" strokeWidth={0.8} />
+                    <g key={`${cat.key}-${it.ll.lat}-${it.ll.lon}`}
+                       transform={`translate(${cx} ${cy})`}
+                       opacity={within ? 1 : 0.55}>
+                      <title>{`${cat.label} — ${it.name} (${Math.round(it.dist)} m)`}</title>
+                      {/* Pin teardrop */}
+                      <path d="M0 -22 C 10 -22 14 -14 14 -8 C 14 0 6 6 0 14 C -6 6 -14 0 -14 -8 C -14 -14 -10 -22 0 -22 Z"
+                        fill={cat.color} stroke="#0a0a0a" strokeWidth={1.2} />
+                      {/* Glyph */}
+                      <g transform={`translate(${-size / 2} ${-size / 2 - 4}) scale(${size / 24})`}>
+                        <path d={cat.glyph} fill="#fff" />
+                      </g>
+                      {/* Dot ground */}
+                      <circle cx={0} cy={14} r={1.6} fill="#0a0a0a" />
+                    </g>
                   );
                 })
               )}
+
 
               {/* Lingkungan: hijau & biru sebagai titik */}
               {view === "lingkungan" && elsWithLL.map(({ e, ll }) => {
