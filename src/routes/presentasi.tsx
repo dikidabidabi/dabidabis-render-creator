@@ -1725,28 +1725,28 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               const tipY = mid.y + py * arrowLen;
               return (
                 <g key={`cut-${idx}`} pointerEvents="none">
-                  {/* Dashed section line */}
+                  {/* Dashed section line — tipis, hitam */}
                   <line
                     x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                    stroke="#e85d3a"
-                    strokeWidth={sw * 0.0028}
-                    strokeDasharray={`${sw * 0.014} ${sw * 0.006} ${sw * 0.003} ${sw * 0.006}`}
+                    stroke="#0a0a0a"
+                    strokeWidth={sw * 0.0014}
+                    strokeDasharray={`${sw * 0.012} ${sw * 0.006} ${sw * 0.0025} ${sw * 0.006}`}
                     strokeLinecap="round"
                   />
                   {/* Viewing-direction arrow at mid */}
                   <line
                     x1={mid.x} y1={mid.y} x2={tipX} y2={tipY}
-                    stroke="#e85d3a" strokeWidth={sw * 0.002} strokeLinecap="round"
+                    stroke="#0a0a0a" strokeWidth={sw * 0.0014} strokeLinecap="round"
                   />
                   <polygon
                     points={`${tipX},${tipY} ${tipX - px * arrowHead + py * arrowHead * 0.7},${tipY - py * arrowHead - px * arrowHead * 0.7} ${tipX - px * arrowHead - py * arrowHead * 0.7},${tipY - py * arrowHead + px * arrowHead * 0.7}`}
-                    fill="#e85d3a"
+                    fill="#0a0a0a"
                   />
                   {/* Endpoint label bubbles */}
                   {[{ pt: bA, txt: tag }, { pt: bB, txt: `${tag}'` }].map((b, j) => (
                     <g key={j}>
                       <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
-                        fill="#ffffff" stroke="#e85d3a" strokeWidth={sw * 0.002} />
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0016} />
                       <text x={b.pt.x} y={b.pt.y}
                         textAnchor="middle" dominantBaseline="central"
                         fontSize={sw * 0.018} fontWeight={800} fill="#0a0a0a"
