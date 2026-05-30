@@ -102,13 +102,40 @@ function tipH(lv: { typicalHeight?: number }): number {
   return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
 }
 function isAutoLevelName(name: string): boolean {
-  return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
+  const n = name.trim();
+  if (/^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(n)) return true;
+  if (/^B\d+(?:\s*[-–]\s*B?\d+)?$/i.test(n)) return true;
+  return false;
 }
-function computeLevelDisplayNames(levels: Level[]): Record<string, string> {
-  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+function computeLevelDisplayNames(
+  levels: Level[],
+  layers?: { name: string; levelId?: string }[],
+): Record<string, string> {
   const out: Record<string, string> = {};
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+
+  let lahanLevelId: string | null = null;
+  if (layers && layers.length) {
+    const ids = new Set<string>();
+    for (const ly of layers) {
+      if (ly.levelId && isLahan(ly.name)) ids.add(ly.levelId);
+    }
+    const cand = sorted.filter((l) => ids.has(l.id));
+    if (cand.length) lahanLevelId = cand[0].id;
+  }
+  const lahanIdx = lahanLevelId ? sorted.findIndex((l) => l.id === lahanLevelId) : -1;
+
+  if (lahanIdx > 0) {
+    let bn = 1;
+    for (let i = lahanIdx - 1; i >= 0; i--) {
+      const lv = sorted[i];
+      out[lv.id] = isAutoLevelName(lv.name) ? `B${bn}` : lv.name;
+      bn++;
+    }
+  }
   let idx = 1;
-  for (const lv of sorted) {
+  for (let i = Math.max(0, lahanIdx); i < sorted.length; i++) {
+    const lv = sorted[i];
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
     const start = idx;
     const end = idx + k - 1;
@@ -642,7 +669,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
-  const displayNames = computeLevelDisplayNames(levels);
+  const displayNames = computeLevelDisplayNames(levels, sk.layers ?? []);
   const out: Slide[] = [];
   // Slide judul (paling awal)
   out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
@@ -1278,24 +1305,32 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const cutLenPx = Math.hypot(cut.p2.x - cut.p1.x, cut.p2.y - cut.p1.y);
   const cutLenM = cutLenPx / pxPerMeter;
 
-  // Sort levels by mdpl ascending. Compute per-level base and height.
+  // Sort levels by mdpl ascending. Compute per-level base & top dari MDPL gap
+  // (selaras dengan expandLevelsForView + model 3D), bukan dipaksa 3 m.
   const lvls = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const TYPICAL_H = 3;
   type LvlBox = {
     id: string; name: string; baseM: number; topM: number; count: number; floorH: number;
     slices: Array<{ x0: number; x1: number; name: string; color: string }>;
   };
+  // Gunakan expand untuk turunkan tinggi tiap lantai sesuai MDPL gap (k=1) atau
+  // typicalHeight (k>1). Lalu group balik per sourceId untuk gambar 1 box per level.
+  const floorsExp = expandLevelsForView(lvls);
+  const groupBySource = new Map<string, typeof floorsExp>();
+  for (const f of floorsExp) {
+    const arr = groupBySource.get(f.sourceId) ?? [];
+    arr.push(f);
+    groupBySource.set(f.sourceId, arr);
+  }
   const boxes: LvlBox[] = lvls.map((lv) => {
-    const count = Math.max(1, Math.round(lv.typicalCount ?? 1));
-    const floorH = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
-      ? Number(lv.typicalHeight) : TYPICAL_H;
-    return {
-      id: lv.id, name: lv.name,
-      baseM: lv.mdpl,
-      topM: lv.mdpl + count * floorH,
-      count, floorH,
-      slices: [],
-    };
+    const group = groupBySource.get(lv.id) ?? [];
+    const count = group.length || 1;
+    const baseM = group.length ? group[0].mdpl : lv.mdpl;
+    const topM = group.length
+      ? group[group.length - 1].mdpl + group[group.length - 1].height
+      : lv.mdpl + TYPICAL_H;
+    const floorH = group.length ? group[0].height : TYPICAL_H;
+    return { id: lv.id, name: lv.name, baseM, topM, count, floorH, slices: [] };
   });
 
   // Compute slices per layer (rooms only) intersecting the cut line.
@@ -1500,7 +1535,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const k = Math.max(1, Math.round(level.typicalCount ?? 1));
   const luasPerLantai = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
   const totalLuas = luasPerLantai * k;
-  const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
+  const displayNames = computeLevelDisplayNames(sketch.levels ?? [], sketch.layers ?? []);
   const displayName = displayNames[level.id] ?? level.name;
   // Level 1 = level dengan mdpl terendah. GSB & radius EVK hanya muncul di Level 1.
   const minMdpl = (sketch.levels ?? []).length
@@ -2945,7 +2980,7 @@ function AxonometricView({
 function StackingBody({ sketch }: { sketch: Sketch }) {
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
-  const displayNames = computeLevelDisplayNames(levelsAsc);
+  const displayNames = computeLevelDisplayNames(levelsAsc, sketch.layers ?? []);
 
   // Color map keyed by source level id (matches axonometric)
   const colorMap = new Map<string, string>();
@@ -3138,7 +3173,7 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 // ---- Rincian ----
 function RincianBody({ slide }: { slide: Extract<Slide, { kind: "rincian" }> }) {
   const { sketch, sections } = slide;
-  const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
+  const displayNames = computeLevelDisplayNames(sketch.levels ?? [], sketch.layers ?? []);
   if (sections.length === 0) {
     return (
       <div style={{ fontSize: 14, color: "#999", padding: "8px 0" }}>Belum ada ruang.</div>
@@ -3227,7 +3262,7 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
-  const displayNames = computeLevelDisplayNames(levels);
+  const displayNames = computeLevelDisplayNames(levels, sketch.layers ?? []);
   const perLevel = levels.map((lv) => {
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
     const sum = ruang.filter((r) => r.levelId === lv.id).reduce((s, l) => s + l.areaM2, 0) * k;
