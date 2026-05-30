@@ -2002,14 +2002,30 @@ function projectM(centerLat: number, centerLon: number, lat: number, lon: number
   return { x: dx, y: dy };
 }
 
-// POI category palette + queries.
-const POI_CATS: Array<{ key: string; label: string; color: string; q: string }> = [
-  { key: "edu",   label: "Pendidikan",  color: "#1f9d55", q: 'node["amenity"~"school|university|college|kindergarten"]' },
-  { key: "med",   label: "Kesehatan",   color: "#c0392b", q: 'node["amenity"~"hospital|clinic|doctors|pharmacy"]' },
-  { key: "shop",  label: "Komersial",   color: "#d6a423", q: 'node["shop"];node["amenity"~"marketplace|mall"]' },
-  { key: "food",  label: "Kuliner",     color: "#e85d3a", q: 'node["amenity"~"restaurant|cafe|fast_food|food_court"]' },
-  { key: "trans", label: "Transportasi",color: "#2d6cdf", q: 'node["highway"="bus_stop"];node["railway"~"station|halt"];node["amenity"="bus_station"]' },
-  { key: "wor",   label: "Ibadah",      color: "#8b5cf6", q: 'node["amenity"="place_of_worship"]' },
+// POI category palette + queries + SVG glyph (path within a 24x24 viewBox).
+type PoiCat = { key: string; label: string; color: string; q: string; glyph: string };
+const POI_CATS: Array<PoiCat> = [
+  { key: "edu",   label: "Pendidikan",  color: "#1f9d55",
+    q: 'node["amenity"~"school|university|college|kindergarten"]',
+    glyph: "M12 3 2 8l10 5 8-4v6h2V8L12 3zm-6 9.2V16c0 2 3 4 6 4s6-2 6-4v-3.8l-6 3-6-3z" },
+  { key: "med",   label: "Kesehatan",   color: "#c0392b",
+    q: 'node["amenity"~"hospital|clinic|doctors|pharmacy"]',
+    glyph: "M10 3h4v6h6v4h-6v8h-4v-8H4V9h6V3z" },
+  { key: "shop",  label: "Komersial",   color: "#d6a423",
+    q: 'node["shop"];node["amenity"~"marketplace|mall"]',
+    glyph: "M6 7V6a4 4 0 1 1 8 0v1h3l1 13H2L3 7h3zm2 0h4V6a2 2 0 1 0-4 0v1z" },
+  { key: "food",  label: "Kuliner",     color: "#e85d3a",
+    q: 'node["amenity"~"restaurant|cafe|fast_food|food_court"]',
+    glyph: "M7 2v8a2 2 0 0 0 2 2v10h2V12a2 2 0 0 0 2-2V2h-1v7h-1V2h-1v7H9V2H7zm10 0c-2 0-3 3-3 6 0 2 1 3 2 3v11h2V2h-1z" },
+  { key: "trans", label: "Transportasi",color: "#2d6cdf",
+    q: 'node["highway"="bus_stop"];node["railway"~"station|halt"];node["amenity"="bus_station"]',
+    glyph: "M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2v2h-2v-2H7v2H5v-2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v5h14V8H5zm2 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm10 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" },
+  { key: "wor",   label: "Ibadah",      color: "#8b5cf6",
+    q: 'node["amenity"="place_of_worship"]',
+    glyph: "M11 2h2v3h3v2h-3v3h-2V7H8V5h3V2zm-7 9 8-4 8 4v11h-5v-5h-6v5H4V11z" },
+  { key: "park",  label: "Parkir",      color: "#555f6b",
+    q: 'node["amenity"="parking"];way["amenity"="parking"]',
+    glyph: "M5 3h8a6 6 0 0 1 0 12h-4v6H5V3zm4 4v4h4a2 2 0 1 0 0-4H9z" },
 ];
 
 function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }) {
@@ -2115,7 +2131,8 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
           (c.key === "shop" && (tags.shop || /marketplace|mall/.test(tags.amenity ?? ""))) ||
           (c.key === "food" && /restaurant|cafe|fast_food|food_court/.test(tags.amenity ?? "")) ||
           (c.key === "trans" && (tags.highway === "bus_stop" || /station|halt/.test(tags.railway ?? "") || tags.amenity === "bus_station")) ||
-          (c.key === "wor" && tags.amenity === "place_of_worship");
+          (c.key === "wor" && tags.amenity === "place_of_worship") ||
+          (c.key === "park" && tags.amenity === "parking");
         if (!m) continue;
         items.push({
           name: tags.name ?? `(${c.label.toLowerCase()})`,
@@ -2186,17 +2203,33 @@ function SiteAnalysisBody({ slide }: { slide: Extract<Slide, { kind: "site" }> }
                 );
               })}
 
-              {/* Fasilitas: titik POI berwarna per kategori */}
+              {/* Fasilitas: custom SVG marker per kategori (pin + ikon) */}
               {view === "fasilitas" && facsByCat.flatMap(({ cat, items }) =>
                 items.map((it) => {
                   const p = projectM(lat, lon, it.ll.lat, it.ll.lon);
+                  const cx = p.x * pxPerM;
+                  const cy = p.y * pxPerM;
+                  const size = 22;
+                  const within = it.dist <= 500;
                   return (
-                    <circle key={`${cat.key}-${it.ll.lat}-${it.ll.lon}`}
-                      cx={p.x * pxPerM} cy={p.y * pxPerM} r={4}
-                      fill={cat.color} stroke="#0a0a0a" strokeWidth={0.8} />
+                    <g key={`${cat.key}-${it.ll.lat}-${it.ll.lon}`}
+                       transform={`translate(${cx} ${cy})`}
+                       opacity={within ? 1 : 0.55}>
+                      <title>{`${cat.label} — ${it.name} (${Math.round(it.dist)} m)`}</title>
+                      {/* Pin teardrop */}
+                      <path d="M0 -22 C 10 -22 14 -14 14 -8 C 14 0 6 6 0 14 C -6 6 -14 0 -14 -8 C -14 -14 -10 -22 0 -22 Z"
+                        fill={cat.color} stroke="#0a0a0a" strokeWidth={1.2} />
+                      {/* Glyph */}
+                      <g transform={`translate(${-size / 2} ${-size / 2 - 4}) scale(${size / 24})`}>
+                        <path d={cat.glyph} fill="#fff" />
+                      </g>
+                      {/* Dot ground */}
+                      <circle cx={0} cy={14} r={1.6} fill="#0a0a0a" />
+                    </g>
                   );
                 })
               )}
+
 
               {/* Lingkungan: hijau & biru sebagai titik */}
               {view === "lingkungan" && elsWithLL.map(({ e, ll }) => {
@@ -2344,11 +2377,50 @@ function AksesPanel({ roadTiers, roadsByTier }: {
 function FasilitasPanel({ facsByCat }: {
   facsByCat: Array<{ cat: { key: string; label: string; color: string }; items: Array<{ name: string; dist: number }> }>;
 }) {
+  // Narasi otomatis: hitung jumlah fasilitas per kategori dalam radius 500 m (walkable).
+  const WALK = 500;
+  const counts = facsByCat
+    .map(({ cat, items }) => ({ cat, n: items.filter((i) => i.dist <= WALK).length }))
+    .filter((c) => c.n > 0);
+  const phraseMap: Record<string, (n: number) => string> = {
+    edu:   (n) => `${n} fasilitas pendidikan`,
+    med:   (n) => `${n} fasilitas kesehatan`,
+    shop:  (n) => `${n} ${n === 1 ? "area komersial" : "area komersial"}`,
+    food:  (n) => `${n} titik kuliner`,
+    trans: (n) => `${n} titik transportasi publik`,
+    wor:   (n) => `${n} tempat ibadah`,
+    park:  (n) => `${n} area parkir`,
+  };
+  const phrases = counts.map(({ cat, n }) => (phraseMap[cat.key]?.(n) ?? `${n} ${cat.label.toLowerCase()}`));
+  let narrative = `Dalam radius berjalan kaki (${WALK} m) belum terdeteksi fasilitas signifikan dari data OpenStreetMap.`;
+  if (phrases.length === 1) narrative = `Dalam radius berjalan kaki (${WALK} m), terdapat ${phrases[0]}.`;
+  else if (phrases.length === 2) narrative = `Dalam radius berjalan kaki (${WALK} m), terdapat ${phrases[0]} dan ${phrases[1]}.`;
+  else if (phrases.length > 2) {
+    const head = phrases.slice(0, -1).join(", ");
+    narrative = `Dalam radius berjalan kaki (${WALK} m), terdapat ${head}, dan ${phrases[phrases.length - 1]}.`;
+  }
+  const totalWalk = counts.reduce((s, c) => s + c.n, 0);
+
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Narasi otomatis dari Overpass (≤500 m) */}
+      <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800, marginBottom: 6 }}>
+          Pencapaian Pejalan Kaki · {totalWalk} POI ≤ {WALK} m
+        </div>
+        <div style={{ fontFamily: "var(--font-body, Manrope, sans-serif)", fontSize: 13.5, lineHeight: 1.55, color: "#f1f1f1" }}>
+          {narrative}
+        </div>
+        <div style={{ fontSize: 10, color: "#888", marginTop: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Sumber: Overpass API · OpenStreetMap
+        </div>
+      </div>
+
     <div style={{ border: "1px solid #111", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700 }}>
         Fasilitas Terdekat (3 per kategori)
       </div>
+
       {facsByCat.map(({ cat, items }) => {
         const top = items.slice(0, 3);
         return (
@@ -2376,8 +2448,10 @@ function FasilitasPanel({ facsByCat }: {
         );
       })}
     </div>
+    </div>
   );
 }
+
 
 function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: number; radius: number }) {
   const total = greenN + blueN;
