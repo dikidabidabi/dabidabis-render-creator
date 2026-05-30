@@ -1183,6 +1183,267 @@ function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) 
   );
 }
 
+// ---- Section body (Potongan Prinsip A-A, dinamis dari sketch.sectionCut) ----
+const SECTION_METERS_PER_MAJOR: Record<string, number> = {
+  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10,
+};
+function sectionPointInPolygon(p: Point, poly: Point[]) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const hit = (yi > p.y) !== (yj > p.y) &&
+      p.x < ((xj - xi) * (p.y - yi)) / (yj - yi + 1e-12) + xi;
+    if (hit) inside = !inside;
+  }
+  return inside;
+}
+function cutSegmentIntersectParam(p1: Point, p2: Point, a: Point, b: Point): number | null {
+  const rx = p2.x - p1.x, ry = p2.y - p1.y;
+  const sx = b.x - a.x, sy = b.y - a.y;
+  const denom = rx * sy - ry * sx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((a.x - p1.x) * sy - (a.y - p1.y) * sx) / denom;
+  const u = ((a.x - p1.x) * ry - (a.y - p1.y) * rx) / denom;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return t;
+}
+function cutPolygonIntervals(p1: Point, p2: Point, poly: Point[]): Array<[number, number]> {
+  if (poly.length < 3) return [];
+  const tsSet = new Set<number>();
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const t = cutSegmentIntersectParam(p1, p2, a, b);
+    if (t != null) {
+      const q = Math.round(t * 1e6) / 1e6;
+      if (q > 1e-6 && q < 1 - 1e-6) tsSet.add(q);
+    }
+  }
+  const ts = [...tsSet].sort((a, b) => a - b);
+  const breaks = [0, ...ts, 1];
+  const startInside = sectionPointInPolygon(p1, poly);
+  const out: Array<[number, number]> = [];
+  let inside = startInside;
+  for (let i = 0; i < breaks.length - 1; i++) {
+    if (inside && breaks[i + 1] - breaks[i] > 1e-5) out.push([breaks[i], breaks[i + 1]]);
+    inside = !inside;
+  }
+  return out;
+}
+function isLahanSec(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
+function isVoidSec(n: string) { return n.trim().toLowerCase() === "void"; }
+
+function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) {
+  const { sketch, cut } = slide;
+  const pxPerMeter = (8 * 10) / (SECTION_METERS_PER_MAJOR[sketch.scale] ?? 1);
+  const cutLenPx = Math.hypot(cut.p2.x - cut.p1.x, cut.p2.y - cut.p1.y);
+  const cutLenM = cutLenPx / pxPerMeter;
+
+  // Sort levels by mdpl ascending. Compute per-level base and height.
+  const lvls = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const TYPICAL_H = 3;
+  type LvlBox = {
+    id: string; name: string; baseM: number; topM: number; count: number; floorH: number;
+    slices: Array<{ x0: number; x1: number; name: string; color: string }>;
+  };
+  const boxes: LvlBox[] = lvls.map((lv) => {
+    const count = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const floorH = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
+      ? Number(lv.typicalHeight) : TYPICAL_H;
+    return {
+      id: lv.id, name: lv.name,
+      baseM: lv.mdpl,
+      topM: lv.mdpl + count * floorH,
+      count, floorH,
+      slices: [],
+    };
+  });
+
+  // Compute slices per layer (rooms only) intersecting the cut line.
+  for (const layer of sketch.layers ?? []) {
+    if (isLahanSec(layer.name)) continue;
+    if (isVoidSec(layer.name)) continue;
+    if (!layer.levelId) continue;
+    const box = boxes.find((b) => b.id === layer.levelId);
+    if (!box) continue;
+    const intervals = cutPolygonIntervals(cut.p1, cut.p2, layer.points);
+    for (const [t0, t1] of intervals) {
+      box.slices.push({
+        x0: t0 * cutLenM,
+        x1: t1 * cutLenM,
+        name: layer.name,
+        color: layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)",
+      });
+    }
+  }
+
+  const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
+  const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
+  // Ground = minMdpl. Drawing area extents in meters:
+  const padTopM = Math.max(0.5, (maxMdpl - minMdpl) * 0.08);
+  const padBotM = Math.max(0.5, (maxMdpl - minMdpl) * 0.05);
+  const totalHM = (maxMdpl - minMdpl) + padTopM + padBotM;
+
+  // SVG viewport in mm-like units (1 unit = 1mm in section world);
+  // we then scale to fit a render box. Use cm-mapped scale: pick a uniform
+  // scale that fits both width and height into the available pixel area.
+  const AREA_W = A3_W - 2 * PAD;   // ~1246
+  const AREA_H = A3_H - 2 * PAD - 130; // header+footer reserve
+  const scalePxPerM = Math.min(AREA_W / Math.max(1, cutLenM), AREA_H / Math.max(1, totalHM));
+  const drawW = cutLenM * scalePxPerM;
+  const drawH = totalHM * scalePxPerM;
+  const offsetX = (AREA_W - drawW) / 2;
+  // Map meter X (0..cutLenM) to svg px.
+  const mx = (m: number) => offsetX + m * scalePxPerM;
+  // Map meter elevation (mdpl) to svg px (y down). y=0 at top (maxMdpl + padTop).
+  const topMdpl = maxMdpl + padTopM;
+  const my = (mdpl: number) => (topMdpl - mdpl) * scalePxPerM;
+
+  // mm grid: 1cm major, 1mm minor — drawn over the entire AREA, light.
+  const gridMajor = scalePxPerM * 1; // 1 m grid major (looks like cm at print)
+  const gridMinor = gridMajor / 10;
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+        <svg
+          width="100%" height="100%"
+          viewBox={`0 0 ${AREA_W} ${AREA_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ display: "block", background: "#fcfcfa" }}
+        >
+          <defs>
+            <pattern id={`mm-minor-${slide.id}`} width={gridMinor} height={gridMinor} patternUnits="userSpaceOnUse">
+              <path d={`M ${gridMinor} 0 L 0 0 0 ${gridMinor}`} fill="none" stroke="#e7e2d4" strokeWidth={0.5} />
+            </pattern>
+            <pattern id={`mm-major-${slide.id}`} width={gridMajor} height={gridMajor} patternUnits="userSpaceOnUse">
+              <rect width={gridMajor} height={gridMajor} fill={`url(#mm-minor-${slide.id})`} />
+              <path d={`M ${gridMajor} 0 L 0 0 0 ${gridMajor}`} fill="none" stroke="#d6cfb8" strokeWidth={0.8} />
+            </pattern>
+          </defs>
+          <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
+
+          {/* Ground line */}
+          <line x1={mx(0) - 30} y1={my(minMdpl)} x2={mx(cutLenM) + 30} y2={my(minMdpl)} stroke="#111" strokeWidth={1.6} />
+          {/* Hatching ground */}
+          {Array.from({ length: 18 }).map((_, i) => {
+            const x = mx(0) - 20 + i * ((cutLenM * scalePxPerM + 40) / 18);
+            return (
+              <line key={i} x1={x} y1={my(minMdpl)} x2={x - 8} y2={my(minMdpl) + 10}
+                stroke="#111" strokeWidth={0.7} />
+            );
+          })}
+
+          {/* Level boxes (outline + floor lines for typical count) */}
+          {boxes.map((b) => {
+            const x = mx(0);
+            const y = my(b.topM);
+            const w = cutLenM * scalePxPerM;
+            const h = (b.topM - b.baseM) * scalePxPerM;
+            return (
+              <g key={b.id}>
+                <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="#111" strokeWidth={1.2} />
+                {/* Typical floor split lines */}
+                {Array.from({ length: b.count - 1 }).map((_, i) => {
+                  const yy = my(b.baseM + (i + 1) * b.floorH);
+                  return <line key={i} x1={x} y1={yy} x2={x + w} y2={yy} stroke="#999" strokeWidth={0.6} strokeDasharray="3 3" />;
+                })}
+              </g>
+            );
+          })}
+
+          {/* Room slices per level */}
+          {boxes.map((b) =>
+            b.slices.map((sl, i) => {
+              const x = mx(sl.x0);
+              const w = (sl.x1 - sl.x0) * scalePxPerM;
+              const y = my(b.topM);
+              const h = (b.topM - b.baseM) * scalePxPerM;
+              const cx = x + w / 2, cy = y + h / 2;
+              const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
+              return (
+                <g key={`${b.id}-${i}`}>
+                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.8} />
+                  {w > 28 && h > 18 && (
+                    <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
+                      {sl.name}
+                    </text>
+                  )}
+                </g>
+              );
+            })
+          )}
+
+          {/* Elevation labels (kiri) — MDPL per level */}
+          {boxes.map((b) => {
+            const yBase = my(b.baseM);
+            const yTop = my(b.topM);
+            const xLabel = mx(0) - 8;
+            return (
+              <g key={`elev-${b.id}`}>
+                <line x1={mx(0) - 36} y1={yTop} x2={mx(0)} y2={yTop} stroke="#111" strokeWidth={0.6} />
+                <text x={xLabel} y={yTop - 3} fontSize={9} textAnchor="end" fill="#111"
+                  style={{ fontFamily: "Manrope, sans-serif" }}>
+                  +{b.topM.toFixed(2)} mdpl
+                </text>
+                <text x={xLabel} y={yBase - 3} fontSize={9} textAnchor="end" fill="#444"
+                  style={{ fontFamily: "Manrope, sans-serif" }}>
+                  +{b.baseM.toFixed(2)} mdpl
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Dimensi tinggi bersih antar level (kanan) */}
+          {boxes.map((b) => {
+            const x = mx(cutLenM) + 8;
+            const y1 = my(b.topM);
+            const y2 = my(b.baseM);
+            const cy = (y1 + y2) / 2;
+            const dim = (b.topM - b.baseM).toFixed(2);
+            return (
+              <g key={`dim-${b.id}`}>
+                <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111" strokeWidth={0.8} />
+                <line x1={x - 4} y1={y1} x2={x + 4} y2={y1} stroke="#111" strokeWidth={0.8} />
+                <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#111" strokeWidth={0.8} />
+                <text x={x + 8} y={cy + 3} fontSize={9} fill="#111"
+                  style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
+                  {dim} m
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Penanda A dan A' di ujung area gambar */}
+          <g>
+            <circle cx={mx(0)} cy={my(maxMdpl) - 18} r={10} fill="#111" />
+            <text x={mx(0)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>A</text>
+            <circle cx={mx(cutLenM)} cy={my(maxMdpl) - 18} r={10} fill="#111" />
+            <text x={mx(cutLenM)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>A'</text>
+          </g>
+
+          {/* Skala panjang potongan */}
+          <g>
+            <line x1={mx(0)} y1={my(minMdpl) + 28} x2={mx(cutLenM)} y2={my(minMdpl) + 28} stroke="#111" strokeWidth={0.8} />
+            <line x1={mx(0)} y1={my(minMdpl) + 24} x2={mx(0)} y2={my(minMdpl) + 32} stroke="#111" strokeWidth={0.8} />
+            <line x1={mx(cutLenM)} y1={my(minMdpl) + 24} x2={mx(cutLenM)} y2={my(minMdpl) + 32} stroke="#111" strokeWidth={0.8} />
+            <text x={(mx(0) + mx(cutLenM)) / 2} y={my(minMdpl) + 44} fontSize={10} textAnchor="middle" fill="#111"
+              style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
+              Panjang potongan: {cutLenM.toFixed(2)} m
+            </text>
+          </g>
+        </svg>
+      </div>
+      <div style={{ fontSize: 11, color: "#444", textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
+        Potongan dihasilkan otomatis dari garis irisan {cut.label || "A-A"} pada kanvas sketsa ·
+        Skala {sketch.scale} · {boxes.length} level
+      </div>
+    </div>
+  );
+}
+
 // ---- Level body ----
 function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const { sketch, level, bounds } = slide;
