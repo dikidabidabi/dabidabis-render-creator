@@ -1381,19 +1381,21 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
       </div>
       <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
         <BigStat
+          compact
           label="Level"
           value={displayName}
           hint={k > 1
             ? `${fmt(level.mdpl, 1)} mdpl · tipikal ${k}×`
             : `${fmt(level.mdpl, 1)} mdpl`}
         />
-        <BigStat label="Jumlah Ruang" value={String(layers.filter((l) => !isLahan(l.name)).length)} />
+        <BigStat compact label="Jumlah Ruang" value={String(layers.filter((l) => !isLahan(l.name)).length)} />
         <BigStat
+          compact
           label="Total Luas"
           value={`${fmt(totalLuas)} m²`}
           hint={k > 1 ? `${fmt(luasPerLantai)} m² × ${k} lantai` : undefined}
         />
-        {sketch.fungsi && <BigStat label="Fungsi" value={sketch.fungsi} />}
+        {sketch.fungsi && <BigStat compact label="Fungsi" value={sketch.fungsi} />}
         {(() => {
           const roomList = layers.filter((l) => !isLahan(l.name));
           if (roomList.length === 0) return null;
