@@ -94,6 +94,10 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
+const MDPL_ZERO_EPS = 0.0001;
+function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
+  return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
+}
 
 // Typical floor logic — kept in sync with sketch.tsx
 const TYPICAL_FLOOR_H = 3;
@@ -109,21 +113,12 @@ function isAutoLevelName(name: string): boolean {
 }
 function computeLevelDisplayNames(
   levels: Level[],
-  layers?: { name: string; levelId?: string }[],
+  _layers?: { name: string; levelId?: string }[],
 ): Record<string, string> {
   const out: Record<string, string> = {};
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-
-  let lahanLevelId: string | null = null;
-  if (layers && layers.length) {
-    const ids = new Set<string>();
-    for (const ly of layers) {
-      if (ly.levelId && isLahan(ly.name)) ids.add(ly.levelId);
-    }
-    const cand = sorted.filter((l) => ids.has(l.id));
-    if (cand.length) lahanLevelId = cand[0].id;
-  }
-  const lahanIdx = lahanLevelId ? sorted.findIndex((l) => l.id === lahanLevelId) : -1;
+  const zeroLevel = findMdplZeroLevel(sorted);
+  const lahanIdx = zeroLevel ? sorted.findIndex((l) => l.id === zeroLevel.id) : 0;
 
   if (lahanIdx > 0) {
     let bn = 1;
