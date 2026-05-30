@@ -2060,6 +2060,58 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
+  // Commit sebuah polyline. `closed` = true bila berakhir di titik awal,
+  // membentuk polygon tertutup (otomatis menjadi Ruang baru).
+  const commitPolyline = useCallback(
+    (pts: Point[], closed: boolean) => {
+      if (pts.length < 2) return;
+      const { levels: nextLevelsBase, activeId } = ensureLevels();
+      const segCount = closed ? pts.length : pts.length - 1;
+      const newLines: Line[] = [];
+      for (let i = 0; i < segCount; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        if (dist(a, b) < 1) continue;
+        newLines.push({ a, b, kind: "straight", levelId: activeId });
+      }
+      if (newLines.length === 0) return;
+      pushHistory();
+      let nextLayers = layers;
+      const patch: Partial<Sketch> = { lines: [...lines, ...newLines] };
+      if (closed && pts.length >= 3) {
+        const areaPx = polygonAreaPx(pts);
+        if (areaPx > 25) {
+          const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+          const idx = layers.length + 1;
+          const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+          const layer: Layer = {
+            id: `L${Date.now()}`,
+            name: `Ruang ${idx}`,
+            points: pts,
+            areaM2,
+            color,
+            locked: false,
+            levelId: activeId,
+            coefficient: 1,
+          };
+          const carved = applySubtractionToLayers(layers, pts, activeId);
+          nextLayers = [...carved, layer];
+          toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+        }
+      } else {
+        toast.success(`Polyline: ${newLines.length} ruas tersimpan`);
+      }
+      patch.layers = nextLayers;
+      if (nextLevelsBase !== levels) {
+        patch.levels = nextLevelsBase;
+        patch.activeLevelId = activeId;
+      } else if (!activeLvlId) {
+        patch.activeLevelId = activeId;
+      }
+      onChange(patch);
+    },
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
+
   // Find nearest vertex on the ACTIVE level (line endpoint or layer point) within tolerance
   const findVertexAt = useCallback(
     (p: Point, tol: number): Point | null => {
