@@ -28,6 +28,7 @@ import {
   Move,
   GripHorizontal,
   Copy,
+  Waypoints,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1241,7 +1242,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "erase" | "edit">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit">("line");
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -1261,6 +1262,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
   const [filletSegments] = useState<number>(10);
   const [addPointPreview, setAddPointPreview] = useState<Point | null>(null);
+  // Polyline live-draw: stylus turuns membentuk vertex baru otomatis saat berbelok.
+  // points = vertex yang sudah ter-commit; lastSample = posisi stylus terbaru sebelum cursor;
+  // cursor = posisi stylus saat ini. Selesai saat pointer up atau cursor menyentuh points[0].
+  const [polyDraft, setPolyDraft] = useState<
+    | { points: Point[]; lastSample: Point; cursor: Point; closed?: boolean }
+    | null
+  >(null);
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
@@ -1718,6 +1726,48 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.setLineDash([]);
     }
 
+    // Polyline draft preview
+    if (polyDraft) {
+      const pts = polyDraft.points;
+      const closing =
+        pts.length >= 3 &&
+        dist(polyDraft.cursor, pts[0]) <= 14 / s;
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
+      ctx.lineWidth = 2 / s;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      // Garis aktif ke cursor (dashed)
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.moveTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      ctx.lineTo(polyDraft.cursor.x, polyDraft.cursor.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Vertex markers
+      ctx.fillStyle = "rgba(232, 93, 58, 1)";
+      for (const v of pts) {
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, 4 / s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Highlight titik awal saat siap ditutup
+      if (closing) {
+        ctx.strokeStyle = "rgba(34, 197, 94, 0.95)";
+        ctx.lineWidth = 2.5 / s;
+        ctx.beginPath();
+        ctx.arc(pts[0].x, pts[0].y, 10 / s, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = "rgba(232, 93, 58, 0.7)";
+        ctx.lineWidth = 1.5 / s;
+        ctx.beginPath();
+        ctx.arc(pts[0].x, pts[0].y, 8 / s, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
     // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
       const seen = new Set<string>();
@@ -1896,7 +1946,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, tileTick, onTileLoad]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, tileTick, onTileLoad]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -2051,6 +2101,61 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     },
     [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
+
+  // Commit sebuah polyline. `closed` = true bila berakhir di titik awal,
+  // membentuk polygon tertutup (otomatis menjadi Ruang baru).
+  const commitPolyline = useCallback(
+    (pts: Point[], closed: boolean) => {
+      if (pts.length < 2) return;
+      const { levels: nextLevelsBase, activeId } = ensureLevels();
+      const segCount = closed ? pts.length : pts.length - 1;
+      const newLines: Line[] = [];
+      for (let i = 0; i < segCount; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        if (dist(a, b) < 1) continue;
+        newLines.push({ a, b, kind: "straight", levelId: activeId });
+      }
+      if (newLines.length === 0) return;
+      pushHistory();
+      let nextLayers = layers;
+      const patch: Partial<Sketch> = { lines: [...lines, ...newLines] };
+      if (closed && pts.length >= 3) {
+        const areaPx = polygonAreaPx(pts);
+        if (areaPx > 25) {
+          const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+          const idx = layers.length + 1;
+          const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+          const layer: Layer = {
+            id: `L${Date.now()}`,
+            name: `Ruang ${idx}`,
+            points: pts,
+            areaM2,
+            color,
+            locked: false,
+            levelId: activeId,
+            coefficient: 1,
+          };
+          const carved = applySubtractionToLayers(layers, pts, activeId);
+          nextLayers = [...carved, layer];
+          toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+        }
+      } else {
+        toast.success(`Polyline: ${newLines.length} ruas tersimpan`);
+      }
+      patch.layers = nextLayers;
+      if (nextLevelsBase !== levels) {
+        patch.levels = nextLevelsBase;
+        patch.activeLevelId = activeId;
+      } else if (!activeLvlId) {
+        patch.activeLevelId = activeId;
+      }
+      onChange(patch);
+    },
+    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
+  );
+
+
 
   // Find nearest vertex on the ACTIVE level (line endpoint or layer point) within tolerance
   const findVertexAt = useCallback(
@@ -2423,6 +2528,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const p = getWorldPos(e);
     if (tool === "line" || tool === "rect") {
       setDrawing({ a: p, b: p });
+    } else if (tool === "polyline") {
+      setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
       const raw = getWorldPosRaw(e);
       const tol = 14 / view.s;
@@ -2566,6 +2673,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
+    if (polyDraft && tool === "polyline") {
+      const cur = p;
+      const pts = polyDraft.points;
+      const lastV = pts[pts.length - 1];
+      const ls = polyDraft.lastSample;
+      const minSegPx = 10 / view.s;
+      const closeTolPx = 14 / view.s;
+      // Auto-close: cursor menyentuh titik awal
+      if (pts.length >= 3 && dist(cur, pts[0]) <= closeTolPx) {
+        commitPolyline(pts, true);
+        setPolyDraft(null);
+        return;
+      }
+      // Deteksi belokan: bandingkan arah lastV→lastSample vs lastSample→cursor
+      const v1x = ls.x - lastV.x, v1y = ls.y - lastV.y;
+      const v2x = cur.x - ls.x, v2y = cur.y - ls.y;
+      const n1 = Math.hypot(v1x, v1y), n2 = Math.hypot(v2x, v2y);
+      if (n1 > minSegPx && n2 > minSegPx / 2) {
+        const cos = (v1x * v2x + v1y * v2y) / (n1 * n2);
+        // ~22 derajat → cos ≈ 0.927
+        if (cos < 0.927) {
+          setPolyDraft({ points: [...pts, ls], lastSample: cur, cursor: cur });
+          return;
+        }
+      }
+      setPolyDraft({ ...polyDraft, lastSample: n2 > minSegPx / 3 ? cur : ls, cursor: cur });
+    }
   };
 
   const endPointer = (e: React.PointerEvent) => {
@@ -2589,6 +2723,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     if (editDrag) {
       setEditDrag(null);
+      return;
+    }
+    if (polyDraft && tool === "polyline") {
+      // Tambahkan sample terakhir bila cukup jauh dari vertex terakhir
+      const pts = polyDraft.points.slice();
+      const last = pts[pts.length - 1];
+      const minTailPx = 8 / view.s;
+      const closeTolPx = 14 / view.s;
+      const closing = pts.length >= 3 && dist(polyDraft.cursor, pts[0]) <= closeTolPx;
+      if (!closing && dist(polyDraft.cursor, last) > minTailPx) {
+        pts.push(polyDraft.cursor);
+      }
+      setPolyDraft(null);
+      commitPolyline(pts, closing);
       return;
     }
     if (!drawing) return;
@@ -2625,6 +2773,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setDrawing(null);
     setDraggingHandle(null);
     setEditDrag(null);
+    setPolyDraft(null);
   };
 
   const handleUndo = () => {
@@ -3067,6 +3216,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Square className="mr-1.5 h-4 w-4" /> Persegi
           </Button>
           <Button
+            variant={tool === "polyline" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setPolyDraft(null); setTool("polyline"); }}
+            className={cn(tool === "polyline" && "bg-gradient-ember shadow-ember")}
+          >
+            <Waypoints className="mr-1.5 h-4 w-4" /> Polyline
+          </Button>
+          <Button
             variant={tool === "edit" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("edit"); }}
@@ -3082,6 +3239,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
         </div>
+        {tool === "polyline" && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Tarik stylus tanpa jeda. Setiap belokan menjadi titik baru. Lepas stylus untuk berhenti, atau kembali ke titik awal untuk menutup polygon.
+          </p>
+        )}
         {tool === "rect" && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Tarik diagonal untuk membentuk persegi/persegi panjang. Ruang otomatis terbentuk.
@@ -3318,7 +3480,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
@@ -3361,6 +3523,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Persegi (tarik diagonal)"
           >
             <Square className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "polyline" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setPolyDraft(null); setTool("polyline"); }}
+            className={cn(tool === "polyline" && "bg-gradient-ember shadow-ember")}
+            title="Polyline (tarik tanpa jeda, berbelok = titik baru)"
+          >
+            <Waypoints className="h-4 w-4" />
           </Button>
           <Button
             variant={tool === "edit" ? "default" : "ghost"}
@@ -3540,7 +3711,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
