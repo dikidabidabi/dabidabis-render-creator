@@ -1726,6 +1726,48 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.setLineDash([]);
     }
 
+    // Polyline draft preview
+    if (polyDraft) {
+      const pts = polyDraft.points;
+      const closing =
+        pts.length >= 3 &&
+        dist(polyDraft.cursor, pts[0]) <= 14 / s;
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
+      ctx.lineWidth = 2 / s;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      // Garis aktif ke cursor (dashed)
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.moveTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      ctx.lineTo(polyDraft.cursor.x, polyDraft.cursor.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Vertex markers
+      ctx.fillStyle = "rgba(232, 93, 58, 1)";
+      for (const v of pts) {
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, 4 / s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Highlight titik awal saat siap ditutup
+      if (closing) {
+        ctx.strokeStyle = "rgba(34, 197, 94, 0.95)";
+        ctx.lineWidth = 2.5 / s;
+        ctx.beginPath();
+        ctx.arc(pts[0].x, pts[0].y, 10 / s, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = "rgba(232, 93, 58, 0.7)";
+        ctx.lineWidth = 1.5 / s;
+        ctx.beginPath();
+        ctx.arc(pts[0].x, pts[0].y, 8 / s, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
     // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
       const seen = new Set<string>();
