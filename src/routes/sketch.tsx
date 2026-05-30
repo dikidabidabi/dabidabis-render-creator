@@ -157,7 +157,8 @@ type Sketch = {
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
-  sectionCut?: SectionCut; // Garis Potong A-A (dinamis, men-trigger slide potongan)
+  sectionCut?: SectionCut; // legacy single cut (kompatibilitas)
+  sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
 };
 
 type StoreShape = {
