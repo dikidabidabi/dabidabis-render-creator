@@ -1380,7 +1380,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} />
       </div>
-      <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
+      <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
         <BigStat
           label="Level"
           value={displayName}
@@ -1395,6 +1395,43 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           hint={k > 1 ? `${fmt(luasPerLantai)} m² × ${k} lantai` : undefined}
         />
         {sketch.fungsi && <BigStat label="Fungsi" value={sketch.fungsi} />}
+        {(() => {
+          const roomList = layers.filter((l) => !isLahan(l.name));
+          if (roomList.length === 0) return null;
+          // Two columns when many rooms
+          const twoCol = roomList.length > 10;
+          return (
+            <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "0 1 auto", overflow: "hidden" }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8 }}>
+                Legenda Ruang
+              </div>
+              <ol style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                columnCount: twoCol ? 2 : 1,
+                columnGap: 12,
+                fontSize: 11,
+                lineHeight: 1.4,
+              }}>
+                {roomList.map((r, i) => (
+                  <li key={r.id} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: 3 }}>
+                    <span style={{
+                      flexShrink: 0,
+                      minWidth: 18,
+                      fontWeight: 700,
+                      color: r.color.replace("ALPHA", "1"),
+                      fontVariantNumeric: "tabular-nums",
+                    }}>{i + 1}.</span>
+                    <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.name}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
