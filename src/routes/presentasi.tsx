@@ -592,6 +592,15 @@ function A3Frame({ children }: { children: React.ReactNode }) {
 
 // ---------- Slide types ----------
 type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
+type RincianSection = {
+  level: Level;
+  items: Layer[];
+  k: number;
+  partIndex: number;
+  partCount: number;
+  totalAsliPer: number;
+  totalEfPer: number;
+};
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
   | { kind: "closing"; id: string; title: string; sketch: Sketch }
@@ -603,7 +612,7 @@ type Slide =
   | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
-  | { kind: "rincian"; id: string; title: string; sketch: Sketch }
+  | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats };
 
@@ -666,7 +675,57 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
-  out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk });
+  // Rincian per Level — paginated jika tidak muat satu slide.
+  {
+    const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name));
+    const MAX_ROWS_PER_CHUNK = 18;
+    const SECTION_OVERHEAD = 130; // px (header + thead + total row + margin)
+    const ROW_HEIGHT = 28;
+    const BUDGET = 700;
+    const allSections: RincianSection[] = [];
+    for (const lv of levels) {
+      const items = ruangAll.filter((l) => l.levelId === lv.id);
+      const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+      const totalAsliPer = items.reduce((s, l) => s + l.areaM2, 0);
+      const totalEfPer = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+      if (items.length === 0) {
+        allSections.push({ level: lv, items, k, partIndex: 1, partCount: 1, totalAsliPer, totalEfPer });
+        continue;
+      }
+      const partCount = Math.max(1, Math.ceil(items.length / MAX_ROWS_PER_CHUNK));
+      for (let p = 0; p < partCount; p++) {
+        const chunk = items.slice(p * MAX_ROWS_PER_CHUNK, (p + 1) * MAX_ROWS_PER_CHUNK);
+        allSections.push({ level: lv, items: chunk, k, partIndex: p + 1, partCount, totalAsliPer, totalEfPer });
+      }
+    }
+    // Pack sections into pages by height budget
+    const pages: RincianSection[][] = [];
+    let cur: RincianSection[] = [];
+    let curH = 0;
+    for (const s of allSections) {
+      const h = SECTION_OVERHEAD + ROW_HEIGHT * Math.max(1, s.items.length);
+      if (cur.length > 0 && curH + h > BUDGET) {
+        pages.push(cur); cur = []; curH = 0;
+      }
+      cur.push(s); curH += h;
+    }
+    if (cur.length > 0) pages.push(cur);
+    const pageCount = Math.max(1, pages.length);
+    pages.forEach((sections, i) => {
+      out.push({
+        kind: "rincian",
+        id: pageCount > 1 ? `rincian-${i + 1}` : "rincian",
+        title: pageCount > 1 ? `Rincian per Level (${i + 1}/${pageCount})` : "Rincian per Level",
+        sketch: sk,
+        sections,
+        pageIndex: i + 1,
+        pageCount,
+      });
+    });
+    if (pages.length === 0) {
+      out.push({ kind: "rincian", id: "rincian", title: "Rincian per Level", sketch: sk, sections: [], pageIndex: 1, pageCount: 1 });
+    }
+  }
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   // Slide penutup
@@ -889,7 +948,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
-      {slide.kind === "rincian" && <RincianBody sketch={slide.sketch} />}
+      {slide.kind === "rincian" && <RincianBody slide={slide} />}
       {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
@@ -1178,7 +1237,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               })}
             </g>
           ))}
-          {layers.filter((l) => !isLahan(l.name)).map((l) => (
+          {layers.filter((l) => !isLahan(l.name)).map((l, i) => (
             <g key={l.id}>
               <polygon
                 points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
@@ -1191,12 +1250,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 y={centroid(l.points).y}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={sw * 0.02}
-                fontWeight={600}
+                fontSize={sw * 0.028}
+                fontWeight={700}
                 fill="#0a0a0a"
-                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: sw * 0.01 } as React.CSSProperties}
+                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.012 } as React.CSSProperties}
               >
-                {l.name}
+                {i + 1}
               </text>
             </g>
           ))}
@@ -1321,7 +1380,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} />
       </div>
-      <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 14 }}>
+      <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
         <BigStat
           label="Level"
           value={displayName}
@@ -1336,6 +1395,43 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           hint={k > 1 ? `${fmt(luasPerLantai)} m² × ${k} lantai` : undefined}
         />
         {sketch.fungsi && <BigStat label="Fungsi" value={sketch.fungsi} />}
+        {(() => {
+          const roomList = layers.filter((l) => !isLahan(l.name));
+          if (roomList.length === 0) return null;
+          // Two columns when many rooms
+          const twoCol = roomList.length > 10;
+          return (
+            <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "0 1 auto", overflow: "hidden" }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8 }}>
+                Legenda Ruang
+              </div>
+              <ol style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                columnCount: twoCol ? 2 : 1,
+                columnGap: 12,
+                fontSize: 11,
+                lineHeight: 1.4,
+              }}>
+                {roomList.map((r, i) => (
+                  <li key={r.id} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: 3 }}>
+                    <span style={{
+                      flexShrink: 0,
+                      minWidth: 18,
+                      fontWeight: 700,
+                      color: r.color.replace("ALPHA", "1"),
+                      fontVariantNumeric: "tabular-nums",
+                    }}>{i + 1}.</span>
+                    <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.name}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -2647,33 +2743,35 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 }
 
 // ---- Rincian ----
-function RincianBody({ sketch }: { sketch: Sketch }) {
-  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
-  const displayNames = computeLevelDisplayNames(levels);
+function RincianBody({ slide }: { slide: Extract<Slide, { kind: "rincian" }> }) {
+  const { sketch, sections } = slide;
+  const displayNames = computeLevelDisplayNames(sketch.levels ?? []);
+  if (sections.length === 0) {
+    return (
+      <div style={{ fontSize: 14, color: "#999", padding: "8px 0" }}>Belum ada ruang.</div>
+    );
+  }
   return (
     <div style={{ width: "100%", overflow: "hidden", display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{
-        columnCount: levels.length > 2 ? 2 : 1,
-        columnGap: 28,
-        width: "100%",
-      }}>
-        {levels.map((lv) => {
-          const items = ruang.filter((l) => l.levelId === lv.id);
-          const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
-          const totalAsliPer = items.reduce((s, l) => s + l.areaM2, 0);
-          const totalEfPer = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+      <div style={{ width: "100%" }}>
+        {sections.map((sec, idx) => {
+          const { level: lv, items, k, partIndex, partCount, totalAsliPer, totalEfPer } = sec;
           const totalAsli = totalAsliPer * k;
           const totalEf = totalEfPer * k;
           const name = displayNames[lv.id] ?? lv.name;
           return (
-            <div key={lv.id} style={{ breakInside: "avoid", marginBottom: 22 }}>
+            <div key={`${lv.id}-${partIndex}-${idx}`} style={{ breakInside: "avoid", marginBottom: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1px solid #111", paddingBottom: 6, marginBottom: 8 }}>
                 <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em" }}>
                   {name}
                   {k > 1 && (
                     <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#e85d3a", textTransform: "uppercase" }}>
                       tipikal {k}×
+                    </span>
+                  )}
+                  {partCount > 1 && (
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#888", textTransform: "uppercase" }}>
+                      bag. {partIndex}/{partCount}
                     </span>
                   )}
                 </span>
@@ -2707,11 +2805,13 @@ function RincianBody({ sketch }: { sketch: Sketch }) {
                         </tr>
                       );
                     })}
-                    <tr style={{ borderTop: "1px solid #111", fontWeight: 600 }}>
-                      <td style={{ padding: "8px 0" }} colSpan={2}>Total</td>
-                      <td style={{ padding: "8px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAsli)}</td>
-                      <td style={{ padding: "8px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalEf)}</td>
-                    </tr>
+                    {partIndex === partCount && (
+                      <tr style={{ borderTop: "1px solid #111", fontWeight: 600 }}>
+                        <td style={{ padding: "8px 0" }} colSpan={2}>Total</td>
+                        <td style={{ padding: "8px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAsli)}</td>
+                        <td style={{ padding: "8px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalEf)}</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               )}
