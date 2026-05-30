@@ -539,6 +539,18 @@ function normalizeSketch(s: any): Sketch {
           label: typeof s.geo.label === "string" ? s.geo.label : "",
         }
       : undefined,
+    sectionCut:
+      s?.sectionCut &&
+      s.sectionCut.p1 && s.sectionCut.p2 &&
+      Number.isFinite(Number(s.sectionCut.p1.x)) && Number.isFinite(Number(s.sectionCut.p1.y)) &&
+      Number.isFinite(Number(s.sectionCut.p2.x)) && Number.isFinite(Number(s.sectionCut.p2.y))
+        ? {
+            p1: { x: Number(s.sectionCut.p1.x), y: Number(s.sectionCut.p1.y) },
+            p2: { x: Number(s.sectionCut.p2.x), y: Number(s.sectionCut.p2.y) },
+            label: typeof s.sectionCut.label === "string" ? s.sectionCut.label : "A-A",
+            updatedAt: Number.isFinite(Number(s.sectionCut.updatedAt)) ? Number(s.sectionCut.updatedAt) : Date.now(),
+          }
+        : undefined,
   };
 }
 
