@@ -1010,6 +1010,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
     slide.kind === "level" ? "Sketsa · Level"
+    : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
     : slide.kind === "site" ? (
         slide.view === "lokasi" ? "Analisa · Lokasi"
         : slide.view === "akses" ? "Analisa · Akses"
