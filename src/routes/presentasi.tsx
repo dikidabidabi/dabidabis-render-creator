@@ -42,11 +42,13 @@ type Layer = {
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
+type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
   kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
   geo?: Geo;
+  sectionCut?: SectionCut;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
