@@ -1250,10 +1250,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 y={centroid(l.points).y}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fontSize={sw * 0.028}
+                fontSize={sw * 0.014}
                 fontWeight={700}
-                fill="#0a0a0a"
-                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.012 } as React.CSSProperties}
+                fill="#000000"
               >
                 {i + 1}
               </text>
