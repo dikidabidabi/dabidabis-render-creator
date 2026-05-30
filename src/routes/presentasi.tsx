@@ -673,6 +673,18 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
       bounds,
     });
   }
+  // Slide Potongan Prinsip A-A (otomatis muncul setelah slide denah ketika
+  // user menarik garis potong di kanvas sketsa).
+  if (sk.sectionCut && sk.sectionCut.p1 && sk.sectionCut.p2) {
+    const lbl = sk.sectionCut.label || "A-A";
+    out.push({
+      kind: "section",
+      id: "section-cut",
+      title: `Potongan Prinsip Skematik ${lbl}`,
+      sketch: sk,
+      cut: sk.sectionCut,
+    });
+  }
   out.push({ kind: "matahari", id: "matahari", title: "Analisa Matahari & Bukaan", sketch: sk, bounds });
   out.push({ kind: "shadow-seasonal", id: "shadow-seasonal", title: "Studi Bayangan Tahunan · 15.00 WIB", sketch: sk, bounds });
   out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
