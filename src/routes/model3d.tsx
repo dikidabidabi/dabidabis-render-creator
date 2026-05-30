@@ -561,6 +561,21 @@ function SketchViewer({
               <span className="font-mono">{sketch.scale}</span>
             </div>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary" size="sm" className="h-7 gap-1 px-2 text-xs">
+                <Download className="h-3 w-3" /> Unduh
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[160px]">
+              <DropdownMenuItem onClick={() => handleExport("obj")}>
+                Wavefront (.obj + .mtl)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("3ds")}>
+                Autodesk (.3ds)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
 
