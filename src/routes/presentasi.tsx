@@ -1305,24 +1305,32 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const cutLenPx = Math.hypot(cut.p2.x - cut.p1.x, cut.p2.y - cut.p1.y);
   const cutLenM = cutLenPx / pxPerMeter;
 
-  // Sort levels by mdpl ascending. Compute per-level base and height.
+  // Sort levels by mdpl ascending. Compute per-level base & top dari MDPL gap
+  // (selaras dengan expandLevelsForView + model 3D), bukan dipaksa 3 m.
   const lvls = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const TYPICAL_H = 3;
   type LvlBox = {
     id: string; name: string; baseM: number; topM: number; count: number; floorH: number;
     slices: Array<{ x0: number; x1: number; name: string; color: string }>;
   };
+  // Gunakan expand untuk turunkan tinggi tiap lantai sesuai MDPL gap (k=1) atau
+  // typicalHeight (k>1). Lalu group balik per sourceId untuk gambar 1 box per level.
+  const floorsExp = expandLevelsForView(lvls);
+  const groupBySource = new Map<string, typeof floorsExp>();
+  for (const f of floorsExp) {
+    const arr = groupBySource.get(f.sourceId) ?? [];
+    arr.push(f);
+    groupBySource.set(f.sourceId, arr);
+  }
   const boxes: LvlBox[] = lvls.map((lv) => {
-    const count = Math.max(1, Math.round(lv.typicalCount ?? 1));
-    const floorH = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
-      ? Number(lv.typicalHeight) : TYPICAL_H;
-    return {
-      id: lv.id, name: lv.name,
-      baseM: lv.mdpl,
-      topM: lv.mdpl + count * floorH,
-      count, floorH,
-      slices: [],
-    };
+    const group = groupBySource.get(lv.id) ?? [];
+    const count = group.length || 1;
+    const baseM = group.length ? group[0].mdpl : lv.mdpl;
+    const topM = group.length
+      ? group[group.length - 1].mdpl + group[group.length - 1].height
+      : lv.mdpl + TYPICAL_H;
+    const floorH = group.length ? group[0].height : TYPICAL_H;
+    return { id: lv.id, name: lv.name, baseM, topM, count, floorH, slices: [] };
   });
 
   // Compute slices per layer (rooms only) intersecting the cut line.
