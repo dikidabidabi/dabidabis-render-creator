@@ -3105,7 +3105,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       nextLayers = carved;
     }
-    onChange({ layers: nextLayers });
+    const bound = bindLahanLayersToMdplZero(levels, nextLayers);
+    onChange({ levels: bound.levels, layers: bound.layers });
     if (final.toLowerCase().startsWith("lahan"))
       toast.success(`${final} ditandai sebagai acuan KDB/KLB`);
     else if (becameVoid)
@@ -3154,7 +3155,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   // Rekapitulasi panel (rendered below canvas in normal mode, inside SidePanel in fullscreen)
   const RekapPanel = (() => {
-    const groundLevel = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
+  const groundLevel = findMdplZeroLevel(levels) ?? [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
     const ruangLayers = layers.filter((l) => !isLahanName(l.name) && !isVoidLayerName(l.name));
     const kdbRencana = groundLevel
       ? ruangLayers.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
