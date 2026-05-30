@@ -612,6 +612,21 @@ function SketchViewer({
               </>
             )}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary" size="sm" className="h-7 gap-1 px-2 text-xs">
+                <Download className="h-3 w-3" /> Unduh
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuItem onClick={() => handleExport("obj")}>
+                Wavefront (.obj + .mtl)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("3ds")}>
+                Autodesk (.3ds)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-slate-700 shadow-sm">
