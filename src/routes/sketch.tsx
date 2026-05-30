@@ -2547,7 +2547,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     const p = getWorldPos(e);
-    if (tool === "line" || tool === "rect") {
+    if (tool === "line" || tool === "rect" || tool === "section") {
       setDrawing({ a: p, b: p });
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
