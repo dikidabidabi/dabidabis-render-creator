@@ -812,7 +812,7 @@ function computeStats(sk: Sketch): Stats {
   // KDB = footprint at ground only (no multiplier — ground floor is a single footprint)
   let kdbRencanaM2 = 0;
   if (levels.length > 0) {
-    const ground = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
+    const ground = findMdplZeroLevel(levels) ?? [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
     kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
   }
   const klbRencanaM2 = ruang.reduce(
@@ -1532,11 +1532,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const totalLuas = luasPerLantai * k;
   const displayNames = computeLevelDisplayNames(sketch.levels ?? [], sketch.layers ?? []);
   const displayName = displayNames[level.id] ?? level.name;
-  // Level 1 = level dengan mdpl terendah. GSB & radius EVK hanya muncul di Level 1.
-  const minMdpl = (sketch.levels ?? []).length
-    ? Math.min(...(sketch.levels ?? []).map((l) => l.mdpl))
-    : level.mdpl;
-  const isGround = level.mdpl === minMdpl;
+  // Lahan & GSB hanya terikat pada level MDPL 0, bukan level terendah/basement.
+  const groundLevel = findMdplZeroLevel(sketch.levels ?? []);
+  const isGround = groundLevel ? level.id === groundLevel.id : Math.abs(level.mdpl) <= MDPL_ZERO_EPS;
   const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
   const pxPerM = 1 / mPerSPx;
   const evkRooms = isGround
@@ -1558,14 +1556,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           preserveAspectRatio="xMidYMid meet"
           style={{ width: "100%", height: "100%", display: "block" }}
         >
-          {lahanAll.map((l) => (
+          {isGround && lahanAll.map((l) => (
             <g key={`lhn-${l.id}`}>
               <polygon
                 points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill={isGround ? "rgba(0,0,0,0.04)" : "none"}
+                fill="rgba(0,0,0,0.04)"
                 stroke="rgba(0,0,0,0.55)"
                 strokeWidth={sw * 0.0015}
-                strokeDasharray={isGround ? undefined : `${sw * 0.008} ${sw * 0.005}`}
               />
               {isGround && l.points.map((_, i) => {
                 const seg = inwardOffsetSegPx(l.points, i, getLayerGsbM(l, i) * pxPerM);
