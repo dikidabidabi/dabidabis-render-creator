@@ -729,7 +729,7 @@ function Model3DPage() {
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) => {
       const next = prev.map((s) =>
-        s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s,
+        s.id === id ? bindLahanToMdplZero({ ...s, ...patch, updatedAt: Date.now() }) : s,
       );
       try {
         localStorage.setItem(
