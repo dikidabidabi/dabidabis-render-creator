@@ -1084,19 +1084,49 @@ function effectiveNorthDeg(sketch: Sketch): number {
 function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
   const r = ((rotation % 360) + 360) % 360;
   return (
-    <div style={{ position: "absolute", right: 8, bottom: 8, width: size, height: size, pointerEvents: "none" }}>
-      <div style={{ width: size, height: size, transform: `rotate(${r}deg)` }}>
-        <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
-          <circle cx="50" cy="50" r="46" fill="rgba(255,255,255,0.92)" stroke="#0a0a0a" strokeWidth="2" />
-          <circle cx="50" cy="50" r="2.5" fill="#0a0a0a" />
-          <polygon points="50,8 42,52 50,46 58,52" fill="#e85d3a" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
-          <polygon points="50,92 44,54 50,58 56,54" fill="#ffffff" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
-          <text x="50" y="22" textAnchor="middle" fontSize="14" fontWeight="800" fill="#0a0a0a" fontFamily="Sora, sans-serif">U</text>
-          <text x="50" y="86" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">S</text>
-          <text x="84" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">T</text>
-          <text x="16" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">B</text>
-        </svg>
-      </div>
+    <div style={{ position: "absolute", right: 10, bottom: 10, width: size, height: size, pointerEvents: "none", filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.18))" }}>
+      <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
+        <defs>
+          <linearGradient id="compassBg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="100%" stopColor="#f1f1ef" />
+          </linearGradient>
+          <linearGradient id="compassN" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ff7a55" />
+            <stop offset="100%" stopColor="#e85d3a" />
+          </linearGradient>
+        </defs>
+        {/* Outer ring */}
+        <circle cx="50" cy="50" r="47" fill="url(#compassBg)" stroke="#0a0a0a" strokeWidth="0.8" />
+        <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(10,10,10,0.18)" strokeWidth="0.4" />
+        {/* Rotating dial */}
+        <g transform={`rotate(${r} 50 50)`}>
+          {/* Cardinal & intercardinal tick marks */}
+          {Array.from({ length: 16 }).map((_, i) => {
+            const angle = (i * 22.5) * Math.PI / 180;
+            const isCardinal = i % 4 === 0;
+            const r1 = isCardinal ? 38 : 41;
+            const r2 = 45;
+            const x1 = 50 + Math.sin(angle) * r1;
+            const y1 = 50 - Math.cos(angle) * r1;
+            const x2 = 50 + Math.sin(angle) * r2;
+            const y2 = 50 - Math.cos(angle) * r2;
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#0a0a0a" strokeWidth={isCardinal ? 0.8 : 0.35} strokeLinecap="round" opacity={isCardinal ? 1 : 0.45} />;
+          })}
+          {/* North needle (filled, accent) */}
+          <polygon points="50,10 45,50 50,46 55,50" fill="url(#compassN)" stroke="#7a2a18" strokeWidth="0.35" strokeLinejoin="round" />
+          {/* South needle (outline) */}
+          <polygon points="50,90 46,50 50,54 54,50" fill="#ffffff" stroke="#0a0a0a" strokeWidth="0.5" strokeLinejoin="round" />
+          {/* Cardinal letters (rotate with dial so U follows north) */}
+          <text x="50" y="26" textAnchor="middle" dominantBaseline="central" fontSize="9" fontWeight="800" fill="#0a0a0a" fontFamily="Sora, sans-serif" letterSpacing="0.5">U</text>
+          <text x="50" y="76" textAnchor="middle" dominantBaseline="central" fontSize="6" fontWeight="700" fill="#888" fontFamily="Sora, sans-serif">S</text>
+          <text x="74" y="50" textAnchor="middle" dominantBaseline="central" fontSize="6" fontWeight="700" fill="#888" fontFamily="Sora, sans-serif">T</text>
+          <text x="26" y="50" textAnchor="middle" dominantBaseline="central" fontSize="6" fontWeight="700" fill="#888" fontFamily="Sora, sans-serif">B</text>
+        </g>
+        {/* Center cap */}
+        <circle cx="50" cy="50" r="3" fill="#0a0a0a" />
+        <circle cx="50" cy="50" r="1.2" fill="#ff7a55" />
+      </svg>
     </div>
   );
 }
@@ -1663,6 +1693,65 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
+          {(() => {
+            const cuts = Array.isArray(sketch.sectionCuts) && sketch.sectionCuts.length > 0
+              ? sketch.sectionCuts
+              : (sketch.sectionCut ? [sketch.sectionCut] : []);
+            if (cuts.length === 0) return null;
+            return cuts.map((cut, idx) => {
+              const label = cut.label || "A-A";
+              const tag = (label.split("-")[0] || "A").trim();
+              const { p1, p2 } = cut;
+              const dx = p2.x - p1.x, dy = p2.y - p1.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const ux = dx / len, uy = dy / len;
+              // Perpendicular (rotated +90° CW in screen frame) = viewing direction
+              const px = -uy, py = ux;
+              const rBub = sw * 0.018;
+              const arrowLen = sw * 0.028;
+              const arrowHead = sw * 0.008;
+              const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+              // Bubble positions extend beyond each endpoint along the line
+              const bA = { x: p1.x - ux * (rBub + sw * 0.004), y: p1.y - uy * (rBub + sw * 0.004) };
+              const bB = { x: p2.x + ux * (rBub + sw * 0.004), y: p2.y + uy * (rBub + sw * 0.004) };
+              const tipX = mid.x + px * arrowLen;
+              const tipY = mid.y + py * arrowLen;
+              return (
+                <g key={`cut-${idx}`} pointerEvents="none">
+                  {/* Dashed section line */}
+                  <line
+                    x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                    stroke="#e85d3a"
+                    strokeWidth={sw * 0.0028}
+                    strokeDasharray={`${sw * 0.014} ${sw * 0.006} ${sw * 0.003} ${sw * 0.006}`}
+                    strokeLinecap="round"
+                  />
+                  {/* Viewing-direction arrow at mid */}
+                  <line
+                    x1={mid.x} y1={mid.y} x2={tipX} y2={tipY}
+                    stroke="#e85d3a" strokeWidth={sw * 0.002} strokeLinecap="round"
+                  />
+                  <polygon
+                    points={`${tipX},${tipY} ${tipX - px * arrowHead + py * arrowHead * 0.7},${tipY - py * arrowHead - px * arrowHead * 0.7} ${tipX - px * arrowHead - py * arrowHead * 0.7},${tipY - py * arrowHead + px * arrowHead * 0.7}`}
+                    fill="#e85d3a"
+                  />
+                  {/* Endpoint label bubbles */}
+                  {[{ pt: bA, txt: tag }, { pt: bB, txt: `${tag}'` }].map((b, j) => (
+                    <g key={j}>
+                      <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
+                        fill="#ffffff" stroke="#e85d3a" strokeWidth={sw * 0.002} />
+                      <text x={b.pt.x} y={b.pt.y}
+                        textAnchor="middle" dominantBaseline="central"
+                        fontSize={sw * 0.018} fontWeight={800} fill="#0a0a0a"
+                        fontFamily="Sora, sans-serif">
+                        {b.txt}
+                      </text>
+                    </g>
+                  ))}
+                </g>
+              );
+            });
+          })()}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} />
       </div>
