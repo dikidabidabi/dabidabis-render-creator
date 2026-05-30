@@ -669,7 +669,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
-  const displayNames = computeLevelDisplayNames(levels);
+  const displayNames = computeLevelDisplayNames(levels, sk.layers ?? []);
   const out: Slide[] = [];
   // Slide judul (paling awal)
   out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
