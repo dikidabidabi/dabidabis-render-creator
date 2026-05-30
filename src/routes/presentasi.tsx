@@ -2972,7 +2972,7 @@ function AxonometricView({
 function StackingBody({ sketch }: { sketch: Sketch }) {
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
-  const displayNames = computeLevelDisplayNames(levelsAsc);
+  const displayNames = computeLevelDisplayNames(levelsAsc, sketch.layers ?? []);
 
   // Color map keyed by source level id (matches axonometric)
   const colorMap = new Map<string, string>();
