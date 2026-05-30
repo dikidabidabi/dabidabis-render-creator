@@ -29,6 +29,7 @@ import {
   GripHorizontal,
   Copy,
   Waypoints,
+  Scissors,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,6 +134,13 @@ function computeLevelDisplayNames(levels: { id: string; name: string; mdpl: numb
   return out;
 }
 
+type SectionCut = {
+  p1: Point;
+  p2: Point;
+  label?: string;
+  updatedAt?: number;
+};
+
 type Sketch = {
   id: string;
   title: string;
@@ -149,6 +157,7 @@ type Sketch = {
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
+  sectionCut?: SectionCut; // Garis Potong A-A (dinamis, men-trigger slide potongan)
 };
 
 type StoreShape = {
@@ -530,6 +539,18 @@ function normalizeSketch(s: any): Sketch {
           label: typeof s.geo.label === "string" ? s.geo.label : "",
         }
       : undefined,
+    sectionCut:
+      s?.sectionCut &&
+      s.sectionCut.p1 && s.sectionCut.p2 &&
+      Number.isFinite(Number(s.sectionCut.p1.x)) && Number.isFinite(Number(s.sectionCut.p1.y)) &&
+      Number.isFinite(Number(s.sectionCut.p2.x)) && Number.isFinite(Number(s.sectionCut.p2.y))
+        ? {
+            p1: { x: Number(s.sectionCut.p1.x), y: Number(s.sectionCut.p1.y) },
+            p2: { x: Number(s.sectionCut.p2.x), y: Number(s.sectionCut.p2.y) },
+            label: typeof s.sectionCut.label === "string" ? s.sectionCut.label : "A-A",
+            updatedAt: Number.isFinite(Number(s.sectionCut.updatedAt)) ? Number(s.sectionCut.updatedAt) : Date.now(),
+          }
+        : undefined,
   };
 }
 
@@ -1242,7 +1263,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section">("line");
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -1768,6 +1789,72 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
+    // Garis Potong A-A persisten (selalu terlihat) — gaya bold dashed dengan
+    // label A & A' dan dua panah arah pandang potongan (tegak lurus, ke kanan
+    // dari arah A→A').
+    {
+      const cut = sketch.sectionCut;
+      const cutA = drawing && tool === "section" ? drawing.a : cut?.p1;
+      const cutB = drawing && tool === "section" ? drawing.b : cut?.p2;
+      const isLive = !!(drawing && tool === "section");
+      if (cutA && cutB && dist(cutA, cutB) > 1) {
+        const dx = cutB.x - cutA.x, dy = cutB.y - cutA.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        // Normal kanan (arah pandang)
+        const nx = -uy, ny = ux;
+        ctx.save();
+        ctx.lineWidth = (isLive ? 2.5 : 2.5) / s;
+        ctx.strokeStyle = isLive ? "rgba(232, 93, 58, 0.95)" : "#111111";
+        ctx.setLineDash([14 / s, 6 / s, 4 / s, 6 / s]);
+        ctx.beginPath();
+        ctx.moveTo(cutA.x, cutA.y);
+        ctx.lineTo(cutB.x, cutB.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Bulatan label A dan A'
+        const labelR = 14 / s;
+        const labelFont = `bold ${Math.round(14 / s)}px Manrope, sans-serif`;
+        const drawCap = (p: Point, txt: string) => {
+          ctx.fillStyle = "#111111";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, labelR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.font = labelFont;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(txt, p.x, p.y);
+        };
+        drawCap(cutA, "A");
+        drawCap(cutB, "A'");
+        // Panah arah pandang (di tengah, tegak lurus ke kanan)
+        const mid = { x: (cutA.x + cutB.x) / 2, y: (cutA.y + cutB.y) / 2 };
+        const arrowLen = Math.min(48, len * 0.18) / s;
+        const tip = { x: mid.x + nx * arrowLen, y: mid.y + ny * arrowLen };
+        ctx.strokeStyle = isLive ? "rgba(232, 93, 58, 0.95)" : "#111111";
+        ctx.lineWidth = 1.6 / s;
+        ctx.beginPath();
+        ctx.moveTo(mid.x, mid.y);
+        ctx.lineTo(tip.x, tip.y);
+        ctx.stroke();
+        // Kepala panah
+        const headSize = 7 / s;
+        const hx1 = tip.x - nx * headSize - ux * (headSize * 0.6);
+        const hy1 = tip.y - ny * headSize - uy * (headSize * 0.6);
+        const hx2 = tip.x - nx * headSize + ux * (headSize * 0.6);
+        const hy2 = tip.y - ny * headSize + uy * (headSize * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(tip.x, tip.y);
+        ctx.lineTo(hx1, hy1);
+        ctx.lineTo(hx2, hy2);
+        ctx.closePath();
+        ctx.fillStyle = isLive ? "rgba(232, 93, 58, 0.95)" : "#111111";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
       const seen = new Set<string>();
@@ -1946,7 +2033,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, tileTick, onTileLoad]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCut, tileTick, onTileLoad]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -2526,7 +2613,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     const p = getWorldPos(e);
-    if (tool === "line" || tool === "rect") {
+    if (tool === "line" || tool === "rect" || tool === "section") {
       setDrawing({ a: p, b: p });
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
@@ -2753,6 +2840,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       commitRect(a, b);
       return;
     }
+
+    if (curTool === "section") {
+      // Garis Potong A-A: simpan bidang irisan ke sketch.
+      // Slide presentasi "Potongan Prinsip Skematik A-A" akan otomatis muncul.
+      onChange({
+        sectionCut: {
+          p1: a,
+          p2: b,
+          label: "A-A",
+          updatedAt: Date.now(),
+        },
+      });
+      toast.success("Garis Potong A-A tersimpan · slide potongan otomatis dibuat", { duration: 2500 });
+      return;
+    }
+
 
     if (lineKind === "bezier") {
       // Defer commit: open tangent handles for adjustment
@@ -3238,6 +3341,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
           </Button>
+          <Button
+            variant={tool === "section" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("section"); }}
+            className={cn("col-span-2", tool === "section" && "bg-gradient-ember shadow-ember")}
+            title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
+          >
+            <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong A-A
+          </Button>
         </div>
         {tool === "polyline" && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -3249,6 +3361,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             Tarik diagonal untuk membentuk persegi/persegi panjang. Ruang otomatis terbentuk.
           </p>
         )}
+        {tool === "section" && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Tarik satu garis lurus untuk menentukan bidang irisan. Anak panah menunjukkan arah pandang (ke kanan dari A → A'). Lepas stylus untuk menyimpan — slide
+              <span className="font-medium text-foreground"> Potongan Prinsip Skematik A-A</span> otomatis dibuat tepat setelah slide denah.
+            </p>
+            {sketch.sectionCut && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-full text-[11px]"
+                onClick={() => onChange({ sectionCut: undefined })}
+              >
+                <X className="mr-1 h-3.5 w-3.5" /> Hapus garis potong
+              </Button>
+            )}
+          </div>
+        )}
+
         {tool === "edit" && (
           <div className="space-y-1.5">
             <div className="grid grid-cols-4 gap-1.5">
@@ -3480,7 +3611,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
@@ -3549,6 +3680,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Hapus"
           >
             <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "section" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("section"); }}
+            className={cn(tool === "section" && "bg-gradient-ember shadow-ember")}
+            title="Garis Potong A-A (tarik satu garis → slide potongan dibuat)"
+          >
+            <Scissors className="h-4 w-4" />
           </Button>
           {tool === "edit" && (
             <>
@@ -3711,7 +3851,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
