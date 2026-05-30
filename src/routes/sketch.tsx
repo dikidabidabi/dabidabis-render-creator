@@ -1246,11 +1246,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   const updateLevelMdpl = useCallback(
     (lvlId: string, mdpl: number) => {
+      const nextLevels = levels.map((l) => (l.id === lvlId ? { ...l, mdpl } : l));
+      const bound = bindLahanLayersToMdplZero(nextLevels, layers);
       onChange({
-        levels: levels.map((l) => (l.id === lvlId ? { ...l, mdpl } : l)),
+        levels: bound.levels,
+        layers: bound.layers,
       });
     },
-    [levels, onChange],
+    [levels, layers, onChange],
   );
 
   const updateLevelOpacity = useCallback(
@@ -1272,11 +1275,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       const remaining = levels.filter((l) => l.id !== lvlId);
       const fallback = remaining[0].id;
+      const nextLines = lines.filter((ln) => ln.levelId !== lvlId);
+      const nextLayersBase = layers.filter((ly) => ly.levelId !== lvlId || isLahanLayerName(ly.name));
+      const bound = bindLahanLayersToMdplZero(remaining, nextLayersBase);
       onChange({
-        levels: remaining,
-        activeLevelId: activeLvlId === lvlId ? fallback : activeLvlId,
-        lines: lines.filter((ln) => ln.levelId !== lvlId),
-        layers: layers.filter((ly) => ly.levelId !== lvlId),
+        levels: bound.levels,
+        activeLevelId: activeLvlId === lvlId ? (bound.levels[0]?.id ?? fallback) : activeLvlId,
+        lines: nextLines,
+        layers: bound.layers,
       });
       toast.success("Level dihapus");
     },
