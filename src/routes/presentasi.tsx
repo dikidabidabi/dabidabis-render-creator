@@ -98,6 +98,22 @@ const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
 }
+function bindLahanToMdplZero(sketch: Sketch): Sketch {
+  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) return sketch;
+  const zero = findMdplZeroLevel(sketch.levels ?? []);
+  const zeroLevel = zero ?? {
+    id: `LV_${sketch.id}_MDPL0`,
+    name: "Level 1",
+    mdpl: 0,
+    opacity: 0.5,
+  };
+  const levels = zero ? sketch.levels : [...(sketch.levels ?? []), zeroLevel];
+  return {
+    ...sketch,
+    levels,
+    layers: (sketch.layers ?? []).map((ly) => (isLahan(ly.name) ? { ...ly, levelId: zeroLevel.id } : ly)),
+  };
+}
 
 // Typical floor logic — kept in sync with sketch.tsx
 const TYPICAL_FLOOR_H = 3;
