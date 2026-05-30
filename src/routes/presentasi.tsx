@@ -2448,8 +2448,10 @@ function FasilitasPanel({ facsByCat }: {
         );
       })}
     </div>
+    </div>
   );
 }
+
 
 function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: number; radius: number }) {
   const total = greenN + blueN;
