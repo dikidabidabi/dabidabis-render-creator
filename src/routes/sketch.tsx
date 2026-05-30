@@ -3681,6 +3681,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          <Button
+            variant={tool === "section" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("section"); }}
+            className={cn(tool === "section" && "bg-gradient-ember shadow-ember")}
+            title="Garis Potong A-A (tarik satu garis → slide potongan dibuat)"
+          >
+            <Scissors className="h-4 w-4" />
+          </Button>
           {tool === "edit" && (
             <>
               <div className="h-6 w-px bg-border/60" />
