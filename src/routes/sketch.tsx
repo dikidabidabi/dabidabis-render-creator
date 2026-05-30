@@ -113,17 +113,52 @@ function tipicalHeightOf(lv: { typicalHeight?: number }): number {
   return Number.isFinite(h) && h > 0 ? h : TYPICAL_FLOOR_H;
 }
 
-// Hitung nama tampilan tiap level (Level N atau Level N–M) berdasarkan urutan MDPL
-// dan jumlah tipikal di tiap level. Jika user sudah mengganti nama (tidak cocok pola
-// "Level <angka>" / "Level <angka>-<angka>"), nama kustom tersebut dipertahankan.
+// Hitung nama tampilan tiap level berdasarkan urutan MDPL & keberadaan layer "Lahan".
+// Aturan:
+//  - Level yang berisi layer "Lahan" selalu menjadi acuan = "Level 1".
+//  - Level di atas Lahan (MDPL lebih tinggi) → Level 2, Level 3, ... (asc).
+//  - Level di bawah Lahan (MDPL lebih rendah) → B1, B2, B3, ... (B1 tepat di bawah Lahan).
+//  - Jika belum ada Lahan, jatuh kembali ke penomoran Level 1..N asc berdasarkan MDPL.
+//  - Nama kustom (yang tidak cocok pola otomatis) selalu dipertahankan.
 function isAutoLevelName(name: string): boolean {
-  return /^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(name.trim());
+  const n = name.trim();
+  if (/^Level\s+\d+(?:\s*[-–]\s*\d+)?$/i.test(n)) return true;
+  if (/^B\d+(?:\s*[-–]\s*B?\d+)?$/i.test(n)) return true;
+  return false;
 }
-function computeLevelDisplayNames(levels: { id: string; name: string; mdpl: number; typicalCount?: number }[]): Record<string, string> {
-  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+function computeLevelDisplayNames(
+  levels: { id: string; name: string; mdpl: number; typicalCount?: number }[],
+  layers?: { name: string; levelId?: string }[],
+): Record<string, string> {
   const out: Record<string, string> = {};
+  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+
+  let lahanLevelId: string | null = null;
+  if (layers && layers.length) {
+    const lahanIds = new Set<string>();
+    for (const ly of layers) {
+      if (ly.levelId && ly.name.trim().toLowerCase().startsWith("lahan")) lahanIds.add(ly.levelId);
+    }
+    const cand = sorted.filter((l) => lahanIds.has(l.id));
+    if (cand.length) lahanLevelId = cand[0].id; // terendah MDPL
+  }
+
+  const lahanIdx = lahanLevelId ? sorted.findIndex((l) => l.id === lahanLevelId) : -1;
+
+  // Bawah Lahan: B1, B2, ... (terdekat ke Lahan = B1)
+  if (lahanIdx > 0) {
+    let bn = 1;
+    for (let i = lahanIdx - 1; i >= 0; i--) {
+      const lv = sorted[i];
+      out[lv.id] = isAutoLevelName(lv.name) ? `B${bn}` : lv.name;
+      bn++;
+    }
+  }
+
+  // Lahan & atasnya: Level 1, Level 2, ... (atau Level N–M untuk tipikal)
   let idx = 1;
-  for (const lv of sorted) {
+  for (let i = Math.max(0, lahanIdx); i < sorted.length; i++) {
+    const lv = sorted[i];
     const k = Math.max(1, lv.typicalCount ?? 1);
     const start = idx;
     const end = idx + k - 1;
@@ -131,6 +166,8 @@ function computeLevelDisplayNames(levels: { id: string; name: string; mdpl: numb
     out[lv.id] = isAutoLevelName(lv.name) ? auto : lv.name;
     idx = end + 1;
   }
+
+  // Jika tidak ada Lahan dan lahanIdx = -1, sorted di atas dilewati dari 0 — sudah benar.
   return out;
 }
 
