@@ -4046,7 +4046,7 @@ function LevelsPanel({
   const [typicalDrafts, setTypicalDrafts] = useState<Record<string, string>>({});
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
 
-  const displayNames = computeLevelDisplayNames(levels);
+  const displayNames = computeLevelDisplayNames(levels, layers);
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
 
   return (
