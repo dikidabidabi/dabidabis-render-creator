@@ -1789,6 +1789,72 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
+    // Garis Potong A-A persisten (selalu terlihat) — gaya bold dashed dengan
+    // label A & A' dan dua panah arah pandang potongan (tegak lurus, ke kanan
+    // dari arah A→A').
+    {
+      const cut = sketch.sectionCut;
+      const cutA = drawing && tool === "section" ? drawing.a : cut?.p1;
+      const cutB = drawing && tool === "section" ? drawing.b : cut?.p2;
+      const isLive = !!(drawing && tool === "section");
+      if (cutA && cutB && dist(cutA, cutB) > 1) {
+        const dx = cutB.x - cutA.x, dy = cutB.y - cutA.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        // Normal kanan (arah pandang)
+        const nx = -uy, ny = ux;
+        ctx.save();
+        ctx.lineWidth = (isLive ? 2.5 : 2.5) / s;
+        ctx.strokeStyle = isLive ? "rgba(232, 93, 58, 0.95)" : "#111111";
+        ctx.setLineDash([14 / s, 6 / s, 4 / s, 6 / s]);
+        ctx.beginPath();
+        ctx.moveTo(cutA.x, cutA.y);
+        ctx.lineTo(cutB.x, cutB.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Bulatan label A dan A'
+        const labelR = 14 / s;
+        const labelFont = `bold ${Math.round(14 / s)}px Manrope, sans-serif`;
+        const drawCap = (p: Point, txt: string) => {
+          ctx.fillStyle = "#111111";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, labelR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.font = labelFont;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(txt, p.x, p.y);
+        };
+        drawCap(cutA, "A");
+        drawCap(cutB, "A'");
+        // Panah arah pandang (di tengah, tegak lurus ke kanan)
+        const mid = { x: (cutA.x + cutB.x) / 2, y: (cutA.y + cutB.y) / 2 };
+        const arrowLen = Math.min(48, len * 0.18) / s;
+        const tip = { x: mid.x + nx * arrowLen, y: mid.y + ny * arrowLen };
+        ctx.strokeStyle = isLive ? "rgba(232, 93, 58, 0.95)" : "#111111";
+        ctx.lineWidth = 1.6 / s;
+        ctx.beginPath();
+        ctx.moveTo(mid.x, mid.y);
+        ctx.lineTo(tip.x, tip.y);
+        ctx.stroke();
+        // Kepala panah
+        const headSize = 7 / s;
+        const hx1 = tip.x - nx * headSize - ux * (headSize * 0.6);
+        const hy1 = tip.y - ny * headSize - uy * (headSize * 0.6);
+        const hx2 = tip.x - nx * headSize + ux * (headSize * 0.6);
+        const hy2 = tip.y - ny * headSize + uy * (headSize * 0.6);
+        ctx.beginPath();
+        ctx.moveTo(tip.x, tip.y);
+        ctx.lineTo(hx1, hy1);
+        ctx.lineTo(hx2, hy2);
+        ctx.closePath();
+        ctx.fillStyle = isLive ? "rgba(232, 93, 58, 0.95)" : "#111111";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
       const seen = new Set<string>();
