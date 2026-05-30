@@ -3769,7 +3769,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("section"); }}
             className={cn(tool === "section" && "bg-gradient-ember shadow-ember")}
-            title="Garis Potong A-A (tarik satu garis → slide potongan dibuat)"
+            title="Garis Potong (tarik garis → slide potongan dibuat; label berurutan A-A, B-B, …)"
           >
             <Scissors className="h-4 w-4" />
           </Button>
