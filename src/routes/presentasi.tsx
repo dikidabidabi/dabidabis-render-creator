@@ -956,6 +956,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "title" && <TitleBody slide={slide} />}
       {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
+      {slide.kind === "section" && <SectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
       {slide.kind === "matahari" && <MatahariBody slide={slide} />}
@@ -972,6 +973,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
     slide.kind === "title" ||
     slide.kind === "closing" ||
     slide.kind === "level" ||
+    slide.kind === "section" ||
     slide.kind === "matahari" ||
     slide.kind === "konsep" ||
     slide.kind === "shadow-seasonal" ||
