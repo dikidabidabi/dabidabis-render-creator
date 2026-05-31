@@ -72,6 +72,9 @@ import {
   isColumnClipped,
   levelInRange,
   computeStructuralStats,
+  computeAllStructuralStats,
+  collectGrids,
+  normalizeGridExtras,
   type ColumnClip,
 } from "@/lib/structural-grid";
 
@@ -248,7 +251,8 @@ type Sketch = {
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
   sectionCut?: SectionCut; // legacy single cut (kompatibilitas)
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
-  structuralGrid?: StructuralGrid; // Modul Struktur parametric grid
+  structuralGrid?: StructuralGrid; // Modul Struktur parametric grid (primer)
+  structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
 };
 
 type StoreShape = {
@@ -670,6 +674,7 @@ function normalizeSketch(s: any): Sketch {
     })(),
     sectionCut: undefined,
     structuralGrid: normalizeGrid(s?.structuralGrid),
+    structuralGridExtras: normalizeGridExtras(s?.structuralGridExtras),
   };
 }
 
@@ -1297,27 +1302,48 @@ type EditorProps = {
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
-  const grid: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+  // ----- Grid Struktur: primer + extras (paste grid) -----
+  // Index 0 = grid primer (sketch.structuralGrid).
+  // Index 1..N = sketch.structuralGridExtras[idx-1].
+  const [editGridIdx, setEditGridIdx] = useState<number>(0);
+  const primaryGrid: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+  const gridExtras: StructuralGrid[] = sketch.structuralGridExtras ?? [];
+  const grid: StructuralGrid =
+    editGridIdx === 0 ? primaryGrid : (gridExtras[editGridIdx - 1] ?? primaryGrid);
   const updateGrid = useCallback(
     (patch: Partial<StructuralGrid>) => {
-      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-      onChange({ structuralGrid: { ...cur, ...patch } });
+      if (editGridIdx === 0) {
+        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+        onChange({ structuralGrid: { ...cur, ...patch } });
+        return;
+      }
+      const ei = editGridIdx - 1;
+      const arr = (sketch.structuralGridExtras ?? []).slice();
+      if (!arr[ei]) return;
+      arr[ei] = { ...arr[ei], ...patch };
+      onChange({ structuralGridExtras: arr });
     },
-    [sketch.structuralGrid, onChange],
+    [sketch.structuralGrid, sketch.structuralGridExtras, editGridIdx, onChange],
   );
   const updateGridOverride = useCallback(
     (lvlId: string, patch: Partial<import("@/lib/structural-grid").GridOverride>) => {
-      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-      const prev = cur.perLevel?.[lvlId] ?? {};
-      const next = { ...cur.perLevel, [lvlId]: { ...prev, ...patch } };
-      onChange({ structuralGrid: { ...cur, perLevel: next } });
+      const prev = grid.perLevel?.[lvlId] ?? {};
+      const next = { ...grid.perLevel, [lvlId]: { ...prev, ...patch } };
+      updateGrid({ perLevel: next });
     },
-    [sketch.structuralGrid, onChange],
+    [grid, updateGrid],
   );
+  // Auto-clamp idx kalau extras berkurang.
+  useEffect(() => {
+    if (editGridIdx > 0 && editGridIdx - 1 >= gridExtras.length) {
+      setEditGridIdx(0);
+    }
+  }, [gridExtras.length, editGridIdx]);
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
+
   const [sideOffset, setSideOffset] = useState({ x: 0, y: 0 });
   const [rekapOffset, setRekapOffset] = useState({ x: 0, y: 0 });
   const [rekapBtnOffset, setRekapBtnOffset] = useState({ x: 0, y: 0 });
@@ -2230,7 +2256,49 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
-    // ----- Modul Struktur (grid + kolom) -----
+    // ----- Modul Struktur: render grid INAKTIF (extras yang bukan grid edit aktif) sebagai ghost -----
+    if (activeLvlId) {
+      const activeLvGhost = levels.find((l) => l.id === activeLvlId);
+      const allGridsForGhost: Array<{ g: StructuralGrid; idx: number }> = [];
+      if (primaryGrid.enabled) allGridsForGhost.push({ g: primaryGrid, idx: 0 });
+      gridExtras.forEach((g, i) => { if (g.enabled) allGridsForGhost.push({ g, idx: i + 1 }); });
+      for (const ent of allGridsForGhost) {
+        if (ent.idx === editGridIdx) continue; // grid aktif dirender block utama di bawah
+        const g = ent.g;
+        if (!activeLvGhost || !levelInRange(g, activeLvGhost, levels)) continue;
+        const { spansX, spansY } = spansForLevel(g, activeLvGhost.id);
+        const ppm = pxPerMeter;
+        const xs = axisPositions(spansX).map((m) => g.origin.x + m * ppm);
+        const ys = axisPositions(spansY).map((m) => g.origin.y + m * ppm);
+        const xMin = xs[0], xMax = xs[xs.length - 1];
+        const yMin = ys[0], yMax = ys[ys.length - 1];
+        const bubbleOff = 22 / s;
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = "rgba(80,80,80,0.85)";
+        ctx.lineWidth = 0.3 / s;
+        ctx.setLineDash([10 / s, 5 / s, 1.5 / s, 5 / s]);
+        ctx.beginPath();
+        for (const x of xs) { ctx.moveTo(x, yMin - bubbleOff); ctx.lineTo(x, yMax + bubbleOff); }
+        for (const y of ys) { ctx.moveTo(xMin - bubbleOff, y); ctx.lineTo(xMax + bubbleOff, y); }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const colPx = (g.colSizeCm / 100) * ppm;
+        const posXM = axisPositions(spansX);
+        const posYM = axisPositions(spansY);
+        ctx.fillStyle = "rgba(40,40,40,0.55)";
+        for (let j = 0; j < ys.length; j++) {
+          for (let i = 0; i < xs.length; i++) {
+            if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
+            if (isColumnClipped(g, posXM[i], posYM[j])) continue;
+            ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // ----- Modul Struktur (grid aktif + kolom) -----
     if (grid.enabled && activeLvlId) {
       const activeLv = levels.find((l) => l.id === activeLvlId);
       if (activeLv && levelInRange(grid, activeLv, levels)) {
@@ -2488,7 +2556,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, tileTick, onTileLoad, grid, clipDraft, gridEditMode]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -3341,15 +3409,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           setClipDraft({ pts: next });
         }
       } else {
-        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-        const clips = (cur.columnClips ?? []).map((c) => {
+        const clips = (grid.columnClips ?? []).map((c) => {
           if (c.id !== clipDrag.clipId) return c;
           const pts = c.pts.slice();
           pts[clipDrag.idx] = { x: mx, y: my };
           return { ...c, pts };
         });
-        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+        updateGrid({ columnClips: clips });
       }
+
       if (moved && !clipDrag.moved) setClipDrag({ ...clipDrag, moved: true });
       return;
     }
@@ -4137,6 +4205,96 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Aktif</Label>
               <Switch checked={grid.enabled} onCheckedChange={(v) => updateGrid({ enabled: v })} />
             </div>
+            {/* ===== Pilih grid (primer + extras) + Paste Grid ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Grid Aktif untuk Edit
+                </Label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-[10px]"
+                  title="Paste salinan grid primer di sini — bisa digeser & di-clip terpisah"
+                  onClick={() => {
+                    const src = primaryGrid;
+                    const offsetPx = pxPerMeter * 1.5; // beda posisi agar terlihat & bisa didrag
+                    const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+                    const fromIdx = activeLvlId
+                      ? sortedLv.findIndex((l) => l.id === activeLvlId)
+                      : -1;
+                    const fromLevelId = fromIdx >= 0 ? sortedLv[fromIdx].id : src.fromLevelId;
+                    // default: berlaku sampai dua lantai di atas level aktif (atau paling atas)
+                    const toIdx = fromIdx >= 0
+                      ? Math.min(sortedLv.length - 1, fromIdx + 2)
+                      : -1;
+                    const toLevelId = toIdx >= 0 ? sortedLv[toIdx].id : src.toLevelId;
+                    const pasted: StructuralGrid = {
+                      enabled: true,
+                      origin: { x: src.origin.x + offsetPx, y: src.origin.y + offsetPx },
+                      spansX: [...src.spansX],
+                      spansY: [...src.spansY],
+                      colSizeCm: src.colSizeCm,
+                      fromLevelId,
+                      toLevelId,
+                      perLevel: undefined,
+                      columnClips: undefined,
+                    };
+                    const nextExtras = [...gridExtras, pasted];
+                    onChange({ structuralGridExtras: nextExtras });
+                    setEditGridIdx(nextExtras.length); // langsung jadi grid aktif
+                    setClipDraft(null);
+                    toast.success("Grid dipaste — geser ke posisi yang diinginkan");
+                  }}
+                >
+                  <Copy className="mr-1 h-3 w-3" /> Paste Grid
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                <Button
+                  size="sm"
+                  variant={editGridIdx === 0 ? "default" : "outline"}
+                  className={cn("h-6 px-2 text-[10px]", editGridIdx === 0 && "bg-gradient-ember shadow-ember")}
+                  onClick={() => { setEditGridIdx(0); setClipDraft(null); }}
+                >
+                  Primer
+                </Button>
+                {gridExtras.map((_, i) => (
+                  <div key={`gex-${i}`} className="flex items-center gap-0.5">
+                    <Button
+                      size="sm"
+                      variant={editGridIdx === i + 1 ? "default" : "outline"}
+                      className={cn("h-6 px-2 text-[10px]", editGridIdx === i + 1 && "bg-gradient-ember shadow-ember")}
+                      onClick={() => { setEditGridIdx(i + 1); setClipDraft(null); }}
+                    >
+                      Extra {i + 1}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0 text-[10px]"
+                      title="Hapus grid extra"
+                      onClick={() => {
+                        const next = gridExtras.filter((_, idx) => idx !== i);
+                        onChange({ structuralGridExtras: next.length ? next : undefined });
+                        if (editGridIdx === i + 1) setEditGridIdx(0);
+                        else if (editGridIdx > i + 1) setEditGridIdx(editGridIdx - 1);
+                        setClipDraft(null);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {editGridIdx > 0 && (
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Mengedit <span className="font-medium text-foreground">Extra {editGridIdx}</span>.
+                  Bentang, kolom, clip, dan range level di bawah ini hanya berlaku pada grid ini — tidak mempengaruhi grid primer.
+                </p>
+              )}
+            </div>
+
             <SpanAxisEditor label="Bentang Sumbu X (m)" spans={grid.spansX}
               onChange={(next) => updateGrid({ spansX: next })} />
             <SpanAxisEditor label="Bentang Sumbu Y (m)" spans={grid.spansY}
@@ -4199,13 +4357,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                           toast.error("Butuh minimal 3 titik");
                           return;
                         }
-                        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
                         const newClip: ColumnClip = {
                           id: `clip-${Date.now().toString(36)}`,
                           pts: clipDraft.pts.slice(),
                         };
-                        const clips = [...(cur.columnClips ?? []), newClip];
-                        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+                        const clips = [...(grid.columnClips ?? []), newClip];
+                        updateGrid({ columnClips: clips });
                         setClipDraft(null);
                         toast.success("Area clip tersimpan");
                       }}
@@ -4246,9 +4403,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                             size="sm"
                             className="h-6 px-1.5 text-[10px]"
                             onClick={() => {
-                              const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-                              const clips = (cur.columnClips ?? []).filter((x) => x.id !== c.id);
-                              onChange({ structuralGrid: { ...cur, columnClips: clips.length ? clips : undefined } });
+                              const clips = (grid.columnClips ?? []).filter((x) => x.id !== c.id);
+                              updateGrid({ columnClips: clips.length ? clips : undefined });
                             }}
                             title="Hapus area"
                           >
@@ -4295,10 +4451,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   </Button>
                   <Button size="sm" variant="outline" className="h-7 text-[10px]"
                     onClick={() => {
-                      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-                      const np = { ...(cur.perLevel ?? {}) };
+                      const np = { ...(grid.perLevel ?? {}) };
                       delete np[activeLvlId];
-                      onChange({ structuralGrid: { ...cur, perLevel: np } });
+                      updateGrid({ perLevel: np });
                     }}>
                     <X className="mr-1 h-3 w-3" /> Reset override
                   </Button>
@@ -4307,8 +4462,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             )}
             <div className="rounded bg-muted/40 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
               {(() => {
-                const stats = computeStructuralStats(grid, levels);
-                return `Total kolom: ${stats.totalColumns} · Volume beton: ${stats.concreteVolumeM3.toFixed(2)} m³`;
+                const here = computeStructuralStats(grid, levels);
+                const all = computeAllStructuralStats(primaryGrid, gridExtras, levels);
+                return `Grid ini: ${here.totalColumns} kolom · ${here.concreteVolumeM3.toFixed(2)} m³  ·  Total: ${all.totalColumns} kolom · ${all.concreteVolumeM3.toFixed(2)} m³`;
               })()}
             </div>
           </div>

@@ -42,6 +42,7 @@ import {
   isNodeActive,
   isColumnClipped,
   levelInRange,
+  collectGrids,
 } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/model3d")({
@@ -82,6 +83,7 @@ type Sketch = {
   geo?: Geo;
   northRotation?: number;
   structuralGrid?: StructuralGrid;
+  structuralGridExtras?: StructuralGrid[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -314,51 +316,57 @@ function StructuralColumns({
   baseMdpl: number;
   colorMode: "sketch" | "bw";
 }) {
-  const grid = sketch.structuralGrid;
+  const grids = useMemo(
+    () => collectGrids(sketch.structuralGrid, sketch.structuralGridExtras),
+    [sketch.structuralGrid, sketch.structuralGridExtras],
+  );
   const sortedLevels = useMemo(
     () => [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl),
     [sketch.levels],
   );
   const items = useMemo(() => {
-    if (!grid || !grid.enabled) return [] as Array<{
+    if (!grids.length) return [] as Array<{
       key: string; x: number; z: number; y: number; h: number; size: number;
     }>;
-    const colM = grid.colSizeCm / 100;
-    const ox = (grid.origin.x - origin.x) * mPerPx;
-    const oz = (grid.origin.y - origin.y) * mPerPx;
     const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number }> = [];
-    for (let li = 0; li < sortedLevels.length; li++) {
-      const lv = sortedLevels[li];
-      if (!levelInRange(grid, lv, sortedLevels)) continue;
-      const { spansX, spansY } = spansForLevel(grid, lv.id);
-      const xs = axisPositions(spansX);
-      const zs = axisPositions(spansY);
-      const next = sortedLevels[li + 1];
-      const floorH = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
-        ? Number(lv.typicalHeight)
-        : (next ? next.mdpl - lv.mdpl : 3);
-      const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
-      const totalH = Math.max(0.1, floorH * k);
-      const yBase = lv.mdpl - baseMdpl;
-      for (let i = 0; i < xs.length; i++) {
-        for (let j = 0; j < zs.length; j++) {
-          if (!isNodeActive(grid, lv.id, i, j)) continue;
-          if (isColumnClipped(grid, xs[i], zs[j])) continue;
-          out.push({
-            key: `${lv.id}_${i}_${j}`,
-            x: ox + xs[i],
-            z: oz + zs[j],
-            y: yBase + totalH / 2,
-            h: totalH,
-            size: colM,
-          });
+    for (let gi = 0; gi < grids.length; gi++) {
+      const grid = grids[gi];
+      const colM = grid.colSizeCm / 100;
+      const ox = (grid.origin.x - origin.x) * mPerPx;
+      const oz = (grid.origin.y - origin.y) * mPerPx;
+      for (let li = 0; li < sortedLevels.length; li++) {
+        const lv = sortedLevels[li];
+        if (!levelInRange(grid, lv, sortedLevels)) continue;
+        const { spansX, spansY } = spansForLevel(grid, lv.id);
+        const xs = axisPositions(spansX);
+        const zs = axisPositions(spansY);
+        const next = sortedLevels[li + 1];
+        const floorH = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
+          ? Number(lv.typicalHeight)
+          : (next ? next.mdpl - lv.mdpl : 3);
+        const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+        const totalH = Math.max(0.1, floorH * k);
+        const yBase = lv.mdpl - baseMdpl;
+        for (let i = 0; i < xs.length; i++) {
+          for (let j = 0; j < zs.length; j++) {
+            if (!isNodeActive(grid, lv.id, i, j)) continue;
+            if (isColumnClipped(grid, xs[i], zs[j])) continue;
+            out.push({
+              key: `g${gi}_${lv.id}_${i}_${j}`,
+              x: ox + xs[i],
+              z: oz + zs[j],
+              y: yBase + totalH / 2,
+              h: totalH,
+              size: colM,
+            });
+          }
         }
       }
     }
     return out;
-  }, [grid, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl]);
+  }, [grids, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl]);
 
-  if (!grid?.enabled || items.length === 0) return null;
+  if (items.length === 0) return null;
   const col = "#ffffff";
   return (
     <group>
@@ -372,6 +380,7 @@ function StructuralColumns({
     </group>
   );
 }
+
 
 
 

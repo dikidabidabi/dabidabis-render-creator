@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { type StructuralGrid, computeStructuralStats } from "@/lib/structural-grid";
+import { type StructuralGrid, computeAllStructuralStats } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/tabulasi")({
   head: () => ({
@@ -41,6 +41,7 @@ type Sketch = {
   kdhPct?: number;
   ktbPct?: number;
   structuralGrid?: StructuralGrid;
+  structuralGridExtras?: StructuralGrid[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -320,7 +321,7 @@ function computeStats(sk: Sketch): Stats {
 
 
 
-  const { totalColumns, concreteVolumeM3 } = computeStructuralStats(sk.structuralGrid, levels);
+  const { totalColumns, concreteVolumeM3 } = computeAllStructuralStats(sk.structuralGrid, sk.structuralGridExtras, levels);
 
   return {
     totalLahanM2,
