@@ -1077,16 +1077,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
   );
-  const fixedLayout =
-    slide.kind === "title" ||
-    slide.kind === "closing" ||
-    slide.kind === "level" ||
-    slide.kind === "section" ||
-    slide.kind === "matahari" ||
-    slide.kind === "konsep" ||
-    slide.kind === "shadow-seasonal" ||
-    slide.kind === "facade-zoning";
-  // Inner padded "safe area" inside the 1414x1000 canvas, 2.5cm inset.
+  // All non-special slides default to fit and expose a manual scale handle at bottom-right.
   return (
     <div
       style={{
@@ -1101,8 +1092,8 @@ function SlideContent({ slide }: { slide?: Slide }) {
       }}
     >
       {!isSpecial && <SlideHeader slide={slide} />}
-      {fixedLayout ? (
-        <div style={{ flex: 1, minHeight: 0, marginTop: isSpecial ? 0 : 28, marginBottom: isSpecial ? 0 : 28, overflow: "hidden" }}>
+      {isSpecial ? (
+        <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {body}
         </div>
       ) : (
@@ -1110,6 +1101,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
           {body}
         </ManualScaleBox>
       )}
+
       {!isSpecial && <SlideFooter slide={slide} />}
     </div>
   );
