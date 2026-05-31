@@ -3526,6 +3526,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setEditDrag(null);
     setPolyDraft(null);
     setGridDrag(null);
+    setClipDrag(null);
   };
 
   const handleUndo = () => {
