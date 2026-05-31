@@ -96,6 +96,10 @@ function isLahan(n: string) {
 function isVoid(n: string) {
   return n.trim().toLowerCase() === "void";
 }
+function isTaman(n: string) {
+  return n.trim().toLowerCase().startsWith("taman");
+}
+const TAMAN_GREEN = "#22c55e";
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
@@ -305,7 +309,11 @@ function Scene({
   const groundY = 0 - baseMdpl;
 
   const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
-  const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const tamanLayers = sketch.layers.filter((l) => isTaman(l.name));
+  const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  const groundLevel = findMdplZeroLevel(sketch.levels) ?? [...sketch.levels].sort((a, b) => a.mdpl - b.mdpl)[0];
+  const groundFloor = floors.find((f) => f.sourceId === groundLevel?.id) ?? floors[0];
+  const tamanBaseY = (groundFloor?.baseMdpl ?? 0) - baseMdpl;
 
   // Sun position from SunCalc using geo + current date + chosen hour.
   // North rotation rotates the world so we counter-rotate sun azimuth.
@@ -390,6 +398,19 @@ function Scene({
           );
         });
       })}
+
+      {tamanLayers.map((ly, idx) => (
+        <ExtrudedFloor
+          key={`taman_${ly.id}_${idx}`}
+          points={ly.points}
+          origin={origin}
+          mPerPx={mPerPx}
+          baseY={tamanBaseY}
+          height={0.1}
+          color={colorMode === "bw" ? "#cfcfcf" : TAMAN_GREEN}
+          highlighted={false}
+        />
+      ))}
     </>
   );
 }

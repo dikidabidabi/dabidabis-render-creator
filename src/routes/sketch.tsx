@@ -224,6 +224,8 @@ type Sketch = {
   activeLevelId: string | null;
   kdbPct?: number; // 0..100, prosentase KDB terhadap luas lahan
   klbCoef?: number; // koefisien KLB, pengali luas lahan
+  kdhPct?: number; // 0..100, prosentase KDH (area hijau) terhadap luas lahan
+  ktbPct?: number; // 0..100, prosentase KTB (basement) terhadap luas lahan
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
@@ -343,6 +345,10 @@ function isLahanLayerName(n: string) {
 function isVoidLayerName(n: string) {
   return n.trim().toLowerCase() === "void";
 }
+function isTamanLayerName(n: string) {
+  return n.trim().toLowerCase().startsWith("taman");
+}
+const TAMAN_FILL_RGBA = "rgba(34, 197, 94, ALPHA)";
 
 const DEFAULT_GSB_M = 4;
 function getGsbMeters(layer: Layer, sideIndex: number): number {
@@ -599,6 +605,8 @@ function normalizeSketch(s: any): Sketch {
     activeLevelId,
     kdbPct: Number.isFinite(Number(s?.kdbPct)) ? Math.max(0, Math.min(100, Number(s.kdbPct))) : undefined,
     klbCoef: Number.isFinite(Number(s?.klbCoef)) ? Math.max(0, Number(s.klbCoef)) : undefined,
+    kdhPct: Number.isFinite(Number(s?.kdhPct)) ? Math.max(0, Math.min(100, Number(s.kdhPct))) : undefined,
+    ktbPct: Number.isFinite(Number(s?.ktbPct)) ? Math.max(0, Math.min(100, Number(s.ktbPct))) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
@@ -1164,7 +1172,7 @@ type EditorProps = {
 };
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
-  const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, fungsi } = sketch;
+  const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
@@ -1712,9 +1720,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
           ctx.stroke();
         } else {
-          ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
+          const fillBase = isTamanLayerName(layer.name) ? TAMAN_FILL_RGBA : layer.color;
+          ctx.fillStyle = fillBase.replace("ALPHA", layer.locked ? "0.4" : "0.32");
           ctx.fill();
-          ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
+          ctx.strokeStyle = fillBase.replace("ALPHA", "0.95");
           ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
           ctx.stroke();
         }
@@ -3160,22 +3169,49 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   // Rekapitulasi panel (rendered below canvas in normal mode, inside SidePanel in fullscreen)
   const RekapPanel = (() => {
-  const groundLevel = findMdplZeroLevel(levels) ?? [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
-    const ruangLayers = layers.filter((l) => !isLahanName(l.name) && !isVoidLayerName(l.name));
+    const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+    const groundLevel = findMdplZeroLevel(sortedLv) ?? sortedLv[0];
+    const groundIdx = groundLevel ? sortedLv.findIndex((l) => l.id === groundLevel.id) : -1;
+    const b1Level = groundIdx > 0 ? sortedLv[groundIdx - 1] : undefined;
+    const isTaman = (n: string) => isTamanLayerName(n);
+    const ruangLayers = layers.filter(
+      (l) => !isLahanName(l.name) && !isVoidLayerName(l.name) && !isTaman(l.name),
+    );
+    const tamanLayers = layers.filter(
+      (l) => isTaman(l.name) && groundLevel && l.levelId === groundLevel.id,
+    );
     const kdbRencana = groundLevel
       ? ruangLayers.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
       : 0;
     const klbRencana = ruangLayers.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+    const kdhRencana = tamanLayers.reduce((s, l) => s + l.areaM2, 0);
+    const ktbRencana = b1Level
+      ? layers
+          .filter((l) => l.levelId === b1Level.id && !isLahanName(l.name) && !isVoidLayerName(l.name) && !isTaman(l.name))
+          .reduce((s, l) => s + l.areaM2, 0)
+      : 0;
     const kdbLimit = (kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : 0;
     const klbLimit = (klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : 0;
+    const kdhLimit = (kdhPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdhPct! / 100) * totalLahanM2 : 0;
+    const ktbLimit = (ktbPct ?? 0) > 0 && totalLahanM2 > 0 ? (ktbPct! / 100) * totalLahanM2 : 0;
     const kdbDev = kdbRencana - kdbLimit;
     const klbDev = klbRencana - klbLimit;
+    // For KDH (green): being under the minimum is "bad" (deficit), being over is good.
+    const kdhDev = kdhRencana - kdhLimit;
+    const ktbDev = ktbRencana - ktbLimit;
     const fmt = (v: number) => v.toFixed(2);
-    const devNode = (dev: number, hasLimit: boolean) => {
+    const pct = (num: number) => (totalLahanM2 > 0 ? (num / totalLahanM2) * 100 : 0);
+    const devNode = (dev: number, hasLimit: boolean, invert = false) => {
       if (!hasLimit) return <span className="text-muted-foreground">—</span>;
       const over = dev > 0.005;
       const under = dev < -0.005;
-      const color = over ? "text-red-500" : under ? "text-green-500" : "text-muted-foreground";
+      // For "invert" (KDH), over = green (good), under = red (deficit).
+      const badIsOver = !invert;
+      const color = over
+        ? badIsOver ? "text-red-500" : "text-green-500"
+        : under
+          ? badIsOver ? "text-green-500" : "text-red-500"
+          : "text-muted-foreground";
       const sign = over ? "+" : under ? "−" : "";
       return (
         <span className={cn("font-display font-semibold", color)}>
@@ -3195,7 +3231,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             {layers.length} ruang · {lahanLayers.length} lahan
           </span>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {/* Totals */}
           <div className="space-y-2 rounded-md border border-border/50 bg-background/40 p-3">
             <div className="flex items-baseline justify-between">
@@ -3217,7 +3253,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               </span>
             </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Acuan KDB/KLB. Atur ruang langsung dari sub-gambar pada panel Level.
+              Acuan KDB/KLB/KDH/KTB. "Taman" di Level 1 dihitung sebagai KDH dan tidak ikut KDB/KLB.
             </p>
           </div>
 
@@ -3250,7 +3286,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               </span>
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-[11px] text-muted-foreground">KDB Rencana (Level dasar)</span>
+              <span className="text-[11px] text-muted-foreground">
+                KDB Rencana ({pct(kdbRencana).toFixed(1)}%)
+              </span>
               <span className="font-display text-sm font-semibold">
                 {kdbRencana > 0 ? fmt(kdbRencana) : "—"}
                 <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
@@ -3288,11 +3326,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 {klbLimit > 0 ? fmt(klbLimit) : "—"}
                 <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
               </span>
-      </div>
-
-      <GeoPanel geo={sketch.geo} onChange={(g) => onChange({ geo: g })} />
-
-
+            </div>
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] text-muted-foreground">KLB Rencana (semua level × koef)</span>
               <span className="font-display text-sm font-semibold">
@@ -3305,6 +3339,96 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               {devNode(klbDev, klbLimit > 0)}
             </div>
           </div>
+
+          {/* KDH */}
+          <div className="space-y-2 rounded-md border border-border/50 bg-background/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">KDH</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  placeholder="0"
+                  value={kdhPct ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onChange({ kdhPct: v === "" ? undefined : Math.max(0, Math.min(100, Number(v))) });
+                  }}
+                  className="h-7 w-16 text-right text-xs"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">Minimum (KDH × Lahan)</span>
+              <span className="font-display text-sm font-semibold">
+                {kdhLimit > 0 ? fmt(kdhLimit) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">
+                KDH Rencana ({pct(kdhRencana).toFixed(1)}%)
+              </span>
+              <span className="font-display text-sm font-semibold text-green-500">
+                {kdhRencana > 0 ? fmt(kdhRencana) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between border-t border-border/40 pt-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Deviasi</span>
+              {devNode(kdhDev, kdhLimit > 0, true)}
+            </div>
+          </div>
+
+          {/* KTB */}
+          <div className="space-y-2 rounded-md border border-border/50 bg-background/40 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">KTB</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  placeholder="0"
+                  value={ktbPct ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    onChange({ ktbPct: v === "" ? undefined : Math.max(0, Math.min(100, Number(v))) });
+                  }}
+                  className="h-7 w-16 text-right text-xs"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">Maksimum (KTB × Lahan)</span>
+              <span className="font-display text-sm font-semibold">
+                {ktbLimit > 0 ? fmt(ktbLimit) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] text-muted-foreground">
+                KTB Rencana ({pct(ktbRencana).toFixed(1)}% · {b1Level ? "LT B1" : "—"})
+              </span>
+              <span className="font-display text-sm font-semibold">
+                {ktbRencana > 0 ? fmt(ktbRencana) : "—"}
+                <span className="ml-1 text-[10px] font-normal text-muted-foreground">m²</span>
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between border-t border-border/40 pt-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Deviasi</span>
+              {devNode(ktbDev, ktbLimit > 0)}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <GeoPanel geo={sketch.geo} onChange={(g) => onChange({ geo: g })} />
         </div>
       </div>
     );
