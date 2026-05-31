@@ -94,6 +94,8 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
+function isTaman(n: string) { return n.trim().toLowerCase().startsWith("taman"); }
+
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
