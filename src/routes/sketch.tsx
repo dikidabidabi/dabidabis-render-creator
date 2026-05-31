@@ -4943,7 +4943,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
         {/* Floating draggable side panel on the right */}
         <div
-          className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]"
+          className="absolute right-4 top-4 z-10 w-[400px] max-w-[90vw]"
           style={{ transform: `translate(${sideOffset.x}px, ${sideOffset.y}px)` }}
         >
           {SidePanel}
@@ -5009,7 +5009,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   return (
     <div className="space-y-4 p-4 lg:p-5">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_400px]">
         <div
           ref={wrapRef}
           className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
@@ -5101,6 +5101,9 @@ function LevelsPanel({
   const displayNames = computeLevelDisplayNames(levels, layers);
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
 
+  // Slider — batasi tinggi area daftar level agar tidak terlalu panjang ke bawah.
+  const [listMaxH, setListMaxH] = useState<number>(560);
+  const showSlider = levels.length > 4;
   return (
     <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-4">
       <div className="flex items-center justify-between">
@@ -5112,7 +5115,27 @@ function LevelsPanel({
         </span>
       </div>
 
-      <ul className="space-y-2">
+      {showSlider && (
+        <div className="flex items-center gap-2 px-0.5">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Tinggi</span>
+          <input
+            type="range"
+            min={200}
+            max={1400}
+            step={20}
+            value={listMaxH}
+            onChange={(e) => setListMaxH(Number(e.target.value))}
+            className="flex-1 accent-ember"
+            aria-label="Atur tinggi area daftar level"
+          />
+          <span className="w-10 text-right text-[10px] tabular-nums text-muted-foreground">{listMaxH}px</span>
+        </div>
+      )}
+
+      <ul
+        className="space-y-2 overflow-y-auto pr-1"
+        style={{ maxHeight: `${listMaxH}px` }}
+      >
         {sorted.map((lvl) => {
           const isActive = lvl.id === activeLevelId;
           const editing = editingId === lvl.id;

@@ -124,6 +124,13 @@ function roomStrokeOverride(name: string): string | null {
   if (isTaman(name)) return "rgb(22,163,74)";
   return null;
 }
+// Match Model 3D extrude rules: override height & base shift for named rooms.
+function roomExtrudeOverride(name: string): { height: number; baseDelta: number } | null {
+  if (isAtapHijau(name)) return { height: 0.5, baseDelta: 0 };
+  if (isBalkon(name)) return { height: 0.1, baseDelta: -0.1 };
+  if (isAtap(name)) return { height: 0.2, baseDelta: -0.2 };
+  return null;
+}
 
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
@@ -1399,19 +1406,25 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   });
 
   // Compute slices per layer (rooms only) intersecting the cut line.
+  // Also collect Void intervals separately — used to suppress floor lines below them.
+  const voidIntervalsByBox = new Map<string, Array<[number, number]>>();
   for (const layer of sketch.layers ?? []) {
     if (isLahanSec(layer.name)) continue;
-    if (isVoidSec(layer.name)) continue;
     if (!layer.levelId) continue;
     const box = boxes.find((b) => b.id === layer.levelId);
     if (!box) continue;
     const intervals = cutPolygonIntervals(cut.p1, cut.p2, layer.points);
+    if (isVoidSec(layer.name)) {
+      const arr = voidIntervalsByBox.get(box.id) ?? [];
+      for (const [t0, t1] of intervals) arr.push([t0 * cutLenM, t1 * cutLenM]);
+      voidIntervalsByBox.set(box.id, arr);
+      continue;
+    }
     // Match 3D extrude rules for special rooms.
     let heightOverride: number | undefined;
     let baseDelta: number | undefined;
-    if (isAtap(layer.name)) continue; // no extrusion in 3D → no slice
-    if (isAtapHijau(layer.name)) { heightOverride = 0.5; baseDelta = 0; }
-    else if (isBalkon(layer.name)) { heightOverride = 0.1; baseDelta = -0.1; }
+    const ov = roomExtrudeOverride(layer.name);
+    if (ov) { heightOverride = ov.height; baseDelta = ov.baseDelta; }
     for (const [t0, t1] of intervals) {
       box.slices.push({
         x0: t0 * cutLenM,
@@ -1520,7 +1533,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               heavy = false,
             ) => {
               const rooms = underBoxId ? (roomIntervalsByBox.get(underBoxId) ?? []) : [];
-              const segs: Array<{ a: number; b: number; thick: boolean }> = [];
+              const voids = underBoxId ? (voidIntervalsByBox.get(underBoxId) ?? []) : [];
+              let segs: Array<{ a: number; b: number; thick: boolean }> = [];
               let cursor = 0;
               for (const [r0, r1] of rooms) {
                 const a = Math.max(0, r0);
@@ -1531,6 +1545,18 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 cursor = b2;
               }
               if (cursor < cutLenM) segs.push({ a: cursor, b: cutLenM, thick: false });
+              // Cut out segments that fall under Void rooms — no floor line below void.
+              for (const [v0, v1] of voids) {
+                const va = Math.max(0, v0), vb = Math.min(cutLenM, v1);
+                if (vb <= va) continue;
+                const next: typeof segs = [];
+                for (const s of segs) {
+                  if (vb <= s.a || va >= s.b) { next.push(s); continue; }
+                  if (va > s.a) next.push({ a: s.a, b: va, thick: s.thick });
+                  if (vb < s.b) next.push({ a: vb, b: s.b, thick: s.thick });
+                }
+                segs = next;
+              }
               const thickW = heavy ? FLOOR_THICK_HEAVY : FLOOR_THICK;
               return (
                 <g key={key}>
@@ -1813,6 +1839,36 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             </g>
           ))}
           {layers.filter((l) => !isLahan(l.name)).map((l, i) => {
+            if (isVoid(l.name)) {
+              let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+              for (const p of l.points) {
+                if (p.x < mnx) mnx = p.x;
+                if (p.y < mny) mny = p.y;
+                if (p.x > mxx) mxx = p.x;
+                if (p.y > mxy) mxy = p.y;
+              }
+              const clipId = `void-clip-${slide.id}-${l.id}`;
+              const ptsStr = l.points.map((p) => `${p.x},${p.y}`).join(" ");
+              return (
+                <g key={l.id}>
+                  <defs>
+                    <clipPath id={clipId}>
+                      <polygon points={ptsStr} />
+                    </clipPath>
+                  </defs>
+                  <polygon points={ptsStr}
+                    fill="#ffffff"
+                    stroke="#0a0a0a"
+                    strokeWidth={sw * 0.0015} />
+                  <g clipPath={`url(#${clipId})`}>
+                    <line x1={mnx} y1={mny} x2={mxx} y2={mxy}
+                      stroke="#0a0a0a" strokeWidth={sw * 0.0008} />
+                    <line x1={mxx} y1={mny} x2={mnx} y2={mxy}
+                      stroke="#0a0a0a" strokeWidth={sw * 0.0008} />
+                  </g>
+                </g>
+              );
+            }
             const overrideFill = roomFillOverride(l.name, "0.45");
             const overrideStroke = roomStrokeOverride(l.name);
             const fillCol = overrideFill ?? l.color.replace("ALPHA", "0.28");
@@ -3283,6 +3339,10 @@ function AxonometricView({
   }
 
   // Floors (build layers only — Taman handled above, Lahan/Void excluded)
+  const ABU_HEX = "#bebebe";
+  const ABU_SIDE = "#9a9a9a";
+  const HIJAU_HEX = "#22c55e";
+  const HIJAU_SIDE = "#16a34a";
   for (const lv of withH) {
     const top = colorOf(lv.sourceId);
     const side = shadeHsl(top, -18);
@@ -3290,8 +3350,11 @@ function AxonometricView({
     for (const ly of layers) {
       const pm = toPm(ly);
       if (pm.length < 3) continue;
-      const yBot = lv.base;
-      const yTop = lv.base + lv.height;
+      const ov = roomExtrudeOverride(ly.name);
+      const yBot = lv.base + (ov?.baseDelta ?? 0);
+      const yTop = yBot + (ov?.height ?? lv.height);
+      const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
+      const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
       // Side quads
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
@@ -3303,14 +3366,14 @@ function AxonometricView({
           project(a.x, a.z, yTop),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-        faces.push({ pts: quad, fill: side, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5 });
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5 });
       }
       // Top face
       const topPts = pm.map((p) => project(p.x, p.z, yTop));
       const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
       faces.push({
         pts: topPts,
-        fill: top,
+        fill: topFill,
         stroke: "rgba(0,0,0,0.55)",
         depth: avg + yTop * 100 + 1,
         sw: 0.7,
@@ -4150,10 +4213,12 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const own = expanded.filter((e) => e.sourceId === layer.levelId);
     if (own.length === 0) continue;
     const baseMdpl = Math.min(...own.map((e) => e.mdpl));
-    const topMdpl = Math.max(...own.map((e) => e.mdpl + e.height));
-    // Relative heights (bangunan diasumsikan duduk di z=0 site).
-    const baseRel = baseMdpl - Math.min(...expanded.map((e) => e.mdpl));
-    const topRel = topMdpl - Math.min(...expanded.map((e) => e.mdpl));
+    const topMdplFloor = Math.max(...own.map((e) => e.mdpl + e.height));
+    // Override: Atap/Balkon/Atap Hijau pakai tinggi & shift sesuai Model 3D.
+    const ov = roomExtrudeOverride(layer.name);
+    const minExp = Math.min(...expanded.map((e) => e.mdpl));
+    const baseRel = (ov ? baseMdpl + ov.baseDelta : baseMdpl) - minExp;
+    const topRel = (ov ? baseMdpl + ov.baseDelta + ov.height : topMdplFloor) - minExp;
 
     const ccw = polygonSignedArea(layer.points) > 0;
     // Wall quads per edge.
