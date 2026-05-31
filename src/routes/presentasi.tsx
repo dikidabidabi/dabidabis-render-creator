@@ -1948,7 +1948,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 }))}
               </g>
             );
-          })()}
+          })}
           {null /* dimensi ruang dihapus — diganti dimensi bentang grid */}
           {evkRooms.map((l) => {
             const c = centroid(l.points);
