@@ -69,8 +69,10 @@ import {
   yAxisLabel,
   spansForLevel,
   isNodeActive,
+  isColumnClipped,
   levelInRange,
   computeStructuralStats,
+  type ColumnClip,
 } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/sketch")({
