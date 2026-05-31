@@ -109,6 +109,21 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
 function isTaman(n: string) { return n.trim().toLowerCase().startsWith("taman"); }
+function isBalkon(n: string) { return n.trim().toLowerCase() === "balkon"; }
+function isAtapHijau(n: string) { return n.trim().toLowerCase() === "atap hijau"; }
+function isAtap(n: string) { return n.trim().toLowerCase() === "atap"; }
+function roomFillOverride(name: string, alpha: string): string | null {
+  if (isAtapHijau(name)) return `rgba(34,197,94,${alpha})`;
+  if (isBalkon(name) || isAtap(name)) return `rgba(190,190,190,${alpha})`;
+  if (isTaman(name)) return `rgba(34,197,94,${alpha})`;
+  return null;
+}
+function roomStrokeOverride(name: string): string | null {
+  if (isAtapHijau(name)) return "rgb(22,163,74)";
+  if (isBalkon(name) || isAtap(name)) return "rgb(140,140,140)";
+  if (isTaman(name)) return "rgb(22,163,74)";
+  return null;
+}
 
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
@@ -1361,7 +1376,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const TYPICAL_H = 3;
   type LvlBox = {
     id: string; name: string; baseM: number; topM: number; count: number; floorH: number;
-    slices: Array<{ x0: number; x1: number; name: string; color: string }>;
+    slices: Array<{ x0: number; x1: number; name: string; color: string; heightOverride?: number; baseDelta?: number }>;
   };
   // Gunakan expand untuk turunkan tinggi tiap lantai sesuai MDPL gap (k=1) atau
   // typicalHeight (k>1). Lalu group balik per sourceId untuk gambar 1 box per level.
@@ -1391,12 +1406,20 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
     const box = boxes.find((b) => b.id === layer.levelId);
     if (!box) continue;
     const intervals = cutPolygonIntervals(cut.p1, cut.p2, layer.points);
+    // Match 3D extrude rules for special rooms.
+    let heightOverride: number | undefined;
+    let baseDelta: number | undefined;
+    if (isAtap(layer.name)) continue; // no extrusion in 3D → no slice
+    if (isAtapHijau(layer.name)) { heightOverride = 0.5; baseDelta = 0; }
+    else if (isBalkon(layer.name)) { heightOverride = 0.1; baseDelta = -0.1; }
     for (const [t0, t1] of intervals) {
       box.slices.push({
         x0: t0 * cutLenM,
         x1: t1 * cutLenM,
         name: layer.name,
-        color: layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)",
+        color: roomFillOverride(layer.name, "0.55") ?? (layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)"),
+        heightOverride,
+        baseDelta,
       });
     }
   }
@@ -1565,8 +1588,12 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             b.slices.map((sl, i) => {
               const x = mx(sl.x0);
               const w = (sl.x1 - sl.x0) * scalePxPerM;
-              const y = my(b.topM);
-              const h = (b.topM - b.baseM) * scalePxPerM;
+              const sliceHM = sl.heightOverride ?? (b.topM - b.baseM);
+              // baseM is the floor level mdpl; baseDelta shifts the slab (e.g. balkon -0.1m).
+              const sliceBaseM = b.baseM + (sl.baseDelta ?? 0);
+              const sliceTopM = sliceBaseM + sliceHM;
+              const y = my(sliceTopM);
+              const h = sliceHM * scalePxPerM;
               const cx = x + w / 2, cy = y + h / 2;
               const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
               return (
@@ -1786,9 +1813,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             </g>
           ))}
           {layers.filter((l) => !isLahan(l.name)).map((l, i) => {
-            const taman = isTaman(l.name);
-            const fillCol = taman ? "rgba(34,197,94,0.45)" : l.color.replace("ALPHA", "0.28");
-            const strokeCol = taman ? "rgb(22,163,74)" : l.color.replace("ALPHA", "1");
+            const overrideFill = roomFillOverride(l.name, "0.45");
+            const overrideStroke = roomStrokeOverride(l.name);
+            const fillCol = overrideFill ?? l.color.replace("ALPHA", "0.28");
+            const strokeCol = overrideStroke ?? l.color.replace("ALPHA", "1");
             return (
               <g key={l.id}>
                 <polygon

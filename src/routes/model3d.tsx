@@ -110,7 +110,26 @@ function isVoid(n: string) {
 function isTaman(n: string) {
   return n.trim().toLowerCase().startsWith("taman");
 }
+function isBalkon(n: string) {
+  return n.trim().toLowerCase() === "balkon";
+}
+function isAtapHijau(n: string) {
+  return n.trim().toLowerCase() === "atap hijau";
+}
+function isAtap(n: string) {
+  return n.trim().toLowerCase() === "atap";
+}
 const TAMAN_GREEN = "#22c55e";
+const ABU_MUDA = "#bebebe";
+const ATAP_HIJAU_COLOR = "#22c55e";
+// Special extrude rules for named rooms.
+// height === 0 means: do not render any extruded geometry in 3D.
+function roomExtrudeOverride(name: string): { height: number; baseDelta: number; color: string } | null {
+  if (isAtapHijau(name)) return { height: 0.5, baseDelta: 0, color: ATAP_HIJAU_COLOR };
+  if (isBalkon(name)) return { height: 0.1, baseDelta: -0.1, color: ABU_MUDA };
+  if (isAtap(name)) return { height: 0, baseDelta: 0, color: ABU_MUDA };
+  return null;
+}
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
@@ -471,20 +490,25 @@ function Scene({
       {floors.map((lv) => {
         const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
         return layersOfLevel.map((ly, idx) => {
+          const override = roomExtrudeOverride(ly.name);
+          if (override && override.height <= 0) return null;
           const sketchColor =
             ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
               const parts = body.split(",").map((s: string) => s.trim());
               return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
             }) || "#e85d3a";
-          const color = colorMode === "bw" ? "#dcdcdc" : sketchColor;
+          const baseColor = override ? override.color : sketchColor;
+          const color = colorMode === "bw" ? "#dcdcdc" : baseColor;
+          const h = override ? override.height : lv.height;
+          const baseY = lv.baseMdpl - baseMdpl + (override ? override.baseDelta : 0);
           return (
             <ExtrudedFloor
               key={`${lv.id}_${ly.id}_${idx}`}
               points={ly.points}
               origin={origin}
               mPerPx={mPerPx}
-              baseY={lv.baseMdpl - baseMdpl}
-              height={lv.height}
+              baseY={baseY}
+              height={h}
               color={color}
               highlighted={highlightLevelId === lv.sourceId}
             />
@@ -681,17 +705,21 @@ function SketchViewer({
     for (const lv of expanded) {
       const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
       for (const ly of layersOfLevel) {
-        const rgb = ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
-          const parts = body.split(",").map((s: string) => s.trim());
-          return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-        }) || "#e85d3a";
+        const override = roomExtrudeOverride(ly.name);
+        if (override && override.height <= 0) continue;
+        const rgb = override
+          ? override.color
+          : ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+              const parts = body.split(",").map((s: string) => s.trim());
+              return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+            }) || "#e85d3a";
         inputs.push({
           name: `${lv.name}_${ly.name}`,
           points: ly.points,
           origin,
           mPerPx,
-          baseY: lv.baseMdpl - baseMdpl0,
-          height: lv.height,
+          baseY: lv.baseMdpl - baseMdpl0 + (override ? override.baseDelta : 0),
+          height: override ? override.height : lv.height,
           color: rgb,
         });
       }
