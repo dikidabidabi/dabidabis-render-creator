@@ -3172,6 +3172,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     endPointer(e);
     if (wasGesture) return;
 
+    if (gridDrag) {
+      setGridDrag(null);
+      return;
+    }
     if (draggingHandle) {
       setDraggingHandle(null);
       return;
