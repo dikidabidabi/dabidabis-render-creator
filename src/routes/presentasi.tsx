@@ -1801,9 +1801,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             </g>
           ))}
           {layers.filter((l) => !isLahan(l.name)).map((l, i) => {
-            const taman = isTaman(l.name);
-            const fillCol = taman ? "rgba(34,197,94,0.45)" : l.color.replace("ALPHA", "0.28");
-            const strokeCol = taman ? "rgb(22,163,74)" : l.color.replace("ALPHA", "1");
+            const overrideFill = roomFillOverride(l.name, "0.45");
+            const overrideStroke = roomStrokeOverride(l.name);
+            const fillCol = overrideFill ?? l.color.replace("ALPHA", "0.28");
+            const strokeCol = overrideStroke ?? l.color.replace("ALPHA", "1");
             return (
               <g key={l.id}>
                 <polygon
