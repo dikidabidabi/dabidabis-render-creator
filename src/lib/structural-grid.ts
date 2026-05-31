@@ -145,6 +145,54 @@ export function isNodeActive(
   return !dis.includes(`${i},${j}`);
 }
 
+// Ray-cast point in polygon (poligon koordinat meter relatif origin).
+function pointInPoly(px: number, py: number, poly: Array<{ x: number; y: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect =
+      ((yi > py) !== (yj > py)) &&
+      (px < ((xj - xi) * (py - yi)) / (yj - yi + 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Apakah kolom pada koordinat meter (mx,my) relatif grid.origin tersembunyi
+// oleh salah satu clip polygon.
+export function isColumnClipped(
+  grid: StructuralGrid,
+  mx: number,
+  my: number,
+): boolean {
+  const clips = grid.columnClips;
+  if (!clips || !clips.length) return false;
+  for (const c of clips) {
+    if (c.pts.length >= 3 && pointInPoly(mx, my, c.pts)) return true;
+  }
+  return false;
+}
+
+// Apakah kolom pada node (i,j) level tertentu ditampilkan (gabungan
+// disabled-node + clip polygon).
+export function isColumnVisible(
+  grid: StructuralGrid,
+  levelId: string | undefined,
+  i: number,
+  j: number,
+  spansX?: number[],
+  spansY?: number[],
+): boolean {
+  if (!isNodeActive(grid, levelId, i, j)) return false;
+  const sx = spansX ?? grid.spansX;
+  const sy = spansY ?? grid.spansY;
+  const mx = axisPositions(sx)[i];
+  const my = axisPositions(sy)[j];
+  if (mx == null || my == null) return true;
+  return !isColumnClipped(grid, mx, my);
+}
+
 // Apakah `levelMdpl` tercakup dalam range [fromLevelId..toLevelId] berdasarkan
 // urutan MDPL ascending. Jika range tidak diset → berlaku untuk semua level
 // di atas (atau sama dengan) MDPL 0 sebagai default praktis.
