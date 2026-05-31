@@ -398,6 +398,13 @@ function RekapSection({ data }: { data: Stats }) {
       <Row label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
       <Row label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
       <Row label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
+      {data.totalKolom > 0 && (
+        <>
+          <div className="my-2 h-px bg-border" />
+          <Row label="Modul Struktur — Kolom" value={`${data.totalKolom} titik`} />
+          <Row label="Volume Beton Kolom" value={`${fmt(data.volumeBetonM3, 2)} m³`} />
+        </>
+      )}
     </div>
   );
 }
