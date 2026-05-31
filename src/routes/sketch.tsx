@@ -605,6 +605,8 @@ function normalizeSketch(s: any): Sketch {
     activeLevelId,
     kdbPct: Number.isFinite(Number(s?.kdbPct)) ? Math.max(0, Math.min(100, Number(s.kdbPct))) : undefined,
     klbCoef: Number.isFinite(Number(s?.klbCoef)) ? Math.max(0, Number(s.klbCoef)) : undefined,
+    kdhPct: Number.isFinite(Number(s?.kdhPct)) ? Math.max(0, Math.min(100, Number(s.kdhPct))) : undefined,
+    ktbPct: Number.isFinite(Number(s?.ktbPct)) ? Math.max(0, Math.min(100, Number(s.ktbPct))) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
