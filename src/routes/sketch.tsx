@@ -3708,11 +3708,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "section" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("section"); }}
-            className={cn("col-span-2", tool === "section" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "section" && "bg-gradient-ember shadow-ember")}
             title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
           >
             <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
           </Button>
+          <Button
+            variant={tool === "grid" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("grid"); if (!grid.enabled) updateGrid({ enabled: true }); }}
+            className={cn(tool === "grid" && "bg-gradient-ember shadow-ember")}
+            title="Modul Struktur — grid as + kolom parametric"
+          >
+            <Grid3x3 className="mr-1.5 h-4 w-4" /> Grid Struktur
+          </Button>
+        </div>
+        {tool === "grid" && (
+          <StructurePanel
+            grid={grid}
+            levels={levels}
+            activeLvlId={activeLvlId}
+            onUpdate={updateGrid}
+            onUpdateOverride={updateGridOverride}
+          />
+        )}
         </div>
         {tool === "polyline" && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
