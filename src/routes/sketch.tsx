@@ -1716,9 +1716,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
           ctx.stroke();
         } else {
-          ctx.fillStyle = layer.color.replace("ALPHA", layer.locked ? "0.4" : "0.28");
+          const fillBase = isTamanLayerName(layer.name) ? TAMAN_FILL_RGBA : layer.color;
+          ctx.fillStyle = fillBase.replace("ALPHA", layer.locked ? "0.4" : "0.32");
           ctx.fill();
-          ctx.strokeStyle = layer.color.replace("ALPHA", "0.95");
+          ctx.strokeStyle = fillBase.replace("ALPHA", "0.95");
           ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
           ctx.stroke();
         }
