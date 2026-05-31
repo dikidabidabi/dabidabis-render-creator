@@ -3254,6 +3254,68 @@ function AxonometricView({
     }
   }
 
+  // Structural columns (black) extruded per level in range
+  const grid = sketch.structuralGrid;
+  if (grid?.enabled) {
+    const colM = grid.colSizeCm / 100;
+    const half = colM / 2;
+    // Flip x/z to match toPm()
+    const gx0 = -(grid.origin.x - ox) * mPerPx;
+    const gz0 = -(grid.origin.y - oy) * mPerPx;
+    for (let li = 0; li < withH.length; li++) {
+      const lv = withH[li];
+      const src = ascLevels.find((l) => l.id === lv.sourceId);
+      if (!src) continue;
+      if (!levelInRange(grid, src, ascLevels)) continue;
+      const { spansX, spansY } = spansForLevel(grid, lv.sourceId);
+      const xs = axisPositions(spansX);
+      const zs = axisPositions(spansY);
+      const yBot = lv.base;
+      const yTop = lv.base + lv.height;
+      for (let i = 0; i < xs.length; i++) {
+        for (let j = 0; j < zs.length; j++) {
+          if (!isNodeActive(grid, lv.sourceId, i, j)) continue;
+          // Flip span offsets too
+          const cx = gx0 - xs[i];
+          const cz = gz0 - zs[j];
+          const x0 = cx - half, x1c = cx + half;
+          const z0 = cz - half, z1c = cz + half;
+          // 4 side faces
+          const sides = [
+            [[x0, z0], [x1c, z0]],
+            [[x1c, z0], [x1c, z1c]],
+            [[x1c, z1c], [x0, z1c]],
+            [[x0, z1c], [x0, z0]],
+          ];
+          for (const [[ax, az], [bx, bz]] of sides) {
+            const quad = [
+              project(ax, az, yBot),
+              project(bx, bz, yBot),
+              project(bx, bz, yTop),
+              project(ax, az, yTop),
+            ];
+            const depth = (ax + bx + az + bz) / 2 + yTop * 50 + 5000;
+            faces.push({ pts: quad, fill: "#0a0a0a", stroke: "#000000", depth, sw: 0.5 });
+          }
+          // top face
+          const topPts = [
+            project(x0, z0, yTop),
+            project(x1c, z0, yTop),
+            project(x1c, z1c, yTop),
+            project(x0, z1c, yTop),
+          ];
+          faces.push({
+            pts: topPts,
+            fill: "#1a1a1a",
+            stroke: "#000000",
+            depth: cx + cz + yTop * 100 + 10000,
+            sw: 0.7,
+          });
+        }
+      }
+    }
+  }
+
   faces.sort((a, b) => a.depth - b.depth);
 
   // Compute viewBox
