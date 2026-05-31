@@ -1588,8 +1588,12 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             b.slices.map((sl, i) => {
               const x = mx(sl.x0);
               const w = (sl.x1 - sl.x0) * scalePxPerM;
-              const y = my(b.topM);
-              const h = (b.topM - b.baseM) * scalePxPerM;
+              const sliceHM = sl.heightOverride ?? (b.topM - b.baseM);
+              // baseM is the floor level mdpl; baseDelta shifts the slab (e.g. balkon -0.1m).
+              const sliceBaseM = b.baseM + (sl.baseDelta ?? 0);
+              const sliceTopM = sliceBaseM + sliceHM;
+              const y = my(sliceTopM);
+              const h = sliceHM * scalePxPerM;
               const cx = x + w / 2, cy = y + h / 2;
               const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
               return (
