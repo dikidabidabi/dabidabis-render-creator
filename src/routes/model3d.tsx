@@ -40,6 +40,7 @@ import {
   axisPositions,
   spansForLevel,
   isNodeActive,
+  isColumnClipped,
   levelInRange,
 } from "@/lib/structural-grid";
 
