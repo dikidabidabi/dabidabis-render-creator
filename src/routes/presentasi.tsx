@@ -1699,16 +1699,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             <text x={mx(cutLenM)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>A'</text>
           </g>
 
-          {/* Skala panjang potongan */}
-          <g>
-            <line x1={mx(0)} y1={my(minMdpl) + 28} x2={mx(cutLenM)} y2={my(minMdpl) + 28} stroke="#111" strokeWidth={0.8} />
-            <line x1={mx(0)} y1={my(minMdpl) + 24} x2={mx(0)} y2={my(minMdpl) + 32} stroke="#111" strokeWidth={0.8} />
-            <line x1={mx(cutLenM)} y1={my(minMdpl) + 24} x2={mx(cutLenM)} y2={my(minMdpl) + 32} stroke="#111" strokeWidth={0.8} />
-            <text x={(mx(0) + mx(cutLenM)) / 2} y={my(minMdpl) + 44} fontSize={10} textAnchor="middle" fill="#111"
-              style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
-              Panjang potongan: {cutLenM.toFixed(2)} m
-            </text>
-          </g>
+          {/* Skala panjang potongan dihapus — diganti dimensi bentang grid */}
 
           {/* Grid struktur vertikal — diproyeksikan ke garis potongan (semua grid aktif) */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
