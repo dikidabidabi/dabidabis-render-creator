@@ -3164,7 +3164,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const totalLengthM = lines.reduce((s, l) => s + lineLengthPx(l), 0) / pxPerMeter;
   const totalAreaM2 = layers.reduce((s, l) => s + l.areaM2, 0);
-  const lahanLayers = layers.filter((l) => isLahanName(l.name));
+  // Luas Lahan = HANYA layer bernama "Lahan" di Level 1 (MDPL 0). Tidak boleh ditambah luas lain.
+  const sortedLvForLahan = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const groundLevelForLahan = findMdplZeroLevel(sortedLvForLahan) ?? sortedLvForLahan[0];
+  const lahanLayers = layers.filter(
+    (l) => isLahanName(l.name) && groundLevelForLahan && l.levelId === groundLevelForLahan.id,
+  );
   const totalLahanM2 = lahanLayers.reduce((s, l) => s + l.areaM2, 0);
 
   // Rekapitulasi panel (rendered below canvas in normal mode, inside SidePanel in fullscreen)
