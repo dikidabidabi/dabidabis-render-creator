@@ -129,6 +129,7 @@ function roomExtrudeOverride(name: string): { height: number; baseDelta: number 
   if (isAtapHijau(name)) return { height: 0.5, baseDelta: 0 };
   if (isBalkon(name)) return { height: 0.1, baseDelta: -0.1 };
   if (isAtap(name)) return { height: 0.2, baseDelta: -0.2 };
+  if (isTaman(name)) return { height: 0.1, baseDelta: 0 };
   return null;
 }
 
