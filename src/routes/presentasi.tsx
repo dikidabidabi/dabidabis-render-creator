@@ -1878,22 +1878,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     </text>
                   </g>
                 ))}
-                {/* Dimensi bentang grid terluar — angka mm tanpa satuan */}
+                {/* Dimensi bentang grid terluar — diletakkan di sisi dalam antara garis grid terluar dan buble */}
                 {spansX.map((sM, i) => {
                   const xa = xs[i];
                   const xb = xs[i + 1];
                   const cx = (xa + xb) / 2;
-                  const yTop = y0 - ext - rBub * 2 - dimGap;
-                  const yBot = y1 + ext + rBub * 2 + dimGap;
+                  // antara y0 (grid line) dan (y0 - ext - rBub) (buble)
+                  const yTop = (y0 + (y0 - ext - rBub)) / 2;
+                  const yBot = (y1 + (y1 + ext + rBub)) / 2;
                   const mm = Math.round(sM * 1000);
                   return (
                     <g key={`dx-${i}`}>
-                      <text x={cx} y={yTop} textAnchor="middle" dominantBaseline="alphabetic"
+                      <text x={cx} y={yTop} textAnchor="middle" dominantBaseline="central"
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
                       </text>
-                      <text x={cx} y={yBot} textAnchor="middle" dominantBaseline="hanging"
+                      <text x={cx} y={yBot} textAnchor="middle" dominantBaseline="central"
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
@@ -1905,17 +1906,19 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   const ya = ys[j];
                   const yb = ys[j + 1];
                   const cy = (ya + yb) / 2;
-                  const xLeft = x0 - ext - rBub * 2 - dimGap;
-                  const xRight = x1 + ext + rBub * 2 + dimGap;
+                  const xLeft = (x0 + (x0 - ext - rBub)) / 2;
+                  const xRight = (x1 + (x1 + ext + rBub)) / 2;
                   const mm = Math.round(sM * 1000);
                   return (
                     <g key={`dy-${j}`}>
-                      <text x={xLeft} y={cy} textAnchor="end" dominantBaseline="central"
+                      <text x={xLeft} y={cy} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(-90 ${xLeft} ${cy})`}
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
                       </text>
-                      <text x={xRight} y={cy} textAnchor="start" dominantBaseline="central"
+                      <text x={xRight} y={cy} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(-90 ${xRight} ${cy})`}
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
@@ -1923,6 +1926,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     </g>
                   );
                 })}
+
                 {/* Kolom hitam pada tiap titik temu */}
                 {xs.flatMap((x, i) => ys.map((y, j) => (
                   isNodeActive(grid, level.id, i, j) ? (
