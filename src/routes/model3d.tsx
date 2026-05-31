@@ -291,10 +291,12 @@ function Scene({
   sketch,
   highlightLevelId,
   sunHour,
+  colorMode,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
   sunHour: number;
+  colorMode: "sketch" | "bw";
 }) {
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
@@ -316,14 +318,12 @@ function Scene({
     const d = new Date();
     d.setHours(Math.floor(sunHour), Math.round((sunHour % 1) * 60), 0, 0);
     const sc = SunCalc.getPosition(d, geo.lat, geo.lon);
-    // SunCalc azimuth: south=0, west=+π/2 (clockwise from south). Convert to north-clockwise.
     const azNorthCW = sc.azimuth + Math.PI;
     const north = ((Number(sketch.northRotation) || 0) * Math.PI) / 180;
     const az = azNorthCW - north;
     const alt = Math.max(0.01, sc.altitude);
     const dist = 80;
     const horiz = Math.cos(alt) * dist;
-    // In our scene: +Z = south (canvas y grows south), +X = east, +Y = up
     const x = Math.sin(az) * horiz;
     const z = -Math.cos(az) * horiz;
     const y = Math.sin(alt) * dist;
@@ -357,10 +357,10 @@ function Scene({
         args={[200, 200]}
         cellSize={1}
         cellThickness={0.5}
-        cellColor="#cfcfcf"
+        cellColor={colorMode === "bw" ? "#bfbfbf" : "#cfcfcf"}
         sectionSize={10}
         sectionThickness={1}
-        sectionColor="#9a9a9a"
+        sectionColor={colorMode === "bw" ? "#808080" : "#9a9a9a"}
         position={[0, groundY - 0.01, 0]}
         fadeDistance={120}
         fadeStrength={1}
@@ -369,21 +369,26 @@ function Scene({
 
       {floors.map((lv) => {
         const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
-        return layersOfLevel.map((ly, idx) => (
-          <ExtrudedFloor
-            key={`${lv.id}_${ly.id}_${idx}`}
-            points={ly.points}
-            origin={origin}
-            mPerPx={mPerPx}
-            baseY={lv.baseMdpl - baseMdpl}
-            height={lv.height}
-            color={ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+        return layersOfLevel.map((ly, idx) => {
+          const sketchColor =
+            ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
               const parts = body.split(",").map((s: string) => s.trim());
               return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-            }) || "#e85d3a"}
-            highlighted={highlightLevelId === lv.sourceId}
-          />
-        ));
+            }) || "#e85d3a";
+          const color = colorMode === "bw" ? "#dcdcdc" : sketchColor;
+          return (
+            <ExtrudedFloor
+              key={`${lv.id}_${ly.id}_${idx}`}
+              points={ly.points}
+              origin={origin}
+              mPerPx={mPerPx}
+              baseY={lv.baseMdpl - baseMdpl}
+              height={lv.height}
+              color={color}
+              highlighted={highlightLevelId === lv.sourceId}
+            />
+          );
+        });
       })}
     </>
   );
