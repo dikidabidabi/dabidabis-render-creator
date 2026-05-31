@@ -804,7 +804,8 @@ function SketchViewer({
               />
             </div>
           )}
-        </div>
+
+
 
           {/* Library screenshot — floating in fullscreen */}
           {fullscreen && (
