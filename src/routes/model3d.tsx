@@ -407,6 +407,7 @@ function SketchViewer({
   const [sunHour, setSunHour] = useState(12);
   const [projection, setProjection] = useState<"persp" | "axon">("persp");
   const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
+  const [libraryOpen, setLibraryOpen] = useState(true);
   const [shots, setShots] = useState<{ id: string; dataUrl: string; ts: number }[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
