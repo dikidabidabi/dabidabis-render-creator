@@ -1406,19 +1406,25 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   });
 
   // Compute slices per layer (rooms only) intersecting the cut line.
+  // Also collect Void intervals separately — used to suppress floor lines below them.
+  const voidIntervalsByBox = new Map<string, Array<[number, number]>>();
   for (const layer of sketch.layers ?? []) {
     if (isLahanSec(layer.name)) continue;
-    if (isVoidSec(layer.name)) continue;
     if (!layer.levelId) continue;
     const box = boxes.find((b) => b.id === layer.levelId);
     if (!box) continue;
     const intervals = cutPolygonIntervals(cut.p1, cut.p2, layer.points);
+    if (isVoidSec(layer.name)) {
+      const arr = voidIntervalsByBox.get(box.id) ?? [];
+      for (const [t0, t1] of intervals) arr.push([t0 * cutLenM, t1 * cutLenM]);
+      voidIntervalsByBox.set(box.id, arr);
+      continue;
+    }
     // Match 3D extrude rules for special rooms.
     let heightOverride: number | undefined;
     let baseDelta: number | undefined;
-    if (isAtap(layer.name)) continue; // no extrusion in 3D → no slice
-    if (isAtapHijau(layer.name)) { heightOverride = 0.5; baseDelta = 0; }
-    else if (isBalkon(layer.name)) { heightOverride = 0.1; baseDelta = -0.1; }
+    const ov = roomExtrudeOverride(layer.name);
+    if (ov) { heightOverride = ov.height; baseDelta = ov.baseDelta; }
     for (const [t0, t1] of intervals) {
       box.slices.push({
         x0: t0 * cutLenM,
