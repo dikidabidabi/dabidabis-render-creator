@@ -671,6 +671,111 @@ function normalizeSketch(s: any): Sketch {
   };
 }
 
+// Editor tabel bentang per as — bisa diketik per baris, tambah/hapus baris,
+// dan field "Jumlah" untuk membuat N bentang sama dari preset.
+function SpanAxisEditor({
+  label,
+  spans,
+  onChange,
+}: {
+  label: string;
+  spans: number[];
+  onChange: (next: number[]) => void;
+}) {
+  const [count, setCount] = useState<string>(String(spans.length));
+  const [unit, setUnit] = useState<string>(String(spans[spans.length - 1] ?? 8));
+  useEffect(() => { setCount(String(spans.length)); }, [spans.length]);
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <div className="flex flex-wrap items-center gap-1">
+        {SPAN_PRESETS.map((p) => (
+          <Button key={`p-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+            onClick={() => { setUnit(String(p)); onChange(Array(Math.max(1, Number(count) || spans.length)).fill(p)); }}>
+            {p}m
+          </Button>
+        ))}
+        <div className="ml-auto flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground">×</span>
+          <Input className="h-6 w-12 text-[10px]" inputMode="numeric"
+            value={count} onChange={(e) => setCount(e.target.value)}
+            onBlur={() => {
+              const n = Math.max(1, Math.min(50, Math.round(Number(count) || spans.length)));
+              const u = Math.max(0.5, Number(unit) || 8);
+              onChange(Array(n).fill(u));
+              setCount(String(n));
+            }}
+          />
+          <Input className="h-6 w-14 text-[10px]" inputMode="decimal"
+            value={unit} onChange={(e) => setUnit(e.target.value)}
+            onBlur={() => {
+              const u = Math.max(0.5, Number(unit) || 8);
+              onChange(Array(spans.length).fill(u));
+              setUnit(String(u));
+            }}
+            placeholder="m"
+          />
+        </div>
+      </div>
+      <div className="rounded border border-border/50 bg-background/60">
+        <div className="grid grid-cols-[28px_1fr_28px] items-center gap-1 border-b border-border/40 px-1.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span>#</span><span>Bentang (m)</span><span></span>
+        </div>
+        <div className="max-h-44 overflow-y-auto">
+          {spans.map((s, i) => (
+            <SpanRow key={i} index={i} value={s}
+              onCommit={(v) => {
+                const arr = spans.slice();
+                arr[i] = Math.max(0.5, v);
+                onChange(arr);
+              }}
+              onRemove={() => {
+                if (spans.length <= 1) return;
+                onChange(spans.filter((_, k) => k !== i));
+              }}
+            />
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-1 border-t border-border/40 px-1.5 py-1">
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]"
+            onClick={() => onChange([...spans, Number(unit) || spans[spans.length - 1] || 8])}>
+            <Plus className="mr-1 h-3 w-3" /> Tambah baris
+          </Button>
+          <span className="text-[10px] text-muted-foreground">
+            Total: {spans.reduce((a, b) => a + b, 0).toFixed(2)} m
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpanRow({
+  index, value, onCommit, onRemove,
+}: { index: number; value: number; onCommit: (v: number) => void; onRemove: () => void }) {
+  const [v, setV] = useState<string>(String(value));
+  useEffect(() => { setV(String(value)); }, [value]);
+  return (
+    <div className="grid grid-cols-[28px_1fr_28px] items-center gap-1 border-b border-border/30 px-1.5 py-1 last:border-b-0">
+      <span className="text-[10px] text-muted-foreground">{index + 1}</span>
+      <Input className="h-6 text-[11px]" inputMode="decimal"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => {
+          const n = Number(v);
+          if (Number.isFinite(n) && n > 0) onCommit(n);
+          else setV(String(value));
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      />
+      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={onRemove} title="Hapus baris">
+        <X className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
+
 function SketchPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -1436,6 +1541,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
 
+  // Grid Struktur stylus drag — geser origin atau expand dari 4 sudut.
+  type GridDrag =
+    | { kind: "move"; startWorld: Point; startOrigin: Point }
+    | {
+        kind: "corner";
+        corner: "tl" | "tr" | "bl" | "br";
+        startWorld: Point;
+        startOrigin: Point;
+        startSpansX: number[];
+        startSpansY: number[];
+        unit: number;
+      };
+  const [gridDrag, setGridDrag] = useState<GridDrag | null>(null);
+
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
   const [past, setPast] = useState<Snap[]>([]);
@@ -2184,6 +2303,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
           }
         }
+
+        // Corner handles (stylus drag → expand di 4 arah)
+        if (tool === "grid") {
+          const hSize = 20 / s;
+          const corners: Array<{ x: number; y: number }> = [
+            { x: xMin, y: yMin }, { x: xMax, y: yMin },
+            { x: xMin, y: yMax }, { x: xMax, y: yMax },
+          ];
+          for (const c of corners) {
+            ctx.save();
+            ctx.fillStyle = "rgba(232,93,58,0.95)";
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1.5 / s;
+            ctx.fillRect(c.x - hSize / 2, c.y - hSize / 2, hSize, hSize);
+            ctx.strokeRect(c.x - hSize / 2, c.y - hSize / 2, hSize, hSize);
+            ctx.restore();
+          }
+        }
         ctx.restore();
       }
     }
@@ -2287,6 +2424,65 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return snapPoint(screenToWorld(sp));
   };
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
+
+  // ===== Grid Struktur stylus interaksi =====
+  // Hitung bounds grid pada level aktif (dalam koordinat world px).
+  const gridBounds = useCallback((): null | {
+    xs: number[]; ys: number[]; xMin: number; xMax: number; yMin: number; yMax: number; spansX: number[]; spansY: number[];
+  } => {
+    if (!grid.enabled || !activeLvlId) return null;
+    const lv = levels.find((l) => l.id === activeLvlId);
+    if (!lv) return null;
+    const { spansX, spansY } = spansForLevel(grid, lv.id);
+    const ppm = pxPerMeter;
+    const posX = axisPositions(spansX).map((m) => grid.origin.x + m * ppm);
+    const posY = axisPositions(spansY).map((m) => grid.origin.y + m * ppm);
+    return {
+      xs: posX, ys: posY,
+      xMin: posX[0], xMax: posX[posX.length - 1],
+      yMin: posY[0], yMax: posY[posY.length - 1],
+      spansX, spansY,
+    };
+  }, [grid, activeLvlId, levels, pxPerMeter]);
+
+  // Hit-test sudut grid. Mengembalikan label sudut atau null.
+  const hitGridCorner = useCallback(
+    (raw: Point): "tl" | "tr" | "bl" | "br" | null => {
+      const b = gridBounds(); if (!b) return null;
+      const tol = 22 / view.s;
+      const corners: Array<{ k: "tl"|"tr"|"bl"|"br"; x: number; y: number }> = [
+        { k: "tl", x: b.xMin, y: b.yMin },
+        { k: "tr", x: b.xMax, y: b.yMin },
+        { k: "bl", x: b.xMin, y: b.yMax },
+        { k: "br", x: b.xMax, y: b.yMax },
+      ];
+      let best: { k: "tl"|"tr"|"bl"|"br"; d: number } | null = null;
+      for (const c of corners) {
+        const d = Math.hypot(raw.x - c.x, raw.y - c.y);
+        if (d <= tol && (!best || d < best.d)) best = { k: c.k, d };
+      }
+      return best ? best.k : null;
+    },
+    [gridBounds, view.s],
+  );
+
+  // Snap origin ke kelipatan MINOR_PX agar tetap "snap to grid" milimeter block.
+  const snapOriginPx = (p: Point): Point => ({
+    x: Math.round(p.x / MINOR_PX) * MINOR_PX,
+    y: Math.round(p.y / MINOR_PX) * MINOR_PX,
+  });
+
+  const adjustSpans = (start: number[], added: number, unit: number, atStart: boolean): number[] => {
+    if (added > 0) {
+      const extra = Array(added).fill(unit);
+      return atStart ? [...extra, ...start] : [...start, ...extra];
+    }
+    if (added < 0) {
+      const remove = Math.min(-added, start.length - 1);
+      return atStart ? start.slice(remove) : start.slice(0, start.length - remove);
+    }
+    return start;
+  };
 
   // Commit a finished line into state, run cycle detection, push history.
   // Apply boolean subtraction: new polygon carves out overlapping area from
@@ -2856,6 +3052,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     const p = getWorldPos(e);
+    if (tool === "grid") {
+      const raw = getWorldPosRaw(e);
+      const corner = hitGridCorner(raw);
+      const b = gridBounds();
+      if (corner && b) {
+        const startSpansX = b.spansX.slice();
+        const startSpansY = b.spansY.slice();
+        const avgX = startSpansX.reduce((s, n) => s + n, 0) / startSpansX.length;
+        const avgY = startSpansY.reduce((s, n) => s + n, 0) / startSpansY.length;
+        const unit = Math.max(1, Math.round(((avgX + avgY) / 2) * 2) / 2); // snap unit ke 0.5m
+        setGridDrag({
+          kind: "corner", corner,
+          startWorld: raw,
+          startOrigin: { ...grid.origin },
+          startSpansX, startSpansY, unit,
+        });
+        return;
+      }
+      if (b && raw.x >= b.xMin && raw.x <= b.xMax && raw.y >= b.yMin && raw.y <= b.yMax) {
+        setGridDrag({ kind: "move", startWorld: raw, startOrigin: { ...grid.origin } });
+        return;
+      }
+      // klik di luar → set origin ke titik klik (snap)
+      const snapped = snapOriginPx(raw);
+      updateGrid({ origin: snapped });
+      return;
+    }
     if (tool === "line" || tool === "rect" || tool === "section") {
       setDrawing({ a: p, b: p });
     } else if (tool === "polyline") {
@@ -2965,6 +3188,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (gridDrag) {
+      const raw = getWorldPosRaw(e);
+      if (gridDrag.kind === "move") {
+        const dx = raw.x - gridDrag.startWorld.x;
+        const dy = raw.y - gridDrag.startWorld.y;
+        const next = snapOriginPx({ x: gridDrag.startOrigin.x + dx, y: gridDrag.startOrigin.y + dy });
+        if (next.x !== grid.origin.x || next.y !== grid.origin.y) updateGrid({ origin: next });
+      } else {
+        const dxm = (raw.x - gridDrag.startWorld.x) / pxPerMeter;
+        const dym = (raw.y - gridDrag.startWorld.y) / pxPerMeter;
+        const extX = gridDrag.corner === "tr" || gridDrag.corner === "br" ? 1 : -1;
+        const extY = gridDrag.corner === "bl" || gridDrag.corner === "br" ? 1 : -1;
+        const addX = Math.round((dxm * extX) / gridDrag.unit);
+        const addY = Math.round((dym * extY) / gridDrag.unit);
+        const newSpansX = adjustSpans(gridDrag.startSpansX, addX, gridDrag.unit, extX < 0);
+        const newSpansY = adjustSpans(gridDrag.startSpansY, addY, gridDrag.unit, extY < 0);
+        const actualAddX = newSpansX.length - gridDrag.startSpansX.length;
+        const actualAddY = newSpansY.length - gridDrag.startSpansY.length;
+        const newOriginX = extX < 0 ? gridDrag.startOrigin.x - actualAddX * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.x;
+        const newOriginY = extY < 0 ? gridDrag.startOrigin.y - actualAddY * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.y;
+        updateGrid({ spansX: newSpansX, spansY: newSpansY, origin: { x: newOriginX, y: newOriginY } });
+      }
+      return;
+    }
+
     if (editDrag) {
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
@@ -3047,6 +3295,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     endPointer(e);
     if (wasGesture) return;
 
+    if (gridDrag) {
+      setGridDrag(null);
+      return;
+    }
     if (draggingHandle) {
       setDraggingHandle(null);
       return;
@@ -3119,6 +3371,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setDraggingHandle(null);
     setEditDrag(null);
     setPolyDraft(null);
+    setGridDrag(null);
   };
 
   const handleUndo = () => {
@@ -3729,46 +3982,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Aktif</Label>
               <Switch checked={grid.enabled} onCheckedChange={(v) => updateGrid({ enabled: v })} />
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu X (m)</Label>
-              <div className="flex flex-wrap gap-1">
-                {SPAN_PRESETS.map((p) => (
-                  <Button key={`px-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
-                    onClick={() => updateGrid({ spansX: Array(Math.max(1, grid.spansX.length)).fill(p) })}>
-                    {p}m × {grid.spansX.length}
-                  </Button>
-                ))}
-              </div>
-              <Input
-                className="h-7 text-xs"
-                value={grid.spansX.join(", ")}
-                onChange={(e) => {
-                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
-                  if (arr.length) updateGrid({ spansX: arr });
-                }}
-                placeholder="contoh: 8, 8, 6, 9"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu Y (m)</Label>
-              <div className="flex flex-wrap gap-1">
-                {SPAN_PRESETS.map((p) => (
-                  <Button key={`py-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
-                    onClick={() => updateGrid({ spansY: Array(Math.max(1, grid.spansY.length)).fill(p) })}>
-                    {p}m × {grid.spansY.length}
-                  </Button>
-                ))}
-              </div>
-              <Input
-                className="h-7 text-xs"
-                value={grid.spansY.join(", ")}
-                onChange={(e) => {
-                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
-                  if (arr.length) updateGrid({ spansY: arr });
-                }}
-                placeholder="contoh: 8, 8, 6"
-              />
-            </div>
+            <SpanAxisEditor label="Bentang Sumbu X (m)" spans={grid.spansX}
+              onChange={(next) => updateGrid({ spansX: next })} />
+            <SpanAxisEditor label="Bentang Sumbu Y (m)" spans={grid.spansY}
+              onChange={(next) => updateGrid({ spansY: next })} />
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Tip: di kanvas, tarik 4 kotak sudut grid (oranye) dengan stylus untuk menambah/mengurangi bentang otomatis. Tarik bagian dalam grid untuk menggeser titik nol (snap milimeter block).
+            </p>
             <div className="space-y-1">
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dimensi Kolom (cm)</Label>
               <div className="flex flex-wrap gap-1">
