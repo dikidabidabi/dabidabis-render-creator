@@ -233,9 +233,13 @@ export function computeStructuralStats(
     const { spansX, spansY } = spansForLevel(grid, lv.id);
     const nx = spansX.length + 1;
     const ny = spansY.length + 1;
-    const dis = grid.perLevel?.[lv.id]?.disabledNodes ?? [];
-    const disabledCount = dis.length;
-    const nodes = Math.max(0, nx * ny - disabledCount);
+    let active = 0;
+    for (let jj = 0; jj < ny; jj++) {
+      for (let ii = 0; ii < nx; ii++) {
+        if (isColumnVisible(grid, lv.id, ii, jj, spansX, spansY)) active++;
+      }
+    }
+    const nodes = active;
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
     const h = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
       ? Number(lv.typicalHeight)
