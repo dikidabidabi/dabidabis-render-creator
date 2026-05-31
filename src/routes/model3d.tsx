@@ -493,6 +493,14 @@ function Scene({
           highlighted={false}
         />
       ))}
+
+      <StructuralColumns
+        sketch={sketch}
+        origin={origin}
+        mPerPx={mPerPx}
+        baseMdpl={baseMdpl}
+        colorMode={colorMode}
+      />
     </>
   );
 }
