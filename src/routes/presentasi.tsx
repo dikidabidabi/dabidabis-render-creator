@@ -1727,10 +1727,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             }
             if (!hits.length) return null;
             const yTopPx = my(maxMdpl);
-            const yBub = my(minMdpl) + 64;
+            const yFloorBottom = my(minMdpl);
             const rBub = 7;
+            // Bubble digeser mendekat ke bawah lantai terbawah; dimensi di atas buble
+            // (di antara lantai terbawah dan buble).
+            const yBub = yFloorBottom + 32;
+            const yDim = yFloorBottom + 14;
             // Sort hits by t, dedupe near-identical positions, dan hitung
-            // bentang antar buble (mm) untuk ditampilkan di antara buble.
+            // bentang antar buble (mm) untuk ditampilkan di atas buble.
             const sorted = [...hits].sort((a, b) => a.t - b.t);
             const dims: Array<{ x: number; mm: number }> = [];
             for (let i = 0; i < sorted.length - 1; i++) {
@@ -1747,7 +1751,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   const sx = mx(h.t * cutLenM);
                   return (
                     <g key={h.key}>
-                      <line x1={sx} y1={yTopPx} x2={sx} y2={yBub - rBub}
+                      <line x1={sx} y1={yTopPx} x2={sx} y2={yFloorBottom}
                         stroke="#0a0a0a" strokeWidth={0.3}
                         strokeDasharray="6 3 1 3" />
                       <circle cx={sx} cy={yBub} r={rBub}
@@ -1761,7 +1765,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   );
                 })}
                 {dims.map((d, i) => (
-                  <text key={`gd-${gIdx}-${i}`} x={d.x} y={yBub + rBub + 12}
+                  <text key={`gd-${gIdx}-${i}`} x={d.x} y={yDim}
                     textAnchor="middle" dominantBaseline="central"
                     fontSize={9} fontWeight={600} fill="#0a0a0a"
                     style={{ fontFamily: "Manrope, sans-serif",
