@@ -705,17 +705,21 @@ function SketchViewer({
     for (const lv of expanded) {
       const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
       for (const ly of layersOfLevel) {
-        const rgb = ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
-          const parts = body.split(",").map((s: string) => s.trim());
-          return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-        }) || "#e85d3a";
+        const override = roomExtrudeOverride(ly.name);
+        if (override && override.height <= 0) continue;
+        const rgb = override
+          ? override.color
+          : ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+              const parts = body.split(",").map((s: string) => s.trim());
+              return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+            }) || "#e85d3a";
         inputs.push({
           name: `${lv.name}_${ly.name}`,
           points: ly.points,
           origin,
           mPerPx,
-          baseY: lv.baseMdpl - baseMdpl0,
-          height: lv.height,
+          baseY: lv.baseMdpl - baseMdpl0 + (override ? override.baseDelta : 0),
+          height: override ? override.height : lv.height,
           color: rgb,
         });
       }
