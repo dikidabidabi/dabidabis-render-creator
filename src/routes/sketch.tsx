@@ -1557,6 +1557,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       };
   const [gridDrag, setGridDrag] = useState<GridDrag | null>(null);
 
+  // Grid Struktur — edit kolom: clip polygon (sembunyikan kolom di area)
+  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip">("expand");
+  type ClipDrag = {
+    clipId: string;        // id clip (atau "__draft__" jika polygon belum di-commit)
+    idx: number;           // index titik yang di-drag
+    moved: boolean;
+    startScreen: Point;
+  };
+  const [clipDraft, setClipDraft] = useState<{ pts: Point[] } | null>(null); // titik dalam METER relatif origin
+  const [clipDrag, setClipDrag] = useState<ClipDrag | null>(null);
+
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
   const [past, setPast] = useState<Snap[]>([]);
