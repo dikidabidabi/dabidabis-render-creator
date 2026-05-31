@@ -72,6 +72,9 @@ import {
   isColumnClipped,
   levelInRange,
   computeStructuralStats,
+  computeAllStructuralStats,
+  collectGrids,
+  normalizeGridExtras,
   type ColumnClip,
 } from "@/lib/structural-grid";
 
