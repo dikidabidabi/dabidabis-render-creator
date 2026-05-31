@@ -398,6 +398,19 @@ function Scene({
           );
         });
       })}
+
+      {tamanLayers.map((ly, idx) => (
+        <ExtrudedFloor
+          key={`taman_${ly.id}_${idx}`}
+          points={ly.points}
+          origin={origin}
+          mPerPx={mPerPx}
+          baseY={tamanBaseY}
+          height={0.1}
+          color={colorMode === "bw" ? "#cfcfcf" : TAMAN_GREEN}
+          highlighted={false}
+        />
+      ))}
     </>
   );
 }
