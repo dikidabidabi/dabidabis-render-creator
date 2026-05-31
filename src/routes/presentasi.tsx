@@ -1647,6 +1647,60 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               Panjang potongan: {cutLenM.toFixed(2)} m
             </text>
           </g>
+
+          {/* Grid struktur vertikal — diproyeksikan ke garis potongan */}
+          {(() => {
+            const grid = sketch.structuralGrid;
+            if (!grid?.enabled) return null;
+            const ppm = pxPerMeter;
+            const ox = grid.origin.x, oy = grid.origin.y;
+            const ddx = cut.p2.x - cut.p1.x;
+            const ddy = cut.p2.y - cut.p1.y;
+            type Hit = { t: number; label: string; key: string };
+            const hits: Hit[] = [];
+            const axX = axisPositions(grid.spansX);
+            for (let i = 0; i < axX.length; i++) {
+              const planX = ox + axX[i] * ppm;
+              if (Math.abs(ddx) < 1e-6) continue;
+              const t = (planX - cut.p1.x) / ddx;
+              if (t < -0.001 || t > 1.001) continue;
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabel(i), key: `gx${i}` });
+            }
+            const axY = axisPositions(grid.spansY);
+            for (let j = 0; j < axY.length; j++) {
+              const planY = oy + axY[j] * ppm;
+              if (Math.abs(ddy) < 1e-6) continue;
+              const t = (planY - cut.p1.y) / ddy;
+              if (t < -0.001 || t > 1.001) continue;
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabel(j), key: `gy${j}` });
+            }
+            if (!hits.length) return null;
+            const yTopPx = my(maxMdpl);
+            const yBotPx = my(minMdpl);
+            const yBub = my(minMdpl) + 64;
+            const rBub = 7;
+            return (
+              <g pointerEvents="none">
+                {hits.map((h) => {
+                  const sx = mx(h.t * cutLenM);
+                  return (
+                    <g key={h.key}>
+                      <line x1={sx} y1={yTopPx} x2={sx} y2={yBub - rBub}
+                        stroke="#0a0a0a" strokeWidth={0.3}
+                        strokeDasharray="6 3 1 3" />
+                      <circle cx={sx} cy={yBub} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.4} />
+                      <text x={sx} y={yBub} textAnchor="middle" dominantBaseline="central"
+                        fontSize={7} fontWeight={700} fill="#0a0a0a"
+                        style={{ fontFamily: "Sora, sans-serif" }}>
+                        {h.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
         </svg>
       </div>
       <div style={{ fontSize: 11, color: "#444", textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
