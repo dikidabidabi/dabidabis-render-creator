@@ -2231,13 +2231,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const ys = posY.map((m) => oy + m * ppm);
         const xMin = xs[0], xMax = xs[xs.length - 1];
         const yMin = ys[0], yMax = ys[ys.length - 1];
-        const bubbleOff = 28 / s;
-        const bubbleR = 14 / s;
+        const bubbleOff = 22 / s;
+        const bubbleR = 7 / s;
 
         // Garis as dash-dot
         ctx.save();
         ctx.strokeStyle = "rgba(20,20,20,0.85)";
-        ctx.lineWidth = 0.8 / s;
+        ctx.lineWidth = 0.4 / s;
         ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
         ctx.beginPath();
         for (const x of xs) {
@@ -2252,7 +2252,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.setLineDash([]);
 
         // Bubbles
-        ctx.font = `600 ${11 / s}px var(--font-display), sans-serif`;
+        ctx.font = `600 ${7 / s}px var(--font-display), sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         for (let i = 0; i < xs.length; i++) {
@@ -2261,7 +2261,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.arc(xs[i], yEnd, bubbleR, 0, Math.PI * 2);
             ctx.fillStyle = "#fff";
             ctx.fill();
-            ctx.lineWidth = 0.8 / s;
+            ctx.lineWidth = 0.4 / s;
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
@@ -2274,7 +2274,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.arc(xEnd, ys[j], bubbleR, 0, Math.PI * 2);
             ctx.fillStyle = "#fff";
             ctx.fill();
-            ctx.lineWidth = 0.8 / s;
+            ctx.lineWidth = 0.4 / s;
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
