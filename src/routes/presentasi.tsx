@@ -129,6 +129,7 @@ function roomExtrudeOverride(name: string): { height: number; baseDelta: number 
   if (isAtapHijau(name)) return { height: 0.5, baseDelta: 0 };
   if (isBalkon(name)) return { height: 0.1, baseDelta: -0.1 };
   if (isAtap(name)) return { height: 0.2, baseDelta: -0.2 };
+  if (isTaman(name)) return { height: 0.1, baseDelta: 0 };
   return null;
 }
 
@@ -1698,16 +1699,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             <text x={mx(cutLenM)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>A'</text>
           </g>
 
-          {/* Skala panjang potongan */}
-          <g>
-            <line x1={mx(0)} y1={my(minMdpl) + 28} x2={mx(cutLenM)} y2={my(minMdpl) + 28} stroke="#111" strokeWidth={0.8} />
-            <line x1={mx(0)} y1={my(minMdpl) + 24} x2={mx(0)} y2={my(minMdpl) + 32} stroke="#111" strokeWidth={0.8} />
-            <line x1={mx(cutLenM)} y1={my(minMdpl) + 24} x2={mx(cutLenM)} y2={my(minMdpl) + 32} stroke="#111" strokeWidth={0.8} />
-            <text x={(mx(0) + mx(cutLenM)) / 2} y={my(minMdpl) + 44} fontSize={10} textAnchor="middle" fill="#111"
-              style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
-              Panjang potongan: {cutLenM.toFixed(2)} m
-            </text>
-          </g>
+          {/* Skala panjang potongan dihapus — diganti dimensi bentang grid */}
 
           {/* Grid struktur vertikal — diproyeksikan ke garis potongan (semua grid aktif) */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
@@ -1737,6 +1729,18 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const yTopPx = my(maxMdpl);
             const yBub = my(minMdpl) + 64;
             const rBub = 7;
+            // Sort hits by t, dedupe near-identical positions, dan hitung
+            // bentang antar buble (mm) untuk ditampilkan di antara buble.
+            const sorted = [...hits].sort((a, b) => a.t - b.t);
+            const dims: Array<{ x: number; mm: number }> = [];
+            for (let i = 0; i < sorted.length - 1; i++) {
+              const a = sorted[i], b = sorted[i + 1];
+              const dM = (b.t - a.t) * cutLenM;
+              if (dM <= 0.05) continue;
+              const xa = mx(a.t * cutLenM);
+              const xb = mx(b.t * cutLenM);
+              dims.push({ x: (xa + xb) / 2, mm: Math.round(dM * 1000) });
+            }
             return (
               <g key={`sg-${gIdx}`} pointerEvents="none">
                 {hits.map((h) => {
@@ -1756,6 +1760,15 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                     </g>
                   );
                 })}
+                {dims.map((d, i) => (
+                  <text key={`gd-${gIdx}-${i}`} x={d.x} y={yBub + rBub + 12}
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize={9} fontWeight={600} fill="#0a0a0a"
+                    style={{ fontFamily: "Manrope, sans-serif",
+                      paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: 3 } as React.CSSProperties}>
+                    {d.mm}
+                  </text>
+                ))}
               </g>
             );
           })}
