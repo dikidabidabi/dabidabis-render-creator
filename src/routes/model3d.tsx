@@ -42,6 +42,7 @@ import {
   isNodeActive,
   isColumnClipped,
   levelInRange,
+  collectGrids,
 } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/model3d")({
