@@ -1376,7 +1376,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const TYPICAL_H = 3;
   type LvlBox = {
     id: string; name: string; baseM: number; topM: number; count: number; floorH: number;
-    slices: Array<{ x0: number; x1: number; name: string; color: string }>;
+    slices: Array<{ x0: number; x1: number; name: string; color: string; heightOverride?: number; baseDelta?: number }>;
   };
   // Gunakan expand untuk turunkan tinggi tiap lantai sesuai MDPL gap (k=1) atau
   // typicalHeight (k>1). Lalu group balik per sourceId untuk gambar 1 box per level.
