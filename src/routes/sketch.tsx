@@ -370,7 +370,18 @@ function isVoidLayerName(n: string) {
 function isTamanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("taman");
 }
+function isBalkonLayerName(n: string) {
+  return n.trim().toLowerCase() === "balkon";
+}
+function isAtapHijauLayerName(n: string) {
+  return n.trim().toLowerCase() === "atap hijau";
+}
+function isAtapLayerName(n: string) {
+  return n.trim().toLowerCase() === "atap";
+}
 const TAMAN_FILL_RGBA = "rgba(34, 197, 94, ALPHA)";
+const ATAP_HIJAU_FILL_RGBA = "rgba(34, 197, 94, ALPHA)";
+const ABU_MUDA_FILL_RGBA = "rgba(190, 190, 190, ALPHA)";
 
 const DEFAULT_GSB_M = 4;
 function getGsbMeters(layer: Layer, sideIndex: number): number {
