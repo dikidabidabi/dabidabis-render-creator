@@ -258,6 +258,8 @@ type Stats = {
   ktbRencanaM2: number; // total ruang di LT B1
   jumlahLapis: number;
   ketinggianM: number;
+  totalKolom: number;
+  volumeBetonM3: number;
 };
 
 function computeStats(sk: Sketch): Stats {
