@@ -918,26 +918,30 @@ function computeStats(sk: Sketch): Stats {
 
 // ============= SLIDE CONTENT (white A3 modern theme) =============
 
-const SLIDE_SCALE_KEY = "dabidabis_slidescale_v1";
-function loadSlideScale(id: string): number | null {
+const SLIDE_VIEW_KEY = "dabidabis_slideview_v2";
+type SlideView = { scale: number; tx: number; ty: number };
+function loadSlideView(id: string): SlideView | null {
   try {
-    const raw = localStorage.getItem(SLIDE_SCALE_KEY);
+    const raw = localStorage.getItem(SLIDE_VIEW_KEY);
     if (!raw) return null;
     const v = JSON.parse(raw);
-    const n = v?.[id];
-    return typeof n === "number" && Number.isFinite(n) ? n : null;
+    const s = v?.[id];
+    if (!s) return null;
+    if (typeof s.scale === "number" && typeof s.tx === "number" && typeof s.ty === "number") return s;
+    return null;
   } catch { return null; }
 }
-function saveSlideScale(id: string, scale: number | null) {
+function saveSlideView(id: string, view: SlideView | null) {
   try {
-    const raw = localStorage.getItem(SLIDE_SCALE_KEY);
+    const raw = localStorage.getItem(SLIDE_VIEW_KEY);
     const v = raw ? JSON.parse(raw) : {};
-    if (scale == null) delete v[id]; else v[id] = scale;
-    localStorage.setItem(SLIDE_SCALE_KEY, JSON.stringify(v));
+    if (view == null) delete v[id]; else v[id] = view;
+    localStorage.setItem(SLIDE_VIEW_KEY, JSON.stringify(v));
   } catch { /* ignore */ }
 }
 
-// Scales children to fit; user can drag the bottom-right handle to scale manually.
+// Default: fit-to-box, centered. User can drag (1 finger / mouse) to pan,
+// pinch with 2 fingers (or Ctrl+wheel) to zoom. Double-click to reset.
 function ManualScaleBox({
   slideId, children, style,
 }: { slideId: string; children: React.ReactNode; style?: React.CSSProperties }) {
@@ -945,14 +949,12 @@ function ManualScaleBox({
   const innerRef = useRef<HTMLDivElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [fitScale, setFitScale] = useState(1);
-  const [userScale, setUserScale] = useState<number | null>(() => loadSlideScale(slideId));
-  const scaleRef = useRef<number>(1);
+  const [view, setView] = useState<SlideView | null>(() => loadSlideView(slideId));
+  const viewRef = useRef<SlideView | null>(view);
+  viewRef.current = view;
 
-  useEffect(() => { setUserScale(loadSlideScale(slideId)); }, [slideId]);
+  useEffect(() => { setView(loadSlideView(slideId)); }, [slideId]);
 
-  // Measure ONCE on mount (and when slideId changes). Slides are static:
-  // no ResizeObserver, no auto re-fit on data change. Only the user's manual
-  // drag handle can change scale after the initial fit.
   useEffect(() => {
     if (!boxRef.current || !innerRef.current) return;
     let raf1 = 0, raf2 = 0;
@@ -969,90 +971,154 @@ function ManualScaleBox({
       setNatural({ w: cw, h: ch });
       setFitScale(Math.min(1, box.width / cw, box.height / ch));
     };
-    // Two RAFs to let fonts/images settle before measuring once.
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(measure);
-    });
+    raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(measure); });
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
   }, [slideId]);
 
+  const scale = view?.scale ?? fitScale;
+  const tx = view?.tx ?? 0;
+  const ty = view?.ty ?? 0;
 
-  const scale = userScale ?? fitScale;
-  scaleRef.current = scale;
+  // Pointer-based pan + pinch
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const gestureRef = useRef<{
+    startView: SlideView;
+    startDist?: number;
+    startMid?: { x: number; y: number };
+    startCenter?: { x: number; y: number }; // pointer in box coords at gesture start
+  } | null>(null);
 
-  const startDrag = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!natural || !boxRef.current) return;
-    const boxRect = boxRef.current.getBoundingClientRect();
-    const move = (ev: PointerEvent) => {
-      const cx = ev.clientX - boxRect.left;
-      const cy = ev.clientY - boxRect.top;
-      const sx = cx / natural.w;
-      const sy = cy / natural.h;
-      const ns = Math.max(0.1, Math.min(4, Math.min(sx, sy)));
-      scaleRef.current = ns;
-      setUserScale(ns);
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      saveSlideScale(slideId, scaleRef.current);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+  const currentView = (): SlideView => viewRef.current ?? { scale: fitScale, tx: 0, ty: 0 };
+
+  const boxRect = () => boxRef.current?.getBoundingClientRect();
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!boxRef.current || !natural) return;
+    boxRef.current.setPointerCapture(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = Array.from(pointersRef.current.values());
+    const v = currentView();
+    if (pts.length === 1) {
+      gestureRef.current = { startView: v, startCenter: { x: pts[0].x, y: pts[0].y } };
+    } else if (pts.length === 2) {
+      const dx = pts[1].x - pts[0].x;
+      const dy = pts[1].y - pts[0].y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      gestureRef.current = { startView: v, startDist: dist, startMid: mid, startCenter: mid };
+    }
   };
 
-  const resetScale = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setUserScale(null);
-    saveSlideScale(slideId, null);
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = Array.from(pointersRef.current.values());
+    const g = gestureRef.current;
+    if (!g || !natural) return;
+    const rect = boxRect();
+    if (!rect) return;
+    if (pts.length === 1 && g.startCenter) {
+      // Pan
+      const dx = pts[0].x - g.startCenter.x;
+      const dy = pts[0].y - g.startCenter.y;
+      const next = { scale: g.startView.scale, tx: g.startView.tx + dx, ty: g.startView.ty + dy };
+      setView(next);
+      viewRef.current = next;
+    } else if (pts.length >= 2 && g.startDist && g.startMid) {
+      const dx = pts[1].x - pts[0].x;
+      const dy = pts[1].y - pts[0].y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const ratio = dist / g.startDist;
+      const newScale = Math.max(0.1, Math.min(6, g.startView.scale * ratio));
+      // Keep gesture midpoint anchored
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      // Convert start mid (box coord) to inner-untranslated coord at startView
+      const cxBox = g.startMid.x - rect.left - rect.width / 2;
+      const cyBox = g.startMid.y - rect.top - rect.height / 2;
+      // Anchor: keep that inner point under the current mid pointer
+      const sRatio = newScale / g.startView.scale;
+      const tx = (g.startView.tx - cxBox) * sRatio + (mid.x - rect.left - rect.width / 2);
+      const ty = (g.startView.ty - cyBox) * sRatio + (mid.y - rect.top - rect.height / 2);
+      const next = { scale: newScale, tx, ty };
+      setView(next);
+      viewRef.current = next;
+    }
   };
 
-  const displayW = natural ? natural.w * scale : 0;
-  const displayH = natural ? natural.h * scale : 0;
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size === 0) {
+      gestureRef.current = null;
+      saveSlideView(slideId, viewRef.current);
+    } else {
+      // Recalibrate remaining gesture
+      const pts = Array.from(pointersRef.current.values());
+      const v = currentView();
+      if (pts.length === 1) {
+        gestureRef.current = { startView: v, startCenter: { x: pts[0].x, y: pts[0].y } };
+      }
+    }
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return; // only ctrl-wheel zooms; normal wheel scrolls page
+    e.preventDefault();
+    const rect = boxRect();
+    if (!rect) return;
+    const v = currentView();
+    const ratio = Math.exp(-e.deltaY * 0.0015);
+    const newScale = Math.max(0.1, Math.min(6, v.scale * ratio));
+    const cx = e.clientX - rect.left - rect.width / 2;
+    const cy = e.clientY - rect.top - rect.height / 2;
+    const sRatio = newScale / v.scale;
+    const tx = (v.tx - cx) * sRatio + cx;
+    const ty = (v.ty - cy) * sRatio + cy;
+    const next = { scale: newScale, tx, ty };
+    setView(next);
+    viewRef.current = next;
+    saveSlideView(slideId, next);
+  };
+
+  const reset = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setView(null);
+    viewRef.current = null;
+    saveSlideView(slideId, null);
+  };
 
   return (
-    <div ref={boxRef} style={{ ...style, position: "relative", overflow: "hidden" }}>
-      <div
-        ref={innerRef}
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: natural ? natural.w : "100%",
-          height: natural ? natural.h : "100%",
-          display: "flex",
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
-        }}
-      >
-        {children}
-      </div>
-      {natural && (
+    <div
+      ref={boxRef}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onWheel={onWheel}
+      onDoubleClick={reset}
+      title="Tarik untuk geser · Cubit 2 jari untuk zoom · Klik dua kali untuk reset"
+      style={{
+        ...style,
+        position: "relative",
+        overflow: "hidden",
+        touchAction: "none",
+        cursor: pointersRef.current.size > 0 ? "grabbing" : "grab",
+      }}
+    >
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div
-          className="no-print slide-scale-handle"
-          onPointerDown={startDrag}
-          onDoubleClick={resetScale}
-          title="Tarik untuk skala manual · Klik dua kali untuk reset"
+          ref={innerRef}
           style={{
-            position: "absolute",
-            left: displayW - 18,
-            top: displayH - 18,
-            width: 22,
-            height: 22,
-            cursor: "nwse-resize",
-            background: "linear-gradient(135deg, transparent 0 50%, #111 50% 60%, transparent 60% 70%, #111 70% 80%, transparent 80%)",
-            border: "1px solid rgba(0,0,0,0.35)",
-            borderRadius: 3,
-            backgroundColor: "rgba(255,255,255,0.85)",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
-            zIndex: 10,
-            touchAction: "none",
+            width: natural ? natural.w : "100%",
+            height: natural ? natural.h : "100%",
+            transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
+            transformOrigin: "center center",
+            flexShrink: 0,
           }}
-        />
-      )}
+        >
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
