@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { type StructuralGrid, computeStructuralStats } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/tabulasi")({
   head: () => ({
