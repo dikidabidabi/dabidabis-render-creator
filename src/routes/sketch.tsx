@@ -1436,6 +1436,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
 
+  // Grid Struktur stylus drag — geser origin atau expand dari 4 sudut.
+  type GridDrag =
+    | { kind: "move"; startWorld: Point; startOrigin: Point }
+    | {
+        kind: "corner";
+        corner: "tl" | "tr" | "bl" | "br";
+        startWorld: Point;
+        startOrigin: Point;
+        startSpansX: number[];
+        startSpansY: number[];
+        unit: number;
+      };
+  const [gridDrag, setGridDrag] = useState<GridDrag | null>(null);
+
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
   const [past, setPast] = useState<Snap[]>([]);
