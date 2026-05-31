@@ -544,7 +544,19 @@ function InfographicSection({ data, sketch }: { data: Stats; sketch: Sketch }) {
           value={klbUsage}
           caption={data.klbLimitM2 > 0 ? `${fmt(data.klbRencanaM2, 0)} / ${fmt(data.klbLimitM2, 0)} m²` : "Belum diatur"}
         />
+        <RingStat
+          label="KDH"
+          value={kdhUsage}
+          invert
+          caption={data.kdhLimitM2 > 0 ? `${fmt(data.kdhRencanaM2, 0)} / ${fmt(data.kdhLimitM2, 0)} m²` : "Belum diatur"}
+        />
+        <RingStat
+          label="KTB"
+          value={ktbUsage}
+          caption={data.ktbLimitM2 > 0 ? `${fmt(data.ktbRencanaM2, 0)} / ${fmt(data.ktbLimitM2, 0)} m²` : "Belum diatur"}
+        />
       </div>
+
 
       {perLevel.length > 0 && (
         <div>
