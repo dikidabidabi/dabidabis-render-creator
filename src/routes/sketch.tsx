@@ -343,6 +343,10 @@ function isLahanLayerName(n: string) {
 function isVoidLayerName(n: string) {
   return n.trim().toLowerCase() === "void";
 }
+function isTamanLayerName(n: string) {
+  return n.trim().toLowerCase().startsWith("taman");
+}
+const TAMAN_FILL_RGBA = "rgba(34, 197, 94, ALPHA)";
 
 const DEFAULT_GSB_M = 4;
 function getGsbMeters(layer: Layer, sideIndex: number): number {
