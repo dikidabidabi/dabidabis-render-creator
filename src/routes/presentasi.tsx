@@ -25,6 +25,7 @@ import {
   axisPositions,
   spansForLevel,
   isNodeActive,
+  isColumnClipped,
   levelInRange,
   xAxisLabel,
   yAxisLabel,
@@ -1932,15 +1933,17 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   );
                 })}
 
-                {/* Kolom hitam pada tiap titik temu */}
-                {xs.flatMap((x, i) => ys.map((y, j) => (
-                  isNodeActive(grid, level.id, i, j) ? (
+                {/* Kolom hitam pada tiap titik temu (skip area clip) */}
+                {xs.flatMap((x, i) => ys.map((y, j) => {
+                  if (!isNodeActive(grid, level.id, i, j)) return null;
+                  if (isColumnClipped(grid, xsM[i], zsM[j])) return null;
+                  return (
                     <rect key={`col-${i}-${j}`}
                       x={x - colPx / 2} y={y - colPx / 2}
                       width={colPx} height={colPx}
                       fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
-                  ) : null
-                )))}
+                  );
+                }))}
               </g>
             );
           })()}

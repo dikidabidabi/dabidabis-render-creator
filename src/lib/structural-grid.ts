@@ -13,6 +13,14 @@ export type GridOverride = {
   spansY?: number[];            // override bentang sumbu Y
 };
 
+// Poligon perimeter untuk menyembunyikan kolom di area tertentu.
+// Titik disimpan dalam METER relatif terhadap grid.origin agar konsisten
+// di seluruh renderer (sketch / model 3D / presentasi).
+export type ColumnClip = {
+  id: string;
+  pts: Array<{ x: number; y: number }>;
+};
+
 export type StructuralGrid = {
   enabled: boolean;
   origin: { x: number; y: number };     // titik (0,0) grid di koordinat kanvas (px world)
@@ -22,6 +30,7 @@ export type StructuralGrid = {
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
+  columnClips?: ColumnClip[];            // poligon area yang menyembunyikan kolom
 };
 
 export const SPAN_PRESETS = [6, 7.2, 8, 9] as const;
@@ -55,6 +64,21 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
       };
     }
   }
+  const clips: ColumnClip[] = [];
+  if (Array.isArray(g.columnClips)) {
+    for (const c of g.columnClips) {
+      if (!c || !Array.isArray(c.pts)) continue;
+      const pts = c.pts
+        .map((p: any) => ({ x: Number(p?.x), y: Number(p?.y) }))
+        .filter((p: any) => Number.isFinite(p.x) && Number.isFinite(p.y));
+      if (pts.length >= 3) {
+        clips.push({
+          id: typeof c.id === "string" && c.id ? c.id : `clip-${Math.random().toString(36).slice(2, 8)}`,
+          pts,
+        });
+      }
+    }
+  }
   return {
     enabled: Boolean(g.enabled),
     origin: {
@@ -67,6 +91,7 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     fromLevelId: typeof g.fromLevelId === "string" ? g.fromLevelId : undefined,
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
+    columnClips: clips.length ? clips : undefined,
   };
 }
 
@@ -120,6 +145,54 @@ export function isNodeActive(
   return !dis.includes(`${i},${j}`);
 }
 
+// Ray-cast point in polygon (poligon koordinat meter relatif origin).
+function pointInPoly(px: number, py: number, poly: Array<{ x: number; y: number }>): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect =
+      ((yi > py) !== (yj > py)) &&
+      (px < ((xj - xi) * (py - yi)) / (yj - yi + 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Apakah kolom pada koordinat meter (mx,my) relatif grid.origin tersembunyi
+// oleh salah satu clip polygon.
+export function isColumnClipped(
+  grid: StructuralGrid,
+  mx: number,
+  my: number,
+): boolean {
+  const clips = grid.columnClips;
+  if (!clips || !clips.length) return false;
+  for (const c of clips) {
+    if (c.pts.length >= 3 && pointInPoly(mx, my, c.pts)) return true;
+  }
+  return false;
+}
+
+// Apakah kolom pada node (i,j) level tertentu ditampilkan (gabungan
+// disabled-node + clip polygon).
+export function isColumnVisible(
+  grid: StructuralGrid,
+  levelId: string | undefined,
+  i: number,
+  j: number,
+  spansX?: number[],
+  spansY?: number[],
+): boolean {
+  if (!isNodeActive(grid, levelId, i, j)) return false;
+  const sx = spansX ?? grid.spansX;
+  const sy = spansY ?? grid.spansY;
+  const mx = axisPositions(sx)[i];
+  const my = axisPositions(sy)[j];
+  if (mx == null || my == null) return true;
+  return !isColumnClipped(grid, mx, my);
+}
+
 // Apakah `levelMdpl` tercakup dalam range [fromLevelId..toLevelId] berdasarkan
 // urutan MDPL ascending. Jika range tidak diset → berlaku untuk semua level
 // di atas (atau sama dengan) MDPL 0 sebagai default praktis.
@@ -160,9 +233,13 @@ export function computeStructuralStats(
     const { spansX, spansY } = spansForLevel(grid, lv.id);
     const nx = spansX.length + 1;
     const ny = spansY.length + 1;
-    const dis = grid.perLevel?.[lv.id]?.disabledNodes ?? [];
-    const disabledCount = dis.length;
-    const nodes = Math.max(0, nx * ny - disabledCount);
+    let active = 0;
+    for (let jj = 0; jj < ny; jj++) {
+      for (let ii = 0; ii < nx; ii++) {
+        if (isColumnVisible(grid, lv.id, ii, jj, spansX, spansY)) active++;
+      }
+    }
+    const nodes = active;
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
     const h = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
       ? Number(lv.typicalHeight)

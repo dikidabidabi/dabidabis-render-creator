@@ -69,8 +69,10 @@ import {
   yAxisLabel,
   spansForLevel,
   isNodeActive,
+  isColumnClipped,
   levelInRange,
   computeStructuralStats,
+  type ColumnClip,
 } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/sketch")({
@@ -1555,6 +1557,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       };
   const [gridDrag, setGridDrag] = useState<GridDrag | null>(null);
 
+  // Grid Struktur — edit kolom: clip polygon (sembunyikan kolom di area)
+  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip">("expand");
+  type ClipDrag = {
+    clipId: string;        // id clip (atau "__draft__" jika polygon belum di-commit)
+    idx: number;           // index titik yang di-drag
+    moved: boolean;
+    startScreen: Point;
+  };
+  const [clipDraft, setClipDraft] = useState<{ pts: Point[] } | null>(null); // titik dalam METER relatif origin
+  const [clipDrag, setClipDrag] = useState<ClipDrag | null>(null);
+
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
   const [past, setPast] = useState<Snap[]>([]);
@@ -2282,8 +2295,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
         }
 
-        // Kolom hitam padat di tiap titik potong
+        // Kolom hitam padat di tiap titik potong (skip area clip)
         const colPx = (grid.colSizeCm / 100) * ppm;
+        const posXM = axisPositions(spansX);
+        const posYM = axisPositions(spansY);
         ctx.fillStyle = "#0a0a0a";
         for (let j = 0; j < ys.length; j++) {
           for (let i = 0; i < xs.length; i++) {
@@ -2300,7 +2315,67 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               ctx.restore();
               continue;
             }
+            if (isColumnClipped(grid, posXM[i], posYM[j])) {
+              // clipped marker (titik kecil agar terlihat lokasinya saat edit)
+              if (tool === "grid") {
+                ctx.save();
+                ctx.strokeStyle = "rgba(232,93,58,0.55)";
+                ctx.setLineDash([2 / s, 2 / s]);
+                ctx.lineWidth = 0.6 / s;
+                ctx.strokeRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+                ctx.restore();
+              }
+              continue;
+            }
             ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+          }
+        }
+
+        // Render clip polygons (dan draft) saat tool grid aktif
+        if (tool === "grid") {
+          const allClips: Array<{ id: string; pts: Point[]; isDraft: boolean }> = [];
+          for (const c of grid.columnClips ?? []) {
+            allClips.push({
+              id: c.id,
+              pts: c.pts.map((p) => ({ x: ox + p.x * ppm, y: oy + p.y * ppm })),
+              isDraft: false,
+            });
+          }
+          if (clipDraft && clipDraft.pts.length) {
+            allClips.push({
+              id: "__draft__",
+              pts: clipDraft.pts.map((p) => ({ x: ox + p.x * ppm, y: oy + p.y * ppm })),
+              isDraft: true,
+            });
+          }
+          for (const cp of allClips) {
+            if (cp.pts.length === 0) continue;
+            ctx.save();
+            ctx.fillStyle = cp.isDraft
+              ? "rgba(232,93,58,0.12)"
+              : "rgba(232,93,58,0.18)";
+            ctx.strokeStyle = "rgba(232,93,58,0.95)";
+            ctx.lineWidth = 1.2 / s;
+            if (cp.isDraft) ctx.setLineDash([6 / s, 4 / s]);
+            ctx.beginPath();
+            ctx.moveTo(cp.pts[0].x, cp.pts[0].y);
+            for (let k = 1; k < cp.pts.length; k++) ctx.lineTo(cp.pts[k].x, cp.pts[k].y);
+            if (cp.pts.length >= 3) ctx.closePath();
+            if (cp.pts.length >= 3) ctx.fill();
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // handle titik
+            const hR = 6 / s;
+            for (const p of cp.pts) {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, hR, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.strokeStyle = "rgba(232,93,58,0.95)";
+              ctx.lineWidth = 1.2 / s;
+              ctx.stroke();
+            }
+            ctx.restore();
           }
         }
 
@@ -2413,7 +2488,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, tileTick, onTileLoad, grid]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, tileTick, onTileLoad, grid, clipDraft, gridEditMode]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -3054,6 +3129,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const p = getWorldPos(e);
     if (tool === "grid") {
       const raw = getWorldPosRaw(e);
+      // -------- MODE: edit kolom (clip polygon) --------
+      if (gridEditMode === "clip") {
+        const ppm = pxPerMeter;
+        const ox = grid.origin.x, oy = grid.origin.y;
+        const tolPx = 14 / view.s;
+        // 1) hit-test handle pada clip yang sudah ada atau draft
+        type Hit = { clipId: string; idx: number; d: number };
+        const hits: Hit[] = [];
+        const collect = (clipId: string, ptsM: Array<{x:number;y:number}>) => {
+          for (let i = 0; i < ptsM.length; i++) {
+            const wx = ox + ptsM[i].x * ppm;
+            const wy = oy + ptsM[i].y * ppm;
+            const d = Math.hypot(raw.x - wx, raw.y - wy);
+            if (d <= tolPx) hits.push({ clipId, idx: i, d });
+          }
+        };
+        for (const c of grid.columnClips ?? []) collect(c.id, c.pts);
+        if (clipDraft) collect("__draft__", clipDraft.pts);
+        hits.sort((a, b) => a.d - b.d);
+        const best = hits[0];
+        if (best) {
+          setClipDrag({
+            clipId: best.clipId,
+            idx: best.idx,
+            moved: false,
+            startScreen: getScreenPos(e),
+          });
+          return;
+        }
+        // 2) klik di area kosong → tambah titik ke draft (commit pas pointerUp tanpa drag)
+        setClipDrag({
+          clipId: "__add__",
+          idx: -1,
+          moved: false,
+          startScreen: getScreenPos(e),
+        });
+        return;
+      }
+      // -------- MODE: expand (default) --------
       const corner = hitGridCorner(raw);
       const b = gridBounds();
       if (corner && b) {
@@ -3213,6 +3327,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (clipDrag && clipDrag.idx >= 0) {
+      const raw = getWorldPosRaw(e);
+      const ppm = pxPerMeter;
+      const mx = (raw.x - grid.origin.x) / ppm;
+      const my = (raw.y - grid.origin.y) / ppm;
+      const sp = getScreenPos(e);
+      const moved = Math.hypot(sp.x - clipDrag.startScreen.x, sp.y - clipDrag.startScreen.y) > 4;
+      if (clipDrag.clipId === "__draft__") {
+        if (clipDraft) {
+          const next = clipDraft.pts.slice();
+          next[clipDrag.idx] = { x: mx, y: my };
+          setClipDraft({ pts: next });
+        }
+      } else {
+        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+        const clips = (cur.columnClips ?? []).map((c) => {
+          if (c.id !== clipDrag.clipId) return c;
+          const pts = c.pts.slice();
+          pts[clipDrag.idx] = { x: mx, y: my };
+          return { ...c, pts };
+        });
+        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+      }
+      if (moved && !clipDrag.moved) setClipDrag({ ...clipDrag, moved: true });
+      return;
+    }
+
     if (editDrag) {
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
@@ -3299,6 +3440,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setGridDrag(null);
       return;
     }
+    if (clipDrag) {
+      const cd = clipDrag;
+      setClipDrag(null);
+      // Tap statis (tidak digeser) di area kosong → tambah titik ke draft
+      if (cd.clipId === "__add__" && !cd.moved) {
+        const raw = getWorldPosRaw(e);
+        const mx = (raw.x - grid.origin.x) / pxPerMeter;
+        const my = (raw.y - grid.origin.y) / pxPerMeter;
+        const draft = clipDraft ?? { pts: [] };
+        setClipDraft({ pts: [...draft.pts, { x: mx, y: my }] });
+      }
+      return;
+    }
     if (draggingHandle) {
       setDraggingHandle(null);
       return;
@@ -3372,6 +3526,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setEditDrag(null);
     setPolyDraft(null);
     setGridDrag(null);
+    setClipDrag(null);
   };
 
   const handleUndo = () => {
@@ -4005,6 +4160,106 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   onChange={(e) => updateGrid({ colSizeCm: Math.max(5, Number(e.target.value) || 50) })}
                 />
               </div>
+            </div>
+            {/* ===== Edit Kolom (Clip Polygon) ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Edit Kolom</Label>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "expand" ? "default" : "outline"}
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => { setGridEditMode("expand"); setClipDraft(null); }}
+                  >
+                    Bentang
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "clip" ? "default" : "outline"}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "clip" && "bg-gradient-ember shadow-ember")}
+                    onClick={() => setGridEditMode("clip")}
+                  >
+                    Clip Kolom
+                  </Button>
+                </div>
+              </div>
+              {gridEditMode === "clip" && (
+                <>
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    Tap di kanvas untuk menambah titik perimeter. Geser titik untuk mengatur bentuk. Setelah ≥3 titik, tekan <span className="font-medium text-foreground">Simpan Area</span> untuk menyembunyikan kolom di dalam area.
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px]"
+                      onClick={() => {
+                        if (!clipDraft || clipDraft.pts.length < 3) {
+                          toast.error("Butuh minimal 3 titik");
+                          return;
+                        }
+                        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                        const newClip: ColumnClip = {
+                          id: `clip-${Date.now().toString(36)}`,
+                          pts: clipDraft.pts.slice(),
+                        };
+                        const clips = [...(cur.columnClips ?? []), newClip];
+                        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+                        setClipDraft(null);
+                        toast.success("Area clip tersimpan");
+                      }}
+                      disabled={!clipDraft || clipDraft.pts.length < 3}
+                    >
+                      Simpan Area
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px]"
+                      onClick={() => {
+                        if (!clipDraft || !clipDraft.pts.length) return;
+                        setClipDraft({ pts: clipDraft.pts.slice(0, -1) });
+                      }}
+                      disabled={!clipDraft || !clipDraft.pts.length}
+                    >
+                      <X className="mr-1 h-3 w-3" /> Titik Terakhir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px]"
+                      onClick={() => setClipDraft(null)}
+                      disabled={!clipDraft}
+                    >
+                      Batal Draft
+                    </Button>
+                  </div>
+                  {(grid.columnClips ?? []).length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Area Clip ({grid.columnClips!.length})</div>
+                      {grid.columnClips!.map((c, idx) => (
+                        <div key={c.id} className="flex items-center justify-between gap-1.5 rounded border border-border/50 bg-surface/40 px-2 py-1">
+                          <span className="text-[11px]">Area {idx + 1} · {c.pts.length} titik</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px]"
+                            onClick={() => {
+                              const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                              const clips = (cur.columnClips ?? []).filter((x) => x.id !== c.id);
+                              onChange({ structuralGrid: { ...cur, columnClips: clips.length ? clips : undefined } });
+                            }}
+                            title="Hapus area"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="space-y-1">

@@ -40,6 +40,7 @@ import {
   axisPositions,
   spansForLevel,
   isNodeActive,
+  isColumnClipped,
   levelInRange,
 } from "@/lib/structural-grid";
 
@@ -342,6 +343,7 @@ function StructuralColumns({
       for (let i = 0; i < xs.length; i++) {
         for (let j = 0; j < zs.length; j++) {
           if (!isNodeActive(grid, lv.id, i, j)) continue;
+          if (isColumnClipped(grid, xs[i], zs[j])) continue;
           out.push({
             key: `${lv.id}_${i}_${j}`,
             x: ox + xs[i],
