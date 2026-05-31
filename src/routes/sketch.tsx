@@ -246,6 +246,7 @@ type Sketch = {
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
   sectionCut?: SectionCut; // legacy single cut (kompatibilitas)
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
+  structuralGrid?: StructuralGrid; // Modul Struktur parametric grid
 };
 
 type StoreShape = {
