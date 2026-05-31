@@ -3446,7 +3446,13 @@ function AxonometricView({
 
 function StackingBody({ sketch }: { sketch: Sketch }) {
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const groundLv = findMdplZeroLevel(levelsAsc) ?? levelsAsc[0];
+  const groundId = groundLv?.id;
+  // Taman di level dasar (MDPL 0 / LT 1) adalah lansekap, bukan luasan bangunan,
+  // sehingga tidak diakumulasi dengan ruang lain di level dasar.
+  const build = (sketch.layers ?? []).filter(
+    (l) => !isLahan(l.name) && !isVoid(l.name) && !(isTaman(l.name) && l.levelId === groundId),
+  );
   const displayNames = computeLevelDisplayNames(levelsAsc, sketch.layers ?? []);
 
   // Color map keyed by source level id (matches axonometric)
