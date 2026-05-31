@@ -1406,12 +1406,20 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
     const box = boxes.find((b) => b.id === layer.levelId);
     if (!box) continue;
     const intervals = cutPolygonIntervals(cut.p1, cut.p2, layer.points);
+    // Match 3D extrude rules for special rooms.
+    let heightOverride: number | undefined;
+    let baseDelta: number | undefined;
+    if (isAtap(layer.name)) continue; // no extrusion in 3D → no slice
+    if (isAtapHijau(layer.name)) { heightOverride = 0.5; baseDelta = 0; }
+    else if (isBalkon(layer.name)) { heightOverride = 0.1; baseDelta = -0.1; }
     for (const [t0, t1] of intervals) {
       box.slices.push({
         x0: t0 * cutLenM,
         x1: t1 * cutLenM,
         name: layer.name,
         color: roomFillOverride(layer.name, "0.55") ?? (layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)"),
+        heightOverride,
+        baseDelta,
       });
     }
   }
