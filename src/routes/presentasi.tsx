@@ -124,6 +124,13 @@ function roomStrokeOverride(name: string): string | null {
   if (isTaman(name)) return "rgb(22,163,74)";
   return null;
 }
+// Match Model 3D extrude rules: override height & base shift for named rooms.
+function roomExtrudeOverride(name: string): { height: number; baseDelta: number } | null {
+  if (isAtapHijau(name)) return { height: 0.5, baseDelta: 0 };
+  if (isBalkon(name)) return { height: 0.1, baseDelta: -0.1 };
+  if (isAtap(name)) return { height: 0.2, baseDelta: -0.2 };
+  return null;
+}
 
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
