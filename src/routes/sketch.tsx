@@ -4161,6 +4161,106 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 />
               </div>
             </div>
+            {/* ===== Edit Kolom (Clip Polygon) ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Edit Kolom</Label>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "expand" ? "default" : "outline"}
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => { setGridEditMode("expand"); setClipDraft(null); }}
+                  >
+                    Bentang
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "clip" ? "default" : "outline"}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "clip" && "bg-gradient-ember shadow-ember")}
+                    onClick={() => setGridEditMode("clip")}
+                  >
+                    Clip Kolom
+                  </Button>
+                </div>
+              </div>
+              {gridEditMode === "clip" && (
+                <>
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    Tap di kanvas untuk menambah titik perimeter. Geser titik untuk mengatur bentuk. Setelah ≥3 titik, tekan <span className="font-medium text-foreground">Simpan Area</span> untuk menyembunyikan kolom di dalam area.
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px]"
+                      onClick={() => {
+                        if (!clipDraft || clipDraft.pts.length < 3) {
+                          toast.error("Butuh minimal 3 titik");
+                          return;
+                        }
+                        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                        const newClip: ColumnClip = {
+                          id: `clip-${Date.now().toString(36)}`,
+                          pts: clipDraft.pts.slice(),
+                        };
+                        const clips = [...(cur.columnClips ?? []), newClip];
+                        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+                        setClipDraft(null);
+                        toast.success("Area clip tersimpan");
+                      }}
+                      disabled={!clipDraft || clipDraft.pts.length < 3}
+                    >
+                      Simpan Area
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px]"
+                      onClick={() => {
+                        if (!clipDraft || !clipDraft.pts.length) return;
+                        setClipDraft({ pts: clipDraft.pts.slice(0, -1) });
+                      }}
+                      disabled={!clipDraft || !clipDraft.pts.length}
+                    >
+                      <X className="mr-1 h-3 w-3" /> Titik Terakhir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px]"
+                      onClick={() => setClipDraft(null)}
+                      disabled={!clipDraft}
+                    >
+                      Batal Draft
+                    </Button>
+                  </div>
+                  {(grid.columnClips ?? []).length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Area Clip ({grid.columnClips!.length})</div>
+                      {grid.columnClips!.map((c, idx) => (
+                        <div key={c.id} className="flex items-center justify-between gap-1.5 rounded border border-border/50 bg-surface/40 px-2 py-1">
+                          <span className="text-[11px]">Area {idx + 1} · {c.pts.length} titik</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px]"
+                            onClick={() => {
+                              const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                              const clips = (cur.columnClips ?? []).filter((x) => x.id !== c.id);
+                              onChange({ structuralGrid: { ...cur, columnClips: clips.length ? clips : undefined } });
+                            }}
+                            title="Hapus area"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="space-y-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dari Level</Label>
