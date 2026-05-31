@@ -13,6 +13,14 @@ export type GridOverride = {
   spansY?: number[];            // override bentang sumbu Y
 };
 
+// Poligon perimeter untuk menyembunyikan kolom di area tertentu.
+// Titik disimpan dalam METER relatif terhadap grid.origin agar konsisten
+// di seluruh renderer (sketch / model 3D / presentasi).
+export type ColumnClip = {
+  id: string;
+  pts: Array<{ x: number; y: number }>;
+};
+
 export type StructuralGrid = {
   enabled: boolean;
   origin: { x: number; y: number };     // titik (0,0) grid di koordinat kanvas (px world)
@@ -22,6 +30,7 @@ export type StructuralGrid = {
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
+  columnClips?: ColumnClip[];            // poligon area yang menyembunyikan kolom
 };
 
 export const SPAN_PRESETS = [6, 7.2, 8, 9] as const;
