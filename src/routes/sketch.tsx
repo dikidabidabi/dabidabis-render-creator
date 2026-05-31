@@ -3065,6 +3065,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (gridDrag) {
+      const raw = getWorldPosRaw(e);
+      if (gridDrag.kind === "move") {
+        const dx = raw.x - gridDrag.startWorld.x;
+        const dy = raw.y - gridDrag.startWorld.y;
+        const next = snapOriginPx({ x: gridDrag.startOrigin.x + dx, y: gridDrag.startOrigin.y + dy });
+        if (next.x !== grid.origin.x || next.y !== grid.origin.y) updateGrid({ origin: next });
+      } else {
+        const dxm = (raw.x - gridDrag.startWorld.x) / pxPerMeter;
+        const dym = (raw.y - gridDrag.startWorld.y) / pxPerMeter;
+        const extX = gridDrag.corner === "tr" || gridDrag.corner === "br" ? 1 : -1;
+        const extY = gridDrag.corner === "bl" || gridDrag.corner === "br" ? 1 : -1;
+        const addX = Math.round((dxm * extX) / gridDrag.unit);
+        const addY = Math.round((dym * extY) / gridDrag.unit);
+        const newSpansX = adjustSpans(gridDrag.startSpansX, addX, gridDrag.unit, extX < 0);
+        const newSpansY = adjustSpans(gridDrag.startSpansY, addY, gridDrag.unit, extY < 0);
+        const actualAddX = newSpansX.length - gridDrag.startSpansX.length;
+        const actualAddY = newSpansY.length - gridDrag.startSpansY.length;
+        const newOriginX = extX < 0 ? gridDrag.startOrigin.x - actualAddX * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.x;
+        const newOriginY = extY < 0 ? gridDrag.startOrigin.y - actualAddY * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.y;
+        updateGrid({ spansX: newSpansX, spansY: newSpansY, origin: { x: newOriginX, y: newOriginY } });
+      }
+      return;
+    }
+
     if (editDrag) {
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
