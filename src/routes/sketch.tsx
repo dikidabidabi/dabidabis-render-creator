@@ -3327,6 +3327,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (clipDrag && clipDrag.idx >= 0) {
+      const raw = getWorldPosRaw(e);
+      const ppm = pxPerMeter;
+      const mx = (raw.x - grid.origin.x) / ppm;
+      const my = (raw.y - grid.origin.y) / ppm;
+      const sp = getScreenPos(e);
+      const moved = Math.hypot(sp.x - clipDrag.startScreen.x, sp.y - clipDrag.startScreen.y) > 4;
+      if (clipDrag.clipId === "__draft__") {
+        if (clipDraft) {
+          const next = clipDraft.pts.slice();
+          next[clipDrag.idx] = { x: mx, y: my };
+          setClipDraft({ pts: next });
+        }
+      } else {
+        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+        const clips = (cur.columnClips ?? []).map((c) => {
+          if (c.id !== clipDrag.clipId) return c;
+          const pts = c.pts.slice();
+          pts[clipDrag.idx] = { x: mx, y: my };
+          return { ...c, pts };
+        });
+        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+      }
+      if (moved && !clipDrag.moved) setClipDrag({ ...clipDrag, moved: true });
+      return;
+    }
+
     if (editDrag) {
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
