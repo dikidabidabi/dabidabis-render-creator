@@ -1875,7 +1875,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
 
   return (
     <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "relative", height: "100%", width: "auto", aspectRatio: `${w} / ${h}`, maxWidth: "100%", maxHeight: "100%" }}>
         <svg
           viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`}
           preserveAspectRatio="xMidYMid meet"
