@@ -30,6 +30,8 @@ import {
   xAxisLabel,
   yAxisLabel,
   computeStructuralStats,
+  computeAllStructuralStats,
+  collectGrids,
 } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/presentasi")({
