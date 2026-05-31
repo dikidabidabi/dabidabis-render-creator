@@ -1847,7 +1847,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const dimFs = sw * 0.0085;
             const dimGap = sw * 0.006;
             return (
-              <g pointerEvents="none">
+              <g key={`grid-${gIdx}`} pointerEvents="none">
                 {/* Vertikal (sumbu X) */}
                 {xs.map((x, i) => (
                   <g key={`gx-${i}`}>
