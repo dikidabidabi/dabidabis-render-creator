@@ -816,6 +816,7 @@ type Stats = {
   kdbRencanaM2: number; klbRencanaM2: number; kdhRencanaM2: number; ktbRencanaM2: number;
   jumlahLapis: number; ketinggianM: number;
   totalTerhitungM2: number;
+  totalKolom: number; volumeBetonM3: number;
 };
 
 function computeStats(sk: Sketch): Stats {
