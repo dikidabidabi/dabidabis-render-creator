@@ -64,6 +64,21 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
       };
     }
   }
+  const clips: ColumnClip[] = [];
+  if (Array.isArray(g.columnClips)) {
+    for (const c of g.columnClips) {
+      if (!c || !Array.isArray(c.pts)) continue;
+      const pts = c.pts
+        .map((p: any) => ({ x: Number(p?.x), y: Number(p?.y) }))
+        .filter((p: any) => Number.isFinite(p.x) && Number.isFinite(p.y));
+      if (pts.length >= 3) {
+        clips.push({
+          id: typeof c.id === "string" && c.id ? c.id : `clip-${Math.random().toString(36).slice(2, 8)}`,
+          pts,
+        });
+      }
+    }
+  }
   return {
     enabled: Boolean(g.enabled),
     origin: {
@@ -76,6 +91,7 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     fromLevelId: typeof g.fromLevelId === "string" ? g.fromLevelId : undefined,
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
+    columnClips: clips.length ? clips : undefined,
   };
 }
 
