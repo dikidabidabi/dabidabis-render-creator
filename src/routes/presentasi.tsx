@@ -1759,6 +1759,77 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               strokeLinecap="round"
             />
           ))}
+          {(() => {
+            const grid = sketch.structuralGrid;
+            if (!grid?.enabled) return null;
+            const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            if (!levelInRange(grid, level, allLv)) return null;
+            const { spansX, spansY } = spansForLevel(grid, level.id);
+            const xsM = axisPositions(spansX);
+            const zsM = axisPositions(spansY);
+            const ox = grid.origin.x;
+            const oy = grid.origin.y;
+            const xs = xsM.map((m) => ox + m * pxPerM);
+            const ys = zsM.map((m) => oy + m * pxPerM);
+            const x0 = xs[0], x1 = xs[xs.length - 1];
+            const y0 = ys[0], y1 = ys[ys.length - 1];
+            const ext = sw * 0.04;
+            const rBub = sw * 0.018;
+            const gridSW = sw * 0.0012; // lebih tipis dari garis potong (0.0014)
+            const dash = `${sw * 0.01} ${sw * 0.004} ${sw * 0.002} ${sw * 0.004}`;
+            const colPx = (grid.colSizeCm / 100) * pxPerM;
+            return (
+              <g pointerEvents="none">
+                {/* Vertikal (sumbu X) */}
+                {xs.map((x, i) => (
+                  <g key={`gx-${i}`}>
+                    <line x1={x} y1={y0 - ext} x2={x} y2={y1 + ext}
+                      stroke="#0a0a0a" strokeWidth={gridSW} strokeDasharray={dash} />
+                    <circle cx={x} cy={y0 - ext - rBub} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {xAxisLabel(i)}
+                    </text>
+                    <circle cx={x} cy={y1 + ext + rBub} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {xAxisLabel(i)}
+                    </text>
+                  </g>
+                ))}
+                {/* Horizontal (sumbu Y) */}
+                {ys.map((y, j) => (
+                  <g key={`gy-${j}`}>
+                    <line x1={x0 - ext} y1={y} x2={x1 + ext} y2={y}
+                      stroke="#0a0a0a" strokeWidth={gridSW} strokeDasharray={dash} />
+                    <circle cx={x0 - ext - rBub} cy={y} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {yAxisLabel(j)}
+                    </text>
+                    <circle cx={x1 + ext + rBub} cy={y} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {yAxisLabel(j)}
+                    </text>
+                  </g>
+                ))}
+                {/* Kolom hitam pada tiap titik temu */}
+                {xs.flatMap((x, i) => ys.map((y, j) => (
+                  isNodeActive(grid, level.id, i, j) ? (
+                    <rect key={`col-${i}-${j}`}
+                      x={x - colPx / 2} y={y - colPx / 2}
+                      width={colPx} height={colPx}
+                      fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
+                  ) : null
+                )))}
+              </g>
+            );
+          })()}
           {hull.length >= 2 && (() => {
             // Bounding box dari hull — dipakai sebagai acuan garis dimensi
             // tiap sisi (top/right/bottom/left) supaya semua label sejajar.
