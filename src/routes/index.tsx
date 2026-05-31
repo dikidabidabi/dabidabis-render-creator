@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, Image as ImageIcon, Sliders, Layers } from "lucide-react";
+import { ArrowRight, Sparkles, Image as ImageIcon, Sliders, Layers, CircleDot, PenTool, Box, Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+
 
 export const Route = createFileRoute("/")({
   component: Landing,
