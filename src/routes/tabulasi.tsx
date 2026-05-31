@@ -404,20 +404,30 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
   );
 }
 
-function DeviationRow({ dev }: { dev: number }) {
-  // dev = limit - rencana. negative => rencana > limit (kelebihan, merah, +)
+function DeviationRow({ dev, invert }: { dev: number; invert?: boolean }) {
+  // Default: dev = limit - rencana. negative => rencana > limit (kelebihan, merah, +)
+  // Invert (KDH): dev = rencana - limit. negative => rencana < limit (kurang, merah, −)
+  const good = invert ? dev >= 0 : dev >= 0;
   const exceed = dev < 0;
   const abs = Math.abs(dev);
+  const sign = invert
+    ? exceed
+      ? "−"
+      : "+"
+    : exceed
+      ? "+"
+      : "−";
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">Deviasi</span>
-      <span className={cn("font-mono tabular-nums", exceed ? "text-red-500" : "text-emerald-500")}>
-        {exceed ? "+" : "−"}
+      <span className={cn("font-mono tabular-nums", good ? "text-emerald-500" : "text-red-500")}>
+        {sign}
         {fmt(abs)} m²
       </span>
     </div>
   );
 }
+
 
 function LevelDetailSection({ sketch }: { sketch: Sketch }) {
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
