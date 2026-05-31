@@ -2302,6 +2302,65 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
 
+  // ===== Grid Struktur stylus interaksi =====
+  // Hitung bounds grid pada level aktif (dalam koordinat world px).
+  const gridBounds = useCallback((): null | {
+    xs: number[]; ys: number[]; xMin: number; xMax: number; yMin: number; yMax: number; spansX: number[]; spansY: number[];
+  } => {
+    if (!grid.enabled || !activeLvlId) return null;
+    const lv = levels.find((l) => l.id === activeLvlId);
+    if (!lv) return null;
+    const { spansX, spansY } = spansForLevel(grid, lv.id);
+    const ppm = pxPerMeter;
+    const posX = axisPositions(spansX).map((m) => grid.origin.x + m * ppm);
+    const posY = axisPositions(spansY).map((m) => grid.origin.y + m * ppm);
+    return {
+      xs: posX, ys: posY,
+      xMin: posX[0], xMax: posX[posX.length - 1],
+      yMin: posY[0], yMax: posY[posY.length - 1],
+      spansX, spansY,
+    };
+  }, [grid, activeLvlId, levels, pxPerMeter]);
+
+  // Hit-test sudut grid. Mengembalikan label sudut atau null.
+  const hitGridCorner = useCallback(
+    (raw: Point): "tl" | "tr" | "bl" | "br" | null => {
+      const b = gridBounds(); if (!b) return null;
+      const tol = 22 / view.s;
+      const corners: Array<{ k: "tl"|"tr"|"bl"|"br"; x: number; y: number }> = [
+        { k: "tl", x: b.xMin, y: b.yMin },
+        { k: "tr", x: b.xMax, y: b.yMin },
+        { k: "bl", x: b.xMin, y: b.yMax },
+        { k: "br", x: b.xMax, y: b.yMax },
+      ];
+      let best: { k: "tl"|"tr"|"bl"|"br"; d: number } | null = null;
+      for (const c of corners) {
+        const d = Math.hypot(raw.x - c.x, raw.y - c.y);
+        if (d <= tol && (!best || d < best.d)) best = { k: c.k, d };
+      }
+      return best ? best.k : null;
+    },
+    [gridBounds, view.s],
+  );
+
+  // Snap origin ke kelipatan MINOR_PX agar tetap "snap to grid" milimeter block.
+  const snapOriginPx = (p: Point): Point => ({
+    x: Math.round(p.x / MINOR_PX) * MINOR_PX,
+    y: Math.round(p.y / MINOR_PX) * MINOR_PX,
+  });
+
+  const adjustSpans = (start: number[], added: number, unit: number, atStart: boolean): number[] => {
+    if (added > 0) {
+      const extra = Array(added).fill(unit);
+      return atStart ? [...extra, ...start] : [...start, ...extra];
+    }
+    if (added < 0) {
+      const remove = Math.min(-added, start.length - 1);
+      return atStart ? start.slice(remove) : start.slice(0, start.length - remove);
+    }
+    return start;
+  };
+
   // Commit a finished line into state, run cycle detection, push history.
   // Apply boolean subtraction: new polygon carves out overlapping area from
   // any existing same-level non-lahan layer.
