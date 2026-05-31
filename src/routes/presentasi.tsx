@@ -1712,27 +1712,32 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               })}
             </g>
           ))}
-          {layers.filter((l) => !isLahan(l.name)).map((l, i) => (
-            <g key={l.id}>
-              <polygon
-                points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill={l.color.replace("ALPHA", "0.28")}
-                stroke={l.color.replace("ALPHA", "1")}
-                strokeWidth={sw * 0.002}
-              />
-              <text
-                x={centroid(l.points).x}
-                y={centroid(l.points).y}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={sw * 0.014}
-                fontWeight={700}
-                fill="#000000"
-              >
-                {i + 1}
-              </text>
-            </g>
-          ))}
+          {layers.filter((l) => !isLahan(l.name)).map((l, i) => {
+            const taman = isTaman(l.name);
+            const fillCol = taman ? "rgba(34,197,94,0.45)" : l.color.replace("ALPHA", "0.28");
+            const strokeCol = taman ? "rgb(22,163,74)" : l.color.replace("ALPHA", "1");
+            return (
+              <g key={l.id}>
+                <polygon
+                  points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill={fillCol}
+                  stroke={strokeCol}
+                  strokeWidth={sw * 0.002}
+                />
+                <text
+                  x={centroid(l.points).x}
+                  y={centroid(l.points).y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fontSize={sw * 0.014}
+                  fontWeight={700}
+                  fill="#000000"
+                >
+                  {i + 1}
+                </text>
+              </g>
+            );
+          })}
           {lines.map((ln, i) => (
             <path
               key={i}
