@@ -109,6 +109,21 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
 function isTaman(n: string) { return n.trim().toLowerCase().startsWith("taman"); }
+function isBalkon(n: string) { return n.trim().toLowerCase() === "balkon"; }
+function isAtapHijau(n: string) { return n.trim().toLowerCase() === "atap hijau"; }
+function isAtap(n: string) { return n.trim().toLowerCase() === "atap"; }
+function roomFillOverride(name: string, alpha: string): string | null {
+  if (isAtapHijau(name)) return `rgba(34,197,94,${alpha})`;
+  if (isBalkon(name) || isAtap(name)) return `rgba(190,190,190,${alpha})`;
+  if (isTaman(name)) return `rgba(34,197,94,${alpha})`;
+  return null;
+}
+function roomStrokeOverride(name: string): string | null {
+  if (isAtapHijau(name)) return "rgb(22,163,74)";
+  if (isBalkon(name) || isAtap(name)) return "rgb(140,140,140)";
+  if (isTaman(name)) return "rgb(22,163,74)";
+  return null;
+}
 
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
