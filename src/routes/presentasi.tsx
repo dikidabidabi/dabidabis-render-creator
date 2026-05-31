@@ -1411,7 +1411,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
         x0: t0 * cutLenM,
         x1: t1 * cutLenM,
         name: layer.name,
-        color: layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)",
+        color: roomFillOverride(layer.name, "0.55") ?? (layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)"),
       });
     }
   }
