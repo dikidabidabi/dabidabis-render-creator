@@ -3339,6 +3339,10 @@ function AxonometricView({
   }
 
   // Floors (build layers only — Taman handled above, Lahan/Void excluded)
+  const ABU_HEX = "#bebebe";
+  const ABU_SIDE = "#9a9a9a";
+  const HIJAU_HEX = "#22c55e";
+  const HIJAU_SIDE = "#16a34a";
   for (const lv of withH) {
     const top = colorOf(lv.sourceId);
     const side = shadeHsl(top, -18);
@@ -3346,8 +3350,11 @@ function AxonometricView({
     for (const ly of layers) {
       const pm = toPm(ly);
       if (pm.length < 3) continue;
-      const yBot = lv.base;
-      const yTop = lv.base + lv.height;
+      const ov = roomExtrudeOverride(ly.name);
+      const yBot = lv.base + (ov?.baseDelta ?? 0);
+      const yTop = yBot + (ov?.height ?? lv.height);
+      const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
+      const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
       // Side quads
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
@@ -3359,14 +3366,14 @@ function AxonometricView({
           project(a.x, a.z, yTop),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-        faces.push({ pts: quad, fill: side, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5 });
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5 });
       }
       // Top face
       const topPts = pm.map((p) => project(p.x, p.z, yTop));
       const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
       faces.push({
         pts: topPts,
-        fill: top,
+        fill: topFill,
         stroke: "rgba(0,0,0,0.55)",
         depth: avg + yTop * 100 + 1,
         sw: 0.7,
