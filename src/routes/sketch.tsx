@@ -3136,19 +3136,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const tolPx = 14 / view.s;
         // 1) hit-test handle pada clip yang sudah ada atau draft
         type Hit = { clipId: string; idx: number; d: number };
-        let best: Hit | null = null;
-        const tryHit = (clipId: string, ptsM: Array<{x:number;y:number}>) => {
+        const hits: Hit[] = [];
+        const collect = (clipId: string, ptsM: Array<{x:number;y:number}>) => {
           for (let i = 0; i < ptsM.length; i++) {
             const wx = ox + ptsM[i].x * ppm;
             const wy = oy + ptsM[i].y * ppm;
             const d = Math.hypot(raw.x - wx, raw.y - wy);
-            if (d <= tolPx) {
-              if (!best || d < best.d) best = { clipId, idx: i, d };
-            }
+            if (d <= tolPx) hits.push({ clipId, idx: i, d });
           }
         };
-        for (const c of grid.columnClips ?? []) tryHit(c.id, c.pts);
-        if (clipDraft) tryHit("__draft__", clipDraft.pts);
+        for (const c of grid.columnClips ?? []) collect(c.id, c.pts);
+        if (clipDraft) collect("__draft__", clipDraft.pts);
+        hits.sort((a, b) => a.d - b.d);
+        const best = hits[0];
         if (best) {
           setClipDrag({
             clipId: best.clipId,
