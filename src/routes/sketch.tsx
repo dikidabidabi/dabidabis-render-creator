@@ -3440,6 +3440,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setGridDrag(null);
       return;
     }
+    if (clipDrag) {
+      const cd = clipDrag;
+      setClipDrag(null);
+      // Tap statis (tidak digeser) di area kosong → tambah titik ke draft
+      if (cd.clipId === "__add__" && !cd.moved) {
+        const raw = getWorldPosRaw(e);
+        const mx = (raw.x - grid.origin.x) / pxPerMeter;
+        const my = (raw.y - grid.origin.y) / pxPerMeter;
+        const draft = clipDraft ?? { pts: [] };
+        setClipDraft({ pts: [...draft.pts, { x: mx, y: my }] });
+      }
+      return;
+    }
     if (draggingHandle) {
       setDraggingHandle(null);
       return;
