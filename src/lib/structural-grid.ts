@@ -250,3 +250,47 @@ export function computeStructuralStats(
   }
   return { totalColumns: cols, concreteVolumeM3: vol };
 }
+
+// Kumpulkan semua grid yang aktif (enabled): primer + extras (paste grid).
+export function collectGrids(
+  primary: StructuralGrid | undefined,
+  extras: StructuralGrid[] | undefined,
+): StructuralGrid[] {
+  const out: StructuralGrid[] = [];
+  if (primary && primary.enabled) out.push(primary);
+  if (Array.isArray(extras)) {
+    for (const g of extras) {
+      if (g && g.enabled) out.push(g);
+    }
+  }
+  return out;
+}
+
+// Statistik gabungan untuk seluruh grid (primer + extras).
+export function computeAllStructuralStats(
+  primary: StructuralGrid | undefined,
+  extras: StructuralGrid[] | undefined,
+  levels: { id: string; mdpl: number; typicalCount?: number; typicalHeight?: number }[],
+): { totalColumns: number; concreteVolumeM3: number } {
+  const grids = collectGrids(primary, extras);
+  let totalColumns = 0;
+  let concreteVolumeM3 = 0;
+  for (const g of grids) {
+    const s = computeStructuralStats(g, levels);
+    totalColumns += s.totalColumns;
+    concreteVolumeM3 += s.concreteVolumeM3;
+  }
+  return { totalColumns, concreteVolumeM3 };
+}
+
+// Normalisasi array extras untuk persist/load.
+export function normalizeGridExtras(arr: any): StructuralGrid[] | undefined {
+  if (!Array.isArray(arr)) return undefined;
+  const out: StructuralGrid[] = [];
+  for (const g of arr) {
+    const ng = normalizeGrid(g);
+    if (ng) out.push(ng);
+  }
+  return out.length ? out : undefined;
+}
+
