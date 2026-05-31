@@ -3564,15 +3564,15 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
               const pct = totalArea > 0 ? (total / totalArea) * 100 : 0;
               const name = displayNames[lv.id] ?? lv.name;
               return (
-                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
-                  <span style={{ width: 10, height: 10, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
+                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10 }}>
+                  <span style={{ width: 9, height: 9, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {name}{k > 1 ? ` · ${k}×` : ""}
                   </span>
                   <span style={{ color: "#888", fontSize: 9, fontVariantNumeric: "tabular-nums" }}>
                     {fmt(pct, 1)}%
                   </span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 56, textAlign: "right", fontSize: 10 }}>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 52, textAlign: "right", fontSize: 10 }}>
                     {fmt(total)} m²
                   </span>
                 </div>
