@@ -110,7 +110,26 @@ function isVoid(n: string) {
 function isTaman(n: string) {
   return n.trim().toLowerCase().startsWith("taman");
 }
+function isBalkon(n: string) {
+  return n.trim().toLowerCase() === "balkon";
+}
+function isAtapHijau(n: string) {
+  return n.trim().toLowerCase() === "atap hijau";
+}
+function isAtap(n: string) {
+  return n.trim().toLowerCase() === "atap";
+}
 const TAMAN_GREEN = "#22c55e";
+const ABU_MUDA = "#bebebe";
+const ATAP_HIJAU_COLOR = "#22c55e";
+// Special extrude rules for named rooms.
+// height === 0 means: do not render any extruded geometry in 3D.
+function roomExtrudeOverride(name: string): { height: number; baseDelta: number; color: string } | null {
+  if (isAtapHijau(name)) return { height: 0.5, baseDelta: 0, color: ATAP_HIJAU_COLOR };
+  if (isBalkon(name)) return { height: 0.1, baseDelta: -0.1, color: ABU_MUDA };
+  if (isAtap(name)) return { height: 0, baseDelta: 0, color: ABU_MUDA };
+  return null;
+}
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
