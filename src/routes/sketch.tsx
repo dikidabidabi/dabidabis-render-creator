@@ -3982,46 +3982,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Aktif</Label>
               <Switch checked={grid.enabled} onCheckedChange={(v) => updateGrid({ enabled: v })} />
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu X (m)</Label>
-              <div className="flex flex-wrap gap-1">
-                {SPAN_PRESETS.map((p) => (
-                  <Button key={`px-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
-                    onClick={() => updateGrid({ spansX: Array(Math.max(1, grid.spansX.length)).fill(p) })}>
-                    {p}m × {grid.spansX.length}
-                  </Button>
-                ))}
-              </div>
-              <Input
-                className="h-7 text-xs"
-                value={grid.spansX.join(", ")}
-                onChange={(e) => {
-                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
-                  if (arr.length) updateGrid({ spansX: arr });
-                }}
-                placeholder="contoh: 8, 8, 6, 9"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu Y (m)</Label>
-              <div className="flex flex-wrap gap-1">
-                {SPAN_PRESETS.map((p) => (
-                  <Button key={`py-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
-                    onClick={() => updateGrid({ spansY: Array(Math.max(1, grid.spansY.length)).fill(p) })}>
-                    {p}m × {grid.spansY.length}
-                  </Button>
-                ))}
-              </div>
-              <Input
-                className="h-7 text-xs"
-                value={grid.spansY.join(", ")}
-                onChange={(e) => {
-                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
-                  if (arr.length) updateGrid({ spansY: arr });
-                }}
-                placeholder="contoh: 8, 8, 6"
-              />
-            </div>
+            <SpanAxisEditor label="Bentang Sumbu X (m)" spans={grid.spansX}
+              onChange={(next) => updateGrid({ spansX: next })} />
+            <SpanAxisEditor label="Bentang Sumbu Y (m)" spans={grid.spansY}
+              onChange={(next) => updateGrid({ spansY: next })} />
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Tip: di kanvas, tarik 4 kotak sudut grid (oranye) dengan stylus untuk menambah/mengurangi bentang otomatis. Tarik bagian dalam grid untuk menggeser titik nol (snap milimeter block).
+            </p>
             <div className="space-y-1">
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dimensi Kolom (cm)</Label>
               <div className="flex flex-wrap gap-1">
