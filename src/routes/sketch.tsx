@@ -2295,8 +2295,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
         }
 
-        // Kolom hitam padat di tiap titik potong
+        // Kolom hitam padat di tiap titik potong (skip area clip)
         const colPx = (grid.colSizeCm / 100) * ppm;
+        const posXM = axisPositions(spansX);
+        const posYM = axisPositions(spansY);
         ctx.fillStyle = "#0a0a0a";
         for (let j = 0; j < ys.length; j++) {
           for (let i = 0; i < xs.length; i++) {
@@ -2313,7 +2315,67 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               ctx.restore();
               continue;
             }
+            if (isColumnClipped(grid, posXM[i], posYM[j])) {
+              // clipped marker (titik kecil agar terlihat lokasinya saat edit)
+              if (tool === "grid") {
+                ctx.save();
+                ctx.strokeStyle = "rgba(232,93,58,0.55)";
+                ctx.setLineDash([2 / s, 2 / s]);
+                ctx.lineWidth = 0.6 / s;
+                ctx.strokeRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+                ctx.restore();
+              }
+              continue;
+            }
             ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+          }
+        }
+
+        // Render clip polygons (dan draft) saat tool grid aktif
+        if (tool === "grid") {
+          const allClips: Array<{ id: string; pts: Point[]; isDraft: boolean }> = [];
+          for (const c of grid.columnClips ?? []) {
+            allClips.push({
+              id: c.id,
+              pts: c.pts.map((p) => ({ x: ox + p.x * ppm, y: oy + p.y * ppm })),
+              isDraft: false,
+            });
+          }
+          if (clipDraft && clipDraft.pts.length) {
+            allClips.push({
+              id: "__draft__",
+              pts: clipDraft.pts.map((p) => ({ x: ox + p.x * ppm, y: oy + p.y * ppm })),
+              isDraft: true,
+            });
+          }
+          for (const cp of allClips) {
+            if (cp.pts.length === 0) continue;
+            ctx.save();
+            ctx.fillStyle = cp.isDraft
+              ? "rgba(232,93,58,0.12)"
+              : "rgba(232,93,58,0.18)";
+            ctx.strokeStyle = "rgba(232,93,58,0.95)";
+            ctx.lineWidth = 1.2 / s;
+            if (cp.isDraft) ctx.setLineDash([6 / s, 4 / s]);
+            ctx.beginPath();
+            ctx.moveTo(cp.pts[0].x, cp.pts[0].y);
+            for (let k = 1; k < cp.pts.length; k++) ctx.lineTo(cp.pts[k].x, cp.pts[k].y);
+            if (cp.pts.length >= 3) ctx.closePath();
+            if (cp.pts.length >= 3) ctx.fill();
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // handle titik
+            const hR = 6 / s;
+            for (const p of cp.pts) {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, hR, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.strokeStyle = "rgba(232,93,58,0.95)";
+              ctx.lineWidth = 1.2 / s;
+              ctx.stroke();
+            }
+            ctx.restore();
           }
         }
 
