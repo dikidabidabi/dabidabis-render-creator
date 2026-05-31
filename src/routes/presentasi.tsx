@@ -1453,7 +1453,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const AREA_H = A3_H - 2 * PAD - 130; // header+footer reserve
   // Reserve ruang bawah utk grid bubble + skala panjang potongan agar tidak terpotong.
   const hasGrid = !!sketch.structuralGrid?.enabled;
-  const BUBBLE_PAD = hasGrid ? 90 : 50;
+  const BUBBLE_PAD = hasGrid ? 60 : 40;
   const AREA_H_DRAW = Math.max(100, AREA_H - BUBBLE_PAD);
   const scalePxPerM = Math.min(AREA_W / Math.max(1, cutLenM), AREA_H_DRAW / Math.max(1, totalHM));
   const drawW = cutLenM * scalePxPerM;
