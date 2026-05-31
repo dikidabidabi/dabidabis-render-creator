@@ -60,6 +60,7 @@ type Sketch = {
   geo?: Geo;
   sectionCut?: SectionCut; // legacy
   sectionCuts?: SectionCut[];
+  structuralGrid?: StructuralGrid;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
