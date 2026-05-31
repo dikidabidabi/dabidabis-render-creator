@@ -1408,7 +1408,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid">("line");
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
