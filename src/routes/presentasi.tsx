@@ -1729,6 +1729,18 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const yTopPx = my(maxMdpl);
             const yBub = my(minMdpl) + 64;
             const rBub = 7;
+            // Sort hits by t, dedupe near-identical positions, dan hitung
+            // bentang antar buble (mm) untuk ditampilkan di antara buble.
+            const sorted = [...hits].sort((a, b) => a.t - b.t);
+            const dims: Array<{ x: number; mm: number }> = [];
+            for (let i = 0; i < sorted.length - 1; i++) {
+              const a = sorted[i], b = sorted[i + 1];
+              const dM = (b.t - a.t) * cutLenM;
+              if (dM <= 0.05) continue;
+              const xa = mx(a.t * cutLenM);
+              const xb = mx(b.t * cutLenM);
+              dims.push({ x: (xa + xb) / 2, mm: Math.round(dM * 1000) });
+            }
             return (
               <g key={`sg-${gIdx}`} pointerEvents="none">
                 {hits.map((h) => {
@@ -1748,6 +1760,15 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                     </g>
                   );
                 })}
+                {dims.map((d, i) => (
+                  <text key={`gd-${gIdx}-${i}`} x={d.x} y={yBub + rBub + 12}
+                    textAnchor="middle" dominantBaseline="central"
+                    fontSize={9} fontWeight={600} fill="#0a0a0a"
+                    style={{ fontFamily: "Manrope, sans-serif",
+                      paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: 3 } as React.CSSProperties}>
+                    {d.mm}
+                  </text>
+                ))}
               </g>
             );
           })}
