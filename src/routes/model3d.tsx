@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Grid, Edges } from "@react-three/drei";
+import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import SunCalc from "suncalc";
 import { Slider } from "@/components/ui/slider";
@@ -14,6 +14,9 @@ import {
   Minimize2,
   RotateCcw,
   Download,
+  Camera,
+  Palette,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -288,10 +291,12 @@ function Scene({
   sketch,
   highlightLevelId,
   sunHour,
+  colorMode,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
   sunHour: number;
+  colorMode: "sketch" | "bw";
 }) {
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
@@ -313,14 +318,12 @@ function Scene({
     const d = new Date();
     d.setHours(Math.floor(sunHour), Math.round((sunHour % 1) * 60), 0, 0);
     const sc = SunCalc.getPosition(d, geo.lat, geo.lon);
-    // SunCalc azimuth: south=0, west=+π/2 (clockwise from south). Convert to north-clockwise.
     const azNorthCW = sc.azimuth + Math.PI;
     const north = ((Number(sketch.northRotation) || 0) * Math.PI) / 180;
     const az = azNorthCW - north;
     const alt = Math.max(0.01, sc.altitude);
     const dist = 80;
     const horiz = Math.cos(alt) * dist;
-    // In our scene: +Z = south (canvas y grows south), +X = east, +Y = up
     const x = Math.sin(az) * horiz;
     const z = -Math.cos(az) * horiz;
     const y = Math.sin(alt) * dist;
@@ -354,10 +357,10 @@ function Scene({
         args={[200, 200]}
         cellSize={1}
         cellThickness={0.5}
-        cellColor="#cfcfcf"
+        cellColor={colorMode === "bw" ? "#bfbfbf" : "#cfcfcf"}
         sectionSize={10}
         sectionThickness={1}
-        sectionColor="#9a9a9a"
+        sectionColor={colorMode === "bw" ? "#808080" : "#9a9a9a"}
         position={[0, groundY - 0.01, 0]}
         fadeDistance={120}
         fadeStrength={1}
@@ -366,21 +369,26 @@ function Scene({
 
       {floors.map((lv) => {
         const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
-        return layersOfLevel.map((ly, idx) => (
-          <ExtrudedFloor
-            key={`${lv.id}_${ly.id}_${idx}`}
-            points={ly.points}
-            origin={origin}
-            mPerPx={mPerPx}
-            baseY={lv.baseMdpl - baseMdpl}
-            height={lv.height}
-            color={ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+        return layersOfLevel.map((ly, idx) => {
+          const sketchColor =
+            ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
               const parts = body.split(",").map((s: string) => s.trim());
               return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-            }) || "#e85d3a"}
-            highlighted={highlightLevelId === lv.sourceId}
-          />
-        ));
+            }) || "#e85d3a";
+          const color = colorMode === "bw" ? "#dcdcdc" : sketchColor;
+          return (
+            <ExtrudedFloor
+              key={`${lv.id}_${ly.id}_${idx}`}
+              points={ly.points}
+              origin={origin}
+              mPerPx={mPerPx}
+              baseY={lv.baseMdpl - baseMdpl}
+              height={lv.height}
+              color={color}
+              highlighted={highlightLevelId === lv.sourceId}
+            />
+          );
+        });
       })}
     </>
   );
@@ -397,8 +405,53 @@ function SketchViewer({
   const [highlight, setHighlight] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [sunHour, setSunHour] = useState(12);
+  const [projection, setProjection] = useState<"persp" | "axon">("persp");
+  const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
+  const [shots, setShots] = useState<{ id: string; dataUrl: string; ts: number }[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
+
+  const shotsKey = `dabidabis_model3d_shots_${sketch.id}`;
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(shotsKey);
+      if (raw) setShots(JSON.parse(raw));
+      else setShots([]);
+    } catch {
+      setShots([]);
+    }
+  }, [shotsKey]);
+  const saveShots = useCallback(
+    (next: { id: string; dataUrl: string; ts: number }[]) => {
+      setShots(next);
+      try {
+        localStorage.setItem(shotsKey, JSON.stringify(next));
+      } catch {
+        // ignore quota
+      }
+    },
+    [shotsKey],
+  );
+  const takeScreenshot = useCallback(() => {
+    const el = canvasRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
+    if (!el) return;
+    try {
+      const dataUrl = el.toDataURL("image/png");
+      const item = { id: `s_${Date.now()}`, dataUrl, ts: Date.now() };
+      saveShots([item, ...shots].slice(0, 24));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [shots, saveShots]);
+  const removeShot = (id: string) => saveShots(shots.filter((s) => s.id !== id));
+  const downloadShot = (s: { dataUrl: string; ts: number }) => {
+    const a = document.createElement("a");
+    a.href = s.dataUrl;
+    a.download = `${(sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_")}_${s.ts}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const expanded = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
   const baseMdpl = expanded[0]?.baseMdpl ?? 0;
@@ -489,7 +542,7 @@ function SketchViewer({
     }
   }, [buildExportInputs, safeTitle]);
 
-  return (
+  const viewerBody = (
     <div
       className={cn(
         "grid gap-4",
@@ -587,96 +640,231 @@ function SketchViewer({
         </div>
       )}
 
-      {/* Canvas 3D */}
-      <div
-        ref={canvasRef}
-        className={cn(
-          "relative rounded-lg border border-border bg-gradient-to-b from-slate-100 to-slate-300 overflow-hidden",
-          fullscreen ? "h-[80vh]" : "h-[520px]",
-        )}
-      >
-        <Canvas
-          shadows
-          camera={{ position: [25, 22, 25], fov: 45, near: 0.1, far: 1000 }}
-          dpr={[1, 2]}
+      {/* Canvas 3D + library */}
+      <div className="flex flex-col gap-3">
+        <div
+          ref={canvasRef}
+          className={cn(
+            "relative rounded-lg border border-border bg-gradient-to-b from-slate-100 to-slate-300 overflow-hidden",
+            fullscreen ? "h-full flex-1" : "h-[520px]",
+          )}
         >
-          <color attach="background" args={["#eef1f4"]} />
-          <Scene sketch={sketch} highlightLevelId={highlight} sunHour={sunHour} />
-          <OrbitControls
-            ref={orbitRef}
-            enableDamping
-            dampingFactor={0.08}
-            makeDefault
-          />
-        </Canvas>
-
-        <div className="absolute right-2 top-2 flex gap-1">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs"
-            onClick={resetCamera}
+          <Canvas
+            key={projection}
+            shadows
+            gl={{ preserveDrawingBuffer: true, antialias: true }}
+            dpr={[1, 2]}
           >
-            <RotateCcw className="h-3 w-3" /> Reset
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-7 gap-1 px-2 text-xs"
-            onClick={() => setFullscreen((v) => !v)}
-          >
-            {fullscreen ? (
-              <>
-                <Minimize2 className="h-3 w-3" /> Kecil
-              </>
+            {projection === "persp" ? (
+              <PerspectiveCamera
+                makeDefault
+                position={[25, 22, 25]}
+                fov={45}
+                near={0.1}
+                far={1000}
+              />
             ) : (
-              <>
-                <Maximize2 className="h-3 w-3" /> Besar
-              </>
+              <OrthographicCamera
+                makeDefault
+                position={[40, 40, 40]}
+                zoom={18}
+                near={-500}
+                far={1000}
+              />
             )}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="sm" className="h-7 gap-1 px-2 text-xs">
-                <Download className="h-3 w-3" /> Unduh
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[180px]">
-              <DropdownMenuItem onClick={() => handleExport("obj")}>
-                Wavefront (.obj + .mtl)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("3ds")}>
-                Autodesk (.3ds)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <color attach="background" args={[colorMode === "bw" ? "#f3f3f3" : "#eef1f4"]} />
+            <Scene
+              sketch={sketch}
+              highlightLevelId={highlight}
+              sunHour={sunHour}
+              colorMode={colorMode}
+            />
+            <OrbitControls
+              ref={orbitRef}
+              enableDamping
+              dampingFactor={0.08}
+              makeDefault
+            />
+          </Canvas>
+
+          <div className="absolute right-2 top-2 flex flex-wrap justify-end gap-1">
+            <div className="flex overflow-hidden rounded-md border border-border/60 bg-secondary/90 text-xs">
+              <button
+                type="button"
+                onClick={() => setProjection("persp")}
+                className={cn(
+                  "px-2 py-1 transition-colors",
+                  projection === "persp" ? "bg-primary text-primary-foreground" : "hover:bg-background/60",
+                )}
+              >
+                Perspektif
+              </button>
+              <button
+                type="button"
+                onClick={() => setProjection("axon")}
+                className={cn(
+                  "px-2 py-1 transition-colors",
+                  projection === "axon" ? "bg-primary text-primary-foreground" : "hover:bg-background/60",
+                )}
+              >
+                Aksonometri
+              </button>
+            </div>
+            <div className="flex overflow-hidden rounded-md border border-border/60 bg-secondary/90 text-xs">
+              <button
+                type="button"
+                onClick={() => setColorMode("sketch")}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1 transition-colors",
+                  colorMode === "sketch" ? "bg-primary text-primary-foreground" : "hover:bg-background/60",
+                )}
+              >
+                <Palette className="h-3 w-3" /> Warna
+              </button>
+              <button
+                type="button"
+                onClick={() => setColorMode("bw")}
+                className={cn(
+                  "px-2 py-1 transition-colors",
+                  colorMode === "bw" ? "bg-primary text-primary-foreground" : "hover:bg-background/60",
+                )}
+              >
+                Hitam-Putih
+              </button>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={takeScreenshot}
+            >
+              <Camera className="h-3 w-3" /> Screenshot
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={resetCamera}
+            >
+              <RotateCcw className="h-3 w-3" /> Reset
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => setFullscreen((v) => !v)}
+            >
+              {fullscreen ? (
+                <>
+                  <Minimize2 className="h-3 w-3" /> Keluar
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="h-3 w-3" /> Full Screen
+                </>
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="sm" className="h-7 gap-1 px-2 text-xs">
+                  <Download className="h-3 w-3" /> Unduh
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuItem onClick={() => handleExport("obj")}>
+                  Wavefront (.obj + .mtl)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("3ds")}>
+                  Autodesk (.3ds)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-slate-700 shadow-sm">
+            Drag = rotasi · Shift+Drag = pan · Scroll = zoom · 1 unit = 1 m ·{" "}
+            {fmt(mPerPx, 4)} m/px
+          </div>
+          {sketch.geo?.locked && (
+            <div className="absolute left-2 bottom-10 w-56 rounded-md bg-white/85 p-2 shadow-sm backdrop-blur">
+              <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-slate-700">
+                <span>Jam Matahari</span>
+                <span className="font-mono">
+                  {String(Math.floor(sunHour)).padStart(2, "0")}.
+                  {String(Math.round((sunHour % 1) * 60)).padStart(2, "0")}
+                </span>
+              </div>
+              <Slider
+                min={6}
+                max={18}
+                step={0.25}
+                value={[sunHour]}
+                onValueChange={(v) => setSunHour(v[0] ?? 12)}
+              />
+            </div>
+          )}
         </div>
 
-        <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-slate-700 shadow-sm">
-          Drag = rotasi · Shift+Drag = pan · Scroll = zoom · 1 unit = 1 m ·{" "}
-          {fmt(mPerPx, 4)} m/px
-        </div>
-        {sketch.geo?.locked && (
-          <div className="absolute left-2 top-2 w-56 rounded-md bg-white/85 p-2 shadow-sm backdrop-blur">
-            <div className="mb-1 flex items-center justify-between text-[10px] font-medium text-slate-700">
-              <span>Jam Matahari</span>
-              <span className="font-mono">
-                {String(Math.floor(sunHour)).padStart(2, "0")}.
-                {String(Math.round((sunHour % 1) * 60)).padStart(2, "0")}
-              </span>
-            </div>
-            <Slider
-              min={6}
-              max={18}
-              step={0.25}
-              value={[sunHour]}
-              onValueChange={(v) => setSunHour(v[0] ?? 12)}
-            />
+        {/* Library screenshot */}
+        <div className="rounded-lg border border-border bg-card/40 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Library Screenshot
+            </h4>
+            <span className="text-[10px] text-muted-foreground">
+              {shots.length} gambar
+            </span>
           </div>
-        )}
+          {shots.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Belum ada screenshot. Klik tombol <span className="font-medium">Screenshot</span> di atas kanvas.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {shots.map((s) => (
+                <div
+                  key={s.id}
+                  className="group relative overflow-hidden rounded-md border border-border/60 bg-background"
+                >
+                  <img
+                    src={s.dataUrl}
+                    alt="screenshot"
+                    className="block aspect-[4/3] w-full cursor-pointer object-cover"
+                    onClick={() => downloadShot(s)}
+                  />
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-1.5 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="font-mono">
+                      {new Date(s.ts).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeShot(s.id);
+                      }}
+                      className="rounded p-0.5 hover:bg-white/20"
+                      aria-label="Hapus"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
+
+  if (fullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-background p-4">
+        {viewerBody}
+      </div>
+    );
+  }
+  return viewerBody;
 }
 
 // ---------- Page ----------
