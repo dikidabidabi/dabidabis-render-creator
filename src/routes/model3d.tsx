@@ -83,6 +83,7 @@ type Sketch = {
   geo?: Geo;
   northRotation?: number;
   structuralGrid?: StructuralGrid;
+  structuralGridExtras?: StructuralGrid[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
