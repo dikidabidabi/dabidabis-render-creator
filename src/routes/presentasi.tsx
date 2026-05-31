@@ -20,6 +20,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import SunCalc from "suncalc";
 import { drawOsmTiles } from "@/lib/geo";
+import {
+  type StructuralGrid,
+  axisPositions,
+  spansForLevel,
+  isNodeActive,
+  levelInRange,
+  xAxisLabel,
+  yAxisLabel,
+  computeStructuralStats,
+} from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
