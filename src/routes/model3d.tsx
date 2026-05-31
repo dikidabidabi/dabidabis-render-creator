@@ -309,7 +309,11 @@ function Scene({
   const groundY = 0 - baseMdpl;
 
   const lahanLayers = sketch.layers.filter((l) => isLahan(l.name));
-  const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const tamanLayers = sketch.layers.filter((l) => isTaman(l.name));
+  const buildLayers = sketch.layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  const groundLevel = findMdplZeroLevel(sketch.levels) ?? [...sketch.levels].sort((a, b) => a.mdpl - b.mdpl)[0];
+  const groundFloor = floors.find((f) => f.sourceId === groundLevel?.id) ?? floors[0];
+  const tamanBaseY = (groundFloor?.baseMdpl ?? 0) - baseMdpl;
 
   // Sun position from SunCalc using geo + current date + chosen hour.
   // North rotation rotates the world so we counter-rotate sun azimuth.
