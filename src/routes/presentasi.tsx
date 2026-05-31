@@ -3558,6 +3558,9 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       <GridStat label="Luas Semi" value={`${fmt(data.totalSetengahM2)} m²`} />
       <GridStat label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
       <GridStat label="KLB Rencana" value={`${fmt(data.klbRencanaM2)} m²`} />
+      {data.totalKolom > 0 && (
+        <GridStat label="Modul Struktur" value={`${data.totalKolom} kolom`} hint={`Volume beton ${fmt(data.volumeBetonM3, 2)} m³`} />
+      )}
     </div>
   );
 }
