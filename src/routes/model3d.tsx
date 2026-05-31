@@ -490,20 +490,25 @@ function Scene({
       {floors.map((lv) => {
         const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
         return layersOfLevel.map((ly, idx) => {
+          const override = roomExtrudeOverride(ly.name);
+          if (override && override.height <= 0) return null;
           const sketchColor =
             ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
               const parts = body.split(",").map((s: string) => s.trim());
               return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
             }) || "#e85d3a";
-          const color = colorMode === "bw" ? "#dcdcdc" : sketchColor;
+          const baseColor = override ? override.color : sketchColor;
+          const color = colorMode === "bw" ? "#dcdcdc" : baseColor;
+          const h = override ? override.height : lv.height;
+          const baseY = lv.baseMdpl - baseMdpl + (override ? override.baseDelta : 0);
           return (
             <ExtrudedFloor
               key={`${lv.id}_${ly.id}_${idx}`}
               points={ly.points}
               origin={origin}
               mPerPx={mPerPx}
-              baseY={lv.baseMdpl - baseMdpl}
-              height={lv.height}
+              baseY={baseY}
+              height={h}
               color={color}
               highlighted={highlightLevelId === lv.sourceId}
             />
