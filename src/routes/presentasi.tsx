@@ -3496,12 +3496,15 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
           </div>
         </div>
       </Panel>
-      <Panel title="KDB / KLB">
-        <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", height: "100%" }}>
+      <Panel title="KDB / KLB / KDH / KTB">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "center", justifyItems: "center", height: "100%" }}>
           <Ring value={kdbUsage} label="KDB" />
           <Ring value={klbUsage} label="KLB" />
+          <Ring value={kdhUsage} label="KDH" />
+          <Ring value={ktbUsage} label="KTB" />
         </div>
       </Panel>
+
       <Panel title="Distribusi per Level">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {perLevel.map(({ lv, sum, k, name }) => {
