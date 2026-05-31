@@ -4943,7 +4943,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
         {/* Floating draggable side panel on the right */}
         <div
-          className="absolute right-4 top-4 z-10 w-[340px] max-w-[90vw]"
+          className="absolute right-4 top-4 z-10 w-[400px] max-w-[90vw]"
           style={{ transform: `translate(${sideOffset.x}px, ${sideOffset.y}px)` }}
         >
           {SidePanel}
