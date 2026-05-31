@@ -4361,9 +4361,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                             size="sm"
                             className="h-6 px-1.5 text-[10px]"
                             onClick={() => {
-                              const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-                              const clips = (cur.columnClips ?? []).filter((x) => x.id !== c.id);
-                              onChange({ structuralGrid: { ...cur, columnClips: clips.length ? clips : undefined } });
+                              const clips = (grid.columnClips ?? []).filter((x) => x.id !== c.id);
+                              updateGrid({ columnClips: clips.length ? clips : undefined });
                             }}
                             title="Hapus area"
                           >
