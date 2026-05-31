@@ -321,7 +321,7 @@ function computeStats(sk: Sketch): Stats {
 
 
 
-  const { totalColumns, concreteVolumeM3 } = computeStructuralStats(sk.structuralGrid, levels);
+  const { totalColumns, concreteVolumeM3 } = computeAllStructuralStats(sk.structuralGrid, sk.structuralGridExtras, levels);
 
   return {
     totalLahanM2,
