@@ -224,6 +224,8 @@ type Sketch = {
   activeLevelId: string | null;
   kdbPct?: number; // 0..100, prosentase KDB terhadap luas lahan
   klbCoef?: number; // koefisien KLB, pengali luas lahan
+  kdhPct?: number; // 0..100, prosentase KDH (area hijau) terhadap luas lahan
+  ktbPct?: number; // 0..100, prosentase KTB (basement) terhadap luas lahan
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
