@@ -3142,7 +3142,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             const wx = ox + ptsM[i].x * ppm;
             const wy = oy + ptsM[i].y * ppm;
             const d = Math.hypot(raw.x - wx, raw.y - wy);
-            if (d <= tolPx && (!best || d < best.d)) best = { clipId, idx: i, d };
+            if (d <= tolPx) {
+              if (!best || d < best.d) best = { clipId, idx: i, d };
+            }
           }
         };
         for (const c of grid.columnClips ?? []) tryHit(c.id, c.pts);
