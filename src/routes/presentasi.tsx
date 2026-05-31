@@ -1825,9 +1825,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               strokeLinecap="round"
             />
           ))}
-          {(() => {
-            const grid = sketch.structuralGrid;
-            if (!grid?.enabled) return null;
+          {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
+            void gIdx;
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
             if (!levelInRange(grid, level, allLv)) return null;
             const { spansX, spansY } = spansForLevel(grid, level.id);
