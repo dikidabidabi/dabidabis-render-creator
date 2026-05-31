@@ -3302,8 +3302,13 @@ function AxonometricView({
   };
   const faces: Face[] = [];
 
+  const groundLevel = findMdplZeroLevel(ascLevels) ?? ascLevels[0];
+  const groundLevelId = groundLevel?.id;
   const lahan = (sketch.layers ?? []).filter((l) => isLahan(l.name));
-  const taman = (sketch.layers ?? []).filter((l) => isTaman(l.name));
+  // Taman di level dasar (LT 1) tidak ikut stacking diagram — itu lansekap, bukan luasan bangunan.
+  const taman = (sketch.layers ?? []).filter(
+    (l) => isTaman(l.name) && l.levelId !== groundLevelId,
+  );
   const build = (sketch.layers ?? []).filter(
     (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
   );
