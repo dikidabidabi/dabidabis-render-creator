@@ -1584,7 +1584,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const cy = (my(b.topM) + my(b.baseM)) / 2;
             const xName = AREA_W - 8;
             return (
-              <text key={`name-${b.id}`} x={xName} y={cy} fontSize={20} textAnchor="end"
+              <text key={`name-${b.id}`} x={xName} y={cy} fontSize={10} textAnchor="end"
                 dominantBaseline="middle" fill="#111"
                 style={{ fontFamily: "Sora, sans-serif", fontWeight: 700, letterSpacing: 0.3 }}>
                 {b.name}
