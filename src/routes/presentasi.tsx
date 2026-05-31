@@ -878,12 +878,14 @@ function computeStats(sk: Sketch): Stats {
   const totalTerhitungM2 = layers
     .filter((l) => !isLahan(l.name) && !isVoid(l.name))
     .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
+  const struct = computeStructuralStats(sk.structuralGrid, levels);
   return {
     totalLahanM2, totalRuangM2, totalEfektifM2, totalSaranaM2, totalSetengahM2,
     kdbPct: sk.kdbPct, klbCoef: sk.klbCoef, kdhPct: sk.kdhPct, ktbPct: sk.ktbPct,
     kdbLimitM2, klbLimitM2, kdhLimitM2, ktbLimitM2,
     kdbRencanaM2, klbRencanaM2, kdhRencanaM2, ktbRencanaM2,
     jumlahLapis, ketinggianM, totalTerhitungM2,
+    totalKolom: struct.totalColumns, volumeBetonM3: struct.concreteVolumeM3,
   };
 }
 
