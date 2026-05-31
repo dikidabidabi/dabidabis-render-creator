@@ -345,6 +345,10 @@ function computeStats(sk: Sketch): Stats {
 function RekapSection({ data }: { data: Stats }) {
   const kdbDev = data.kdbLimitM2 - data.kdbRencanaM2; // positive = under limit (hijau)
   const klbDev = data.klbLimitM2 - data.klbRencanaM2;
+  // KDH: target adalah minimum — rencana ≥ limit = hijau (invert)
+  const kdhDev = data.kdhRencanaM2 - data.kdhLimitM2;
+  // KTB: target adalah maksimum — rencana ≤ limit = hijau (sama seperti KDB)
+  const ktbDev = data.ktbLimitM2 - data.ktbRencanaM2;
   return (
     <div className="space-y-2 text-sm">
       <Row label="Luas Lahan" value={`${fmt(data.totalLahanM2)} m²`} />
@@ -367,12 +371,29 @@ function RekapSection({ data }: { data: Stats }) {
       <Row label="KLB Rencana" value={`${fmt(data.klbRencanaM2)} m²`} />
       {data.klbCoef ? <DeviationRow dev={klbDev} /> : null}
       <div className="my-2 h-px bg-border" />
+      <Row
+        label={`KDH${data.kdhPct ? ` (min ${data.kdhPct}%)` : ""}`}
+        value={`${fmt(data.kdhLimitM2)} m²`}
+        muted={!data.kdhPct}
+      />
+      <Row label="KDH Rencana" value={`${fmt(data.kdhRencanaM2)} m²`} />
+      {data.kdhPct ? <DeviationRow dev={kdhDev} invert /> : null}
+      <div className="my-2 h-px bg-border" />
+      <Row
+        label={`KTB${data.ktbPct ? ` (maks ${data.ktbPct}%)` : ""}`}
+        value={`${fmt(data.ktbLimitM2)} m²`}
+        muted={!data.ktbPct}
+      />
+      <Row label="KTB Rencana" value={`${fmt(data.ktbRencanaM2)} m²`} />
+      {data.ktbPct ? <DeviationRow dev={ktbDev} /> : null}
+      <div className="my-2 h-px bg-border" />
       <Row label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
       <Row label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
       <Row label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
     </div>
   );
 }
+
 
 function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
