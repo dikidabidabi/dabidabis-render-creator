@@ -123,11 +123,10 @@ const TAMAN_GREEN = "#22c55e";
 const ABU_MUDA = "#bebebe";
 const ATAP_HIJAU_COLOR = "#22c55e";
 // Special extrude rules for named rooms.
-// height === 0 means: do not render any extruded geometry in 3D.
 function roomExtrudeOverride(name: string): { height: number; baseDelta: number; color: string } | null {
   if (isAtapHijau(name)) return { height: 0.5, baseDelta: 0, color: ATAP_HIJAU_COLOR };
   if (isBalkon(name)) return { height: 0.1, baseDelta: -0.1, color: ABU_MUDA };
-  if (isAtap(name)) return { height: 0, baseDelta: 0, color: ABU_MUDA };
+  if (isAtap(name)) return { height: 0.2, baseDelta: -0.2, color: ABU_MUDA };
   return null;
 }
 const MDPL_ZERO_EPS = 0.0001;
