@@ -1777,10 +1777,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const x0 = xs[0], x1 = xs[xs.length - 1];
             const y0 = ys[0], y1 = ys[ys.length - 1];
             const ext = sw * 0.04;
-            const rBub = sw * 0.018;
-            const gridSW = sw * 0.0012; // lebih tipis dari garis potong (0.0014)
+            const rBub = sw * 0.009;
+            const gridSW = sw * 0.0006; // lebih tipis 50% dari sebelumnya
             const dash = `${sw * 0.01} ${sw * 0.004} ${sw * 0.002} ${sw * 0.004}`;
             const colPx = (grid.colSizeCm / 100) * pxPerM;
+            const bubFs = sw * 0.008;
+            const dimFs = sw * 0.0085;
+            const dimGap = sw * 0.006;
             return (
               <g pointerEvents="none">
                 {/* Vertikal (sumbu X) */}
@@ -1791,13 +1794,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     <circle cx={x} cy={y0 - ext - rBub} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {xAxisLabel(i)}
                     </text>
                     <circle cx={x} cy={y1 + ext + rBub} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {xAxisLabel(i)}
                     </text>
                   </g>
@@ -1810,17 +1813,62 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     <circle cx={x0 - ext - rBub} cy={y} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {yAxisLabel(j)}
                     </text>
                     <circle cx={x1 + ext + rBub} cy={y} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {yAxisLabel(j)}
                     </text>
                   </g>
                 ))}
+                {/* Dimensi bentang grid terluar — angka mm tanpa satuan */}
+                {spansX.map((sM, i) => {
+                  const xa = xs[i];
+                  const xb = xs[i + 1];
+                  const cx = (xa + xb) / 2;
+                  const yTop = y0 - ext - rBub * 2 - dimGap;
+                  const yBot = y1 + ext + rBub * 2 + dimGap;
+                  const mm = Math.round(sM * 1000);
+                  return (
+                    <g key={`dx-${i}`}>
+                      <text x={cx} y={yTop} textAnchor="middle" dominantBaseline="alphabetic"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                      <text x={cx} y={yBot} textAnchor="middle" dominantBaseline="hanging"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                    </g>
+                  );
+                })}
+                {spansY.map((sM, j) => {
+                  const ya = ys[j];
+                  const yb = ys[j + 1];
+                  const cy = (ya + yb) / 2;
+                  const xLeft = x0 - ext - rBub * 2 - dimGap;
+                  const xRight = x1 + ext + rBub * 2 + dimGap;
+                  const mm = Math.round(sM * 1000);
+                  return (
+                    <g key={`dy-${j}`}>
+                      <text x={xLeft} y={cy} textAnchor="end" dominantBaseline="central"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                      <text x={xRight} y={cy} textAnchor="start" dominantBaseline="central"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                    </g>
+                  );
+                })}
                 {/* Kolom hitam pada tiap titik temu */}
                 {xs.flatMap((x, i) => ys.map((y, j) => (
                   isNodeActive(grid, level.id, i, j) ? (
