@@ -1486,13 +1486,25 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const h = (b.topM - b.baseM) * scalePxPerM;
               const upper = boxes.find((o) => Math.abs(o.baseM - b.topM) < 1e-3);
               const isBasement = b.topM <= groundMdpl + 1e-3;
-              const wallW = isBasement ? FLOOR_THICK_HEAVY : 0.5;
               const isBottom = b.id === bottomBoxId;
+              const rooms = roomIntervalsByBox.get(b.id) ?? [];
+              const roomMin = rooms.length ? Math.max(0, rooms[0][0]) : null;
+              const roomMax = rooms.length ? Math.min(cutLenM, rooms[rooms.length - 1][1]) : null;
               return (
                 <g key={b.id}>
                   <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="none" />
-                  <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={wallW} strokeLinecap="square" />
-                  <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={wallW} strokeLinecap="square" />
+                  {/* Batas luar potongan — garis tipis */}
+                  <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
+                  <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
+                  {/* Dinding terluar ruang pada level basement — tebal 2x */}
+                  {isBasement && roomMin !== null && roomMax !== null && (
+                    <>
+                      <line x1={mx(roomMin)} y1={y} x2={mx(roomMin)} y2={y + h}
+                        stroke="#111" strokeWidth={FLOOR_THICK_HEAVY} strokeLinecap="square" />
+                      <line x1={mx(roomMax)} y1={y} x2={mx(roomMax)} y2={y + h}
+                        stroke="#111" strokeWidth={FLOOR_THICK_HEAVY} strokeLinecap="square" />
+                    </>
+                  )}
                   {renderFloorLine(`${b.id}-top`, y, upper ? upper.id : null)}
                   {renderFloorLine(`${b.id}-bot`, y + h, b.id, isBottom)}
                   {Array.from({ length: b.count - 1 }).map((_, i) => {
