@@ -57,6 +57,20 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import polygonClipping from "polygon-clipping";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
+import {
+  type StructuralGrid,
+  DEFAULT_GRID,
+  SPAN_PRESETS,
+  COL_PRESETS,
+  normalizeGrid,
+  axisPositions,
+  xAxisLabel,
+  yAxisLabel,
+  spansForLevel,
+  isNodeActive,
+  levelInRange,
+  computeStructuralStats,
+} from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
