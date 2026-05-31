@@ -80,6 +80,7 @@ type Sketch = {
   levels: Level[];
   geo?: Geo;
   northRotation?: number;
+  structuralGrid?: StructuralGrid;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
