@@ -642,12 +642,12 @@ function SketchViewer({
       )}
 
       {/* Canvas 3D + library */}
-      <div className="flex flex-col gap-3">
+      <div className={cn("flex flex-col gap-3", fullscreen && "h-full min-h-0")}>
         <div
           ref={canvasRef}
           className={cn(
             "relative rounded-lg border border-border bg-gradient-to-b from-slate-100 to-slate-300 overflow-hidden",
-            fullscreen ? "h-full flex-1" : "h-[520px]",
+            fullscreen ? "flex-1 min-h-0" : "h-[520px]",
           )}
         >
           <Canvas
