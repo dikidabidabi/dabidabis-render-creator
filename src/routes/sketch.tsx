@@ -30,6 +30,7 @@ import {
   Copy,
   Waypoints,
   Scissors,
+  Grid3x3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,20 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import polygonClipping from "polygon-clipping";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
+import {
+  type StructuralGrid,
+  DEFAULT_GRID,
+  SPAN_PRESETS,
+  COL_PRESETS,
+  normalizeGrid,
+  axisPositions,
+  xAxisLabel,
+  yAxisLabel,
+  spansForLevel,
+  isNodeActive,
+  levelInRange,
+  computeStructuralStats,
+} from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -231,6 +246,7 @@ type Sketch = {
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
   sectionCut?: SectionCut; // legacy single cut (kompatibilitas)
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
+  structuralGrid?: StructuralGrid; // Modul Struktur parametric grid
 };
 
 type StoreShape = {
@@ -651,6 +667,7 @@ function normalizeSketch(s: any): Sketch {
       });
     })(),
     sectionCut: undefined,
+    structuralGrid: normalizeGrid(s?.structuralGrid),
   };
 }
 
@@ -1173,6 +1190,23 @@ type EditorProps = {
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
+  const grid: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+  const updateGrid = useCallback(
+    (patch: Partial<StructuralGrid>) => {
+      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+      onChange({ structuralGrid: { ...cur, ...patch } });
+    },
+    [sketch.structuralGrid, onChange],
+  );
+  const updateGridOverride = useCallback(
+    (lvlId: string, patch: Partial<import("@/lib/structural-grid").GridOverride>) => {
+      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+      const prev = cur.perLevel?.[lvlId] ?? {};
+      const next = { ...cur.perLevel, [lvlId]: { ...prev, ...patch } };
+      onChange({ structuralGrid: { ...cur, perLevel: next } });
+    },
+    [sketch.structuralGrid, onChange],
+  );
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
@@ -1374,7 +1408,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid">("line");
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -2064,6 +2098,96 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
+    // ----- Modul Struktur (grid + kolom) -----
+    if (grid.enabled && activeLvlId) {
+      const activeLv = levels.find((l) => l.id === activeLvlId);
+      if (activeLv && levelInRange(grid, activeLv, levels)) {
+        const { spansX, spansY } = spansForLevel(grid, activeLv.id);
+        const posX = axisPositions(spansX);
+        const posY = axisPositions(spansY);
+        const ox = grid.origin.x;
+        const oy = grid.origin.y;
+        const ppm = pxPerMeter;
+        const xs = posX.map((m) => ox + m * ppm);
+        const ys = posY.map((m) => oy + m * ppm);
+        const xMin = xs[0], xMax = xs[xs.length - 1];
+        const yMin = ys[0], yMax = ys[ys.length - 1];
+        const bubbleOff = 28 / s;
+        const bubbleR = 14 / s;
+
+        // Garis as dash-dot
+        ctx.save();
+        ctx.strokeStyle = "rgba(20,20,20,0.85)";
+        ctx.lineWidth = 0.8 / s;
+        ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
+        ctx.beginPath();
+        for (const x of xs) {
+          ctx.moveTo(x, yMin - bubbleOff);
+          ctx.lineTo(x, yMax + bubbleOff);
+        }
+        for (const y of ys) {
+          ctx.moveTo(xMin - bubbleOff, y);
+          ctx.lineTo(xMax + bubbleOff, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Bubbles
+        ctx.font = `600 ${11 / s}px var(--font-display), sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (let i = 0; i < xs.length; i++) {
+          for (const yEnd of [yMin - bubbleOff, yMax + bubbleOff]) {
+            ctx.beginPath();
+            ctx.arc(xs[i], yEnd, bubbleR, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.lineWidth = 0.8 / s;
+            ctx.strokeStyle = "#0a0a0a";
+            ctx.stroke();
+            ctx.fillStyle = "#0a0a0a";
+            ctx.fillText(xAxisLabel(i), xs[i], yEnd);
+          }
+        }
+        for (let j = 0; j < ys.length; j++) {
+          for (const xEnd of [xMin - bubbleOff, xMax + bubbleOff]) {
+            ctx.beginPath();
+            ctx.arc(xEnd, ys[j], bubbleR, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.lineWidth = 0.8 / s;
+            ctx.strokeStyle = "#0a0a0a";
+            ctx.stroke();
+            ctx.fillStyle = "#0a0a0a";
+            ctx.fillText(yAxisLabel(j), xEnd, ys[j]);
+          }
+        }
+
+        // Kolom hitam padat di tiap titik potong
+        const colPx = (grid.colSizeCm / 100) * ppm;
+        ctx.fillStyle = "#0a0a0a";
+        for (let j = 0; j < ys.length; j++) {
+          for (let i = 0; i < xs.length; i++) {
+            if (!isNodeActive(grid, activeLv.id, i, j)) {
+              // disabled marker
+              ctx.save();
+              ctx.strokeStyle = "rgba(220,50,50,0.7)";
+              ctx.lineWidth = 0.8 / s;
+              ctx.beginPath();
+              ctx.arc(xs[i], ys[j], colPx * 0.7, 0, Math.PI * 2);
+              ctx.moveTo(xs[i] - colPx * 0.5, ys[j] - colPx * 0.5);
+              ctx.lineTo(xs[i] + colPx * 0.5, ys[j] + colPx * 0.5);
+              ctx.stroke();
+              ctx.restore();
+              continue;
+            }
+            ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
     if (hover && tool === "line" && !drawing) {
       ctx.fillStyle = "rgba(232,93,58,0.9)";
       ctx.beginPath();
@@ -2152,7 +2276,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, tileTick, onTileLoad]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, tileTick, onTileLoad, grid]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -3584,11 +3708,136 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "section" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("section"); }}
-            className={cn("col-span-2", tool === "section" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "section" && "bg-gradient-ember shadow-ember")}
             title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
           >
             <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
           </Button>
+          <Button
+            variant={tool === "grid" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("grid"); if (!grid.enabled) updateGrid({ enabled: true }); }}
+            className={cn(tool === "grid" && "bg-gradient-ember shadow-ember")}
+            title="Modul Struktur — grid as + kolom parametric"
+          >
+            <Grid3x3 className="mr-1.5 h-4 w-4" /> Grid Struktur
+          </Button>
+        </div>
+        {tool === "grid" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Aktif</Label>
+              <Switch checked={grid.enabled} onCheckedChange={(v) => updateGrid({ enabled: v })} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu X (m)</Label>
+              <div className="flex flex-wrap gap-1">
+                {SPAN_PRESETS.map((p) => (
+                  <Button key={`px-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                    onClick={() => updateGrid({ spansX: Array(Math.max(1, grid.spansX.length)).fill(p) })}>
+                    {p}m × {grid.spansX.length}
+                  </Button>
+                ))}
+              </div>
+              <Input
+                className="h-7 text-xs"
+                value={grid.spansX.join(", ")}
+                onChange={(e) => {
+                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
+                  if (arr.length) updateGrid({ spansX: arr });
+                }}
+                placeholder="contoh: 8, 8, 6, 9"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu Y (m)</Label>
+              <div className="flex flex-wrap gap-1">
+                {SPAN_PRESETS.map((p) => (
+                  <Button key={`py-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                    onClick={() => updateGrid({ spansY: Array(Math.max(1, grid.spansY.length)).fill(p) })}>
+                    {p}m × {grid.spansY.length}
+                  </Button>
+                ))}
+              </div>
+              <Input
+                className="h-7 text-xs"
+                value={grid.spansY.join(", ")}
+                onChange={(e) => {
+                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
+                  if (arr.length) updateGrid({ spansY: arr });
+                }}
+                placeholder="contoh: 8, 8, 6"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dimensi Kolom (cm)</Label>
+              <div className="flex flex-wrap gap-1">
+                {COL_PRESETS.map((c) => (
+                  <Button key={`c-${c}`} size="sm" variant={grid.colSizeCm === c ? "default" : "outline"} className="h-6 px-2 text-[10px]"
+                    onClick={() => updateGrid({ colSizeCm: c })}>
+                    {c}
+                  </Button>
+                ))}
+                <Input
+                  className="h-6 w-16 text-[10px]"
+                  type="number" min={10} step={5}
+                  value={grid.colSizeCm}
+                  onChange={(e) => updateGrid({ colSizeCm: Math.max(5, Number(e.target.value) || 50) })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dari Level</Label>
+                <Select value={grid.fromLevelId ?? ""} onValueChange={(v) => updateGrid({ fromLevelId: v || undefined })}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="auto (≥ MDPL 0)" /></SelectTrigger>
+                  <SelectContent>
+                    {[...levels].sort((a, b) => a.mdpl - b.mdpl).map((lv) => (
+                      <SelectItem key={lv.id} value={lv.id}>{lv.name} · {lv.mdpl}m</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Sampai Level</Label>
+                <Select value={grid.toLevelId ?? ""} onValueChange={(v) => updateGrid({ toLevelId: v || undefined })}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="paling atas" /></SelectTrigger>
+                  <SelectContent>
+                    {[...levels].sort((a, b) => a.mdpl - b.mdpl).map((lv) => (
+                      <SelectItem key={lv.id} value={lv.id}>{lv.name} · {lv.mdpl}m</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {activeLvlId && (
+              <div className="space-y-1 border-t border-border/40 pt-2">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Edit level aktif</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button size="sm" variant="outline" className="h-7 text-[10px]"
+                    onClick={() => updateGridOverride(activeLvlId, { spansX: [...grid.spansX], spansY: [...grid.spansY] })}>
+                    <Copy className="mr-1 h-3 w-3" /> Copy grid
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-[10px]"
+                    onClick={() => {
+                      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                      const np = { ...(cur.perLevel ?? {}) };
+                      delete np[activeLvlId];
+                      onChange({ structuralGrid: { ...cur, perLevel: np } });
+                    }}>
+                    <X className="mr-1 h-3 w-3" /> Reset override
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className="rounded bg-muted/40 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
+              {(() => {
+                const stats = computeStructuralStats(grid, levels);
+                return `Total kolom: ${stats.totalColumns} · Volume beton: ${stats.concreteVolumeM3.toFixed(2)} m³`;
+              })()}
+            </div>
+          </div>
+        )}
         </div>
         {tool === "polyline" && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
