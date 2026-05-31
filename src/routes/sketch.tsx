@@ -3724,13 +3724,119 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </Button>
         </div>
         {tool === "grid" && (
-          <StructurePanel
-            grid={grid}
-            levels={levels}
-            activeLvlId={activeLvlId}
-            onUpdate={updateGrid}
-            onUpdateOverride={updateGridOverride}
-          />
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Aktif</Label>
+              <Switch checked={grid.enabled} onCheckedChange={(v) => updateGrid({ enabled: v })} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu X (m)</Label>
+              <div className="flex flex-wrap gap-1">
+                {SPAN_PRESETS.map((p) => (
+                  <Button key={`px-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                    onClick={() => updateGrid({ spansX: Array(Math.max(1, grid.spansX.length)).fill(p) })}>
+                    {p}m × {grid.spansX.length}
+                  </Button>
+                ))}
+              </div>
+              <Input
+                className="h-7 text-xs"
+                value={grid.spansX.join(", ")}
+                onChange={(e) => {
+                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
+                  if (arr.length) updateGrid({ spansX: arr });
+                }}
+                placeholder="contoh: 8, 8, 6, 9"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Bentang Sumbu Y (m)</Label>
+              <div className="flex flex-wrap gap-1">
+                {SPAN_PRESETS.map((p) => (
+                  <Button key={`py-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+                    onClick={() => updateGrid({ spansY: Array(Math.max(1, grid.spansY.length)).fill(p) })}>
+                    {p}m × {grid.spansY.length}
+                  </Button>
+                ))}
+              </div>
+              <Input
+                className="h-7 text-xs"
+                value={grid.spansY.join(", ")}
+                onChange={(e) => {
+                  const arr = e.target.value.split(/[,\s]+/).map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0);
+                  if (arr.length) updateGrid({ spansY: arr });
+                }}
+                placeholder="contoh: 8, 8, 6"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dimensi Kolom (cm)</Label>
+              <div className="flex flex-wrap gap-1">
+                {COL_PRESETS.map((c) => (
+                  <Button key={`c-${c}`} size="sm" variant={grid.colSizeCm === c ? "default" : "outline"} className="h-6 px-2 text-[10px]"
+                    onClick={() => updateGrid({ colSizeCm: c })}>
+                    {c}
+                  </Button>
+                ))}
+                <Input
+                  className="h-6 w-16 text-[10px]"
+                  type="number" min={10} step={5}
+                  value={grid.colSizeCm}
+                  onChange={(e) => updateGrid({ colSizeCm: Math.max(5, Number(e.target.value) || 50) })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dari Level</Label>
+                <Select value={grid.fromLevelId ?? ""} onValueChange={(v) => updateGrid({ fromLevelId: v || undefined })}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="auto (≥ MDPL 0)" /></SelectTrigger>
+                  <SelectContent>
+                    {[...levels].sort((a, b) => a.mdpl - b.mdpl).map((lv) => (
+                      <SelectItem key={lv.id} value={lv.id}>{lv.name} · {lv.mdpl}m</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Sampai Level</Label>
+                <Select value={grid.toLevelId ?? ""} onValueChange={(v) => updateGrid({ toLevelId: v || undefined })}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="paling atas" /></SelectTrigger>
+                  <SelectContent>
+                    {[...levels].sort((a, b) => a.mdpl - b.mdpl).map((lv) => (
+                      <SelectItem key={lv.id} value={lv.id}>{lv.name} · {lv.mdpl}m</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {activeLvlId && (
+              <div className="space-y-1 border-t border-border/40 pt-2">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Edit level aktif</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button size="sm" variant="outline" className="h-7 text-[10px]"
+                    onClick={() => updateGridOverride(activeLvlId, { spansX: [...grid.spansX], spansY: [...grid.spansY] })}>
+                    <Copy className="mr-1 h-3 w-3" /> Copy grid
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 text-[10px]"
+                    onClick={() => {
+                      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                      const np = { ...(cur.perLevel ?? {}) };
+                      delete np[activeLvlId];
+                      onChange({ structuralGrid: { ...cur, perLevel: np } });
+                    }}>
+                    <X className="mr-1 h-3 w-3" /> Reset override
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className="rounded bg-muted/40 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
+              {(() => {
+                const stats = computeStructuralStats(grid, levels);
+                return `Total kolom: ${stats.totalColumns} · Volume beton: ${stats.concreteVolumeM3.toFixed(2)} m³`;
+              })()}
+            </div>
+          </div>
         )}
         </div>
         {tool === "polyline" && (
