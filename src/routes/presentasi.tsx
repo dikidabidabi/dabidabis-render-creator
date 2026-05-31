@@ -3350,6 +3350,17 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
         value={`${fmt(data.klbRencanaM2)} m²`}
         hint={data.klbLimitM2 > 0 ? `dari batas ${fmt(data.klbLimitM2)} m²` : "batas belum diatur"}
       />
+      <GridStat
+        label={`KDH${data.kdhPct ? ` (min ${data.kdhPct}%)` : ""}`}
+        value={`${fmt(data.kdhRencanaM2)} m²`}
+        hint={data.kdhLimitM2 > 0 ? `target min ${fmt(data.kdhLimitM2)} m²` : "target belum diatur"}
+      />
+      <GridStat
+        label={`KTB${data.ktbPct ? ` (maks ${data.ktbPct}%)` : ""}`}
+        value={`${fmt(data.ktbRencanaM2)} m²`}
+        hint={data.ktbLimitM2 > 0 ? `dari batas ${fmt(data.ktbLimitM2)} m²` : "batas belum diatur"}
+      />
+
       <GridStat label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
       <GridStat label="Total Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan & Void" />
       <GridStat label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
