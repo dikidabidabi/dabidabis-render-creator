@@ -2256,7 +2256,49 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
-    // ----- Modul Struktur (grid + kolom) -----
+    // ----- Modul Struktur: render grid INAKTIF (extras yang bukan grid edit aktif) sebagai ghost -----
+    if (activeLvlId) {
+      const activeLvGhost = levels.find((l) => l.id === activeLvlId);
+      const allGridsForGhost: Array<{ g: StructuralGrid; idx: number }> = [];
+      if (primaryGrid.enabled) allGridsForGhost.push({ g: primaryGrid, idx: 0 });
+      gridExtras.forEach((g, i) => { if (g.enabled) allGridsForGhost.push({ g, idx: i + 1 }); });
+      for (const ent of allGridsForGhost) {
+        if (ent.idx === editGridIdx) continue; // grid aktif dirender block utama di bawah
+        const g = ent.g;
+        if (!activeLvGhost || !levelInRange(g, activeLvGhost, levels)) continue;
+        const { spansX, spansY } = spansForLevel(g, activeLvGhost.id);
+        const ppm = pxPerMeter;
+        const xs = axisPositions(spansX).map((m) => g.origin.x + m * ppm);
+        const ys = axisPositions(spansY).map((m) => g.origin.y + m * ppm);
+        const xMin = xs[0], xMax = xs[xs.length - 1];
+        const yMin = ys[0], yMax = ys[ys.length - 1];
+        const bubbleOff = 22 / s;
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = "rgba(80,80,80,0.85)";
+        ctx.lineWidth = 0.3 / s;
+        ctx.setLineDash([10 / s, 5 / s, 1.5 / s, 5 / s]);
+        ctx.beginPath();
+        for (const x of xs) { ctx.moveTo(x, yMin - bubbleOff); ctx.lineTo(x, yMax + bubbleOff); }
+        for (const y of ys) { ctx.moveTo(xMin - bubbleOff, y); ctx.lineTo(xMax + bubbleOff, y); }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const colPx = (g.colSizeCm / 100) * ppm;
+        const posXM = axisPositions(spansX);
+        const posYM = axisPositions(spansY);
+        ctx.fillStyle = "rgba(40,40,40,0.55)";
+        for (let j = 0; j < ys.length; j++) {
+          for (let i = 0; i < xs.length; i++) {
+            if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
+            if (isColumnClipped(g, posXM[i], posYM[j])) continue;
+            ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+    // ----- Modul Struktur (grid aktif + kolom) -----
     if (grid.enabled && activeLvlId) {
       const activeLv = levels.find((l) => l.id === activeLvlId);
       if (activeLv && levelInRange(grid, activeLv, levels)) {
