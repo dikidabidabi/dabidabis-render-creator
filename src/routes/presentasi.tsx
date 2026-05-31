@@ -46,7 +46,7 @@ type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
-  kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
+  kdbPct?: number; klbCoef?: number; kdhPct?: number; ktbPct?: number; fungsi?: string; northRotation?: number;
   geo?: Geo;
   sectionCut?: SectionCut; // legacy
   sectionCuts?: SectionCut[];
