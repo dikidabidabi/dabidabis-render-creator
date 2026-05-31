@@ -3367,15 +3367,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           setClipDraft({ pts: next });
         }
       } else {
-        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-        const clips = (cur.columnClips ?? []).map((c) => {
+        const clips = (grid.columnClips ?? []).map((c) => {
           if (c.id !== clipDrag.clipId) return c;
           const pts = c.pts.slice();
           pts[clipDrag.idx] = { x: mx, y: my };
           return { ...c, pts };
         });
-        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+        updateGrid({ columnClips: clips });
       }
+
       if (moved && !clipDrag.moved) setClipDrag({ ...clipDrag, moved: true });
       return;
     }
