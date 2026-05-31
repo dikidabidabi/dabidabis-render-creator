@@ -2929,6 +2929,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     const p = getWorldPos(e);
+    if (tool === "grid") {
+      const raw = getWorldPosRaw(e);
+      const corner = hitGridCorner(raw);
+      const b = gridBounds();
+      if (corner && b) {
+        const startSpansX = b.spansX.slice();
+        const startSpansY = b.spansY.slice();
+        const avgX = startSpansX.reduce((s, n) => s + n, 0) / startSpansX.length;
+        const avgY = startSpansY.reduce((s, n) => s + n, 0) / startSpansY.length;
+        const unit = Math.max(1, Math.round(((avgX + avgY) / 2) * 2) / 2); // snap unit ke 0.5m
+        setGridDrag({
+          kind: "corner", corner,
+          startWorld: raw,
+          startOrigin: { ...grid.origin },
+          startSpansX, startSpansY, unit,
+        });
+        return;
+      }
+      if (b && raw.x >= b.xMin && raw.x <= b.xMax && raw.y >= b.yMin && raw.y <= b.yMax) {
+        setGridDrag({ kind: "move", startWorld: raw, startOrigin: { ...grid.origin } });
+        return;
+      }
+      // klik di luar → set origin ke titik klik (snap)
+      const snapped = snapOriginPx(raw);
+      updateGrid({ origin: snapped });
+      return;
+    }
     if (tool === "line" || tool === "rect" || tool === "section") {
       setDrawing({ a: p, b: p });
     } else if (tool === "polyline") {
