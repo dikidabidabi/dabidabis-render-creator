@@ -2198,6 +2198,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
           }
         }
+
+        // Corner handles (stylus drag → expand di 4 arah)
+        if (tool === "grid") {
+          const hSize = 20 / s;
+          const corners: Array<{ x: number; y: number }> = [
+            { x: xMin, y: yMin }, { x: xMax, y: yMin },
+            { x: xMin, y: yMax }, { x: xMax, y: yMax },
+          ];
+          for (const c of corners) {
+            ctx.save();
+            ctx.fillStyle = "rgba(232,93,58,0.95)";
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 1.5 / s;
+            ctx.fillRect(c.x - hSize / 2, c.y - hSize / 2, hSize, hSize);
+            ctx.strokeRect(c.x - hSize / 2, c.y - hSize / 2, hSize, hSize);
+            ctx.restore();
+          }
+        }
         ctx.restore();
       }
     }
