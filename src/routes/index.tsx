@@ -1,8 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, Image as ImageIcon, Sliders, Layers } from "lucide-react";
+import { ArrowRight, Sparkles, Image as ImageIcon, Sliders, Layers, CircleDot, PenTool, Box, Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -116,6 +117,71 @@ function Landing() {
         </motion.div>
       </section>
 
+      {/* ICE Workflow */}
+      <section className="border-t border-border/40 px-4 py-20 sm:px-6">
+        <div className="mx-auto max-w-5xl text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-ember/30 bg-ember/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-ember">
+              <CircleDot className="h-3.5 w-3.5" />
+              Sistem Workflow
+            </div>
+            <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+              ICE
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-lg text-muted-foreground">
+              Integrated Conceptual Environment
+            </p>
+            <p className="mx-auto mt-4 max-w-2xl text-sm text-muted-foreground">
+              Kerangka kerja terpadu yang menghubungkan setiap tahap perancangan arsitektur — dari konsep sketsa, tabulasi ruang, narasi spasial, presentasi profesional, hingga model 3D interaktif — dalam satu ekosistem yang koheren dan berkelanjutan.
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7, delay: 0.15 }}
+            className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
+          >
+            <WorkflowStep
+              icon={<PenTool className="h-5 w-5" />}
+              step="1"
+              title="Sketsa"
+              desc="Gambar denah & potongan, atur level, ruang, dan koordinat tapak."
+            />
+            <WorkflowStep
+              icon={<Layers className="h-5 w-5" />}
+              step="2"
+              title="Tabulasi"
+              desc="Hitung luas, program ruang, dan analisis rasionalitas otomatis."
+            />
+            <WorkflowStep
+              icon={<Sparkles className="h-5 w-5" />}
+              step="3"
+              title="Narasi"
+              desc="Hasilkan kisah spasial dengan bantuan AI dari data perancangan."
+            />
+            <WorkflowStep
+              icon={<Presentation className="h-5 w-5" />}
+              step="4"
+              title="Presentasi"
+              desc="Susun slide profesional denah, potongan, dan analisis kawasan."
+            />
+            <WorkflowStep
+              icon={<Box className="h-5 w-5" />}
+              step="5"
+              title="Model 3D"
+              desc="Jelajahi bangunan dalam tampilan tiga dimensi interaktif."
+            />
+          </motion.div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="border-t border-border/40 px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-6xl">
@@ -189,6 +255,31 @@ function FeatureCard({
       </div>
       <h3 className="font-display text-lg font-semibold">{title}</h3>
       <p className="mt-2 text-sm text-muted-foreground">{desc}</p>
+    </div>
+  );
+}
+
+function WorkflowStep({
+  icon,
+  step,
+  title,
+  desc,
+}: {
+  icon: React.ReactNode;
+  step: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="group relative rounded-xl border border-border/60 bg-surface/60 p-5 text-left transition-all hover:border-ember/40 hover:shadow-soft">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-ember/10 text-ember">
+          {icon}
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ember">{step}</span>
+      </div>
+      <h4 className="font-display text-sm font-semibold">{title}</h4>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{desc}</p>
     </div>
   );
 }
