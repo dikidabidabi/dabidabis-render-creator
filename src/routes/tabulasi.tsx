@@ -37,6 +37,8 @@ type Sketch = {
   levels: Level[];
   kdbPct?: number;
   klbCoef?: number;
+  kdhPct?: number;
+  ktbPct?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -50,6 +52,15 @@ function isLahan(name: string) {
 function isVoid(name: string) {
   return name.trim().toLowerCase() === "void";
 }
+
+function isTaman(name: string) {
+  return name.trim().toLowerCase().startsWith("taman");
+}
+
+function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
+  return levels.find((l) => Math.abs(l.mdpl) < 1e-6);
+}
+
 
 function loadCostMap(): Record<string, number> {
   try {
@@ -233,10 +244,16 @@ type Stats = {
   totalSetengahM2: number; // coefficient 0.5
   kdbPct?: number;
   klbCoef?: number;
+  kdhPct?: number;
+  ktbPct?: number;
   kdbLimitM2: number; // KDB target = kdbPct% * lahan
   klbLimitM2: number; // KLB target = klbCoef * lahan
+  kdhLimitM2: number; // KDH target = kdhPct% * lahan (min)
+  ktbLimitM2: number; // KTB target = ktbPct% * lahan (max)
   kdbRencanaM2: number; // ground floor rooms (level dengan mdpl terendah)
   klbRencanaM2: number; // total ruang * koefisien
+  kdhRencanaM2: number; // total "Taman" di level dasar
+  ktbRencanaM2: number; // total ruang di LT B1
   jumlahLapis: number;
   ketinggianM: number;
 };
@@ -247,8 +264,23 @@ function computeStats(sk: Sketch): Stats {
   const tipMul: Record<string, number> = {};
   for (const lv of levels) tipMul[lv.id] = Math.max(1, lv.typicalCount ?? 1);
   const mul = (l: Layer) => (l.levelId ? tipMul[l.levelId] ?? 1 : 1);
-  const lahan = layers.filter((l) => isLahan(l.name));
-  const ruang = layers.filter((l) => !isLahan(l.name));
+
+  const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const groundLevel = findMdplZeroLevel(sortedLv) ?? sortedLv[0];
+  const groundIdx = groundLevel ? sortedLv.findIndex((l) => l.id === groundLevel.id) : -1;
+  const b1Level = groundIdx > 0 ? sortedLv[groundIdx - 1] : undefined;
+
+  // Lahan = hanya layer "Lahan" di level dasar (mdpl 0)
+  const lahan = layers.filter(
+    (l) => isLahan(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
+  // Ruang utk KDB/KLB: bukan lahan, bukan void, bukan taman
+  const ruang = layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  // Taman di level dasar (utk KDH)
+  const tamanGround = layers.filter(
+    (l) => isTaman(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
+
   const totalLahanM2 = lahan.reduce((s, l) => s + (l.areaM2 || 0), 0);
   const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0) * mul(l), 0);
   const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1).reduce((s, l) => s + l.areaM2 * mul(l), 0);
@@ -257,15 +289,23 @@ function computeStats(sk: Sketch): Stats {
 
   const kdbLimitM2 = (sk.kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdbPct! / 100) * totalLahanM2 : 0;
   const klbLimitM2 = (sk.klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? sk.klbCoef! * totalLahanM2 : 0;
+  const kdhLimitM2 = (sk.kdhPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdhPct! / 100) * totalLahanM2 : 0;
+  const ktbLimitM2 = (sk.ktbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.ktbPct! / 100) * totalLahanM2 : 0;
 
   // KDB Rencana: footprint level dasar (tidak digandakan tipikal)
-  let kdbRencanaM2 = 0;
-  if (levels.length > 0) {
-    const ground = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
-    kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
-  }
-  // KLB Rencana: total ruang * koefisien * tipikal
+  const kdbRencanaM2 = groundLevel
+    ? ruang.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
+    : 0;
+  // KLB Rencana: total ruang * koefisien * tipikal (tanpa taman)
   const klbRencanaM2 = ruang.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1) * mul(l), 0);
+  // KDH Rencana: total taman di level dasar
+  const kdhRencanaM2 = tamanGround.reduce((s, l) => s + l.areaM2, 0);
+  // KTB Rencana: total ruang di LT B1 (tanpa lahan/void/taman)
+  const ktbRencanaM2 = b1Level
+    ? layers
+        .filter((l) => l.levelId === b1Level.id && !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
+        .reduce((s, l) => s + l.areaM2, 0)
+    : 0;
 
   const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, lv.typicalCount ?? 1), 0);
   const typicalExtra = levels.reduce((s, lv) => s + (Math.max(1, lv.typicalCount ?? 1) - 1) * (Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : 3), 0);
@@ -284,20 +324,31 @@ function computeStats(sk: Sketch): Stats {
     totalSetengahM2,
     kdbPct: sk.kdbPct,
     klbCoef: sk.klbCoef,
+    kdhPct: sk.kdhPct,
+    ktbPct: sk.ktbPct,
     kdbLimitM2,
     klbLimitM2,
+    kdhLimitM2,
+    ktbLimitM2,
     kdbRencanaM2,
     klbRencanaM2,
+    kdhRencanaM2,
+    ktbRencanaM2,
     jumlahLapis,
     ketinggianM,
   };
 }
+
 
 // ---------- Sections ----------
 
 function RekapSection({ data }: { data: Stats }) {
   const kdbDev = data.kdbLimitM2 - data.kdbRencanaM2; // positive = under limit (hijau)
   const klbDev = data.klbLimitM2 - data.klbRencanaM2;
+  // KDH: target adalah minimum — rencana ≥ limit = hijau (invert)
+  const kdhDev = data.kdhRencanaM2 - data.kdhLimitM2;
+  // KTB: target adalah maksimum — rencana ≤ limit = hijau (sama seperti KDB)
+  const ktbDev = data.ktbLimitM2 - data.ktbRencanaM2;
   return (
     <div className="space-y-2 text-sm">
       <Row label="Luas Lahan" value={`${fmt(data.totalLahanM2)} m²`} />
@@ -320,12 +371,29 @@ function RekapSection({ data }: { data: Stats }) {
       <Row label="KLB Rencana" value={`${fmt(data.klbRencanaM2)} m²`} />
       {data.klbCoef ? <DeviationRow dev={klbDev} /> : null}
       <div className="my-2 h-px bg-border" />
+      <Row
+        label={`KDH${data.kdhPct ? ` (min ${data.kdhPct}%)` : ""}`}
+        value={`${fmt(data.kdhLimitM2)} m²`}
+        muted={!data.kdhPct}
+      />
+      <Row label="KDH Rencana" value={`${fmt(data.kdhRencanaM2)} m²`} />
+      {data.kdhPct ? <DeviationRow dev={kdhDev} invert /> : null}
+      <div className="my-2 h-px bg-border" />
+      <Row
+        label={`KTB${data.ktbPct ? ` (maks ${data.ktbPct}%)` : ""}`}
+        value={`${fmt(data.ktbLimitM2)} m²`}
+        muted={!data.ktbPct}
+      />
+      <Row label="KTB Rencana" value={`${fmt(data.ktbRencanaM2)} m²`} />
+      {data.ktbPct ? <DeviationRow dev={ktbDev} /> : null}
+      <div className="my-2 h-px bg-border" />
       <Row label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
       <Row label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
       <Row label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
     </div>
   );
 }
+
 
 function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
@@ -336,20 +404,30 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
   );
 }
 
-function DeviationRow({ dev }: { dev: number }) {
-  // dev = limit - rencana. negative => rencana > limit (kelebihan, merah, +)
+function DeviationRow({ dev, invert }: { dev: number; invert?: boolean }) {
+  // Default: dev = limit - rencana. negative => rencana > limit (kelebihan, merah, +)
+  // Invert (KDH): dev = rencana - limit. negative => rencana < limit (kurang, merah, −)
+  const good = invert ? dev >= 0 : dev >= 0;
   const exceed = dev < 0;
   const abs = Math.abs(dev);
+  const sign = invert
+    ? exceed
+      ? "−"
+      : "+"
+    : exceed
+      ? "+"
+      : "−";
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-muted-foreground">Deviasi</span>
-      <span className={cn("font-mono tabular-nums", exceed ? "text-red-500" : "text-emerald-500")}>
-        {exceed ? "+" : "−"}
+      <span className={cn("font-mono tabular-nums", good ? "text-emerald-500" : "text-red-500")}>
+        {sign}
         {fmt(abs)} m²
       </span>
     </div>
   );
 }
+
 
 function LevelDetailSection({ sketch }: { sketch: Sketch }) {
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
@@ -418,6 +496,9 @@ function InfographicSection({ data, sketch }: { data: Stats; sketch: Sketch }) {
 
   const kdbUsage = data.kdbLimitM2 > 0 ? (data.kdbRencanaM2 / data.kdbLimitM2) * 100 : 0;
   const klbUsage = data.klbLimitM2 > 0 ? (data.klbRencanaM2 / data.klbLimitM2) * 100 : 0;
+  const kdhUsage = data.kdhLimitM2 > 0 ? (data.kdhRencanaM2 / data.kdhLimitM2) * 100 : 0;
+  const ktbUsage = data.ktbLimitM2 > 0 ? (data.ktbRencanaM2 / data.ktbLimitM2) * 100 : 0;
+
 
   // Per-level distribution
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
@@ -463,7 +544,19 @@ function InfographicSection({ data, sketch }: { data: Stats; sketch: Sketch }) {
           value={klbUsage}
           caption={data.klbLimitM2 > 0 ? `${fmt(data.klbRencanaM2, 0)} / ${fmt(data.klbLimitM2, 0)} m²` : "Belum diatur"}
         />
+        <RingStat
+          label="KDH"
+          value={kdhUsage}
+          invert
+          caption={data.kdhLimitM2 > 0 ? `${fmt(data.kdhRencanaM2, 0)} / ${fmt(data.kdhLimitM2, 0)} m²` : "Belum diatur"}
+        />
+        <RingStat
+          label="KTB"
+          value={ktbUsage}
+          caption={data.ktbLimitM2 > 0 ? `${fmt(data.ktbRencanaM2, 0)} / ${fmt(data.ktbLimitM2, 0)} m²` : "Belum diatur"}
+        />
       </div>
+
 
       {perLevel.length > 0 && (
         <div>
@@ -549,7 +642,7 @@ function DonutMulti({
   );
 }
 
-function RingStat({ label, value, caption }: { label: string; value: number; caption?: string }) {
+function RingStat({ label, value, caption, invert }: { label: string; value: number; caption?: string; invert?: boolean }) {
   const over = value > 100;
   const pct = Math.max(0, Math.min(100, value));
   const size = 84;
@@ -557,7 +650,20 @@ function RingStat({ label, value, caption }: { label: string; value: number; cap
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
   const dash = (pct / 100) * c;
-  const color = over ? "hsl(0 84% 60%)" : value > 85 ? "hsl(38 92% 55%)" : "hsl(152 65% 45%)";
+  // Default (KDB/KLB/KTB): di bawah limit hijau, mendekati kuning, lewat merah.
+  // Invert (KDH): minimal — mencapai/melebihi hijau, di bawah merah.
+  const color = invert
+    ? value >= 100
+      ? "hsl(152 65% 45%)"
+      : value >= 70
+        ? "hsl(38 92% 55%)"
+        : "hsl(0 84% 60%)"
+    : over
+      ? "hsl(0 84% 60%)"
+      : value > 85
+        ? "hsl(38 92% 55%)"
+        : "hsl(152 65% 45%)";
+
   return (
     <div className="flex flex-col items-center rounded-lg border border-border/60 bg-background/40 p-2">
       <div className="relative" style={{ width: size, height: size }}>

@@ -46,7 +46,7 @@ type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
-  kdbPct?: number; klbCoef?: number; fungsi?: string; northRotation?: number;
+  kdbPct?: number; klbCoef?: number; kdhPct?: number; ktbPct?: number; fungsi?: string; northRotation?: number;
   geo?: Geo;
   sectionCut?: SectionCut; // legacy
   sectionCuts?: SectionCut[];
@@ -94,6 +94,8 @@ const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000
 
 function isLahan(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoid(n: string) { return n.trim().toLowerCase() === "void"; }
+function isTaman(n: string) { return n.trim().toLowerCase().startsWith("taman"); }
+
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
@@ -798,9 +800,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
 type Stats = {
   totalLahanM2: number; totalRuangM2: number;
   totalEfektifM2: number; totalSaranaM2: number; totalSetengahM2: number;
-  kdbPct?: number; klbCoef?: number;
-  kdbLimitM2: number; klbLimitM2: number;
-  kdbRencanaM2: number; klbRencanaM2: number;
+  kdbPct?: number; klbCoef?: number; kdhPct?: number; ktbPct?: number;
+  kdbLimitM2: number; klbLimitM2: number; kdhLimitM2: number; ktbLimitM2: number;
+  kdbRencanaM2: number; klbRencanaM2: number; kdhRencanaM2: number; ktbRencanaM2: number;
   jumlahLapis: number; ketinggianM: number;
   totalTerhitungM2: number;
 };
@@ -808,8 +810,20 @@ type Stats = {
 function computeStats(sk: Sketch): Stats {
   const layers = sk.layers ?? [];
   const levels = sk.levels ?? [];
-  const lahan = layers.filter((l) => isLahan(l.name));
-  const ruang = layers.filter((l) => !isLahan(l.name));
+  const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const groundLevel = findMdplZeroLevel(sortedLv) ?? sortedLv[0];
+  const groundIdx = groundLevel ? sortedLv.findIndex((l) => l.id === groundLevel.id) : -1;
+  const b1Level = groundIdx > 0 ? sortedLv[groundIdx - 1] : undefined;
+
+  // Lahan = hanya layer "Lahan" di level dasar
+  const lahan = layers.filter(
+    (l) => isLahan(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
+  // Ruang utk KDB/KLB: bukan lahan, bukan void, bukan taman
+  const ruang = layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  const tamanGround = layers.filter(
+    (l) => isTaman(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
   // Build a multiplier lookup per source level (default 1).
   const mul: Record<string, number> = {};
   for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
@@ -825,16 +839,22 @@ function computeStats(sk: Sketch): Stats {
     .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
   const kdbLimitM2 = (sk.kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdbPct! / 100) * totalLahanM2 : 0;
   const klbLimitM2 = (sk.klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? sk.klbCoef! * totalLahanM2 : 0;
+  const kdhLimitM2 = (sk.kdhPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdhPct! / 100) * totalLahanM2 : 0;
+  const ktbLimitM2 = (sk.ktbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.ktbPct! / 100) * totalLahanM2 : 0;
   // KDB = footprint at ground only (no multiplier — ground floor is a single footprint)
-  let kdbRencanaM2 = 0;
-  if (levels.length > 0) {
-    const ground = findMdplZeroLevel(levels) ?? [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
-    kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
-  }
+  const kdbRencanaM2 = groundLevel
+    ? ruang.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
+    : 0;
   const klbRencanaM2 = ruang.reduce(
     (s, l) => s + l.areaM2 * (l.coefficient ?? 1) * kOf(l.levelId),
     0,
   );
+  const kdhRencanaM2 = tamanGround.reduce((s, l) => s + l.areaM2, 0);
+  const ktbRencanaM2 = b1Level
+    ? layers
+        .filter((l) => l.levelId === b1Level.id && !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
+        .reduce((s, l) => s + l.areaM2, 0)
+    : 0;
   const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, Math.round(lv.typicalCount ?? 1)), 0);
   const baseHeight =
     levels.length > 1 ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl)) : 0;
@@ -848,11 +868,13 @@ function computeStats(sk: Sketch): Stats {
     .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
   return {
     totalLahanM2, totalRuangM2, totalEfektifM2, totalSaranaM2, totalSetengahM2,
-    kdbPct: sk.kdbPct, klbCoef: sk.klbCoef,
-    kdbLimitM2, klbLimitM2, kdbRencanaM2, klbRencanaM2,
+    kdbPct: sk.kdbPct, klbCoef: sk.klbCoef, kdhPct: sk.kdhPct, ktbPct: sk.ktbPct,
+    kdbLimitM2, klbLimitM2, kdhLimitM2, ktbLimitM2,
+    kdbRencanaM2, klbRencanaM2, kdhRencanaM2, ktbRencanaM2,
     jumlahLapis, ketinggianM, totalTerhitungM2,
   };
 }
+
 
 // ============= SLIDE CONTENT (white A3 modern theme) =============
 
@@ -3328,6 +3350,17 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
         value={`${fmt(data.klbRencanaM2)} m²`}
         hint={data.klbLimitM2 > 0 ? `dari batas ${fmt(data.klbLimitM2)} m²` : "batas belum diatur"}
       />
+      <GridStat
+        label={`KDH${data.kdhPct ? ` (min ${data.kdhPct}%)` : ""}`}
+        value={`${fmt(data.kdhRencanaM2)} m²`}
+        hint={data.kdhLimitM2 > 0 ? `target min ${fmt(data.kdhLimitM2)} m²` : "target belum diatur"}
+      />
+      <GridStat
+        label={`KTB${data.ktbPct ? ` (maks ${data.ktbPct}%)` : ""}`}
+        value={`${fmt(data.ktbRencanaM2)} m²`}
+        hint={data.ktbLimitM2 > 0 ? `dari batas ${fmt(data.ktbLimitM2)} m²` : "batas belum diatur"}
+      />
+
       <GridStat label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
       <GridStat label="Total Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan & Void" />
       <GridStat label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
@@ -3427,6 +3460,9 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
   const pctSetengah = (data.totalSetengahM2 / total) * 100;
   const kdbUsage = data.kdbLimitM2 > 0 ? (data.kdbRencanaM2 / data.kdbLimitM2) * 100 : 0;
   const klbUsage = data.klbLimitM2 > 0 ? (data.klbRencanaM2 / data.klbLimitM2) * 100 : 0;
+  const kdhUsage = data.kdhLimitM2 > 0 ? (data.kdhRencanaM2 / data.kdhLimitM2) * 100 : 0;
+  const ktbUsage = data.ktbLimitM2 > 0 ? (data.ktbRencanaM2 / data.ktbLimitM2) * 100 : 0;
+
 
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
@@ -3460,12 +3496,15 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
           </div>
         </div>
       </Panel>
-      <Panel title="KDB / KLB">
-        <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", height: "100%" }}>
+      <Panel title="KDB / KLB / KDH / KTB">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "center", justifyItems: "center", height: "100%" }}>
           <Ring value={kdbUsage} label="KDB" />
           <Ring value={klbUsage} label="KLB" />
+          <Ring value={kdhUsage} label="KDH" />
+          <Ring value={ktbUsage} label="KTB" />
         </div>
       </Panel>
+
       <Panel title="Distribusi per Level">
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {perLevel.map(({ lv, sum, k, name }) => {
