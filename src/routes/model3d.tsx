@@ -357,14 +357,14 @@ function StructuralColumns({
   }, [grid, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl]);
 
   if (!grid?.enabled || items.length === 0) return null;
-  const col = colorMode === "bw" ? "#1a1a1a" : "#0a0a0a";
+  const col = "#ffffff";
   return (
     <group>
       {items.map((it) => (
         <mesh key={it.key} position={[it.x, it.y, it.z]} castShadow receiveShadow>
           <boxGeometry args={[it.size, it.h, it.size]} />
-          <meshStandardMaterial color={col} roughness={0.85} metalness={0.05} />
-          <Edges threshold={15} color="#000000" />
+          <meshStandardMaterial color={col} roughness={0.7} metalness={0.05} />
+          <Edges threshold={15} color="#444444" />
         </mesh>
       ))}
     </group>

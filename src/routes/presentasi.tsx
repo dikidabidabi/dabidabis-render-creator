@@ -1647,6 +1647,60 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               Panjang potongan: {cutLenM.toFixed(2)} m
             </text>
           </g>
+
+          {/* Grid struktur vertikal — diproyeksikan ke garis potongan */}
+          {(() => {
+            const grid = sketch.structuralGrid;
+            if (!grid?.enabled) return null;
+            const ppm = pxPerMeter;
+            const ox = grid.origin.x, oy = grid.origin.y;
+            const ddx = cut.p2.x - cut.p1.x;
+            const ddy = cut.p2.y - cut.p1.y;
+            type Hit = { t: number; label: string; key: string };
+            const hits: Hit[] = [];
+            const axX = axisPositions(grid.spansX);
+            for (let i = 0; i < axX.length; i++) {
+              const planX = ox + axX[i] * ppm;
+              if (Math.abs(ddx) < 1e-6) continue;
+              const t = (planX - cut.p1.x) / ddx;
+              if (t < -0.001 || t > 1.001) continue;
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabel(i), key: `gx${i}` });
+            }
+            const axY = axisPositions(grid.spansY);
+            for (let j = 0; j < axY.length; j++) {
+              const planY = oy + axY[j] * ppm;
+              if (Math.abs(ddy) < 1e-6) continue;
+              const t = (planY - cut.p1.y) / ddy;
+              if (t < -0.001 || t > 1.001) continue;
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabel(j), key: `gy${j}` });
+            }
+            if (!hits.length) return null;
+            const yTopPx = my(maxMdpl);
+            const yBotPx = my(minMdpl);
+            const yBub = my(minMdpl) + 64;
+            const rBub = 7;
+            return (
+              <g pointerEvents="none">
+                {hits.map((h) => {
+                  const sx = mx(h.t * cutLenM);
+                  return (
+                    <g key={h.key}>
+                      <line x1={sx} y1={yTopPx} x2={sx} y2={yBub - rBub}
+                        stroke="#0a0a0a" strokeWidth={0.3}
+                        strokeDasharray="6 3 1 3" />
+                      <circle cx={sx} cy={yBub} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.4} />
+                      <text x={sx} y={yBub} textAnchor="middle" dominantBaseline="central"
+                        fontSize={7} fontWeight={700} fill="#0a0a0a"
+                        style={{ fontFamily: "Sora, sans-serif" }}>
+                        {h.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
         </svg>
       </div>
       <div style={{ fontSize: 11, color: "#444", textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
@@ -1777,10 +1831,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const x0 = xs[0], x1 = xs[xs.length - 1];
             const y0 = ys[0], y1 = ys[ys.length - 1];
             const ext = sw * 0.04;
-            const rBub = sw * 0.018;
-            const gridSW = sw * 0.0012; // lebih tipis dari garis potong (0.0014)
+            const rBub = sw * 0.009;
+            const gridSW = sw * 0.0006; // lebih tipis 50% dari sebelumnya
             const dash = `${sw * 0.01} ${sw * 0.004} ${sw * 0.002} ${sw * 0.004}`;
             const colPx = (grid.colSizeCm / 100) * pxPerM;
+            const bubFs = sw * 0.008;
+            const dimFs = sw * 0.0085;
+            const dimGap = sw * 0.006;
             return (
               <g pointerEvents="none">
                 {/* Vertikal (sumbu X) */}
@@ -1791,13 +1848,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     <circle cx={x} cy={y0 - ext - rBub} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {xAxisLabel(i)}
                     </text>
                     <circle cx={x} cy={y1 + ext + rBub} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {xAxisLabel(i)}
                     </text>
                   </g>
@@ -1810,17 +1867,62 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     <circle cx={x0 - ext - rBub} cy={y} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {yAxisLabel(j)}
                     </text>
                     <circle cx={x1 + ext + rBub} cy={y} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
                       {yAxisLabel(j)}
                     </text>
                   </g>
                 ))}
+                {/* Dimensi bentang grid terluar — angka mm tanpa satuan */}
+                {spansX.map((sM, i) => {
+                  const xa = xs[i];
+                  const xb = xs[i + 1];
+                  const cx = (xa + xb) / 2;
+                  const yTop = y0 - ext - rBub * 2 - dimGap;
+                  const yBot = y1 + ext + rBub * 2 + dimGap;
+                  const mm = Math.round(sM * 1000);
+                  return (
+                    <g key={`dx-${i}`}>
+                      <text x={cx} y={yTop} textAnchor="middle" dominantBaseline="alphabetic"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                      <text x={cx} y={yBot} textAnchor="middle" dominantBaseline="hanging"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                    </g>
+                  );
+                })}
+                {spansY.map((sM, j) => {
+                  const ya = ys[j];
+                  const yb = ys[j + 1];
+                  const cy = (ya + yb) / 2;
+                  const xLeft = x0 - ext - rBub * 2 - dimGap;
+                  const xRight = x1 + ext + rBub * 2 + dimGap;
+                  const mm = Math.round(sM * 1000);
+                  return (
+                    <g key={`dy-${j}`}>
+                      <text x={xLeft} y={cy} textAnchor="end" dominantBaseline="central"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                      <text x={xRight} y={cy} textAnchor="start" dominantBaseline="central"
+                        fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
+                        style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
+                        {mm}
+                      </text>
+                    </g>
+                  );
+                })}
                 {/* Kolom hitam pada tiap titik temu */}
                 {xs.flatMap((x, i) => ys.map((y, j) => (
                   isNodeActive(grid, level.id, i, j) ? (
@@ -1833,86 +1935,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })()}
-          {hull.length >= 2 && (() => {
-            // Bounding box dari hull — dipakai sebagai acuan garis dimensi
-            // tiap sisi (top/right/bottom/left) supaya semua label sejajar.
-            const hxs = hull.map((p) => p.x);
-            const hys = hull.map((p) => p.y);
-            const bx0 = Math.min(...hxs), bx1 = Math.max(...hxs);
-            const by0 = Math.min(...hys), by1 = Math.max(...hys);
-            const hc = centroid(hull);
-            const tick = sw * 0.006;
-            const labelGap = sw * 0.012;
-            return hull.map((_, i) => {
-              const a = hull[i];
-              const b = hull[(i + 1) % hull.length];
-              const dx = b.x - a.x, dy = b.y - a.y;
-              const len = Math.hypot(dx, dy) || 1;
-              const lengthM = len * mPerSPx;
-              if (lengthM < 0.5) return null;
-              // outward normal (away from hull centroid)
-              let nx = -dy / len, ny = dx / len;
-              const midE = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-              if ((midE.x - hc.x) * nx + (midE.y - hc.y) * ny < 0) { nx = -nx; ny = -ny; }
-              // Pilih sisi dominan berdasarkan arah normal terbesar.
-              const horizontal = Math.abs(nx) > Math.abs(ny);
-              let oa: Point, ob: Point, labelX: number, labelY: number, labelDy: number;
-              if (horizontal) {
-                // sisi kiri/kanan — garis dimensi vertikal, label horizontal
-                const x = nx > 0 ? bx1 + dimOffsetPx : bx0 - dimOffsetPx;
-                oa = { x, y: a.y };
-                ob = { x, y: b.y };
-                labelX = x + (nx > 0 ? labelGap : -labelGap);
-                labelY = (a.y + b.y) / 2;
-                labelDy = 0;
-              } else {
-                // sisi atas/bawah — garis dimensi horizontal, label horizontal
-                const y = ny > 0 ? by1 + dimOffsetPx : by0 - dimOffsetPx;
-                oa = { x: a.x, y };
-                ob = { x: b.x, y };
-                labelX = (a.x + b.x) / 2;
-                labelY = y + (ny > 0 ? labelGap : -labelGap);
-                labelDy = 0;
-              }
-              return (
-                <g key={`dim-${i}`}>
-                  <line x1={a.x} y1={a.y} x2={oa.x} y2={oa.y}
-                    stroke="rgba(0,0,0,0.45)" strokeWidth={sw * 0.0008}
-                    strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
-                  <line x1={b.x} y1={b.y} x2={ob.x} y2={ob.y}
-                    stroke="rgba(0,0,0,0.45)" strokeWidth={sw * 0.0008}
-                    strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
-                  <line x1={oa.x - (horizontal ? 0 : 0)} y1={oa.y} x2={ob.x} y2={ob.y}
-                    stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
-                  {/* tick marks pada ujung garis dimensi */}
-                  {horizontal ? (
-                    <>
-                      <line x1={oa.x - tick / 2} y1={oa.y} x2={oa.x + tick / 2} y2={oa.y}
-                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
-                      <line x1={ob.x - tick / 2} y1={ob.y} x2={ob.x + tick / 2} y2={ob.y}
-                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
-                    </>
-                  ) : (
-                    <>
-                      <line x1={oa.x} y1={oa.y - tick / 2} x2={oa.x} y2={oa.y + tick / 2}
-                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
-                      <line x1={ob.x} y1={ob.y - tick / 2} x2={ob.x} y2={ob.y + tick / 2}
-                        stroke="rgba(0,0,0,0.85)" strokeWidth={sw * 0.0012} />
-                    </>
-                  )}
-                  <text
-                    x={labelX} y={labelY} dy={labelDy}
-                    textAnchor={horizontal ? (nx > 0 ? "start" : "end") : "middle"}
-                    dominantBaseline={horizontal ? "central" : (ny > 0 ? "hanging" : "auto")}
-                    fontSize={sw * 0.01} fontWeight={600} fill="#0a0a0a"
-                    style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.004 } as React.CSSProperties}
-                  >
-                    {`${fmt(lengthM * 1000, 0)} mm`}
-                  </text>
-                </g>
-              );
-            });
-          })()}
+          {null /* dimensi ruang dihapus — diganti dimensi bentang grid */}
           {evkRooms.map((l) => {
             const c = centroid(l.points);
             const rPx = 38 * pxPerM;
@@ -3257,67 +3280,7 @@ function AxonometricView({
     }
   }
 
-  // Structural columns (black) extruded per level in range
-  const grid = sketch.structuralGrid;
-  if (grid?.enabled) {
-    const colM = grid.colSizeCm / 100;
-    const half = colM / 2;
-    // Flip x/z to match toPm()
-    const gx0 = -(grid.origin.x - ox) * mPerPx;
-    const gz0 = -(grid.origin.y - oy) * mPerPx;
-    for (let li = 0; li < withH.length; li++) {
-      const lv = withH[li];
-      const src = ascLevels.find((l) => l.id === lv.sourceId);
-      if (!src) continue;
-      if (!levelInRange(grid, src, ascLevels)) continue;
-      const { spansX, spansY } = spansForLevel(grid, lv.sourceId);
-      const xs = axisPositions(spansX);
-      const zs = axisPositions(spansY);
-      const yBot = lv.base;
-      const yTop = lv.base + lv.height;
-      for (let i = 0; i < xs.length; i++) {
-        for (let j = 0; j < zs.length; j++) {
-          if (!isNodeActive(grid, lv.sourceId, i, j)) continue;
-          // Flip span offsets too
-          const cx = gx0 - xs[i];
-          const cz = gz0 - zs[j];
-          const x0 = cx - half, x1c = cx + half;
-          const z0 = cz - half, z1c = cz + half;
-          // 4 side faces
-          const sides = [
-            [[x0, z0], [x1c, z0]],
-            [[x1c, z0], [x1c, z1c]],
-            [[x1c, z1c], [x0, z1c]],
-            [[x0, z1c], [x0, z0]],
-          ];
-          for (const [[ax, az], [bx, bz]] of sides) {
-            const quad = [
-              project(ax, az, yBot),
-              project(bx, bz, yBot),
-              project(bx, bz, yTop),
-              project(ax, az, yTop),
-            ];
-            const depth = (ax + bx + az + bz) / 2 + yTop * 50 + 5000;
-            faces.push({ pts: quad, fill: "#0a0a0a", stroke: "#000000", depth, sw: 0.5 });
-          }
-          // top face
-          const topPts = [
-            project(x0, z0, yTop),
-            project(x1c, z0, yTop),
-            project(x1c, z1c, yTop),
-            project(x0, z1c, yTop),
-          ];
-          faces.push({
-            pts: topPts,
-            fill: "#1a1a1a",
-            stroke: "#000000",
-            depth: cx + cz + yTop * 100 + 10000,
-            sw: 0.7,
-          });
-        }
-      }
-    }
-  }
+  // Kolom struktur sengaja tidak dirender di stacking diagram (Aksonometrik).
 
   faces.sort((a, b) => a.depth - b.depth);
 
