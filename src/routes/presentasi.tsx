@@ -4213,10 +4213,12 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const own = expanded.filter((e) => e.sourceId === layer.levelId);
     if (own.length === 0) continue;
     const baseMdpl = Math.min(...own.map((e) => e.mdpl));
-    const topMdpl = Math.max(...own.map((e) => e.mdpl + e.height));
-    // Relative heights (bangunan diasumsikan duduk di z=0 site).
-    const baseRel = baseMdpl - Math.min(...expanded.map((e) => e.mdpl));
-    const topRel = topMdpl - Math.min(...expanded.map((e) => e.mdpl));
+    const topMdplFloor = Math.max(...own.map((e) => e.mdpl + e.height));
+    // Override: Atap/Balkon/Atap Hijau pakai tinggi & shift sesuai Model 3D.
+    const ov = roomExtrudeOverride(layer.name);
+    const minExp = Math.min(...expanded.map((e) => e.mdpl));
+    const baseRel = (ov ? baseMdpl + ov.baseDelta : baseMdpl) - minExp;
+    const topRel = (ov ? baseMdpl + ov.baseDelta + ov.height : topMdplFloor) - minExp;
 
     const ccw = polygonSignedArea(layer.points) > 0;
     // Wall quads per edge.
