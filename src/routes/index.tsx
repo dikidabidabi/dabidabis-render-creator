@@ -117,6 +117,71 @@ function Landing() {
         </motion.div>
       </section>
 
+      {/* ICE Workflow */}
+      <section className="border-t border-border/40 px-4 py-20 sm:px-6">
+        <div className="mx-auto max-w-5xl text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-ember/30 bg-ember/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-ember">
+              <CircleDot className="h-3.5 w-3.5" />
+              Sistem Workflow
+            </div>
+            <h2 className="font-display text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+              ICE
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-lg text-muted-foreground">
+              Integrated Conceptual Environment
+            </p>
+            <p className="mx-auto mt-4 max-w-2xl text-sm text-muted-foreground">
+              Kerangka kerja terpadu yang menghubungkan setiap tahap perancangan arsitektur — dari konsep sketsa, tabulasi ruang, narasi spasial, presentasi profesional, hingga model 3D interaktif — dalam satu ekosistem yang koheren dan berkelanjutan.
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7, delay: 0.15 }}
+            className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
+          >
+            <WorkflowStep
+              icon={<PenTool className="h-5 w-5" />}
+              step="1"
+              title="Sketsa"
+              desc="Gambar denah & potongan, atur level, ruang, dan koordinat tapak."
+            />
+            <WorkflowStep
+              icon={<Layers className="h-5 w-5" />}
+              step="2"
+              title="Tabulasi"
+              desc="Hitung luas, program ruang, dan analisis rasionalitas otomatis."
+            />
+            <WorkflowStep
+              icon={<Sparkles className="h-5 w-5" />}
+              step="3"
+              title="Narasi"
+              desc="Hasilkan kisah spasial dengan bantuan AI dari data perancangan."
+            />
+            <WorkflowStep
+              icon={<Presentation className="h-5 w-5" />}
+              step="4"
+              title="Presentasi"
+              desc="Susun slide profesional denah, potongan, dan analisis kawasan."
+            />
+            <WorkflowStep
+              icon={<Box className="h-5 w-5" />}
+              step="5"
+              title="Model 3D"
+              desc="Jelajahi bangunan dalam tampilan tiga dimensi interaktif."
+            />
+          </motion.div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="border-t border-border/40 px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-6xl">
