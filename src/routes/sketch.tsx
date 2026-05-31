@@ -4409,10 +4409,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   </Button>
                   <Button size="sm" variant="outline" className="h-7 text-[10px]"
                     onClick={() => {
-                      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-                      const np = { ...(cur.perLevel ?? {}) };
+                      const np = { ...(grid.perLevel ?? {}) };
                       delete np[activeLvlId];
-                      onChange({ structuralGrid: { ...cur, perLevel: np } });
+                      updateGrid({ perLevel: np });
                     }}>
                     <X className="mr-1 h-3 w-3" /> Reset override
                   </Button>
