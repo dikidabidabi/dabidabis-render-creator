@@ -3042,11 +3042,12 @@ function AxonometricView({
   }
 
   const expanded = expandLevelsForView(ascLevels);
-  const baseMdpl = expanded[0]?.mdpl ?? 0;
+  // Use absolute MDPL so Lahan (drawn at y=0) sits at MDPL 0,
+  // basement levels go below, upper levels above — matching Model 3D.
   const withH = expanded.map((f) => ({
     id: f.id,
     sourceId: f.sourceId,
-    base: f.mdpl - baseMdpl,
+    base: f.mdpl,
     height: f.height,
   }));
 
@@ -3082,23 +3083,61 @@ function AxonometricView({
   const faces: Face[] = [];
 
   const lahan = (sketch.layers ?? []).filter((l) => isLahan(l.name));
-  const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const taman = (sketch.layers ?? []).filter((l) => isTaman(l.name));
+  const build = (sketch.layers ?? []).filter(
+    (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
+  );
 
-  // Ground plane (lahan) at y=0
+  // Flip view to the diagonally opposite corner (rotate plan 180° about Y).
+  const toPm = (l: { points: { x: number; y: number }[] }) =>
+    l.points.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
+
+  // Ground plane (lahan) at MDPL 0
   for (const ly of lahan) {
-    const pm = ly.points.map((p) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx }));
+    const pm = toPm(ly);
     const top = pm.map((p) => project(p.x, p.z, 0));
     const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / Math.max(1, pm.length);
     faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4 });
   }
 
-  // Floors
+  // Taman: thin green slab at MDPL 0, 0.1 m tall (matches Model 3D)
+  const TAMAN_GREEN = "#22c55e";
+  const TAMAN_SIDE = "#16a34a";
+  for (const ly of taman) {
+    const pm = toPm(ly);
+    if (pm.length < 3) continue;
+    const yBot = 0;
+    const yTop = 0.1;
+    for (let i = 0; i < pm.length; i++) {
+      const a = pm[i];
+      const b = pm[(i + 1) % pm.length];
+      const quad = [
+        project(a.x, a.z, yBot),
+        project(b.x, b.z, yBot),
+        project(b.x, b.z, yTop),
+        project(a.x, a.z, yTop),
+      ];
+      const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
+      faces.push({ pts: quad, fill: TAMAN_SIDE, stroke: "rgba(0,0,0,0.35)", depth, sw: 0.4 });
+    }
+    const topPts = pm.map((p) => project(p.x, p.z, yTop));
+    const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
+    faces.push({
+      pts: topPts,
+      fill: TAMAN_GREEN,
+      stroke: "rgba(0,0,0,0.4)",
+      depth: avg + yTop * 100 + 0.5,
+      sw: 0.5,
+    });
+  }
+
+  // Floors (build layers only — Taman handled above, Lahan/Void excluded)
   for (const lv of withH) {
     const top = colorOf(lv.sourceId);
     const side = shadeHsl(top, -18);
     const layers = build.filter((l) => l.levelId === lv.sourceId);
     for (const ly of layers) {
-      const pm = ly.points.map((p) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx }));
+      const pm = toPm(ly);
       if (pm.length < 3) continue;
       const yBot = lv.base;
       const yTop = lv.base + lv.height;
