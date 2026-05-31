@@ -1302,27 +1302,48 @@ type EditorProps = {
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
-  const grid: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+  // ----- Grid Struktur: primer + extras (paste grid) -----
+  // Index 0 = grid primer (sketch.structuralGrid).
+  // Index 1..N = sketch.structuralGridExtras[idx-1].
+  const [editGridIdx, setEditGridIdx] = useState<number>(0);
+  const primaryGrid: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+  const gridExtras: StructuralGrid[] = sketch.structuralGridExtras ?? [];
+  const grid: StructuralGrid =
+    editGridIdx === 0 ? primaryGrid : (gridExtras[editGridIdx - 1] ?? primaryGrid);
   const updateGrid = useCallback(
     (patch: Partial<StructuralGrid>) => {
-      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-      onChange({ structuralGrid: { ...cur, ...patch } });
+      if (editGridIdx === 0) {
+        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+        onChange({ structuralGrid: { ...cur, ...patch } });
+        return;
+      }
+      const ei = editGridIdx - 1;
+      const arr = (sketch.structuralGridExtras ?? []).slice();
+      if (!arr[ei]) return;
+      arr[ei] = { ...arr[ei], ...patch };
+      onChange({ structuralGridExtras: arr });
     },
-    [sketch.structuralGrid, onChange],
+    [sketch.structuralGrid, sketch.structuralGridExtras, editGridIdx, onChange],
   );
   const updateGridOverride = useCallback(
     (lvlId: string, patch: Partial<import("@/lib/structural-grid").GridOverride>) => {
-      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
-      const prev = cur.perLevel?.[lvlId] ?? {};
-      const next = { ...cur.perLevel, [lvlId]: { ...prev, ...patch } };
-      onChange({ structuralGrid: { ...cur, perLevel: next } });
+      const prev = grid.perLevel?.[lvlId] ?? {};
+      const next = { ...grid.perLevel, [lvlId]: { ...prev, ...patch } };
+      updateGrid({ perLevel: next });
     },
-    [sketch.structuralGrid, onChange],
+    [grid, updateGrid],
   );
+  // Auto-clamp idx kalau extras berkurang.
+  useEffect(() => {
+    if (editGridIdx > 0 && editGridIdx - 1 >= gridExtras.length) {
+      setEditGridIdx(0);
+    }
+  }, [gridExtras.length, editGridIdx]);
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
+
   const [sideOffset, setSideOffset] = useState({ x: 0, y: 0 });
   const [rekapOffset, setRekapOffset] = useState({ x: 0, y: 0 });
   const [rekapBtnOffset, setRekapBtnOffset] = useState({ x: 0, y: 0 });
