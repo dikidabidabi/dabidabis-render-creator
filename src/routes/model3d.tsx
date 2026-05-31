@@ -394,6 +394,58 @@ function Scene({
   );
 }
 
+// ---------- Library grid (shared) ----------
+function LibraryGrid({
+  shots,
+  onDownload,
+  onRemove,
+}: {
+  shots: { id: string; dataUrl: string; ts: number }[];
+  onDownload: (s: { dataUrl: string; ts: number }) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (shots.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Belum ada screenshot. Klik tombol <span className="font-medium">Screenshot</span> di atas kanvas.
+      </p>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      {shots.map((s) => (
+        <div
+          key={s.id}
+          className="group relative overflow-hidden rounded-md border border-border/60 bg-background"
+        >
+          <img
+            src={s.dataUrl}
+            alt="screenshot"
+            className="block aspect-[4/3] w-full cursor-pointer object-cover"
+            onClick={() => onDownload(s)}
+          />
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-1.5 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="font-mono">
+              {new Date(s.ts).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(s.id);
+              }}
+              className="rounded p-0.5 hover:bg-white/20"
+              aria-label="Hapus"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------- Per-sketch viewer card ----------
 function SketchViewer({
   sketch,
@@ -407,6 +459,7 @@ function SketchViewer({
   const [sunHour, setSunHour] = useState(12);
   const [projection, setProjection] = useState<"persp" | "axon">("persp");
   const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
+  const [libraryOpen, setLibraryOpen] = useState(true);
   const [shots, setShots] = useState<{ id: string; dataUrl: string; ts: number }[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
@@ -641,12 +694,12 @@ function SketchViewer({
       )}
 
       {/* Canvas 3D + library */}
-      <div className="flex flex-col gap-3">
+      <div className={cn("flex flex-col gap-3", fullscreen && "h-full min-h-0")}>
         <div
           ref={canvasRef}
           className={cn(
             "relative rounded-lg border border-border bg-gradient-to-b from-slate-100 to-slate-300 overflow-hidden",
-            fullscreen ? "h-full flex-1" : "h-[520px]",
+            fullscreen ? "flex-1 min-h-0" : "h-[520px]",
           )}
         >
           <Canvas
@@ -803,63 +856,64 @@ function SketchViewer({
               />
             </div>
           )}
-        </div>
 
-        {/* Library screenshot */}
-        <div className="rounded-lg border border-border bg-card/40 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Library Screenshot
-            </h4>
-            <span className="text-[10px] text-muted-foreground">
-              {shots.length} gambar
-            </span>
-          </div>
-          {shots.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Belum ada screenshot. Klik tombol <span className="font-medium">Screenshot</span> di atas kanvas.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-              {shots.map((s) => (
-                <div
-                  key={s.id}
-                  className="group relative overflow-hidden rounded-md border border-border/60 bg-background"
-                >
-                  <img
-                    src={s.dataUrl}
-                    alt="screenshot"
-                    className="block aspect-[4/3] w-full cursor-pointer object-cover"
-                    onClick={() => downloadShot(s)}
+
+
+          {/* Library screenshot — floating in fullscreen */}
+          {fullscreen && (
+            <div className="pointer-events-auto absolute inset-x-2 bottom-2 z-10 max-h-[40vh] overflow-hidden rounded-lg border border-border bg-card/90 shadow-lg backdrop-blur">
+              <button
+                type="button"
+                onClick={() => setLibraryOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-card"
+              >
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Library Screenshot · {shots.length}
+                </span>
+                {libraryOpen ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+              {libraryOpen && (
+                <div className="max-h-[34vh] overflow-y-auto px-3 pb-3">
+                  <LibraryGrid
+                    shots={shots}
+                    onDownload={downloadShot}
+                    onRemove={removeShot}
                   />
-                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-1.5 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                    <span className="font-mono">
-                      {new Date(s.ts).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeShot(s.id);
-                      }}
-                      className="rounded p-0.5 hover:bg-white/20"
-                      aria-label="Hapus"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
+
+        {/* Library screenshot — inline (normal mode) */}
+        {!fullscreen && (
+          <div className="rounded-lg border border-border bg-card/40 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Library Screenshot
+              </h4>
+              <span className="text-[10px] text-muted-foreground">
+                {shots.length} gambar
+              </span>
+            </div>
+            <LibraryGrid
+              shots={shots}
+              onDownload={downloadShot}
+              onRemove={removeShot}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 
   if (fullscreen) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-background p-4">
+      <div className="fixed inset-0 z-50 flex flex-col bg-background p-2">
         {viewerBody}
       </div>
     );
