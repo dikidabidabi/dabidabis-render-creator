@@ -1839,6 +1839,36 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             </g>
           ))}
           {layers.filter((l) => !isLahan(l.name)).map((l, i) => {
+            if (isVoid(l.name)) {
+              let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+              for (const p of l.points) {
+                if (p.x < mnx) mnx = p.x;
+                if (p.y < mny) mny = p.y;
+                if (p.x > mxx) mxx = p.x;
+                if (p.y > mxy) mxy = p.y;
+              }
+              const clipId = `void-clip-${slide.id}-${l.id}`;
+              const ptsStr = l.points.map((p) => `${p.x},${p.y}`).join(" ");
+              return (
+                <g key={l.id}>
+                  <defs>
+                    <clipPath id={clipId}>
+                      <polygon points={ptsStr} />
+                    </clipPath>
+                  </defs>
+                  <polygon points={ptsStr}
+                    fill="#ffffff"
+                    stroke="#0a0a0a"
+                    strokeWidth={sw * 0.0015} />
+                  <g clipPath={`url(#${clipId})`}>
+                    <line x1={mnx} y1={mny} x2={mxx} y2={mxy}
+                      stroke="#0a0a0a" strokeWidth={sw * 0.0008} />
+                    <line x1={mxx} y1={mny} x2={mnx} y2={mxy}
+                      stroke="#0a0a0a" strokeWidth={sw * 0.0008} />
+                  </g>
+                </g>
+              );
+            }
             const overrideFill = roomFillOverride(l.name, "0.45");
             const overrideStroke = roomStrokeOverride(l.name);
             const fillCol = overrideFill ?? l.color.replace("ALPHA", "0.28");
