@@ -244,10 +244,16 @@ type Stats = {
   totalSetengahM2: number; // coefficient 0.5
   kdbPct?: number;
   klbCoef?: number;
+  kdhPct?: number;
+  ktbPct?: number;
   kdbLimitM2: number; // KDB target = kdbPct% * lahan
   klbLimitM2: number; // KLB target = klbCoef * lahan
+  kdhLimitM2: number; // KDH target = kdhPct% * lahan (min)
+  ktbLimitM2: number; // KTB target = ktbPct% * lahan (max)
   kdbRencanaM2: number; // ground floor rooms (level dengan mdpl terendah)
   klbRencanaM2: number; // total ruang * koefisien
+  kdhRencanaM2: number; // total "Taman" di level dasar
+  ktbRencanaM2: number; // total ruang di LT B1
   jumlahLapis: number;
   ketinggianM: number;
 };
@@ -258,8 +264,23 @@ function computeStats(sk: Sketch): Stats {
   const tipMul: Record<string, number> = {};
   for (const lv of levels) tipMul[lv.id] = Math.max(1, lv.typicalCount ?? 1);
   const mul = (l: Layer) => (l.levelId ? tipMul[l.levelId] ?? 1 : 1);
-  const lahan = layers.filter((l) => isLahan(l.name));
-  const ruang = layers.filter((l) => !isLahan(l.name));
+
+  const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const groundLevel = findMdplZeroLevel(sortedLv) ?? sortedLv[0];
+  const groundIdx = groundLevel ? sortedLv.findIndex((l) => l.id === groundLevel.id) : -1;
+  const b1Level = groundIdx > 0 ? sortedLv[groundIdx - 1] : undefined;
+
+  // Lahan = hanya layer "Lahan" di level dasar (mdpl 0)
+  const lahan = layers.filter(
+    (l) => isLahan(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
+  // Ruang utk KDB/KLB: bukan lahan, bukan void, bukan taman
+  const ruang = layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  // Taman di level dasar (utk KDH)
+  const tamanGround = layers.filter(
+    (l) => isTaman(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
+
   const totalLahanM2 = lahan.reduce((s, l) => s + (l.areaM2 || 0), 0);
   const totalRuangM2 = ruang.reduce((s, l) => s + (l.areaM2 || 0) * mul(l), 0);
   const totalEfektifM2 = ruang.filter((l) => (l.coefficient ?? 1) === 1).reduce((s, l) => s + l.areaM2 * mul(l), 0);
@@ -268,15 +289,23 @@ function computeStats(sk: Sketch): Stats {
 
   const kdbLimitM2 = (sk.kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdbPct! / 100) * totalLahanM2 : 0;
   const klbLimitM2 = (sk.klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? sk.klbCoef! * totalLahanM2 : 0;
+  const kdhLimitM2 = (sk.kdhPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdhPct! / 100) * totalLahanM2 : 0;
+  const ktbLimitM2 = (sk.ktbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.ktbPct! / 100) * totalLahanM2 : 0;
 
   // KDB Rencana: footprint level dasar (tidak digandakan tipikal)
-  let kdbRencanaM2 = 0;
-  if (levels.length > 0) {
-    const ground = [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
-    kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
-  }
-  // KLB Rencana: total ruang * koefisien * tipikal
+  const kdbRencanaM2 = groundLevel
+    ? ruang.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
+    : 0;
+  // KLB Rencana: total ruang * koefisien * tipikal (tanpa taman)
   const klbRencanaM2 = ruang.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1) * mul(l), 0);
+  // KDH Rencana: total taman di level dasar
+  const kdhRencanaM2 = tamanGround.reduce((s, l) => s + l.areaM2, 0);
+  // KTB Rencana: total ruang di LT B1 (tanpa lahan/void/taman)
+  const ktbRencanaM2 = b1Level
+    ? layers
+        .filter((l) => l.levelId === b1Level.id && !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
+        .reduce((s, l) => s + l.areaM2, 0)
+    : 0;
 
   const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, lv.typicalCount ?? 1), 0);
   const typicalExtra = levels.reduce((s, lv) => s + (Math.max(1, lv.typicalCount ?? 1) - 1) * (Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : 3), 0);
@@ -295,14 +324,21 @@ function computeStats(sk: Sketch): Stats {
     totalSetengahM2,
     kdbPct: sk.kdbPct,
     klbCoef: sk.klbCoef,
+    kdhPct: sk.kdhPct,
+    ktbPct: sk.ktbPct,
     kdbLimitM2,
     klbLimitM2,
+    kdhLimitM2,
+    ktbLimitM2,
     kdbRencanaM2,
     klbRencanaM2,
+    kdhRencanaM2,
+    ktbRencanaM2,
     jumlahLapis,
     ketinggianM,
   };
 }
+
 
 // ---------- Sections ----------
 
