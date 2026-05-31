@@ -800,9 +800,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
 type Stats = {
   totalLahanM2: number; totalRuangM2: number;
   totalEfektifM2: number; totalSaranaM2: number; totalSetengahM2: number;
-  kdbPct?: number; klbCoef?: number;
-  kdbLimitM2: number; klbLimitM2: number;
-  kdbRencanaM2: number; klbRencanaM2: number;
+  kdbPct?: number; klbCoef?: number; kdhPct?: number; ktbPct?: number;
+  kdbLimitM2: number; klbLimitM2: number; kdhLimitM2: number; ktbLimitM2: number;
+  kdbRencanaM2: number; klbRencanaM2: number; kdhRencanaM2: number; ktbRencanaM2: number;
   jumlahLapis: number; ketinggianM: number;
   totalTerhitungM2: number;
 };
@@ -810,8 +810,20 @@ type Stats = {
 function computeStats(sk: Sketch): Stats {
   const layers = sk.layers ?? [];
   const levels = sk.levels ?? [];
-  const lahan = layers.filter((l) => isLahan(l.name));
-  const ruang = layers.filter((l) => !isLahan(l.name));
+  const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+  const groundLevel = findMdplZeroLevel(sortedLv) ?? sortedLv[0];
+  const groundIdx = groundLevel ? sortedLv.findIndex((l) => l.id === groundLevel.id) : -1;
+  const b1Level = groundIdx > 0 ? sortedLv[groundIdx - 1] : undefined;
+
+  // Lahan = hanya layer "Lahan" di level dasar
+  const lahan = layers.filter(
+    (l) => isLahan(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
+  // Ruang utk KDB/KLB: bukan lahan, bukan void, bukan taman
+  const ruang = layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  const tamanGround = layers.filter(
+    (l) => isTaman(l.name) && groundLevel && l.levelId === groundLevel.id,
+  );
   // Build a multiplier lookup per source level (default 1).
   const mul: Record<string, number> = {};
   for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
@@ -827,16 +839,22 @@ function computeStats(sk: Sketch): Stats {
     .reduce((s, l) => s + l.areaM2 * kOf(l.levelId), 0);
   const kdbLimitM2 = (sk.kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdbPct! / 100) * totalLahanM2 : 0;
   const klbLimitM2 = (sk.klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? sk.klbCoef! * totalLahanM2 : 0;
+  const kdhLimitM2 = (sk.kdhPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.kdhPct! / 100) * totalLahanM2 : 0;
+  const ktbLimitM2 = (sk.ktbPct ?? 0) > 0 && totalLahanM2 > 0 ? (sk.ktbPct! / 100) * totalLahanM2 : 0;
   // KDB = footprint at ground only (no multiplier — ground floor is a single footprint)
-  let kdbRencanaM2 = 0;
-  if (levels.length > 0) {
-    const ground = findMdplZeroLevel(levels) ?? [...levels].sort((a, b) => a.mdpl - b.mdpl)[0];
-    kdbRencanaM2 = ruang.filter((l) => l.levelId === ground.id).reduce((s, l) => s + l.areaM2, 0);
-  }
+  const kdbRencanaM2 = groundLevel
+    ? ruang.filter((l) => l.levelId === groundLevel.id).reduce((s, l) => s + l.areaM2, 0)
+    : 0;
   const klbRencanaM2 = ruang.reduce(
     (s, l) => s + l.areaM2 * (l.coefficient ?? 1) * kOf(l.levelId),
     0,
   );
+  const kdhRencanaM2 = tamanGround.reduce((s, l) => s + l.areaM2, 0);
+  const ktbRencanaM2 = b1Level
+    ? layers
+        .filter((l) => l.levelId === b1Level.id && !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
+        .reduce((s, l) => s + l.areaM2, 0)
+    : 0;
   const jumlahLapis = levels.reduce((s, lv) => s + Math.max(1, Math.round(lv.typicalCount ?? 1)), 0);
   const baseHeight =
     levels.length > 1 ? Math.max(...levels.map((l) => l.mdpl)) - Math.min(...levels.map((l) => l.mdpl)) : 0;
@@ -850,11 +868,13 @@ function computeStats(sk: Sketch): Stats {
     .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
   return {
     totalLahanM2, totalRuangM2, totalEfektifM2, totalSaranaM2, totalSetengahM2,
-    kdbPct: sk.kdbPct, klbCoef: sk.klbCoef,
-    kdbLimitM2, klbLimitM2, kdbRencanaM2, klbRencanaM2,
+    kdbPct: sk.kdbPct, klbCoef: sk.klbCoef, kdhPct: sk.kdhPct, ktbPct: sk.ktbPct,
+    kdbLimitM2, klbLimitM2, kdhLimitM2, ktbLimitM2,
+    kdbRencanaM2, klbRencanaM2, kdhRencanaM2, ktbRencanaM2,
     jumlahLapis, ketinggianM, totalTerhitungM2,
   };
 }
+
 
 // ============= SLIDE CONTENT (white A3 modern theme) =============
 
