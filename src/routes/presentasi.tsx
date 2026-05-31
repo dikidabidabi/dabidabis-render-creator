@@ -1425,7 +1425,9 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           })}
 
           {/* Level boxes — pelat lantai tebal HANYA di bawah ruang;
-              di luar ruang berupa garis putus-putus tipis */}
+              di luar ruang berupa garis putus-putus tipis.
+              Dinding luar level basement (di bawah MDPL 0) dan lantai paling bawah
+              dibuat 2x lebih tebal dari garis lantai. */}
           {(() => {
             const roomIntervalsByBox = new Map<string, Array<[number, number]>>();
             for (const b of boxes) {
@@ -1439,7 +1441,17 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               }
               roomIntervalsByBox.set(b.id, merged);
             }
-            const renderFloorLine = (key: string, yy: number, underBoxId: string | null) => {
+            const FLOOR_THICK = 2.4;
+            const FLOOR_THICK_HEAVY = 4.8; // 2x lebih tebal dari garis lantai
+            const bottomBoxId = boxes.length
+              ? boxes.reduce((a, b) => (a.baseM <= b.baseM ? a : b)).id
+              : null;
+            const renderFloorLine = (
+              key: string,
+              yy: number,
+              underBoxId: string | null,
+              heavy = false,
+            ) => {
               const rooms = underBoxId ? (roomIntervalsByBox.get(underBoxId) ?? []) : [];
               const segs: Array<{ a: number; b: number; thick: boolean }> = [];
               let cursor = 0;
@@ -1452,12 +1464,13 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 cursor = b2;
               }
               if (cursor < cutLenM) segs.push({ a: cursor, b: cutLenM, thick: false });
+              const thickW = heavy ? FLOOR_THICK_HEAVY : FLOOR_THICK;
               return (
                 <g key={key}>
                   {segs.map((s, i) =>
                     s.thick ? (
                       <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
-                        stroke="#111" strokeWidth={2.4} strokeLinecap="square" />
+                        stroke="#111" strokeWidth={thickW} strokeLinecap="square" />
                     ) : (
                       <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
                         stroke="#111" strokeWidth={0.6} strokeDasharray="3 3" />
@@ -1472,13 +1485,16 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const w = cutLenM * scalePxPerM;
               const h = (b.topM - b.baseM) * scalePxPerM;
               const upper = boxes.find((o) => Math.abs(o.baseM - b.topM) < 1e-3);
+              const isBasement = b.topM <= groundMdpl + 1e-3;
+              const wallW = isBasement ? FLOOR_THICK_HEAVY : 0.5;
+              const isBottom = b.id === bottomBoxId;
               return (
                 <g key={b.id}>
                   <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="none" />
-                  <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} />
-                  <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} />
+                  <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={wallW} strokeLinecap="square" />
+                  <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={wallW} strokeLinecap="square" />
                   {renderFloorLine(`${b.id}-top`, y, upper ? upper.id : null)}
-                  {renderFloorLine(`${b.id}-bot`, y + h, b.id)}
+                  {renderFloorLine(`${b.id}-bot`, y + h, b.id, isBottom)}
                   {Array.from({ length: b.count - 1 }).map((_, i) => {
                     const yy = my(b.baseM + (i + 1) * b.floorH);
                     return renderFloorLine(`${b.id}-mid-${i}`, yy, b.id);
