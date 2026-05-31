@@ -1411,11 +1411,16 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   // scale that fits both width and height into the available pixel area.
   const AREA_W = A3_W - 2 * PAD;   // ~1246
   const AREA_H = A3_H - 2 * PAD - 130; // header+footer reserve
-  const scalePxPerM = Math.min(AREA_W / Math.max(1, cutLenM), AREA_H / Math.max(1, totalHM));
+  // Reserve ruang bawah utk grid bubble + skala panjang potongan agar tidak terpotong.
+  const hasGrid = !!sketch.structuralGrid?.enabled;
+  const BUBBLE_PAD = hasGrid ? 90 : 50;
+  const AREA_H_DRAW = Math.max(100, AREA_H - BUBBLE_PAD);
+  const scalePxPerM = Math.min(AREA_W / Math.max(1, cutLenM), AREA_H_DRAW / Math.max(1, totalHM));
   const drawW = cutLenM * scalePxPerM;
   const drawH = totalHM * scalePxPerM;
   const offsetX = (AREA_W - drawW) / 2;
-  const offsetY = (AREA_H - drawH) / 2;
+  const offsetY = Math.max(8, (AREA_H_DRAW - drawH) / 2);
+
   // Map meter X (0..cutLenM) to svg px.
   const mx = (m: number) => offsetX + m * scalePxPerM;
   // Map meter elevation (mdpl) to svg px (y down). Drawing is centered vertically.
@@ -1878,22 +1883,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     </text>
                   </g>
                 ))}
-                {/* Dimensi bentang grid terluar — angka mm tanpa satuan */}
+                {/* Dimensi bentang grid terluar — diletakkan di sisi dalam antara garis grid terluar dan buble */}
                 {spansX.map((sM, i) => {
                   const xa = xs[i];
                   const xb = xs[i + 1];
                   const cx = (xa + xb) / 2;
-                  const yTop = y0 - ext - rBub * 2 - dimGap;
-                  const yBot = y1 + ext + rBub * 2 + dimGap;
+                  // antara y0 (grid line) dan (y0 - ext - rBub) (buble)
+                  const yTop = (y0 + (y0 - ext - rBub)) / 2;
+                  const yBot = (y1 + (y1 + ext + rBub)) / 2;
                   const mm = Math.round(sM * 1000);
                   return (
                     <g key={`dx-${i}`}>
-                      <text x={cx} y={yTop} textAnchor="middle" dominantBaseline="alphabetic"
+                      <text x={cx} y={yTop} textAnchor="middle" dominantBaseline="central"
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
                       </text>
-                      <text x={cx} y={yBot} textAnchor="middle" dominantBaseline="hanging"
+                      <text x={cx} y={yBot} textAnchor="middle" dominantBaseline="central"
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
@@ -1905,17 +1911,19 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   const ya = ys[j];
                   const yb = ys[j + 1];
                   const cy = (ya + yb) / 2;
-                  const xLeft = x0 - ext - rBub * 2 - dimGap;
-                  const xRight = x1 + ext + rBub * 2 + dimGap;
+                  const xLeft = (x0 + (x0 - ext - rBub)) / 2;
+                  const xRight = (x1 + (x1 + ext + rBub)) / 2;
                   const mm = Math.round(sM * 1000);
                   return (
                     <g key={`dy-${j}`}>
-                      <text x={xLeft} y={cy} textAnchor="end" dominantBaseline="central"
+                      <text x={xLeft} y={cy} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(-90 ${xLeft} ${cy})`}
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
                       </text>
-                      <text x={xRight} y={cy} textAnchor="start" dominantBaseline="central"
+                      <text x={xRight} y={cy} textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(-90 ${xRight} ${cy})`}
                         fontSize={dimFs} fontWeight={600} fill="#0a0a0a" fontFamily="Manrope, sans-serif"
                         style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.92)", strokeWidth: sw * 0.003 } as React.CSSProperties}>
                         {mm}
@@ -1923,6 +1931,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     </g>
                   );
                 })}
+
                 {/* Kolom hitam pada tiap titik temu */}
                 {xs.flatMap((x, i) => ys.map((y, j) => (
                   isNodeActive(grid, level.id, i, j) ? (
