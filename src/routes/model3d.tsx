@@ -913,7 +913,7 @@ function SketchViewer({
 
   if (fullscreen) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col gap-3 overflow-auto bg-background p-4">
+      <div className="fixed inset-0 z-50 flex flex-col bg-background p-2">
         {viewerBody}
       </div>
     );
