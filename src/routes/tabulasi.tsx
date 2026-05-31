@@ -41,6 +41,7 @@ type Sketch = {
   kdhPct?: number;
   ktbPct?: number;
   structuralGrid?: StructuralGrid;
+  structuralGridExtras?: StructuralGrid[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
