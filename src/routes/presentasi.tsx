@@ -1453,7 +1453,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const AREA_H = A3_H - 2 * PAD - 130; // header+footer reserve
   // Reserve ruang bawah utk grid bubble + skala panjang potongan agar tidak terpotong.
   const hasGrid = !!sketch.structuralGrid?.enabled;
-  const BUBBLE_PAD = hasGrid ? 90 : 50;
+  const BUBBLE_PAD = hasGrid ? 60 : 40;
   const AREA_H_DRAW = Math.max(100, AREA_H - BUBBLE_PAD);
   const scalePxPerM = Math.min(AREA_W / Math.max(1, cutLenM), AREA_H_DRAW / Math.max(1, totalHM));
   const drawW = cutLenM * scalePxPerM;
@@ -1727,10 +1727,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             }
             if (!hits.length) return null;
             const yTopPx = my(maxMdpl);
-            const yBub = my(minMdpl) + 64;
+            const yFloorBottom = my(minMdpl);
             const rBub = 7;
+            // Bubble digeser mendekat ke bawah lantai terbawah; dimensi di atas buble
+            // (di antara lantai terbawah dan buble).
+            const yBub = yFloorBottom + 32;
+            const yDim = yFloorBottom + 14;
             // Sort hits by t, dedupe near-identical positions, dan hitung
-            // bentang antar buble (mm) untuk ditampilkan di antara buble.
+            // bentang antar buble (mm) untuk ditampilkan di atas buble.
             const sorted = [...hits].sort((a, b) => a.t - b.t);
             const dims: Array<{ x: number; mm: number }> = [];
             for (let i = 0; i < sorted.length - 1; i++) {
@@ -1747,7 +1751,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   const sx = mx(h.t * cutLenM);
                   return (
                     <g key={h.key}>
-                      <line x1={sx} y1={yTopPx} x2={sx} y2={yBub - rBub}
+                      <line x1={sx} y1={yTopPx} x2={sx} y2={yFloorBottom}
                         stroke="#0a0a0a" strokeWidth={0.3}
                         strokeDasharray="6 3 1 3" />
                       <circle cx={sx} cy={yBub} r={rBub}
@@ -1761,7 +1765,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   );
                 })}
                 {dims.map((d, i) => (
-                  <text key={`gd-${gIdx}-${i}`} x={d.x} y={yBub + rBub + 12}
+                  <text key={`gd-${gIdx}-${i}`} x={d.x} y={yDim}
                     textAnchor="middle" dominantBaseline="central"
                     fontSize={9} fontWeight={600} fill="#0a0a0a"
                     style={{ fontFamily: "Manrope, sans-serif",
@@ -3442,7 +3446,13 @@ function AxonometricView({
 
 function StackingBody({ sketch }: { sketch: Sketch }) {
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const build = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const groundLv = findMdplZeroLevel(levelsAsc) ?? levelsAsc[0];
+  const groundId = groundLv?.id;
+  // Taman di level dasar (MDPL 0 / LT 1) adalah lansekap, bukan luasan bangunan,
+  // sehingga tidak diakumulasi dengan ruang lain di level dasar.
+  const build = (sketch.layers ?? []).filter(
+    (l) => !isLahan(l.name) && !isVoid(l.name) && !(isTaman(l.name) && l.levelId === groundId),
+  );
   const displayNames = computeLevelDisplayNames(levelsAsc, sketch.layers ?? []);
 
   // Color map keyed by source level id (matches axonometric)
@@ -3544,7 +3554,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
           <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 6 }}>
             Legenda Level
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minHeight: 0, overflow: "hidden" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
             {levelsAsc.slice().reverse().map((lv) => {
               const baseArea = build
                 .filter((l) => l.levelId === lv.id)
@@ -3554,15 +3564,15 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
               const pct = totalArea > 0 ? (total / totalArea) * 100 : 0;
               const name = displayNames[lv.id] ?? lv.name;
               return (
-                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
-                  <span style={{ width: 10, height: 10, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
+                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10 }}>
+                  <span style={{ width: 9, height: 9, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {name}{k > 1 ? ` · ${k}×` : ""}
                   </span>
                   <span style={{ color: "#888", fontSize: 9, fontVariantNumeric: "tabular-nums" }}>
                     {fmt(pct, 1)}%
                   </span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 56, textAlign: "right", fontSize: 10 }}>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 52, textAlign: "right", fontSize: 10 }}>
                     {fmt(total)} m²
                   </span>
                 </div>
