@@ -37,6 +37,8 @@ type Sketch = {
   levels: Level[];
   kdbPct?: number;
   klbCoef?: number;
+  kdhPct?: number;
+  ktbPct?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -50,6 +52,15 @@ function isLahan(name: string) {
 function isVoid(name: string) {
   return name.trim().toLowerCase() === "void";
 }
+
+function isTaman(name: string) {
+  return name.trim().toLowerCase().startsWith("taman");
+}
+
+function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
+  return levels.find((l) => Math.abs(l.mdpl) < 1e-6);
+}
+
 
 function loadCostMap(): Record<string, number> {
   try {
