@@ -3838,7 +3838,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             </div>
           </div>
         )}
-        </div>
         {tool === "polyline" && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Tarik stylus tanpa jeda. Setiap belokan menjadi titik baru. Lepas stylus untuk berhenti, atau kembali ke titik awal untuk menutup polygon.
