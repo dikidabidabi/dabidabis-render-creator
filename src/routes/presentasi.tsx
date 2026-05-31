@@ -1567,6 +1567,20 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
 
+          {/* Nama Level di sisi paling kanan potongan */}
+          {boxes.map((b) => {
+            const cy = (my(b.topM) + my(b.baseM)) / 2;
+            const xName = AREA_W - 8;
+            return (
+              <text key={`name-${b.id}`} x={xName} y={cy} fontSize={20} textAnchor="end"
+                dominantBaseline="middle" fill="#111"
+                style={{ fontFamily: "Sora, sans-serif", fontWeight: 700, letterSpacing: 0.3 }}>
+                {b.name}
+              </text>
+            );
+          })}
+
+
           {/* Penanda A dan A' di ujung area gambar */}
           <g>
             <circle cx={mx(0)} cy={my(maxMdpl) - 18} r={10} fill="#111" />
