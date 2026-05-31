@@ -25,6 +25,7 @@ import {
   axisPositions,
   spansForLevel,
   isNodeActive,
+  isColumnClipped,
   levelInRange,
   xAxisLabel,
   yAxisLabel,
