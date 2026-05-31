@@ -3554,7 +3554,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
           <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 6 }}>
             Legenda Level
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minHeight: 0, overflow: "hidden" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
             {levelsAsc.slice().reverse().map((lv) => {
               const baseArea = build
                 .filter((l) => l.levelId === lv.id)
