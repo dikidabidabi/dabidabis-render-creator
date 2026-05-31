@@ -1657,10 +1657,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             </text>
           </g>
 
-          {/* Grid struktur vertikal — diproyeksikan ke garis potongan */}
-          {(() => {
-            const grid = sketch.structuralGrid;
-            if (!grid?.enabled) return null;
+          {/* Grid struktur vertikal — diproyeksikan ke garis potongan (semua grid aktif) */}
+          {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             const ppm = pxPerMeter;
             const ox = grid.origin.x, oy = grid.origin.y;
             const ddx = cut.p2.x - cut.p1.x;
@@ -1673,7 +1671,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               if (Math.abs(ddx) < 1e-6) continue;
               const t = (planX - cut.p1.x) / ddx;
               if (t < -0.001 || t > 1.001) continue;
-              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabel(i), key: `gx${i}` });
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabel(i), key: `g${gIdx}x${i}` });
             }
             const axY = axisPositions(grid.spansY);
             for (let j = 0; j < axY.length; j++) {
@@ -1681,15 +1679,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               if (Math.abs(ddy) < 1e-6) continue;
               const t = (planY - cut.p1.y) / ddy;
               if (t < -0.001 || t > 1.001) continue;
-              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabel(j), key: `gy${j}` });
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabel(j), key: `g${gIdx}y${j}` });
             }
             if (!hits.length) return null;
             const yTopPx = my(maxMdpl);
-            const yBotPx = my(minMdpl);
             const yBub = my(minMdpl) + 64;
             const rBub = 7;
             return (
-              <g pointerEvents="none">
+              <g key={`sg-${gIdx}`} pointerEvents="none">
                 {hits.map((h) => {
                   const sx = mx(h.t * cutLenM);
                   return (
@@ -1709,7 +1706,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 })}
               </g>
             );
-          })()}
+          })}
         </svg>
       </div>
       <div style={{ fontSize: 11, color: "#444", textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
