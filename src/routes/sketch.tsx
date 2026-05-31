@@ -4420,8 +4420,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             )}
             <div className="rounded bg-muted/40 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
               {(() => {
-                const stats = computeStructuralStats(grid, levels);
-                return `Total kolom: ${stats.totalColumns} · Volume beton: ${stats.concreteVolumeM3.toFixed(2)} m³`;
+                const here = computeStructuralStats(grid, levels);
+                const all = computeAllStructuralStats(primaryGrid, gridExtras, levels);
+                return `Grid ini: ${here.totalColumns} kolom · ${here.concreteVolumeM3.toFixed(2)} m³  ·  Total: ${all.totalColumns} kolom · ${all.concreteVolumeM3.toFixed(2)} m³`;
               })()}
             </div>
           </div>
