@@ -1533,7 +1533,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               heavy = false,
             ) => {
               const rooms = underBoxId ? (roomIntervalsByBox.get(underBoxId) ?? []) : [];
-              const segs: Array<{ a: number; b: number; thick: boolean }> = [];
+              const voids = underBoxId ? (voidIntervalsByBox.get(underBoxId) ?? []) : [];
+              let segs: Array<{ a: number; b: number; thick: boolean }> = [];
               let cursor = 0;
               for (const [r0, r1] of rooms) {
                 const a = Math.max(0, r0);
@@ -1544,6 +1545,18 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 cursor = b2;
               }
               if (cursor < cutLenM) segs.push({ a: cursor, b: cutLenM, thick: false });
+              // Cut out segments that fall under Void rooms — no floor line below void.
+              for (const [v0, v1] of voids) {
+                const va = Math.max(0, v0), vb = Math.min(cutLenM, v1);
+                if (vb <= va) continue;
+                const next: typeof segs = [];
+                for (const s of segs) {
+                  if (vb <= s.a || va >= s.b) { next.push(s); continue; }
+                  if (va > s.a) next.push({ a: s.a, b: va, thick: s.thick });
+                  if (vb < s.b) next.push({ a: vb, b: s.b, thick: s.thick });
+                }
+                segs = next;
+              }
               const thickW = heavy ? FLOOR_THICK_HEAVY : FLOOR_THICK;
               return (
                 <g key={key}>
