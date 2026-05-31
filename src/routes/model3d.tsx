@@ -96,6 +96,10 @@ function isLahan(n: string) {
 function isVoid(n: string) {
   return n.trim().toLowerCase() === "void";
 }
+function isTaman(n: string) {
+  return n.trim().toLowerCase().startsWith("taman");
+}
+const TAMAN_GREEN = "#22c55e";
 const MDPL_ZERO_EPS = 0.0001;
 function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefined {
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
