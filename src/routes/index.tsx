@@ -258,3 +258,28 @@ function FeatureCard({
     </div>
   );
 }
+
+function WorkflowStep({
+  icon,
+  step,
+  title,
+  desc,
+}: {
+  icon: React.ReactNode;
+  step: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="group relative rounded-xl border border-border/60 bg-surface/60 p-5 text-left transition-all hover:border-ember/40 hover:shadow-soft">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-ember/10 text-ember">
+          {icon}
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ember">{step}</span>
+      </div>
+      <h4 className="font-display text-sm font-semibold">{title}</h4>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{desc}</p>
+    </div>
+  );
+}
