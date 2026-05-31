@@ -3242,13 +3242,13 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
   const totalArea = rows.reduce((s, r) => s + r.area, 0);
 
   return (
-    <div style={{ display: "flex", gap: 28, width: "100%", height: "100%", alignItems: "stretch" }}>
+    <div style={{ display: "flex", gap: 20, width: "100%", height: "100%", alignItems: "stretch", minHeight: 0, overflow: "hidden" }}>
       {/* Aksonometrik 3D */}
-      <div style={{ width: 720, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ width: 620, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 8 }}>
           Aksonometrik · Model 3D
         </div>
-        <div style={{ flex: 1, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ flex: 1, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 10, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
           <AxonometricView sketch={sketch} colorOf={colorOf} />
         </div>
         <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#999", marginTop: 6 }}>
