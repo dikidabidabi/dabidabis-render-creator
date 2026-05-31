@@ -671,6 +671,111 @@ function normalizeSketch(s: any): Sketch {
   };
 }
 
+// Editor tabel bentang per as — bisa diketik per baris, tambah/hapus baris,
+// dan field "Jumlah" untuk membuat N bentang sama dari preset.
+function SpanAxisEditor({
+  label,
+  spans,
+  onChange,
+}: {
+  label: string;
+  spans: number[];
+  onChange: (next: number[]) => void;
+}) {
+  const [count, setCount] = useState<string>(String(spans.length));
+  const [unit, setUnit] = useState<string>(String(spans[spans.length - 1] ?? 8));
+  useEffect(() => { setCount(String(spans.length)); }, [spans.length]);
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <div className="flex flex-wrap items-center gap-1">
+        {SPAN_PRESETS.map((p) => (
+          <Button key={`p-${p}`} size="sm" variant="outline" className="h-6 px-2 text-[10px]"
+            onClick={() => { setUnit(String(p)); onChange(Array(Math.max(1, Number(count) || spans.length)).fill(p)); }}>
+            {p}m
+          </Button>
+        ))}
+        <div className="ml-auto flex items-center gap-1">
+          <span className="text-[10px] text-muted-foreground">×</span>
+          <Input className="h-6 w-12 text-[10px]" inputMode="numeric"
+            value={count} onChange={(e) => setCount(e.target.value)}
+            onBlur={() => {
+              const n = Math.max(1, Math.min(50, Math.round(Number(count) || spans.length)));
+              const u = Math.max(0.5, Number(unit) || 8);
+              onChange(Array(n).fill(u));
+              setCount(String(n));
+            }}
+          />
+          <Input className="h-6 w-14 text-[10px]" inputMode="decimal"
+            value={unit} onChange={(e) => setUnit(e.target.value)}
+            onBlur={() => {
+              const u = Math.max(0.5, Number(unit) || 8);
+              onChange(Array(spans.length).fill(u));
+              setUnit(String(u));
+            }}
+            placeholder="m"
+          />
+        </div>
+      </div>
+      <div className="rounded border border-border/50 bg-background/60">
+        <div className="grid grid-cols-[28px_1fr_28px] items-center gap-1 border-b border-border/40 px-1.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span>#</span><span>Bentang (m)</span><span></span>
+        </div>
+        <div className="max-h-44 overflow-y-auto">
+          {spans.map((s, i) => (
+            <SpanRow key={i} index={i} value={s}
+              onCommit={(v) => {
+                const arr = spans.slice();
+                arr[i] = Math.max(0.5, v);
+                onChange(arr);
+              }}
+              onRemove={() => {
+                if (spans.length <= 1) return;
+                onChange(spans.filter((_, k) => k !== i));
+              }}
+            />
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-1 border-t border-border/40 px-1.5 py-1">
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]"
+            onClick={() => onChange([...spans, Number(unit) || spans[spans.length - 1] || 8])}>
+            <Plus className="mr-1 h-3 w-3" /> Tambah baris
+          </Button>
+          <span className="text-[10px] text-muted-foreground">
+            Total: {spans.reduce((a, b) => a + b, 0).toFixed(2)} m
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpanRow({
+  index, value, onCommit, onRemove,
+}: { index: number; value: number; onCommit: (v: number) => void; onRemove: () => void }) {
+  const [v, setV] = useState<string>(String(value));
+  useEffect(() => { setV(String(value)); }, [value]);
+  return (
+    <div className="grid grid-cols-[28px_1fr_28px] items-center gap-1 border-b border-border/30 px-1.5 py-1 last:border-b-0">
+      <span className="text-[10px] text-muted-foreground">{index + 1}</span>
+      <Input className="h-6 text-[11px]" inputMode="decimal"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => {
+          const n = Number(v);
+          if (Number.isFinite(n) && n > 0) onCommit(n);
+          else setV(String(value));
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      />
+      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={onRemove} title="Hapus baris">
+        <X className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
+
 function SketchPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
