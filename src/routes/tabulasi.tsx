@@ -320,6 +320,8 @@ function computeStats(sk: Sketch): Stats {
 
 
 
+  const { totalColumns, concreteVolumeM3 } = computeStructuralStats(sk.structuralGrid, levels);
+
   return {
     totalLahanM2,
     totalRuangM2,
@@ -340,6 +342,8 @@ function computeStats(sk: Sketch): Stats {
     ktbRencanaM2,
     jumlahLapis,
     ketinggianM,
+    totalKolom: totalColumns,
+    volumeBetonM3: concreteVolumeM3,
   };
 }
 
