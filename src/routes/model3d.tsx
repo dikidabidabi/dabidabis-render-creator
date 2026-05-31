@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Grid, Edges } from "@react-three/drei";
+import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import SunCalc from "suncalc";
 import { Slider } from "@/components/ui/slider";
@@ -14,6 +14,9 @@ import {
   Minimize2,
   RotateCcw,
   Download,
+  Camera,
+  Palette,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
