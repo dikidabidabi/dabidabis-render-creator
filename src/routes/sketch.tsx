@@ -2098,6 +2098,96 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
+    // ----- Modul Struktur (grid + kolom) -----
+    if (grid.enabled && activeLvlId) {
+      const activeLv = levels.find((l) => l.id === activeLvlId);
+      if (activeLv && levelInRange(grid, activeLv, levels)) {
+        const { spansX, spansY } = spansForLevel(grid, activeLv.id);
+        const posX = axisPositions(spansX);
+        const posY = axisPositions(spansY);
+        const ox = grid.origin.x;
+        const oy = grid.origin.y;
+        const ppm = pxPerMeter;
+        const xs = posX.map((m) => ox + m * ppm);
+        const ys = posY.map((m) => oy + m * ppm);
+        const xMin = xs[0], xMax = xs[xs.length - 1];
+        const yMin = ys[0], yMax = ys[ys.length - 1];
+        const bubbleOff = 28 / s;
+        const bubbleR = 14 / s;
+
+        // Garis as dash-dot
+        ctx.save();
+        ctx.strokeStyle = "rgba(20,20,20,0.85)";
+        ctx.lineWidth = 0.8 / s;
+        ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
+        ctx.beginPath();
+        for (const x of xs) {
+          ctx.moveTo(x, yMin - bubbleOff);
+          ctx.lineTo(x, yMax + bubbleOff);
+        }
+        for (const y of ys) {
+          ctx.moveTo(xMin - bubbleOff, y);
+          ctx.lineTo(xMax + bubbleOff, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Bubbles
+        ctx.font = `600 ${11 / s}px var(--font-display), sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (let i = 0; i < xs.length; i++) {
+          for (const yEnd of [yMin - bubbleOff, yMax + bubbleOff]) {
+            ctx.beginPath();
+            ctx.arc(xs[i], yEnd, bubbleR, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.lineWidth = 0.8 / s;
+            ctx.strokeStyle = "#0a0a0a";
+            ctx.stroke();
+            ctx.fillStyle = "#0a0a0a";
+            ctx.fillText(xAxisLabel(i), xs[i], yEnd);
+          }
+        }
+        for (let j = 0; j < ys.length; j++) {
+          for (const xEnd of [xMin - bubbleOff, xMax + bubbleOff]) {
+            ctx.beginPath();
+            ctx.arc(xEnd, ys[j], bubbleR, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.lineWidth = 0.8 / s;
+            ctx.strokeStyle = "#0a0a0a";
+            ctx.stroke();
+            ctx.fillStyle = "#0a0a0a";
+            ctx.fillText(yAxisLabel(j), xEnd, ys[j]);
+          }
+        }
+
+        // Kolom hitam padat di tiap titik potong
+        const colPx = (grid.colSizeCm / 100) * ppm;
+        ctx.fillStyle = "#0a0a0a";
+        for (let j = 0; j < ys.length; j++) {
+          for (let i = 0; i < xs.length; i++) {
+            if (!isNodeActive(grid, activeLv.id, i, j)) {
+              // disabled marker
+              ctx.save();
+              ctx.strokeStyle = "rgba(220,50,50,0.7)";
+              ctx.lineWidth = 0.8 / s;
+              ctx.beginPath();
+              ctx.arc(xs[i], ys[j], colPx * 0.7, 0, Math.PI * 2);
+              ctx.moveTo(xs[i] - colPx * 0.5, ys[j] - colPx * 0.5);
+              ctx.lineTo(xs[i] + colPx * 0.5, ys[j] + colPx * 0.5);
+              ctx.stroke();
+              ctx.restore();
+              continue;
+            }
+            ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+          }
+        }
+        ctx.restore();
+      }
+    }
+
     if (hover && tool === "line" && !drawing) {
       ctx.fillStyle = "rgba(232,93,58,0.9)";
       ctx.beginPath();
