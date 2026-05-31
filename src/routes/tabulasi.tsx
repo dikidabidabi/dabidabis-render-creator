@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { type StructuralGrid, computeStructuralStats } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/tabulasi")({
   head: () => ({
@@ -39,6 +40,7 @@ type Sketch = {
   klbCoef?: number;
   kdhPct?: number;
   ktbPct?: number;
+  structuralGrid?: StructuralGrid;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -256,6 +258,8 @@ type Stats = {
   ktbRencanaM2: number; // total ruang di LT B1
   jumlahLapis: number;
   ketinggianM: number;
+  totalKolom: number;
+  volumeBetonM3: number;
 };
 
 function computeStats(sk: Sketch): Stats {
@@ -316,6 +320,8 @@ function computeStats(sk: Sketch): Stats {
 
 
 
+  const { totalColumns, concreteVolumeM3 } = computeStructuralStats(sk.structuralGrid, levels);
+
   return {
     totalLahanM2,
     totalRuangM2,
@@ -336,6 +342,8 @@ function computeStats(sk: Sketch): Stats {
     ktbRencanaM2,
     jumlahLapis,
     ketinggianM,
+    totalKolom: totalColumns,
+    volumeBetonM3: concreteVolumeM3,
   };
 }
 
@@ -390,6 +398,13 @@ function RekapSection({ data }: { data: Stats }) {
       <Row label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
       <Row label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
       <Row label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
+      {data.totalKolom > 0 && (
+        <>
+          <div className="my-2 h-px bg-border" />
+          <Row label="Modul Struktur — Kolom" value={`${data.totalKolom} titik`} />
+          <Row label="Volume Beton Kolom" value={`${fmt(data.volumeBetonM3, 2)} m³`} />
+        </>
+      )}
     </div>
   );
 }

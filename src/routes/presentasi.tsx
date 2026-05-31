@@ -20,6 +20,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import SunCalc from "suncalc";
 import { drawOsmTiles } from "@/lib/geo";
+import {
+  type StructuralGrid,
+  axisPositions,
+  spansForLevel,
+  isNodeActive,
+  levelInRange,
+  xAxisLabel,
+  yAxisLabel,
+  computeStructuralStats,
+} from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
@@ -50,6 +60,7 @@ type Sketch = {
   geo?: Geo;
   sectionCut?: SectionCut; // legacy
   sectionCuts?: SectionCut[];
+  structuralGrid?: StructuralGrid;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -805,6 +816,7 @@ type Stats = {
   kdbRencanaM2: number; klbRencanaM2: number; kdhRencanaM2: number; ktbRencanaM2: number;
   jumlahLapis: number; ketinggianM: number;
   totalTerhitungM2: number;
+  totalKolom: number; volumeBetonM3: number;
 };
 
 function computeStats(sk: Sketch): Stats {
@@ -866,12 +878,14 @@ function computeStats(sk: Sketch): Stats {
   const totalTerhitungM2 = layers
     .filter((l) => !isLahan(l.name) && !isVoid(l.name))
     .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
+  const struct = computeStructuralStats(sk.structuralGrid, levels);
   return {
     totalLahanM2, totalRuangM2, totalEfektifM2, totalSaranaM2, totalSetengahM2,
     kdbPct: sk.kdbPct, klbCoef: sk.klbCoef, kdhPct: sk.kdhPct, ktbPct: sk.ktbPct,
     kdbLimitM2, klbLimitM2, kdhLimitM2, ktbLimitM2,
     kdbRencanaM2, klbRencanaM2, kdhRencanaM2, ktbRencanaM2,
     jumlahLapis, ketinggianM, totalTerhitungM2,
+    totalKolom: struct.totalColumns, volumeBetonM3: struct.concreteVolumeM3,
   };
 }
 
@@ -1748,6 +1762,77 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               strokeLinecap="round"
             />
           ))}
+          {(() => {
+            const grid = sketch.structuralGrid;
+            if (!grid?.enabled) return null;
+            const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            if (!levelInRange(grid, level, allLv)) return null;
+            const { spansX, spansY } = spansForLevel(grid, level.id);
+            const xsM = axisPositions(spansX);
+            const zsM = axisPositions(spansY);
+            const ox = grid.origin.x;
+            const oy = grid.origin.y;
+            const xs = xsM.map((m) => ox + m * pxPerM);
+            const ys = zsM.map((m) => oy + m * pxPerM);
+            const x0 = xs[0], x1 = xs[xs.length - 1];
+            const y0 = ys[0], y1 = ys[ys.length - 1];
+            const ext = sw * 0.04;
+            const rBub = sw * 0.018;
+            const gridSW = sw * 0.0012; // lebih tipis dari garis potong (0.0014)
+            const dash = `${sw * 0.01} ${sw * 0.004} ${sw * 0.002} ${sw * 0.004}`;
+            const colPx = (grid.colSizeCm / 100) * pxPerM;
+            return (
+              <g pointerEvents="none">
+                {/* Vertikal (sumbu X) */}
+                {xs.map((x, i) => (
+                  <g key={`gx-${i}`}>
+                    <line x1={x} y1={y0 - ext} x2={x} y2={y1 + ext}
+                      stroke="#0a0a0a" strokeWidth={gridSW} strokeDasharray={dash} />
+                    <circle cx={x} cy={y0 - ext - rBub} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {xAxisLabel(i)}
+                    </text>
+                    <circle cx={x} cy={y1 + ext + rBub} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {xAxisLabel(i)}
+                    </text>
+                  </g>
+                ))}
+                {/* Horizontal (sumbu Y) */}
+                {ys.map((y, j) => (
+                  <g key={`gy-${j}`}>
+                    <line x1={x0 - ext} y1={y} x2={x1 + ext} y2={y}
+                      stroke="#0a0a0a" strokeWidth={gridSW} strokeDasharray={dash} />
+                    <circle cx={x0 - ext - rBub} cy={y} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {yAxisLabel(j)}
+                    </text>
+                    <circle cx={x1 + ext + rBub} cy={y} r={rBub}
+                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                    <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.014} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                      {yAxisLabel(j)}
+                    </text>
+                  </g>
+                ))}
+                {/* Kolom hitam pada tiap titik temu */}
+                {xs.flatMap((x, i) => ys.map((y, j) => (
+                  isNodeActive(grid, level.id, i, j) ? (
+                    <rect key={`col-${i}-${j}`}
+                      x={x - colPx / 2} y={y - colPx / 2}
+                      width={colPx} height={colPx}
+                      fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
+                  ) : null
+                )))}
+              </g>
+            );
+          })()}
           {hull.length >= 2 && (() => {
             // Bounding box dari hull — dipakai sebagai acuan garis dimensi
             // tiap sisi (top/right/bottom/left) supaya semua label sejajar.
@@ -3172,6 +3257,68 @@ function AxonometricView({
     }
   }
 
+  // Structural columns (black) extruded per level in range
+  const grid = sketch.structuralGrid;
+  if (grid?.enabled) {
+    const colM = grid.colSizeCm / 100;
+    const half = colM / 2;
+    // Flip x/z to match toPm()
+    const gx0 = -(grid.origin.x - ox) * mPerPx;
+    const gz0 = -(grid.origin.y - oy) * mPerPx;
+    for (let li = 0; li < withH.length; li++) {
+      const lv = withH[li];
+      const src = ascLevels.find((l) => l.id === lv.sourceId);
+      if (!src) continue;
+      if (!levelInRange(grid, src, ascLevels)) continue;
+      const { spansX, spansY } = spansForLevel(grid, lv.sourceId);
+      const xs = axisPositions(spansX);
+      const zs = axisPositions(spansY);
+      const yBot = lv.base;
+      const yTop = lv.base + lv.height;
+      for (let i = 0; i < xs.length; i++) {
+        for (let j = 0; j < zs.length; j++) {
+          if (!isNodeActive(grid, lv.sourceId, i, j)) continue;
+          // Flip span offsets too
+          const cx = gx0 - xs[i];
+          const cz = gz0 - zs[j];
+          const x0 = cx - half, x1c = cx + half;
+          const z0 = cz - half, z1c = cz + half;
+          // 4 side faces
+          const sides = [
+            [[x0, z0], [x1c, z0]],
+            [[x1c, z0], [x1c, z1c]],
+            [[x1c, z1c], [x0, z1c]],
+            [[x0, z1c], [x0, z0]],
+          ];
+          for (const [[ax, az], [bx, bz]] of sides) {
+            const quad = [
+              project(ax, az, yBot),
+              project(bx, bz, yBot),
+              project(bx, bz, yTop),
+              project(ax, az, yTop),
+            ];
+            const depth = (ax + bx + az + bz) / 2 + yTop * 50 + 5000;
+            faces.push({ pts: quad, fill: "#0a0a0a", stroke: "#000000", depth, sw: 0.5 });
+          }
+          // top face
+          const topPts = [
+            project(x0, z0, yTop),
+            project(x1c, z0, yTop),
+            project(x1c, z1c, yTop),
+            project(x0, z1c, yTop),
+          ];
+          faces.push({
+            pts: topPts,
+            fill: "#1a1a1a",
+            stroke: "#000000",
+            depth: cx + cz + yTop * 100 + 10000,
+            sw: 0.7,
+          });
+        }
+      }
+    }
+  }
+
   faces.sort((a, b) => a.depth - b.depth);
 
   // Compute viewBox
@@ -3411,6 +3558,9 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       <GridStat label="Luas Semi" value={`${fmt(data.totalSetengahM2)} m²`} />
       <GridStat label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
       <GridStat label="KLB Rencana" value={`${fmt(data.klbRencanaM2)} m²`} />
+      {data.totalKolom > 0 && (
+        <GridStat label="Modul Struktur" value={`${data.totalKolom} kolom`} hint={`Volume beton ${fmt(data.volumeBetonM3, 2)} m³`} />
+      )}
     </div>
   );
 }
