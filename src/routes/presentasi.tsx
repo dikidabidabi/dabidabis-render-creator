@@ -29,7 +29,6 @@ import {
   levelInRange,
   xAxisLabel,
   yAxisLabel,
-  computeStructuralStats,
   computeAllStructuralStats,
   collectGrids,
 } from "@/lib/structural-grid";
