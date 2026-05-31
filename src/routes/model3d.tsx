@@ -599,7 +599,9 @@ function SketchViewer({
     <div
       className={cn(
         "grid gap-4",
-        fullscreen ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-[320px_1fr]",
+        fullscreen
+          ? "h-full min-h-0 grid-cols-1 grid-rows-[1fr]"
+          : "grid-cols-1 lg:grid-cols-[320px_1fr]",
       )}
     >
       {/* Panel manajemen level */}
