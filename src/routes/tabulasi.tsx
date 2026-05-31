@@ -642,7 +642,7 @@ function DonutMulti({
   );
 }
 
-function RingStat({ label, value, caption }: { label: string; value: number; caption?: string }) {
+function RingStat({ label, value, caption, invert }: { label: string; value: number; caption?: string; invert?: boolean }) {
   const over = value > 100;
   const pct = Math.max(0, Math.min(100, value));
   const size = 84;
@@ -650,7 +650,20 @@ function RingStat({ label, value, caption }: { label: string; value: number; cap
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
   const dash = (pct / 100) * c;
-  const color = over ? "hsl(0 84% 60%)" : value > 85 ? "hsl(38 92% 55%)" : "hsl(152 65% 45%)";
+  // Default (KDB/KLB/KTB): di bawah limit hijau, mendekati kuning, lewat merah.
+  // Invert (KDH): minimal — mencapai/melebihi hijau, di bawah merah.
+  const color = invert
+    ? value >= 100
+      ? "hsl(152 65% 45%)"
+      : value >= 70
+        ? "hsl(38 92% 55%)"
+        : "hsl(0 84% 60%)"
+    : over
+      ? "hsl(0 84% 60%)"
+      : value > 85
+        ? "hsl(38 92% 55%)"
+        : "hsl(152 65% 45%)";
+
   return (
     <div className="flex flex-col items-center rounded-lg border border-border/60 bg-background/40 p-2">
       <div className="relative" style={{ width: size, height: size }}>
