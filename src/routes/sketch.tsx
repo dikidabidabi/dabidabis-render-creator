@@ -1923,7 +1923,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.lineWidth = (layer.locked ? 3 : 2.5) / s;
           ctx.stroke();
         } else {
-          const fillBase = isTamanLayerName(layer.name) ? TAMAN_FILL_RGBA : layer.color;
+          const fillBase = isAtapHijauLayerName(layer.name)
+            ? ATAP_HIJAU_FILL_RGBA
+            : isBalkonLayerName(layer.name) || isAtapLayerName(layer.name)
+              ? ABU_MUDA_FILL_RGBA
+              : isTamanLayerName(layer.name)
+                ? TAMAN_FILL_RGBA
+                : layer.color;
           ctx.fillStyle = fillBase.replace("ALPHA", layer.locked ? "0.4" : "0.32");
           ctx.fill();
           ctx.strokeStyle = fillBase.replace("ALPHA", "0.95");
