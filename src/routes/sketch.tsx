@@ -1190,6 +1190,23 @@ type EditorProps = {
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
+  const grid: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+  const updateGrid = useCallback(
+    (patch: Partial<StructuralGrid>) => {
+      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+      onChange({ structuralGrid: { ...cur, ...patch } });
+    },
+    [sketch.structuralGrid, onChange],
+  );
+  const updateGridOverride = useCallback(
+    (lvlId: string, patch: Partial<import("@/lib/structural-grid").GridOverride>) => {
+      const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+      const prev = cur.perLevel?.[lvlId] ?? {};
+      const next = { ...cur.perLevel, [lvlId]: { ...prev, ...patch } };
+      onChange({ structuralGrid: { ...cur, perLevel: next } });
+    },
+    [sketch.structuralGrid, onChange],
+  );
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
