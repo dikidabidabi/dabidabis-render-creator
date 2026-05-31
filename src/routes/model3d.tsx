@@ -35,6 +35,13 @@ import {
   triggerDownload,
   type MeshInput,
 } from "@/lib/model3d-export";
+import {
+  type StructuralGrid,
+  axisPositions,
+  spansForLevel,
+  isNodeActive,
+  levelInRange,
+} from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/model3d")({
   head: () => ({
