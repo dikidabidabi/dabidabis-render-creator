@@ -674,6 +674,7 @@ function normalizeSketch(s: any): Sketch {
     })(),
     sectionCut: undefined,
     structuralGrid: normalizeGrid(s?.structuralGrid),
+    structuralGridExtras: normalizeGridExtras(s?.structuralGridExtras),
   };
 }
 
