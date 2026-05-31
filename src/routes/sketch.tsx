@@ -4315,13 +4315,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                           toast.error("Butuh minimal 3 titik");
                           return;
                         }
-                        const cur = sketch.structuralGrid ?? { ...DEFAULT_GRID };
                         const newClip: ColumnClip = {
                           id: `clip-${Date.now().toString(36)}`,
                           pts: clipDraft.pts.slice(),
                         };
-                        const clips = [...(cur.columnClips ?? []), newClip];
-                        onChange({ structuralGrid: { ...cur, columnClips: clips } });
+                        const clips = [...(grid.columnClips ?? []), newClip];
+                        updateGrid({ columnClips: clips });
                         setClipDraft(null);
                         toast.success("Area clip tersimpan");
                       }}
