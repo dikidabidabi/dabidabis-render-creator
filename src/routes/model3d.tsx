@@ -405,8 +405,53 @@ function SketchViewer({
   const [highlight, setHighlight] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [sunHour, setSunHour] = useState(12);
+  const [projection, setProjection] = useState<"persp" | "axon">("persp");
+  const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
+  const [shots, setShots] = useState<{ id: string; dataUrl: string; ts: number }[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
+
+  const shotsKey = `dabidabis_model3d_shots_${sketch.id}`;
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(shotsKey);
+      if (raw) setShots(JSON.parse(raw));
+      else setShots([]);
+    } catch {
+      setShots([]);
+    }
+  }, [shotsKey]);
+  const saveShots = useCallback(
+    (next: { id: string; dataUrl: string; ts: number }[]) => {
+      setShots(next);
+      try {
+        localStorage.setItem(shotsKey, JSON.stringify(next));
+      } catch {
+        // ignore quota
+      }
+    },
+    [shotsKey],
+  );
+  const takeScreenshot = useCallback(() => {
+    const el = canvasRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
+    if (!el) return;
+    try {
+      const dataUrl = el.toDataURL("image/png");
+      const item = { id: `s_${Date.now()}`, dataUrl, ts: Date.now() };
+      saveShots([item, ...shots].slice(0, 24));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [shots, saveShots]);
+  const removeShot = (id: string) => saveShots(shots.filter((s) => s.id !== id));
+  const downloadShot = (s: { dataUrl: string; ts: number }) => {
+    const a = document.createElement("a");
+    a.href = s.dataUrl;
+    a.download = `${(sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_")}_${s.ts}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const expanded = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
   const baseMdpl = expanded[0]?.baseMdpl ?? 0;
