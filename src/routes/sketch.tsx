@@ -3129,6 +3129,43 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const p = getWorldPos(e);
     if (tool === "grid") {
       const raw = getWorldPosRaw(e);
+      // -------- MODE: edit kolom (clip polygon) --------
+      if (gridEditMode === "clip") {
+        const ppm = pxPerMeter;
+        const ox = grid.origin.x, oy = grid.origin.y;
+        const tolPx = 14 / view.s;
+        // 1) hit-test handle pada clip yang sudah ada atau draft
+        type Hit = { clipId: string; idx: number; d: number };
+        let best: Hit | null = null;
+        const tryHit = (clipId: string, ptsM: Array<{x:number;y:number}>) => {
+          for (let i = 0; i < ptsM.length; i++) {
+            const wx = ox + ptsM[i].x * ppm;
+            const wy = oy + ptsM[i].y * ppm;
+            const d = Math.hypot(raw.x - wx, raw.y - wy);
+            if (d <= tolPx && (!best || d < best.d)) best = { clipId, idx: i, d };
+          }
+        };
+        for (const c of grid.columnClips ?? []) tryHit(c.id, c.pts);
+        if (clipDraft) tryHit("__draft__", clipDraft.pts);
+        if (best) {
+          setClipDrag({
+            clipId: best.clipId,
+            idx: best.idx,
+            moved: false,
+            startScreen: getScreenPos(e),
+          });
+          return;
+        }
+        // 2) klik di area kosong → tambah titik ke draft (commit pas pointerUp tanpa drag)
+        setClipDrag({
+          clipId: "__add__",
+          idx: -1,
+          moved: false,
+          startScreen: getScreenPos(e),
+        });
+        return;
+      }
+      // -------- MODE: expand (default) --------
       const corner = hitGridCorner(raw);
       const b = gridBounds();
       if (corner && b) {
