@@ -3257,18 +3257,18 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
       </div>
 
       {/* Stack visual */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 4, overflow: "hidden" }}>
         {rows.length === 0 && (
           <div style={{ color: "#999", fontSize: 14 }}>Belum ada level untuk ditampilkan.</div>
         )}
         {rows.map((r) => {
           const widthPct = 14 + (r.area / maxArea) * 86;
           return (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36 }}>
-              <div style={{ width: 62, textAlign: "right", fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 1 30px", minHeight: 22 }}>
+              <div style={{ width: 58, textAlign: "right", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
                 {fmt(r.mdpl, 1)} m
               </div>
-              <div style={{ flex: 1, position: "relative", height: 36 }}>
+              <div style={{ flex: 1, position: "relative", height: "100%", minHeight: 22 }}>
                 <div
                   style={{
                     width: `${widthPct}%`,
@@ -3278,9 +3278,9 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "0 12px",
+                    padding: "0 10px",
                     color: "#fff",
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: 600,
                   }}
                 >
@@ -3295,27 +3295,27 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
             </div>
           );
         })}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-          <div style={{ width: 62 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+          <div style={{ width: 58 }} />
           <div style={{ flex: 1, borderTop: "1px solid #111" }} />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 62, textAlign: "right", fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 58, textAlign: "right", fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
             MDPL
           </div>
           <div style={{ flex: 1, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
-            Tanah / Permukaan Acuan
+            Tanah · MDPL 0
           </div>
         </div>
       </div>
 
       {/* Legend & summary */}
-      <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 8 }}>
+      <div style={{ width: 230, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600, marginBottom: 6 }}>
             Legenda Level
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minHeight: 0, overflow: "hidden" }}>
             {levelsAsc.slice().reverse().map((lv) => {
               const baseArea = build
                 .filter((l) => l.levelId === lv.id)
@@ -3325,15 +3325,15 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
               const pct = totalArea > 0 ? (total / totalArea) * 100 : 0;
               const name = displayNames[lv.id] ?? lv.name;
               return (
-                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <span style={{ width: 12, height: 12, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
+                <div key={lv.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                  <span style={{ width: 10, height: 10, background: colorOf(lv.id), border: "1px solid rgba(0,0,0,0.25)", flexShrink: 0 }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {name}{k > 1 ? ` · ${k}×` : ""}
                   </span>
-                  <span style={{ color: "#888", fontSize: 10, fontVariantNumeric: "tabular-nums" }}>
+                  <span style={{ color: "#888", fontSize: 9, fontVariantNumeric: "tabular-nums" }}>
                     {fmt(pct, 1)}%
                   </span>
-                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 70, textAlign: "right" }}>
+                  <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 56, textAlign: "right", fontSize: 10 }}>
                     {fmt(total)} m²
                   </span>
                 </div>
@@ -3341,9 +3341,9 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
             })}
           </div>
         </div>
-        <BigStat label="Jumlah Lapis" value={String(totalFloors)} />
-        <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" />
-        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="termasuk tipikal" />
+        <BigStat label="Jumlah Lapis" value={String(totalFloors)} compact />
+        <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" compact />
+        <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="termasuk tipikal" compact />
       </div>
     </div>
   );
