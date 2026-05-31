@@ -394,6 +394,58 @@ function Scene({
   );
 }
 
+// ---------- Library grid (shared) ----------
+function LibraryGrid({
+  shots,
+  onDownload,
+  onRemove,
+}: {
+  shots: { id: string; dataUrl: string; ts: number }[];
+  onDownload: (s: { dataUrl: string; ts: number }) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (shots.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Belum ada screenshot. Klik tombol <span className="font-medium">Screenshot</span> di atas kanvas.
+      </p>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+      {shots.map((s) => (
+        <div
+          key={s.id}
+          className="group relative overflow-hidden rounded-md border border-border/60 bg-background"
+        >
+          <img
+            src={s.dataUrl}
+            alt="screenshot"
+            className="block aspect-[4/3] w-full cursor-pointer object-cover"
+            onClick={() => onDownload(s)}
+          />
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-1.5 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="font-mono">
+              {new Date(s.ts).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(s.id);
+              }}
+              className="rounded p-0.5 hover:bg-white/20"
+              aria-label="Hapus"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------- Per-sketch viewer card ----------
 function SketchViewer({
   sketch,
