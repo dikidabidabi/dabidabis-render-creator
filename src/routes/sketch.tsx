@@ -1582,8 +1582,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door">("line");
   const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
+  // Door tool — parameter & live draft (3-langkah gesture single drag).
+  const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
+  const [doorWidthCm, setDoorWidthCm] = useState<number>(100);
+  const [doorDraft, setDoorDraft] = useState<
+    | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
+    | null
+  >(null);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
