@@ -2791,6 +2791,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
         }
         ctx.restore();
+        ctx.restore(); // tutup wrapper rotasi grid struktur
       }
     }
 
