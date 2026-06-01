@@ -3664,7 +3664,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       // Step 1 — Snap engsel (Titik A) ke garis lurus terdekat di level aktif.
-      const raw = getWorldPosRaw(e);
       const tolPx = 16 / view.s;
       let bestLn: Line | null = null;
       let bestProj: Point | null = null;
