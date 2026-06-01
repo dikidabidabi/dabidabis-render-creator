@@ -2281,7 +2281,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const y0 = ys[0], y1 = ys[ys.length - 1];
             const ext = sw * 0.04;
             const rBub = sw * 0.009;
-            const gridSW = sw * 0.0006; // lebih tipis 50% dari sebelumnya
+            const gridSW = sw * 0.0003; // lebih tipis 50% lagi
             const dash = `${sw * 0.01} ${sw * 0.004} ${sw * 0.002} ${sw * 0.004}`;
             const colPx = (grid.colSizeCm / 100) * pxPerM;
             const bubFs = sw * 0.008;
