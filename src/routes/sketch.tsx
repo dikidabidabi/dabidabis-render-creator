@@ -3436,6 +3436,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       pushHistory();
       onChange({ edgeAttrs: next });
+    } else if (tool === "door") {
+      // Step 1 — Snap engsel (Titik A) ke garis lurus terdekat di level aktif.
+      const raw = getWorldPosRaw(e);
+      const tolPx = 16 / view.s;
+      let bestLn: Line | null = null;
+      let bestProj: Point | null = null;
+      let bestD = Infinity;
+      for (const ln of lines) {
+        if (activeLvlId && ln.levelId !== activeLvlId) continue;
+        if ((ln.kind ?? "straight") !== "straight") continue;
+        const proj = projectOnSegment(raw, ln.a, ln.b);
+        const d = dist(raw, proj);
+        if (d < bestD) { bestD = d; bestProj = proj; bestLn = ln; }
+      }
+      if (!bestLn || !bestProj || bestD > tolPx) {
+        toast.error("Tap pada garis dinding untuk menempatkan engsel pintu");
+        return;
+      }
+      const dxL = bestLn.b.x - bestLn.a.x;
+      const dyL = bestLn.b.y - bestLn.a.y;
+      const Llen = Math.hypot(dxL, dyL) || 1;
+      const dirX = dxL / Llen, dirY = dyL / Llen;
+      // Pastikan ada cukup ruang di sisa garis: jika dekat ujung, balik arah default.
+      const widthPx = (doorWidthCm / 100) * pxPerMeter;
+      const remainFwd = (bestLn.b.x - bestProj.x) * dirX + (bestLn.b.y - bestProj.y) * dirY;
+      const initSign = remainFwd >= widthPx * 0.5 ? 1 : -1;
+      const bx = bestProj.x + dirX * initSign * widthPx;
+      const by = bestProj.y + dirY * initSign * widthPx;
+      // Normal default: +90° dari arah.
+      setDoorDraft({
+        a: bestProj,
+        dirX, dirY,
+        b: { x: bx, y: by },
+        nx: -dirY, ny: dirX,
+        levelId: bestLn.levelId ?? activeLvlId ?? undefined,
+      });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
