@@ -4080,7 +4080,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setClipDrag(null);
       // Tap statis (tidak digeser) di area kosong → tambah titik ke draft
       if (cd.clipId === "__add__" && !cd.moved) {
-        const raw = getWorldPosRaw(e);
+        const rawWorld = getWorldPosRaw(e);
+        const raw = structGridRotRad !== 0
+          ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
+          : rawWorld;
         const mx = (raw.x - grid.origin.x) / pxPerMeter;
         const my = (raw.y - grid.origin.y) / pxPerMeter;
         const draft = clipDraft ?? { pts: [] };
