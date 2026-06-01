@@ -3696,7 +3696,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const dx = ln.b.x - ln.a.x, dy = ln.b.y - ln.a.y;
         const L = Math.hypot(dx, dy) || 1;
         let nx = -dy / L, ny = dx / L;
-        const side = (raw.x - bestProj.x) * nx + (raw.y - bestProj.y) * ny;
+        const bp: Point = bestProj;
+        const side = (raw.x - bp.x) * nx + (raw.y - bp.y) * ny;
         if (side < 0) { nx = -nx; ny = -ny; }
         const offPx = (offsetCm / 100) * pxPerMeter;
         const newLine: Line = {
