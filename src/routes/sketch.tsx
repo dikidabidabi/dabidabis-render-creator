@@ -3603,7 +3603,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           return;
         }
         const startLn = lines[bestIdx];
-        const origin = { ...startLn.a };
+        const lnOrigin = { ...startLn.a };
         const vx = startLn.b.x - startLn.a.x;
         const vy = startLn.b.y - startLn.a.y;
         const rotDeg = (Math.atan2(vy, vx) * 180) / Math.PI;
@@ -3613,35 +3613,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           toast.error("Garis terlalu pendek");
           return;
         }
-        const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-        const lvId = activeLvlId ?? sortedLv[0]?.id;
-        const sameLvlExtras = gridExtras.filter((g) =>
-          g.enabled && (!lvId || (g.fromLevelId === lvId || g.toLevelId === lvId || (!g.fromLevelId && !g.toLevelId)))
-        );
-        let nextOffX = 0;
-        if (primaryGrid?.enabled) nextOffX = Math.max(nextOffX, (primaryGrid.labelOffsetX ?? 0) + primaryGrid.spansX.length + 1);
-        for (const g of sameLvlExtras) {
-          nextOffX = Math.max(nextOffX, (g.labelOffsetX ?? 0) + g.spansX.length + 1);
-        }
-        const newGrid: StructuralGrid = {
-          enabled: true,
-          origin,
+        // Gabungkan ke grid yang sedang aktif (primer atau extra yg dipilih).
+        const prevExtraLines = grid.extraLines ?? [];
+        const newExtra = {
+          id: `xl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+          origin: lnOrigin,
           rotation: rotDeg,
-          spansX: [Number(lenM.toFixed(2))],
-          spansY: [],
-          colSizeCm: primaryGrid?.colSizeCm ?? 50,
-          labelOffsetX: nextOffX,
-          labelOffsetY: 0,
-          lineOnly: true,
-          fromLevelId: lvId,
-          toLevelId: lvId,
+          lengthM: Number(lenM.toFixed(2)),
         };
-        const nextExtras = [...gridExtras, newGrid];
+        updateGrid({ extraLines: [...prevExtraLines, newExtra] });
+        // Hapus garis aslinya, tapi pertahankan mode "fromLine" agar bisa
+        // pilih garis lain secara berurutan.
         const nextLines = lines.filter((_, i) => i !== bestIdx);
-        onChange({ structuralGridExtras: nextExtras, lines: nextLines });
-        setEditGridIdx(nextExtras.length);
-        setGridEditMode("expand");
-        toast.success("Grid dibuat dari garis terpilih");
+        onChange({ lines: nextLines });
+        toast.success("Garis ditambahkan ke grid aktif");
         return;
       }
       // -------- MODE: edit kolom (clip polygon) --------
