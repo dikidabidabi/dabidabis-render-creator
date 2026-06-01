@@ -3703,6 +3703,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setDraggingHandle(null);
       return;
     }
+    if (doorDraft) {
+      const d = doorDraft;
+      setDoorDraft(null);
+      // Tap tanpa drag tetap commit (default sign +). Spec: rekam pelepasan sentuhan.
+      pushHistory();
+      const door: Door = {
+        id: genDoorId(),
+        levelId: d.levelId,
+        a: d.a,
+        b: d.b,
+        nx: d.nx,
+        ny: d.ny,
+        leaves: doorLeaves,
+        widthCm: doorWidthCm,
+      };
+      const prev = sketch.doors ?? [];
+      onChange({ doors: [...prev, door] });
+      toast.success(`Pintu ${doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
+      return;
+    }
     if (editDrag) {
       setEditDrag(null);
       return;
