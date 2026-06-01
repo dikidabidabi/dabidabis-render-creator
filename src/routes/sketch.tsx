@@ -5266,15 +5266,19 @@ function LevelsPanel({
                 </Label>
                 <Input
                   id={`mdpl-${lvl.id}`}
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  step="0.1"
                   value={mdplDraft ?? String(lvl.mdpl)}
-                  onChange={(e) =>
-                    setMdplDrafts((d) => ({ ...d, [lvl.id]: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    // Allow only digits, optional leading minus, one decimal separator
+                    if (raw === "" || /^-?\d*([.,]\d*)?$/.test(raw)) {
+                      setMdplDrafts((d) => ({ ...d, [lvl.id]: raw }));
+                    }
+                  }}
                   onBlur={() => {
-                    const v = parseFloat(mdplDraft ?? "");
+                    const raw = (mdplDraft ?? "").replace(",", ".");
+                    const v = parseFloat(raw);
                     if (Number.isFinite(v)) onMdpl(lvl.id, v);
                     setMdplDrafts((d) => {
                       const n = { ...d };
