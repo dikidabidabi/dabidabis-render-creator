@@ -5524,6 +5524,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 Chain ke grid extra lain
               </Button>
             </div>
+            {/* ===== Sembunyikan Buble ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Sembunyikan Buble</Label>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Sembunyikan buble di ujung sumbu agar mudah menyambung grid lain.
+              </p>
+              {grid.lineOnly ? (
+                <div className="grid grid-cols-2 gap-1.5">
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleStartX}
+                      onChange={(e) => updateGrid({ hideBubbleStartX: e.target.checked })} />
+                    Ujung Awal
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleEndX}
+                      onChange={(e) => updateGrid({ hideBubbleEndX: e.target.checked })} />
+                    Ujung Akhir
+                  </label>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-1.5 gap-y-1">
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleStartY}
+                      onChange={(e) => updateGrid({ hideBubbleStartY: e.target.checked })} />
+                    X · Atas
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleEndY}
+                      onChange={(e) => updateGrid({ hideBubbleEndY: e.target.checked })} />
+                    X · Bawah
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleStartX}
+                      onChange={(e) => updateGrid({ hideBubbleStartX: e.target.checked })} />
+                    Y · Kiri
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleEndX}
+                      onChange={(e) => updateGrid({ hideBubbleEndX: e.target.checked })} />
+                    Y · Kanan
+                  </label>
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="space-y-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dari Level</Label>
