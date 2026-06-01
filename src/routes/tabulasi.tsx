@@ -184,14 +184,22 @@ function TabulasiBox({
 }) {
   const data = useMemo(() => computeStats(sketch), [sketch]);
 
+  const handleDownloadExcel = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      downloadSketchExcel(sketch, data);
+    },
+    [sketch, data],
+  );
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface/60 shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface"
-      >
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex w-full items-center justify-between gap-3 px-4 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left transition-colors hover:opacity-80"
+        >
           <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">{sketch.title}</div>
@@ -199,9 +207,29 @@ function TabulasiBox({
               Skala {sketch.scale} · {data.totalLahanM2 > 0 ? `Lahan ${fmt(data.totalLahanM2)} m²` : "Lahan belum ditentukan"} · {sketch.levels.length} lapis
             </div>
           </div>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadExcel}
+            className="h-8 gap-1.5 text-xs"
+            title="Unduh semua tabel sebagai Excel"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Excel
+          </Button>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={open ? "Tutup" : "Buka"}
+            className="rounded p-1 text-muted-foreground hover:bg-surface"
+          >
+            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
         </div>
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-      </button>
+      </div>
 
       {open && (
         <div className="border-t border-border p-4">
