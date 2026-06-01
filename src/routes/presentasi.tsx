@@ -4034,10 +4034,16 @@ function AxonometricView({
       const yTop = yBot + (ov?.height ?? lv.height);
       const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
       const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
-      // Side quads
+      // Side quads (hanya yang menghadap kamera — view direction +x +z di proyeksi dimetric).
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
         const b = pm[(i + 1) % pm.length];
+        // Outward normal (asumsi CCW di plane x,z setelah toPm).
+        const ex = b.x - a.x;
+        const ez = b.z - a.z;
+        const nx = ez;
+        const nz = -ex;
+        if (nx + nz <= 0) continue;
         const quad = [
           project(a.x, a.z, yBot),
           project(b.x, b.z, yBot),
