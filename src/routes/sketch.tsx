@@ -3617,10 +3617,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
     } else if (tool === "pick") {
+      if (!activeLvlId) {
+        toast.error("Pilih Level aktif terlebih dahulu");
+        return;
+      }
       const raw = getWorldPosRaw(e);
       const tol = 10 / view.s;
       const segs = computeStraightSegments(lines).filter(
-        (s) => !activeLvlId || s.levelId === activeLvlId,
+        (s) => s.levelId === activeLvlId,
       );
       const hit = pickSegmentAt(raw, segs, tol);
       if (!hit) return;
