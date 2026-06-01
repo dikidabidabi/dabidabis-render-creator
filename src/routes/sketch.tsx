@@ -4006,6 +4006,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       toast.success(`Pintu ${doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
       return;
     }
+    if (circleDraft && tool === "circle") {
+      const r = Math.hypot(circleDraft.cur.x - circleDraft.c.x, circleDraft.cur.y - circleDraft.c.y);
+      const c0 = circleDraft.c;
+      const lvlId = circleDraft.levelId;
+      setCircleDraft(null);
+      if (r < 4) return;
+      pushHistory();
+      const newCir: Circle = {
+        id: `CIR${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        c: c0, r, levelId: lvlId ?? activeLvlId ?? undefined,
+      };
+      onChange({ circles: [...(sketch.circles ?? []), newCir] });
+      toast.success(`Lingkaran R ${(r / pxPerMeter).toFixed(2)} m`);
+      return;
+    }
     if (editDrag) {
       setEditDrag(null);
       return;
