@@ -3678,19 +3678,26 @@ function MaterialEdges({
             </g>
           );
         }
-        // window (window wall): kontur tebal + dua garis sash kaca di tengah.
-        const cMid1 = { x: (a1.x + a2.x) / 2 + nx * half * 0.25, y: (a1.y + a2.y) / 2 + ny * half * 0.25 };
-        const cMid2 = { x: (b1.x + b2.x) / 2 + nx * half * 0.25, y: (b1.y + b2.y) / 2 + ny * half * 0.25 };
-        const dMid1 = { x: (a1.x + a2.x) / 2 - nx * half * 0.25, y: (a1.y + a2.y) / 2 - ny * half * 0.25 };
-        const dMid2 = { x: (b1.x + b2.x) / 2 - nx * half * 0.25, y: (b1.y + b2.y) / 2 - ny * half * 0.25 };
+        // window (jendela): kontur tipis seragam + 3 garis sash kaca + hatch tipis pada band dinding.
+        const off = half * 0.33;
+        const cMid1 = { x: (a1.x + a2.x) / 2 + nx * off, y: (a1.y + a2.y) / 2 + ny * off };
+        const cMid2 = { x: (b1.x + b2.x) / 2 + nx * off, y: (b1.y + b2.y) / 2 + ny * off };
+        const dMid1 = { x: (a1.x + a2.x) / 2 - nx * off, y: (a1.y + a2.y) / 2 - ny * off };
+        const dMid2 = { x: (b1.x + b2.x) / 2 - nx * off, y: (b1.y + b2.y) / 2 - ny * off };
+        const eMid1 = { x: (a1.x + a2.x) / 2, y: (a1.y + a2.y) / 2 };
+        const eMid2 = { x: (b1.x + b2.x) / 2, y: (b1.y + b2.y) / 2 };
         return (
           <g key={`s-${s.id}`}>
-            <polygon points={pts} fill="#ffffff"
+            <polygon points={pts} fill="#ffffff" stroke="none" />
+            <polygon points={pts} fill={`url(#hatch45-${patternId})`} stroke="none" opacity={0.55} />
+            <polygon points={pts} fill="none"
               stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
             <line x1={cMid1.x} y1={cMid1.y} x2={cMid2.x} y2={cMid2.y}
-              stroke="#0a0a0a" strokeWidth={strokeFine * 0.9} />
+              stroke="#0a0a0a" strokeWidth={stroke} />
+            <line x1={eMid1.x} y1={eMid1.y} x2={eMid2.x} y2={eMid2.y}
+              stroke="#0a0a0a" strokeWidth={stroke} />
             <line x1={dMid1.x} y1={dMid1.y} x2={dMid2.x} y2={dMid2.y}
-              stroke="#0a0a0a" strokeWidth={strokeFine * 0.9} />
+              stroke="#0a0a0a" strokeWidth={stroke} />
           </g>
         );
       })}
