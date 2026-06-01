@@ -5456,6 +5456,74 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 </>
               )}
             </div>
+            {/* ===== Edit Buble (label) ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Edit Buble</Label>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Atur buble paling kecil (sudut kiri atas) untuk grid ini. Tombol
+                <span className="font-medium text-foreground"> Chain</span> akan menomori ulang
+                grid extra lain di level yang sama agar bublenya melanjutkan serial dari grid ini.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Mulai X (angka)</Label>
+                  <Input
+                    className="h-7 text-xs"
+                    type="text"
+                    inputMode="numeric"
+                    defaultValue={xAxisLabelAt(0, grid.labelOffsetX ?? 0)}
+                    onBlur={(e) => {
+                      const v = parseXAxisLabel(e.target.value);
+                      if (v == null) { e.target.value = xAxisLabelAt(0, grid.labelOffsetX ?? 0); return; }
+                      updateGrid({ labelOffsetX: v });
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Mulai Y (huruf)</Label>
+                  <Input
+                    className="h-7 text-xs uppercase"
+                    type="text"
+                    defaultValue={yAxisLabelAt(0, grid.labelOffsetY ?? 0)}
+                    onBlur={(e) => {
+                      const v = parseYAxisLabel(e.target.value);
+                      if (v == null) { e.target.value = yAxisLabelAt(0, grid.labelOffsetY ?? 0); return; }
+                      updateGrid({ labelOffsetY: v });
+                    }}
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm" variant="outline" className="h-7 w-full text-[10px]"
+                onClick={() => {
+                  // Chain offset ke grid extras lain pada level yang sama (urutan extras).
+                  const lvId = grid.fromLevelId ?? activeLvlId ?? undefined;
+                  const baseX = (grid.labelOffsetX ?? 0) + grid.spansX.length + 1;
+                  const baseY = (grid.labelOffsetY ?? 0) + grid.spansY.length + 1;
+                  let accX = baseX;
+                  let accY = baseY;
+                  // chainKind: kalau grid ini orientasi vertikal (rotasi mendekati 90°/270°),
+                  // chain Y; selain itu chain X. Sederhana: pakai X.
+                  const next = gridExtras.map((g, i) => {
+                    // skip grid ini sendiri (kalau sedang edit extra ke-N)
+                    if (editGridIdx > 0 && i === editGridIdx - 1) return g;
+                    const same = lvId
+                      ? (g.fromLevelId === lvId || g.toLevelId === lvId || (!g.fromLevelId && !g.toLevelId))
+                      : true;
+                    if (!same) return g;
+                    const updated: StructuralGrid = { ...g, labelOffsetX: accX, labelOffsetY: accY };
+                    accX += g.spansX.length + 1;
+                    accY += g.spansY.length + 1;
+                    return updated;
+                  });
+                  onChange({ structuralGridExtras: next });
+                  toast.success("Buble grid extra dichain dari grid ini");
+                }}
+                title="Setel ulang buble grid extra lain di level yang sama agar melanjutkan serial dari grid ini"
+              >
+                Chain ke grid extra lain
+              </Button>
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="space-y-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dari Level</Label>
