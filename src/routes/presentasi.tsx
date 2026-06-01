@@ -3590,11 +3590,10 @@ function MaterialEdges({
   const segs = computeStraightSegments(
     lines.map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
   ).filter((s) => (lines[s.sourceLineIndex].kind ?? "straight") === "straight");
-  // Tebalkan kontur dinding agar terlihat jelas di slide denah.
-  // Kontur dinding tipis; hatch 45° sangat halus.
-  const stroke = sw * 0.0014;
-  const strokeFine = sw * 0.0012;
-  const hatchStroke = Math.max(0.25, sw * 0.0006);
+  // Kontur dinding sangat tipis & seragam (80% lebih tipis dari sebelumnya).
+  const stroke = sw * 0.00028;
+  const strokeFine = stroke;
+  const hatchStroke = Math.max(0.2, sw * 0.0005);
   const hatchGap = Math.max(2, sw * 0.005);
   const patternId = useId();
   return (
@@ -3617,7 +3616,7 @@ function MaterialEdges({
           key={`c-${i}`}
           d={linePath(ln)}
           stroke="#0a0a0a"
-          strokeWidth={sw * 0.004}
+          strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"
         />
@@ -3629,7 +3628,7 @@ function MaterialEdges({
             <line
               key={`s-${s.id}`}
               x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
-              stroke="#0a0a0a" strokeWidth={sw * 0.004} strokeLinecap="round"
+              stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
             />
           );
         }
@@ -3679,19 +3678,26 @@ function MaterialEdges({
             </g>
           );
         }
-        // window (window wall): kontur tebal + dua garis sash kaca di tengah.
-        const cMid1 = { x: (a1.x + a2.x) / 2 + nx * half * 0.25, y: (a1.y + a2.y) / 2 + ny * half * 0.25 };
-        const cMid2 = { x: (b1.x + b2.x) / 2 + nx * half * 0.25, y: (b1.y + b2.y) / 2 + ny * half * 0.25 };
-        const dMid1 = { x: (a1.x + a2.x) / 2 - nx * half * 0.25, y: (a1.y + a2.y) / 2 - ny * half * 0.25 };
-        const dMid2 = { x: (b1.x + b2.x) / 2 - nx * half * 0.25, y: (b1.y + b2.y) / 2 - ny * half * 0.25 };
+        // window (jendela): kontur tipis seragam + 3 garis sash kaca + hatch tipis pada band dinding.
+        const off = half * 0.33;
+        const cMid1 = { x: (a1.x + a2.x) / 2 + nx * off, y: (a1.y + a2.y) / 2 + ny * off };
+        const cMid2 = { x: (b1.x + b2.x) / 2 + nx * off, y: (b1.y + b2.y) / 2 + ny * off };
+        const dMid1 = { x: (a1.x + a2.x) / 2 - nx * off, y: (a1.y + a2.y) / 2 - ny * off };
+        const dMid2 = { x: (b1.x + b2.x) / 2 - nx * off, y: (b1.y + b2.y) / 2 - ny * off };
+        const eMid1 = { x: (a1.x + a2.x) / 2, y: (a1.y + a2.y) / 2 };
+        const eMid2 = { x: (b1.x + b2.x) / 2, y: (b1.y + b2.y) / 2 };
         return (
           <g key={`s-${s.id}`}>
-            <polygon points={pts} fill="#ffffff"
+            <polygon points={pts} fill="#ffffff" stroke="none" />
+            <polygon points={pts} fill={`url(#hatch45-${patternId})`} stroke="none" opacity={0.55} />
+            <polygon points={pts} fill="none"
               stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
             <line x1={cMid1.x} y1={cMid1.y} x2={cMid2.x} y2={cMid2.y}
-              stroke="#0a0a0a" strokeWidth={strokeFine * 0.9} />
+              stroke="#0a0a0a" strokeWidth={stroke} />
+            <line x1={eMid1.x} y1={eMid1.y} x2={eMid2.x} y2={eMid2.y}
+              stroke="#0a0a0a" strokeWidth={stroke} />
             <line x1={dMid1.x} y1={dMid1.y} x2={dMid2.x} y2={dMid2.y}
-              stroke="#0a0a0a" strokeWidth={strokeFine * 0.9} />
+              stroke="#0a0a0a" strokeWidth={stroke} />
           </g>
         );
       })}
@@ -3709,7 +3715,7 @@ function DoorNotation({
   sw: number;
 }) {
   if (!doors.length) return null;
-  const stroke = sw * 0.0012;
+  const stroke = sw * 0.0006;
   const thick = 0.15 * pxPerM; // 150mm wall thickness mask
   return (
     <g>
