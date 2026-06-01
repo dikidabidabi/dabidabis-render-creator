@@ -3708,7 +3708,7 @@ function DoorNotation({
   sw: number;
 }) {
   if (!doors.length) return null;
-  const stroke = sw * 0.0022;
+  const stroke = sw * 0.0012;
   const thick = 0.15 * pxPerM; // 150mm wall thickness mask
   return (
     <g>
