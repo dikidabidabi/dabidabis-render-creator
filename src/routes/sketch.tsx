@@ -267,6 +267,14 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
   edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
+  circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
+};
+
+type Circle = {
+  id: string;
+  c: Point;
+  r: number; // radius (px world)
+  levelId?: string;
 };
 
 type StoreShape = {
