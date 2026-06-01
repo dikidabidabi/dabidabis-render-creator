@@ -2092,7 +2092,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   return (
                     <g key={h.key}>
                       <line x1={sx} y1={yTopPx} x2={sx} y2={yFloorBottom}
-                        stroke="#0a0a0a" strokeWidth={0.3}
+                        stroke="#0a0a0a" strokeWidth={0.15}
                         strokeDasharray="6 3 1 3" />
                       <circle cx={sx} cy={yBub} r={rBub}
                         fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.4} />
