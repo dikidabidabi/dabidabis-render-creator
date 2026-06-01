@@ -3844,6 +3844,69 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       updateGrid({ origin: snapped });
       return;
     }
+    if (tool === "floor") {
+      if (floorMode === "rect") {
+        setDrawing({ a: p, b: p });
+      } else if (floorMode === "polyline" || floorMode === "line") {
+        // Reuse polyDraft; floor commit handled in pointerUp branch via tool guard.
+        if (!polyDraft) {
+          setPolyDraft({ points: [p], lastSample: p, cursor: p });
+        } else {
+          // Subsequent click: add a vertex (or close if near first point)
+          const tolClose = 14 / view.s;
+          const first = polyDraft.points[0];
+          if (polyDraft.points.length >= 3 && dist(p, first) <= tolClose) {
+            const pts = polyDraft.points.slice();
+            setPolyDraft(null);
+            commitFloorFromPolys(pts, []);
+          } else {
+            setPolyDraft({ ...polyDraft, points: [...polyDraft.points, p], lastSample: p, cursor: p });
+          }
+        }
+      } else if (floorMode === "attach") {
+        // Pick segmen terdekat di level aktif, lalu cari cycle terkecil
+        // yang melewatinya. Pertama → outer, berikutnya → hole.
+        const tolPx = 12 / view.s;
+        const raw = getWorldPosRaw(e);
+        const candidates: { a: Point; b: Point; idx: number }[] = [];
+        lines.forEach((ln, i) => {
+          if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) return;
+          if ((ln.kind ?? "straight") !== "straight") return;
+          candidates.push({ a: ln.a, b: ln.b, idx: candidates.length });
+        });
+        let bestIdx = -1;
+        let bestD = tolPx;
+        candidates.forEach((c, i) => {
+          const d = pointToSegmentDist(raw, c.a, c.b);
+          if (d < bestD) { bestD = d; bestIdx = i; }
+        });
+        if (bestIdx < 0) {
+          toast.error("Tidak ada garis di dekat klik");
+          return;
+        }
+        const segs = candidates.map((c) => ({ a: c.a, b: c.b }));
+        const cycle = findCycleThroughSegment(segs, bestIdx, SNAP_TOL);
+        if (!cycle || cycle.length < 3) {
+          toast.error("Segmen tidak membentuk poligon tertutup");
+          return;
+        }
+        const cur = floorDraft ?? { outer: null as Point[] | null, holes: [] as Point[][], levelId: activeLvlId };
+        if (!cur.outer) {
+          setFloorDraft({ outer: cycle, holes: [], levelId: activeLvlId });
+          toast.success("Outer dipilih — klik segmen lubang berikutnya atau tekan Selesai");
+        } else {
+          // Validasi: centroid hole harus berada di dalam outer
+          const c = floorPolyCentroid(cycle);
+          if (!floorPointInPolygon(c, cur.outer)) {
+            toast.error("Poligon ini bukan lubang di dalam outer");
+            return;
+          }
+          setFloorDraft({ outer: cur.outer, holes: [...cur.holes, cycle], levelId: cur.levelId });
+          toast.success(`Void #${cur.holes.length + 1} ditambahkan`);
+        }
+      }
+      return;
+    }
     if (tool === "line" || tool === "rect" || tool === "section") {
       setDrawing({ a: p, b: p });
     } else if (tool === "polyline") {
