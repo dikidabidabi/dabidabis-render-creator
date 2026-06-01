@@ -126,6 +126,27 @@ export function yAxisLabel(i: number): string {
   } while (n >= 0);
   return s;
 }
+// Label dengan offset (sesuai labelOffsetX/Y pada grid).
+export function xAxisLabelAt(i: number, offset: number = 0): string {
+  return xAxisLabel(i + Math.max(0, offset | 0));
+}
+export function yAxisLabelAt(i: number, offset: number = 0): string {
+  return yAxisLabel(i + Math.max(0, offset | 0));
+}
+// Parser kebalikan label.
+export function parseXAxisLabel(s: string): number | null {
+  const n = parseInt(String(s).trim(), 10);
+  return Number.isFinite(n) && n >= 1 ? n - 1 : null;
+}
+export function parseYAxisLabel(s: string): number | null {
+  const str = String(s).trim().toUpperCase();
+  if (!str || !/^[A-Z]+$/.test(str)) return null;
+  let n = 0;
+  for (let i = 0; i < str.length; i++) {
+    n = n * 26 + (str.charCodeAt(i) - 64);
+  }
+  return n - 1;
+}
 
 // Bentang efektif pada sebuah level (memperhitungkan override).
 export function spansForLevel(
