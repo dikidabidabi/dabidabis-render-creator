@@ -2120,6 +2120,120 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
+    // ----- Notasi Pintu (committed) -----
+    {
+      const doors = sketch.doors ?? [];
+      for (const d of doors) {
+        if (activeLvlId && d.levelId !== activeLvlId) continue;
+        const ax = d.a.x, ay = d.a.y;
+        const bx = d.b.x, by = d.b.y;
+        const widthPx = (d.widthCm / 100) * pxPerMeter;
+        // Mask gap di dinding
+        const dirX = (bx - ax) / (Math.hypot(bx - ax, by - ay) || 1);
+        const dirY = (by - ay) / (Math.hypot(bx - ax, by - ay) || 1);
+        const thick = (0.15 * pxPerMeter); // 150mm
+        const pnx = -dirY, pny = dirX;
+        ctx.save();
+        ctx.fillStyle = "#f6efe3";
+        ctx.beginPath();
+        ctx.moveTo(ax + pnx * thick * 0.6, ay + pny * thick * 0.6);
+        ctx.lineTo(bx + pnx * thick * 0.6, by + pny * thick * 0.6);
+        ctx.lineTo(bx - pnx * thick * 0.6, by - pny * thick * 0.6);
+        ctx.lineTo(ax - pnx * thick * 0.6, ay - pny * thick * 0.6);
+        ctx.closePath();
+        ctx.fill();
+        // Daun pintu + arc
+        ctx.strokeStyle = "#0a0a0a";
+        ctx.lineWidth = 1.6 / s;
+        if (d.leaves === 1) {
+          const lx = ax + d.nx * widthPx;
+          const ly = ay + d.ny * widthPx;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(lx, ly);
+          ctx.stroke();
+          // arc dari leaf-end ke B (radius widthPx, pusat A)
+          const a0 = Math.atan2(d.ny, d.nx);
+          const a1 = Math.atan2(by - ay, bx - ax);
+          ctx.beginPath();
+          ctx.setLineDash([4 / s, 3 / s]);
+          // tentukan arah pendek
+          let delta = a1 - a0;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          ctx.arc(ax, ay, widthPx, a0, a0 + delta, delta < 0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          // 2 daun: dari A dan B masing-masing widthPx/2
+          const mx = (ax + bx) / 2, my = (ay + by) / 2;
+          const half = widthPx / 2;
+          const la = { x: ax + d.nx * half, y: ay + d.ny * half };
+          const lb = { x: bx + d.nx * half, y: by + d.ny * half };
+          ctx.beginPath();
+          ctx.moveTo(ax, ay); ctx.lineTo(la.x, la.y);
+          ctx.moveTo(bx, by); ctx.lineTo(lb.x, lb.y);
+          ctx.stroke();
+          ctx.setLineDash([4 / s, 3 / s]);
+          ctx.beginPath();
+          const a0a = Math.atan2(d.ny, d.nx);
+          const a1a = Math.atan2(my - ay, mx - ax);
+          let da = a1a - a0a;
+          while (da > Math.PI) da -= Math.PI * 2;
+          while (da < -Math.PI) da += Math.PI * 2;
+          ctx.arc(ax, ay, half, a0a, a0a + da, da < 0);
+          const a0b = Math.atan2(d.ny, d.nx);
+          const a1b = Math.atan2(my - by, mx - bx);
+          let db = a1b - a0b;
+          while (db > Math.PI) db -= Math.PI * 2;
+          while (db < -Math.PI) db += Math.PI * 2;
+          ctx.arc(bx, by, half, a0b, a0b + db, db < 0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        // Engsel marker
+        ctx.fillStyle = "#e85d3a";
+        ctx.beginPath();
+        ctx.arc(ax, ay, 3 / s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // ----- Door draft preview -----
+    if (doorDraft && tool === "door") {
+      const ax = doorDraft.a.x, ay = doorDraft.a.y;
+      const bx = doorDraft.b.x, by = doorDraft.b.y;
+      const widthPx = (doorWidthCm / 100) * pxPerMeter;
+      ctx.save();
+      ctx.strokeStyle = "rgba(232,93,58,0.95)";
+      ctx.lineWidth = 2.4 / s;
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+      ctx.stroke();
+      // arc preview
+      ctx.setLineDash([3 / s, 3 / s]);
+      ctx.lineWidth = 1.4 / s;
+      ctx.strokeStyle = "rgba(232,93,58,0.7)";
+      const a0 = Math.atan2(doorDraft.ny, doorDraft.nx);
+      const a1 = Math.atan2(by - ay, bx - ax);
+      let delta = a1 - a0;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(ax, ay, doorDraft.leaves === 2 ? widthPx / 2 : widthPx, a0, a0 + delta, delta < 0);
+      void (0); // placeholder
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Hinge marker
+      ctx.fillStyle = "#e85d3a";
+      ctx.beginPath();
+      ctx.arc(ax, ay, 4 / s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
 
     // Active drawing preview (during drag)
     if (drawing) {
