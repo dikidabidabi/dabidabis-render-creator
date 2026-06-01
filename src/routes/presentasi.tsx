@@ -3960,6 +3960,7 @@ function AxonometricView({
     stroke: string;
     depth: number;
     sw: number;
+    kind: "base" | "top" | "side";
   };
   const faces: Face[] = [];
 
@@ -3983,7 +3984,7 @@ function AxonometricView({
     const pm = toPm(ly);
     const top = pm.map((p) => project(p.x, p.z, 0));
     const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / Math.max(1, pm.length);
-    faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4 });
+    faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4, kind: "base" });
   }
 
   // Taman: thin green slab at MDPL 0, 0.1 m tall (matches Model 3D)
@@ -4006,7 +4007,7 @@ function AxonometricView({
         project(a.x, a.z, yTop),
       ];
       const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-      faces.push({ pts: quad, fill: TAMAN_SIDE, stroke: "rgba(0,0,0,0.35)", depth, sw: 0.4 });
+      faces.push({ pts: quad, fill: TAMAN_SIDE, stroke: "rgba(0,0,0,0.35)", depth, sw: 0.4, kind: "side" });
     }
     const topPts = pm.map((p) => project(p.x, p.z, yTop));
     const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
@@ -4016,6 +4017,7 @@ function AxonometricView({
       stroke: "rgba(0,0,0,0.4)",
       depth: avg + yTop * 0.01,
       sw: 0.5,
+      kind: "top",
     });
   }
 
@@ -4047,7 +4049,7 @@ function AxonometricView({
           project(a.x, a.z, yTop),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5 });
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
       }
       // Top face
       const topPts = pm.map((p) => project(p.x, p.z, yTop));
@@ -4058,6 +4060,7 @@ function AxonometricView({
         stroke: "rgba(0,0,0,0.55)",
         depth: avg + yTop * 0.01,
         sw: 0.7,
+        kind: "top",
       });
     }
   }
