@@ -2680,7 +2680,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(xAxisLabel(i), xs[i], yEnd);
+            ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], yEnd);
           }
         }
         for (let j = 0; j < ys.length; j++) {
