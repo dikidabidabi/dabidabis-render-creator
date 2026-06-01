@@ -93,6 +93,8 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     spansX: spansX.length ? spansX : [...DEFAULT_GRID.spansX],
     spansY: spansY.length ? spansY : [...DEFAULT_GRID.spansY],
     colSizeCm: Number.isFinite(col) && col > 0 ? col : DEFAULT_GRID.colSizeCm,
+    labelOffsetX: Number.isFinite(Number(g.labelOffsetX)) ? Math.max(0, Math.floor(Number(g.labelOffsetX))) : 0,
+    labelOffsetY: Number.isFinite(Number(g.labelOffsetY)) ? Math.max(0, Math.floor(Number(g.labelOffsetY))) : 0,
     fromLevelId: typeof g.fromLevelId === "string" ? g.fromLevelId : undefined,
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
