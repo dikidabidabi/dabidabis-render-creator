@@ -724,6 +724,23 @@ function normalizeSketch(s: any): Sketch {
       const validLvl = new Set(levels.map((l) => l.id));
       return arr.map((d) => (d.levelId && validLvl.has(d.levelId) ? d : { ...d, levelId: fallback }));
     })(),
+    circles: (() => {
+      const raw = s?.circles;
+      if (!Array.isArray(raw)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const out: Circle[] = [];
+      for (const c of raw) {
+        if (!c || typeof c !== "object") continue;
+        const cx = Number(c.c?.x), cy = Number(c.c?.y), r = Number(c.r);
+        if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r) || r <= 0) continue;
+        const lid = typeof c.levelId === "string" && validLvl.has(c.levelId) ? c.levelId : fallback;
+        out.push({
+          id: typeof c.id === "string" && c.id ? c.id : `CIR${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          c: { x: cx, y: cy }, r, levelId: lid,
+        });
+      }
+      return out;
+    })(),
   };
 }
 
