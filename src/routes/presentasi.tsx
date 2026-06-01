@@ -4911,6 +4911,9 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const a = layer.points[i];
       const b = layer.points[(i + 1) % layer.points.length];
       const n = outwardNormal(a, b, ccw);
+      // Back-face culling: di proyeksi dimetric, view direction (plan) = (+1, +1).
+      // Hanya render dinding yang outward-normal-nya menghadap kamera.
+      if (n.x + n.y <= 0) continue;
       const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
       const dir = classifyBearing(bearing);
       const col = FACADE_COLORS[dir];
