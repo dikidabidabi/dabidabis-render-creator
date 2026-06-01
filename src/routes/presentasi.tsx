@@ -640,31 +640,41 @@ function FullscreenSlideshow({
 // ---------- A3 Frame: maintains aspect, scales internal 1414x1000 canvas ----------
 function A3Frame({ children }: { children: React.ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.5);
+  const [frame, setFrame] = useState({ scale: 0.5, w: A3_W * 0.5, h: A3_H * 0.5 });
   useLayoutEffect(() => {
     if (!wrap.current) return;
-    const ro = new ResizeObserver(([entry]) => {
-      const w = entry.contentRect.width;
-      setScale(w / A3_W);
-    });
+    const update = (availableW: number) => {
+      const viewportFitW = Math.max(320, (window.innerHeight - 140) * (A3_W / A3_H));
+      const w = Math.min(availableW, viewportFitW);
+      const scale = w / A3_W;
+      setFrame({ scale, w, h: A3_H * scale });
+    };
+    const ro = new ResizeObserver(([entry]) => update(entry.contentRect.width));
     ro.observe(wrap.current);
+    const onResize = () => wrap.current && update(wrap.current.getBoundingClientRect().width);
+    window.addEventListener("resize", onResize);
     return () => ro.disconnect();
   }, []);
   return (
     <div
       ref={wrap}
-      className="relative w-full overflow-hidden bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.45)] ring-1 ring-black/5"
-      style={{ aspectRatio: `${A3_W} / ${A3_H}` }}
+      className="relative flex w-full items-center justify-center overflow-hidden"
+      style={{ height: frame.h }}
     >
       <div
+        className="overflow-hidden bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.45)] ring-1 ring-black/5"
+        style={{ width: frame.w, height: frame.h }}
+      >
+        <div
         style={{
           width: A3_W,
           height: A3_H,
-          transform: `scale(${scale})`,
+          transform: `scale(${frame.scale})`,
           transformOrigin: "top left",
         }}
       >
         {children}
+      </div>
       </div>
     </div>
   );
