@@ -611,6 +611,29 @@ function Scene({
         />
       ))}
 
+      {(sketch.floors ?? []).map((fl) => {
+        const lvl = sketch.levels.find((l) => l.id === fl.levelId);
+        if (!lvl) return null;
+        const topY = lvl.mdpl - baseMdpl;
+        const thick = (fl.thicknessMm ?? 150) / 1000;
+        const slabColor = colorMode === "bw" ? "#c8c8c8" : "#a8a29e";
+        return (
+          <FloorSlab
+            key={`slab_${fl.id}`}
+            outer={fl.outer}
+            holes={fl.holes}
+            origin={origin}
+            mPerPx={mPerPx}
+            topY={topY}
+            thickness={thick}
+            color={slabColor}
+            highlighted={highlightLevelId === lvl.id}
+          />
+        );
+      })}
+
+
+
       <StructuralColumns
         sketch={sketch}
         origin={origin}
