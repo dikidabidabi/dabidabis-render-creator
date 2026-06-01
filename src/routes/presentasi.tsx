@@ -920,6 +920,8 @@ function computeStats(sk: Sketch): Stats {
 
 const SLIDE_VIEW_KEY = "dabidabis_slideview_v2";
 type SlideView = { scale: number; tx: number; ty: number };
+const COMPASS_VIEW_KEY = "dabidabis_compass_view_v1";
+type CompassView = { x: number; y: number };
 function loadSlideView(id: string): SlideView | null {
   try {
     const raw = localStorage.getItem(SLIDE_VIEW_KEY);
@@ -937,6 +939,23 @@ function saveSlideView(id: string, view: SlideView | null) {
     const v = raw ? JSON.parse(raw) : {};
     if (view == null) delete v[id]; else v[id] = view;
     localStorage.setItem(SLIDE_VIEW_KEY, JSON.stringify(v));
+  } catch { /* ignore */ }
+}
+function loadCompassView(id: string): CompassView | null {
+  try {
+    const raw = localStorage.getItem(COMPASS_VIEW_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw)?.[id];
+    if (typeof s?.x === "number" && typeof s?.y === "number") return s;
+    return null;
+  } catch { return null; }
+}
+function saveCompassView(id: string, view: CompassView) {
+  try {
+    const raw = localStorage.getItem(COMPASS_VIEW_KEY);
+    const v = raw ? JSON.parse(raw) : {};
+    v[id] = view;
+    localStorage.setItem(COMPASS_VIEW_KEY, JSON.stringify(v));
   } catch { /* ignore */ }
 }
 
@@ -1102,6 +1121,9 @@ function ManualScaleBox({
         position: "relative",
         overflow: "hidden",
         touchAction: "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         cursor: pointersRef.current.size > 0 ? "grabbing" : "grab",
       }}
     >
