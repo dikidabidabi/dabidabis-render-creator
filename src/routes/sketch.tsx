@@ -33,6 +33,9 @@ import {
   Grid3x3,
   Paintbrush,
   DoorOpen,
+  Circle as CircleIcon,
+  Crop,
+  MoveHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
