@@ -3595,7 +3595,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       // klik di luar → set origin ke titik klik (snap bila paralel dgn mm grid)
-      const snapped = gridsParallel ? snapOriginPx(rawWorld) : rawWorld;
+      const snapped = gridsParallel
+        ? (() => {
+            const local = rotateAround(rawWorld, { x: 0, y: 0 }, -mmGridRotRad);
+            const sl = { x: Math.round(local.x / MINOR_PX) * MINOR_PX, y: Math.round(local.y / MINOR_PX) * MINOR_PX };
+            return rotateAround(sl, { x: 0, y: 0 }, mmGridRotRad);
+          })()
+        : rawWorld;
       updateGrid({ origin: snapped });
       return;
     }
