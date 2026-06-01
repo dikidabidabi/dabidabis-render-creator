@@ -263,6 +263,7 @@ type Sketch = {
   ktbPct?: number; // 0..100, prosentase KTB (basement) terhadap luas lahan
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
+  mmGridRotation?: number; // derajat rotasi tampilan grid milimeter block (display-only, tidak mengubah koordinat sketsa)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
   sectionCut?: SectionCut; // legacy single cut (kompatibilitas)
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
