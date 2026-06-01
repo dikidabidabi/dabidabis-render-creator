@@ -3590,11 +3590,10 @@ function MaterialEdges({
   const segs = computeStraightSegments(
     lines.map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
   ).filter((s) => (lines[s.sourceLineIndex].kind ?? "straight") === "straight");
-  // Tebalkan kontur dinding agar terlihat jelas di slide denah.
-  // Kontur dinding tipis; hatch 45° sangat halus.
-  const stroke = sw * 0.0014;
-  const strokeFine = sw * 0.0012;
-  const hatchStroke = Math.max(0.25, sw * 0.0006);
+  // Kontur dinding sangat tipis & seragam (80% lebih tipis dari sebelumnya).
+  const stroke = sw * 0.00028;
+  const strokeFine = stroke;
+  const hatchStroke = Math.max(0.2, sw * 0.0005);
   const hatchGap = Math.max(2, sw * 0.005);
   const patternId = useId();
   return (
