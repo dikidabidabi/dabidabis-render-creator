@@ -2633,6 +2633,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const bubbleOff = 22 / s;
         const bubbleR = 7 / s;
 
+        // Wrapper rotasi grid struktur (di sekitar origin grid)
+        ctx.save();
+        if (structGridRotRad !== 0) {
+          ctx.translate(ox, oy);
+          ctx.rotate(structGridRotRad);
+          ctx.translate(-ox, -oy);
+        }
+
         // Garis as dash-dot
         ctx.save();
         ctx.strokeStyle = "rgba(20,20,20,0.85)";
