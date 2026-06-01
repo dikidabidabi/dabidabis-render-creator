@@ -2136,7 +2136,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.save();
         ctx.lineCap = "round";
         for (const seg of allSegs) {
-          if (activeLvlId && seg.levelId !== activeLvlId) continue;
+          if (!activeLvlId || seg.levelId !== activeLvlId) continue;
           const mat = attrs[seg.id];
           if (!mat) continue;
           ctx.strokeStyle = MATERIAL_COLORS[mat];
