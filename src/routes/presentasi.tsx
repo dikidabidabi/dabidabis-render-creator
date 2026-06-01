@@ -4390,8 +4390,8 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   }
   if (!Number.isFinite(vx0)) { vx0 = -10; vy0 = -10; vx1 = 10; vy1 = 10; }
   const w0 = vx1 - vx0, h0 = vy1 - vy0;
-  // Sisakan ruang di kanan untuk label keterangan ruang.
-  const labelExtra = Math.max(w0, h0) * 0.55;
+  // Sisakan ruang di kanan untuk label keterangan ruang (dua kolom selang-seling).
+  const labelExtra = Math.max(w0, h0) * 0.85;
   vx1 += labelExtra;
   const w = vx1 - vx0, h = vy1 - vy0;
   const pad = Math.max(w, h, 1) * 0.04;
@@ -4399,7 +4399,8 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   const baseStroke = Math.max(w, h) * 0.0015;
   const fontPx = Math.max(w, h) * 0.018;
   const lineH = fontPx * 1.5;
-  const labelX = vx1 - labelExtra * 0.95;
+  // Dua kolom: "tengah" (col 0) dan digeser ke kanan (col 1), selang-seling per lantai.
+  const labelColX = [vx1 - labelExtra * 0.95, vx1 - labelExtra * 0.45];
 
   // Susun label per lantai supaya tidak tumpang tindih.
   type Leader = { x1: number; y1: number; x2: number; y2: number; label: string };
@@ -4409,18 +4410,20 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     if (!byFloor.has(a.floorIdx)) byFloor.set(a.floorIdx, []);
     byFloor.get(a.floorIdx)!.push(a);
   }
+  const topIdx = reps.length - 1;
   for (const [fi, arr] of byFloor) {
     const yBot = fi * (floorH + gap);
     const yTop = yBot + floorH;
-    // Pusatkan stack label pada tengah lantai (di sumbu y proyeksi).
     const center = (project(0, 0, yBot).y + project(0, 0, yTop).y) / 2;
     const n = arr.length;
     const totalH = (n - 1) * lineH;
-    // Urutkan agar leader yang dekat sumbu y atas keluar ke atas.
+    // Selang-seling: lantai paling atas → kolom tengah, di bawahnya → kolom kanan, dst.
+    const colIdx = (topIdx - fi) % 2 === 0 ? 0 : 1;
+    const lx = labelColX[colIdx];
     const sorted = [...arr].sort((a, b) => a.from.y - b.from.y);
     sorted.forEach((a, i) => {
       const ly = center - totalH / 2 + i * lineH;
-      leaders.push({ x1: a.from.x, y1: a.from.y, x2: labelX, y2: ly, label: a.label });
+      leaders.push({ x1: a.from.x, y1: a.from.y, x2: lx, y2: ly, label: a.label });
     });
   }
 
