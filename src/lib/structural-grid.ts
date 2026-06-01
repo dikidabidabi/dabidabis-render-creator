@@ -263,6 +263,7 @@ export function computeStructuralStats(
   levels: { id: string; mdpl: number; typicalCount?: number; typicalHeight?: number }[],
 ): { totalColumns: number; concreteVolumeM3: number } {
   if (!grid || !grid.enabled) return { totalColumns: 0, concreteVolumeM3: 0 };
+  if (grid.lineOnly) return { totalColumns: 0, concreteVolumeM3: 0 };
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
   const colM = grid.colSizeCm / 100;
   const colArea = colM * colM;
