@@ -2160,16 +2160,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
-          {lines.map((ln, i) => (
-            <path
-              key={i}
-              d={linePath(ln)}
-              stroke="#0a0a0a"
-              strokeWidth={sw * 0.003}
-              fill="none"
-              strokeLinecap="round"
-            />
-          ))}
+          <MaterialEdges
+            lines={lines}
+            edgeAttrs={sketch.edgeAttrs ?? {}}
+            pxPerM={pxPerM}
+            sw={sw}
+          />
+
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             void gIdx;
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
