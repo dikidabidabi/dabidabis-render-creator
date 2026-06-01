@@ -32,6 +32,7 @@ import {
   Scissors,
   Grid3x3,
   Paintbrush,
+  DoorOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +88,7 @@ import {
   MATERIAL_COLORS,
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
+import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -264,6 +266,7 @@ type Sketch = {
   structuralGrid?: StructuralGrid; // Modul Struktur parametric grid (primer)
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
   edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
+  doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
 };
 
 type StoreShape = {
@@ -707,6 +710,11 @@ function normalizeSketch(s: any): Sketch {
         }
       }
       return valid;
+    })(),
+    doors: (() => {
+      const arr = normalizeDoors(s?.doors);
+      const validLvl = new Set(levels.map((l) => l.id));
+      return arr.map((d) => (d.levelId && validLvl.has(d.levelId) ? d : { ...d, levelId: fallback }));
     })(),
   };
 }
@@ -1574,8 +1582,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door">("line");
   const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
+  // Door tool — parameter & live draft (3-langkah gesture single drag).
+  const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
+  const [doorWidthCm, setDoorWidthCm] = useState<number>(100);
+  const [doorDraft, setDoorDraft] = useState<
+    | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
+    | null
+  >(null);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -2103,6 +2118,120 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         ctx.restore();
       }
+    }
+
+    // ----- Notasi Pintu (committed) -----
+    {
+      const doors = sketch.doors ?? [];
+      for (const d of doors) {
+        if (activeLvlId && d.levelId !== activeLvlId) continue;
+        const ax = d.a.x, ay = d.a.y;
+        const bx = d.b.x, by = d.b.y;
+        const widthPx = (d.widthCm / 100) * pxPerMeter;
+        // Mask gap di dinding
+        const dirX = (bx - ax) / (Math.hypot(bx - ax, by - ay) || 1);
+        const dirY = (by - ay) / (Math.hypot(bx - ax, by - ay) || 1);
+        const thick = (0.15 * pxPerMeter); // 150mm
+        const pnx = -dirY, pny = dirX;
+        ctx.save();
+        ctx.fillStyle = "#f6efe3";
+        ctx.beginPath();
+        ctx.moveTo(ax + pnx * thick * 0.6, ay + pny * thick * 0.6);
+        ctx.lineTo(bx + pnx * thick * 0.6, by + pny * thick * 0.6);
+        ctx.lineTo(bx - pnx * thick * 0.6, by - pny * thick * 0.6);
+        ctx.lineTo(ax - pnx * thick * 0.6, ay - pny * thick * 0.6);
+        ctx.closePath();
+        ctx.fill();
+        // Daun pintu + arc
+        ctx.strokeStyle = "#0a0a0a";
+        ctx.lineWidth = 1.6 / s;
+        if (d.leaves === 1) {
+          const lx = ax + d.nx * widthPx;
+          const ly = ay + d.ny * widthPx;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(lx, ly);
+          ctx.stroke();
+          // arc dari leaf-end ke B (radius widthPx, pusat A)
+          const a0 = Math.atan2(d.ny, d.nx);
+          const a1 = Math.atan2(by - ay, bx - ax);
+          ctx.beginPath();
+          ctx.setLineDash([4 / s, 3 / s]);
+          // tentukan arah pendek
+          let delta = a1 - a0;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          ctx.arc(ax, ay, widthPx, a0, a0 + delta, delta < 0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else {
+          // 2 daun: dari A dan B masing-masing widthPx/2
+          const mx = (ax + bx) / 2, my = (ay + by) / 2;
+          const half = widthPx / 2;
+          const la = { x: ax + d.nx * half, y: ay + d.ny * half };
+          const lb = { x: bx + d.nx * half, y: by + d.ny * half };
+          ctx.beginPath();
+          ctx.moveTo(ax, ay); ctx.lineTo(la.x, la.y);
+          ctx.moveTo(bx, by); ctx.lineTo(lb.x, lb.y);
+          ctx.stroke();
+          ctx.setLineDash([4 / s, 3 / s]);
+          ctx.beginPath();
+          const a0a = Math.atan2(d.ny, d.nx);
+          const a1a = Math.atan2(my - ay, mx - ax);
+          let da = a1a - a0a;
+          while (da > Math.PI) da -= Math.PI * 2;
+          while (da < -Math.PI) da += Math.PI * 2;
+          ctx.arc(ax, ay, half, a0a, a0a + da, da < 0);
+          const a0b = Math.atan2(d.ny, d.nx);
+          const a1b = Math.atan2(my - by, mx - bx);
+          let db = a1b - a0b;
+          while (db > Math.PI) db -= Math.PI * 2;
+          while (db < -Math.PI) db += Math.PI * 2;
+          ctx.arc(bx, by, half, a0b, a0b + db, db < 0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        // Engsel marker
+        ctx.fillStyle = "#e85d3a";
+        ctx.beginPath();
+        ctx.arc(ax, ay, 3 / s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // ----- Door draft preview -----
+    if (doorDraft && tool === "door") {
+      const ax = doorDraft.a.x, ay = doorDraft.a.y;
+      const bx = doorDraft.b.x, by = doorDraft.b.y;
+      const widthPx = (doorWidthCm / 100) * pxPerMeter;
+      ctx.save();
+      ctx.strokeStyle = "rgba(232,93,58,0.95)";
+      ctx.lineWidth = 2.4 / s;
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+      ctx.stroke();
+      // arc preview
+      ctx.setLineDash([3 / s, 3 / s]);
+      ctx.lineWidth = 1.4 / s;
+      ctx.strokeStyle = "rgba(232,93,58,0.7)";
+      const a0 = Math.atan2(doorDraft.ny, doorDraft.nx);
+      const a1 = Math.atan2(by - ay, bx - ax);
+      let delta = a1 - a0;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(ax, ay, doorLeaves === 2 ? widthPx / 2 : widthPx, a0, a0 + delta, delta < 0);
+      void (0); // placeholder
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Hinge marker
+      ctx.fillStyle = "#e85d3a";
+      ctx.beginPath();
+      ctx.arc(ax, ay, 4 / s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
 
@@ -2642,7 +2771,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -3421,6 +3550,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       pushHistory();
       onChange({ edgeAttrs: next });
+    } else if (tool === "door") {
+      // Step 1 — Snap engsel (Titik A) ke garis lurus terdekat di level aktif.
+      const raw = getWorldPosRaw(e);
+      const tolPx = 16 / view.s;
+      let bestLn: Line | null = null;
+      let bestProj: Point | null = null;
+      let bestD = Infinity;
+      for (const ln of lines) {
+        if (activeLvlId && ln.levelId !== activeLvlId) continue;
+        if ((ln.kind ?? "straight") !== "straight") continue;
+        const proj = projectOnSegment(raw, ln.a, ln.b);
+        const d = dist(raw, proj);
+        if (d < bestD) { bestD = d; bestProj = proj; bestLn = ln; }
+      }
+      if (!bestLn || !bestProj || bestD > tolPx) {
+        toast.error("Tap pada garis dinding untuk menempatkan engsel pintu");
+        return;
+      }
+      const dxL = bestLn.b.x - bestLn.a.x;
+      const dyL = bestLn.b.y - bestLn.a.y;
+      const Llen = Math.hypot(dxL, dyL) || 1;
+      const dirX = dxL / Llen, dirY = dyL / Llen;
+      // Pastikan ada cukup ruang di sisa garis: jika dekat ujung, balik arah default.
+      const widthPx = (doorWidthCm / 100) * pxPerMeter;
+      const remainFwd = (bestLn.b.x - bestProj.x) * dirX + (bestLn.b.y - bestProj.y) * dirY;
+      const initSign = remainFwd >= widthPx * 0.5 ? 1 : -1;
+      const bx = bestProj.x + dirX * initSign * widthPx;
+      const by = bestProj.y + dirY * initSign * widthPx;
+      // Normal default: +90° dari arah.
+      setDoorDraft({
+        a: bestProj,
+        dirX, dirY,
+        b: { x: bx, y: by },
+        nx: -dirY, ny: dirX,
+        levelId: bestLn.levelId ?? activeLvlId ?? undefined,
+      });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
@@ -3523,6 +3688,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
 
       if (moved && !clipDrag.moved) setClipDrag({ ...clipDrag, moved: true });
+      return;
+    }
+
+    if (doorDraft) {
+      // Step 2 (arah/lebar) & Step 3 (swing) — dihitung kontinu selama drag.
+      const raw = getWorldPosRaw(e);
+      const ox = raw.x - doorDraft.a.x;
+      const oy = raw.y - doorDraft.a.y;
+      const along = ox * doorDraft.dirX + oy * doorDraft.dirY;
+      const perp = ox * (-doorDraft.dirY) + oy * doorDraft.dirX;
+      const signAlong = along < 0 ? -1 : 1;
+      const widthPx = (doorWidthCm / 100) * pxPerMeter;
+      const bx = doorDraft.a.x + doorDraft.dirX * signAlong * widthPx;
+      const by = doorDraft.a.y + doorDraft.dirY * signAlong * widthPx;
+      // Sign perp tetap pakai default jika user belum bergerak tegak lurus signifikan.
+      const perpThresh = 4 / view.s;
+      let nx = doorDraft.nx, ny = doorDraft.ny;
+      if (Math.abs(perp) > perpThresh) {
+        const signPerp = perp < 0 ? -1 : 1;
+        nx = -doorDraft.dirY * signPerp;
+        ny = doorDraft.dirX * signPerp;
+      }
+      setDoorDraft({ ...doorDraft, b: { x: bx, y: by }, nx, ny });
       return;
     }
 
@@ -3629,6 +3817,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setDraggingHandle(null);
       return;
     }
+    if (doorDraft) {
+      const d = doorDraft;
+      setDoorDraft(null);
+      // Tap tanpa drag tetap commit (default sign +). Spec: rekam pelepasan sentuhan.
+      pushHistory();
+      const door: Door = {
+        id: genDoorId(),
+        levelId: d.levelId,
+        a: d.a,
+        b: d.b,
+        nx: d.nx,
+        ny: d.ny,
+        leaves: doorLeaves,
+        widthCm: doorWidthCm,
+      };
+      const prev = sketch.doors ?? [];
+      onChange({ doors: [...prev, door] });
+      toast.success(`Pintu ${doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
+      return;
+    }
     if (editDrag) {
       setEditDrag(null);
       return;
@@ -3699,6 +3907,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setPolyDraft(null);
     setGridDrag(null);
     setClipDrag(null);
+    setDoorDraft(null);
   };
 
   const handleUndo = () => {
@@ -4311,7 +4520,88 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
           </Button>
+          <Button
+            variant={tool === "door" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("door"); }}
+            className={cn(tool === "door" && "bg-gradient-ember shadow-ember")}
+            title="Pintu — tap di dinding (engsel A), geser searah dinding (lebar), lalu tegak lurus untuk arah ayun."
+          >
+            <DoorOpen className="mr-1.5 h-4 w-4" /> Pintu
+          </Button>
         </div>
+        {tool === "door" && (
+          <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pintu — Parameter</Label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {([1, 2] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setDoorLeaves(n)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1.5 text-xs font-medium transition",
+                    doorLeaves === n
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                      : "border-border/60 hover:bg-muted/40",
+                  )}
+                >
+                  {n === 1 ? "1 Daun" : "2 Daun"}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] text-muted-foreground">Lebar (cm)</Label>
+                <Input
+                  type="number"
+                  min={90}
+                  max={200}
+                  step={5}
+                  value={doorWidthCm}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (!Number.isFinite(v)) return;
+                    setDoorWidthCm(Math.max(90, Math.min(200, Math.round(v))));
+                  }}
+                  className="h-7 w-20 text-xs"
+                />
+              </div>
+              <input
+                type="range"
+                min={90}
+                max={200}
+                step={1}
+                value={doorWidthCm}
+                onChange={(e) => setDoorWidthCm(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              1) Tap di garis dinding — titik akan snap ke dinding (engsel).
+              2) Geser searah dinding untuk menentukan arah pintu.
+              3) Geser tegak lurus untuk memilih sisi ayun, lalu lepas.
+              Notasi muncul di Slide Denah; massa 3D tidak berubah.
+            </p>
+            {(sketch.doors?.length ?? 0) > 0 && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] text-muted-foreground">{sketch.doors!.length} pintu</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    pushHistory();
+                    onChange({ doors: [] });
+                    toast.success("Semua pintu dihapus");
+                  }}
+                  className="h-7 text-xs"
+                >
+                  <Trash2 className="mr-1.5 h-3 w-3" /> Reset
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         {tool === "pick" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
