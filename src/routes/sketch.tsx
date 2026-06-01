@@ -3529,7 +3529,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
     const p = getWorldPos(e);
     if (tool === "grid") {
-      const raw = getWorldPosRaw(e);
+      const rawWorld = getWorldPosRaw(e);
+      // Konversi ke frame lokal grid (un-rotate di sekitar origin) untuk hit-test
+      // sehingga semua logika di bawah tetap dapat memakai sumbu sumbu yang sejajar.
+      const raw = structGridRotRad !== 0
+        ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
+        : rawWorld;
       // -------- MODE: edit kolom (clip polygon) --------
       if (gridEditMode === "clip") {
         const ppm = pxPerMeter;
