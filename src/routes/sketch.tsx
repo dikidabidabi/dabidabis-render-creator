@@ -1607,7 +1607,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset">("line");
+  // Circle tool — center + drag radius
+  const [circleDraft, setCircleDraft] = useState<{ c: Point; cur: Point; levelId?: string } | null>(null);
+  // Offset tool — jarak offset (cm pada skala asli)
+  const [offsetCm, setOffsetCm] = useState<number>(100);
   const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
   // Door tool — parameter & live draft (3-langkah gesture single drag).
   const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
