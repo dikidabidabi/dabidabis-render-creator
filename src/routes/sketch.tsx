@@ -36,7 +36,19 @@ import {
   Circle as CircleIcon,
   Crop,
   MoveHorizontal,
+  Box as BoxIcon,
 } from "lucide-react";
+import {
+  type Floor,
+  type FloorMode,
+  FLOOR_THICKNESS_MM,
+  findCycleThroughSegment,
+  genFloorId,
+  pointToSegmentDist,
+  polygonAreaPx as floorPolyArea,
+  polygonCentroid as floorPolyCentroid,
+  pointInPolygon as floorPointInPolygon,
+} from "@/lib/floors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
