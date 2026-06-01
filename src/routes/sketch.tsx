@@ -2060,6 +2060,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     ctx.globalAlpha = 1;
 
+    // ----- Overlay material edges (Attribute Painter) -----
+    {
+      const attrs = sketch.edgeAttrs ?? {};
+      const hasAny = Object.keys(attrs).length > 0;
+      if (hasAny || tool === "pick") {
+        const allSegs = computeStraightSegments(lines);
+        ctx.save();
+        ctx.lineCap = "round";
+        for (const seg of allSegs) {
+          if (activeLvlId && seg.levelId !== activeLvlId) continue;
+          const mat = attrs[seg.id];
+          if (!mat) continue;
+          ctx.strokeStyle = MATERIAL_COLORS[mat];
+          ctx.lineWidth = (mat === "solid" ? 4.5 : 4) / s;
+          ctx.globalAlpha = 0.95;
+          ctx.beginPath();
+          ctx.moveTo(seg.a.x, seg.a.y);
+          ctx.lineTo(seg.b.x, seg.b.y);
+          ctx.stroke();
+        }
+        // Sorot node split saat pick aktif supaya batas segmen terlihat.
+        if (tool === "pick") {
+          const nodeKeys = new Set<string>();
+          for (const seg of allSegs) {
+            if (activeLvlId && seg.levelId !== activeLvlId) continue;
+            nodeKeys.add(`${seg.a.x.toFixed(3)},${seg.a.y.toFixed(3)}`);
+            nodeKeys.add(`${seg.b.x.toFixed(3)},${seg.b.y.toFixed(3)}`);
+          }
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "rgba(232,93,58,0.95)";
+          ctx.lineWidth = 1.5 / s;
+          for (const k of nodeKeys) {
+            const [xs, ys] = k.split(",");
+            const x = Number(xs), y = Number(ys);
+            ctx.beginPath();
+            ctx.arc(x, y, 3.5 / s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+    }
+
+
     // Active drawing preview (during drag)
     if (drawing) {
       ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
