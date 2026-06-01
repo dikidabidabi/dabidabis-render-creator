@@ -3591,11 +3591,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       if (b && raw.x >= b.xMin && raw.x <= b.xMax && raw.y >= b.yMin && raw.y <= b.yMax) {
-        setGridDrag({ kind: "move", startWorld: raw, startOrigin: { ...grid.origin } });
+        setGridDrag({ kind: "move", startWorld: rawWorld, startOrigin: { ...grid.origin } });
         return;
       }
-      // klik di luar → set origin ke titik klik (snap)
-      const snapped = snapOriginPx(raw);
+      // klik di luar → set origin ke titik klik (snap bila paralel dgn mm grid)
+      const snapped = gridsParallel ? snapOriginPx(rawWorld) : rawWorld;
       updateGrid({ origin: snapped });
       return;
     }
