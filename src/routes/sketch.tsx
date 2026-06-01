@@ -2591,7 +2591,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const xMin = xs[0], xMax = xs[xs.length - 1];
         const yMin = ys[0], yMax = ys[ys.length - 1];
         const bubbleOff = 22 / s;
+        const gRotRad = ((Number(g.rotation) || 0) * Math.PI) / 180;
         ctx.save();
+        if (gRotRad !== 0) {
+          ctx.translate(g.origin.x, g.origin.y);
+          ctx.rotate(gRotRad);
+          ctx.translate(-g.origin.x, -g.origin.y);
+        }
         ctx.globalAlpha = 0.45;
         ctx.strokeStyle = "rgba(80,80,80,0.85)";
         ctx.lineWidth = 0.3 / s;
