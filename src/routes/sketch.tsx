@@ -710,6 +710,11 @@ function normalizeSketch(s: any): Sketch {
       }
       return valid;
     })(),
+    doors: (() => {
+      const arr = normalizeDoors(s?.doors);
+      const validLvl = new Set(levels.map((l) => l.id));
+      return arr.map((d) => (d.levelId && validLvl.has(d.levelId) ? d : { ...d, levelId: fallback }));
+    })(),
   };
 }
 
