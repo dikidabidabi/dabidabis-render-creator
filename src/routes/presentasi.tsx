@@ -1198,6 +1198,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
+      {slide.kind === "toc" && <TocBody slide={slide} />}
       {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
