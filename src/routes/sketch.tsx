@@ -70,8 +70,10 @@ import {
   COL_PRESETS,
   normalizeGrid,
   axisPositions,
-  xAxisLabel,
-  yAxisLabel,
+  xAxisLabelAt,
+  yAxisLabelAt,
+  parseXAxisLabel,
+  parseYAxisLabel,
   spansForLevel,
   isNodeActive,
   isColumnClipped,
@@ -1683,7 +1685,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [gridDrag, setGridDrag] = useState<GridDrag | null>(null);
 
   // Grid Struktur — edit kolom: clip polygon (sembunyikan kolom di area)
-  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip">("expand");
+  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip" | "fromLine">("expand");
   type ClipDrag = {
     clipId: string;        // id clip (atau "__draft__" jika polygon belum di-commit)
     idx: number;           // index titik yang di-drag
@@ -2676,7 +2678,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(xAxisLabel(i), xs[i], yEnd);
+            ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], yEnd);
           }
         }
         for (let j = 0; j < ys.length; j++) {
@@ -2689,7 +2691,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(yAxisLabel(j), xEnd, ys[j]);
+            ctx.fillText(yAxisLabelAt(j, grid.labelOffsetY ?? 0), xEnd, ys[j]);
           }
         }
 
@@ -3533,6 +3535,115 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const raw = structGridRotRad !== 0
         ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
         : rawWorld;
+      // -------- MODE: jadikan grid dari line/polyline --------
+      if (gridEditMode === "fromLine") {
+        const tolPx = 10 / view.s;
+        // cari straight line terdekat pada level aktif
+        let bestIdx = -1;
+        let bestD = Infinity;
+        lines.forEach((ln, i) => {
+          if ((ln.kind ?? "straight") !== "straight") return;
+          if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) return;
+          const d = pointToLine(rawWorld, ln);
+          if (d < bestD) { bestD = d; bestIdx = i; }
+        });
+        if (bestIdx < 0 || bestD > tolPx) {
+          toast.error("Tidak ada garis yang dipilih");
+          return;
+        }
+        // Kumpulkan chain colinear: garis lain yang endpoint-nya menyambung
+        // dan sudut-nya sama (toleransi ±2°) dengan garis pertama.
+        const startLn = lines[bestIdx];
+        const angDeg = (Math.atan2(startLn.b.y - startLn.a.y, startLn.b.x - startLn.a.x) * 180) / Math.PI;
+        const angTol = 2;
+        const eqAng = (d: number) => {
+          const diff = (((d - angDeg) % 180) + 180) % 180;
+          return diff < angTol || diff > 180 - angTol;
+        };
+        const eqPt = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) < 1.5;
+        const used = new Set<number>([bestIdx]);
+        // Bangun chain: titik ujung → titik ujung
+        const chainPts: Point[] = [startLn.a, startLn.b];
+        // Extend forward (dari chainPts[last])
+        let growing = true;
+        while (growing) {
+          growing = false;
+          const tail = chainPts[chainPts.length - 1];
+          for (let i = 0; i < lines.length; i++) {
+            if (used.has(i)) continue;
+            const ln = lines[i];
+            if ((ln.kind ?? "straight") !== "straight") continue;
+            if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) continue;
+            const a = (Math.atan2(ln.b.y - ln.a.y, ln.b.x - ln.a.x) * 180) / Math.PI;
+            if (!eqAng(a)) continue;
+            if (eqPt(ln.a, tail)) { chainPts.push(ln.b); used.add(i); growing = true; break; }
+            if (eqPt(ln.b, tail)) { chainPts.push(ln.a); used.add(i); growing = true; break; }
+          }
+        }
+        // Extend backward (dari chainPts[0])
+        growing = true;
+        while (growing) {
+          growing = false;
+          const head = chainPts[0];
+          for (let i = 0; i < lines.length; i++) {
+            if (used.has(i)) continue;
+            const ln = lines[i];
+            if ((ln.kind ?? "straight") !== "straight") continue;
+            if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) continue;
+            const a = (Math.atan2(ln.b.y - ln.a.y, ln.b.x - ln.a.x) * 180) / Math.PI;
+            if (!eqAng(a)) continue;
+            if (eqPt(ln.a, head)) { chainPts.unshift(ln.b); used.add(i); growing = true; break; }
+            if (eqPt(ln.b, head)) { chainPts.unshift(ln.a); used.add(i); growing = true; break; }
+          }
+        }
+        // Origin = chainPts[0], rotation = sudut dari [0]→[1]
+        const origin = { ...chainPts[0] };
+        const v0x = chainPts[1].x - chainPts[0].x;
+        const v0y = chainPts[1].y - chainPts[0].y;
+        const rotDeg = (Math.atan2(v0y, v0x) * 180) / Math.PI;
+        // Spans X = panjang tiap segmen (meter), Y = 1 bentang default 8m
+        const spansX: number[] = [];
+        for (let i = 0; i < chainPts.length - 1; i++) {
+          const dpx = Math.hypot(chainPts[i + 1].x - chainPts[i].x, chainPts[i + 1].y - chainPts[i].y);
+          const m = dpx / pxPerMeter;
+          if (m > 0.05) spansX.push(Number(m.toFixed(2)));
+        }
+        if (!spansX.length) {
+          toast.error("Garis terlalu pendek");
+          return;
+        }
+        // Tentukan range level: hanya di level aktif
+        const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+        const lvId = activeLvlId ?? sortedLv[0]?.id;
+        // Hitung labelOffset agar otomatis menyambung dgn grid extras lain di
+        // level yg sama (chain serial).
+        const sameLvlExtras = gridExtras.filter((g) =>
+          g.enabled && (!lvId || (g.fromLevelId === lvId || g.toLevelId === lvId || (!g.fromLevelId && !g.toLevelId)))
+        );
+        let nextOffX = 0;
+        if (primaryGrid?.enabled) nextOffX = Math.max(nextOffX, (primaryGrid.labelOffsetX ?? 0) + primaryGrid.spansX.length + 1);
+        for (const g of sameLvlExtras) {
+          nextOffX = Math.max(nextOffX, (g.labelOffsetX ?? 0) + g.spansX.length + 1);
+        }
+        const newGrid: StructuralGrid = {
+          enabled: true,
+          origin,
+          rotation: rotDeg,
+          spansX,
+          spansY: [8],
+          colSizeCm: primaryGrid?.colSizeCm ?? 50,
+          labelOffsetX: nextOffX,
+          labelOffsetY: 0,
+          fromLevelId: lvId,
+          toLevelId: lvId,
+        };
+        const nextExtras = [...gridExtras, newGrid];
+        onChange({ structuralGridExtras: nextExtras });
+        setEditGridIdx(nextExtras.length);
+        setGridEditMode("expand");
+        toast.success(`Grid dibuat dari ${chainPts.length - 1} segmen`);
+        return;
+      }
       // -------- MODE: edit kolom (clip polygon) --------
       if (gridEditMode === "clip") {
         const ppm = pxPerMeter;
@@ -5233,8 +5344,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             {/* ===== Edit Kolom (Clip Polygon) ===== */}
             <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Edit Kolom</Label>
-                <div className="flex gap-1">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Mode Edit</Label>
+                <div className="flex flex-wrap gap-1">
                   <Button
                     size="sm"
                     variant={gridEditMode === "expand" ? "default" : "outline"}
@@ -5251,8 +5362,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   >
                     Clip Kolom
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "fromLine" ? "default" : "outline"}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "fromLine" && "bg-gradient-ember shadow-ember")}
+                    onClick={() => { setGridEditMode("fromLine"); setClipDraft(null); }}
+                    title="Klik garis lurus / polyline di kanvas — grid extra dibuat mengikuti panjang segmen, dengan buble otomatis menyambung dari grid sebelumnya."
+                  >
+                    Jadikan Grid
+                  </Button>
                 </div>
               </div>
+              {gridEditMode === "fromLine" && (
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Klik salah satu garis lurus / polyline di kanvas. Segmen-segmen
+                  colinear yang menyambung akan dibaca sebagai bentang sumbu X.
+                  Rotasi grid mengikuti arah garis, buble otomatis melanjutkan
+                  serial dari grid sebelumnya di level aktif.
+                </p>
+              )}
               {gridEditMode === "clip" && (
                 <>
                   <p className="text-[10px] leading-snug text-muted-foreground">
@@ -5327,6 +5455,74 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   )}
                 </>
               )}
+            </div>
+            {/* ===== Edit Buble (label) ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Edit Buble</Label>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Atur buble paling kecil (sudut kiri atas) untuk grid ini. Tombol
+                <span className="font-medium text-foreground"> Chain</span> akan menomori ulang
+                grid extra lain di level yang sama agar bublenya melanjutkan serial dari grid ini.
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Mulai X (angka)</Label>
+                  <Input
+                    className="h-7 text-xs"
+                    type="text"
+                    inputMode="numeric"
+                    defaultValue={xAxisLabelAt(0, grid.labelOffsetX ?? 0)}
+                    onBlur={(e) => {
+                      const v = parseXAxisLabel(e.target.value);
+                      if (v == null) { e.target.value = xAxisLabelAt(0, grid.labelOffsetX ?? 0); return; }
+                      updateGrid({ labelOffsetX: v });
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Mulai Y (huruf)</Label>
+                  <Input
+                    className="h-7 text-xs uppercase"
+                    type="text"
+                    defaultValue={yAxisLabelAt(0, grid.labelOffsetY ?? 0)}
+                    onBlur={(e) => {
+                      const v = parseYAxisLabel(e.target.value);
+                      if (v == null) { e.target.value = yAxisLabelAt(0, grid.labelOffsetY ?? 0); return; }
+                      updateGrid({ labelOffsetY: v });
+                    }}
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm" variant="outline" className="h-7 w-full text-[10px]"
+                onClick={() => {
+                  // Chain offset ke grid extras lain pada level yang sama (urutan extras).
+                  const lvId = grid.fromLevelId ?? activeLvlId ?? undefined;
+                  const baseX = (grid.labelOffsetX ?? 0) + grid.spansX.length + 1;
+                  const baseY = (grid.labelOffsetY ?? 0) + grid.spansY.length + 1;
+                  let accX = baseX;
+                  let accY = baseY;
+                  // chainKind: kalau grid ini orientasi vertikal (rotasi mendekati 90°/270°),
+                  // chain Y; selain itu chain X. Sederhana: pakai X.
+                  const next = gridExtras.map((g, i) => {
+                    // skip grid ini sendiri (kalau sedang edit extra ke-N)
+                    if (editGridIdx > 0 && i === editGridIdx - 1) return g;
+                    const same = lvId
+                      ? (g.fromLevelId === lvId || g.toLevelId === lvId || (!g.fromLevelId && !g.toLevelId))
+                      : true;
+                    if (!same) return g;
+                    const updated: StructuralGrid = { ...g, labelOffsetX: accX, labelOffsetY: accY };
+                    accX += g.spansX.length + 1;
+                    accY += g.spansY.length + 1;
+                    return updated;
+                  });
+                  onChange({ structuralGridExtras: next });
+                  toast.success("Buble grid extra dichain dari grid ini");
+                }}
+                title="Setel ulang buble grid extra lain di level yang sama agar melanjutkan serial dari grid ini"
+              >
+                Chain ke grid extra lain
+              </Button>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="space-y-1">

@@ -27,8 +27,8 @@ import {
   isNodeActive,
   isColumnClipped,
   levelInRange,
-  xAxisLabel,
-  yAxisLabel,
+  xAxisLabelAt,
+  yAxisLabelAt,
   computeAllStructuralStats,
   collectGrids,
 } from "@/lib/structural-grid";
@@ -2055,7 +2055,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               if (Math.abs(ddx) < 1e-6) continue;
               const t = (planX - cut.p1.x) / ddx;
               if (t < -0.001 || t > 1.001) continue;
-              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabel(i), key: `g${gIdx}x${i}` });
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabelAt(i, grid.labelOffsetX ?? 0), key: `g${gIdx}x${i}` });
             }
             const axY = axisPositions(grid.spansY);
             for (let j = 0; j < axY.length; j++) {
@@ -2063,7 +2063,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               if (Math.abs(ddy) < 1e-6) continue;
               const t = (planY - cut.p1.y) / ddy;
               if (t < -0.001 || t > 1.001) continue;
-              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabel(j), key: `g${gIdx}y${j}` });
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabelAt(j, grid.labelOffsetY ?? 0), key: `g${gIdx}y${j}` });
             }
             if (!hits.length) return null;
             const yTopPx = my(maxMdpl);
@@ -2300,13 +2300,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {xAxisLabel(i)}
+                      {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
                     </text>
                     <circle cx={x} cy={y1 + ext + rBub} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {xAxisLabel(i)}
+                      {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
                     </text>
                   </g>
                 ))}
@@ -2319,13 +2319,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {yAxisLabel(j)}
+                      {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
                     </text>
                     <circle cx={x1 + ext + rBub} cy={y} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {yAxisLabel(j)}
+                      {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
                     </text>
                   </g>
                 ))}

@@ -28,6 +28,8 @@ export type StructuralGrid = {
   spansX: number[];                      // bentang antar as sumbu X (meter)
   spansY: number[];                      // bentang antar as sumbu Y (meter)
   colSizeCm: number;                     // ukuran kolom persegi (cm)
+  labelOffsetX?: number;                 // offset penomoran sumbu X (0 → "1", 3 → "4")
+  labelOffsetY?: number;                 // offset huruf sumbu Y (0 → "A", 3 → "D")
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
@@ -91,6 +93,8 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     spansX: spansX.length ? spansX : [...DEFAULT_GRID.spansX],
     spansY: spansY.length ? spansY : [...DEFAULT_GRID.spansY],
     colSizeCm: Number.isFinite(col) && col > 0 ? col : DEFAULT_GRID.colSizeCm,
+    labelOffsetX: Number.isFinite(Number(g.labelOffsetX)) ? Math.max(0, Math.floor(Number(g.labelOffsetX))) : 0,
+    labelOffsetY: Number.isFinite(Number(g.labelOffsetY)) ? Math.max(0, Math.floor(Number(g.labelOffsetY))) : 0,
     fromLevelId: typeof g.fromLevelId === "string" ? g.fromLevelId : undefined,
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
@@ -121,6 +125,27 @@ export function yAxisLabel(i: number): string {
     n = Math.floor(n / 26) - 1;
   } while (n >= 0);
   return s;
+}
+// Label dengan offset (sesuai labelOffsetX/Y pada grid).
+export function xAxisLabelAt(i: number, offset: number = 0): string {
+  return xAxisLabel(i + Math.max(0, offset | 0));
+}
+export function yAxisLabelAt(i: number, offset: number = 0): string {
+  return yAxisLabel(i + Math.max(0, offset | 0));
+}
+// Parser kebalikan label.
+export function parseXAxisLabel(s: string): number | null {
+  const n = parseInt(String(s).trim(), 10);
+  return Number.isFinite(n) && n >= 1 ? n - 1 : null;
+}
+export function parseYAxisLabel(s: string): number | null {
+  const str = String(s).trim().toUpperCase();
+  if (!str || !/^[A-Z]+$/.test(str)) return null;
+  let n = 0;
+  for (let i = 0; i < str.length; i++) {
+    n = n * 26 + (str.charCodeAt(i) - 64);
+  }
+  return n - 1;
 }
 
 // Bentang efektif pada sebuah level (memperhitungkan override).
