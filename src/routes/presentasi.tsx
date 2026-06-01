@@ -39,6 +39,7 @@ import {
   type EdgeMaterial,
   type EdgeSegment,
 } from "@/lib/edge-segments";
+import { type Door } from "@/lib/doors";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
