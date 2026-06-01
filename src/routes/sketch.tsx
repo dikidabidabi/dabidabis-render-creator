@@ -3019,6 +3019,82 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     });
     ctx.globalAlpha = 1;
 
+    // ===== Lantai (slab) — outline + hatch + label nama level =====
+    const allFloors = sketch.floors ?? [];
+    if (allFloors.length) {
+      ctx.save();
+      for (const fl of allFloors) {
+        const lvl = levels.find((l) => l.id === fl.levelId);
+        const alpha = !lvl || activeLvlId == null || lvl.id === activeLvlId ? 1 : Math.min(lvl.opacity, 0.35);
+        if (alpha <= 0.001) continue;
+        ctx.globalAlpha = alpha;
+        // Build path: outer CW, holes CCW (canvas evenodd will handle it regardless)
+        ctx.beginPath();
+        fl.outer.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.closePath();
+        for (const hole of fl.holes ?? []) {
+          hole.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+          ctx.closePath();
+        }
+        ctx.fillStyle = "rgba(232,93,58,0.10)";
+        (ctx as CanvasRenderingContext2D).fill("evenodd");
+        ctx.lineWidth = 2 / view.s;
+        ctx.strokeStyle = "rgba(232,93,58,0.85)";
+        ctx.stroke();
+        // hole outlines extra emphasis
+        for (const hole of fl.holes ?? []) {
+          ctx.beginPath();
+          hole.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+          ctx.closePath();
+          ctx.setLineDash([6 / view.s, 4 / view.s]);
+          ctx.strokeStyle = "rgba(120,40,20,0.9)";
+          ctx.lineWidth = 1.5 / view.s;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      // Label nama level di centroid floor (screen-space)
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      for (const fl of allFloors) {
+        const lvl = levels.find((l) => l.id === fl.levelId);
+        if (!lvl) continue;
+        if (activeLvlId != null && lvl.id !== activeLvlId) continue;
+        const c = floorPolyCentroid(fl.outer);
+        const sp = worldToScreen(c);
+        const text = `Lantai · ${lvl.name}`;
+        ctx.font = "600 11px Manrope, sans-serif";
+        const w = ctx.measureText(text).width + 12;
+        ctx.fillStyle = "rgba(232,93,58,0.92)";
+        ctx.fillRect(sp.x - w / 2, sp.y - 10, w, 20);
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.fillText(text, sp.x, sp.y + 4);
+      }
+      ctx.restore();
+    }
+
+    // Floor draft preview (mode "attach"): tampilkan outer + holes yang sedang dipilih
+    if (tool === "floor" && floorDraft && floorDraft.outer) {
+      ctx.save();
+      ctx.beginPath();
+      floorDraft.outer.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+      ctx.closePath();
+      for (const h of floorDraft.holes) {
+        h.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+        ctx.closePath();
+      }
+      ctx.fillStyle = "rgba(232,93,58,0.22)";
+      (ctx as CanvasRenderingContext2D).fill("evenodd");
+      ctx.lineWidth = 3 / view.s;
+      ctx.strokeStyle = "rgba(232,93,58,1)";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+
     // Active line length label, screen-space
     if (drawing) {
       const meters = dist(drawing.a, drawing.b) / pxPerMeter;
