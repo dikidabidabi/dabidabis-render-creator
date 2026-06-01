@@ -1623,6 +1623,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
     | null
   >(null);
+  const [doorEraseMode, setDoorEraseMode] = useState(false);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
