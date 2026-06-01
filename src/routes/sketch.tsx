@@ -3357,6 +3357,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
+    } else if (tool === "pick") {
+      const raw = getWorldPosRaw(e);
+      const tol = 10 / view.s;
+      const segs = computeStraightSegments(lines).filter(
+        (s) => !activeLvlId || s.levelId === activeLvlId,
+      );
+      const hit = pickSegmentAt(raw, segs, tol);
+      if (!hit) return;
+      const prev = sketch.edgeAttrs ?? {};
+      const next: Record<string, EdgeMaterial> = { ...prev };
+      // Alt/Shift = hapus attribute.
+      if (e.altKey || e.shiftKey) {
+        delete next[hit.id];
+      } else {
+        next[hit.id] = pickMaterial;
+      }
+      pushHistory();
+      onChange({ edgeAttrs: next });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
