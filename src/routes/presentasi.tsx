@@ -3997,6 +3997,11 @@ function AxonometricView({
     for (let i = 0; i < pm.length; i++) {
       const a = pm[i];
       const b = pm[(i + 1) % pm.length];
+      const ex = b.x - a.x;
+      const ez = b.z - a.z;
+      const nx = ez;
+      const nz = -ex;
+      if (nx + nz <= 0) continue;
       const quad = [
         project(a.x, a.z, yBot),
         project(b.x, b.z, yBot),
