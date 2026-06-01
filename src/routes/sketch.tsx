@@ -2151,7 +2151,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         if (tool === "pick") {
           const nodeKeys = new Set<string>();
           for (const seg of allSegs) {
-            if (activeLvlId && seg.levelId !== activeLvlId) continue;
+            if (!activeLvlId || seg.levelId !== activeLvlId) continue;
             nodeKeys.add(`${seg.a.x.toFixed(3)},${seg.a.y.toFixed(3)}`);
             nodeKeys.add(`${seg.b.x.toFixed(3)},${seg.b.y.toFixed(3)}`);
           }
