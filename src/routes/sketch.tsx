@@ -1919,35 +1919,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.restore();
     }
 
-    // Minor grid (in world units)
-    ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
-    ctx.lineWidth = 1 / s;
-    ctx.beginPath();
-    for (let x = x0; x <= maxX; x += MINOR_PX) {
-      ctx.moveTo(x, minY);
-      ctx.lineTo(x, maxY);
+    // Minor + Major grid (in world units), dengan rotasi tampilan opsional di sekitar titik (0,0).
+    {
+      ctx.save();
+      if (mmGridRotRad !== 0) ctx.rotate(mmGridRotRad);
+      // Hitung bounds visible dalam mm-grid frame (inverse-rotate 4 sudut world).
+      const cs = Math.cos(-mmGridRotRad), sn = Math.sin(-mmGridRotRad);
+      const localCorners = corners.map((c) => ({ x: c.x * cs - c.y * sn, y: c.x * sn + c.y * cs }));
+      const lMinX = Math.min(...localCorners.map((c) => c.x));
+      const lMaxX = Math.max(...localCorners.map((c) => c.x));
+      const lMinY = Math.min(...localCorners.map((c) => c.y));
+      const lMaxY = Math.max(...localCorners.map((c) => c.y));
+      const lx0 = Math.floor(lMinX / MINOR_PX) * MINOR_PX;
+      const ly0 = Math.floor(lMinY / MINOR_PX) * MINOR_PX;
+      // Minor
+      ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
+      ctx.lineWidth = 1 / s;
+      ctx.beginPath();
+      for (let x = lx0; x <= lMaxX; x += MINOR_PX) { ctx.moveTo(x, lMinY); ctx.lineTo(x, lMaxY); }
+      for (let y = ly0; y <= lMaxY; y += MINOR_PX) { ctx.moveTo(lMinX, y); ctx.lineTo(lMaxX, y); }
+      ctx.stroke();
+      // Major
+      ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
+      ctx.lineWidth = 1.2 / s;
+      ctx.beginPath();
+      const lxm0 = Math.floor(lMinX / major) * major;
+      const lym0 = Math.floor(lMinY / major) * major;
+      for (let x = lxm0; x <= lMaxX; x += major) { ctx.moveTo(x, lMinY); ctx.lineTo(x, lMaxY); }
+      for (let y = lym0; y <= lMaxY; y += major) { ctx.moveTo(lMinX, y); ctx.lineTo(lMaxX, y); }
+      ctx.stroke();
+      ctx.restore();
     }
-    for (let y = y0; y <= maxY; y += MINOR_PX) {
-      ctx.moveTo(minX, y);
-      ctx.lineTo(maxX, y);
-    }
-    ctx.stroke();
-
-    // Major grid
-    ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
-    ctx.lineWidth = 1.2 / s;
-    ctx.beginPath();
-    const xm0 = Math.floor(minX / major) * major;
-    const ym0 = Math.floor(minY / major) * major;
-    for (let x = xm0; x <= maxX; x += major) {
-      ctx.moveTo(x, minY);
-      ctx.lineTo(x, maxY);
-    }
-    for (let y = ym0; y <= maxY; y += major) {
-      ctx.moveTo(minX, y);
-      ctx.lineTo(maxX, y);
-    }
-    ctx.stroke();
 
     // Group + sort by Level MDPL (lowest = bottom, highest = top)
     const sortedLevels = [...levels].sort((a, b) => a.mdpl - b.mdpl);
