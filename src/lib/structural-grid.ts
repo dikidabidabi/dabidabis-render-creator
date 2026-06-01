@@ -120,6 +120,25 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     hideBubbleStartY: Boolean(g.hideBubbleStartY),
     hideBubbleEndY: Boolean(g.hideBubbleEndY),
     lineOnly: Boolean(g.lineOnly),
+    extraLines: Array.isArray(g.extraLines)
+      ? g.extraLines
+          .map((l: any, idx: number) => {
+            const ox = Number(l?.origin?.x);
+            const oy = Number(l?.origin?.y);
+            const rot = Number(l?.rotation);
+            const len = Number(l?.lengthM);
+            if (!Number.isFinite(ox) || !Number.isFinite(oy) || !Number.isFinite(len) || len <= 0) return null;
+            return {
+              id: typeof l.id === "string" && l.id ? l.id : `xl-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+              origin: { x: ox, y: oy },
+              rotation: Number.isFinite(rot) ? rot : 0,
+              lengthM: len,
+              hideStart: Boolean(l.hideStart),
+              hideEnd: Boolean(l.hideEnd),
+            };
+          })
+          .filter(Boolean) as StructuralGrid["extraLines"]
+      : undefined,
     fromLevelId: typeof g.fromLevelId === "string" ? g.fromLevelId : undefined,
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
