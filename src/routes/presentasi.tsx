@@ -1457,6 +1457,67 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
   );
 }
 
+// ---- Table of Contents body ----
+function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
+  const entries = slide.entries;
+  const half = Math.ceil(entries.length / 2);
+  const col1 = entries.slice(0, half);
+  const col2 = entries.slice(half);
+  const renderCol = (items: TocEntry[], startIdx: number) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 0 }}>
+      {items.map((e, i) => (
+        <div
+          key={`${e.label}-${e.page}-${i}`}
+          style={{ display: "flex", alignItems: "baseline", gap: 12, fontFamily: "var(--font-sans, Manrope, sans-serif)" }}
+        >
+          <span style={{ fontSize: 13, color: "#888", fontVariantNumeric: "tabular-nums", width: 28, fontWeight: 600 }}>
+            {String(startIdx + i + 1).padStart(2, "0")}
+          </span>
+          <span style={{ fontSize: 20, color: "#111", fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
+            {e.label}
+          </span>
+          <span style={{ flex: 1, borderBottom: "1px dotted #c8c8c8", transform: "translateY(-4px)" }} />
+          <span style={{ fontSize: 18, color: "#444", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+            {String(e.page).padStart(2, "0")}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 700 }}>
+          Daftar Isi
+        </div>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
+          {slide.sketch.title || "Proyek"}
+        </div>
+      </div>
+      <div style={{ width: 80, height: 3, background: "#e85d3a", marginBottom: 24 }} />
+      <div
+        style={{
+          fontFamily: "var(--font-display, Sora, sans-serif)",
+          fontSize: 56,
+          lineHeight: 1.05,
+          letterSpacing: "-0.03em",
+          fontWeight: 700,
+          color: "#0a0a0a",
+          marginBottom: 32,
+        }}
+      >
+        Ikhtisar Presentasi
+      </div>
+      <div style={{ display: "flex", gap: 64, flex: 1, alignItems: "flex-start" }}>
+        {renderCol(col1, 0)}
+        {col2.length > 0 && renderCol(col2, col1.length)}
+      </div>
+    </div>
+  );
+}
+
+
+
 // ---- Closing body ----
 function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
   return (
