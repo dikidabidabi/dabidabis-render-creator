@@ -4302,7 +4302,65 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Grid3x3 className="mr-1.5 h-4 w-4" /> Grid Struktur
           </Button>
+          <Button
+            variant={tool === "pick" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("pick"); }}
+            className={cn(tool === "pick" && "bg-gradient-ember shadow-ember")}
+            title="Pick Material — klik segmen garis untuk menandai jenis selubung (Solid/Curtain/Window). Alt-klik untuk hapus."
+          >
+            <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
+          </Button>
         </div>
+        {tool === "pick" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Material Selubung
+            </Label>
+            <div className="grid grid-cols-1 gap-1.5">
+              {(["solid", "curtain", "window"] as EdgeMaterial[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPickMaterial(m)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition",
+                    pickMaterial === m
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                      : "border-border/60 hover:bg-muted/40",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className="h-4 w-4 rounded-sm border border-black/20"
+                    style={{ background: MATERIAL_COLORS[m] }}
+                  />
+                  <span className="font-medium">{MATERIAL_LABELS[m]}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Klik segmen garis di kanvas untuk menandai. Segmen dipecah otomatis
+              pada tiap titik potong (node). Alt/Shift + klik = hapus tanda.
+              Tanda ini hanya mengubah notasi di slide Denah & Potongan, tidak
+              memengaruhi massa 3D.
+            </p>
+            {Object.keys(sketch.edgeAttrs ?? {}).length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  pushHistory();
+                  onChange({ edgeAttrs: {} });
+                  toast.success("Semua tanda material dihapus");
+                }}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Reset semua tanda
+              </Button>
+            )}
+          </div>
+        )}
         {tool === "grid" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <div className="flex items-center justify-between">
