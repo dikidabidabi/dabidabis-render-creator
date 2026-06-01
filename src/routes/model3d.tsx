@@ -84,6 +84,14 @@ type Sketch = {
   northRotation?: number;
   structuralGrid?: StructuralGrid;
   structuralGridExtras?: StructuralGrid[];
+  floors?: {
+    id: string;
+    levelId: string;
+    outer: Point[];
+    holes?: Point[][];
+    thicknessMm: number;
+    createdAt: number;
+  }[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
