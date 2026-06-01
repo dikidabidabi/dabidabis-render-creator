@@ -3784,10 +3784,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (bestIdx >= 0 && bestD <= tol) {
         pushHistory();
         onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
-      } else {
-        const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
-        if (hitLocked) toast.error("Garis terkunci");
+        return;
       }
+      // Coba hapus lingkaran: jarak ke keliling
+      const circles = sketch.circles ?? [];
+      let cIdx = -1;
+      let cBestD = Infinity;
+      circles.forEach((cc, i) => {
+        if (activeLvlId && cc.levelId !== activeLvlId) return;
+        const d = Math.abs(Math.hypot(p.x - cc.c.x, p.y - cc.c.y) - cc.r);
+        if (d < cBestD) { cBestD = d; cIdx = i; }
+      });
+      if (cIdx >= 0 && cBestD <= tol) {
+        pushHistory();
+        onChange({ circles: circles.filter((_, i) => i !== cIdx) });
+        return;
+      }
+      const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
+      if (hitLocked) toast.error("Garis terkunci");
     }
   };
 
