@@ -4872,19 +4872,34 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               Notasi muncul di Slide Denah; massa 3D tidak berubah.
             </p>
             {(sketch.doors?.length ?? 0) > 0 && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] text-muted-foreground">{sketch.doors!.length} pintu</span>
+              <div className="space-y-1.5 border-t border-border/60 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">{sketch.doors!.length} pintu</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      pushHistory();
+                      onChange({ doors: [] });
+                      setDoorEraseMode(false);
+                      toast.success("Semua pintu dihapus");
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    <Trash2 className="mr-1.5 h-3 w-3" /> Reset
+                  </Button>
+                </div>
                 <Button
-                  variant="outline"
+                  variant={doorEraseMode ? "default" : "outline"}
                   size="sm"
-                  onClick={() => {
-                    pushHistory();
-                    onChange({ doors: [] });
-                    toast.success("Semua pintu dihapus");
-                  }}
-                  className="h-7 text-xs"
+                  onClick={() => setDoorEraseMode((v) => !v)}
+                  className={cn(
+                    "h-7 w-full text-xs",
+                    doorEraseMode && "bg-gradient-ember shadow-ember",
+                  )}
                 >
-                  <Trash2 className="mr-1.5 h-3 w-3" /> Reset
+                  <Trash2 className="mr-1.5 h-3 w-3" />
+                  {doorEraseMode ? "Mode Hapus Aktif — tap pintu" : "Hapus Pintu (per item)"}
                 </Button>
               </div>
             )}
