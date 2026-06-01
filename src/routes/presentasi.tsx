@@ -694,8 +694,10 @@ type RincianSection = {
   totalAsliPer: number;
   totalEfPer: number;
 };
+type TocEntry = { label: string; page: number };
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
+  | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
   | { kind: "closing"; id: string; title: string; sketch: Sketch }
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
@@ -843,6 +845,37 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
+
+  // Sisipkan Daftar Isi tepat setelah slide judul (index 1).
+  // Page numbering setelah penyisipan: title=1, toc=2, rest mulai 3.
+  const groupLabel = (s: Slide): string | null => {
+    switch (s.kind) {
+      case "site": return "Analisa Tapak";
+      case "konsep": return "Konsep";
+      case "level": return "Denah per Level";
+      case "section": return "Potongan Prinsip";
+      case "matahari":
+      case "shadow-seasonal":
+      case "facade-zoning": return "Analisa Matahari & Fasad";
+      case "stacking": return "Stacking Diagram";
+      case "rekap": return "Rekapitulasi";
+      case "rincian": return "Rincian per Level";
+      case "infografis": return "Infografis";
+      case "biaya": return "Estimasi Biaya";
+      case "closing": return "Penutup";
+      default: return null;
+    }
+  };
+  const entries: TocEntry[] = [];
+  const seen = new Set<string>();
+  // out[0] is title; remaining items start at page 3 after TOC is inserted.
+  for (let i = 1; i < out.length; i++) {
+    const label = groupLabel(out[i]);
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    entries.push({ label, page: i + 2 });
+  }
+  out.splice(1, 0, { kind: "toc", id: "toc-slide", title: "Daftar Isi", sketch: sk, entries });
   return out;
 }
 
@@ -1165,6 +1198,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
+      {slide.kind === "toc" && <TocBody slide={slide} />}
       {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
@@ -1422,6 +1456,67 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
     </div>
   );
 }
+
+// ---- Table of Contents body ----
+function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
+  const entries = slide.entries;
+  const half = Math.ceil(entries.length / 2);
+  const col1 = entries.slice(0, half);
+  const col2 = entries.slice(half);
+  const renderCol = (items: TocEntry[], startIdx: number) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 0 }}>
+      {items.map((e, i) => (
+        <div
+          key={`${e.label}-${e.page}-${i}`}
+          style={{ display: "flex", alignItems: "baseline", gap: 12, fontFamily: "var(--font-sans, Manrope, sans-serif)" }}
+        >
+          <span style={{ fontSize: 13, color: "#888", fontVariantNumeric: "tabular-nums", width: 28, fontWeight: 600 }}>
+            {String(startIdx + i + 1).padStart(2, "0")}
+          </span>
+          <span style={{ fontSize: 20, color: "#111", fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
+            {e.label}
+          </span>
+          <span style={{ flex: 1, borderBottom: "1px dotted #c8c8c8", transform: "translateY(-4px)" }} />
+          <span style={{ fontSize: 18, color: "#444", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+            {String(e.page).padStart(2, "0")}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 700 }}>
+          Daftar Isi
+        </div>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
+          {slide.sketch.title || "Proyek"}
+        </div>
+      </div>
+      <div style={{ width: 80, height: 3, background: "#e85d3a", marginBottom: 24 }} />
+      <div
+        style={{
+          fontFamily: "var(--font-display, Sora, sans-serif)",
+          fontSize: 56,
+          lineHeight: 1.05,
+          letterSpacing: "-0.03em",
+          fontWeight: 700,
+          color: "#0a0a0a",
+          marginBottom: 32,
+        }}
+      >
+        Ikhtisar Presentasi
+      </div>
+      <div style={{ display: "flex", gap: 64, flex: 1, alignItems: "flex-start" }}>
+        {renderCol(col1, 0)}
+        {col2.length > 0 && renderCol(col2, col1.length)}
+      </div>
+    </div>
+  );
+}
+
+
 
 // ---- Closing body ----
 function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
