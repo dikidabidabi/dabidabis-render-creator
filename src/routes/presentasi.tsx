@@ -694,8 +694,10 @@ type RincianSection = {
   totalAsliPer: number;
   totalEfPer: number;
 };
+type TocEntry = { label: string; page: number };
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
+  | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
   | { kind: "closing"; id: string; title: string; sketch: Sketch }
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
