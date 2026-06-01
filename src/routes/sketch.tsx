@@ -1623,6 +1623,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
     | null
   >(null);
+  const [doorEraseMode, setDoorEraseMode] = useState(false);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -3634,8 +3635,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       pushHistory();
       onChange({ edgeAttrs: next });
     } else if (tool === "door") {
-      // Step 1 — Snap engsel (Titik A) ke garis lurus terdekat di level aktif.
       const raw = getWorldPosRaw(e);
+      if (doorEraseMode) {
+        const doors = sketch.doors ?? [];
+        if (doors.length === 0) {
+          toast.error("Belum ada pintu untuk dihapus");
+          return;
+        }
+        const tolPx = 18 / view.s;
+        let bestId: string | null = null;
+        let bestD = Infinity;
+        for (const d of doors) {
+          if (activeLvlId && d.levelId && d.levelId !== activeLvlId) continue;
+          const proj = projectOnSegment(raw, d.a, d.b);
+          const dd = dist(raw, proj);
+          // juga cek jarak ke titik engsel agar mudah di-tap
+          const dh = dist(raw, d.a);
+          const m = Math.min(dd, dh);
+          if (m < bestD) { bestD = m; bestId = d.id; }
+        }
+        if (!bestId || bestD > tolPx) {
+          toast.error("Tap dekat pintu yang ingin dihapus");
+          return;
+        }
+        pushHistory();
+        onChange({ doors: doors.filter((d) => d.id !== bestId) });
+        toast.success("Pintu dihapus");
+        return;
+      }
+      // Step 1 — Snap engsel (Titik A) ke garis lurus terdekat di level aktif.
       const tolPx = 16 / view.s;
       let bestLn: Line | null = null;
       let bestProj: Point | null = null;
@@ -4844,19 +4872,34 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               Notasi muncul di Slide Denah; massa 3D tidak berubah.
             </p>
             {(sketch.doors?.length ?? 0) > 0 && (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] text-muted-foreground">{sketch.doors!.length} pintu</span>
+              <div className="space-y-1.5 border-t border-border/60 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">{sketch.doors!.length} pintu</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      pushHistory();
+                      onChange({ doors: [] });
+                      setDoorEraseMode(false);
+                      toast.success("Semua pintu dihapus");
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    <Trash2 className="mr-1.5 h-3 w-3" /> Reset
+                  </Button>
+                </div>
                 <Button
-                  variant="outline"
+                  variant={doorEraseMode ? "default" : "outline"}
                   size="sm"
-                  onClick={() => {
-                    pushHistory();
-                    onChange({ doors: [] });
-                    toast.success("Semua pintu dihapus");
-                  }}
-                  className="h-7 text-xs"
+                  onClick={() => setDoorEraseMode((v) => !v)}
+                  className={cn(
+                    "h-7 w-full text-xs",
+                    doorEraseMode && "bg-gradient-ember shadow-ember",
+                  )}
                 >
-                  <Trash2 className="mr-1.5 h-3 w-3" /> Reset
+                  <Trash2 className="mr-1.5 h-3 w-3" />
+                  {doorEraseMode ? "Mode Hapus Aktif — tap pintu" : "Hapus Pintu (per item)"}
                 </Button>
               </div>
             )}
