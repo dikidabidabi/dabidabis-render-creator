@@ -2253,6 +2253,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             sw={sw}
           />
 
+          <DoorNotation
+            doors={(sketch.doors ?? []).filter((d) => d.levelId === level.id)}
+            pxPerM={pxPerM}
+            sw={sw}
+          />
+
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             void gIdx;
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
