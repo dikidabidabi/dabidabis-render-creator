@@ -697,6 +697,17 @@ function normalizeSketch(s: any): Sketch {
     sectionCut: undefined,
     structuralGrid: normalizeGrid(s?.structuralGrid),
     structuralGridExtras: normalizeGridExtras(s?.structuralGridExtras),
+    edgeAttrs: (() => {
+      const raw = s?.edgeAttrs;
+      if (!raw || typeof raw !== "object") return {};
+      const valid: Record<string, EdgeMaterial> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (v === "solid" || v === "curtain" || v === "window") {
+          valid[k] = v;
+        }
+      }
+      return valid;
+    })(),
   };
 }
 
