@@ -2693,7 +2693,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(yAxisLabel(j), xEnd, ys[j]);
+            ctx.fillText(yAxisLabelAt(j, grid.labelOffsetY ?? 0), xEnd, ys[j]);
           }
         }
 
