@@ -3997,6 +3997,11 @@ function AxonometricView({
     for (let i = 0; i < pm.length; i++) {
       const a = pm[i];
       const b = pm[(i + 1) % pm.length];
+      const ex = b.x - a.x;
+      const ez = b.z - a.z;
+      const nx = ez;
+      const nz = -ex;
+      if (nx + nz <= 0) continue;
       const quad = [
         project(a.x, a.z, yBot),
         project(b.x, b.z, yBot),
@@ -4034,10 +4039,16 @@ function AxonometricView({
       const yTop = yBot + (ov?.height ?? lv.height);
       const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
       const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
-      // Side quads
+      // Side quads (hanya yang menghadap kamera — view direction +x +z di proyeksi dimetric).
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
         const b = pm[(i + 1) % pm.length];
+        // Outward normal (asumsi CCW di plane x,z setelah toPm).
+        const ex = b.x - a.x;
+        const ez = b.z - a.z;
+        const nx = ez;
+        const nz = -ex;
+        if (nx + nz <= 0) continue;
         const quad = [
           project(a.x, a.z, yBot),
           project(b.x, b.z, yBot),
@@ -4911,6 +4922,9 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const a = layer.points[i];
       const b = layer.points[(i + 1) % layer.points.length];
       const n = outwardNormal(a, b, ccw);
+      // Back-face culling: di proyeksi dimetric, view direction (plan) = (+1, +1).
+      // Hanya render dinding yang outward-normal-nya menghadap kamera.
+      if (n.x + n.y <= 0) continue;
       const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
       const dir = classifyBearing(bearing);
       const col = FACADE_COLORS[dir];
