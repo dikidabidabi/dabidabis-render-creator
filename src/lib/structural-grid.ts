@@ -30,11 +30,19 @@ export type StructuralGrid = {
   colSizeCm: number;                     // ukuran kolom persegi (cm)
   labelOffsetX?: number;                 // offset penomoran sumbu X (0 → "1", 3 → "4")
   labelOffsetY?: number;                 // offset huruf sumbu Y (0 → "A", 3 → "D")
+  // Visibilitas buble ujung — true = sembunyikan buble di ujung tsb.
+  hideBubbleStartX?: boolean;            // sembunyikan buble X di ujung as pertama
+  hideBubbleEndX?: boolean;              // sembunyikan buble X di ujung as terakhir
+  hideBubbleStartY?: boolean;            // sembunyikan buble Y di ujung as pertama
+  hideBubbleEndY?: boolean;              // sembunyikan buble Y di ujung as terakhir
+  // Grid hasil "Jadikan Grid" dari satu garis — hanya satu sumbu (X), tanpa kolom.
+  lineOnly?: boolean;
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
   columnClips?: ColumnClip[];            // poligon area yang menyembunyikan kolom
 };
+
 
 export const SPAN_PRESETS = [6, 7.2, 8, 9] as const;
 export const COL_PRESETS = [40, 50, 60, 70, 80] as const;
