@@ -845,6 +845,37 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
+
+  // Sisipkan Daftar Isi tepat setelah slide judul (index 1).
+  // Page numbering setelah penyisipan: title=1, toc=2, rest mulai 3.
+  const groupLabel = (s: Slide): string | null => {
+    switch (s.kind) {
+      case "site": return "Analisa Tapak";
+      case "konsep": return "Konsep";
+      case "level": return "Denah per Level";
+      case "section": return "Potongan Prinsip";
+      case "matahari":
+      case "shadow-seasonal":
+      case "facade-zoning": return "Analisa Matahari & Fasad";
+      case "stacking": return "Stacking Diagram";
+      case "rekap": return "Rekapitulasi";
+      case "rincian": return "Rincian per Level";
+      case "infografis": return "Infografis";
+      case "biaya": return "Estimasi Biaya";
+      case "closing": return "Penutup";
+      default: return null;
+    }
+  };
+  const entries: TocEntry[] = [];
+  const seen = new Set<string>();
+  // out[0] is title; remaining items start at page 3 after TOC is inserted.
+  for (let i = 1; i < out.length; i++) {
+    const label = groupLabel(out[i]);
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    entries.push({ label, page: i + 2 });
+  }
+  out.splice(1, 0, { kind: "toc", id: "toc-slide", title: "Daftar Isi", sketch: sk, entries });
   return out;
 }
 
