@@ -2313,11 +2313,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
       if (tool === "rect") {
-        const x = Math.min(drawing.a.x, drawing.b.x);
-        const y = Math.min(drawing.a.y, drawing.b.y);
-        const w = Math.abs(drawing.b.x - drawing.a.x);
-        const h = Math.abs(drawing.b.y - drawing.a.y);
-        ctx.rect(x, y, w, h);
+        // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
+        // (un-rotate kedua sudut diagonal), lalu rotasi balik 4 sudutnya.
+        const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
+        const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
+        const lx1 = Math.min(la.x, lb.x), lx2 = Math.max(la.x, lb.x);
+        const ly1 = Math.min(la.y, lb.y), ly2 = Math.max(la.y, lb.y);
+        const corners = [
+          { x: lx1, y: ly1 }, { x: lx2, y: ly1 },
+          { x: lx2, y: ly2 }, { x: lx1, y: ly2 },
+        ].map((p) => rotateAround(p, { x: 0, y: 0 }, mmGridRotRad));
+        ctx.moveTo(corners[0].x, corners[0].y);
+        for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+        ctx.closePath();
         ctx.stroke();
         ctx.fillStyle = "rgba(232, 93, 58, 0.10)";
         ctx.fill();
