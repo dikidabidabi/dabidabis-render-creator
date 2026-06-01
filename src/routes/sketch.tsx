@@ -5344,8 +5344,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             {/* ===== Edit Kolom (Clip Polygon) ===== */}
             <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
               <div className="flex items-center justify-between">
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Edit Kolom</Label>
-                <div className="flex gap-1">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Mode Edit</Label>
+                <div className="flex flex-wrap gap-1">
                   <Button
                     size="sm"
                     variant={gridEditMode === "expand" ? "default" : "outline"}
@@ -5362,8 +5362,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   >
                     Clip Kolom
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "fromLine" ? "default" : "outline"}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "fromLine" && "bg-gradient-ember shadow-ember")}
+                    onClick={() => { setGridEditMode("fromLine"); setClipDraft(null); }}
+                    title="Klik garis lurus / polyline di kanvas — grid extra dibuat mengikuti panjang segmen, dengan buble otomatis menyambung dari grid sebelumnya."
+                  >
+                    Jadikan Grid
+                  </Button>
                 </div>
               </div>
+              {gridEditMode === "fromLine" && (
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Klik salah satu garis lurus / polyline di kanvas. Segmen-segmen
+                  colinear yang menyambung akan dibaca sebagai bentang sumbu X.
+                  Rotasi grid mengikuti arah garis, buble otomatis melanjutkan
+                  serial dari grid sebelumnya di level aktif.
+                </p>
+              )}
               {gridEditMode === "clip" && (
                 <>
                   <p className="text-[10px] leading-snug text-muted-foreground">
