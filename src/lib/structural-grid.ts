@@ -24,6 +24,7 @@ export type ColumnClip = {
 export type StructuralGrid = {
   enabled: boolean;
   origin: { x: number; y: number };     // titik (0,0) grid di koordinat kanvas (px world)
+  rotation?: number;                     // derajat rotasi grid struktur (CW positif) — display & geometri kolom
   spansX: number[];                      // bentang antar as sumbu X (meter)
   spansY: number[];                      // bentang antar as sumbu Y (meter)
   colSizeCm: number;                     // ukuran kolom persegi (cm)
@@ -39,6 +40,7 @@ export const COL_PRESETS = [40, 50, 60, 70, 80] as const;
 export const DEFAULT_GRID: StructuralGrid = {
   enabled: false,
   origin: { x: 0, y: 0 },
+  rotation: 0,
   spansX: [8, 8, 8],
   spansY: [8, 8],
   colSizeCm: 50,
