@@ -28,6 +28,8 @@ export type StructuralGrid = {
   spansX: number[];                      // bentang antar as sumbu X (meter)
   spansY: number[];                      // bentang antar as sumbu Y (meter)
   colSizeCm: number;                     // ukuran kolom persegi (cm)
+  labelOffsetX?: number;                 // offset penomoran sumbu X (0 → "1", 3 → "4")
+  labelOffsetY?: number;                 // offset huruf sumbu Y (0 → "A", 3 → "D")
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
