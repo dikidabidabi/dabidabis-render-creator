@@ -2222,7 +2222,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       while (delta > Math.PI) delta -= Math.PI * 2;
       while (delta < -Math.PI) delta += Math.PI * 2;
       ctx.beginPath();
-      ctx.arc(ax, ay, doorDraft.leaves === 2 ? widthPx / 2 : widthPx, a0, a0 + delta, delta < 0);
+      ctx.arc(ax, ay, doorLeaves === 2 ? widthPx / 2 : widthPx, a0, a0 + delta, delta < 0);
       void (0); // placeholder
       ctx.stroke();
       ctx.setLineDash([]);
