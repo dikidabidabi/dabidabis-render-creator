@@ -27,8 +27,6 @@ import {
   isNodeActive,
   isColumnClipped,
   levelInRange,
-  xAxisLabel,
-  yAxisLabel,
   xAxisLabelAt,
   yAxisLabelAt,
   computeAllStructuralStats,
