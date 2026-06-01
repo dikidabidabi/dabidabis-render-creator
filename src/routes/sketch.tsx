@@ -2317,6 +2317,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.setLineDash([]);
     }
 
+    // Circle draft preview
+    if (circleDraft && tool === "circle") {
+      const r = Math.hypot(circleDraft.cur.x - circleDraft.c.x, circleDraft.cur.y - circleDraft.c.y);
+      ctx.save();
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
+      ctx.lineWidth = 2 / s;
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.arc(circleDraft.c.x, circleDraft.c.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // garis radius + label
+      ctx.beginPath();
+      ctx.moveTo(circleDraft.c.x, circleDraft.c.y);
+      ctx.lineTo(circleDraft.cur.x, circleDraft.cur.y);
+      ctx.lineWidth = 1 / s;
+      ctx.stroke();
+      const fontPx = 11 / s;
+      ctx.font = `600 ${fontPx}px var(--font-display), sans-serif`;
+      ctx.fillStyle = "rgba(232,93,58,0.95)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`R ${(r / pxPerMeter).toFixed(2)} m`, circleDraft.cur.x + 4 / s, circleDraft.cur.y - 4 / s);
+      // pusat
+      ctx.fillStyle = "rgba(232,93,58,1)";
+      ctx.beginPath();
+      ctx.arc(circleDraft.c.x, circleDraft.c.y, 3 / s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+
     // Polyline draft preview
     if (polyDraft) {
       const pts = polyDraft.points;
