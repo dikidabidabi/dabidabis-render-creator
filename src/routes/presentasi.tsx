@@ -3616,7 +3616,7 @@ function MaterialEdges({
           key={`c-${i}`}
           d={linePath(ln)}
           stroke="#0a0a0a"
-          strokeWidth={sw * 0.004}
+          strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"
         />
@@ -3628,7 +3628,7 @@ function MaterialEdges({
             <line
               key={`s-${s.id}`}
               x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
-              stroke="#0a0a0a" strokeWidth={sw * 0.004} strokeLinecap="round"
+              stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
             />
           );
         }
