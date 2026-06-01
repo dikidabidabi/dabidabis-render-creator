@@ -4743,6 +4743,91 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         </p>
       </div>
 
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Rotasi Grid</Label>
+        <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+          {/* Grid milimeter block (display-only) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Milimeter Block</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {mmGridRotation.toFixed(1)}°
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                step="1"
+                value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onChange({ mmGridRotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-7 text-xs"
+              />
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => onChange({ mmGridRotation: 0 })}
+                disabled={mmGridRotation === 0}
+                title="Kembalikan ke 0° tanpa memindahkan sketsa"
+              >
+                Reset
+              </Button>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Memutar tampilan kertas milimeter block saja. Tidak mengubah koordinat sketsa, dapat dikembalikan ke 0° tanpa pergeseran.
+            </p>
+          </div>
+
+          {/* Grid struktur (per grid aktif) */}
+          <div className="space-y-1 border-t border-border/40 pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Grid Struktur {editGridIdx === 0 ? "(Primer)" : `(Extra ${editGridIdx})`}
+              </span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {structGridRotation.toFixed(1)}°
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                step="1"
+                value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-7 text-xs"
+              />
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => updateGrid({ rotation: 0 })}
+                disabled={structGridRotation === 0}
+                title="Kembalikan rotasi grid struktur ke 0°"
+              >
+                Reset
+              </Button>
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => updateGrid({ rotation: mmGridRotation })}
+                disabled={structGridRotation === mmGridRotation}
+                title="Samakan dengan rotasi milimeter block agar paralel"
+              >
+                = mm
+              </Button>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              {gridsParallel
+                ? "Paralel dengan milimeter block → snap to grid aktif saat menggeser titik nol grid struktur."
+                : "Tidak paralel dengan milimeter block → snap to grid dimatikan untuk menggeser grid struktur."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+
+
 
 
       <div className="space-y-2">
