@@ -2678,25 +2678,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const hideEX = Boolean(grid.hideBubbleEndX);
         const hideSY = Boolean(grid.hideBubbleStartY);
         const hideEY = Boolean(grid.hideBubbleEndY);
-        for (let i = 0; i < xs.length; i++) {
-          const ends: Array<{ y: number; hide: boolean }> = [
-            { y: yMin - bubbleOff, hide: hideSY },
-            { y: yMax + bubbleOff, hide: hideEY },
+        if (grid.lineOnly) {
+          // satu bubble di tiap ujung garis, sejajar dengan garis
+          const lastI = xs.length - 1;
+          const ends: Array<{ i: number; x: number; hide: boolean }> = [
+            { i: 0, x: xs[0] - bubbleOff, hide: hideSX },
+            { i: lastI, x: xs[lastI] + bubbleOff, hide: hideEX },
           ];
           for (const e of ends) {
             if (e.hide) continue;
             ctx.beginPath();
-            ctx.arc(xs[i], e.y, bubbleR, 0, Math.PI * 2);
+            ctx.arc(e.x, ys[0], bubbleR, 0, Math.PI * 2);
             ctx.fillStyle = "#fff";
             ctx.fill();
             ctx.lineWidth = 0.4 / s;
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], e.y);
+            ctx.fillText(xAxisLabelAt(e.i, grid.labelOffsetX ?? 0), e.x, ys[0]);
           }
-        }
-        if (!grid.lineOnly) {
+        } else {
+          for (let i = 0; i < xs.length; i++) {
+            const ends: Array<{ y: number; hide: boolean }> = [
+              { y: yMin - bubbleOff, hide: hideSY },
+              { y: yMax + bubbleOff, hide: hideEY },
+            ];
+            for (const e of ends) {
+              if (e.hide) continue;
+              ctx.beginPath();
+              ctx.arc(xs[i], e.y, bubbleR, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.lineWidth = 0.4 / s;
+              ctx.strokeStyle = "#0a0a0a";
+              ctx.stroke();
+              ctx.fillStyle = "#0a0a0a";
+              ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], e.y);
+            }
+          }
           for (let j = 0; j < ys.length; j++) {
             const ends: Array<{ x: number; hide: boolean }> = [
               { x: xMin - bubbleOff, hide: hideSX },
