@@ -480,7 +480,7 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
   return (
-    <div className="space-y-3 text-sm">
+    <div className="max-h-[420px] space-y-3 overflow-y-auto pr-2 text-sm">
       {levels.map((lv) => {
         const items = ruang.filter((l) => l.levelId === lv.id);
         const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
@@ -530,6 +530,130 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
       })}
     </div>
   );
+}
+
+// ---------- Excel export ----------
+
+function escapeXml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function tableHtml(title: string, headers: string[], rows: (string | number)[][]): string {
+  const head = headers
+    .map((h) => `<th style="background:#eee;border:1px solid #999;padding:4px;text-align:left;">${escapeXml(h)}</th>`)
+    .join("");
+  const body = rows
+    .map(
+      (r) =>
+        "<tr>" +
+        r
+          .map(
+            (c) =>
+              `<td style="border:1px solid #ccc;padding:4px;${typeof c === "number" ? "text-align:right;mso-number-format:'0.00';" : ""}">${escapeXml(String(c))}</td>`,
+          )
+          .join("") +
+        "</tr>",
+    )
+    .join("");
+  return `<h3>${escapeXml(title)}</h3><table style="border-collapse:collapse;margin-bottom:16px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function downloadSketchExcel(sketch: Sketch, data: Stats) {
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
+
+  const sections: string[] = [];
+
+  // Rekapitulasi
+  const rekapRows: (string | number)[][] = [
+    ["Luas Lahan (m²)", Number(data.totalLahanM2.toFixed(2))],
+    ["Jumlah Lapis", data.jumlahLapis],
+    ["Ketinggian (m)", Number(data.ketinggianM.toFixed(2))],
+    [`KDB${data.kdbPct ? ` (${data.kdbPct}%)` : ""} — Limit (m²)`, Number(data.kdbLimitM2.toFixed(2))],
+    ["KDB Rencana (m²)", Number(data.kdbRencanaM2.toFixed(2))],
+    [`KLB${data.klbCoef ? ` (×${data.klbCoef})` : ""} — Limit (m²)`, Number(data.klbLimitM2.toFixed(2))],
+    ["KLB Rencana (m²)", Number(data.klbRencanaM2.toFixed(2))],
+    [`KDH${data.kdhPct ? ` (min ${data.kdhPct}%)` : ""} — Limit (m²)`, Number(data.kdhLimitM2.toFixed(2))],
+    ["KDH Rencana (m²)", Number(data.kdhRencanaM2.toFixed(2))],
+    [`KTB${data.ktbPct ? ` (maks ${data.ktbPct}%)` : ""} — Limit (m²)`, Number(data.ktbLimitM2.toFixed(2))],
+    ["KTB Rencana (m²)", Number(data.ktbRencanaM2.toFixed(2))],
+    ["Total Luas Ruang (m²)", Number(data.totalRuangM2.toFixed(2))],
+    ["Luas Efektif (m²)", Number(data.totalEfektifM2.toFixed(2))],
+    ["Luas Sarana (m²)", Number(data.totalSaranaM2.toFixed(2))],
+    ["Luas Semi (m²)", Number(data.totalSetengahM2.toFixed(2))],
+  ];
+  if (data.totalKolom > 0) {
+    rekapRows.push(["Modul Struktur — Kolom (titik)", data.totalKolom]);
+    rekapRows.push(["Volume Beton Kolom (m³)", Number(data.volumeBetonM3.toFixed(2))]);
+  }
+  sections.push(tableHtml("Rekapitulasi", ["Parameter", "Nilai"], rekapRows));
+
+  // Rincian per Level
+  for (const lv of levels) {
+    const items = ruang.filter((l) => l.levelId === lv.id);
+    if (items.length === 0) continue;
+    const rows: (string | number)[][] = items.map((r) => {
+      const coef = r.coefficient ?? 1;
+      return [r.name, coef, Number(r.areaM2.toFixed(2)), Number((r.areaM2 * coef).toFixed(2))];
+    });
+    const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
+    const totalEfektif = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+    rows.push(["TOTAL", "", Number(totalAsli.toFixed(2)), Number(totalEfektif.toFixed(2))]);
+    sections.push(
+      tableHtml(
+        `Rincian — ${lv.name} (${fmt(lv.mdpl, 1)} mdpl)`,
+        ["Ruang", "Koef.", "Luas (m²)", "Efektif (m²)"],
+        rows,
+      ),
+    );
+  }
+
+  // Distribusi per Level
+  const totalAll = ruang.reduce((s, l) => s + l.areaM2, 0) || 1;
+  const distRows: (string | number)[][] = levels.map((lv) => {
+    const sum = ruang.filter((r) => r.levelId === lv.id).reduce((s, l) => s + l.areaM2, 0);
+    return [lv.name, Number(sum.toFixed(2)), Number(((sum / totalAll) * 100).toFixed(2))];
+  });
+  sections.push(tableHtml("Distribusi per Level", ["Level", "Luas (m²)", "Persentase (%)"], distRows));
+
+  // Estimasi biaya
+  const costMap = loadCostMap();
+  const rate = costMap[sketch.id] ?? 0;
+  const totalCostM2 = (sketch.layers ?? [])
+    .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+    .reduce((s, l) => s + (l.areaM2 || 0), 0);
+  const totalCost = totalCostM2 * rate;
+  sections.push(
+    tableHtml(
+      "Estimasi Biaya",
+      ["Parameter", "Nilai"],
+      [
+        ["Total Luas Terhitung (m²)", Number(totalCostM2.toFixed(2))],
+        ["Biaya per m² (Rp)", rate],
+        ["Estimasi Total (Rp)", Math.round(totalCost)],
+        ["Arsitektur 25% (Rp)", Math.round(totalCost * 0.25)],
+        ["Struktur 35% (Rp)", Math.round(totalCost * 0.35)],
+        ["MEP 40% (Rp)", Math.round(totalCost * 0.4)],
+      ],
+    ),
+  );
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${escapeXml(sketch.title).slice(0, 31)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><h2>${escapeXml(sketch.title)}</h2><p>Skala ${escapeXml(sketch.scale)}</p>${sections.join("")}</body></html>`;
+
+  const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const safeName = sketch.title.replace(/[^a-z0-9\-_ ]/gi, "_").slice(0, 60) || "tabulasi";
+  a.href = url;
+  a.download = `${safeName}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function InfographicSection({ data, sketch }: { data: Stats; sketch: Sketch }) {
