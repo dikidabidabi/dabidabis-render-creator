@@ -918,7 +918,7 @@ function computeStats(sk: Sketch): Stats {
 
 // ============= SLIDE CONTENT (white A3 modern theme) =============
 
-const SLIDE_VIEW_KEY = "dabidabis_slideview_v2";
+const SLIDE_VIEW_KEY = "dabidabis_slideview_v3";
 type SlideView = { scale: number; tx: number; ty: number };
 const COMPASS_VIEW_KEY = "dabidabis_compass_view_v1";
 type CompassView = { x: number; y: number };
@@ -988,10 +988,12 @@ function ManualScaleBox({
       inner.style.transform = prev;
       if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
       setNatural({ w: cw, h: ch });
-      setFitScale(Math.min(1, box.width / cw, box.height / ch));
+      setFitScale(Math.min(box.width / cw, box.height / ch));
     };
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(boxRef.current);
     raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(measure); });
-    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); ro.disconnect(); };
   }, [slideId]);
 
   const scale = view?.scale ?? fitScale;
@@ -1165,7 +1167,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
   );
-  // All non-special slides default to fit and expose a manual scale handle at bottom-right.
+  // All non-special slides default to centered fit; users can pan and pinch-to-zoom.
   return (
     <div
       style={{
