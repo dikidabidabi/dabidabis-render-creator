@@ -653,7 +653,10 @@ function A3Frame({ children }: { children: React.ReactNode }) {
     ro.observe(wrap.current);
     const onResize = () => wrap.current && update(wrap.current.getBoundingClientRect().width);
     window.addEventListener("resize", onResize);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", onResize);
+    };
   }, []);
   return (
     <div
