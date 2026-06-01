@@ -263,6 +263,7 @@ type Sketch = {
   ktbPct?: number; // 0..100, prosentase KTB (basement) terhadap luas lahan
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
+  mmGridRotation?: number; // derajat rotasi tampilan grid milimeter block (display-only, tidak mengubah koordinat sketsa)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
   sectionCut?: SectionCut; // legacy single cut (kompatibilitas)
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
@@ -667,6 +668,7 @@ function normalizeSketch(s: any): Sketch {
     ktbPct: Number.isFinite(Number(s?.ktbPct)) ? Math.max(0, Math.min(100, Number(s.ktbPct))) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
+    mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
       ? {
           lat: Number(s.geo.lat),
@@ -1409,6 +1411,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
   }, [gridExtras.length, editGridIdx]);
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
+  const mmGridRotation = Number.isFinite(Number(sketch.mmGridRotation)) ? Number(sketch.mmGridRotation) : 0;
+  const mmGridRotRad = (mmGridRotation * Math.PI) / 180;
+  const structGridRotation = Number.isFinite(Number(grid.rotation)) ? Number(grid.rotation) : 0;
+  const structGridRotRad = (structGridRotation * Math.PI) / 180;
+  // Dua grid dianggap "paralel" bila selisih rotasi adalah kelipatan 90°.
+  const gridsParallel = (() => {
+    const diff = (((structGridRotation - mmGridRotation) % 90) + 90) % 90;
+    return diff < 0.05 || diff > 89.95;
+  })();
+  // Helper: rotasi titik di sekitar pusat (CW positif, sesuai konvensi sketch).
+  const rotateAround = (p: Point, c: Point, rad: number): Point => {
+    const dx = p.x - c.x, dy = p.y - c.y;
+    const cs = Math.cos(rad), sn = Math.sin(rad);
+    return { x: c.x + dx * cs - dy * sn, y: c.y + dx * sn + dy * cs };
+  };
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
@@ -1868,8 +1885,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const minY = Math.min(...corners.map((c) => c.y));
     const maxY = Math.max(...corners.map((c) => c.y));
     const major = MINOR_PX * MAJOR_EVERY;
-    const x0 = Math.floor(minX / MINOR_PX) * MINOR_PX;
-    const y0 = Math.floor(minY / MINOR_PX) * MINOR_PX;
 
     // OSM tile underlay (anchored at geo lat/lon → world 0,0).
     // mapRotation hanya berdampak pada peta; grid milimeter block & skala tetap.
@@ -1902,35 +1917,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.restore();
     }
 
-    // Minor grid (in world units)
-    ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
-    ctx.lineWidth = 1 / s;
-    ctx.beginPath();
-    for (let x = x0; x <= maxX; x += MINOR_PX) {
-      ctx.moveTo(x, minY);
-      ctx.lineTo(x, maxY);
+    // Minor + Major grid (in world units), dengan rotasi tampilan opsional di sekitar titik (0,0).
+    {
+      ctx.save();
+      if (mmGridRotRad !== 0) ctx.rotate(mmGridRotRad);
+      // Hitung bounds visible dalam mm-grid frame (inverse-rotate 4 sudut world).
+      const cs = Math.cos(-mmGridRotRad), sn = Math.sin(-mmGridRotRad);
+      const localCorners = corners.map((c) => ({ x: c.x * cs - c.y * sn, y: c.x * sn + c.y * cs }));
+      const lMinX = Math.min(...localCorners.map((c) => c.x));
+      const lMaxX = Math.max(...localCorners.map((c) => c.x));
+      const lMinY = Math.min(...localCorners.map((c) => c.y));
+      const lMaxY = Math.max(...localCorners.map((c) => c.y));
+      const lx0 = Math.floor(lMinX / MINOR_PX) * MINOR_PX;
+      const ly0 = Math.floor(lMinY / MINOR_PX) * MINOR_PX;
+      // Minor
+      ctx.strokeStyle = "rgba(180, 90, 60, 0.22)";
+      ctx.lineWidth = 1 / s;
+      ctx.beginPath();
+      for (let x = lx0; x <= lMaxX; x += MINOR_PX) { ctx.moveTo(x, lMinY); ctx.lineTo(x, lMaxY); }
+      for (let y = ly0; y <= lMaxY; y += MINOR_PX) { ctx.moveTo(lMinX, y); ctx.lineTo(lMaxX, y); }
+      ctx.stroke();
+      // Major
+      ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
+      ctx.lineWidth = 1.2 / s;
+      ctx.beginPath();
+      const lxm0 = Math.floor(lMinX / major) * major;
+      const lym0 = Math.floor(lMinY / major) * major;
+      for (let x = lxm0; x <= lMaxX; x += major) { ctx.moveTo(x, lMinY); ctx.lineTo(x, lMaxY); }
+      for (let y = lym0; y <= lMaxY; y += major) { ctx.moveTo(lMinX, y); ctx.lineTo(lMaxX, y); }
+      ctx.stroke();
+      ctx.restore();
     }
-    for (let y = y0; y <= maxY; y += MINOR_PX) {
-      ctx.moveTo(minX, y);
-      ctx.lineTo(maxX, y);
-    }
-    ctx.stroke();
-
-    // Major grid
-    ctx.strokeStyle = "rgba(160, 60, 30, 0.55)";
-    ctx.lineWidth = 1.2 / s;
-    ctx.beginPath();
-    const xm0 = Math.floor(minX / major) * major;
-    const ym0 = Math.floor(minY / major) * major;
-    for (let x = xm0; x <= maxX; x += major) {
-      ctx.moveTo(x, minY);
-      ctx.lineTo(x, maxY);
-    }
-    for (let y = ym0; y <= maxY; y += major) {
-      ctx.moveTo(minX, y);
-      ctx.lineTo(maxX, y);
-    }
-    ctx.stroke();
 
     // Group + sort by Level MDPL (lowest = bottom, highest = top)
     const sortedLevels = [...levels].sort((a, b) => a.mdpl - b.mdpl);
@@ -2572,7 +2589,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const xMin = xs[0], xMax = xs[xs.length - 1];
         const yMin = ys[0], yMax = ys[ys.length - 1];
         const bubbleOff = 22 / s;
+        const gRotRad = ((Number(g.rotation) || 0) * Math.PI) / 180;
         ctx.save();
+        if (gRotRad !== 0) {
+          ctx.translate(g.origin.x, g.origin.y);
+          ctx.rotate(gRotRad);
+          ctx.translate(-g.origin.x, -g.origin.y);
+        }
         ctx.globalAlpha = 0.45;
         ctx.strokeStyle = "rgba(80,80,80,0.85)";
         ctx.lineWidth = 0.3 / s;
@@ -2613,6 +2636,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const yMin = ys[0], yMax = ys[ys.length - 1];
         const bubbleOff = 22 / s;
         const bubbleR = 7 / s;
+
+        // Wrapper rotasi grid struktur (di sekitar origin grid)
+        ctx.save();
+        if (structGridRotRad !== 0) {
+          ctx.translate(ox, oy);
+          ctx.rotate(structGridRotRad);
+          ctx.translate(-ox, -oy);
+        }
 
         // Garis as dash-dot
         ctx.save();
@@ -2764,6 +2795,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
         }
         ctx.restore();
+        ctx.restore(); // tutup wrapper rotasi grid struktur
       }
     }
 
@@ -2855,7 +2887,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -3495,7 +3527,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
     const p = getWorldPos(e);
     if (tool === "grid") {
-      const raw = getWorldPosRaw(e);
+      const rawWorld = getWorldPosRaw(e);
+      // Konversi ke frame lokal grid (un-rotate di sekitar origin) untuk hit-test
+      // sehingga semua logika di bawah tetap dapat memakai sumbu sumbu yang sejajar.
+      const raw = structGridRotRad !== 0
+        ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
+        : rawWorld;
       // -------- MODE: edit kolom (clip polygon) --------
       if (gridEditMode === "clip") {
         const ppm = pxPerMeter;
@@ -3552,11 +3589,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       if (b && raw.x >= b.xMin && raw.x <= b.xMax && raw.y >= b.yMin && raw.y <= b.yMax) {
-        setGridDrag({ kind: "move", startWorld: raw, startOrigin: { ...grid.origin } });
+        setGridDrag({ kind: "move", startWorld: rawWorld, startOrigin: { ...grid.origin } });
         return;
       }
-      // klik di luar → set origin ke titik klik (snap)
-      const snapped = snapOriginPx(raw);
+      // klik di luar → set origin ke titik klik (snap bila paralel dgn mm grid)
+      const snapped = gridsParallel
+        ? (() => {
+            const local = rotateAround(rawWorld, { x: 0, y: 0 }, -mmGridRotRad);
+            const sl = { x: Math.round(local.x / MINOR_PX) * MINOR_PX, y: Math.round(local.y / MINOR_PX) * MINOR_PX };
+            return rotateAround(sl, { x: 0, y: 0 }, mmGridRotRad);
+          })()
+        : rawWorld;
       updateGrid({ origin: snapped });
       return;
     }
@@ -3854,15 +3897,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     if (gridDrag) {
-      const raw = getWorldPosRaw(e);
+      const rawWorld = getWorldPosRaw(e);
       if (gridDrag.kind === "move") {
-        const dx = raw.x - gridDrag.startWorld.x;
-        const dy = raw.y - gridDrag.startWorld.y;
-        const next = snapOriginPx({ x: gridDrag.startOrigin.x + dx, y: gridDrag.startOrigin.y + dy });
+        // Move: pakai world delta. Snap origin ke mm grid hanya bila kedua grid paralel.
+        const dx = rawWorld.x - gridDrag.startWorld.x;
+        const dy = rawWorld.y - gridDrag.startWorld.y;
+        const cand = { x: gridDrag.startOrigin.x + dx, y: gridDrag.startOrigin.y + dy };
+        const next = gridsParallel
+          ? (() => {
+              // Snap dalam frame mm grid (rotasi mmGridRotRad di sekitar 0,0)
+              const local = rotateAround(cand, { x: 0, y: 0 }, -mmGridRotRad);
+              const snapLocal = { x: Math.round(local.x / MINOR_PX) * MINOR_PX, y: Math.round(local.y / MINOR_PX) * MINOR_PX };
+              return rotateAround(snapLocal, { x: 0, y: 0 }, mmGridRotRad);
+            })()
+          : cand;
         if (next.x !== grid.origin.x || next.y !== grid.origin.y) updateGrid({ origin: next });
       } else {
-        const dxm = (raw.x - gridDrag.startWorld.x) / pxPerMeter;
-        const dym = (raw.y - gridDrag.startWorld.y) / pxPerMeter;
+        // Corner: delta dihitung di frame lokal grid (rotasi struct).
+        const rawLocal = structGridRotRad !== 0
+          ? rotateAround(rawWorld, gridDrag.startOrigin, -structGridRotRad)
+          : rawWorld;
+        const dxm = (rawLocal.x - gridDrag.startWorld.x) / pxPerMeter;
+        const dym = (rawLocal.y - gridDrag.startWorld.y) / pxPerMeter;
         const extX = gridDrag.corner === "tr" || gridDrag.corner === "br" ? 1 : -1;
         const extY = gridDrag.corner === "bl" || gridDrag.corner === "br" ? 1 : -1;
         const addX = Math.round((dxm * extX) / gridDrag.unit);
@@ -3871,15 +3927,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const newSpansY = adjustSpans(gridDrag.startSpansY, addY, gridDrag.unit, extY < 0);
         const actualAddX = newSpansX.length - gridDrag.startSpansX.length;
         const actualAddY = newSpansY.length - gridDrag.startSpansY.length;
-        const newOriginX = extX < 0 ? gridDrag.startOrigin.x - actualAddX * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.x;
-        const newOriginY = extY < 0 ? gridDrag.startOrigin.y - actualAddY * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.y;
+        // Pergeseran origin saat extend ke arah negatif: vektor sumbu lokal × jarak,
+        // dirotasi ke world.
+        const dxLocal = extX < 0 ? -actualAddX * gridDrag.unit * pxPerMeter : 0;
+        const dyLocal = extY < 0 ? -actualAddY * gridDrag.unit * pxPerMeter : 0;
+        const cs = Math.cos(structGridRotRad), sn = Math.sin(structGridRotRad);
+        const newOriginX = gridDrag.startOrigin.x + dxLocal * cs - dyLocal * sn;
+        const newOriginY = gridDrag.startOrigin.y + dxLocal * sn + dyLocal * cs;
         updateGrid({ spansX: newSpansX, spansY: newSpansY, origin: { x: newOriginX, y: newOriginY } });
       }
       return;
     }
 
     if (clipDrag && clipDrag.idx >= 0) {
-      const raw = getWorldPosRaw(e);
+      const rawWorld = getWorldPosRaw(e);
+      const raw = structGridRotRad !== 0
+        ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
+        : rawWorld;
       const ppm = pxPerMeter;
       const mx = (raw.x - grid.origin.x) / ppm;
       const my = (raw.y - grid.origin.y) / ppm;
@@ -4020,7 +4084,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setClipDrag(null);
       // Tap statis (tidak digeser) di area kosong → tambah titik ke draft
       if (cd.clipId === "__add__" && !cd.moved) {
-        const raw = getWorldPosRaw(e);
+        const rawWorld = getWorldPosRaw(e);
+        const raw = structGridRotRad !== 0
+          ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
+          : rawWorld;
         const mx = (raw.x - grid.origin.x) / pxPerMeter;
         const my = (raw.y - grid.origin.y) / pxPerMeter;
         const draft = clipDraft ?? { pts: [] };
@@ -4679,6 +4746,91 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           0° = utara ke atas. Rotasi searah jarum jam. Muncul di kanan bawah tiap denah pada slide.
         </p>
       </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Rotasi Grid</Label>
+        <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+          {/* Grid milimeter block (display-only) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Milimeter Block</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {mmGridRotation.toFixed(1)}°
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                step="1"
+                value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onChange({ mmGridRotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-7 text-xs"
+              />
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => onChange({ mmGridRotation: 0 })}
+                disabled={mmGridRotation === 0}
+                title="Kembalikan ke 0° tanpa memindahkan sketsa"
+              >
+                Reset
+              </Button>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Memutar tampilan kertas milimeter block saja. Tidak mengubah koordinat sketsa, dapat dikembalikan ke 0° tanpa pergeseran.
+            </p>
+          </div>
+
+          {/* Grid struktur (per grid aktif) */}
+          <div className="space-y-1 border-t border-border/40 pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Grid Struktur {editGridIdx === 0 ? "(Primer)" : `(Extra ${editGridIdx})`}
+              </span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {structGridRotation.toFixed(1)}°
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                step="1"
+                value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-7 text-xs"
+              />
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => updateGrid({ rotation: 0 })}
+                disabled={structGridRotation === 0}
+                title="Kembalikan rotasi grid struktur ke 0°"
+              >
+                Reset
+              </Button>
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => updateGrid({ rotation: mmGridRotation })}
+                disabled={structGridRotation === mmGridRotation}
+                title="Samakan dengan rotasi milimeter block agar paralel"
+              >
+                = mm
+              </Button>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              {gridsParallel
+                ? "Paralel dengan milimeter block → snap to grid aktif saat menggeser titik nol grid struktur."
+                : "Tidak paralel dengan milimeter block → snap to grid dimatikan untuk menggeser grid struktur."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+
 
 
 
