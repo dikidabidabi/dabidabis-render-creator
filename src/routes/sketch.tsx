@@ -31,6 +31,7 @@ import {
   Waypoints,
   Scissors,
   Grid3x3,
+  Paintbrush,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,15 @@ import {
   normalizeGridExtras,
   type ColumnClip,
 } from "@/lib/structural-grid";
+import {
+  type EdgeMaterial,
+  type EdgeSegment,
+  computeStraightSegments,
+  pickSegmentAt,
+  segmentIdFor,
+  MATERIAL_COLORS,
+  MATERIAL_LABELS,
+} from "@/lib/edge-segments";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -253,6 +263,7 @@ type Sketch = {
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
   structuralGrid?: StructuralGrid; // Modul Struktur parametric grid (primer)
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
+  edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
 };
 
 type StoreShape = {
@@ -686,6 +697,17 @@ function normalizeSketch(s: any): Sketch {
     sectionCut: undefined,
     structuralGrid: normalizeGrid(s?.structuralGrid),
     structuralGridExtras: normalizeGridExtras(s?.structuralGridExtras),
+    edgeAttrs: (() => {
+      const raw = s?.edgeAttrs;
+      if (!raw || typeof raw !== "object") return {};
+      const valid: Record<string, EdgeMaterial> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (v === "solid" || v === "curtain" || v === "window") {
+          valid[k] = v;
+        }
+      }
+      return valid;
+    })(),
   };
 }
 
@@ -1552,7 +1574,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick">("line");
+  const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -2036,6 +2059,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
     ctx.globalAlpha = 1;
+
+    // ----- Overlay material edges (Attribute Painter) -----
+    {
+      const attrs = sketch.edgeAttrs ?? {};
+      const hasAny = Object.keys(attrs).length > 0;
+      if (hasAny || tool === "pick") {
+        const allSegs = computeStraightSegments(lines);
+        ctx.save();
+        ctx.lineCap = "round";
+        for (const seg of allSegs) {
+          if (activeLvlId && seg.levelId !== activeLvlId) continue;
+          const mat = attrs[seg.id];
+          if (!mat) continue;
+          ctx.strokeStyle = MATERIAL_COLORS[mat];
+          ctx.lineWidth = (mat === "solid" ? 4.5 : 4) / s;
+          ctx.globalAlpha = 0.95;
+          ctx.beginPath();
+          ctx.moveTo(seg.a.x, seg.a.y);
+          ctx.lineTo(seg.b.x, seg.b.y);
+          ctx.stroke();
+        }
+        // Sorot node split saat pick aktif supaya batas segmen terlihat.
+        if (tool === "pick") {
+          const nodeKeys = new Set<string>();
+          for (const seg of allSegs) {
+            if (activeLvlId && seg.levelId !== activeLvlId) continue;
+            nodeKeys.add(`${seg.a.x.toFixed(3)},${seg.a.y.toFixed(3)}`);
+            nodeKeys.add(`${seg.b.x.toFixed(3)},${seg.b.y.toFixed(3)}`);
+          }
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "rgba(232,93,58,0.95)";
+          ctx.lineWidth = 1.5 / s;
+          for (const k of nodeKeys) {
+            const [xs, ys] = k.split(",");
+            const x = Number(xs), y = Number(ys);
+            ctx.beginPath();
+            ctx.arc(x, y, 3.5 / s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+    }
+
 
     // Active drawing preview (during drag)
     if (drawing) {
@@ -3334,6 +3403,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
+    } else if (tool === "pick") {
+      const raw = getWorldPosRaw(e);
+      const tol = 10 / view.s;
+      const segs = computeStraightSegments(lines).filter(
+        (s) => !activeLvlId || s.levelId === activeLvlId,
+      );
+      const hit = pickSegmentAt(raw, segs, tol);
+      if (!hit) return;
+      const prev = sketch.edgeAttrs ?? {};
+      const next: Record<string, EdgeMaterial> = { ...prev };
+      // Alt/Shift = hapus attribute.
+      if (e.altKey || e.shiftKey) {
+        delete next[hit.id];
+      } else {
+        next[hit.id] = pickMaterial;
+      }
+      pushHistory();
+      onChange({ edgeAttrs: next });
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
@@ -4215,7 +4302,65 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Grid3x3 className="mr-1.5 h-4 w-4" /> Grid Struktur
           </Button>
+          <Button
+            variant={tool === "pick" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("pick"); }}
+            className={cn(tool === "pick" && "bg-gradient-ember shadow-ember")}
+            title="Pick Material — klik segmen garis untuk menandai jenis selubung (Solid/Curtain/Window). Alt-klik untuk hapus."
+          >
+            <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
+          </Button>
         </div>
+        {tool === "pick" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Material Selubung
+            </Label>
+            <div className="grid grid-cols-1 gap-1.5">
+              {(["solid", "curtain", "window"] as EdgeMaterial[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPickMaterial(m)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition",
+                    pickMaterial === m
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                      : "border-border/60 hover:bg-muted/40",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className="h-4 w-4 rounded-sm border border-black/20"
+                    style={{ background: MATERIAL_COLORS[m] }}
+                  />
+                  <span className="font-medium">{MATERIAL_LABELS[m]}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Klik segmen garis di kanvas untuk menandai. Segmen dipecah otomatis
+              pada tiap titik potong (node). Alt/Shift + klik = hapus tanda.
+              Tanda ini hanya mengubah notasi di slide Denah & Potongan, tidak
+              memengaruhi massa 3D.
+            </p>
+            {Object.keys(sketch.edgeAttrs ?? {}).length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  pushHistory();
+                  onChange({ edgeAttrs: {} });
+                  toast.success("Semua tanda material dihapus");
+                }}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Reset semua tanda
+              </Button>
+            )}
+          </div>
+        )}
         {tool === "grid" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <div className="flex items-center justify-between">
