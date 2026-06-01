@@ -6992,3 +6992,81 @@ function LevelsPanel({
     </div>
   );
 }
+
+// ============================================================
+// Floor Tool — panel sidebar untuk pembuat lantai (slab 150mm)
+// ============================================================
+function FloorToolPanel({
+  mode,
+  onMode,
+  draft,
+  level,
+  onCommit,
+  onCancel,
+}: {
+  mode: FloorMode;
+  onMode: (m: FloorMode) => void;
+  draft: { outer: Point[] | null; holes: Point[][] } | null;
+  level: Level | null;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const hasOuter = !!(draft && draft.outer && draft.outer.length >= 3);
+  const holeCount = draft?.holes?.length ?? 0;
+  return (
+    <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          Alat Lantai — slab {FLOOR_THICKNESS_MM} mm ↓
+        </Label>
+        <span className="text-[10px] text-muted-foreground">
+          {level ? `${level.name} · MDPL ${level.mdpl.toFixed(2)} m` : "Tanpa level"}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {(
+          [
+            { id: "rect", label: "Persegi", hint: "Drag dua sudut diagonal" },
+            { id: "line", label: "Garis", hint: "Klik dua titik tiap segmen, dobel-klik tutup" },
+            { id: "polyline", label: "Polyline", hint: "Klik banyak titik, dobel-klik tutup" },
+            { id: "attach", label: "Attach Garis", hint: "Klik segmen perimeter (outer), lalu segmen lubang (void)" },
+          ] as { id: FloorMode; label: string; hint: string }[]
+        ).map((m) => (
+          <Button
+            key={m.id}
+            variant={mode === m.id ? "default" : "outline"}
+            size="sm"
+            className={cn("h-8 text-xs", mode === m.id && "bg-gradient-ember shadow-ember")}
+            onClick={() => onMode(m.id)}
+            title={m.hint}
+          >
+            {m.label}
+          </Button>
+        ))}
+      </div>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        {mode === "attach"
+          ? "Klik segmen pada perimeter terluar untuk men-set outer; klik segmen poligon di dalamnya untuk menambah void."
+          : "Outer langsung di-commit setelah gesture selesai (tanpa void)."}
+      </p>
+      {mode === "attach" && (
+        <div className="rounded-sm bg-background/60 p-2 text-[10px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">
+              Outer: <span className={cn(hasOuter ? "text-ember" : "text-muted-foreground")}>{hasOuter ? "OK" : "—"}</span>
+            </span>
+            <span className="text-muted-foreground">Void: {holeCount}</span>
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            <Button size="sm" className="h-7 flex-1 text-[10px]" disabled={!hasOuter} onClick={onCommit}>
+              <Check className="mr-1 h-3 w-3" /> Selesai
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={onCancel}>
+              <X className="mr-1 h-3 w-3" /> Batal
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
