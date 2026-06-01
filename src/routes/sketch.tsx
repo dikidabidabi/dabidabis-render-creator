@@ -5134,7 +5134,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <MoveHorizontal className="mr-1.5 h-4 w-4" /> Offset
           </Button>
+          <Button
+            variant={tool === "floor" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setFloorDraft(null); setTool("floor"); }}
+            className={cn(tool === "floor" && "bg-gradient-ember shadow-ember")}
+            title="Alat Lantai — slab 150mm di bawah MDPL level aktif (Persegi / Garis / Polyline / Attach Garis)"
+          >
+            <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
+          </Button>
         </div>
+        {tool === "floor" && (
+          <FloorToolPanel
+            mode={floorMode}
+            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
+            draft={floorDraft}
+            level={levels.find((l) => l.id === activeLvlId) ?? null}
+            onCommit={() => commitFloor()}
+            onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
+          />
+        )}
         {tool === "offset" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Offset — Jarak (cm)</Label>
