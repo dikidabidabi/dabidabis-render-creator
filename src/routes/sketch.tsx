@@ -2313,11 +2313,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
       if (tool === "rect") {
-        const x = Math.min(drawing.a.x, drawing.b.x);
-        const y = Math.min(drawing.a.y, drawing.b.y);
-        const w = Math.abs(drawing.b.x - drawing.a.x);
-        const h = Math.abs(drawing.b.y - drawing.a.y);
-        ctx.rect(x, y, w, h);
+        // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
+        // (un-rotate kedua sudut diagonal), lalu rotasi balik 4 sudutnya.
+        const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
+        const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
+        const lx1 = Math.min(la.x, lb.x), lx2 = Math.max(la.x, lb.x);
+        const ly1 = Math.min(la.y, lb.y), ly2 = Math.max(la.y, lb.y);
+        const corners = [
+          { x: lx1, y: ly1 }, { x: lx2, y: ly1 },
+          { x: lx2, y: ly2 }, { x: lx1, y: ly2 },
+        ].map((p) => rotateAround(p, { x: 0, y: 0 }, mmGridRotRad));
+        ctx.moveTo(corners[0].x, corners[0].y);
+        for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+        ctx.closePath();
         ctx.stroke();
         ctx.fillStyle = "rgba(232, 93, 58, 0.10)";
         ctx.fill();
@@ -3171,15 +3179,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Commit a rectangle from two diagonal corners
   const commitRect = useCallback(
     (a: Point, b: Point) => {
-      const minX = Math.min(a.x, b.x);
-      const maxX = Math.max(a.x, b.x);
-      const minY = Math.min(a.y, b.y);
-      const maxY = Math.max(a.y, b.y);
-      if (maxX - minX < 4 || maxY - minY < 4) return;
-      const p1 = { x: minX, y: minY };
-      const p2 = { x: maxX, y: minY };
-      const p3 = { x: maxX, y: maxY };
-      const p4 = { x: minX, y: maxY };
+      // Persegi mengikuti rotasi grid milimeter block. Sudut diagonal di-
+      // un-rotate ke frame lokal, dibangun axis-aligned, lalu dirotasi balik.
+      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
+      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
+      const lminX = Math.min(la.x, lb.x);
+      const lmaxX = Math.max(la.x, lb.x);
+      const lminY = Math.min(la.y, lb.y);
+      const lmaxY = Math.max(la.y, lb.y);
+      if (lmaxX - lminX < 4 || lmaxY - lminY < 4) return;
+      const lp1 = { x: lminX, y: lminY };
+      const lp2 = { x: lmaxX, y: lminY };
+      const lp3 = { x: lmaxX, y: lmaxY };
+      const lp4 = { x: lminX, y: lmaxY };
+      const p1 = rotateAround(lp1, { x: 0, y: 0 }, mmGridRotRad);
+      const p2 = rotateAround(lp2, { x: 0, y: 0 }, mmGridRotRad);
+      const p3 = rotateAround(lp3, { x: 0, y: 0 }, mmGridRotRad);
+      const p4 = rotateAround(lp4, { x: 0, y: 0 }, mmGridRotRad);
       const { levels: nextLevelsBase, activeId } = ensureLevels();
       const newLines: Line[] = [
         { a: p1, b: p2, kind: "straight", levelId: activeId },
@@ -3217,7 +3233,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange(patch);
       toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
     },
-    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
+    [lines, layers, levels, activeLvlId, pxPerMeter, mmGridRotRad, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
   // Commit sebuah polyline. `closed` = true bila berakhir di titik awal,
