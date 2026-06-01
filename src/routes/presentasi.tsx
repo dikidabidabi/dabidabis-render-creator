@@ -4913,9 +4913,6 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const a = layer.points[i];
       const b = layer.points[(i + 1) % layer.points.length];
       const n = outwardNormal(a, b, ccw);
-      // Back-face culling: di proyeksi dimetric, view direction (plan) = (+1, +1).
-      // Hanya render dinding yang outward-normal-nya menghadap kamera.
-      if (n.x + n.y <= 0) continue;
       const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
       const dir = classifyBearing(bearing);
       const col = FACADE_COLORS[dir];
@@ -4940,7 +4937,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
     quads.push({
       pts: topPts,
-      depth: 1e8, // selalu paling depan/atas
+      depth: avgDepthForPoints(layer.points, cx, cy),
       fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
@@ -5073,6 +5070,11 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       </div>
     </div>
   );
+}
+
+function avgDepthForPoints(points: Point[], cx: number, cy: number): number {
+  if (points.length === 0) return 0;
+  return points.reduce((sum, p) => sum + (p.x - cx) + (p.y - cy), 0) / points.length;
 }
 
 function LegendRow({ swatch, border, title, body }: { swatch: string; border: string; title: string; body: string }) {
