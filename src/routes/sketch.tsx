@@ -3535,6 +3535,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const raw = structGridRotRad !== 0
         ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
         : rawWorld;
+      // -------- MODE: jadikan grid dari line/polyline --------
+      if (gridEditMode === "fromLine") {
+        const tolPx = 10 / view.s;
+        // cari straight line terdekat pada level aktif
+        let bestIdx = -1;
+        let bestD = Infinity;
+        lines.forEach((ln, i) => {
+          if ((ln.kind ?? "straight") !== "straight") return;
+          if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) return;
+          const d = pointToLine(rawWorld, ln);
+          if (d < bestD) { bestD = d; bestIdx = i; }
+        });
+        if (bestIdx < 0 || bestD > tolPx) {
+          toast.error("Tidak ada garis yang dipilih");
+          return;
+        }
+        createGridFromLine(bestIdx);
+        return;
+      }
       // -------- MODE: edit kolom (clip polygon) --------
       if (gridEditMode === "clip") {
         const ppm = pxPerMeter;
