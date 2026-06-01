@@ -4466,6 +4466,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const curTool = tool;
     setDrawing(null);
 
+    if (tool === "floor" && floorMode === "rect") {
+      // Bangun persegi axis-aligned (mengikuti rotasi mm-grid) lalu commit sebagai outer floor.
+      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
+      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
+      const lminX = Math.min(la.x, lb.x);
+      const lmaxX = Math.max(la.x, lb.x);
+      const lminY = Math.min(la.y, lb.y);
+      const lmaxY = Math.max(la.y, lb.y);
+      if (lmaxX - lminX < 4 || lmaxY - lminY < 4) return;
+      const p1 = rotateAround({ x: lminX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
+      const p2 = rotateAround({ x: lmaxX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
+      const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
+      const p4 = rotateAround({ x: lminX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
+      commitFloorFromPolys([p1, p2, p3, p4], []);
+      return;
+    }
+
     if (curTool === "rect") {
       commitRect(a, b);
       return;
