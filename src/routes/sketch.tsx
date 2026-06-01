@@ -4520,7 +4520,88 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
           </Button>
+          <Button
+            variant={tool === "door" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("door"); }}
+            className={cn(tool === "door" && "bg-gradient-ember shadow-ember")}
+            title="Pintu — tap di dinding (engsel A), geser searah dinding (lebar), lalu tegak lurus untuk arah ayun."
+          >
+            <DoorOpen className="mr-1.5 h-4 w-4" /> Pintu
+          </Button>
         </div>
+        {tool === "door" && (
+          <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pintu — Parameter</Label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {([1, 2] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setDoorLeaves(n)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1.5 text-xs font-medium transition",
+                    doorLeaves === n
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                      : "border-border/60 hover:bg-muted/40",
+                  )}
+                >
+                  {n === 1 ? "1 Daun" : "2 Daun"}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] text-muted-foreground">Lebar (cm)</Label>
+                <Input
+                  type="number"
+                  min={90}
+                  max={200}
+                  step={5}
+                  value={doorWidthCm}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (!Number.isFinite(v)) return;
+                    setDoorWidthCm(Math.max(90, Math.min(200, Math.round(v))));
+                  }}
+                  className="h-7 w-20 text-xs"
+                />
+              </div>
+              <input
+                type="range"
+                min={90}
+                max={200}
+                step={1}
+                value={doorWidthCm}
+                onChange={(e) => setDoorWidthCm(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              1) Tap di garis dinding — titik akan snap ke dinding (engsel).
+              2) Geser searah dinding untuk menentukan arah pintu.
+              3) Geser tegak lurus untuk memilih sisi ayun, lalu lepas.
+              Notasi muncul di Slide Denah; massa 3D tidak berubah.
+            </p>
+            {(sketch.doors?.length ?? 0) > 0 && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] text-muted-foreground">{sketch.doors!.length} pintu</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    pushHistory();
+                    onChange({ doors: [] });
+                    toast.success("Semua pintu dihapus");
+                  }}
+                  className="h-7 text-xs"
+                >
+                  <Trash2 className="mr-1.5 h-3 w-3" /> Reset
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         {tool === "pick" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
