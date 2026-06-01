@@ -32,6 +32,13 @@ import {
   computeAllStructuralStats,
   collectGrids,
 } from "@/lib/structural-grid";
+import {
+  computeStraightSegments,
+  segmentIdFor,
+  intersectSegmentWithCut,
+  type EdgeMaterial,
+  type EdgeSegment,
+} from "@/lib/edge-segments";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
