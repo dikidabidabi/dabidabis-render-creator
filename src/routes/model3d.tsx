@@ -84,6 +84,14 @@ type Sketch = {
   northRotation?: number;
   structuralGrid?: StructuralGrid;
   structuralGridExtras?: StructuralGrid[];
+  floors?: {
+    id: string;
+    levelId: string;
+    outer: Point[];
+    holes?: Point[][];
+    thicknessMm: number;
+    createdAt: number;
+  }[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -284,6 +292,76 @@ function ExtrudedFloor({
     </group>
   );
 }
+
+// Floor slab — top permukaan di baseY, extrude 150mm ke bawah, mendukung holes.
+function FloorSlab({
+  outer,
+  holes,
+  origin,
+  mPerPx,
+  topY,
+  thickness,
+  color,
+  highlighted,
+}: {
+  outer: Point[];
+  holes?: Point[][];
+  origin: Point;
+  mPerPx: number;
+  topY: number;
+  thickness: number;
+  color: string;
+  highlighted: boolean;
+}) {
+  const geometry = useMemo(() => {
+    if (outer.length < 3 || thickness <= 0) return null;
+    const shape = new THREE.Shape();
+    outer.forEach((p, i) => {
+      const x = (p.x - origin.x) * mPerPx;
+      const y = (p.y - origin.y) * mPerPx;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    });
+    shape.closePath();
+    for (const hole of holes ?? []) {
+      if (hole.length < 3) continue;
+      const path = new THREE.Path();
+      hole.forEach((p, i) => {
+        const x = (p.x - origin.x) * mPerPx;
+        const y = (p.y - origin.y) * mPerPx;
+        if (i === 0) path.moveTo(x, y);
+        else path.lineTo(x, y);
+      });
+      path.closePath();
+      shape.holes.push(path);
+    }
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+    geo.rotateX(Math.PI / 2);
+    geo.scale(1, -1, 1);
+    return geo;
+  }, [outer, holes, origin.x, origin.y, mPerPx, thickness]);
+
+  if (!geometry) return null;
+
+  // baseY = topY - thickness, supaya top face berada di topY.
+  return (
+    <group position={[0, topY - thickness, 0]}>
+      <mesh geometry={geometry} castShadow receiveShadow>
+        <meshStandardMaterial
+          color={color}
+          roughness={0.6}
+          metalness={0.08}
+          side={THREE.DoubleSide}
+          emissive={highlighted ? color : "#000000"}
+          emissiveIntensity={highlighted ? 0.18 : 0}
+        />
+        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#1a1a1a"} />
+      </mesh>
+    </group>
+  );
+}
+
+
 
 function GroundPlane({
   points,
@@ -540,6 +618,29 @@ function Scene({
           highlighted={false}
         />
       ))}
+
+      {(sketch.floors ?? []).map((fl) => {
+        const lvl = sketch.levels.find((l) => l.id === fl.levelId);
+        if (!lvl) return null;
+        const topY = lvl.mdpl - baseMdpl;
+        const thick = (fl.thicknessMm ?? 150) / 1000;
+        const slabColor = colorMode === "bw" ? "#c8c8c8" : "#a8a29e";
+        return (
+          <FloorSlab
+            key={`slab_${fl.id}`}
+            outer={fl.outer}
+            holes={fl.holes}
+            origin={origin}
+            mPerPx={mPerPx}
+            topY={topY}
+            thickness={thick}
+            color={slabColor}
+            highlighted={highlightLevelId === lvl.id}
+          />
+        );
+      })}
+
+
 
       <StructuralColumns
         sketch={sketch}
