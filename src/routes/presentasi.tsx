@@ -4935,7 +4935,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     quads.push({
       pts: topPts,
       depth: 1e8, // selalu paling depan/atas
-      fill: "rgba(40,40,40,0.55)",
+      fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
     });
