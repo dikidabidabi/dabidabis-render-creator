@@ -265,6 +265,7 @@ type Sketch = {
   structuralGrid?: StructuralGrid; // Modul Struktur parametric grid (primer)
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
   edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
+  doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
 };
 
 type StoreShape = {
