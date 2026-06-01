@@ -1261,10 +1261,59 @@ function effectiveNorthDeg(sketch: Sketch): number {
   return ((m % 360) + 360) % 360;
 }
 
-function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
+function SlideCompass({ rotation, size = 92, draggableId }: { rotation: number; size?: number; draggableId?: string }) {
   const r = ((rotation % 360) + 360) % 360;
+  const [pos, setPos] = useState<CompassView>(() => (draggableId ? loadCompassView(draggableId) ?? { x: 14, y: 14 } : { x: 0, y: 0 }));
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const dragRef = useRef<{ startX: number; startY: number; origin: CompassView } | null>(null);
+
+  useEffect(() => {
+    if (draggableId) setPos(loadCompassView(draggableId) ?? { x: 14, y: 14 });
+  }, [draggableId]);
+
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggableId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origin: posRef.current };
+  };
+  const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = dragRef.current;
+    if (!draggableId || !g) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const next = { x: g.origin.x + e.clientX - g.startX, y: g.origin.y + e.clientY - g.startY };
+    setPos(next);
+  };
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggableId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = null;
+    saveCompassView(draggableId, posRef.current);
+  };
+
   return (
-    <div style={{ position: "absolute", right: 10, bottom: 10, width: size, height: size, pointerEvents: "none", filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.18))" }}>
+    <div
+      onPointerDown={startDrag}
+      onPointerMove={moveDrag}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      title={draggableId ? "Tarik kompas untuk mengatur posisi" : undefined}
+      style={{
+        position: "absolute",
+        ...(draggableId ? { left: pos.x, top: pos.y } : { right: 10, bottom: 10 }),
+        width: size,
+        height: size,
+        cursor: draggableId ? "move" : "default",
+        touchAction: draggableId ? "none" : "auto",
+        pointerEvents: draggableId ? "auto" : "none",
+        filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.18))",
+        zIndex: 6,
+      }}
+    >
       <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
         <defs>
           <linearGradient id="compassBg" x1="0" y1="0" x2="0" y2="1">
