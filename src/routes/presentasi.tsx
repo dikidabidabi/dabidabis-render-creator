@@ -718,6 +718,7 @@ type Slide =
   | { kind: "shadow-seasonal"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
+  | { kind: "explode-axo"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
