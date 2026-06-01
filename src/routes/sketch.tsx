@@ -3600,7 +3600,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
-
+    if (editDrag) {
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
       setEditDrag({ key: keyOf(newPos), coord: newPos, target: editDrag.target });
