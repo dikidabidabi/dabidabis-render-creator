@@ -33,6 +33,9 @@ import {
   Grid3x3,
   Paintbrush,
   DoorOpen,
+  Circle as CircleIcon,
+  Crop,
+  MoveHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -267,6 +270,14 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
   edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
+  circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
+};
+
+type Circle = {
+  id: string;
+  c: Point;
+  r: number; // radius (px world)
+  levelId?: string;
 };
 
 type StoreShape = {
@@ -715,6 +726,23 @@ function normalizeSketch(s: any): Sketch {
       const arr = normalizeDoors(s?.doors);
       const validLvl = new Set(levels.map((l) => l.id));
       return arr.map((d) => (d.levelId && validLvl.has(d.levelId) ? d : { ...d, levelId: fallback }));
+    })(),
+    circles: (() => {
+      const raw = s?.circles;
+      if (!Array.isArray(raw)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const out: Circle[] = [];
+      for (const c of raw) {
+        if (!c || typeof c !== "object") continue;
+        const cx = Number(c.c?.x), cy = Number(c.c?.y), r = Number(c.r);
+        if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r) || r <= 0) continue;
+        const lid = typeof c.levelId === "string" && validLvl.has(c.levelId) ? c.levelId : fallback;
+        out.push({
+          id: typeof c.id === "string" && c.id ? c.id : `CIR${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          c: { x: cx, y: cy }, r, levelId: lid,
+        });
+      }
+      return out;
     })(),
   };
 }
@@ -1582,7 +1610,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset">("line");
+  // Circle tool — center + drag radius
+  const [circleDraft, setCircleDraft] = useState<{ c: Point; cur: Point; levelId?: string } | null>(null);
+  // Offset tool — jarak offset (cm pada skala asli)
+  const [offsetCm, setOffsetCm] = useState<number>(100);
   const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
   // Door tool — parameter & live draft (3-langkah gesture single drag).
   const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
@@ -2072,6 +2104,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.fill();
         }
       }
+
+      // Lingkaran (circles) per level
+      const lvlCircles = (sketch.circles ?? []).filter(
+        (c) => (c.levelId ?? fallbackLvl) === lvl.id,
+      );
+      if (lvlCircles.length) {
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.lineWidth = 2 / s;
+        ctx.fillStyle = "#1a1a1a";
+        for (const cc of lvlCircles) {
+          ctx.beginPath();
+          ctx.arc(cc.c.x, cc.c.y, cc.r, 0, Math.PI * 2);
+          ctx.stroke();
+          // tanda pusat
+          ctx.beginPath();
+          ctx.arc(cc.c.x, cc.c.y, 2 / s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -2265,6 +2316,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       ctx.setLineDash([]);
     }
+
+    // Circle draft preview
+    if (circleDraft && tool === "circle") {
+      const r = Math.hypot(circleDraft.cur.x - circleDraft.c.x, circleDraft.cur.y - circleDraft.c.y);
+      ctx.save();
+      ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
+      ctx.lineWidth = 2 / s;
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath();
+      ctx.arc(circleDraft.c.x, circleDraft.c.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // garis radius + label
+      ctx.beginPath();
+      ctx.moveTo(circleDraft.c.x, circleDraft.c.y);
+      ctx.lineTo(circleDraft.cur.x, circleDraft.cur.y);
+      ctx.lineWidth = 1 / s;
+      ctx.stroke();
+      const fontPx = 11 / s;
+      ctx.font = `600 ${fontPx}px var(--font-display), sans-serif`;
+      ctx.fillStyle = "rgba(232,93,58,0.95)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`R ${(r / pxPerMeter).toFixed(2)} m`, circleDraft.cur.x + 4 / s, circleDraft.cur.y - 4 / s);
+      // pusat
+      ctx.fillStyle = "rgba(232,93,58,1)";
+      ctx.beginPath();
+      ctx.arc(circleDraft.c.x, circleDraft.c.y, 3 / s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
 
     // Polyline draft preview
     if (polyDraft) {
@@ -2771,7 +2854,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -3586,6 +3669,91 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         nx: -dirY, ny: dirX,
         levelId: bestLn.levelId ?? activeLvlId ?? undefined,
       });
+    } else if (tool === "circle") {
+      setCircleDraft({ c: p, cur: p, levelId: activeLvlId ?? undefined });
+    } else if (tool === "trim" || tool === "offset") {
+      const raw = getWorldPosRaw(e);
+      const tolPx = 14 / view.s;
+      // cari garis lurus terdekat di level aktif
+      let bestIdx = -1;
+      let bestD = Infinity;
+      let bestProj: Point | null = null;
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        if ((ln.kind ?? "straight") !== "straight") return;
+        if (isLineLocked(ln)) return;
+        const proj = projectOnSegment(raw, ln.a, ln.b);
+        const d = dist(raw, proj);
+        if (d < bestD) { bestD = d; bestIdx = i; bestProj = proj; }
+      });
+      if (bestIdx < 0 || !bestProj || bestD > tolPx * 3) {
+        toast.error("Tap pada garis lurus");
+        return;
+      }
+      const ln = lines[bestIdx];
+      if (tool === "offset") {
+        // arah normal: dari proyeksi ke titik tap
+        const dx = ln.b.x - ln.a.x, dy = ln.b.y - ln.a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        let nx = -dy / L, ny = dx / L;
+        const bp: Point = bestProj;
+        const side = (raw.x - bp.x) * nx + (raw.y - bp.y) * ny;
+        if (side < 0) { nx = -nx; ny = -ny; }
+        const offPx = (offsetCm / 100) * pxPerMeter;
+        const newLine: Line = {
+          a: { x: ln.a.x + nx * offPx, y: ln.a.y + ny * offPx },
+          b: { x: ln.b.x + nx * offPx, y: ln.b.y + ny * offPx },
+          kind: "straight",
+          levelId: ln.levelId,
+        };
+        pushHistory();
+        onChange({ lines: [...lines, newLine] });
+        toast.success(`Offset ${offsetCm} cm`);
+        return;
+      }
+      // TRIM/EXTEND: cari garis lurus lain terdekat sebagai boundary
+      let bIdx = -1;
+      let bD = Infinity;
+      lines.forEach((ln2, j) => {
+        if (j === bestIdx) return;
+        if (activeLvlId && ln2.levelId !== activeLvlId) return;
+        if ((ln2.kind ?? "straight") !== "straight") return;
+        const proj = projectOnSegment(raw, ln2.a, ln2.b);
+        const d = dist(raw, proj);
+        if (d < bD) { bD = d; bIdx = j; }
+      });
+      if (bIdx < 0) {
+        toast.error("Butuh garis lain sebagai batas");
+        return;
+      }
+      const lnB = lines[bIdx];
+      // hitung interseksi infinite-line A vs infinite-line B
+      const x1 = ln.a.x, y1 = ln.a.y, x2 = ln.b.x, y2 = ln.b.y;
+      const x3 = lnB.a.x, y3 = lnB.a.y, x4 = lnB.b.x, y4 = lnB.b.y;
+      const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+      if (Math.abs(den) < 1e-6) {
+        toast.error("Garis sejajar — tidak ada interseksi");
+        return;
+      }
+      const tA = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+      const ix = x1 + tA * (x2 - x1);
+      const iy = y1 + tA * (y2 - y1);
+      // ujung mana dari ln yang lebih dekat ke titik tap → itu yang dipindah ke interseksi
+      const dA = dist(raw, ln.a);
+      const dB = dist(raw, ln.b);
+      const moveA = dA <= dB;
+      const nextLn: Line = moveA
+        ? { ...ln, a: { x: ix, y: iy } }
+        : { ...ln, b: { x: ix, y: iy } };
+      // cegah panjang ~0
+      if (dist(nextLn.a, nextLn.b) < 1) {
+        toast.error("Hasil terlalu pendek");
+        return;
+      }
+      pushHistory();
+      onChange({ lines: lines.map((x, i) => (i === bestIdx ? nextLn : x)) });
+      const lenM = dist(nextLn.a, nextLn.b) / pxPerMeter;
+      toast.success(`Trim/Extend → ${lenM.toFixed(2)} m`);
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
@@ -3616,10 +3784,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (bestIdx >= 0 && bestD <= tol) {
         pushHistory();
         onChange({ lines: lines.filter((_, i) => i !== bestIdx) });
-      } else {
-        const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
-        if (hitLocked) toast.error("Garis terkunci");
+        return;
       }
+      // Coba hapus lingkaran: jarak ke keliling
+      const circles = sketch.circles ?? [];
+      let cIdx = -1;
+      let cBestD = Infinity;
+      circles.forEach((cc, i) => {
+        if (activeLvlId && cc.levelId !== activeLvlId) return;
+        const d = Math.abs(Math.hypot(p.x - cc.c.x, p.y - cc.c.y) - cc.r);
+        if (d < cBestD) { cBestD = d; cIdx = i; }
+      });
+      if (cIdx >= 0 && cBestD <= tol) {
+        pushHistory();
+        onChange({ circles: circles.filter((_, i) => i !== cIdx) });
+        return;
+      }
+      const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
+      if (hitLocked) toast.error("Garis terkunci");
     }
   };
 
@@ -3752,6 +3934,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
+    if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
       const pts = polyDraft.points;
@@ -3837,6 +4020,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       toast.success(`Pintu ${doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
       return;
     }
+    if (circleDraft && tool === "circle") {
+      const r = Math.hypot(circleDraft.cur.x - circleDraft.c.x, circleDraft.cur.y - circleDraft.c.y);
+      const c0 = circleDraft.c;
+      const lvlId = circleDraft.levelId;
+      setCircleDraft(null);
+      if (r < 4) return;
+      pushHistory();
+      const newCir: Circle = {
+        id: `CIR${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        c: c0, r, levelId: lvlId ?? activeLvlId ?? undefined,
+      };
+      onChange({ circles: [...(sketch.circles ?? []), newCir] });
+      toast.success(`Lingkaran R ${(r / pxPerMeter).toFixed(2)} m`);
+      return;
+    }
     if (editDrag) {
       setEditDrag(null);
       return;
@@ -3908,6 +4106,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setGridDrag(null);
     setClipDrag(null);
     setDoorDraft(null);
+    setCircleDraft(null);
   };
 
   const handleUndo = () => {
@@ -4529,7 +4728,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <DoorOpen className="mr-1.5 h-4 w-4" /> Pintu
           </Button>
+          <Button
+            variant={tool === "circle" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("circle"); }}
+            className={cn(tool === "circle" && "bg-gradient-ember shadow-ember")}
+            title="Lingkaran — tap di pusat, geser untuk menentukan radius."
+          >
+            <CircleIcon className="mr-1.5 h-4 w-4" /> Lingkaran
+          </Button>
+          <Button
+            variant={tool === "trim" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("trim"); }}
+            className={cn(tool === "trim" && "bg-gradient-ember shadow-ember")}
+            title="Trim / Extend — tap di garis dekat ujung yang ingin disesuaikan, gunakan garis lain sebagai batas."
+          >
+            <Crop className="mr-1.5 h-4 w-4" /> Trim / Extend
+          </Button>
+          <Button
+            variant={tool === "offset" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("offset"); }}
+            className={cn(tool === "offset" && "bg-gradient-ember shadow-ember")}
+            title="Offset — tap garis pada sisi yang diinginkan; jarak diatur di bawah."
+          >
+            <MoveHorizontal className="mr-1.5 h-4 w-4" /> Offset
+          </Button>
         </div>
+        {tool === "offset" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Offset — Jarak (cm)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={10000}
+              step={1}
+              value={offsetCm}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0) setOffsetCm(v);
+              }}
+              className="h-8 text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Tap garis pada sisi tempat duplikat ingin diletakkan. Hanya garis lurus.
+            </p>
+          </div>
+        )}
+        {tool === "trim" && (
+          <div className="rounded-md border border-border/60 bg-background/40 p-2.5">
+            <p className="text-[11px] text-muted-foreground">
+              Tap garis pada ujung yang ingin di-trim/extend. Garis lurus terdekat lainnya dipakai sebagai batas; ujung digerakkan ke titik perpotongan kedua garis (memperpendek atau memperpanjang otomatis).
+            </p>
+          </div>
+        )}
+        {tool === "circle" && (
+          <div className="rounded-md border border-border/60 bg-background/40 p-2.5">
+            <p className="text-[11px] text-muted-foreground">
+              Tap di pusat, lalu geser untuk menentukan radius. Hapus dengan tool Hapus.
+            </p>
+          </div>
+        )}
         {tool === "door" && (
           <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pintu — Parameter</Label>
@@ -5218,7 +5478,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
@@ -5296,6 +5556,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Garis Potong (tarik garis → slide potongan dibuat; label berurutan A-A, B-B, …)"
           >
             <Scissors className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "circle" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("circle"); }}
+            className={cn(tool === "circle" && "bg-gradient-ember shadow-ember")}
+            title="Lingkaran (tap pusat, geser radius)"
+          >
+            <CircleIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "trim" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("trim"); }}
+            className={cn(tool === "trim" && "bg-gradient-ember shadow-ember")}
+            title="Trim / Extend (tap garis dekat ujung)"
+          >
+            <Crop className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "offset" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("offset"); }}
+            className={cn(tool === "offset" && "bg-gradient-ember shadow-ember")}
+            title="Offset (tap garis pada sisi tujuan)"
+          >
+            <MoveHorizontal className="h-4 w-4" />
           </Button>
           {tool === "edit" && (
             <>
@@ -5458,7 +5745,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
