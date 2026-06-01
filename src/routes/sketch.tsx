@@ -3551,7 +3551,97 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           toast.error("Tidak ada garis yang dipilih");
           return;
         }
-        createGridFromLine(bestIdx);
+        // Kumpulkan chain colinear: garis lain yang endpoint-nya menyambung
+        // dan sudut-nya sama (toleransi ±2°) dengan garis pertama.
+        const startLn = lines[bestIdx];
+        const angDeg = (Math.atan2(startLn.b.y - startLn.a.y, startLn.b.x - startLn.a.x) * 180) / Math.PI;
+        const angTol = 2;
+        const eqAng = (d: number) => {
+          const diff = (((d - angDeg) % 180) + 180) % 180;
+          return diff < angTol || diff > 180 - angTol;
+        };
+        const eqPt = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) < 1.5;
+        const used = new Set<number>([bestIdx]);
+        // Bangun chain: titik ujung → titik ujung
+        const chainPts: Point[] = [startLn.a, startLn.b];
+        // Extend forward (dari chainPts[last])
+        let growing = true;
+        while (growing) {
+          growing = false;
+          const tail = chainPts[chainPts.length - 1];
+          for (let i = 0; i < lines.length; i++) {
+            if (used.has(i)) continue;
+            const ln = lines[i];
+            if ((ln.kind ?? "straight") !== "straight") continue;
+            if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) continue;
+            const a = (Math.atan2(ln.b.y - ln.a.y, ln.b.x - ln.a.x) * 180) / Math.PI;
+            if (!eqAng(a)) continue;
+            if (eqPt(ln.a, tail)) { chainPts.push(ln.b); used.add(i); growing = true; break; }
+            if (eqPt(ln.b, tail)) { chainPts.push(ln.a); used.add(i); growing = true; break; }
+          }
+        }
+        // Extend backward (dari chainPts[0])
+        growing = true;
+        while (growing) {
+          growing = false;
+          const head = chainPts[0];
+          for (let i = 0; i < lines.length; i++) {
+            if (used.has(i)) continue;
+            const ln = lines[i];
+            if ((ln.kind ?? "straight") !== "straight") continue;
+            if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) continue;
+            const a = (Math.atan2(ln.b.y - ln.a.y, ln.b.x - ln.a.x) * 180) / Math.PI;
+            if (!eqAng(a)) continue;
+            if (eqPt(ln.a, head)) { chainPts.unshift(ln.b); used.add(i); growing = true; break; }
+            if (eqPt(ln.b, head)) { chainPts.unshift(ln.a); used.add(i); growing = true; break; }
+          }
+        }
+        // Origin = chainPts[0], rotation = sudut dari [0]→[1]
+        const origin = { ...chainPts[0] };
+        const v0x = chainPts[1].x - chainPts[0].x;
+        const v0y = chainPts[1].y - chainPts[0].y;
+        const rotDeg = (Math.atan2(v0y, v0x) * 180) / Math.PI;
+        // Spans X = panjang tiap segmen (meter), Y = 1 bentang default 8m
+        const spansX: number[] = [];
+        for (let i = 0; i < chainPts.length - 1; i++) {
+          const dpx = Math.hypot(chainPts[i + 1].x - chainPts[i].x, chainPts[i + 1].y - chainPts[i].y);
+          const m = dpx / pxPerMeter;
+          if (m > 0.05) spansX.push(Number(m.toFixed(2)));
+        }
+        if (!spansX.length) {
+          toast.error("Garis terlalu pendek");
+          return;
+        }
+        // Tentukan range level: hanya di level aktif
+        const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+        const lvId = activeLvlId ?? sortedLv[0]?.id;
+        // Hitung labelOffset agar otomatis menyambung dgn grid extras lain di
+        // level yg sama (chain serial).
+        const sameLvlExtras = gridExtras.filter((g) =>
+          g.enabled && (!lvId || (g.fromLevelId === lvId || g.toLevelId === lvId || (!g.fromLevelId && !g.toLevelId)))
+        );
+        let nextOffX = 0;
+        if (primaryGrid?.enabled) nextOffX = Math.max(nextOffX, (primaryGrid.labelOffsetX ?? 0) + primaryGrid.spansX.length + 1);
+        for (const g of sameLvlExtras) {
+          nextOffX = Math.max(nextOffX, (g.labelOffsetX ?? 0) + g.spansX.length + 1);
+        }
+        const newGrid: StructuralGrid = {
+          enabled: true,
+          origin,
+          rotation: rotDeg,
+          spansX,
+          spansY: [8],
+          colSizeCm: primaryGrid?.colSizeCm ?? 50,
+          labelOffsetX: nextOffX,
+          labelOffsetY: 0,
+          fromLevelId: lvId,
+          toLevelId: lvId,
+        };
+        const nextExtras = [...gridExtras, newGrid];
+        onChange({ structuralGridExtras: nextExtras });
+        setEditGridIdx(nextExtras.length);
+        setGridEditMode("expand");
+        toast.success(`Grid dibuat dari ${chainPts.length - 1} segmen`);
         return;
       }
       // -------- MODE: edit kolom (clip polygon) --------
