@@ -3669,6 +3669,90 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         nx: -dirY, ny: dirX,
         levelId: bestLn.levelId ?? activeLvlId ?? undefined,
       });
+    } else if (tool === "circle") {
+      setCircleDraft({ c: p, cur: p, levelId: activeLvlId ?? undefined });
+    } else if (tool === "trim" || tool === "offset") {
+      const raw = getWorldPosRaw(e);
+      const tolPx = 14 / view.s;
+      // cari garis lurus terdekat di level aktif
+      let bestIdx = -1;
+      let bestD = Infinity;
+      let bestProj: Point | null = null;
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        if ((ln.kind ?? "straight") !== "straight") return;
+        if (isLineLocked(ln)) return;
+        const proj = projectOnSegment(raw, ln.a, ln.b);
+        const d = dist(raw, proj);
+        if (d < bestD) { bestD = d; bestIdx = i; bestProj = proj; }
+      });
+      if (bestIdx < 0 || !bestProj || bestD > tolPx * 3) {
+        toast.error("Tap pada garis lurus");
+        return;
+      }
+      const ln = lines[bestIdx];
+      if (tool === "offset") {
+        // arah normal: dari proyeksi ke titik tap
+        const dx = ln.b.x - ln.a.x, dy = ln.b.y - ln.a.y;
+        const L = Math.hypot(dx, dy) || 1;
+        let nx = -dy / L, ny = dx / L;
+        const side = (raw.x - bestProj.x) * nx + (raw.y - bestProj.y) * ny;
+        if (side < 0) { nx = -nx; ny = -ny; }
+        const offPx = (offsetCm / 100) * pxPerMeter;
+        const newLine: Line = {
+          a: { x: ln.a.x + nx * offPx, y: ln.a.y + ny * offPx },
+          b: { x: ln.b.x + nx * offPx, y: ln.b.y + ny * offPx },
+          kind: "straight",
+          levelId: ln.levelId,
+        };
+        pushHistory();
+        onChange({ lines: [...lines, newLine] });
+        toast.success(`Offset ${offsetCm} cm`);
+        return;
+      }
+      // TRIM/EXTEND: cari garis lurus lain terdekat sebagai boundary
+      let bIdx = -1;
+      let bD = Infinity;
+      lines.forEach((ln2, j) => {
+        if (j === bestIdx) return;
+        if (activeLvlId && ln2.levelId !== activeLvlId) return;
+        if ((ln2.kind ?? "straight") !== "straight") return;
+        const proj = projectOnSegment(raw, ln2.a, ln2.b);
+        const d = dist(raw, proj);
+        if (d < bD) { bD = d; bIdx = j; }
+      });
+      if (bIdx < 0) {
+        toast.error("Butuh garis lain sebagai batas");
+        return;
+      }
+      const lnB = lines[bIdx];
+      // hitung interseksi infinite-line A vs infinite-line B
+      const x1 = ln.a.x, y1 = ln.a.y, x2 = ln.b.x, y2 = ln.b.y;
+      const x3 = lnB.a.x, y3 = lnB.a.y, x4 = lnB.b.x, y4 = lnB.b.y;
+      const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+      if (Math.abs(den) < 1e-6) {
+        toast.error("Garis sejajar — tidak ada interseksi");
+        return;
+      }
+      const tA = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+      const ix = x1 + tA * (x2 - x1);
+      const iy = y1 + tA * (y2 - y1);
+      // ujung mana dari ln yang lebih dekat ke titik tap → itu yang dipindah ke interseksi
+      const dA = dist(raw, ln.a);
+      const dB = dist(raw, ln.b);
+      const moveA = dA <= dB;
+      const nextLn: Line = moveA
+        ? { ...ln, a: { x: ix, y: iy } }
+        : { ...ln, b: { x: ix, y: iy } };
+      // cegah panjang ~0
+      if (dist(nextLn.a, nextLn.b) < 1) {
+        toast.error("Hasil terlalu pendek");
+        return;
+      }
+      pushHistory();
+      onChange({ lines: lines.map((x, i) => (i === bestIdx ? nextLn : x)) });
+      const lenM = dist(nextLn.a, nextLn.b) / pxPerMeter;
+      toast.success(`Trim/Extend → ${lenM.toFixed(2)} m`);
     } else if (tool === "erase") {
       const hitLayer = [...layers].reverse().find((l) => {
         if (activeLvlId && l.levelId !== activeLvlId) return false;
