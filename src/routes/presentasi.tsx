@@ -64,6 +64,7 @@ type Sketch = {
   sectionCuts?: SectionCut[];
   structuralGrid?: StructuralGrid;
   structuralGridExtras?: StructuralGrid[];
+  edgeAttrs?: Record<string, EdgeMaterial>;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
