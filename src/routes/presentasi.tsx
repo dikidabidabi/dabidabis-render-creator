@@ -1884,6 +1884,92 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             })
           )}
 
+          {/* Notasi material selubung pada potongan — dihitung dari edgeAttrs */}
+          {(() => {
+            const attrs = sketch.edgeAttrs ?? {};
+            if (!Object.keys(attrs).length) return null;
+            const allSegs = computeStraightSegments(
+              (sketch.lines ?? []).map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
+            );
+            type Hit = { t: number; mat: EdgeMaterial; levelId?: string };
+            const hits: Hit[] = [];
+            for (const seg of allSegs) {
+              const mat = attrs[segmentIdFor(seg.a, seg.b)];
+              if (!mat) continue;
+              const t = intersectSegmentWithCut({ a: seg.a, b: seg.b }, cut.p1, cut.p2);
+              if (t == null) continue;
+              hits.push({ t, mat, levelId: seg.levelId });
+            }
+            if (!hits.length) return null;
+            return (
+              <g>
+                {boxes.map((b) => {
+                  const relevant = hits.filter((h) => !h.levelId || h.levelId === b.id);
+                  return relevant.map((h, idx) => {
+                    const cx = mx(h.t * cutLenM);
+                    const bandW = Math.max(2, (WALL_THICK_MM[h.mat] / 1000) * scalePxPerM);
+                    const x = cx - bandW / 2;
+                    const yTop = my(b.topM);
+                    const yBot = my(b.baseM);
+                    const totalH = yBot - yTop;
+                    if (h.mat === "solid") {
+                      return (
+                        <g key={`mat-${b.id}-${idx}`}>
+                          <rect x={x} y={yTop} width={bandW} height={totalH}
+                            fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.8} />
+                          {(() => {
+                            const out: React.ReactNode[] = [];
+                            const step = Math.max(3, bandW * 0.9);
+                            const steps = Math.max(2, Math.floor(totalH / step));
+                            for (let k = 1; k < steps; k++) {
+                              const yy = yTop + (k / steps) * totalH;
+                              out.push(<line key={k} x1={x} y1={yy} x2={x + bandW} y2={yy}
+                                stroke="#0a0a0a" strokeWidth={0.4} />);
+                            }
+                            return out;
+                          })()}
+                        </g>
+                      );
+                    }
+                    if (h.mat === "curtain") {
+                      return (
+                        <g key={`mat-${b.id}-${idx}`}>
+                          <rect x={x} y={yTop} width={bandW} height={totalH}
+                            fill="rgba(34,211,238,0.28)" stroke="#0a0a0a" strokeWidth={0.5} />
+                          <line x1={x + bandW / 2} y1={yTop} x2={x + bandW / 2} y2={yBot}
+                            stroke="#0a0a0a" strokeWidth={0.4} strokeDasharray="2 3" />
+                        </g>
+                      );
+                    }
+                    // window: dinding 0–0.9m, kaca 0.9–2.4m, dinding 2.4–plafon (relatif ke baseM)
+                    const ySill = my(b.baseM + 0.9);
+                    const yHead = my(b.baseM + 2.4);
+                    const yCap = Math.max(yTop, yHead);
+                    return (
+                      <g key={`mat-${b.id}-${idx}`}>
+                        {/* Dinding bawah */}
+                        <rect x={x} y={ySill} width={bandW} height={yBot - ySill}
+                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.6} />
+                        {/* Kaca tengah */}
+                        <rect x={x} y={yCap} width={bandW} height={ySill - yCap}
+                          fill="rgba(34,211,238,0.28)" stroke="#0a0a0a" strokeWidth={0.5} />
+                        <line x1={x + bandW / 2} y1={yCap} x2={x + bandW / 2} y2={ySill}
+                          stroke="#0a0a0a" strokeWidth={0.4} strokeDasharray="2 3" />
+                        {/* Dinding atas */}
+                        {yCap > yTop && (
+                          <rect x={x} y={yTop} width={bandW} height={yCap - yTop}
+                            fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.6} />
+                        )}
+                      </g>
+                    );
+                  });
+                })}
+              </g>
+            );
+          })()}
+
+
+
           {/* Elevation labels (kiri) — MDPL per level */}
           {boxes.map((b) => {
             const yBase = my(b.baseM);
