@@ -344,9 +344,10 @@ function StructuralColumns({
   );
   const items = useMemo(() => {
     if (!grids.length) return [] as Array<{
-      key: string; x: number; z: number; y: number; h: number; size: number;
+      key: string; x: number; z: number; y: number; h: number; size: number; rotY: number;
     }>;
-    const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number }> = [];
+    const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number; rotY: number }> = [];
+
     for (let gi = 0; gi < grids.length; gi++) {
       const grid = grids[gi];
       if (grid.lineOnly) continue; // grid garis tunggal: tanpa kolom
