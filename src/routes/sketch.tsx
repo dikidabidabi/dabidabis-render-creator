@@ -5375,10 +5375,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               </div>
               {gridEditMode === "fromLine" && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik salah satu garis lurus / polyline di kanvas. Segmen-segmen
-                  colinear yang menyambung akan dibaca sebagai bentang sumbu X.
-                  Rotasi grid mengikuti arah garis, buble otomatis melanjutkan
-                  serial dari grid sebelumnya di level aktif.
+                  Klik salah satu garis lurus di kanvas. Garis tersebut akan
+                  dikonversi menjadi grid extra (satu sumbu, tanpa kolom) dan
+                  garis aslinya dihapus. Buble otomatis melanjutkan serial
+                  dari grid sebelumnya di level aktif.
                 </p>
               )}
               {gridEditMode === "clip" && (
