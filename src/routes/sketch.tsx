@@ -2104,6 +2104,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.fill();
         }
       }
+
+      // Lingkaran (circles) per level
+      const lvlCircles = (sketch.circles ?? []).filter(
+        (c) => (c.levelId ?? fallbackLvl) === lvl.id,
+      );
+      if (lvlCircles.length) {
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.lineWidth = 2 / s;
+        ctx.fillStyle = "#1a1a1a";
+        for (const cc of lvlCircles) {
+          ctx.beginPath();
+          ctx.arc(cc.c.x, cc.c.y, cc.r, 0, Math.PI * 2);
+          ctx.stroke();
+          // tanda pusat
+          ctx.beginPath();
+          ctx.arc(cc.c.x, cc.c.y, 2 / s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.globalAlpha = 1;
 
