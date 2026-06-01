@@ -30,11 +30,19 @@ export type StructuralGrid = {
   colSizeCm: number;                     // ukuran kolom persegi (cm)
   labelOffsetX?: number;                 // offset penomoran sumbu X (0 → "1", 3 → "4")
   labelOffsetY?: number;                 // offset huruf sumbu Y (0 → "A", 3 → "D")
+  // Visibilitas buble ujung — true = sembunyikan buble di ujung tsb.
+  hideBubbleStartX?: boolean;            // sembunyikan buble X di ujung as pertama
+  hideBubbleEndX?: boolean;              // sembunyikan buble X di ujung as terakhir
+  hideBubbleStartY?: boolean;            // sembunyikan buble Y di ujung as pertama
+  hideBubbleEndY?: boolean;              // sembunyikan buble Y di ujung as terakhir
+  // Grid hasil "Jadikan Grid" dari satu garis — hanya satu sumbu (X), tanpa kolom.
+  lineOnly?: boolean;
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
   columnClips?: ColumnClip[];            // poligon area yang menyembunyikan kolom
 };
+
 
 export const SPAN_PRESETS = [6, 7.2, 8, 9] as const;
 export const COL_PRESETS = [40, 50, 60, 70, 80] as const;
@@ -91,10 +99,15 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     },
     rotation: Number.isFinite(Number(g.rotation)) ? Number(g.rotation) : 0,
     spansX: spansX.length ? spansX : [...DEFAULT_GRID.spansX],
-    spansY: spansY.length ? spansY : [...DEFAULT_GRID.spansY],
+    spansY: spansY.length ? spansY : (g.lineOnly ? [] : [...DEFAULT_GRID.spansY]),
     colSizeCm: Number.isFinite(col) && col > 0 ? col : DEFAULT_GRID.colSizeCm,
     labelOffsetX: Number.isFinite(Number(g.labelOffsetX)) ? Math.max(0, Math.floor(Number(g.labelOffsetX))) : 0,
     labelOffsetY: Number.isFinite(Number(g.labelOffsetY)) ? Math.max(0, Math.floor(Number(g.labelOffsetY))) : 0,
+    hideBubbleStartX: Boolean(g.hideBubbleStartX),
+    hideBubbleEndX: Boolean(g.hideBubbleEndX),
+    hideBubbleStartY: Boolean(g.hideBubbleStartY),
+    hideBubbleEndY: Boolean(g.hideBubbleEndY),
+    lineOnly: Boolean(g.lineOnly),
     fromLevelId: typeof g.fromLevelId === "string" ? g.fromLevelId : undefined,
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
@@ -250,6 +263,7 @@ export function computeStructuralStats(
   levels: { id: string; mdpl: number; typicalCount?: number; typicalHeight?: number }[],
 ): { totalColumns: number; concreteVolumeM3: number } {
   if (!grid || !grid.enabled) return { totalColumns: 0, concreteVolumeM3: 0 };
+  if (grid.lineOnly) return { totalColumns: 0, concreteVolumeM3: 0 };
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
   const colM = grid.colSizeCm / 100;
   const colArea = colM * colM;

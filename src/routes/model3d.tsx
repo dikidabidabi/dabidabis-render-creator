@@ -349,6 +349,7 @@ function StructuralColumns({
     const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number }> = [];
     for (let gi = 0; gi < grids.length; gi++) {
       const grid = grids[gi];
+      if (grid.lineOnly) continue; // grid garis tunggal: tanpa kolom
       const colM = grid.colSizeCm / 100;
       const ox = (grid.origin.x - origin.x) * mPerPx;
       const oz = (grid.origin.y - origin.y) * mPerPx;

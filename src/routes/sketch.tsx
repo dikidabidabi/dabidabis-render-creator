@@ -2603,19 +2603,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 0.3 / s;
         ctx.setLineDash([10 / s, 5 / s, 1.5 / s, 5 / s]);
         ctx.beginPath();
-        for (const x of xs) { ctx.moveTo(x, yMin - bubbleOff); ctx.lineTo(x, yMax + bubbleOff); }
-        for (const y of ys) { ctx.moveTo(xMin - bubbleOff, y); ctx.lineTo(xMax + bubbleOff, y); }
+        if (g.lineOnly) {
+          ctx.moveTo(xs[0] - bubbleOff, ys[0]);
+          ctx.lineTo(xs[xs.length - 1] + bubbleOff, ys[0]);
+        } else {
+          for (const x of xs) { ctx.moveTo(x, yMin - bubbleOff); ctx.lineTo(x, yMax + bubbleOff); }
+          for (const y of ys) { ctx.moveTo(xMin - bubbleOff, y); ctx.lineTo(xMax + bubbleOff, y); }
+        }
         ctx.stroke();
         ctx.setLineDash([]);
-        const colPx = (g.colSizeCm / 100) * ppm;
-        const posXM = axisPositions(spansX);
-        const posYM = axisPositions(spansY);
-        ctx.fillStyle = "rgba(40,40,40,0.55)";
-        for (let j = 0; j < ys.length; j++) {
-          for (let i = 0; i < xs.length; i++) {
-            if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
-            if (isColumnClipped(g, posXM[i], posYM[j])) continue;
-            ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+        if (!g.lineOnly) {
+          const colPx = (g.colSizeCm / 100) * ppm;
+          const posXM = axisPositions(spansX);
+          const posYM = axisPositions(spansY);
+          ctx.fillStyle = "rgba(40,40,40,0.55)";
+          for (let j = 0; j < ys.length; j++) {
+            for (let i = 0; i < xs.length; i++) {
+              if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
+              if (isColumnClipped(g, posXM[i], posYM[j])) continue;
+              ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+            }
           }
         }
         ctx.restore();
@@ -2653,13 +2660,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 0.4 / s;
         ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
         ctx.beginPath();
-        for (const x of xs) {
-          ctx.moveTo(x, yMin - bubbleOff);
-          ctx.lineTo(x, yMax + bubbleOff);
-        }
-        for (const y of ys) {
-          ctx.moveTo(xMin - bubbleOff, y);
-          ctx.lineTo(xMax + bubbleOff, y);
+        if (grid.lineOnly) {
+          // Hanya satu garis sepanjang sumbu X dari xMin..xMax di y=oy
+          ctx.moveTo(xMin - bubbleOff, ys[0]);
+          ctx.lineTo(xMax + bubbleOff, ys[0]);
+        } else {
+          for (const x of xs) {
+            ctx.moveTo(x, yMin - bubbleOff);
+            ctx.lineTo(x, yMax + bubbleOff);
+          }
+          for (const y of ys) {
+            ctx.moveTo(xMin - bubbleOff, y);
+            ctx.lineTo(xMax + bubbleOff, y);
+          }
         }
         ctx.stroke();
         ctx.setLineDash([]);
@@ -2668,30 +2681,65 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.font = `600 ${7 / s}px var(--font-display), sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        for (let i = 0; i < xs.length; i++) {
-          for (const yEnd of [yMin - bubbleOff, yMax + bubbleOff]) {
+        const hideSX = Boolean(grid.hideBubbleStartX);
+        const hideEX = Boolean(grid.hideBubbleEndX);
+        const hideSY = Boolean(grid.hideBubbleStartY);
+        const hideEY = Boolean(grid.hideBubbleEndY);
+        if (grid.lineOnly) {
+          // satu bubble di tiap ujung garis, sejajar dengan garis
+          const lastI = xs.length - 1;
+          const ends: Array<{ i: number; x: number; hide: boolean }> = [
+            { i: 0, x: xs[0] - bubbleOff, hide: hideSX },
+            { i: lastI, x: xs[lastI] + bubbleOff, hide: hideEX },
+          ];
+          for (const e of ends) {
+            if (e.hide) continue;
             ctx.beginPath();
-            ctx.arc(xs[i], yEnd, bubbleR, 0, Math.PI * 2);
+            ctx.arc(e.x, ys[0], bubbleR, 0, Math.PI * 2);
             ctx.fillStyle = "#fff";
             ctx.fill();
             ctx.lineWidth = 0.4 / s;
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], yEnd);
+            ctx.fillText(xAxisLabelAt(e.i, grid.labelOffsetX ?? 0), e.x, ys[0]);
           }
-        }
-        for (let j = 0; j < ys.length; j++) {
-          for (const xEnd of [xMin - bubbleOff, xMax + bubbleOff]) {
-            ctx.beginPath();
-            ctx.arc(xEnd, ys[j], bubbleR, 0, Math.PI * 2);
-            ctx.fillStyle = "#fff";
-            ctx.fill();
-            ctx.lineWidth = 0.4 / s;
-            ctx.strokeStyle = "#0a0a0a";
-            ctx.stroke();
-            ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(yAxisLabelAt(j, grid.labelOffsetY ?? 0), xEnd, ys[j]);
+        } else {
+          for (let i = 0; i < xs.length; i++) {
+            const ends: Array<{ y: number; hide: boolean }> = [
+              { y: yMin - bubbleOff, hide: hideSY },
+              { y: yMax + bubbleOff, hide: hideEY },
+            ];
+            for (const e of ends) {
+              if (e.hide) continue;
+              ctx.beginPath();
+              ctx.arc(xs[i], e.y, bubbleR, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.lineWidth = 0.4 / s;
+              ctx.strokeStyle = "#0a0a0a";
+              ctx.stroke();
+              ctx.fillStyle = "#0a0a0a";
+              ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], e.y);
+            }
+          }
+          for (let j = 0; j < ys.length; j++) {
+            const ends: Array<{ x: number; hide: boolean }> = [
+              { x: xMin - bubbleOff, hide: hideSX },
+              { x: xMax + bubbleOff, hide: hideEX },
+            ];
+            for (const e of ends) {
+              if (e.hide) continue;
+              ctx.beginPath();
+              ctx.arc(e.x, ys[j], bubbleR, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.lineWidth = 0.4 / s;
+              ctx.strokeStyle = "#0a0a0a";
+              ctx.stroke();
+              ctx.fillStyle = "#0a0a0a";
+              ctx.fillText(yAxisLabelAt(j, grid.labelOffsetY ?? 0), e.x, ys[j]);
+            }
           }
         }
 
@@ -2700,6 +2748,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const posXM = axisPositions(spansX);
         const posYM = axisPositions(spansY);
         ctx.fillStyle = "#0a0a0a";
+        if (grid.lineOnly) {
+          // skip kolom untuk grid garis tunggal
+        } else
+
         for (let j = 0; j < ys.length; j++) {
           for (let i = 0; i < xs.length; i++) {
             if (!isNodeActive(grid, activeLv.id, i, j)) {
@@ -3535,10 +3587,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const raw = structGridRotRad !== 0
         ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
         : rawWorld;
-      // -------- MODE: jadikan grid dari line/polyline --------
+      // -------- MODE: jadikan grid dari satu garis lurus --------
       if (gridEditMode === "fromLine") {
         const tolPx = 10 / view.s;
-        // cari straight line terdekat pada level aktif
         let bestIdx = -1;
         let bestD = Infinity;
         lines.forEach((ln, i) => {
@@ -3551,72 +3602,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           toast.error("Tidak ada garis yang dipilih");
           return;
         }
-        // Kumpulkan chain colinear: garis lain yang endpoint-nya menyambung
-        // dan sudut-nya sama (toleransi ±2°) dengan garis pertama.
         const startLn = lines[bestIdx];
-        const angDeg = (Math.atan2(startLn.b.y - startLn.a.y, startLn.b.x - startLn.a.x) * 180) / Math.PI;
-        const angTol = 2;
-        const eqAng = (d: number) => {
-          const diff = (((d - angDeg) % 180) + 180) % 180;
-          return diff < angTol || diff > 180 - angTol;
-        };
-        const eqPt = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y) < 1.5;
-        const used = new Set<number>([bestIdx]);
-        // Bangun chain: titik ujung → titik ujung
-        const chainPts: Point[] = [startLn.a, startLn.b];
-        // Extend forward (dari chainPts[last])
-        let growing = true;
-        while (growing) {
-          growing = false;
-          const tail = chainPts[chainPts.length - 1];
-          for (let i = 0; i < lines.length; i++) {
-            if (used.has(i)) continue;
-            const ln = lines[i];
-            if ((ln.kind ?? "straight") !== "straight") continue;
-            if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) continue;
-            const a = (Math.atan2(ln.b.y - ln.a.y, ln.b.x - ln.a.x) * 180) / Math.PI;
-            if (!eqAng(a)) continue;
-            if (eqPt(ln.a, tail)) { chainPts.push(ln.b); used.add(i); growing = true; break; }
-            if (eqPt(ln.b, tail)) { chainPts.push(ln.a); used.add(i); growing = true; break; }
-          }
-        }
-        // Extend backward (dari chainPts[0])
-        growing = true;
-        while (growing) {
-          growing = false;
-          const head = chainPts[0];
-          for (let i = 0; i < lines.length; i++) {
-            if (used.has(i)) continue;
-            const ln = lines[i];
-            if ((ln.kind ?? "straight") !== "straight") continue;
-            if (activeLvlId && ln.levelId && ln.levelId !== activeLvlId) continue;
-            const a = (Math.atan2(ln.b.y - ln.a.y, ln.b.x - ln.a.x) * 180) / Math.PI;
-            if (!eqAng(a)) continue;
-            if (eqPt(ln.a, head)) { chainPts.unshift(ln.b); used.add(i); growing = true; break; }
-            if (eqPt(ln.b, head)) { chainPts.unshift(ln.a); used.add(i); growing = true; break; }
-          }
-        }
-        // Origin = chainPts[0], rotation = sudut dari [0]→[1]
-        const origin = { ...chainPts[0] };
-        const v0x = chainPts[1].x - chainPts[0].x;
-        const v0y = chainPts[1].y - chainPts[0].y;
-        const rotDeg = (Math.atan2(v0y, v0x) * 180) / Math.PI;
-        // Spans X = panjang tiap segmen (meter), Y = 1 bentang default 8m
-        const spansX: number[] = [];
-        for (let i = 0; i < chainPts.length - 1; i++) {
-          const dpx = Math.hypot(chainPts[i + 1].x - chainPts[i].x, chainPts[i + 1].y - chainPts[i].y);
-          const m = dpx / pxPerMeter;
-          if (m > 0.05) spansX.push(Number(m.toFixed(2)));
-        }
-        if (!spansX.length) {
+        const origin = { ...startLn.a };
+        const vx = startLn.b.x - startLn.a.x;
+        const vy = startLn.b.y - startLn.a.y;
+        const rotDeg = (Math.atan2(vy, vx) * 180) / Math.PI;
+        const lenPx = Math.hypot(vx, vy);
+        const lenM = lenPx / pxPerMeter;
+        if (lenM < 0.1) {
           toast.error("Garis terlalu pendek");
           return;
         }
-        // Tentukan range level: hanya di level aktif
         const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
         const lvId = activeLvlId ?? sortedLv[0]?.id;
-        // Hitung labelOffset agar otomatis menyambung dgn grid extras lain di
-        // level yg sama (chain serial).
         const sameLvlExtras = gridExtras.filter((g) =>
           g.enabled && (!lvId || (g.fromLevelId === lvId || g.toLevelId === lvId || (!g.fromLevelId && !g.toLevelId)))
         );
@@ -3629,19 +3627,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           enabled: true,
           origin,
           rotation: rotDeg,
-          spansX,
-          spansY: [8],
+          spansX: [Number(lenM.toFixed(2))],
+          spansY: [],
           colSizeCm: primaryGrid?.colSizeCm ?? 50,
           labelOffsetX: nextOffX,
           labelOffsetY: 0,
+          lineOnly: true,
           fromLevelId: lvId,
           toLevelId: lvId,
         };
         const nextExtras = [...gridExtras, newGrid];
-        onChange({ structuralGridExtras: nextExtras });
+        const nextLines = lines.filter((_, i) => i !== bestIdx);
+        onChange({ structuralGridExtras: nextExtras, lines: nextLines });
         setEditGridIdx(nextExtras.length);
         setGridEditMode("expand");
-        toast.success(`Grid dibuat dari ${chainPts.length - 1} segmen`);
+        toast.success("Grid dibuat dari garis terpilih");
         return;
       }
       // -------- MODE: edit kolom (clip polygon) --------
@@ -5375,10 +5375,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               </div>
               {gridEditMode === "fromLine" && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik salah satu garis lurus / polyline di kanvas. Segmen-segmen
-                  colinear yang menyambung akan dibaca sebagai bentang sumbu X.
-                  Rotasi grid mengikuti arah garis, buble otomatis melanjutkan
-                  serial dari grid sebelumnya di level aktif.
+                  Klik salah satu garis lurus di kanvas. Garis tersebut akan
+                  dikonversi menjadi grid extra (satu sumbu, tanpa kolom) dan
+                  garis aslinya dihapus. Buble otomatis melanjutkan serial
+                  dari grid sebelumnya di level aktif.
                 </p>
               )}
               {gridEditMode === "clip" && (
@@ -5523,6 +5523,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               >
                 Chain ke grid extra lain
               </Button>
+            </div>
+            {/* ===== Sembunyikan Buble ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/50 bg-background/30 p-2">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Sembunyikan Buble</Label>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Sembunyikan buble di ujung sumbu agar mudah menyambung grid lain.
+              </p>
+              {grid.lineOnly ? (
+                <div className="grid grid-cols-2 gap-1.5">
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleStartX}
+                      onChange={(e) => updateGrid({ hideBubbleStartX: e.target.checked })} />
+                    Ujung Awal
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleEndX}
+                      onChange={(e) => updateGrid({ hideBubbleEndX: e.target.checked })} />
+                    Ujung Akhir
+                  </label>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-1.5 gap-y-1">
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleStartY}
+                      onChange={(e) => updateGrid({ hideBubbleStartY: e.target.checked })} />
+                    X · Atas
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleEndY}
+                      onChange={(e) => updateGrid({ hideBubbleEndY: e.target.checked })} />
+                    X · Bawah
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleStartX}
+                      onChange={(e) => updateGrid({ hideBubbleStartX: e.target.checked })} />
+                    Y · Kiri
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px]">
+                    <input type="checkbox" checked={!!grid.hideBubbleEndX}
+                      onChange={(e) => updateGrid({ hideBubbleEndX: e.target.checked })} />
+                    Y · Kanan
+                  </label>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="space-y-1">
