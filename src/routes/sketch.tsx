@@ -87,6 +87,7 @@ import {
   MATERIAL_COLORS,
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
+import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
