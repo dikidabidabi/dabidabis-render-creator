@@ -3701,6 +3701,85 @@ function MaterialEdges({
   );
 }
 
+function DoorNotation({
+  doors,
+  pxPerM,
+  sw,
+}: {
+  doors: Door[];
+  pxPerM: number;
+  sw: number;
+}) {
+  if (!doors.length) return null;
+  const stroke = sw * 0.0022;
+  const thick = 0.15 * pxPerM; // 150mm wall thickness mask
+  return (
+    <g>
+      {doors.map((d) => {
+        const ax = d.a.x, ay = d.a.y, bx = d.b.x, by = d.b.y;
+        const len = Math.hypot(bx - ax, by - ay) || 1;
+        const dx = (bx - ax) / len, dy = (by - ay) / len;
+        const px = -dy, py = dx;
+        const half = thick * 0.7;
+        const widthPx = (d.widthCm / 100) * pxPerM;
+        // Mask polygon (cover the wall band)
+        const m1 = `${ax + px * half},${ay + py * half}`;
+        const m2 = `${bx + px * half},${by + py * half}`;
+        const m3 = `${bx - px * half},${by - py * half}`;
+        const m4 = `${ax - px * half},${ay - py * half}`;
+        // Door leaf + arc
+        const nx = d.nx, ny = d.ny;
+        const a0 = Math.atan2(ny, nx);
+        if (d.leaves === 1) {
+          const lx = ax + nx * widthPx, ly = ay + ny * widthPx;
+          const a1 = Math.atan2(by - ay, bx - ax);
+          let delta = a1 - a0;
+          while (delta > Math.PI) delta -= Math.PI * 2;
+          while (delta < -Math.PI) delta += Math.PI * 2;
+          const sweep = delta < 0 ? 0 : 1;
+          const largeArc = Math.abs(delta) > Math.PI ? 1 : 0;
+          return (
+            <g key={d.id}>
+              <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+              <line x1={ax} y1={ay} x2={lx} y2={ly} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+              <path
+                d={`M ${lx} ${ly} A ${widthPx} ${widthPx} 0 ${largeArc} ${sweep} ${bx} ${by}`}
+                fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7}
+              />
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+            </g>
+          );
+        }
+        // 2 daun
+        const mxp = (ax + bx) / 2, myp = (ay + by) / 2;
+        const halfW = widthPx / 2;
+        const la = { x: ax + nx * halfW, y: ay + ny * halfW };
+        const lb = { x: bx + nx * halfW, y: by + ny * halfW };
+        const a1a = Math.atan2(myp - ay, mxp - ax);
+        let da = a1a - a0;
+        while (da > Math.PI) da -= Math.PI * 2;
+        while (da < -Math.PI) da += Math.PI * 2;
+        const swA = da < 0 ? 0 : 1;
+        const a1b = Math.atan2(myp - by, mxp - bx);
+        let db = a1b - a0;
+        while (db > Math.PI) db -= Math.PI * 2;
+        while (db < -Math.PI) db += Math.PI * 2;
+        const swB = db < 0 ? 0 : 1;
+        return (
+          <g key={d.id}>
+            <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+            <line x1={ax} y1={ay} x2={la.x} y2={la.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+            <line x1={bx} y1={by} x2={lb.x} y2={lb.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+            <path d={`M ${la.x} ${la.y} A ${halfW} ${halfW} 0 0 ${swA} ${mxp} ${myp}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7} />
+            <path d={`M ${lb.x} ${lb.y} A ${halfW} ${halfW} 0 0 ${swB} ${mxp} ${myp}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+
 // ---- Stacking Diagram (from Model 3D data) ----
 function levelColor(i: number, total: number) {
   // Warm-to-cool gradient, deterministic per level index.
