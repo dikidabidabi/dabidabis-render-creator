@@ -353,6 +353,10 @@ function StructuralColumns({
       const colM = grid.colSizeCm / 100;
       const ox = (grid.origin.x - origin.x) * mPerPx;
       const oz = (grid.origin.y - origin.y) * mPerPx;
+      const rotDeg = Number(grid.rotation) || 0;
+      const rotRad = (rotDeg * Math.PI) / 180;
+      const cosR = Math.cos(rotRad);
+      const sinR = Math.sin(rotRad);
       for (let li = 0; li < sortedLevels.length; li++) {
         const lv = sortedLevels[li];
         if (!levelInRange(grid, lv, sortedLevels)) continue;
@@ -370,13 +374,19 @@ function StructuralColumns({
           for (let j = 0; j < zs.length; j++) {
             if (!isNodeActive(grid, lv.id, i, j)) continue;
             if (isColumnClipped(grid, xs[i], zs[j])) continue;
+            // Rotasi sumbu grid (CW positif di 2D = CW di bidang XZ ketika dilihat dari atas).
+            const lx = xs[i];
+            const lz = zs[j];
+            const rx = lx * cosR - lz * sinR;
+            const rz = lx * sinR + lz * cosR;
             out.push({
               key: `g${gi}_${lv.id}_${i}_${j}`,
-              x: ox + xs[i],
-              z: oz + zs[j],
+              x: ox + rx,
+              z: oz + rz,
               y: yBase + totalH / 2,
               h: totalH,
               size: colM,
+              rotY: -rotRad,
             });
           }
         }
@@ -384,6 +394,7 @@ function StructuralColumns({
     }
     return out;
   }, [grids, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl]);
+
 
   if (items.length === 0) return null;
   const col = "#ffffff";
