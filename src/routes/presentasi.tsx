@@ -4390,17 +4390,18 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   }
   if (!Number.isFinite(vx0)) { vx0 = -10; vy0 = -10; vx1 = 10; vy1 = 10; }
   const w0 = vx1 - vx0, h0 = vy1 - vy0;
-  // Sisakan ruang di kanan untuk label keterangan ruang (dua kolom selang-seling).
-  const labelExtra = Math.max(w0, h0) * 0.85;
+  // Sisakan ruang di kanan untuk label keterangan ruang (tiga kolom selang-seling).
+  const labelExtra = Math.max(w0, h0) * 1.05;
   vx1 += labelExtra;
   const w = vx1 - vx0, h = vy1 - vy0;
   const pad = Math.max(w, h, 1) * 0.04;
   const vb = `${vx0 - pad} ${vy0 - pad} ${w + pad * 2} ${h + pad * 2}`;
   const baseStroke = Math.max(w, h) * 0.0015;
-  const fontPx = Math.max(w, h) * 0.018;
-  const lineH = fontPx * 1.5;
-  // Dua kolom: "tengah" (col 0) dan digeser ke kanan (col 1), selang-seling per lantai.
-  const labelColX = [vx1 - labelExtra * 0.95, vx1 - labelExtra * 0.45];
+  const drawingSpan = Math.max(w - labelExtra, h);
+  const fontPx = drawingSpan * 0.014;
+  const lineH = fontPx * 1.35;
+  // Tiga kolom: tengah → kanan dekat → kanan jauh, selang-seling per lantai dari atas ke bawah.
+  const labelColX = [vx1 - labelExtra * 0.94, vx1 - labelExtra * 0.62, vx1 - labelExtra * 0.3];
 
   // Susun label per lantai supaya tidak tumpang tindih.
   type Leader = { x1: number; y1: number; x2: number; y2: number; label: string };
@@ -4417,8 +4418,8 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     const center = (project(0, 0, yBot).y + project(0, 0, yTop).y) / 2;
     const n = arr.length;
     const totalH = (n - 1) * lineH;
-    // Selang-seling: lantai paling atas → kolom tengah, di bawahnya → kolom kanan, dst.
-    const colIdx = (topIdx - fi) % 2 === 0 ? 0 : 1;
+    // Selang-seling: lantai paling atas → kolom tengah, bawahnya → kanan dekat, lalu kanan jauh, ulang.
+    const colIdx = (topIdx - fi) % 3;
     const lx = labelColX[colIdx];
     const sorted = [...arr].sort((a, b) => a.from.y - b.from.y);
     sorted.forEach((a, i) => {
@@ -4454,11 +4455,11 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
           ))}
           {leaders.map((l, i) => (
             <g key={`ld-${i}`}>
-              <circle cx={l.x1} cy={l.y1} r={baseStroke * 1.6} fill="#0a0a0a" />
+              <circle cx={l.x1} cy={l.y1} r={baseStroke * 1.1} fill="#0a0a0a" />
               <path
-                d={`M ${l.x1} ${l.y1} L ${(l.x1 + l.x2) / 2} ${l.y2} L ${l.x2 - baseStroke * 2} ${l.y2}`}
+                d={`M ${l.x1} ${l.y1} L ${(l.x1 + l.x2) / 2} ${l.y2} L ${l.x2 - baseStroke * 1.5} ${l.y2}`}
                 stroke="#0a0a0a"
-                strokeWidth={baseStroke * 0.7}
+                strokeWidth={baseStroke * 0.35}
                 fill="none"
               />
               <text
