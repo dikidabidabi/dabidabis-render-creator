@@ -3577,7 +3577,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
-    if (editDrag) {
+    if (doorDraft) {
+      // Step 2 (arah/lebar) & Step 3 (swing) — dihitung kontinu selama drag.
+      const raw = getWorldPosRaw(e);
+      const ox = raw.x - doorDraft.a.x;
+      const oy = raw.y - doorDraft.a.y;
+      const along = ox * doorDraft.dirX + oy * doorDraft.dirY;
+      const perp = ox * (-doorDraft.dirY) + oy * doorDraft.dirX;
+      const signAlong = along < 0 ? -1 : 1;
+      const widthPx = (doorWidthCm / 100) * pxPerMeter;
+      const bx = doorDraft.a.x + doorDraft.dirX * signAlong * widthPx;
+      const by = doorDraft.a.y + doorDraft.dirY * signAlong * widthPx;
+      // Sign perp tetap pakai default jika user belum bergerak tegak lurus signifikan.
+      const perpThresh = 4 / view.s;
+      let nx = doorDraft.nx, ny = doorDraft.ny;
+      if (Math.abs(perp) > perpThresh) {
+        const signPerp = perp < 0 ? -1 : 1;
+        nx = -doorDraft.dirY * signPerp;
+        ny = doorDraft.dirX * signPerp;
+      }
+      setDoorDraft({ ...doorDraft, b: { x: bx, y: by }, nx, ny });
+      return;
+    }
+
+
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
       setEditDrag({ key: keyOf(newPos), coord: newPos, target: editDrag.target });
