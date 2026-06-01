@@ -2653,11 +2653,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 0.4 / s;
         ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
         ctx.beginPath();
-        for (const x of xs) {
-          ctx.moveTo(x, yMin - bubbleOff);
-          ctx.lineTo(x, yMax + bubbleOff);
-        }
-        if (!grid.lineOnly) {
+        if (grid.lineOnly) {
+          // Hanya satu garis sepanjang sumbu X dari xMin..xMax di y=oy
+          ctx.moveTo(xMin - bubbleOff, ys[0]);
+          ctx.lineTo(xMax + bubbleOff, ys[0]);
+        } else {
+          for (const x of xs) {
+            ctx.moveTo(x, yMin - bubbleOff);
+            ctx.lineTo(x, yMax + bubbleOff);
+          }
           for (const y of ys) {
             ctx.moveTo(xMin - bubbleOff, y);
             ctx.lineTo(xMax + bubbleOff, y);
