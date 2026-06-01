@@ -2302,13 +2302,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {xAxisLabel(i)}
+                      {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
                     </text>
                     <circle cx={x} cy={y1 + ext + rBub} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {xAxisLabel(i)}
+                      {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
                     </text>
                   </g>
                 ))}
@@ -2321,13 +2321,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {yAxisLabel(j)}
+                      {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
                     </text>
                     <circle cx={x1 + ext + rBub} cy={y} r={rBub}
                       fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
                     <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
                       fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {yAxisLabel(j)}
+                      {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
                     </text>
                   </g>
                 ))}
