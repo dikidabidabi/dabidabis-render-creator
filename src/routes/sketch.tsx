@@ -668,6 +668,7 @@ function normalizeSketch(s: any): Sketch {
     ktbPct: Number.isFinite(Number(s?.ktbPct)) ? Math.max(0, Math.min(100, Number(s.ktbPct))) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
+    mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
       ? {
           lat: Number(s.geo.lat),
