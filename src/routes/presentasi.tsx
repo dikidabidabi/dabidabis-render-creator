@@ -2057,7 +2057,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               if (Math.abs(ddx) < 1e-6) continue;
               const t = (planX - cut.p1.x) / ddx;
               if (t < -0.001 || t > 1.001) continue;
-              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabel(i), key: `g${gIdx}x${i}` });
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabelAt(i, grid.labelOffsetX ?? 0), key: `g${gIdx}x${i}` });
             }
             const axY = axisPositions(grid.spansY);
             for (let j = 0; j < axY.length; j++) {
@@ -2065,7 +2065,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               if (Math.abs(ddy) < 1e-6) continue;
               const t = (planY - cut.p1.y) / ddy;
               if (t < -0.001 || t > 1.001) continue;
-              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabel(j), key: `g${gIdx}y${j}` });
+              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabelAt(j, grid.labelOffsetY ?? 0), key: `g${gIdx}y${j}` });
             }
             if (!hits.length) return null;
             const yTopPx = my(maxMdpl);
