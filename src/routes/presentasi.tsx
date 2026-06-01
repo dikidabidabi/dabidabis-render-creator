@@ -4257,7 +4257,275 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
 }
 
 
-// ---- Modern tiles ----
+// ---- Exploded Axonometric (per unique layout type) ----
+function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
+  const mPerPx = stackMetersPerPx(sketch.scale);
+  const ascLevels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const displayNames = computeLevelDisplayNames(ascLevels, sketch.layers ?? []);
+
+  // Signature per source level: nama ruang + luas (m²) yang dibulatkan.
+  const buildLayersOf = (levelId: string) =>
+    (sketch.layers ?? []).filter(
+      (l) => l.levelId === levelId && !isLahan(l.name) && !isVoid(l.name),
+    );
+  const sigOf = (levelId: string) => {
+    const ls = buildLayersOf(levelId);
+    if (!ls.length) return "";
+    return ls
+      .map((l) => `${l.name.toLowerCase().trim()}|${Math.round(l.areaM2 || 0)}`)
+      .sort()
+      .join(";");
+  };
+
+  // Group level dengan layout identik → 1 representatif (mdpl terendah).
+  const groupOrder: string[] = [];
+  const groups = new Map<string, { rep: Level; members: Level[] }>();
+  for (const lv of ascLevels) {
+    const s = sigOf(lv.id);
+    if (!s) continue;
+    const g = groups.get(s);
+    if (!g) {
+      groups.set(s, { rep: lv, members: [lv] });
+      groupOrder.push(s);
+    } else {
+      g.members.push(lv);
+    }
+  }
+  const reps = groupOrder.map((s) => groups.get(s)!);
+
+  if (reps.length === 0) {
+    return (
+      <div style={{ color: "#999", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+        Belum ada level untuk diproyeksikan.
+      </div>
+    );
+  }
+
+  // Plan origin = bbox centroid of all layer points (px space)
+  let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
+  for (const l of sketch.layers ?? []) for (const p of l.points) {
+    if (p.x < minPx) minPx = p.x; if (p.y < minPy) minPy = p.y;
+    if (p.x > maxPx) maxPx = p.x; if (p.y > maxPy) maxPy = p.y;
+  }
+  if (!Number.isFinite(minPx)) { minPx = 0; minPy = 0; maxPx = 0; maxPy = 0; }
+  const ox = (minPx + maxPx) / 2;
+  const oy = (minPy + maxPy) / 2;
+  const planSizeM = Math.max(maxPx - minPx, maxPy - minPy) * mPerPx;
+
+  const COS = Math.cos(Math.PI / 6);
+  const SIN = Math.sin(Math.PI / 6);
+  const project = (mx: number, mz: number, my: number) => ({
+    x: (mx - mz) * COS,
+    y: (mx + mz) * SIN - my,
+  });
+  const toPm = (l: { points: { x: number; y: number }[] }) =>
+    l.points.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
+
+  const floorH = 3;
+  const gap = Math.max(4, planSizeM * 0.35);
+
+  type Face = {
+    pts: { x: number; y: number }[];
+    fill: string; stroke: string; depth: number; sw: number;
+    kind: "top" | "side";
+  };
+  type Anno = { from: { x: number; y: number }; label: string; floorIdx: number };
+
+  const faces: Face[] = [];
+  const annos: Anno[] = [];
+
+  const ABU_HEX = "#bebebe", ABU_SIDE = "#9a9a9a";
+  const HIJAU_HEX = "#22c55e", HIJAU_SIDE = "#16a34a";
+
+  reps.forEach((g, idx) => {
+    const yBot = idx * (floorH + gap);
+    const color = levelColor(idx, reps.length);
+    const side = shadeHsl(color, -18);
+    const layers = buildLayersOf(g.rep.id);
+    for (const ly of layers) {
+      const pm = toPm(ly);
+      if (pm.length < 3) continue;
+      const ov = roomExtrudeOverride(ly.name);
+      const baseY = yBot + (ov?.baseDelta ?? 0);
+      const topY = baseY + (ov?.height ?? floorH);
+      const topFill = ov
+        ? (isAtapHijau(ly.name) || isTaman(ly.name) ? HIJAU_HEX : ABU_HEX)
+        : color;
+      const sideFill = ov
+        ? (isAtapHijau(ly.name) || isTaman(ly.name) ? HIJAU_SIDE : ABU_SIDE)
+        : side;
+      for (let i = 0; i < pm.length; i++) {
+        const a = pm[i];
+        const b = pm[(i + 1) % pm.length];
+        const quad = [
+          project(a.x, a.z, baseY),
+          project(b.x, b.z, baseY),
+          project(b.x, b.z, topY),
+          project(a.x, a.z, topY),
+        ];
+        const depth = (a.x + b.x + a.z + b.z) / 2 + baseY * 0.01;
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
+      }
+      const topPts = pm.map((p) => project(p.x, p.z, topY));
+      const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
+      faces.push({
+        pts: topPts, fill: topFill, stroke: "rgba(0,0,0,0.55)",
+        depth: avg + topY * 0.01, sw: 0.7, kind: "top",
+      });
+      // Anchor titik anak panah: centroid permukaan atas ruang
+      const cx = pm.reduce((s, p) => s + p.x, 0) / pm.length;
+      const cz = pm.reduce((s, p) => s + p.z, 0) / pm.length;
+      annos.push({ from: project(cx, cz, topY), label: ly.name, floorIdx: idx });
+    }
+  });
+
+  const faceLayer = (k: Face["kind"]) => (k === "top" ? 1 : 2);
+  faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
+
+  // viewBox awal dari faces
+  let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
+  for (const f of faces) for (const p of f.pts) {
+    if (p.x < vx0) vx0 = p.x; if (p.y < vy0) vy0 = p.y;
+    if (p.x > vx1) vx1 = p.x; if (p.y > vy1) vy1 = p.y;
+  }
+  if (!Number.isFinite(vx0)) { vx0 = -10; vy0 = -10; vx1 = 10; vy1 = 10; }
+  const w0 = vx1 - vx0, h0 = vy1 - vy0;
+  // Sisakan ruang di kanan untuk label keterangan ruang.
+  const labelExtra = Math.max(w0, h0) * 0.55;
+  vx1 += labelExtra;
+  const w = vx1 - vx0, h = vy1 - vy0;
+  const pad = Math.max(w, h, 1) * 0.04;
+  const vb = `${vx0 - pad} ${vy0 - pad} ${w + pad * 2} ${h + pad * 2}`;
+  const baseStroke = Math.max(w, h) * 0.0015;
+  const fontPx = Math.max(w, h) * 0.018;
+  const lineH = fontPx * 1.5;
+  const labelX = vx1 - labelExtra * 0.95;
+
+  // Susun label per lantai supaya tidak tumpang tindih.
+  type Leader = { x1: number; y1: number; x2: number; y2: number; label: string };
+  const leaders: Leader[] = [];
+  const byFloor = new Map<number, Anno[]>();
+  for (const a of annos) {
+    if (!byFloor.has(a.floorIdx)) byFloor.set(a.floorIdx, []);
+    byFloor.get(a.floorIdx)!.push(a);
+  }
+  for (const [fi, arr] of byFloor) {
+    const yBot = fi * (floorH + gap);
+    const yTop = yBot + floorH;
+    // Pusatkan stack label pada tengah lantai (di sumbu y proyeksi).
+    const center = (project(0, 0, yBot).y + project(0, 0, yTop).y) / 2;
+    const n = arr.length;
+    const totalH = (n - 1) * lineH;
+    // Urutkan agar leader yang dekat sumbu y atas keluar ke atas.
+    const sorted = [...arr].sort((a, b) => a.from.y - b.from.y);
+    sorted.forEach((a, i) => {
+      const ly = center - totalH / 2 + i * lineH;
+      leaders.push({ x1: a.from.x, y1: a.from.y, x2: labelX, y2: ly, label: a.label });
+    });
+  }
+
+  // Label level di kiri tiap lantai
+  type FloorLabel = { x: number; y: number; text: string };
+  const floorLabels: FloorLabel[] = reps.map((g, idx) => {
+    const yMid = idx * (floorH + gap) + floorH / 2;
+    return {
+      x: vx0 + (w - labelExtra) * 0.02,
+      y: project(0, 0, yMid).y - (project(0, 0, 0).y - project(0, 0, floorH).y) * 0,
+      text: `Tipe ${idx + 1} · ${displayNames[g.rep.id] ?? g.rep.name}`,
+    };
+  });
+
+  return (
+    <div style={{ display: "flex", gap: 20, width: "100%", height: "100%", overflow: "hidden" }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 10, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        <svg viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+          {faces.map((f, i) => (
+            <polygon
+              key={i}
+              points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill={f.fill}
+              stroke={f.stroke}
+              strokeWidth={baseStroke * f.sw * 2}
+              strokeLinejoin="round"
+            />
+          ))}
+          {leaders.map((l, i) => (
+            <g key={`ld-${i}`}>
+              <circle cx={l.x1} cy={l.y1} r={baseStroke * 1.6} fill="#0a0a0a" />
+              <path
+                d={`M ${l.x1} ${l.y1} L ${(l.x1 + l.x2) / 2} ${l.y2} L ${l.x2 - baseStroke * 2} ${l.y2}`}
+                stroke="#0a0a0a"
+                strokeWidth={baseStroke * 0.7}
+                fill="none"
+              />
+              <text
+                x={l.x2 + baseStroke * 2}
+                y={l.y2}
+                fontSize={fontPx}
+                fontFamily="var(--font-sans, Manrope, sans-serif)"
+                dominantBaseline="middle"
+                fill="#0a0a0a"
+              >
+                {l.label}
+              </text>
+            </g>
+          ))}
+          {floorLabels.map((fl, i) => (
+            <text
+              key={`fl-${i}`}
+              x={fl.x}
+              y={fl.y}
+              fontSize={fontPx * 1.1}
+              fontFamily="var(--font-display, Sora, sans-serif)"
+              fontWeight={600}
+              letterSpacing="0.04em"
+              fill="#0a0a0a"
+              dominantBaseline="middle"
+            >
+              {fl.text.toUpperCase()}
+            </text>
+          ))}
+        </svg>
+      </div>
+
+      <div style={{ width: 250, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600 }}>
+          Tipe Layout
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+          {reps.map((g, idx) => {
+            const repName = displayNames[g.rep.id] ?? g.rep.name;
+            const memberNames = g.members.map((m) => displayNames[m.id] ?? m.name);
+            const color = levelColor(idx, reps.length);
+            const k = Math.max(1, Math.round(g.rep.typicalCount ?? 1));
+            return (
+              <div key={g.rep.id} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, padding: "7px 9px", border: "1px solid #ececec", borderRadius: 3, background: "#fff" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 11, height: 11, background: color, border: "1px solid rgba(0,0,0,0.3)", flexShrink: 0 }} />
+                  <span style={{ fontWeight: 700, letterSpacing: "0.04em" }}>
+                    Tipe {idx + 1} · {repName}
+                  </span>
+                </div>
+                {(g.members.length > 1 || k > 1) && (
+                  <div style={{ fontSize: 9.5, color: "#888", marginLeft: 17, lineHeight: 1.35 }}>
+                    {g.members.length > 1 && <>mewakili {memberNames.join(", ")}</>}
+                    {g.members.length > 1 && k > 1 && " · "}
+                    {k > 1 && <>×{k} tipikal</>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 9, color: "#999", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: "auto", lineHeight: 1.5 }}>
+          Hanya menampilkan level dengan layout berbeda. Level copy / tipikal diwakili 1 lantai representatif. Anak panah menunjuk ruang.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function BigStat({ label, value, hint, compact }: { label: string; value: string; hint?: string; compact?: boolean }) {
   const pad = compact ? "10px 14px" : "18px 20px";
   const gap = compact ? 3 : 6;
