@@ -5557,6 +5557,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Scissors className="h-4 w-4" />
           </Button>
+          <Button
+            variant={tool === "circle" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("circle"); }}
+            className={cn(tool === "circle" && "bg-gradient-ember shadow-ember")}
+            title="Lingkaran (tap pusat, geser radius)"
+          >
+            <CircleIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "trim" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("trim"); }}
+            className={cn(tool === "trim" && "bg-gradient-ember shadow-ember")}
+            title="Trim / Extend (tap garis dekat ujung)"
+          >
+            <Crop className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "offset" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("offset"); }}
+            className={cn(tool === "offset" && "bg-gradient-ember shadow-ember")}
+            title="Offset (tap garis pada sisi tujuan)"
+          >
+            <MoveHorizontal className="h-4 w-4" />
+          </Button>
           {tool === "edit" && (
             <>
               <div className="h-6 w-px bg-border/60" />
