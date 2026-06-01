@@ -4728,7 +4728,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <DoorOpen className="mr-1.5 h-4 w-4" /> Pintu
           </Button>
+          <Button
+            variant={tool === "circle" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("circle"); }}
+            className={cn(tool === "circle" && "bg-gradient-ember shadow-ember")}
+            title="Lingkaran — tap di pusat, geser untuk menentukan radius."
+          >
+            <CircleIcon className="mr-1.5 h-4 w-4" /> Lingkaran
+          </Button>
+          <Button
+            variant={tool === "trim" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("trim"); }}
+            className={cn(tool === "trim" && "bg-gradient-ember shadow-ember")}
+            title="Trim / Extend — tap di garis dekat ujung yang ingin disesuaikan, gunakan garis lain sebagai batas."
+          >
+            <Crop className="mr-1.5 h-4 w-4" /> Trim / Extend
+          </Button>
+          <Button
+            variant={tool === "offset" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("offset"); }}
+            className={cn(tool === "offset" && "bg-gradient-ember shadow-ember")}
+            title="Offset — tap garis pada sisi yang diinginkan; jarak diatur di bawah."
+          >
+            <MoveHorizontal className="mr-1.5 h-4 w-4" /> Offset
+          </Button>
         </div>
+        {tool === "offset" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Offset — Jarak (cm)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={10000}
+              step={1}
+              value={offsetCm}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v) && v > 0) setOffsetCm(v);
+              }}
+              className="h-8 text-xs"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Tap garis pada sisi tempat duplikat ingin diletakkan. Hanya garis lurus.
+            </p>
+          </div>
+        )}
+        {tool === "trim" && (
+          <div className="rounded-md border border-border/60 bg-background/40 p-2.5">
+            <p className="text-[11px] text-muted-foreground">
+              Tap garis pada ujung yang ingin di-trim/extend. Garis lurus terdekat lainnya dipakai sebagai batas; ujung digerakkan ke titik perpotongan kedua garis (memperpendek atau memperpanjang otomatis).
+            </p>
+          </div>
+        )}
+        {tool === "circle" && (
+          <div className="rounded-md border border-border/60 bg-background/40 p-2.5">
+            <p className="text-[11px] text-muted-foreground">
+              Tap di pusat, lalu geser untuk menentukan radius. Hapus dengan tool Hapus.
+            </p>
+          </div>
+        )}
         {tool === "door" && (
           <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pintu — Parameter</Label>
