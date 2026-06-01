@@ -2288,6 +2288,40 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const dimFs = sw * 0.0085;
             const dimGap = sw * 0.006;
             const rotDeg = Number(grid.rotation) || 0;
+            const hideSX = Boolean(grid.hideBubbleStartX);
+            const hideEX = Boolean(grid.hideBubbleEndX);
+            const hideSY = Boolean(grid.hideBubbleStartY);
+            const hideEY = Boolean(grid.hideBubbleEndY);
+            if (grid.lineOnly) {
+              const lastI = xs.length - 1;
+              return (
+                <g key={`grid-${gIdx}`} pointerEvents="none"
+                  transform={rotDeg ? `rotate(${rotDeg} ${ox} ${oy})` : undefined}>
+                  <line x1={x0 - ext} y1={y0} x2={x1 + ext} y2={y0}
+                    stroke="#0a0a0a" strokeWidth={gridSW} strokeDasharray={dash} />
+                  {!hideSX && (
+                    <g>
+                      <circle cx={x0 - ext - rBub} cy={y0} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                      <text x={x0 - ext - rBub} y={y0} textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                        {xAxisLabelAt(0, grid.labelOffsetX ?? 0)}
+                      </text>
+                    </g>
+                  )}
+                  {!hideEX && (
+                    <g>
+                      <circle cx={x1 + ext + rBub} cy={y0} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                      <text x={x1 + ext + rBub} y={y0} textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                        {xAxisLabelAt(lastI, grid.labelOffsetX ?? 0)}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            }
             return (
               <g key={`grid-${gIdx}`} pointerEvents="none"
                 transform={rotDeg ? `rotate(${rotDeg} ${ox} ${oy})` : undefined}>
@@ -2296,18 +2330,22 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   <g key={`gx-${i}`}>
                     <line x1={x} y1={y0 - ext} x2={x} y2={y1 + ext}
                       stroke="#0a0a0a" strokeWidth={gridSW} strokeDasharray={dash} />
-                    <circle cx={x} cy={y0 - ext - rBub} r={rBub}
-                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
-                    <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
-                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
-                    </text>
-                    <circle cx={x} cy={y1 + ext + rBub} r={rBub}
-                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
-                    <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
-                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
-                    </text>
+                    {!hideSY && (<>
+                      <circle cx={x} cy={y0 - ext - rBub} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                      <text x={x} y={y0 - ext - rBub} textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                        {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
+                      </text>
+                    </>)}
+                    {!hideEY && (<>
+                      <circle cx={x} cy={y1 + ext + rBub} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                      <text x={x} y={y1 + ext + rBub} textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                        {xAxisLabelAt(i, grid.labelOffsetX ?? 0)}
+                      </text>
+                    </>)}
                   </g>
                 ))}
                 {/* Horizontal (sumbu Y) */}
@@ -2315,18 +2353,22 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   <g key={`gy-${j}`}>
                     <line x1={x0 - ext} y1={y} x2={x1 + ext} y2={y}
                       stroke="#0a0a0a" strokeWidth={gridSW} strokeDasharray={dash} />
-                    <circle cx={x0 - ext - rBub} cy={y} r={rBub}
-                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
-                    <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
-                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
-                    </text>
-                    <circle cx={x1 + ext + rBub} cy={y} r={rBub}
-                      fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
-                    <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
-                      fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
-                      {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
-                    </text>
+                    {!hideSX && (<>
+                      <circle cx={x0 - ext - rBub} cy={y} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                      <text x={x0 - ext - rBub} y={y} textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                        {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
+                      </text>
+                    </>)}
+                    {!hideEX && (<>
+                      <circle cx={x1 + ext + rBub} cy={y} r={rBub}
+                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSW} />
+                      <text x={x1 + ext + rBub} y={y} textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">
+                        {yAxisLabelAt(j, grid.labelOffsetY ?? 0)}
+                      </text>
+                    </>)}
                   </g>
                 ))}
                 {/* Dimensi bentang grid terluar — diletakkan di sisi dalam antara garis grid terluar dan buble */}
