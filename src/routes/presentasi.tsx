@@ -4884,8 +4884,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     return { x: (dx - dy) * cos30, y: (dx + dy) * sin30 - zPx };
   };
 
-  // Kumpulkan semua wall quads + top faces untuk diurutkan dan dirender.
-  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; dir?: FacadeDir };
+  // Kumpulkan semua bidang, lalu render atap sebelum dinding agar sisi yang menghadap kamera tetap terlihat penuh.
+  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall"; dir?: FacadeDir };
   const quads: Quad[] = [];
 
   // Lahan (ground polygon, tipis di z=0).
@@ -4897,6 +4897,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       fill: "rgba(0,0,0,0.04)",
       stroke: "rgba(0,0,0,0.35)",
       sw: 1.2,
+      kind: "base",
     });
   }
 
@@ -4934,6 +4935,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         fill: col.fill,
         stroke: col.stroke,
         sw: 1.4,
+        kind: "wall",
         dir,
       });
     }
@@ -4945,10 +4947,12 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
+      kind: "top",
     });
   }
 
-  quads.sort((a, b) => a.depth - b.depth);
+  const quadLayer = (kind: Quad["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  quads.sort((a, b) => quadLayer(a.kind) - quadLayer(b.kind) || a.depth - b.depth);
 
   // Tentukan bounding viewBox proyeksi.
   const allPts = quads.flatMap((q) => q.pts);
