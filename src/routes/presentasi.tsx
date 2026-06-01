@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -4935,7 +4936,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     quads.push({
       pts: topPts,
       depth: 1e8, // selalu paling depan/atas
-      fill: "rgba(40,40,40,0.55)",
+      fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
     });
@@ -5040,29 +5041,29 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         </div>
       </div>
 
-      {/* Kanan: legenda + rantai logika */}
-      <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ border: "1px solid #111", padding: 12 }}>
-          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
+      {/* Kanan: legenda + analisa WWR + rantai logika */}
+      <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ border: "1px solid #111", padding: 10 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 6 }}>
             Legenda Strategi Pasif
           </div>
           <LegendRow swatch="#7a1f1f" border="#3a0d0d"
-            title="Dinding Masif (Massive Wall / Bare Concrete)"
-            body="Fasad Timur & Barat ditutup masa solid untuk memblokir radiasi matahari ekstrem pagi & sore. Mengurangi beban pendinginan dalam ruang." />
+            title="Dinding Masif (Massive Wall)"
+            body="Timur & Barat ditutup masa solid memblokir radiasi pagi & sore." />
           <LegendRow swatch="#7ec8e3" border="#2a5e7a"
-            title="Bukaan Kaca (Glazing / Open Facade)"
-            body="Fasad Utara & Selatan terbuka untuk pencahayaan alami tak langsung sepanjang tahun. Orientasi visual utama ke arah landmark regional via sisi Utara." />
+            title="Bukaan Kaca (Glazing)"
+            body="Utara & Selatan untuk pencahayaan alami tak langsung." />
         </div>
 
-        <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14, flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+        <WwrPanel sketch={sketch} />
+
+        <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800 }}>
-            Rantai Logika (Chain of Logic)
+            Rantai Logika
           </div>
-          <ChainStep n={1} body="Input koordinat & rotasi peta menentukan arah Utara nyata pada sketsa." />
-          <ChainStep n={2} body="SunCalc menghitung azimut & altitud matahari pada 4 titik balik tahunan pukul 15.00 WIB." />
-          <ChainStep n={3} body="Setiap sisi poligon ruang dievaluasi normal arah hadapnya terhadap kompas asli." />
-          <ChainStep n={4} body="Sisi Timur/Barat → masif (beban termal tinggi). Sisi Utara/Selatan → bukaan kaca (cahaya sejuk)." />
-          <ChainStep n={5} body="Hasil menjadi strategi passive cooling: bayangan masif memotong radiasi puncak, fasad terbuka memaksimalkan daylight." />
+          <ChainStep n={1} body="Koordinat & rotasi peta menetapkan arah Utara nyata." />
+          <ChainStep n={2} body="Normal tiap sisi poligon dievaluasi terhadap kompas." />
+          <ChainStep n={3} body="E/W → masif. N/S → bukaan kaca dengan WWR terukur." />
         </div>
       </div>
     </div>
@@ -5088,6 +5089,95 @@ function ChainStep({ n, body }: { n: number; body: string }) {
         {n}
       </div>
       <div style={{ fontSize: 12, lineHeight: 1.4, color: "#e8e8e8" }}>{body}</div>
+    </div>
+  );
+}
+
+function WwrPanel({ sketch }: { sketch: Sketch }) {
+  const northDeg = effectiveNorthDeg(sketch);
+  const pxPerM = pxPerMeterFor(sketch.scale);
+  const lat = sketch.geo?.lat ?? -6.2;
+  const buildLayers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+
+  // Total panjang fasad per arah (meter).
+  const lenByDir: Record<FacadeDir, number> = { N: 0, S: 0, E: 0, W: 0 };
+  for (const layer of buildLayers) {
+    const ccw = polygonSignedArea(layer.points) > 0;
+    for (let i = 0; i < layer.points.length; i++) {
+      const a = layer.points[i];
+      const b = layer.points[(i + 1) % layer.points.length];
+      const n = outwardNormal(a, b, ccw);
+      const dir = classifyBearing(bearingFromSketchVec(n.x, n.y, northDeg));
+      lenByDir[dir] += Math.hypot(b.x - a.x, b.y - a.y) / pxPerM;
+    }
+  }
+
+  // Rekomendasi WWR (SNI 6389:2020 & ASHRAE 90.1 dasar tropis lembap).
+  // Untuk lintang selatan (Indonesia), Utara menerima radiasi lebih tinggi
+  // sepanjang tahun → WWR lebih konservatif. Selatan paling teduh.
+  const south = lat < 0;
+  const wwr: Record<FacadeDir, { min: number; max: number; target: number; note: string }> = south
+    ? {
+        N: { min: 20, max: 35, target: 28, note: "Sun-path utama; pakai overhang 0.6 m" },
+        S: { min: 40, max: 60, target: 50, note: "Paling teduh, fasad bukaan utama" },
+        E: { min: 10, max: 20, target: 15, note: "Radiasi pagi tinggi; louvre vertikal" },
+        W: { min: 8,  max: 15, target: 12, note: "Silau sore; secondary skin wajib" },
+      }
+    : {
+        N: { min: 40, max: 60, target: 50, note: "Paling teduh, fasad bukaan utama" },
+        S: { min: 20, max: 35, target: 28, note: "Sun-path utama; pakai overhang 0.6 m" },
+        E: { min: 10, max: 20, target: 15, note: "Radiasi pagi tinggi; louvre vertikal" },
+        W: { min: 8,  max: 15, target: 12, note: "Silau sore; secondary skin wajib" },
+      };
+
+  // Asumsi tinggi fasad efektif 3.6 m per lantai × jumlah lantai (heuristik).
+  const levels = (sketch.levels ?? []).length || 1;
+  const hFasad = 3.6 * Math.max(1, levels);
+
+  const order: FacadeDir[] = ["N", "E", "S", "W"];
+  const dirLabel: Record<FacadeDir, string> = { N: "Utara", S: "Selatan", E: "Timur", W: "Barat" };
+
+  return (
+    <div style={{ border: "1px solid #111", padding: 10, background: "#fff" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700 }}>
+          Rekomendasi WWR
+        </div>
+        <div style={{ fontSize: 10, color: "#888" }}>lat {lat.toFixed(2)}° · h≈{hFasad.toFixed(1)} m</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", columnGap: 8, rowGap: 6, fontSize: 11.5 }}>
+        <div style={{ fontWeight: 800, color: "#666", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>Arah</div>
+        <div style={{ fontWeight: 800, color: "#666", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>Catatan</div>
+        <div style={{ fontWeight: 800, color: "#666", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "right" }}>WWR</div>
+        <div style={{ fontWeight: 800, color: "#666", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "right" }}>Kaca m²</div>
+        {order.map((d) => {
+          const w = wwr[d];
+          const L = lenByDir[d];
+          const areaFasad = L * hFasad;
+          const areaKaca = areaFasad * (w.target / 100);
+          const isGlaze = d === "N" || d === "S";
+          const accent = isGlaze ? "#2a5e7a" : "#7a1f1f";
+          return (
+            <Fragment key={d}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, background: accent, display: "inline-block", borderRadius: 2 }} />
+                <span style={{ fontWeight: 800, color: "#0a0a0a" }}>{dirLabel[d]}</span>
+              </div>
+              <div style={{ color: "#444", fontSize: 11 }}>{w.note}</div>
+              <div style={{ textAlign: "right", fontWeight: 700, color: accent, fontVariantNumeric: "tabular-nums" }}>
+                {w.min}–{w.max}% <span style={{ color: "#888", fontWeight: 500 }}>· {w.target}%</span>
+              </div>
+              <div style={{ textAlign: "right", color: "#0a0a0a", fontVariantNumeric: "tabular-nums" }}>
+                {areaKaca.toFixed(1)}
+              </div>
+            </Fragment>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 10.5, color: "#555", lineHeight: 1.4, borderTop: "1px dashed #ccc", paddingTop: 6 }}>
+        Acuan: SNI 6389:2020 selubung bangunan tropis lembap. WWR rendah pada E/W menekan OTTV;
+        WWR tinggi pada {south ? "Selatan" : "Utara"} memaksimalkan daylight tanpa beban termal puncak.
+      </div>
     </div>
   );
 }
