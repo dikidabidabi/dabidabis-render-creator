@@ -5423,12 +5423,60 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 </div>
               </div>
               {gridEditMode === "fromLine" && (
-                <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik salah satu garis lurus di kanvas. Garis tersebut akan
-                  dikonversi menjadi grid extra (satu sumbu, tanpa kolom) dan
-                  garis aslinya dihapus. Buble otomatis melanjutkan serial
-                  dari grid sebelumnya di level aktif.
-                </p>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    Klik garis lurus di kanvas — garis akan ditambahkan sebagai
+                    sumbu grid pada grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
+                    sedang aktif, dan garis aslinya dihapus. Mode tetap aktif
+                    sehingga bisa pilih beberapa garis berurutan. Tekan tombol
+                    <span className="font-medium text-foreground"> Jadikan Grid</span> lagi atau
+                    <span className="font-medium text-foreground"> Bentang</span> untuk selesai.
+                  </p>
+                  {(grid.extraLines ?? []).length > 0 && (
+                    <div className="space-y-1 rounded border border-border/50 bg-surface/40 p-1.5">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Garis tergabung ({grid.extraLines!.length})
+                      </div>
+                      {grid.extraLines!.map((el, i) => {
+                        const baseIdx = (grid.labelOffsetX ?? 0) + grid.spansX.length + 1;
+                        const lbl = xAxisLabelAt(baseIdx + i, 0);
+                        return (
+                          <div key={el.id} className="flex items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-medium">{lbl} · {el.lengthM.toFixed(2)}m</span>
+                            <div className="flex items-center gap-1.5">
+                              <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung awal">
+                                <input type="checkbox" checked={!!el.hideStart}
+                                  onChange={(e) => {
+                                    const next = (grid.extraLines ?? []).map((x, k) =>
+                                      k === i ? { ...x, hideStart: e.target.checked } : x);
+                                    updateGrid({ extraLines: next });
+                                  }} />
+                                Awal
+                              </label>
+                              <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung akhir">
+                                <input type="checkbox" checked={!!el.hideEnd}
+                                  onChange={(e) => {
+                                    const next = (grid.extraLines ?? []).map((x, k) =>
+                                      k === i ? { ...x, hideEnd: e.target.checked } : x);
+                                    updateGrid({ extraLines: next });
+                                  }} />
+                                Akhir
+                              </label>
+                              <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]"
+                                onClick={() => {
+                                  const next = (grid.extraLines ?? []).filter((_, k) => k !== i);
+                                  updateGrid({ extraLines: next.length ? next : undefined });
+                                }}
+                                title="Hapus garis dari grid">
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
               {gridEditMode === "clip" && (
                 <>
