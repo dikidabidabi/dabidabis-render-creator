@@ -70,8 +70,6 @@ import {
   COL_PRESETS,
   normalizeGrid,
   axisPositions,
-  xAxisLabel,
-  yAxisLabel,
   xAxisLabelAt,
   yAxisLabelAt,
   parseXAxisLabel,
