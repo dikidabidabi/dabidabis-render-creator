@@ -3893,15 +3893,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     if (gridDrag) {
-      const raw = getWorldPosRaw(e);
+      const rawWorld = getWorldPosRaw(e);
       if (gridDrag.kind === "move") {
-        const dx = raw.x - gridDrag.startWorld.x;
-        const dy = raw.y - gridDrag.startWorld.y;
-        const next = snapOriginPx({ x: gridDrag.startOrigin.x + dx, y: gridDrag.startOrigin.y + dy });
+        // Move: pakai world delta. Snap origin ke mm grid hanya bila kedua grid paralel.
+        const dx = rawWorld.x - gridDrag.startWorld.x;
+        const dy = rawWorld.y - gridDrag.startWorld.y;
+        const cand = { x: gridDrag.startOrigin.x + dx, y: gridDrag.startOrigin.y + dy };
+        const next = gridsParallel
+          ? (() => {
+              // Snap dalam frame mm grid (rotasi mmGridRotRad di sekitar 0,0)
+              const local = rotateAround(cand, { x: 0, y: 0 }, -mmGridRotRad);
+              const snapLocal = { x: Math.round(local.x / MINOR_PX) * MINOR_PX, y: Math.round(local.y / MINOR_PX) * MINOR_PX };
+              return rotateAround(snapLocal, { x: 0, y: 0 }, mmGridRotRad);
+            })()
+          : cand;
         if (next.x !== grid.origin.x || next.y !== grid.origin.y) updateGrid({ origin: next });
       } else {
-        const dxm = (raw.x - gridDrag.startWorld.x) / pxPerMeter;
-        const dym = (raw.y - gridDrag.startWorld.y) / pxPerMeter;
+        // Corner: delta dihitung di frame lokal grid (rotasi struct).
+        const rawLocal = structGridRotRad !== 0
+          ? rotateAround(rawWorld, gridDrag.startOrigin, -structGridRotRad)
+          : rawWorld;
+        const dxm = (rawLocal.x - gridDrag.startWorld.x) / pxPerMeter;
+        const dym = (rawLocal.y - gridDrag.startWorld.y) / pxPerMeter;
         const extX = gridDrag.corner === "tr" || gridDrag.corner === "br" ? 1 : -1;
         const extY = gridDrag.corner === "bl" || gridDrag.corner === "br" ? 1 : -1;
         const addX = Math.round((dxm * extX) / gridDrag.unit);
@@ -3910,8 +3923,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const newSpansY = adjustSpans(gridDrag.startSpansY, addY, gridDrag.unit, extY < 0);
         const actualAddX = newSpansX.length - gridDrag.startSpansX.length;
         const actualAddY = newSpansY.length - gridDrag.startSpansY.length;
-        const newOriginX = extX < 0 ? gridDrag.startOrigin.x - actualAddX * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.x;
-        const newOriginY = extY < 0 ? gridDrag.startOrigin.y - actualAddY * gridDrag.unit * pxPerMeter : gridDrag.startOrigin.y;
+        // Pergeseran origin saat extend ke arah negatif: vektor sumbu lokal × jarak,
+        // dirotasi ke world.
+        const dxLocal = extX < 0 ? -actualAddX * gridDrag.unit * pxPerMeter : 0;
+        const dyLocal = extY < 0 ? -actualAddY * gridDrag.unit * pxPerMeter : 0;
+        const cs = Math.cos(structGridRotRad), sn = Math.sin(structGridRotRad);
+        const newOriginX = gridDrag.startOrigin.x + dxLocal * cs - dyLocal * sn;
+        const newOriginY = gridDrag.startOrigin.y + dxLocal * sn + dyLocal * cs;
         updateGrid({ spansX: newSpansX, spansY: newSpansY, origin: { x: newOriginX, y: newOriginY } });
       }
       return;
