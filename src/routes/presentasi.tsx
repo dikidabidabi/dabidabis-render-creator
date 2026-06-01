@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -5157,7 +5158,7 @@ function WwrPanel({ sketch }: { sketch: Sketch }) {
           const isGlaze = d === "N" || d === "S";
           const accent = isGlaze ? "#2a5e7a" : "#7a1f1f";
           return (
-            <React.Fragment key={d}>
+            <Fragment key={d}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 8, height: 8, background: accent, display: "inline-block", borderRadius: 2 }} />
                 <span style={{ fontWeight: 800, color: "#0a0a0a" }}>{dirLabel[d]}</span>
@@ -5169,7 +5170,7 @@ function WwrPanel({ sketch }: { sketch: Sketch }) {
               <div style={{ textAlign: "right", color: "#0a0a0a", fontVariantNumeric: "tabular-nums" }}>
                 {areaKaca.toFixed(1)}
               </div>
-            </React.Fragment>
+            </Fragment>
           );
         })}
       </div>
