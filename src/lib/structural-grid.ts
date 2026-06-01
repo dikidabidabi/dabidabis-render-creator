@@ -87,6 +87,7 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
       x: Number.isFinite(Number(g.origin?.x)) ? Number(g.origin.x) : 0,
       y: Number.isFinite(Number(g.origin?.y)) ? Number(g.origin.y) : 0,
     },
+    rotation: Number.isFinite(Number(g.rotation)) ? Number(g.rotation) : 0,
     spansX: spansX.length ? spansX : [...DEFAULT_GRID.spansX],
     spansY: spansY.length ? spansY : [...DEFAULT_GRID.spansY],
     colSizeCm: Number.isFinite(col) && col > 0 ? col : DEFAULT_GRID.colSizeCm,
