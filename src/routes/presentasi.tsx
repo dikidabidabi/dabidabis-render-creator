@@ -5040,29 +5040,29 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         </div>
       </div>
 
-      {/* Kanan: legenda + rantai logika */}
-      <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ border: "1px solid #111", padding: 12 }}>
-          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
+      {/* Kanan: legenda + analisa WWR + rantai logika */}
+      <div style={{ width: 380, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ border: "1px solid #111", padding: 10 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 6 }}>
             Legenda Strategi Pasif
           </div>
           <LegendRow swatch="#7a1f1f" border="#3a0d0d"
-            title="Dinding Masif (Massive Wall / Bare Concrete)"
-            body="Fasad Timur & Barat ditutup masa solid untuk memblokir radiasi matahari ekstrem pagi & sore. Mengurangi beban pendinginan dalam ruang." />
+            title="Dinding Masif (Massive Wall)"
+            body="Timur & Barat ditutup masa solid memblokir radiasi pagi & sore." />
           <LegendRow swatch="#7ec8e3" border="#2a5e7a"
-            title="Bukaan Kaca (Glazing / Open Facade)"
-            body="Fasad Utara & Selatan terbuka untuk pencahayaan alami tak langsung sepanjang tahun. Orientasi visual utama ke arah landmark regional via sisi Utara." />
+            title="Bukaan Kaca (Glazing)"
+            body="Utara & Selatan untuk pencahayaan alami tak langsung." />
         </div>
 
-        <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 14, flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+        <WwrPanel sketch={sketch} />
+
+        <div style={{ border: "1px solid #0a0a0a", background: "#0a0a0a", color: "#fff", padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#e85d3a", fontWeight: 800 }}>
-            Rantai Logika (Chain of Logic)
+            Rantai Logika
           </div>
-          <ChainStep n={1} body="Input koordinat & rotasi peta menentukan arah Utara nyata pada sketsa." />
-          <ChainStep n={2} body="SunCalc menghitung azimut & altitud matahari pada 4 titik balik tahunan pukul 15.00 WIB." />
-          <ChainStep n={3} body="Setiap sisi poligon ruang dievaluasi normal arah hadapnya terhadap kompas asli." />
-          <ChainStep n={4} body="Sisi Timur/Barat → masif (beban termal tinggi). Sisi Utara/Selatan → bukaan kaca (cahaya sejuk)." />
-          <ChainStep n={5} body="Hasil menjadi strategi passive cooling: bayangan masif memotong radiasi puncak, fasad terbuka memaksimalkan daylight." />
+          <ChainStep n={1} body="Koordinat & rotasi peta menetapkan arah Utara nyata." />
+          <ChainStep n={2} body="Normal tiap sisi poligon dievaluasi terhadap kompas." />
+          <ChainStep n={3} body="E/W → masif. N/S → bukaan kaca dengan WWR terukur." />
         </div>
       </div>
     </div>
