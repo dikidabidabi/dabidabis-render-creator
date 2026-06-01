@@ -5097,6 +5097,18 @@ function LevelsPanel({
   const [layerDraft, setLayerDraft] = useState("");
   const [typicalDrafts, setTypicalDrafts] = useState<Record<string, string>>({});
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
+  const normalizeMdplDraft = (value: string) => value.replace(/[−–—]/g, "-").replace(/\s+/g, "");
+  const isValidMdplDraft = (value: string) => value === "" || /^-?\d*([.,]\d*)?$/.test(value);
+  const commitMdplDraft = (lvlId: string, fallback: number, rawValue?: string) => {
+    const raw = normalizeMdplDraft(rawValue ?? mdplDrafts[lvlId] ?? String(fallback));
+    const v = Number.parseFloat(raw.replace(",", "."));
+    if (Number.isFinite(v)) onMdpl(lvlId, v);
+    setMdplDrafts((d) => {
+      const n = { ...d };
+      delete n[lvlId];
+      return n;
+    });
+  };
 
   const displayNames = computeLevelDisplayNames(levels, layers);
   const sorted = [...levels].sort((a, b) => b.mdpl - a.mdpl); // tertinggi di atas
@@ -5267,27 +5279,26 @@ function LevelsPanel({
                 <Input
                   id={`mdpl-${lvl.id}`}
                   type="text"
-                  inputMode="decimal"
+                  inputMode="text"
+                  pattern="-?[0-9]*[.,]?[0-9]*"
                   value={mdplDraft ?? String(lvl.mdpl)}
                   onChange={(e) => {
-                    const raw = e.target.value;
-                    // Allow only digits, optional leading minus, one decimal separator
-                    if (raw === "" || /^-?\d*([.,]\d*)?$/.test(raw)) {
+                    const raw = normalizeMdplDraft(e.target.value);
+                    // Izinkan nilai sementara seperti "-" agar basement (MDPL negatif) bisa diketik.
+                    if (isValidMdplDraft(raw)) {
                       setMdplDrafts((d) => ({ ...d, [lvl.id]: raw }));
                     }
                   }}
-                  onBlur={() => {
-                    const raw = (mdplDraft ?? "").replace(",", ".");
-                    const v = parseFloat(raw);
-                    if (Number.isFinite(v)) onMdpl(lvl.id, v);
-                    setMdplDrafts((d) => {
-                      const n = { ...d };
-                      delete n[lvl.id];
-                      return n;
-                    });
-                  }}
+                  onBlur={(e) => commitMdplDraft(lvl.id, lvl.mdpl, e.currentTarget.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    if (e.key === "Enter") commitMdplDraft(lvl.id, lvl.mdpl, e.currentTarget.value);
+                    if (e.key === "Escape") {
+                      setMdplDrafts((d) => {
+                        const n = { ...d };
+                        delete n[lvl.id];
+                        return n;
+                      });
+                    }
                   }}
                   className="h-7 w-20 text-sm"
                 />

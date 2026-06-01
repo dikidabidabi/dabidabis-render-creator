@@ -640,31 +640,44 @@ function FullscreenSlideshow({
 // ---------- A3 Frame: maintains aspect, scales internal 1414x1000 canvas ----------
 function A3Frame({ children }: { children: React.ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.5);
+  const [frame, setFrame] = useState({ scale: 0.5, w: A3_W * 0.5, h: A3_H * 0.5 });
   useLayoutEffect(() => {
     if (!wrap.current) return;
-    const ro = new ResizeObserver(([entry]) => {
-      const w = entry.contentRect.width;
-      setScale(w / A3_W);
-    });
+    const update = (availableW: number) => {
+      const viewportFitW = Math.max(320, (window.innerHeight - 140) * (A3_W / A3_H));
+      const w = Math.min(availableW, viewportFitW);
+      const scale = w / A3_W;
+      setFrame({ scale, w, h: A3_H * scale });
+    };
+    const ro = new ResizeObserver(([entry]) => update(entry.contentRect.width));
     ro.observe(wrap.current);
-    return () => ro.disconnect();
+    const onResize = () => wrap.current && update(wrap.current.getBoundingClientRect().width);
+    window.addEventListener("resize", onResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", onResize);
+    };
   }, []);
   return (
     <div
       ref={wrap}
-      className="relative w-full overflow-hidden bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.45)] ring-1 ring-black/5"
-      style={{ aspectRatio: `${A3_W} / ${A3_H}` }}
+      className="relative flex w-full items-center justify-center overflow-hidden"
+      style={{ height: frame.h }}
     >
       <div
+        className="overflow-hidden bg-white shadow-[0_10px_40px_-15px_rgba(0,0,0,0.45)] ring-1 ring-black/5"
+        style={{ width: frame.w, height: frame.h }}
+      >
+        <div
         style={{
           width: A3_W,
           height: A3_H,
-          transform: `scale(${scale})`,
+          transform: `scale(${frame.scale})`,
           transformOrigin: "top left",
         }}
       >
         {children}
+      </div>
       </div>
     </div>
   );
@@ -918,8 +931,10 @@ function computeStats(sk: Sketch): Stats {
 
 // ============= SLIDE CONTENT (white A3 modern theme) =============
 
-const SLIDE_VIEW_KEY = "dabidabis_slideview_v2";
+const SLIDE_VIEW_KEY = "dabidabis_slideview_v3";
 type SlideView = { scale: number; tx: number; ty: number };
+const COMPASS_VIEW_KEY = "dabidabis_compass_view_v1";
+type CompassView = { x: number; y: number };
 function loadSlideView(id: string): SlideView | null {
   try {
     const raw = localStorage.getItem(SLIDE_VIEW_KEY);
@@ -937,6 +952,23 @@ function saveSlideView(id: string, view: SlideView | null) {
     const v = raw ? JSON.parse(raw) : {};
     if (view == null) delete v[id]; else v[id] = view;
     localStorage.setItem(SLIDE_VIEW_KEY, JSON.stringify(v));
+  } catch { /* ignore */ }
+}
+function loadCompassView(id: string): CompassView | null {
+  try {
+    const raw = localStorage.getItem(COMPASS_VIEW_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw)?.[id];
+    if (typeof s?.x === "number" && typeof s?.y === "number") return s;
+    return null;
+  } catch { return null; }
+}
+function saveCompassView(id: string, view: CompassView) {
+  try {
+    const raw = localStorage.getItem(COMPASS_VIEW_KEY);
+    const v = raw ? JSON.parse(raw) : {};
+    v[id] = view;
+    localStorage.setItem(COMPASS_VIEW_KEY, JSON.stringify(v));
   } catch { /* ignore */ }
 }
 
@@ -969,10 +1001,12 @@ function ManualScaleBox({
       inner.style.transform = prev;
       if (cw === 0 || ch === 0 || box.width === 0 || box.height === 0) return;
       setNatural({ w: cw, h: ch });
-      setFitScale(Math.min(1, box.width / cw, box.height / ch));
+      setFitScale(Math.min(box.width / cw, box.height / ch));
     };
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(boxRef.current);
     raf1 = requestAnimationFrame(() => { raf2 = requestAnimationFrame(measure); });
-    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); ro.disconnect(); };
   }, [slideId]);
 
   const scale = view?.scale ?? fitScale;
@@ -1102,6 +1136,9 @@ function ManualScaleBox({
         position: "relative",
         overflow: "hidden",
         touchAction: "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         cursor: pointersRef.current.size > 0 ? "grabbing" : "grab",
       }}
     >
@@ -1143,7 +1180,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
   );
-  // All non-special slides default to fit and expose a manual scale handle at bottom-right.
+  // All non-special slides default to centered fit; users can pan and pinch-to-zoom.
   return (
     <div
       style={{
@@ -1239,10 +1276,59 @@ function effectiveNorthDeg(sketch: Sketch): number {
   return ((m % 360) + 360) % 360;
 }
 
-function SlideCompass({ rotation, size = 92 }: { rotation: number; size?: number }) {
+function SlideCompass({ rotation, size = 92, draggableId }: { rotation: number; size?: number; draggableId?: string }) {
   const r = ((rotation % 360) + 360) % 360;
+  const [pos, setPos] = useState<CompassView>(() => (draggableId ? loadCompassView(draggableId) ?? { x: 14, y: 14 } : { x: 0, y: 0 }));
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const dragRef = useRef<{ startX: number; startY: number; origin: CompassView } | null>(null);
+
+  useEffect(() => {
+    if (draggableId) setPos(loadCompassView(draggableId) ?? { x: 14, y: 14 });
+  }, [draggableId]);
+
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggableId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origin: posRef.current };
+  };
+  const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = dragRef.current;
+    if (!draggableId || !g) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const next = { x: g.origin.x + e.clientX - g.startX, y: g.origin.y + e.clientY - g.startY };
+    setPos(next);
+  };
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggableId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = null;
+    saveCompassView(draggableId, posRef.current);
+  };
+
   return (
-    <div style={{ position: "absolute", right: 10, bottom: 10, width: size, height: size, pointerEvents: "none", filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.18))" }}>
+    <div
+      onPointerDown={startDrag}
+      onPointerMove={moveDrag}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      title={draggableId ? "Tarik kompas untuk mengatur posisi" : undefined}
+      style={{
+        position: "absolute",
+        ...(draggableId ? { left: pos.x, top: pos.y } : { right: 10, bottom: 10 }),
+        width: size,
+        height: size,
+        cursor: draggableId ? "move" : "default",
+        touchAction: draggableId ? "none" : "auto",
+        pointerEvents: draggableId ? "auto" : "none",
+        filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.18))",
+        zIndex: 6,
+      }}
+    >
       <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
         <defs>
           <linearGradient id="compassBg" x1="0" y1="0" x2="0" y2="1">
@@ -2194,7 +2280,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             });
           })()}
         </svg>
-        <SlideCompass rotation={effectiveNorthDeg(sketch)} />
+        <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
       </div>
       <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
