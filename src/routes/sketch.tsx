@@ -1685,7 +1685,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [gridDrag, setGridDrag] = useState<GridDrag | null>(null);
 
   // Grid Struktur — edit kolom: clip polygon (sembunyikan kolom di area)
-  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip">("expand");
+  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip" | "fromLine">("expand");
   type ClipDrag = {
     clipId: string;        // id clip (atau "__draft__" jika polygon belum di-commit)
     idx: number;           // index titik yang di-drag
