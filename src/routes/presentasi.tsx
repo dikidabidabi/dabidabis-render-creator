@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -3590,17 +3590,33 @@ function MaterialEdges({
   const segs = computeStraightSegments(
     lines.map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
   ).filter((s) => (lines[s.sourceLineIndex].kind ?? "straight") === "straight");
-  const stroke = sw * 0.0022;
-  const strokeFine = sw * 0.0014;
+  // Tebalkan kontur dinding agar terlihat jelas di slide denah.
+  const stroke = sw * 0.005;
+  const strokeFine = sw * 0.0032;
+  const hatchStroke = Math.max(0.3, sw * 0.0008);
+  const hatchGap = Math.max(2, sw * 0.005);
+  const patternId = useId();
   return (
     <g>
+      <defs>
+        {/* Hatch 45° sangat tipis untuk dinding solid. */}
+        <pattern
+          id={`hatch45-${patternId}`}
+          patternUnits="userSpaceOnUse"
+          width={hatchGap} height={hatchGap}
+          patternTransform="rotate(45)"
+        >
+          <line x1={0} y1={0} x2={0} y2={hatchGap}
+            stroke="#0a0a0a" strokeWidth={hatchStroke} />
+        </pattern>
+      </defs>
       {/* Garis lengkung — render apa adanya (notasi material 2D hanya utk garis lurus). */}
       {curved.map(({ ln, i }) => (
         <path
           key={`c-${i}`}
           d={linePath(ln)}
           stroke="#0a0a0a"
-          strokeWidth={sw * 0.003}
+          strokeWidth={sw * 0.004}
           fill="none"
           strokeLinecap="round"
         />
@@ -3612,7 +3628,7 @@ function MaterialEdges({
             <line
               key={`s-${s.id}`}
               x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
-              stroke="#0a0a0a" strokeWidth={sw * 0.003} strokeLinecap="round"
+              stroke="#0a0a0a" strokeWidth={sw * 0.004} strokeLinecap="round"
             />
           );
         }
@@ -3624,29 +3640,15 @@ function MaterialEdges({
         const a2 = { x: s.a.x - nx * half, y: s.a.y - ny * half };
         const b1 = { x: s.b.x + nx * half, y: s.b.y + ny * half };
         const b2 = { x: s.b.x - nx * half, y: s.b.y - ny * half };
+        const pts = `${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`;
         if (mat === "solid") {
-          // Poligon dinding solid: dua garis sejajar + isi putih (hatch tipis diagonal).
+          // Dinding solid: kontur tebal + hatch 45° sangat tipis.
           return (
             <g key={`s-${s.id}`}>
-              <polygon
-                points={`${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
-                fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter"
-              />
-              {/* Hatch diagonal sederhana — beberapa garis dalam wall band */}
-              {(() => {
-                const steps = Math.max(2, Math.floor(len / (half * 1.6)));
-                const out: React.ReactNode[] = [];
-                for (let k = 1; k < steps; k++) {
-                  const t = k / steps;
-                  const p1 = { x: a1.x + (b1.x - a1.x) * t, y: a1.y + (b1.y - a1.y) * t };
-                  const p2 = { x: a2.x + (b2.x - a2.x) * t, y: a2.y + (b2.y - a2.y) * t };
-                  out.push(
-                    <line key={k} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                      stroke="#0a0a0a" strokeWidth={strokeFine * 0.6} />
-                  );
-                }
-                return out;
-              })()}
+              <polygon points={pts} fill="#ffffff" stroke="none" />
+              <polygon points={pts} fill={`url(#hatch45-${patternId})`} stroke="none" />
+              <polygon points={pts} fill="none"
+                stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
             </g>
           );
         }
@@ -3654,10 +3656,7 @@ function MaterialEdges({
           // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.
           return (
             <g key={`s-${s.id}`}>
-              <polygon
-                points={`${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
-                fill="rgba(34,211,238,0.18)" stroke="none"
-              />
+              <polygon points={pts} fill="rgba(34,211,238,0.22)" stroke="none" />
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
                 stroke="#0a0a0a" strokeWidth={strokeFine} />
               <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y}
@@ -3672,28 +3671,26 @@ function MaterialEdges({
                   const p1 = { x: a1.x + (b1.x - a1.x) * t, y: a1.y + (b1.y - a1.y) * t };
                   const p2 = { x: a2.x + (b2.x - a2.x) * t, y: a2.y + (b2.y - a2.y) * t };
                   out.push(<line key={k} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                    stroke="#0a0a0a" strokeWidth={strokeFine * 0.7} />);
+                    stroke="#0a0a0a" strokeWidth={strokeFine * 0.8} />);
                 }
                 return out;
               })()}
             </g>
           );
         }
-        // window (window wall): dinding (double-line) + garis sash kaca di tengah.
+        // window (window wall): kontur tebal + dua garis sash kaca di tengah.
         const cMid1 = { x: (a1.x + a2.x) / 2 + nx * half * 0.25, y: (a1.y + a2.y) / 2 + ny * half * 0.25 };
         const cMid2 = { x: (b1.x + b2.x) / 2 + nx * half * 0.25, y: (b1.y + b2.y) / 2 + ny * half * 0.25 };
         const dMid1 = { x: (a1.x + a2.x) / 2 - nx * half * 0.25, y: (a1.y + a2.y) / 2 - ny * half * 0.25 };
         const dMid2 = { x: (b1.x + b2.x) / 2 - nx * half * 0.25, y: (b1.y + b2.y) / 2 - ny * half * 0.25 };
         return (
           <g key={`s-${s.id}`}>
-            <polygon
-              points={`${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
-              fill="#ffffff" stroke="#0a0a0a" strokeWidth={strokeFine}
-            />
+            <polygon points={pts} fill="#ffffff"
+              stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
             <line x1={cMid1.x} y1={cMid1.y} x2={cMid2.x} y2={cMid2.y}
-              stroke="#0a0a0a" strokeWidth={strokeFine * 0.8} />
+              stroke="#0a0a0a" strokeWidth={strokeFine * 0.9} />
             <line x1={dMid1.x} y1={dMid1.y} x2={dMid2.x} y2={dMid2.y}
-              stroke="#0a0a0a" strokeWidth={strokeFine * 0.8} />
+              stroke="#0a0a0a" strokeWidth={strokeFine * 0.9} />
           </g>
         );
       })}
@@ -3711,7 +3708,7 @@ function DoorNotation({
   sw: number;
 }) {
   if (!doors.length) return null;
-  const stroke = sw * 0.0022;
+  const stroke = sw * 0.0012;
   const thick = 0.15 * pxPerM; // 150mm wall thickness mask
   return (
     <g>
