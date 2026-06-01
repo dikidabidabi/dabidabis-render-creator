@@ -871,6 +871,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
       case "shadow-seasonal":
       case "facade-zoning": return "Analisa Matahari & Fasad";
       case "stacking": return "Stacking Diagram";
+      case "explode-axo": return "Aksonometri Eksplode";
       case "rekap": return "Rekapitulasi";
       case "rincian": return "Rincian per Level";
       case "infografis": return "Infografis";
