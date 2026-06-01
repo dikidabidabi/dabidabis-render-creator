@@ -3470,6 +3470,143 @@ function linePath(ln: Line): string {
   return `M ${ln.a.x} ${ln.a.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${ln.b.x} ${ln.b.y}`;
 }
 
+// ---- Material edge notation untuk denah (plan view) ----
+// Tebal dinding selubung (mm), dikonversi ke px sketsa via pxPerM.
+const WALL_THICK_MM: Record<EdgeMaterial, number> = {
+  solid: 150,
+  curtain: 80,
+  window: 150,
+};
+
+function MaterialEdges({
+  lines,
+  edgeAttrs,
+  pxPerM,
+  sw,
+}: {
+  lines: Line[];
+  edgeAttrs: Record<string, EdgeMaterial>;
+  pxPerM: number;
+  sw: number;
+}) {
+  // Segmen non-lurus: render utuh via linePath (tidak dipecah).
+  const curved = lines
+    .map((ln, i) => ({ ln, i }))
+    .filter((x) => (x.ln.kind ?? "straight") !== "straight");
+  const segs = computeStraightSegments(
+    lines.map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
+  ).filter((s) => (lines[s.sourceLineIndex].kind ?? "straight") === "straight");
+  const stroke = sw * 0.0022;
+  const strokeFine = sw * 0.0014;
+  return (
+    <g>
+      {/* Garis lengkung — render apa adanya (notasi material 2D hanya utk garis lurus). */}
+      {curved.map(({ ln, i }) => (
+        <path
+          key={`c-${i}`}
+          d={linePath(ln)}
+          stroke="#0a0a0a"
+          strokeWidth={sw * 0.003}
+          fill="none"
+          strokeLinecap="round"
+        />
+      ))}
+      {segs.map((s) => {
+        const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
+        if (!mat) {
+          return (
+            <line
+              key={`s-${s.id}`}
+              x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
+              stroke="#0a0a0a" strokeWidth={sw * 0.003} strokeLinecap="round"
+            />
+          );
+        }
+        const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, ny = dx / len;
+        const half = (WALL_THICK_MM[mat] / 1000) * pxPerM * 0.5;
+        const a1 = { x: s.a.x + nx * half, y: s.a.y + ny * half };
+        const a2 = { x: s.a.x - nx * half, y: s.a.y - ny * half };
+        const b1 = { x: s.b.x + nx * half, y: s.b.y + ny * half };
+        const b2 = { x: s.b.x - nx * half, y: s.b.y - ny * half };
+        if (mat === "solid") {
+          // Poligon dinding solid: dua garis sejajar + isi putih (hatch tipis diagonal).
+          return (
+            <g key={`s-${s.id}`}>
+              <polygon
+                points={`${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
+                fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter"
+              />
+              {/* Hatch diagonal sederhana — beberapa garis dalam wall band */}
+              {(() => {
+                const steps = Math.max(2, Math.floor(len / (half * 1.6)));
+                const out: React.ReactNode[] = [];
+                for (let k = 1; k < steps; k++) {
+                  const t = k / steps;
+                  const p1 = { x: a1.x + (b1.x - a1.x) * t, y: a1.y + (b1.y - a1.y) * t };
+                  const p2 = { x: a2.x + (b2.x - a2.x) * t, y: a2.y + (b2.y - a2.y) * t };
+                  out.push(
+                    <line key={k} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                      stroke="#0a0a0a" strokeWidth={strokeFine * 0.6} />
+                  );
+                }
+                return out;
+              })()}
+            </g>
+          );
+        }
+        if (mat === "curtain") {
+          // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.
+          return (
+            <g key={`s-${s.id}`}>
+              <polygon
+                points={`${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
+                fill="rgba(34,211,238,0.18)" stroke="none"
+              />
+              <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
+                stroke="#0a0a0a" strokeWidth={strokeFine} />
+              <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y}
+                stroke="#0a0a0a" strokeWidth={strokeFine} />
+              {/* Mullion tick di tiap ~1.2m */}
+              {(() => {
+                const mPerSeg = 1.2 * pxPerM;
+                const n = Math.max(1, Math.floor(len / mPerSeg));
+                const out: React.ReactNode[] = [];
+                for (let k = 1; k < n; k++) {
+                  const t = k / n;
+                  const p1 = { x: a1.x + (b1.x - a1.x) * t, y: a1.y + (b1.y - a1.y) * t };
+                  const p2 = { x: a2.x + (b2.x - a2.x) * t, y: a2.y + (b2.y - a2.y) * t };
+                  out.push(<line key={k} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                    stroke="#0a0a0a" strokeWidth={strokeFine * 0.7} />);
+                }
+                return out;
+              })()}
+            </g>
+          );
+        }
+        // window (window wall): dinding (double-line) + garis sash kaca di tengah.
+        const cMid1 = { x: (a1.x + a2.x) / 2 + nx * half * 0.25, y: (a1.y + a2.y) / 2 + ny * half * 0.25 };
+        const cMid2 = { x: (b1.x + b2.x) / 2 + nx * half * 0.25, y: (b1.y + b2.y) / 2 + ny * half * 0.25 };
+        const dMid1 = { x: (a1.x + a2.x) / 2 - nx * half * 0.25, y: (a1.y + a2.y) / 2 - ny * half * 0.25 };
+        const dMid2 = { x: (b1.x + b2.x) / 2 - nx * half * 0.25, y: (b1.y + b2.y) / 2 - ny * half * 0.25 };
+        return (
+          <g key={`s-${s.id}`}>
+            <polygon
+              points={`${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
+              fill="#ffffff" stroke="#0a0a0a" strokeWidth={strokeFine}
+            />
+            <line x1={cMid1.x} y1={cMid1.y} x2={cMid2.x} y2={cMid2.y}
+              stroke="#0a0a0a" strokeWidth={strokeFine * 0.8} />
+            <line x1={dMid1.x} y1={dMid1.y} x2={dMid2.x} y2={dMid2.y}
+              stroke="#0a0a0a" strokeWidth={strokeFine * 0.8} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 // ---- Stacking Diagram (from Model 3D data) ----
 function levelColor(i: number, total: number) {
   // Warm-to-cool gradient, deterministic per level index.
