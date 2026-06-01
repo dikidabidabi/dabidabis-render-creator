@@ -2050,20 +2050,28 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             type Hit = { t: number; label: string; key: string };
             const hits: Hit[] = [];
             const axX = axisPositions(grid.spansX);
+            const lastIX = axX.length - 1;
             for (let i = 0; i < axX.length; i++) {
+              if (i === 0 && grid.hideBubbleStartX) continue;
+              if (i === lastIX && grid.hideBubbleEndX) continue;
               const planX = ox + axX[i] * ppm;
               if (Math.abs(ddx) < 1e-6) continue;
               const t = (planX - cut.p1.x) / ddx;
               if (t < -0.001 || t > 1.001) continue;
               hits.push({ t: Math.max(0, Math.min(1, t)), label: xAxisLabelAt(i, grid.labelOffsetX ?? 0), key: `g${gIdx}x${i}` });
             }
-            const axY = axisPositions(grid.spansY);
-            for (let j = 0; j < axY.length; j++) {
-              const planY = oy + axY[j] * ppm;
-              if (Math.abs(ddy) < 1e-6) continue;
-              const t = (planY - cut.p1.y) / ddy;
-              if (t < -0.001 || t > 1.001) continue;
-              hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabelAt(j, grid.labelOffsetY ?? 0), key: `g${gIdx}y${j}` });
+            if (!grid.lineOnly) {
+              const axY = axisPositions(grid.spansY);
+              const lastIY = axY.length - 1;
+              for (let j = 0; j < axY.length; j++) {
+                if (j === 0 && grid.hideBubbleStartY) continue;
+                if (j === lastIY && grid.hideBubbleEndY) continue;
+                const planY = oy + axY[j] * ppm;
+                if (Math.abs(ddy) < 1e-6) continue;
+                const t = (planY - cut.p1.y) / ddy;
+                if (t < -0.001 || t > 1.001) continue;
+                hits.push({ t: Math.max(0, Math.min(1, t)), label: yAxisLabelAt(j, grid.labelOffsetY ?? 0), key: `g${gIdx}y${j}` });
+              }
             }
             if (!hits.length) return null;
             const yTopPx = my(maxMdpl);
