@@ -3999,9 +3999,6 @@ function AxonometricView({
       const b = pm[(i + 1) % pm.length];
       const ex = b.x - a.x;
       const ez = b.z - a.z;
-      const nx = ez;
-      const nz = -ex;
-      if (nx + nz <= 0) continue;
       const quad = [
         project(a.x, a.z, yBot),
         project(b.x, b.z, yBot),
@@ -4017,7 +4014,7 @@ function AxonometricView({
       pts: topPts,
       fill: TAMAN_GREEN,
       stroke: "rgba(0,0,0,0.4)",
-      depth: avg + yTop * 100 + 0.5,
+      depth: avg + yTop * 0.01,
       sw: 0.5,
     });
   }
@@ -4039,16 +4036,10 @@ function AxonometricView({
       const yTop = yBot + (ov?.height ?? lv.height);
       const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
       const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
-      // Side quads (hanya yang menghadap kamera — view direction +x +z di proyeksi dimetric).
+      // Side quads: render semua sisi, lalu painter sorting menempatkan sisi depan di atas top/back face.
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
         const b = pm[(i + 1) % pm.length];
-        // Outward normal (asumsi CCW di plane x,z setelah toPm).
-        const ex = b.x - a.x;
-        const ez = b.z - a.z;
-        const nx = ez;
-        const nz = -ex;
-        if (nx + nz <= 0) continue;
         const quad = [
           project(a.x, a.z, yBot),
           project(b.x, b.z, yBot),
@@ -4065,7 +4056,7 @@ function AxonometricView({
         pts: topPts,
         fill: topFill,
         stroke: "rgba(0,0,0,0.55)",
-        depth: avg + yTop * 100 + 1,
+        depth: avg + yTop * 0.01,
         sw: 0.7,
       });
     }
