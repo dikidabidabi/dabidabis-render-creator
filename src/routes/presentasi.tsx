@@ -3593,8 +3593,9 @@ function MaterialEdges({
   // Kontur dinding sangat tipis & seragam (80% lebih tipis dari sebelumnya).
   const stroke = sw * 0.00028;
   const strokeFine = stroke;
-  const hatchStroke = Math.max(0.2, sw * 0.0005);
-  const hatchGap = Math.max(2, sw * 0.005);
+  // Hatch 45° rapat: 1 garis tiap 100 mm pada skala asli.
+  const hatchGap = Math.max(1.2, pxPerM * 0.1);
+  const hatchStroke = Math.max(0.18, sw * 0.0004);
   const patternId = useId();
   return (
     <g>
