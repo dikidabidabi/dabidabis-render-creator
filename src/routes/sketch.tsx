@@ -3635,6 +3635,34 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       pushHistory();
       onChange({ edgeAttrs: next });
     } else if (tool === "door") {
+      const raw = getWorldPosRaw(e);
+      if (doorEraseMode) {
+        const doors = sketch.doors ?? [];
+        if (doors.length === 0) {
+          toast.error("Belum ada pintu untuk dihapus");
+          return;
+        }
+        const tolPx = 18 / view.s;
+        let bestId: string | null = null;
+        let bestD = Infinity;
+        for (const d of doors) {
+          if (activeLvlId && d.levelId && d.levelId !== activeLvlId) continue;
+          const proj = projectOnSegment(raw, d.a, d.b);
+          const dd = dist(raw, proj);
+          // juga cek jarak ke titik engsel agar mudah di-tap
+          const dh = dist(raw, d.a);
+          const m = Math.min(dd, dh);
+          if (m < bestD) { bestD = m; bestId = d.id; }
+        }
+        if (!bestId || bestD > tolPx) {
+          toast.error("Tap dekat pintu yang ingin dihapus");
+          return;
+        }
+        pushHistory();
+        onChange({ doors: doors.filter((d) => d.id !== bestId) });
+        toast.success("Pintu dihapus");
+        return;
+      }
       // Step 1 — Snap engsel (Titik A) ke garis lurus terdekat di level aktif.
       const raw = getWorldPosRaw(e);
       const tolPx = 16 / view.s;
