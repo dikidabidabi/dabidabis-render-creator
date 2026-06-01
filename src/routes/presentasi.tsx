@@ -4849,10 +4849,10 @@ function bearingFromSketchVec(vx: number, vy: number, northDeg: number): number 
 }
 
 const FACADE_COLORS: Record<FacadeDir, { fill: string; stroke: string; label: string; kind: "massif" | "glaze" }> = {
-  E: { fill: "rgba(120,40,40,0.92)", stroke: "#3a0d0d", label: "Timur", kind: "massif" },
-  W: { fill: "rgba(120,40,40,0.92)", stroke: "#3a0d0d", label: "Barat", kind: "massif" },
-  N: { fill: "rgba(95,168,211,0.55)", stroke: "#2a5e7a", label: "Utara", kind: "glaze" },
-  S: { fill: "rgba(95,168,211,0.55)", stroke: "#2a5e7a", label: "Selatan", kind: "glaze" },
+  E: { fill: "#7a1f1f", stroke: "#3a0d0d", label: "Timur", kind: "massif" },
+  W: { fill: "#7a1f1f", stroke: "#3a0d0d", label: "Barat", kind: "massif" },
+  N: { fill: "#7ec8e3", stroke: "#2a5e7a", label: "Utara", kind: "glaze" },
+  S: { fill: "#7ec8e3", stroke: "#2a5e7a", label: "Selatan", kind: "glaze" },
 };
 
 function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zoning" }> }) {
