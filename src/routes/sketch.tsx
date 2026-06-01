@@ -3936,7 +3936,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     if (clipDrag && clipDrag.idx >= 0) {
-      const raw = getWorldPosRaw(e);
+      const rawWorld = getWorldPosRaw(e);
+      const raw = structGridRotRad !== 0
+        ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
+        : rawWorld;
       const ppm = pxPerMeter;
       const mx = (raw.x - grid.origin.x) / ppm;
       const my = (raw.y - grid.origin.y) / ppm;
