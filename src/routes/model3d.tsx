@@ -402,7 +402,7 @@ function StructuralColumns({
   return (
     <group>
       {items.map((it) => (
-        <mesh key={it.key} position={[it.x, it.y, it.z]} castShadow receiveShadow>
+        <mesh key={it.key} position={[it.x, it.y, it.z]} rotation={[0, it.rotY, 0]} castShadow receiveShadow>
           <boxGeometry args={[it.size, it.h, it.size]} />
           <meshStandardMaterial color={col} roughness={0.7} metalness={0.05} />
           <Edges threshold={15} color="#444444" />
