@@ -2287,8 +2287,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const bubFs = sw * 0.008;
             const dimFs = sw * 0.0085;
             const dimGap = sw * 0.006;
+            const rotDeg = Number(grid.rotation) || 0;
             return (
-              <g key={`grid-${gIdx}`} pointerEvents="none">
+              <g key={`grid-${gIdx}`} pointerEvents="none"
+                transform={rotDeg ? `rotate(${rotDeg} ${ox} ${oy})` : undefined}>
                 {/* Vertikal (sumbu X) */}
                 {xs.map((x, i) => (
                   <g key={`gx-${i}`}>
