@@ -351,6 +351,9 @@ function FloorSlab({
       </mesh>
     </group>
   );
+}
+
+
 
 function GroundPlane({
   points,
