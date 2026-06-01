@@ -1737,6 +1737,20 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               <rect width={gridMajor} height={gridMajor} fill={`url(#mm-minor-${slide.id})`} />
               <path d={`M ${gridMajor} 0 L 0 0 0 ${gridMajor}`} fill="none" stroke="#d6cfb8" strokeWidth={0.8} />
             </pattern>
+            {/* Hatch 45° rapat (1 garis / 100 mm skala asli) untuk dinding solid pada potongan. */}
+            {(() => {
+              const gap = Math.max(1.2, scalePxPerM * 0.1);
+              return (
+                <pattern
+                  id={`hatch45-sec-${slide.id}`}
+                  patternUnits="userSpaceOnUse"
+                  width={gap} height={gap}
+                  patternTransform="rotate(45)"
+                >
+                  <line x1={0} y1={0} x2={0} y2={gap} stroke="#0a0a0a" strokeWidth={0.35} />
+                </pattern>
+              );
+            })()}
           </defs>
           <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
 
@@ -1919,17 +1933,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         <g key={`mat-${b.id}-${idx}`}>
                           <rect x={x} y={yTop} width={bandW} height={totalH}
                             fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.8} />
-                          {(() => {
-                            const out: React.ReactNode[] = [];
-                            const step = Math.max(3, bandW * 0.9);
-                            const steps = Math.max(2, Math.floor(totalH / step));
-                            for (let k = 1; k < steps; k++) {
-                              const yy = yTop + (k / steps) * totalH;
-                              out.push(<line key={k} x1={x} y1={yy} x2={x + bandW} y2={yy}
-                                stroke="#0a0a0a" strokeWidth={0.4} />);
-                            }
-                            return out;
-                          })()}
+                          <rect x={x} y={yTop} width={bandW} height={totalH}
+                            fill={`url(#hatch45-sec-${slide.id})`} stroke="none" />
                         </g>
                       );
                     }
@@ -3593,8 +3598,9 @@ function MaterialEdges({
   // Kontur dinding sangat tipis & seragam (80% lebih tipis dari sebelumnya).
   const stroke = sw * 0.00028;
   const strokeFine = stroke;
-  const hatchStroke = Math.max(0.2, sw * 0.0005);
-  const hatchGap = Math.max(2, sw * 0.005);
+  // Hatch 45° rapat: 1 garis tiap 100 mm pada skala asli.
+  const hatchGap = Math.max(1.2, pxPerM * 0.1);
+  const hatchStroke = Math.max(0.18, sw * 0.0004);
   const patternId = useId();
   return (
     <g>
