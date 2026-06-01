@@ -3595,7 +3595,7 @@ function MaterialEdges({
   const strokeFine = sw * 0.0032;
   const hatchStroke = Math.max(0.3, sw * 0.0008);
   const hatchGap = Math.max(2, sw * 0.005);
-  const patternId = React.useId();
+  const patternId = useId();
   return (
     <g>
       <defs>
