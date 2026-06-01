@@ -3179,14 +3179,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Commit a rectangle from two diagonal corners
   const commitRect = useCallback(
     (a: Point, b: Point) => {
-      const minX = Math.min(a.x, b.x);
-      const maxX = Math.max(a.x, b.x);
-      const minY = Math.min(a.y, b.y);
-      const maxY = Math.max(a.y, b.y);
-      if (maxX - minX < 4 || maxY - minY < 4) return;
-  // Commit a rectangle from two diagonal corners
-  const commitRect = useCallback(
-    (a: Point, b: Point) => {
       // Persegi mengikuti rotasi grid milimeter block. Sudut diagonal di-
       // un-rotate ke frame lokal, dibangun axis-aligned, lalu dirotasi balik.
       const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
