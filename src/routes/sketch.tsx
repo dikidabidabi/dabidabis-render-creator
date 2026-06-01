@@ -2853,6 +2853,70 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
+    // ----- Modul Struktur: extraLines (garis2 hasil "Jadikan Grid" yang
+    //       tergabung dalam grid induk). Render di world coords. -----
+    {
+      const all: Array<{ g: StructuralGrid; idx: number }> = [];
+      if (primaryGrid?.enabled) all.push({ g: primaryGrid, idx: 0 });
+      gridExtras.forEach((g, i) => { if (g?.enabled) all.push({ g, idx: i + 1 }); });
+      const activeLv = levels.find((l) => l.id === activeLvlId);
+      for (const ent of all) {
+        const g = ent.g;
+        if (!g.extraLines || !g.extraLines.length) continue;
+        if (activeLv && !levelInRange(g, activeLv, levels)) continue;
+        const isActive = ent.idx === editGridIdx;
+        const ppm = pxPerMeter;
+        const bubbleOff = 22 / s;
+        const bubbleR = 7 / s;
+        const baseIdx = (g.labelOffsetX ?? 0) + g.spansX.length + 1;
+        ctx.save();
+        ctx.font = `600 ${7 / s}px var(--font-display), sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        g.extraLines.forEach((el, li) => {
+          const lenPx = el.lengthM * ppm;
+          ctx.save();
+          ctx.translate(el.origin.x, el.origin.y);
+          ctx.rotate((el.rotation * Math.PI) / 180);
+          // garis
+          ctx.strokeStyle = isActive ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.6)";
+          ctx.lineWidth = (isActive ? 0.4 : 0.3) / s;
+          ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
+          ctx.beginPath();
+          ctx.moveTo(-bubbleOff, 0);
+          ctx.lineTo(lenPx + bubbleOff, 0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // bubbles — satu label sama di kedua ujung
+          const label = xAxisLabelAt(baseIdx + li, 0);
+          const ends: Array<{ x: number; hide: boolean }> = [
+            { x: -bubbleOff, hide: !!el.hideStart },
+            { x: lenPx + bubbleOff, hide: !!el.hideEnd },
+          ];
+          for (const e of ends) {
+            if (e.hide) continue;
+            ctx.beginPath();
+            ctx.arc(e.x, 0, bubbleR, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.lineWidth = 0.4 / s;
+            ctx.strokeStyle = "#0a0a0a";
+            ctx.stroke();
+            ctx.fillStyle = "#0a0a0a";
+            // teks harus tetap tegak — un-rotate
+            ctx.save();
+            ctx.translate(e.x, 0);
+            ctx.rotate((-el.rotation * Math.PI) / 180);
+            ctx.fillText(label, 0, 0);
+            ctx.restore();
+          }
+          ctx.restore();
+        });
+        ctx.restore();
+      }
+    }
+
+
     if (hover && tool === "line" && !drawing) {
       ctx.fillStyle = "rgba(232,93,58,0.9)";
       ctx.beginPath();
