@@ -78,6 +78,15 @@ import {
   normalizeGridExtras,
   type ColumnClip,
 } from "@/lib/structural-grid";
+import {
+  type EdgeMaterial,
+  type EdgeSegment,
+  computeStraightSegments,
+  pickSegmentAt,
+  segmentIdFor,
+  MATERIAL_COLORS,
+  MATERIAL_LABELS,
+} from "@/lib/edge-segments";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
