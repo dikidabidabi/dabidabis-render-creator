@@ -2267,7 +2267,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             });
           })()}
         </svg>
-        <SlideCompass rotation={effectiveNorthDeg(sketch)} />
+        <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
       </div>
       <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
