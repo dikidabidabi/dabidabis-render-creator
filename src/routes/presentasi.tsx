@@ -3960,6 +3960,7 @@ function AxonometricView({
     stroke: string;
     depth: number;
     sw: number;
+    kind: "base" | "top" | "side";
   };
   const faces: Face[] = [];
 
@@ -3983,7 +3984,7 @@ function AxonometricView({
     const pm = toPm(ly);
     const top = pm.map((p) => project(p.x, p.z, 0));
     const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / Math.max(1, pm.length);
-    faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4 });
+    faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4, kind: "base" });
   }
 
   // Taman: thin green slab at MDPL 0, 0.1 m tall (matches Model 3D)
@@ -3999,9 +4000,6 @@ function AxonometricView({
       const b = pm[(i + 1) % pm.length];
       const ex = b.x - a.x;
       const ez = b.z - a.z;
-      const nx = ez;
-      const nz = -ex;
-      if (nx + nz <= 0) continue;
       const quad = [
         project(a.x, a.z, yBot),
         project(b.x, b.z, yBot),
@@ -4009,7 +4007,7 @@ function AxonometricView({
         project(a.x, a.z, yTop),
       ];
       const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-      faces.push({ pts: quad, fill: TAMAN_SIDE, stroke: "rgba(0,0,0,0.35)", depth, sw: 0.4 });
+      faces.push({ pts: quad, fill: TAMAN_SIDE, stroke: "rgba(0,0,0,0.35)", depth, sw: 0.4, kind: "side" });
     }
     const topPts = pm.map((p) => project(p.x, p.z, yTop));
     const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
@@ -4017,8 +4015,9 @@ function AxonometricView({
       pts: topPts,
       fill: TAMAN_GREEN,
       stroke: "rgba(0,0,0,0.4)",
-      depth: avg + yTop * 100 + 0.5,
+      depth: avg + yTop * 0.01,
       sw: 0.5,
+      kind: "top",
     });
   }
 
@@ -4039,16 +4038,10 @@ function AxonometricView({
       const yTop = yBot + (ov?.height ?? lv.height);
       const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
       const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
-      // Side quads (hanya yang menghadap kamera — view direction +x +z di proyeksi dimetric).
+      // Side quads: render semua sisi, lalu painter sorting menempatkan sisi depan di atas top/back face.
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
         const b = pm[(i + 1) % pm.length];
-        // Outward normal (asumsi CCW di plane x,z setelah toPm).
-        const ex = b.x - a.x;
-        const ez = b.z - a.z;
-        const nx = ez;
-        const nz = -ex;
-        if (nx + nz <= 0) continue;
         const quad = [
           project(a.x, a.z, yBot),
           project(b.x, b.z, yBot),
@@ -4056,7 +4049,7 @@ function AxonometricView({
           project(a.x, a.z, yTop),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5 });
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
       }
       // Top face
       const topPts = pm.map((p) => project(p.x, p.z, yTop));
@@ -4065,15 +4058,17 @@ function AxonometricView({
         pts: topPts,
         fill: topFill,
         stroke: "rgba(0,0,0,0.55)",
-        depth: avg + yTop * 100 + 1,
+        depth: avg + yTop * 0.01,
         sw: 0.7,
+        kind: "top",
       });
     }
   }
 
   // Kolom struktur sengaja tidak dirender di stacking diagram (Aksonometrik).
 
-  faces.sort((a, b) => a.depth - b.depth);
+  const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
 
   // Compute viewBox
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
@@ -4889,8 +4884,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     return { x: (dx - dy) * cos30, y: (dx + dy) * sin30 - zPx };
   };
 
-  // Kumpulkan semua wall quads + top faces untuk diurutkan dan dirender.
-  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; dir?: FacadeDir };
+  // Kumpulkan semua bidang, lalu render atap sebelum dinding agar sisi yang menghadap kamera tetap terlihat penuh.
+  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall"; dir?: FacadeDir };
   const quads: Quad[] = [];
 
   // Lahan (ground polygon, tipis di z=0).
@@ -4902,6 +4897,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       fill: "rgba(0,0,0,0.04)",
       stroke: "rgba(0,0,0,0.35)",
       sw: 1.2,
+      kind: "base",
     });
   }
 
@@ -4922,9 +4918,6 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const a = layer.points[i];
       const b = layer.points[(i + 1) % layer.points.length];
       const n = outwardNormal(a, b, ccw);
-      // Back-face culling: di proyeksi dimetric, view direction (plan) = (+1, +1).
-      // Hanya render dinding yang outward-normal-nya menghadap kamera.
-      if (n.x + n.y <= 0) continue;
       const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
       const dir = classifyBearing(bearing);
       const col = FACADE_COLORS[dir];
@@ -4942,6 +4935,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         fill: col.fill,
         stroke: col.stroke,
         sw: 1.4,
+        kind: "wall",
         dir,
       });
     }
@@ -4949,14 +4943,16 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
     quads.push({
       pts: topPts,
-      depth: 1e8, // selalu paling depan/atas
+      depth: avgDepthForPoints(layer.points, cx, cy),
       fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
+      kind: "top",
     });
   }
 
-  quads.sort((a, b) => a.depth - b.depth);
+  const quadLayer = (kind: Quad["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  quads.sort((a, b) => quadLayer(a.kind) - quadLayer(b.kind) || a.depth - b.depth);
 
   // Tentukan bounding viewBox proyeksi.
   const allPts = quads.flatMap((q) => q.pts);
@@ -5082,6 +5078,11 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       </div>
     </div>
   );
+}
+
+function avgDepthForPoints(points: Point[], cx: number, cy: number): number {
+  if (points.length === 0) return 0;
+  return points.reduce((sum, p) => sum + (p.x - cx) + (p.y - cy), 0) / points.length;
 }
 
 function LegendRow({ swatch, border, title, body }: { swatch: string; border: string; title: string; body: string }) {
