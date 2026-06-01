@@ -4067,7 +4067,8 @@ function AxonometricView({
 
   // Kolom struktur sengaja tidak dirender di stacking diagram (Aksonometrik).
 
-  faces.sort((a, b) => a.depth - b.depth);
+  const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
 
   // Compute viewBox
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
