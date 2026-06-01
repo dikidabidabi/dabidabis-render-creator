@@ -2657,9 +2657,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.moveTo(x, yMin - bubbleOff);
           ctx.lineTo(x, yMax + bubbleOff);
         }
-        for (const y of ys) {
-          ctx.moveTo(xMin - bubbleOff, y);
-          ctx.lineTo(xMax + bubbleOff, y);
+        if (!grid.lineOnly) {
+          for (const y of ys) {
+            ctx.moveTo(xMin - bubbleOff, y);
+            ctx.lineTo(xMax + bubbleOff, y);
+          }
         }
         ctx.stroke();
         ctx.setLineDash([]);
@@ -2668,30 +2670,46 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.font = `600 ${7 / s}px var(--font-display), sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
+        const hideSX = Boolean(grid.hideBubbleStartX);
+        const hideEX = Boolean(grid.hideBubbleEndX);
+        const hideSY = Boolean(grid.hideBubbleStartY);
+        const hideEY = Boolean(grid.hideBubbleEndY);
         for (let i = 0; i < xs.length; i++) {
-          for (const yEnd of [yMin - bubbleOff, yMax + bubbleOff]) {
+          const ends: Array<{ y: number; hide: boolean }> = [
+            { y: yMin - bubbleOff, hide: hideSY },
+            { y: yMax + bubbleOff, hide: hideEY },
+          ];
+          for (const e of ends) {
+            if (e.hide) continue;
             ctx.beginPath();
-            ctx.arc(xs[i], yEnd, bubbleR, 0, Math.PI * 2);
+            ctx.arc(xs[i], e.y, bubbleR, 0, Math.PI * 2);
             ctx.fillStyle = "#fff";
             ctx.fill();
             ctx.lineWidth = 0.4 / s;
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], yEnd);
+            ctx.fillText(xAxisLabelAt(i, grid.labelOffsetX ?? 0), xs[i], e.y);
           }
         }
-        for (let j = 0; j < ys.length; j++) {
-          for (const xEnd of [xMin - bubbleOff, xMax + bubbleOff]) {
-            ctx.beginPath();
-            ctx.arc(xEnd, ys[j], bubbleR, 0, Math.PI * 2);
-            ctx.fillStyle = "#fff";
-            ctx.fill();
-            ctx.lineWidth = 0.4 / s;
-            ctx.strokeStyle = "#0a0a0a";
-            ctx.stroke();
-            ctx.fillStyle = "#0a0a0a";
-            ctx.fillText(yAxisLabelAt(j, grid.labelOffsetY ?? 0), xEnd, ys[j]);
+        if (!grid.lineOnly) {
+          for (let j = 0; j < ys.length; j++) {
+            const ends: Array<{ x: number; hide: boolean }> = [
+              { x: xMin - bubbleOff, hide: hideSX },
+              { x: xMax + bubbleOff, hide: hideEX },
+            ];
+            for (const e of ends) {
+              if (e.hide) continue;
+              ctx.beginPath();
+              ctx.arc(e.x, ys[j], bubbleR, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.lineWidth = 0.4 / s;
+              ctx.strokeStyle = "#0a0a0a";
+              ctx.stroke();
+              ctx.fillStyle = "#0a0a0a";
+              ctx.fillText(yAxisLabelAt(j, grid.labelOffsetY ?? 0), e.x, ys[j]);
+            }
           }
         }
 
