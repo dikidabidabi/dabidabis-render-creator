@@ -37,6 +37,18 @@ export type StructuralGrid = {
   hideBubbleEndY?: boolean;              // sembunyikan buble Y di ujung as terakhir
   // Grid hasil "Jadikan Grid" dari satu garis — hanya satu sumbu (X), tanpa kolom.
   lineOnly?: boolean;
+  // Garis-garis tambahan yang "tergabung" ke dalam grid ini (hasil mode
+  // "Jadikan Grid"). Tiap garis punya origin & rotasi sendiri di koordinat
+  // dunia (px), panjangnya dalam meter. Label buble melanjutkan serial X
+  // grid induk (mulai dari spansX.length + 1).
+  extraLines?: Array<{
+    id: string;
+    origin: { x: number; y: number };
+    rotation: number;
+    lengthM: number;
+    hideStart?: boolean;
+    hideEnd?: boolean;
+  }>;
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
