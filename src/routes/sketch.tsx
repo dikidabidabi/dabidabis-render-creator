@@ -4092,6 +4092,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     setGridDrag(null);
     setClipDrag(null);
     setDoorDraft(null);
+    setCircleDraft(null);
   };
 
   const handleUndo = () => {
