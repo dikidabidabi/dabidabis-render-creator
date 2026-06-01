@@ -3184,10 +3184,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const minY = Math.min(a.y, b.y);
       const maxY = Math.max(a.y, b.y);
       if (maxX - minX < 4 || maxY - minY < 4) return;
-      const p1 = { x: minX, y: minY };
-      const p2 = { x: maxX, y: minY };
-      const p3 = { x: maxX, y: maxY };
-      const p4 = { x: minX, y: maxY };
+  // Commit a rectangle from two diagonal corners
+  const commitRect = useCallback(
+    (a: Point, b: Point) => {
+      // Persegi mengikuti rotasi grid milimeter block. Sudut diagonal di-
+      // un-rotate ke frame lokal, dibangun axis-aligned, lalu dirotasi balik.
+      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
+      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
+      const lminX = Math.min(la.x, lb.x);
+      const lmaxX = Math.max(la.x, lb.x);
+      const lminY = Math.min(la.y, lb.y);
+      const lmaxY = Math.max(la.y, lb.y);
+      if (lmaxX - lminX < 4 || lmaxY - lminY < 4) return;
+      const lp1 = { x: lminX, y: lminY };
+      const lp2 = { x: lmaxX, y: lminY };
+      const lp3 = { x: lmaxX, y: lmaxY };
+      const lp4 = { x: lminX, y: lmaxY };
+      const p1 = rotateAround(lp1, { x: 0, y: 0 }, mmGridRotRad);
+      const p2 = rotateAround(lp2, { x: 0, y: 0 }, mmGridRotRad);
+      const p3 = rotateAround(lp3, { x: 0, y: 0 }, mmGridRotRad);
+      const p4 = rotateAround(lp4, { x: 0, y: 0 }, mmGridRotRad);
       const { levels: nextLevelsBase, activeId } = ensureLevels();
       const newLines: Line[] = [
         { a: p1, b: p2, kind: "straight", levelId: activeId },
@@ -3225,7 +3241,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange(patch);
       toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
     },
-    [lines, layers, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
+    [lines, layers, levels, activeLvlId, pxPerMeter, mmGridRotRad, pushHistory, onChange, ensureLevels, applySubtractionToLayers],
   );
 
   // Commit sebuah polyline. `closed` = true bila berakhir di titik awal,
