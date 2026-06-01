@@ -2853,6 +2853,70 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
 
+    // ----- Modul Struktur: extraLines (garis2 hasil "Jadikan Grid" yang
+    //       tergabung dalam grid induk). Render di world coords. -----
+    {
+      const all: Array<{ g: StructuralGrid; idx: number }> = [];
+      if (primaryGrid?.enabled) all.push({ g: primaryGrid, idx: 0 });
+      gridExtras.forEach((g, i) => { if (g?.enabled) all.push({ g, idx: i + 1 }); });
+      const activeLv = levels.find((l) => l.id === activeLvlId);
+      for (const ent of all) {
+        const g = ent.g;
+        if (!g.extraLines || !g.extraLines.length) continue;
+        if (activeLv && !levelInRange(g, activeLv, levels)) continue;
+        const isActive = ent.idx === editGridIdx;
+        const ppm = pxPerMeter;
+        const bubbleOff = 22 / s;
+        const bubbleR = 7 / s;
+        const baseIdx = (g.labelOffsetX ?? 0) + g.spansX.length + 1;
+        ctx.save();
+        ctx.font = `600 ${7 / s}px var(--font-display), sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        g.extraLines.forEach((el, li) => {
+          const lenPx = el.lengthM * ppm;
+          ctx.save();
+          ctx.translate(el.origin.x, el.origin.y);
+          ctx.rotate((el.rotation * Math.PI) / 180);
+          // garis
+          ctx.strokeStyle = isActive ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.6)";
+          ctx.lineWidth = (isActive ? 0.4 : 0.3) / s;
+          ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
+          ctx.beginPath();
+          ctx.moveTo(-bubbleOff, 0);
+          ctx.lineTo(lenPx + bubbleOff, 0);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // bubbles — satu label sama di kedua ujung
+          const label = xAxisLabelAt(baseIdx + li, 0);
+          const ends: Array<{ x: number; hide: boolean }> = [
+            { x: -bubbleOff, hide: !!el.hideStart },
+            { x: lenPx + bubbleOff, hide: !!el.hideEnd },
+          ];
+          for (const e of ends) {
+            if (e.hide) continue;
+            ctx.beginPath();
+            ctx.arc(e.x, 0, bubbleR, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.lineWidth = 0.4 / s;
+            ctx.strokeStyle = "#0a0a0a";
+            ctx.stroke();
+            ctx.fillStyle = "#0a0a0a";
+            // teks harus tetap tegak — un-rotate
+            ctx.save();
+            ctx.translate(e.x, 0);
+            ctx.rotate((-el.rotation * Math.PI) / 180);
+            ctx.fillText(label, 0, 0);
+            ctx.restore();
+          }
+          ctx.restore();
+        });
+        ctx.restore();
+      }
+    }
+
+
     if (hover && tool === "line" && !drawing) {
       ctx.fillStyle = "rgba(232,93,58,0.9)";
       ctx.beginPath();
@@ -3603,7 +3667,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           return;
         }
         const startLn = lines[bestIdx];
-        const origin = { ...startLn.a };
+        const lnOrigin = { ...startLn.a };
         const vx = startLn.b.x - startLn.a.x;
         const vy = startLn.b.y - startLn.a.y;
         const rotDeg = (Math.atan2(vy, vx) * 180) / Math.PI;
@@ -3613,35 +3677,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           toast.error("Garis terlalu pendek");
           return;
         }
-        const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-        const lvId = activeLvlId ?? sortedLv[0]?.id;
-        const sameLvlExtras = gridExtras.filter((g) =>
-          g.enabled && (!lvId || (g.fromLevelId === lvId || g.toLevelId === lvId || (!g.fromLevelId && !g.toLevelId)))
-        );
-        let nextOffX = 0;
-        if (primaryGrid?.enabled) nextOffX = Math.max(nextOffX, (primaryGrid.labelOffsetX ?? 0) + primaryGrid.spansX.length + 1);
-        for (const g of sameLvlExtras) {
-          nextOffX = Math.max(nextOffX, (g.labelOffsetX ?? 0) + g.spansX.length + 1);
-        }
-        const newGrid: StructuralGrid = {
-          enabled: true,
-          origin,
+        // Gabungkan ke grid yang sedang aktif (primer atau extra yg dipilih).
+        const prevExtraLines = grid.extraLines ?? [];
+        const newExtra = {
+          id: `xl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+          origin: lnOrigin,
           rotation: rotDeg,
-          spansX: [Number(lenM.toFixed(2))],
-          spansY: [],
-          colSizeCm: primaryGrid?.colSizeCm ?? 50,
-          labelOffsetX: nextOffX,
-          labelOffsetY: 0,
-          lineOnly: true,
-          fromLevelId: lvId,
-          toLevelId: lvId,
+          lengthM: Number(lenM.toFixed(2)),
         };
-        const nextExtras = [...gridExtras, newGrid];
+        updateGrid({ extraLines: [...prevExtraLines, newExtra] });
+        // Hapus garis aslinya, tapi pertahankan mode "fromLine" agar bisa
+        // pilih garis lain secara berurutan.
         const nextLines = lines.filter((_, i) => i !== bestIdx);
-        onChange({ structuralGridExtras: nextExtras, lines: nextLines });
-        setEditGridIdx(nextExtras.length);
-        setGridEditMode("expand");
-        toast.success("Grid dibuat dari garis terpilih");
+        onChange({ lines: nextLines });
+        toast.success("Garis ditambahkan ke grid aktif");
         return;
       }
       // -------- MODE: edit kolom (clip polygon) --------
@@ -5374,12 +5423,60 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 </div>
               </div>
               {gridEditMode === "fromLine" && (
-                <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik salah satu garis lurus di kanvas. Garis tersebut akan
-                  dikonversi menjadi grid extra (satu sumbu, tanpa kolom) dan
-                  garis aslinya dihapus. Buble otomatis melanjutkan serial
-                  dari grid sebelumnya di level aktif.
-                </p>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    Klik garis lurus di kanvas — garis akan ditambahkan sebagai
+                    sumbu grid pada grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
+                    sedang aktif, dan garis aslinya dihapus. Mode tetap aktif
+                    sehingga bisa pilih beberapa garis berurutan. Tekan tombol
+                    <span className="font-medium text-foreground"> Jadikan Grid</span> lagi atau
+                    <span className="font-medium text-foreground"> Bentang</span> untuk selesai.
+                  </p>
+                  {(grid.extraLines ?? []).length > 0 && (
+                    <div className="space-y-1 rounded border border-border/50 bg-surface/40 p-1.5">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Garis tergabung ({grid.extraLines!.length})
+                      </div>
+                      {grid.extraLines!.map((el, i) => {
+                        const baseIdx = (grid.labelOffsetX ?? 0) + grid.spansX.length + 1;
+                        const lbl = xAxisLabelAt(baseIdx + i, 0);
+                        return (
+                          <div key={el.id} className="flex items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-medium">{lbl} · {el.lengthM.toFixed(2)}m</span>
+                            <div className="flex items-center gap-1.5">
+                              <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung awal">
+                                <input type="checkbox" checked={!!el.hideStart}
+                                  onChange={(e) => {
+                                    const next = (grid.extraLines ?? []).map((x, k) =>
+                                      k === i ? { ...x, hideStart: e.target.checked } : x);
+                                    updateGrid({ extraLines: next });
+                                  }} />
+                                Awal
+                              </label>
+                              <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung akhir">
+                                <input type="checkbox" checked={!!el.hideEnd}
+                                  onChange={(e) => {
+                                    const next = (grid.extraLines ?? []).map((x, k) =>
+                                      k === i ? { ...x, hideEnd: e.target.checked } : x);
+                                    updateGrid({ extraLines: next });
+                                  }} />
+                                Akhir
+                              </label>
+                              <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]"
+                                onClick={() => {
+                                  const next = (grid.extraLines ?? []).filter((_, k) => k !== i);
+                                  updateGrid({ extraLines: next.length ? next : undefined });
+                                }}
+                                title="Hapus garis dari grid">
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
               {gridEditMode === "clip" && (
                 <>

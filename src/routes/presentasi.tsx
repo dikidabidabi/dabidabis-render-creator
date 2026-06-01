@@ -2442,6 +2442,44 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
+          {/* extraLines: garis tambahan yang tergabung pada tiap grid */}
+          {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).flatMap((grid, gIdx) => {
+            const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            if (!levelInRange(grid, level, allLv)) return [];
+            const lines = grid.extraLines ?? [];
+            if (!lines.length) return [];
+            const ext = sw * 0.04;
+            const rBub = sw * 0.009;
+            const gridSWx = sw * 0.0003;
+            const dash = `${sw * 0.01} ${sw * 0.004} ${sw * 0.002} ${sw * 0.004}`;
+            const bubFs = sw * 0.008;
+            const baseIdx = (grid.labelOffsetX ?? 0) + grid.spansX.length + 1;
+            return lines.map((el, i) => {
+              const lenPx = el.lengthM * pxPerM;
+              const lbl = xAxisLabelAt(baseIdx + i, 0);
+              return (
+                <g key={`xl-${gIdx}-${el.id}`} pointerEvents="none"
+                  transform={`translate(${el.origin.x} ${el.origin.y}) rotate(${el.rotation})`}>
+                  <line x1={-ext} y1={0} x2={lenPx + ext} y2={0}
+                    stroke="#0a0a0a" strokeWidth={gridSWx} strokeDasharray={dash} />
+                  {!el.hideStart && (
+                    <g transform={`translate(${-ext - rBub} 0) rotate(${-el.rotation})`}>
+                      <circle r={rBub} fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSWx} />
+                      <text textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">{lbl}</text>
+                    </g>
+                  )}
+                  {!el.hideEnd && (
+                    <g transform={`translate(${lenPx + ext + rBub} 0) rotate(${-el.rotation})`}>
+                      <circle r={rBub} fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSWx} />
+                      <text textAnchor="middle" dominantBaseline="central"
+                        fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">{lbl}</text>
+                    </g>
+                  )}
+                </g>
+              );
+            });
+          })}
           {null /* dimensi ruang dihapus — diganti dimensi bentang grid */}
           {evkRooms.map((l) => {
             const c = centroid(l.points);
