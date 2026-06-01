@@ -2136,7 +2136,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.save();
         ctx.lineCap = "round";
         for (const seg of allSegs) {
-          if (activeLvlId && seg.levelId !== activeLvlId) continue;
+          if (!activeLvlId || seg.levelId !== activeLvlId) continue;
           const mat = attrs[seg.id];
           if (!mat) continue;
           ctx.strokeStyle = MATERIAL_COLORS[mat];
@@ -2151,7 +2151,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         if (tool === "pick") {
           const nodeKeys = new Set<string>();
           for (const seg of allSegs) {
-            if (activeLvlId && seg.levelId !== activeLvlId) continue;
+            if (!activeLvlId || seg.levelId !== activeLvlId) continue;
             nodeKeys.add(`${seg.a.x.toFixed(3)},${seg.a.y.toFixed(3)}`);
             nodeKeys.add(`${seg.b.x.toFixed(3)},${seg.b.y.toFixed(3)}`);
           }
@@ -3617,10 +3617,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
     } else if (tool === "pick") {
+      if (!activeLvlId) {
+        toast.error("Pilih Level aktif terlebih dahulu");
+        return;
+      }
       const raw = getWorldPosRaw(e);
       const tol = 10 / view.s;
       const segs = computeStraightSegments(lines).filter(
-        (s) => !activeLvlId || s.levelId === activeLvlId,
+        (s) => s.levelId === activeLvlId,
       );
       const hit = pickSegmentAt(raw, segs, tol);
       if (!hit) return;
