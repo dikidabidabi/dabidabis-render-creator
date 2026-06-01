@@ -3920,6 +3920,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
+    if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
       const pts = polyDraft.points;
