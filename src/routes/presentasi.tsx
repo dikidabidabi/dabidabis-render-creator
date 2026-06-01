@@ -5046,10 +5046,10 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
           <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 700, marginBottom: 8 }}>
             Legenda Strategi Pasif
           </div>
-          <LegendRow swatch="rgba(120,40,40,0.92)" border="#3a0d0d"
+          <LegendRow swatch="#7a1f1f" border="#3a0d0d"
             title="Dinding Masif (Massive Wall / Bare Concrete)"
             body="Fasad Timur & Barat ditutup masa solid untuk memblokir radiasi matahari ekstrem pagi & sore. Mengurangi beban pendinginan dalam ruang." />
-          <LegendRow swatch="rgba(95,168,211,0.55)" border="#2a5e7a"
+          <LegendRow swatch="#7ec8e3" border="#2a5e7a"
             title="Bukaan Kaca (Glazing / Open Facade)"
             body="Fasad Utara & Selatan terbuka untuk pencahayaan alami tak langsung sepanjang tahun. Orientasi visual utama ke arah landmark regional via sisi Utara." />
         </div>
