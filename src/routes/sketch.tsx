@@ -2741,6 +2741,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const posXM = axisPositions(spansX);
         const posYM = axisPositions(spansY);
         ctx.fillStyle = "#0a0a0a";
+        if (grid.lineOnly) {
+          // skip kolom untuk grid garis tunggal
+        } else
+
         for (let j = 0; j < ys.length; j++) {
           for (let i = 0; i < xs.length; i++) {
             if (!isNodeActive(grid, activeLv.id, i, j)) {
