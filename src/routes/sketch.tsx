@@ -1885,8 +1885,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const minY = Math.min(...corners.map((c) => c.y));
     const maxY = Math.max(...corners.map((c) => c.y));
     const major = MINOR_PX * MAJOR_EVERY;
-    const x0 = Math.floor(minX / MINOR_PX) * MINOR_PX;
-    const y0 = Math.floor(minY / MINOR_PX) * MINOR_PX;
 
     // OSM tile underlay (anchored at geo lat/lon → world 0,0).
     // mapRotation hanya berdampak pada peta; grid milimeter block & skala tetap.
