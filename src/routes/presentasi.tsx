@@ -1933,17 +1933,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         <g key={`mat-${b.id}-${idx}`}>
                           <rect x={x} y={yTop} width={bandW} height={totalH}
                             fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.8} />
-                          {(() => {
-                            const out: React.ReactNode[] = [];
-                            const step = Math.max(3, bandW * 0.9);
-                            const steps = Math.max(2, Math.floor(totalH / step));
-                            for (let k = 1; k < steps; k++) {
-                              const yy = yTop + (k / steps) * totalH;
-                              out.push(<line key={k} x1={x} y1={yy} x2={x + bandW} y2={yy}
-                                stroke="#0a0a0a" strokeWidth={0.4} />);
-                            }
-                            return out;
-                          })()}
+                          <rect x={x} y={yTop} width={bandW} height={totalH}
+                            fill={`url(#hatch45-sec-${slide.id})`} stroke="none" />
                         </g>
                       );
                     }
