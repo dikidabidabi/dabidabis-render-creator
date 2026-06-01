@@ -1411,6 +1411,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
   }, [gridExtras.length, editGridIdx]);
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
+  const mmGridRotation = Number.isFinite(Number(sketch.mmGridRotation)) ? Number(sketch.mmGridRotation) : 0;
+  const mmGridRotRad = (mmGridRotation * Math.PI) / 180;
+  const structGridRotation = Number.isFinite(Number(grid.rotation)) ? Number(grid.rotation) : 0;
+  const structGridRotRad = (structGridRotation * Math.PI) / 180;
+  // Dua grid dianggap "paralel" bila selisih rotasi adalah kelipatan 90°.
+  const gridsParallel = (() => {
+    const diff = (((structGridRotation - mmGridRotation) % 90) + 90) % 90;
+    return diff < 0.05 || diff > 89.95;
+  })();
+  // Helper: rotasi titik di sekitar pusat (CW positif, sesuai konvensi sketch).
+  const rotateAround = (p: Point, c: Point, rad: number): Point => {
+    const dx = p.x - c.x, dy = p.y - c.y;
+    const cs = Math.cos(rad), sn = Math.sin(rad);
+    return { x: c.x + dx * cs - dy * sn, y: c.y + dx * sn + dy * cs };
+  };
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
