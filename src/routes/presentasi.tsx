@@ -1737,6 +1737,20 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               <rect width={gridMajor} height={gridMajor} fill={`url(#mm-minor-${slide.id})`} />
               <path d={`M ${gridMajor} 0 L 0 0 0 ${gridMajor}`} fill="none" stroke="#d6cfb8" strokeWidth={0.8} />
             </pattern>
+            {/* Hatch 45° rapat (1 garis / 100 mm skala asli) untuk dinding solid pada potongan. */}
+            {(() => {
+              const gap = Math.max(1.2, scalePxPerM * 0.1);
+              return (
+                <pattern
+                  id={`hatch45-sec-${slide.id}`}
+                  patternUnits="userSpaceOnUse"
+                  width={gap} height={gap}
+                  patternTransform="rotate(45)"
+                >
+                  <line x1={0} y1={0} x2={0} y2={gap} stroke="#0a0a0a" strokeWidth={0.35} />
+                </pattern>
+              );
+            })()}
           </defs>
           <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
 
