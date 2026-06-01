@@ -263,6 +263,7 @@ type Sketch = {
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
   structuralGrid?: StructuralGrid; // Modul Struktur parametric grid (primer)
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
+  edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
 };
 
 type StoreShape = {
