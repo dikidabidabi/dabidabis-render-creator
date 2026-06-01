@@ -2603,19 +2603,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 0.3 / s;
         ctx.setLineDash([10 / s, 5 / s, 1.5 / s, 5 / s]);
         ctx.beginPath();
-        for (const x of xs) { ctx.moveTo(x, yMin - bubbleOff); ctx.lineTo(x, yMax + bubbleOff); }
-        for (const y of ys) { ctx.moveTo(xMin - bubbleOff, y); ctx.lineTo(xMax + bubbleOff, y); }
+        if (g.lineOnly) {
+          ctx.moveTo(xs[0] - bubbleOff, ys[0]);
+          ctx.lineTo(xs[xs.length - 1] + bubbleOff, ys[0]);
+        } else {
+          for (const x of xs) { ctx.moveTo(x, yMin - bubbleOff); ctx.lineTo(x, yMax + bubbleOff); }
+          for (const y of ys) { ctx.moveTo(xMin - bubbleOff, y); ctx.lineTo(xMax + bubbleOff, y); }
+        }
         ctx.stroke();
         ctx.setLineDash([]);
-        const colPx = (g.colSizeCm / 100) * ppm;
-        const posXM = axisPositions(spansX);
-        const posYM = axisPositions(spansY);
-        ctx.fillStyle = "rgba(40,40,40,0.55)";
-        for (let j = 0; j < ys.length; j++) {
-          for (let i = 0; i < xs.length; i++) {
-            if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
-            if (isColumnClipped(g, posXM[i], posYM[j])) continue;
-            ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+        if (!g.lineOnly) {
+          const colPx = (g.colSizeCm / 100) * ppm;
+          const posXM = axisPositions(spansX);
+          const posYM = axisPositions(spansY);
+          ctx.fillStyle = "rgba(40,40,40,0.55)";
+          for (let j = 0; j < ys.length; j++) {
+            for (let i = 0; i < xs.length; i++) {
+              if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
+              if (isColumnClipped(g, posXM[i], posYM[j])) continue;
+              ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+            }
           }
         }
         ctx.restore();
