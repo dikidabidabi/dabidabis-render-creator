@@ -28,6 +28,7 @@ import {
   Move,
   GripHorizontal,
   Copy,
+  ClipboardPaste,
   Waypoints,
   Scissors,
   Grid3x3,
@@ -1691,6 +1692,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
   const [doorEraseMode, setDoorEraseMode] = useState(false);
+  const [doorClipboard, setDoorClipboard] = useState<Door[]>([]);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -5545,6 +5547,51 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               3) Geser tegak lurus untuk memilih sisi ayun, lalu lepas.
               Notasi muncul di Slide Denah; massa 3D tidak berubah.
             </p>
+            {(() => {
+              const doorsInLevel = (sketch.doors ?? []).filter(
+                (d) => (d.levelId ?? activeLvlId) === activeLvlId,
+              );
+              const canCopy = doorsInLevel.length > 0;
+              const canPaste = doorClipboard.length > 0;
+              if (!canCopy && !canPaste) return null;
+              return (
+                <div className="grid grid-cols-2 gap-1.5 border-t border-border/60 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!canCopy}
+                    onClick={() => {
+                      const clones: Door[] = doorsInLevel.map((d) => ({ ...d }));
+                      setDoorClipboard(clones);
+                      toast.success(`${clones.length} pintu disalin`);
+                    }}
+                    className="h-7 text-xs"
+                    title="Salin semua pintu di level aktif"
+                  >
+                    <Copy className="mr-1.5 h-3 w-3" /> Copy Pintu
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!canPaste}
+                    onClick={() => {
+                      pushHistory();
+                      const pasted: Door[] = doorClipboard.map((d) => ({
+                        ...d,
+                        id: genDoorId(),
+                        levelId: activeLvlId,
+                      }));
+                      onChange({ doors: [...(sketch.doors ?? []), ...pasted] });
+                      toast.success(`${pasted.length} pintu ditempel di level ini`);
+                    }}
+                    className="h-7 text-xs"
+                    title="Tempel pintu pada koordinat X/Y yang sama di level aktif"
+                  >
+                    <ClipboardPaste className="mr-1.5 h-3 w-3" /> Paste Pintu
+                  </Button>
+                </div>
+              );
+            })()}
             {(sketch.doors?.length ?? 0) > 0 && (
               <div className="space-y-1.5 border-t border-border/60 pt-2">
                 <div className="flex items-center justify-between">
