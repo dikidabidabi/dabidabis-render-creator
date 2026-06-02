@@ -959,6 +959,25 @@ function SketchPage() {
     toast.success(`${next.title} ditambahkan`);
   };
 
+  const duplicateSketch = (id: string) => {
+    setSketches((prev) => {
+      const src = prev.find((s) => s.id === id);
+      if (!src) return prev;
+      const clone: Sketch = JSON.parse(JSON.stringify(src));
+      clone.id = `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      clone.title = `${src.title} (salinan)`;
+      const now = Date.now();
+      clone.createdAt = now;
+      clone.updatedAt = now;
+      const idx = prev.findIndex((s) => s.id === id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, clone);
+      setOpenId(clone.id);
+      return next;
+    });
+    toast.success("Sketsa disalin — data progres tetap utuh");
+  };
+
   const deleteSketch = (id: string) => {
     setSketches((prev) => {
       const next = prev.filter((s) => s.id !== id);
@@ -999,6 +1018,7 @@ function SketchPage() {
             onMinimize={() => minimizeSketch(s.id)}
             onChange={(patch) => updateSketch(s.id, patch)}
             onRequestDelete={() => setConfirmDeleteId(s.id)}
+            onDuplicate={() => duplicateSketch(s.id)}
             onEnterFullscreen={() => {
               setOpenId(s.id);
               setFullscreenId(s.id);
@@ -1059,12 +1079,13 @@ type SketchCardProps = {
   onMinimize: () => void;
   onChange: (patch: Partial<Sketch>) => void;
   onRequestDelete: () => void;
+  onDuplicate: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
 };
 
 function SketchCard(props: SketchCardProps) {
-  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onEnterFullscreen } = props;
+  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onEnterFullscreen } = props;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(sketch.title);
 
@@ -1155,6 +1176,14 @@ function SketchCard(props: SketchCardProps) {
               Buka
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDuplicate}
+            title="Duplikat sketsa — buat salinan penuh untuk dikembangkan tanpa mengubah progres asli"
+          >
+            <Copy className="mr-1.5 h-4 w-4" /> Salin
+          </Button>
           <Button
             variant="outline"
             size="sm"
