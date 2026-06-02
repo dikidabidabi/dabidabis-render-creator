@@ -4054,7 +4054,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           if (polyDraft.points.length >= 3 && dist(p, first) <= tolClose) {
             const pts = polyDraft.points.slice();
             setPolyDraft(null);
-            commitFloorFromPolys(pts, []);
+            setFloorDraft({ outer: pts, holes: [], levelId: activeLvlId });
+            toast.success("Area disiapkan — tekan Simpan Area");
           } else {
             setPolyDraft({ ...polyDraft, points: [...polyDraft.points, p], lastSample: p, cursor: p });
           }
