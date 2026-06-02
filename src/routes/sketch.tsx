@@ -3495,24 +3495,34 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Commit floor (slab) — outer polygon + optional holes. Nama lantai otomatis
   // mengikuti nama level aktif. Top permukaan = MDPL level, ketebalan 150mm ke bawah.
   const commitFloorFromPolys = useCallback(
-    (outer: Point[], holes: Point[][]) => {
+    (outer: Point[], holes: Point[][], replaceFloorId?: string) => {
       if (outer.length < 3) {
         toast.error("Outline lantai minimal 3 titik");
         return;
       }
       const { levels: nextLevelsBase, activeId } = ensureLevels();
       const validHoles = holes.filter((h) => h.length >= 3);
-      const floor: Floor = {
-        id: genFloorId(),
-        levelId: activeId,
-        outer,
-        holes: validHoles.length ? validHoles : undefined,
-        thicknessMm: FLOOR_THICKNESS_MM,
-        createdAt: Date.now(),
-      };
-      pushHistory();
       const prev = sketch.floors ?? [];
-      const patch: Partial<Sketch> = { floors: [...prev, floor] };
+      pushHistory();
+      let nextFloors: Floor[];
+      if (replaceFloorId) {
+        nextFloors = prev.map((f) =>
+          f.id === replaceFloorId
+            ? { ...f, outer, holes: validHoles.length ? validHoles : undefined }
+            : f,
+        );
+      } else {
+        const floor: Floor = {
+          id: genFloorId(),
+          levelId: activeId,
+          outer,
+          holes: validHoles.length ? validHoles : undefined,
+          thicknessMm: FLOOR_THICKNESS_MM,
+          createdAt: Date.now(),
+        };
+        nextFloors = [...prev, floor];
+      }
+      const patch: Partial<Sketch> = { floors: nextFloors };
       if (nextLevelsBase !== levels) {
         patch.levels = nextLevelsBase;
         patch.activeLevelId = activeId;
@@ -3522,20 +3532,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange(patch);
       const areaPx = floorPolyArea(outer) - validHoles.reduce((s, h) => s + floorPolyArea(h), 0);
       const areaM2 = Math.max(0, areaPx) / (pxPerMeter * pxPerMeter);
-      toast.success(`Lantai dibuat — ${areaM2.toFixed(2)} m²${validHoles.length ? ` · ${validHoles.length} void` : ""}`);
+      toast.success(
+        `${replaceFloorId ? "Lantai diperbarui" : "Lantai disimpan"} — ${areaM2.toFixed(2)} m²${validHoles.length ? ` · ${validHoles.length} void` : ""}`,
+      );
       setFloorDraft(null);
     },
     [sketch.floors, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
   );
 
-  // Commit dari floorDraft (mode "attach"). Mode lain (rect/polyline/line) langsung
-  // memanggil commitFloorFromPolys saat gesture selesai.
+  // Commit dari floorDraft (semua mode: rect/line/polyline/attach).
   const commitFloor = useCallback(() => {
     if (!floorDraft || !floorDraft.outer || floorDraft.outer.length < 3) {
-      toast.error("Pilih perimeter terluar dulu");
+      toast.error("Belum ada area lantai untuk disimpan");
       return;
     }
-    commitFloorFromPolys(floorDraft.outer, floorDraft.holes);
+    commitFloorFromPolys(floorDraft.outer, floorDraft.holes, floorDraft.replaceFloorId);
   }, [floorDraft, commitFloorFromPolys]);
 
 
