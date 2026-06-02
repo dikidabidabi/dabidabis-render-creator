@@ -762,6 +762,44 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    floors: (() => {
+      const raw = s?.floors;
+      if (!Array.isArray(raw)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const validRing = (r: any): Point[] | null => {
+        if (!Array.isArray(r)) return null;
+        const pts: Point[] = [];
+        for (const p of r) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+          pts.push({ x, y });
+        }
+        return pts.length >= 3 ? pts : null;
+      };
+      const out: Floor[] = [];
+      for (const f of raw) {
+        if (!f || typeof f !== "object") continue;
+        const outer = validRing(f.outer);
+        if (!outer) continue;
+        const holes: Point[][] = [];
+        if (Array.isArray(f.holes)) {
+          for (const h of f.holes) {
+            const hh = validRing(h);
+            if (hh) holes.push(hh);
+          }
+        }
+        const lid = typeof f.levelId === "string" && validLvl.has(f.levelId) ? f.levelId : fallback;
+        out.push({
+          id: typeof f.id === "string" && f.id ? f.id : `FL${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: lid,
+          outer,
+          holes: holes.length ? holes : undefined,
+          thicknessMm: Number.isFinite(Number(f.thicknessMm)) && Number(f.thicknessMm) > 0 ? Number(f.thicknessMm) : 150,
+          createdAt: Number.isFinite(Number(f.createdAt)) ? Number(f.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
   };
 }
 
@@ -3159,7 +3197,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       ctx.globalAlpha = 1;
       ctx.restore();
-      // Label nama level di centroid floor (screen-space)
+      // Label nama level + luas lantai di centroid floor (screen-space) — mirip label ruang
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       for (const fl of allFloors) {
@@ -3168,14 +3206,40 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         if (activeLvlId != null && lvl.id !== activeLvlId) continue;
         const c = floorPolyCentroid(fl.outer);
         const sp = worldToScreen(c);
-        const text = `Lantai · ${lvl.name}`;
-        ctx.font = "600 11px Manrope, sans-serif";
-        const w = ctx.measureText(text).width + 12;
-        ctx.fillStyle = "rgba(232,93,58,0.92)";
-        ctx.fillRect(sp.x - w / 2, sp.y - 10, w, 20);
-        ctx.fillStyle = "#fff";
+        const holesArr = fl.holes ?? [];
+        const areaPx = Math.max(0, floorPolyArea(fl.outer) - holesArr.reduce((s, h) => s + floorPolyArea(h), 0));
+        const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+        const nameText = `Lantai · ${lvl.name}`;
+        const areaText = `${areaM2.toFixed(2)} m²`;
+        ctx.font = "600 13px Manrope, sans-serif";
+        const nameW = ctx.measureText(nameText).width;
+        ctx.font = "700 12px Manrope, sans-serif";
+        const areaW = ctx.measureText(areaText).width;
+        const boxW = Math.max(nameW, areaW) + 16;
+        const boxH = 38;
+        const boxR = 8;
+        const bx = sp.x - boxW / 2, by = sp.y - boxH / 2;
+        ctx.fillStyle = "rgba(255,255,255,0.65)";
+        ctx.beginPath();
+        ctx.moveTo(bx + boxR, by);
+        ctx.lineTo(bx + boxW - boxR, by);
+        ctx.quadraticCurveTo(bx + boxW, by, bx + boxW, by + boxR);
+        ctx.lineTo(bx + boxW, by + boxH - boxR);
+        ctx.quadraticCurveTo(bx + boxW, by + boxH, bx + boxW - boxR, by + boxH);
+        ctx.lineTo(bx + boxR, by + boxH);
+        ctx.quadraticCurveTo(bx, by + boxH, bx, by + boxH - boxR);
+        ctx.lineTo(bx, by + boxR);
+        ctx.quadraticCurveTo(bx, by, bx + boxR, by);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(180,55,30,0.95)";
+        ctx.font = "600 13px Manrope, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(text, sp.x, sp.y + 4);
+        ctx.fillText(nameText, sp.x, sp.y - 3);
+        ctx.fillStyle = "rgba(80,25,10,0.95)";
+        ctx.font = "700 12px Manrope, sans-serif";
+        ctx.fillText(areaText, sp.x, sp.y + 14);
+        ctx.textAlign = "start";
       }
       ctx.restore();
     }
