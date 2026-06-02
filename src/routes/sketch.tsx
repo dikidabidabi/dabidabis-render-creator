@@ -28,6 +28,7 @@ import {
   Move,
   GripHorizontal,
   Copy,
+  ClipboardPaste,
   Waypoints,
   Scissors,
   Grid3x3,
