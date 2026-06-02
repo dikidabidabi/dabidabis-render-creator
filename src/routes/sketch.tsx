@@ -2372,18 +2372,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
     // Active drawing preview (during drag)
     if (drawing) {
-      ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
-      ctx.lineWidth = 2 / s;
-      ctx.setLineDash([6 / s, 4 / s]);
+      const isFloorRect = tool === "floor" && floorMode === "rect";
+      if (isFloorRect) {
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([]);
+      } else {
+        ctx.strokeStyle = "rgba(232, 93, 58, 0.9)";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([6 / s, 4 / s]);
+      }
       ctx.beginPath();
-      const isRectPreview = tool === "rect" || (tool === "floor" && floorMode === "rect");
+      const isRectPreview = tool === "rect" || isFloorRect;
       if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
-        // (un-rotate kedua sudut diagonal), lalu rotasi balik 4 sudutnya.
+        // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
+        // rotasi balik 4 sudutnya. Ini menjamin sisi-sisi rect benar-benar
+        // berada di garis grid milimeter block pada semua tingkat zoom.
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
-        const lx1 = Math.min(la.x, lb.x), lx2 = Math.max(la.x, lb.x);
-        const ly1 = Math.min(la.y, lb.y), ly2 = Math.max(la.y, lb.y);
+        const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
+        const lx1 = snapL(Math.min(la.x, lb.x));
+        const lx2 = snapL(Math.max(la.x, lb.x));
+        const ly1 = snapL(Math.min(la.y, lb.y));
+        const ly2 = snapL(Math.max(la.y, lb.y));
         const corners = [
           { x: lx1, y: ly1 }, { x: lx2, y: ly1 },
           { x: lx2, y: ly2 }, { x: lx1, y: ly2 },
@@ -2392,12 +2404,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
         ctx.closePath();
         ctx.stroke();
-        ctx.fillStyle = tool === "floor"
-          ? "rgba(232, 93, 58, 0.18)"
-          : "rgba(232, 93, 58, 0.10)";
-        ctx.fill();
+        if (!isFloorRect) {
+          ctx.fillStyle = "rgba(232, 93, 58, 0.10)";
+          ctx.fill();
+        }
         // Tanda silang preview bila rect berada di dalam floor existing (calon void)
-        if (tool === "floor" && floorMode === "rect") {
+        if (isFloorRect) {
           const floors = sketch.floors ?? [];
           const cornersWorld = corners;
           const allInside = floors.some((fl) =>
@@ -2407,7 +2419,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           );
           if (allInside) {
             ctx.save();
-            ctx.strokeStyle = "rgba(120,40,20,0.95)";
+            ctx.strokeStyle = "#1a1a1a";
             ctx.lineWidth = 1.5 / s;
             ctx.setLineDash([4 / s, 3 / s]);
             ctx.beginPath();
@@ -4633,11 +4645,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       // Bangun persegi axis-aligned (mengikuti rotasi mm-grid) lalu commit sebagai outer floor.
       const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
       const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
-      const lminX = Math.min(la.x, lb.x);
-      const lmaxX = Math.max(la.x, lb.x);
-      const lminY = Math.min(la.y, lb.y);
-      const lmaxY = Math.max(la.y, lb.y);
-      if (lmaxX - lminX < 4 || lmaxY - lminY < 4) return;
+      const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
+      const lminX = snapL(Math.min(la.x, lb.x));
+      const lmaxX = snapL(Math.max(la.x, lb.x));
+      const lminY = snapL(Math.min(la.y, lb.y));
+      const lmaxY = snapL(Math.max(la.y, lb.y));
+      if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
       const p1 = rotateAround({ x: lminX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
       const p2 = rotateAround({ x: lmaxX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
       const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
