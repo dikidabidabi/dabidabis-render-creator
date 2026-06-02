@@ -4622,7 +4622,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const p2 = rotateAround({ x: lmaxX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
       const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
       const p4 = rotateAround({ x: lminX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
-      commitFloorFromPolys([p1, p2, p3, p4], []);
+      const rectPts = [p1, p2, p3, p4];
+      // Jika rect ini berada di dalam floor existing pada level aktif → jadikan void
+      const existing = sketch.floors ?? [];
+      const hostIdx = existing.findIndex((fl) =>
+        fl.levelId === activeLvlId &&
+        rectPts.every((c) => floorPointInPolygon(c, fl.outer)) &&
+        !(fl.holes ?? []).some((h) => rectPts.every((c) => floorPointInPolygon(c, h))),
+      );
+      if (hostIdx >= 0) {
+        pushHistory();
+        const next = existing.slice();
+        const host = next[hostIdx];
+        next[hostIdx] = { ...host, holes: [...(host.holes ?? []), rectPts] };
+        onChange({ floors: next });
+        toast.success("Void ditambahkan ke lantai");
+        return;
+      }
+      commitFloorFromPolys(rectPts, []);
       return;
     }
 
