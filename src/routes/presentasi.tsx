@@ -41,6 +41,7 @@ import {
   type EdgeSegment,
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
+import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
