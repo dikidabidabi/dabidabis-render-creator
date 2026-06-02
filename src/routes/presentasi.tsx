@@ -5486,8 +5486,9 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
   };
 
   // Kumpulkan semua bidang, lalu render atap sebelum dinding agar sisi yang menghadap kamera tetap terlihat penuh.
-  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall"; dir?: FacadeDir };
+  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall" | "slab"; dir?: FacadeDir };
   const quads: Quad[] = [];
+
 
   // Lahan (ground polygon, tipis di z=0).
   for (const l of lahanAll) {
