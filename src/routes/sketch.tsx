@@ -4195,7 +4195,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const flList = (sketch.floors ?? []).filter(
           (f) => !activeLvlId || f.levelId === activeLvlId,
         );
-        if (floorEditSub === "move") {
+        if (floorEditSub === "move" || floorEditSub === "delete") {
           // cari vertex terdekat
           type VHit = { fid: string; ring: "outer" | number; idx: number; d: number };
           const hits: VHit[] = [];
@@ -4217,8 +4217,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
           hits.sort((a, b) => a.d - b.d);
           const bestV = hits[0];
-          pushHistory();
-          setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
+          if (floorEditSub === "move") {
+            pushHistory();
+            setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
+          } else {
+            // delete vertex
+            const target = flList.find((f) => f.id === bestV.fid);
+            if (!target) return;
+            if (bestV.ring === "outer") {
+              if (target.outer.length <= 3) {
+                toast.error("Outer minimal 3 titik — tidak bisa dihapus");
+                return;
+              }
+            } else {
+              const h = (target.holes ?? [])[bestV.ring as number];
+              if (!h) return;
+              // jika menjadi <3 titik → hapus seluruh void
+            }
+            pushHistory();
+            const nextFloors = (sketch.floors ?? []).map((fl) => {
+              if (fl.id !== bestV.fid) return fl;
+              if (bestV.ring === "outer") {
+                const next = fl.outer.slice();
+                next.splice(bestV.idx, 1);
+                return { ...fl, outer: next };
+              }
+              const holes = (fl.holes ?? [])
+                .map((h, hi) => {
+                  if (hi !== bestV.ring) return h;
+                  const nh = h.slice();
+                  nh.splice(bestV.idx, 1);
+                  return nh;
+                })
+                .filter((h) => h.length >= 3);
+              return { ...fl, holes: holes.length ? holes : undefined };
+            });
+            onChange({ floors: nextFloors });
+            toast.success("Titik dihapus");
+          }
         } else {
           // tambah titik: cari segmen terdekat, sisipkan vertex baru di proyeksi
           type EHit = { fid: string; ring: "outer" | number; segIdx: number; proj: Point; d: number };
