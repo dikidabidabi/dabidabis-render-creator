@@ -1079,12 +1079,13 @@ type SketchCardProps = {
   onMinimize: () => void;
   onChange: (patch: Partial<Sketch>) => void;
   onRequestDelete: () => void;
+  onDuplicate: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
 };
 
 function SketchCard(props: SketchCardProps) {
-  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onEnterFullscreen } = props;
+  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onEnterFullscreen } = props;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(sketch.title);
 
