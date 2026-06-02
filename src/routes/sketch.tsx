@@ -3275,7 +3275,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const s = worldToScreen(w);
         ctx.beginPath();
         ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
-        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : "#fff";
+        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : floorEditSub === "delete" ? "#c62828" : "#fff";
         ctx.strokeStyle = "#1a1a1a";
         ctx.lineWidth = 1.5;
         ctx.fill();
