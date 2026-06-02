@@ -4241,41 +4241,41 @@ function AxonometricView({
   const SLAB_SIDE = "#9c9c9c";
   const slabThk = FLOOR_THICKNESS_MM / 1000;
   for (const fl of sketch.floors ?? []) {
-    const lv = ascLevels.find((l) => l.id === fl.levelId);
-    if (!lv) continue;
-    const topY = lv.mdpl;
-    const botY = topY - slabThk;
+    const copies = expanded.filter((e) => e.sourceId === fl.levelId);
+    if (!copies.length) continue;
     const outerPm = fl.outer.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
     if (outerPm.length < 3) continue;
     const holesPm = (fl.holes ?? [])
       .map((h) => h.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx })))
       .filter((h) => h.length >= 3);
-    // Sisi luar
-    for (let i = 0; i < outerPm.length; i++) {
-      const a = outerPm[i];
-      const b = outerPm[(i + 1) % outerPm.length];
-      const quad = [
-        project(a.x, a.z, botY),
-        project(b.x, b.z, botY),
-        project(b.x, b.z, topY),
-        project(a.x, a.z, topY),
-      ];
-      const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
-      faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+    for (const cp of copies) {
+      const topY = cp.mdpl;
+      const botY = topY - slabThk;
+      for (let i = 0; i < outerPm.length; i++) {
+        const a = outerPm[i];
+        const b = outerPm[(i + 1) % outerPm.length];
+        const quad = [
+          project(a.x, a.z, botY),
+          project(b.x, b.z, botY),
+          project(b.x, b.z, topY),
+          project(a.x, a.z, topY),
+        ];
+        const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
+        faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+      }
+      const topPts = outerPm.map((p) => project(p.x, p.z, topY));
+      const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
+      const avg = outerPm.reduce((s, p) => s + p.x + p.z, 0) / outerPm.length;
+      faces.push({
+        pts: topPts,
+        holes: holesTop.length ? holesTop : undefined,
+        fill: SLAB_TOP,
+        stroke: "rgba(0,0,0,0.5)",
+        depth: avg + topY * 0.01 - 0.001,
+        sw: 0.5,
+        kind: "top",
+      });
     }
-    // Permukaan atas (dengan void)
-    const topPts = outerPm.map((p) => project(p.x, p.z, topY));
-    const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
-    const avg = outerPm.reduce((s, p) => s + p.x + p.z, 0) / outerPm.length;
-    faces.push({
-      pts: topPts,
-      holes: holesTop.length ? holesTop : undefined,
-      fill: SLAB_TOP,
-      stroke: "rgba(0,0,0,0.5)",
-      depth: avg + topY * 0.01 - 0.001,
-      sw: 0.5,
-      kind: "top",
-    });
   }
 
   const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
