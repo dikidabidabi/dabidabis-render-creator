@@ -2011,6 +2011,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
                     );
                   })}
+                  {/* Garis sangat tipis di ujung bawah balok, menghubungkan dinding di kedua ujung
+                      dan semua ujung bawah balok dalam tiap interval slab. */}
+                  {intervals.map(([a, b], i) => (
+                    <line key={`bl${i}`}
+                      x1={mx(a)} y1={yBeamBot}
+                      x2={mx(b)} y2={yBeamBot}
+                      stroke="#0a0a0a" strokeWidth={0.25} />
+                  ))}
                 </g>
               );
             });
