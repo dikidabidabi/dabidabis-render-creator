@@ -5742,6 +5742,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
             editSub={floorEditSub}
             onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); }}
+            floorsInLevel={(sketch.floors ?? []).filter((f) => f.levelId === activeLvlId)}
+            clipboardCount={floorClipboard.length}
+            onCopyFloors={() => {
+              const inLvl = (sketch.floors ?? []).filter((f) => f.levelId === activeLvlId);
+              if (inLvl.length === 0) { toast.error("Tidak ada lantai untuk disalin"); return; }
+              const clones: Floor[] = inLvl.map((f) => ({
+                ...f,
+                outer: f.outer.map((p) => ({ x: p.x, y: p.y })),
+                holes: f.holes ? f.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))) : undefined,
+              }));
+              setFloorClipboard(clones);
+              toast.success(`${clones.length} lantai disalin`);
+            }}
+            onPasteFloors={() => {
+              if (floorClipboard.length === 0) return;
+              const { activeId } = ensureLevels();
+              pushHistory();
+              const pasted: Floor[] = floorClipboard.map((f) => ({
+                ...f,
+                id: genFloorId(),
+                levelId: activeId,
+                createdAt: Date.now(),
+                outer: f.outer.map((p) => ({ x: p.x, y: p.y })),
+                holes: f.holes ? f.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))) : undefined,
+              }));
+              onChange({ floors: [...(sketch.floors ?? []), ...pasted] });
+              toast.success(`${pasted.length} lantai ditempel di level ini`);
+            }}
+            onDeleteFloors={() => {
+              const inLvl = (sketch.floors ?? []).filter((f) => f.levelId === activeLvlId);
+              if (inLvl.length === 0) { toast.error("Tidak ada lantai untuk dihapus"); return; }
+              pushHistory();
+              const remaining = (sketch.floors ?? []).filter((f) => f.levelId !== activeLvlId);
+              onChange({ floors: remaining });
+              setFloorDraft(null);
+              setFloorVertexDrag(null);
+              toast.success(`${inLvl.length} lantai dihapus dari level ini`);
+            }}
           />
         )}
         {tool === "offset" && (
