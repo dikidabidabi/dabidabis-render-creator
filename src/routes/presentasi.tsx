@@ -5528,40 +5528,40 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const slabThk = FLOOR_THICKNESS_MM / 1000;
     const minExp = expanded.length ? Math.min(...expanded.map((e) => e.mdpl)) : 0;
     for (const fl of sketch.floors ?? []) {
-      const lv = levels.find((l) => l.id === fl.levelId);
-      if (!lv) continue;
+      const copies = expanded.filter((e) => e.sourceId === fl.levelId);
+      if (!copies.length) continue;
       if (fl.outer.length < 3) continue;
-      const topRel = lv.mdpl - minExp;
-      const botRel = topRel - slabThk;
-      // Sisi luar slab
-      for (let i = 0; i < fl.outer.length; i++) {
-        const a = fl.outer[i];
-        const b = fl.outer[(i + 1) % fl.outer.length];
-        const p1 = project(a.x, a.y, botRel);
-        const p2 = project(b.x, b.y, botRel);
-        const p3 = project(b.x, b.y, topRel);
-        const p4 = project(a.x, a.y, topRel);
-        const mxv = (a.x + b.x) / 2 - cx;
-        const myv = (a.y + b.y) / 2 - cy;
+      for (const cp of copies) {
+        const topRel = cp.mdpl - minExp;
+        const botRel = topRel - slabThk;
+        for (let i = 0; i < fl.outer.length; i++) {
+          const a = fl.outer[i];
+          const b = fl.outer[(i + 1) % fl.outer.length];
+          const p1 = project(a.x, a.y, botRel);
+          const p2 = project(b.x, b.y, botRel);
+          const p3 = project(b.x, b.y, topRel);
+          const p4 = project(a.x, a.y, topRel);
+          const mxv = (a.x + b.x) / 2 - cx;
+          const myv = (a.y + b.y) / 2 - cy;
+          quads.push({
+            pts: [p1, p2, p3, p4],
+            depth: mxv + myv + botRel * 0.01,
+            fill: "#9c9c9c",
+            stroke: "rgba(0,0,0,0.45)",
+            sw: 1.0,
+            kind: "wall",
+          });
+        }
+        const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
         quads.push({
-          pts: [p1, p2, p3, p4],
-          depth: mxv + myv + botRel * 0.01,
-          fill: "#9c9c9c",
-          stroke: "rgba(0,0,0,0.45)",
+          pts: topPts,
+          depth: avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
+          fill: "#cfcfcf",
+          stroke: "rgba(0,0,0,0.5)",
           sw: 1.0,
-          kind: "wall",
+          kind: "top",
         });
       }
-      // Permukaan atas
-      const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
-      quads.push({
-        pts: topPts,
-        depth: avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
-        fill: "#cfcfcf",
-        stroke: "rgba(0,0,0,0.5)",
-        sw: 1.0,
-        kind: "top",
-      });
     }
   }
 
