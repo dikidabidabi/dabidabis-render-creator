@@ -5553,20 +5553,32 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     });
   }
 
-  // Slab lantai (entitas Floor) — 150mm di bawah MDPL level. Konsisten dgn Model 3D.
+  // Slab lantai (entitas Floor) — 150mm di bawah MDPL level, ditandai kind "slab"
+  // supaya selalu tampak (di atas dinding) sebagai band beton horizontal di fasad.
   {
     const slabThk = FLOOR_THICKNESS_MM / 1000;
     const minExp = expanded.length ? Math.min(...expanded.map((e) => e.mdpl)) : 0;
+    const SLAB_OVERHANG_M = 0.08;
     for (const fl of sketch.floors ?? []) {
       const copies = expanded.filter((e) => e.sourceId === fl.levelId);
       if (!copies.length) continue;
       if (fl.outer.length < 3) continue;
+      // Overhang slab agar tepi menonjol keluar dinding sehingga band slab tampak jelas.
+      let cxp = 0, cyp = 0;
+      for (const p of fl.outer) { cxp += p.x; cyp += p.y; }
+      cxp /= fl.outer.length; cyp /= fl.outer.length;
+      const expandPx = SLAB_OVERHANG_M / pxPerM;
+      const outerExp = fl.outer.map((p) => {
+        const dx = p.x - cxp, dy = p.y - cyp;
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: p.x + (dx / len) * expandPx, y: p.y + (dy / len) * expandPx };
+      });
       for (const cp of copies) {
         const topRel = cp.mdpl - minExp;
         const botRel = topRel - slabThk;
-        for (let i = 0; i < fl.outer.length; i++) {
-          const a = fl.outer[i];
-          const b = fl.outer[(i + 1) % fl.outer.length];
+        for (let i = 0; i < outerExp.length; i++) {
+          const a = outerExp[i];
+          const b = outerExp[(i + 1) % outerExp.length];
           const p1 = project(a.x, a.y, botRel);
           const p2 = project(b.x, b.y, botRel);
           const p3 = project(b.x, b.y, topRel);
@@ -5576,29 +5588,29 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
           quads.push({
             pts: [p1, p2, p3, p4],
             depth: mxv + myv + botRel * 0.01,
-            fill: "#9c9c9c",
-            stroke: "rgba(0,0,0,0.45)",
-            sw: 1.0,
-            kind: "wall",
+            fill: "#8a8578",
+            stroke: "#1a1a1a",
+            sw: 1.2,
+            kind: "slab",
           });
         }
-        const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
+        const topPts = outerExp.map((p) => project(p.x, p.y, topRel));
         quads.push({
           pts: topPts,
-          depth: avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
-          fill: "#cfcfcf",
-          stroke: "rgba(0,0,0,0.5)",
+          depth: avgDepthForPoints(outerExp, cx, cy) + topRel * 0.01 + 1e6,
+          fill: "#d6d2c8",
+          stroke: "#1a1a1a",
           sw: 1.0,
-          kind: "top",
+          kind: "slab",
         });
       }
     }
   }
 
-
-
-  const quadLayer = (kind: Quad["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  const quadLayer = (kind: Quad["kind"]) =>
+    kind === "base" ? 0 : kind === "top" ? 1 : kind === "wall" ? 2 : 3;
   quads.sort((a, b) => quadLayer(a.kind) - quadLayer(b.kind) || a.depth - b.depth);
+
 
   // Tentukan bounding viewBox proyeksi.
   const allPts = quads.flatMap((q) => q.pts);
