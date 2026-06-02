@@ -4645,11 +4645,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       // Bangun persegi axis-aligned (mengikuti rotasi mm-grid) lalu commit sebagai outer floor.
       const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
       const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
-      const lminX = Math.min(la.x, lb.x);
-      const lmaxX = Math.max(la.x, lb.x);
-      const lminY = Math.min(la.y, lb.y);
-      const lmaxY = Math.max(la.y, lb.y);
-      if (lmaxX - lminX < 4 || lmaxY - lminY < 4) return;
+      const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
+      const lminX = snapL(Math.min(la.x, lb.x));
+      const lmaxX = snapL(Math.max(la.x, lb.x));
+      const lminY = snapL(Math.min(la.y, lb.y));
+      const lmaxY = snapL(Math.max(la.y, lb.y));
+      if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
       const p1 = rotateAround({ x: lminX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
       const p2 = rotateAround({ x: lmaxX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
       const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
