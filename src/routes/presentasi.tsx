@@ -1759,6 +1759,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 </pattern>
               );
             })()}
+            {/* Notasi beton — pola titik (bintik) untuk slab lantai & balok. */}
+            <pattern id={`concrete-dot-${slide.id}`} width={5} height={5} patternUnits="userSpaceOnUse">
+              <rect width={5} height={5} fill="#ece6d3" />
+              <circle cx={1.2} cy={1.2} r={0.55} fill="#1a1a1a" />
+              <circle cx={3.7} cy={3.7} r={0.55} fill="#1a1a1a" />
+              <circle cx={3.7} cy={1.2} r={0.32} fill="#3a3a3a" />
+              <circle cx={1.2} cy={3.7} r={0.32} fill="#3a3a3a" />
+            </pattern>
           </defs>
           <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
 
