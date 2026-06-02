@@ -1980,47 +1980,46 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             }
 
             const fill = `url(#concrete-dot-${slide.id})`;
-            return floors.map((fl) => {
-              const lv = lvls.find((l) => l.id === fl.levelId);
-              if (!lv) return null;
-              const topM = lv.mdpl;
+            return floors.flatMap((fl) => {
+              const copies = floorsExp.filter((e) => e.sourceId === fl.levelId);
+              if (!copies.length) return [];
               const intervals = intervalsFor(fl);
-              if (!intervals.length) return null;
-              const yTop = my(topM);
-              const ySlabBot = my(topM - SLAB_M);
-              const yBeamBot = my(topM - SLAB_M - BEAM_H_M);
-              return (
-                <g key={`slab-${fl.id}`}>
-                  {intervals.map(([a, b], i) => (
-                    <rect key={`s${i}`}
-                      x={mx(a)} y={yTop}
-                      width={(b - a) * scalePxPerM} height={ySlabBot - yTop}
-                      fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
-                  ))}
-                  {uniqCenters.map((bc, i) => {
-                    const inside = intervals.some(([a, b]) => bc >= a - 1e-3 && bc <= b + 1e-3);
-                    if (!inside) return null;
-                    const x0 = mx(bc - BEAM_W_M / 2);
-                    const w = BEAM_W_M * scalePxPerM;
-                    // Balok menyatu dengan slab: tarik sedikit ke atas agar garis batas hilang.
-                    const yTopBeam = ySlabBot - 0.2;
-                    return (
-                      <rect key={`b${i}`}
-                        x={x0} y={yTopBeam}
-                        width={w} height={yBeamBot - yTopBeam}
+              if (!intervals.length) return [];
+              return copies.map((cp) => {
+                const topM = cp.mdpl;
+                const yTop = my(topM);
+                const ySlabBot = my(topM - SLAB_M);
+                const yBeamBot = my(topM - SLAB_M - BEAM_H_M);
+                return (
+                  <g key={`slab-${fl.id}-${cp.id}`}>
+                    {intervals.map(([a, b], i) => (
+                      <rect key={`s${i}`}
+                        x={mx(a)} y={yTop}
+                        width={(b - a) * scalePxPerM} height={ySlabBot - yTop}
                         fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
-                    );
-                  })}
-                  {/* Garis sangat tipis di ujung bawah balok, menghubungkan dinding di kedua ujung
-                      dan semua ujung bawah balok dalam tiap interval slab. */}
-                  {intervals.map(([a, b], i) => (
-                    <line key={`bl${i}`}
-                      x1={mx(a)} y1={yBeamBot}
-                      x2={mx(b)} y2={yBeamBot}
-                      stroke="#0a0a0a" strokeWidth={0.25} />
-                  ))}
-                </g>
-              );
+                    ))}
+                    {uniqCenters.map((bc, i) => {
+                      const inside = intervals.some(([a, b]) => bc >= a - 1e-3 && bc <= b + 1e-3);
+                      if (!inside) return null;
+                      const x0 = mx(bc - BEAM_W_M / 2);
+                      const w = BEAM_W_M * scalePxPerM;
+                      const yTopBeam = ySlabBot - 0.2;
+                      return (
+                        <rect key={`b${i}`}
+                          x={x0} y={yTopBeam}
+                          width={w} height={yBeamBot - yTopBeam}
+                          fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                      );
+                    })}
+                    {intervals.map(([a, b], i) => (
+                      <line key={`bl${i}`}
+                        x1={mx(a)} y1={yBeamBot}
+                        x2={mx(b)} y2={yBeamBot}
+                        stroke="#0a0a0a" strokeWidth={0.25} />
+                    ))}
+                  </g>
+                );
+              });
             });
           })()}
 
