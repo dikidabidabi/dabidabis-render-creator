@@ -2360,7 +2360,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.lineWidth = 2 / s;
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
-      if (tool === "rect") {
+      const isRectPreview = tool === "rect" || (tool === "floor" && floorMode === "rect");
+      if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), lalu rotasi balik 4 sudutnya.
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
@@ -2375,8 +2376,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
         ctx.closePath();
         ctx.stroke();
-        ctx.fillStyle = "rgba(232, 93, 58, 0.10)";
+        ctx.fillStyle = tool === "floor"
+          ? "rgba(232, 93, 58, 0.18)"
+          : "rgba(232, 93, 58, 0.10)";
         ctx.fill();
+        // Tanda silang preview bila rect berada di dalam floor existing (calon void)
+        if (tool === "floor" && floorMode === "rect") {
+          const floors = sketch.floors ?? [];
+          const cornersWorld = corners;
+          const allInside = floors.some((fl) =>
+            fl.levelId === activeLvlId &&
+            cornersWorld.every((c) => floorPointInPolygon(c, fl.outer)) &&
+            !(fl.holes ?? []).some((h) => cornersWorld.every((c) => floorPointInPolygon(c, h))),
+          );
+          if (allInside) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(120,40,20,0.95)";
+            ctx.lineWidth = 1.5 / s;
+            ctx.setLineDash([4 / s, 3 / s]);
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y); ctx.lineTo(corners[2].x, corners[2].y);
+            ctx.moveTo(corners[1].x, corners[1].y); ctx.lineTo(corners[3].x, corners[3].y);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
       } else {
         ctx.moveTo(drawing.a.x, drawing.a.y);
         if (lineKind === "arc") {
@@ -3070,7 +3094,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 2 / view.s;
         ctx.strokeStyle = "rgba(232,93,58,0.85)";
         ctx.stroke();
-        // hole outlines extra emphasis
+        // hole outlines + tanda silang (X) untuk menandai void
         for (const hole of fl.holes ?? []) {
           ctx.beginPath();
           hole.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
@@ -3080,6 +3104,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.lineWidth = 1.5 / view.s;
           ctx.stroke();
           ctx.setLineDash([]);
+          // bounding box untuk tanda silang
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const p of hole) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+          }
+          ctx.beginPath();
+          ctx.moveTo(minX, minY); ctx.lineTo(maxX, maxY);
+          ctx.moveTo(maxX, minY); ctx.lineTo(minX, maxY);
+          ctx.strokeStyle = "rgba(120,40,20,0.7)";
+          ctx.lineWidth = 1 / view.s;
+          ctx.stroke();
         }
       }
       ctx.globalAlpha = 1;
@@ -4584,7 +4622,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const p2 = rotateAround({ x: lmaxX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
       const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
       const p4 = rotateAround({ x: lminX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
-      commitFloorFromPolys([p1, p2, p3, p4], []);
+      const rectPts = [p1, p2, p3, p4];
+      // Jika rect ini berada di dalam floor existing pada level aktif → jadikan void
+      const existing = sketch.floors ?? [];
+      const hostIdx = existing.findIndex((fl) =>
+        fl.levelId === activeLvlId &&
+        rectPts.every((c) => floorPointInPolygon(c, fl.outer)) &&
+        !(fl.holes ?? []).some((h) => rectPts.every((c) => floorPointInPolygon(c, h))),
+      );
+      if (hostIdx >= 0) {
+        pushHistory();
+        const next = existing.slice();
+        const host = next[hostIdx];
+        next[hostIdx] = { ...host, holes: [...(host.holes ?? []), rectPts] };
+        onChange({ floors: next });
+        toast.success("Void ditambahkan ke lantai");
+        return;
+      }
+      commitFloorFromPolys(rectPts, []);
       return;
     }
 
