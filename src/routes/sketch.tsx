@@ -4603,7 +4603,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange({ floors: nextFloors });
       return;
     }
-
+    const p = tool === "floor" && floorMode === "rect"
       ? snapPointToMillimeterGrid(getWorldPosRaw(e), true)
       : getWorldPos(e);
     setHover(p);
