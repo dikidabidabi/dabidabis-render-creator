@@ -7632,6 +7632,11 @@ function FloorToolPanel({
   onCancel,
   editSub,
   onEditSub,
+  floorsInLevel,
+  clipboardCount,
+  onCopyFloors,
+  onPasteFloors,
+  onDeleteFloors,
 }: {
   mode: FloorMode;
   onMode: (m: FloorMode) => void;
@@ -7639,12 +7644,20 @@ function FloorToolPanel({
   level: Level | null;
   onCommit: () => void;
   onCancel: () => void;
-  editSub: "move" | "add";
-  onEditSub: (s: "move" | "add") => void;
+  editSub: "move" | "add" | "delete";
+  onEditSub: (s: "move" | "add" | "delete") => void;
+  floorsInLevel: Floor[];
+  clipboardCount: number;
+  onCopyFloors: () => void;
+  onPasteFloors: () => void;
+  onDeleteFloors: () => void;
 }) {
   const hasOuter = !!(draft && draft.outer && draft.outer.length >= 3);
   const holeCount = draft?.holes?.length ?? 0;
   const isReplace = !!draft?.replaceFloorId;
+  const canCopy = floorsInLevel.length > 0;
+  const canDelete = floorsInLevel.length > 0;
+  const canPaste = clipboardCount > 0;
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
       <div className="flex items-center justify-between">
@@ -7662,7 +7675,7 @@ function FloorToolPanel({
             { id: "line", label: "Garis", hint: "Klik dua titik tiap segmen, dobel-klik tutup" },
             { id: "polyline", label: "Polyline", hint: "Klik banyak titik, dobel-klik tutup" },
             { id: "attach", label: "Attach Garis", hint: "Klik segmen perimeter (outer), lalu segmen lubang (void)" },
-            { id: "edit", label: "Edit Titik", hint: "Geser titik atau tambah titik baru pada lantai existing" },
+            { id: "edit", label: "Edit Titik", hint: "Geser / tambah / hapus titik pada lantai existing" },
           ] as { id: FloorMode; label: string; hint: string }[]
         ).map((m) => (
           <Button
@@ -7681,29 +7694,37 @@ function FloorToolPanel({
         {mode === "attach"
           ? "Klik segmen pada perimeter terluar untuk men-set outer; klik segmen poligon di dalamnya untuk menambah void."
           : mode === "edit"
-          ? "Pilih sub-mode di bawah. Geser: tarik titik existing. Tambah Titik: klik tepi lantai untuk menyisipkan titik baru."
+          ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus."
           : mode === "rect"
           ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
           : "Klik titik-titik membentuk poligon, tutup di titik awal. Tekan Simpan Area untuk finalisasi."}
       </p>
 
       {mode === "edit" && (
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5">
           <Button
             size="sm"
             variant={editSub === "move" ? "default" : "outline"}
-            className={cn("h-8 text-xs", editSub === "move" && "bg-gradient-ember shadow-ember")}
+            className={cn("h-8 text-[11px]", editSub === "move" && "bg-gradient-ember shadow-ember")}
             onClick={() => onEditSub("move")}
           >
-            Geser Titik
+            Geser
           </Button>
           <Button
             size="sm"
             variant={editSub === "add" ? "default" : "outline"}
-            className={cn("h-8 text-xs", editSub === "add" && "bg-gradient-ember shadow-ember")}
+            className={cn("h-8 text-[11px]", editSub === "add" && "bg-gradient-ember shadow-ember")}
             onClick={() => onEditSub("add")}
           >
-            Tambah Titik
+            Tambah
+          </Button>
+          <Button
+            size="sm"
+            variant={editSub === "delete" ? "default" : "outline"}
+            className={cn("h-8 text-[11px]", editSub === "delete" && "bg-destructive text-destructive-foreground")}
+            onClick={() => onEditSub("delete")}
+          >
+            Hapus
           </Button>
         </div>
       )}
@@ -7728,6 +7749,42 @@ function FloorToolPanel({
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-3 gap-1.5 border-t border-border/60 pt-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canCopy}
+          onClick={onCopyFloors}
+          className="h-7 text-[10px]"
+          title="Salin semua lantai di level aktif"
+        >
+          <Copy className="mr-1 h-3 w-3" /> Copy
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canPaste}
+          onClick={onPasteFloors}
+          className="h-7 text-[10px]"
+          title="Tempel lantai pada koordinat X/Y yang sama di level aktif"
+        >
+          <ClipboardPaste className="mr-1 h-3 w-3" /> Paste
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canDelete}
+          onClick={onDeleteFloors}
+          className="h-7 text-[10px] text-destructive hover:text-destructive"
+          title="Hapus semua lantai di level aktif"
+        >
+          <X className="mr-1 h-3 w-3" /> Hapus
+        </Button>
+      </div>
+      <p className="text-[9px] text-muted-foreground">
+        {floorsInLevel.length} lantai di level ini · clipboard: {clipboardCount}
+      </p>
     </div>
   );
 }
