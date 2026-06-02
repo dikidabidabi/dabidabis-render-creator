@@ -1980,47 +1980,46 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             }
 
             const fill = `url(#concrete-dot-${slide.id})`;
-            return floors.map((fl) => {
-              const lv = lvls.find((l) => l.id === fl.levelId);
-              if (!lv) return null;
-              const topM = lv.mdpl;
+            return floors.flatMap((fl) => {
+              const copies = floorsExp.filter((e) => e.sourceId === fl.levelId);
+              if (!copies.length) return [];
               const intervals = intervalsFor(fl);
-              if (!intervals.length) return null;
-              const yTop = my(topM);
-              const ySlabBot = my(topM - SLAB_M);
-              const yBeamBot = my(topM - SLAB_M - BEAM_H_M);
-              return (
-                <g key={`slab-${fl.id}`}>
-                  {intervals.map(([a, b], i) => (
-                    <rect key={`s${i}`}
-                      x={mx(a)} y={yTop}
-                      width={(b - a) * scalePxPerM} height={ySlabBot - yTop}
-                      fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
-                  ))}
-                  {uniqCenters.map((bc, i) => {
-                    const inside = intervals.some(([a, b]) => bc >= a - 1e-3 && bc <= b + 1e-3);
-                    if (!inside) return null;
-                    const x0 = mx(bc - BEAM_W_M / 2);
-                    const w = BEAM_W_M * scalePxPerM;
-                    // Balok menyatu dengan slab: tarik sedikit ke atas agar garis batas hilang.
-                    const yTopBeam = ySlabBot - 0.2;
-                    return (
-                      <rect key={`b${i}`}
-                        x={x0} y={yTopBeam}
-                        width={w} height={yBeamBot - yTopBeam}
+              if (!intervals.length) return [];
+              return copies.map((cp) => {
+                const topM = cp.mdpl;
+                const yTop = my(topM);
+                const ySlabBot = my(topM - SLAB_M);
+                const yBeamBot = my(topM - SLAB_M - BEAM_H_M);
+                return (
+                  <g key={`slab-${fl.id}-${cp.id}`}>
+                    {intervals.map(([a, b], i) => (
+                      <rect key={`s${i}`}
+                        x={mx(a)} y={yTop}
+                        width={(b - a) * scalePxPerM} height={ySlabBot - yTop}
                         fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
-                    );
-                  })}
-                  {/* Garis sangat tipis di ujung bawah balok, menghubungkan dinding di kedua ujung
-                      dan semua ujung bawah balok dalam tiap interval slab. */}
-                  {intervals.map(([a, b], i) => (
-                    <line key={`bl${i}`}
-                      x1={mx(a)} y1={yBeamBot}
-                      x2={mx(b)} y2={yBeamBot}
-                      stroke="#0a0a0a" strokeWidth={0.25} />
-                  ))}
-                </g>
-              );
+                    ))}
+                    {uniqCenters.map((bc, i) => {
+                      const inside = intervals.some(([a, b]) => bc >= a - 1e-3 && bc <= b + 1e-3);
+                      if (!inside) return null;
+                      const x0 = mx(bc - BEAM_W_M / 2);
+                      const w = BEAM_W_M * scalePxPerM;
+                      const yTopBeam = ySlabBot - 0.2;
+                      return (
+                        <rect key={`b${i}`}
+                          x={x0} y={yTopBeam}
+                          width={w} height={yBeamBot - yTopBeam}
+                          fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                      );
+                    })}
+                    {intervals.map(([a, b], i) => (
+                      <line key={`bl${i}`}
+                        x1={mx(a)} y1={yBeamBot}
+                        x2={mx(b)} y2={yBeamBot}
+                        stroke="#0a0a0a" strokeWidth={0.25} />
+                    ))}
+                  </g>
+                );
+              });
             });
           })()}
 
@@ -4242,41 +4241,41 @@ function AxonometricView({
   const SLAB_SIDE = "#9c9c9c";
   const slabThk = FLOOR_THICKNESS_MM / 1000;
   for (const fl of sketch.floors ?? []) {
-    const lv = ascLevels.find((l) => l.id === fl.levelId);
-    if (!lv) continue;
-    const topY = lv.mdpl;
-    const botY = topY - slabThk;
+    const copies = expanded.filter((e) => e.sourceId === fl.levelId);
+    if (!copies.length) continue;
     const outerPm = fl.outer.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
     if (outerPm.length < 3) continue;
     const holesPm = (fl.holes ?? [])
       .map((h) => h.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx })))
       .filter((h) => h.length >= 3);
-    // Sisi luar
-    for (let i = 0; i < outerPm.length; i++) {
-      const a = outerPm[i];
-      const b = outerPm[(i + 1) % outerPm.length];
-      const quad = [
-        project(a.x, a.z, botY),
-        project(b.x, b.z, botY),
-        project(b.x, b.z, topY),
-        project(a.x, a.z, topY),
-      ];
-      const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
-      faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+    for (const cp of copies) {
+      const topY = cp.mdpl;
+      const botY = topY - slabThk;
+      for (let i = 0; i < outerPm.length; i++) {
+        const a = outerPm[i];
+        const b = outerPm[(i + 1) % outerPm.length];
+        const quad = [
+          project(a.x, a.z, botY),
+          project(b.x, b.z, botY),
+          project(b.x, b.z, topY),
+          project(a.x, a.z, topY),
+        ];
+        const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
+        faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+      }
+      const topPts = outerPm.map((p) => project(p.x, p.z, topY));
+      const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
+      const avg = outerPm.reduce((s, p) => s + p.x + p.z, 0) / outerPm.length;
+      faces.push({
+        pts: topPts,
+        holes: holesTop.length ? holesTop : undefined,
+        fill: SLAB_TOP,
+        stroke: "rgba(0,0,0,0.5)",
+        depth: avg + topY * 0.01 - 0.001,
+        sw: 0.5,
+        kind: "top",
+      });
     }
-    // Permukaan atas (dengan void)
-    const topPts = outerPm.map((p) => project(p.x, p.z, topY));
-    const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
-    const avg = outerPm.reduce((s, p) => s + p.x + p.z, 0) / outerPm.length;
-    faces.push({
-      pts: topPts,
-      holes: holesTop.length ? holesTop : undefined,
-      fill: SLAB_TOP,
-      stroke: "rgba(0,0,0,0.5)",
-      depth: avg + topY * 0.01 - 0.001,
-      sw: 0.5,
-      kind: "top",
-    });
   }
 
   const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
@@ -5529,40 +5528,40 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const slabThk = FLOOR_THICKNESS_MM / 1000;
     const minExp = expanded.length ? Math.min(...expanded.map((e) => e.mdpl)) : 0;
     for (const fl of sketch.floors ?? []) {
-      const lv = levels.find((l) => l.id === fl.levelId);
-      if (!lv) continue;
+      const copies = expanded.filter((e) => e.sourceId === fl.levelId);
+      if (!copies.length) continue;
       if (fl.outer.length < 3) continue;
-      const topRel = lv.mdpl - minExp;
-      const botRel = topRel - slabThk;
-      // Sisi luar slab
-      for (let i = 0; i < fl.outer.length; i++) {
-        const a = fl.outer[i];
-        const b = fl.outer[(i + 1) % fl.outer.length];
-        const p1 = project(a.x, a.y, botRel);
-        const p2 = project(b.x, b.y, botRel);
-        const p3 = project(b.x, b.y, topRel);
-        const p4 = project(a.x, a.y, topRel);
-        const mxv = (a.x + b.x) / 2 - cx;
-        const myv = (a.y + b.y) / 2 - cy;
+      for (const cp of copies) {
+        const topRel = cp.mdpl - minExp;
+        const botRel = topRel - slabThk;
+        for (let i = 0; i < fl.outer.length; i++) {
+          const a = fl.outer[i];
+          const b = fl.outer[(i + 1) % fl.outer.length];
+          const p1 = project(a.x, a.y, botRel);
+          const p2 = project(b.x, b.y, botRel);
+          const p3 = project(b.x, b.y, topRel);
+          const p4 = project(a.x, a.y, topRel);
+          const mxv = (a.x + b.x) / 2 - cx;
+          const myv = (a.y + b.y) / 2 - cy;
+          quads.push({
+            pts: [p1, p2, p3, p4],
+            depth: mxv + myv + botRel * 0.01,
+            fill: "#9c9c9c",
+            stroke: "rgba(0,0,0,0.45)",
+            sw: 1.0,
+            kind: "wall",
+          });
+        }
+        const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
         quads.push({
-          pts: [p1, p2, p3, p4],
-          depth: mxv + myv + botRel * 0.01,
-          fill: "#9c9c9c",
-          stroke: "rgba(0,0,0,0.45)",
+          pts: topPts,
+          depth: avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
+          fill: "#cfcfcf",
+          stroke: "rgba(0,0,0,0.5)",
           sw: 1.0,
-          kind: "wall",
+          kind: "top",
         });
       }
-      // Permukaan atas
-      const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
-      quads.push({
-        pts: topPts,
-        depth: avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
-        fill: "#cfcfcf",
-        stroke: "rgba(0,0,0,0.5)",
-        sw: 1.0,
-        kind: "top",
-      });
     }
   }
 
