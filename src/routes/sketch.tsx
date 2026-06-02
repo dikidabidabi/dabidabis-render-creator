@@ -1718,11 +1718,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
   // Edit Titik (lantai) — sub-mode + drag state
-  const [floorEditSub, setFloorEditSub] = useState<"move" | "add">("move");
+  const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete">("move");
   const [floorVertexDrag, setFloorVertexDrag] = useState<
     | { fid: string; ring: "outer" | number; idx: number }
     | null
   >(null);
+  // Clipboard untuk Copy/Paste Lantai antar level
+  const [floorClipboard, setFloorClipboard] = useState<Floor[]>([]);
   // Circle tool — center + drag radius
   const [circleDraft, setCircleDraft] = useState<{ c: Point; cur: Point; levelId?: string } | null>(null);
   // Offset tool — jarak offset (cm pada skala asli)
@@ -3273,7 +3275,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const s = worldToScreen(w);
         ctx.beginPath();
         ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
-        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : "#fff";
+        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : floorEditSub === "delete" ? "#c62828" : "#fff";
         ctx.strokeStyle = "#1a1a1a";
         ctx.lineWidth = 1.5;
         ctx.fill();
@@ -4193,7 +4195,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const flList = (sketch.floors ?? []).filter(
           (f) => !activeLvlId || f.levelId === activeLvlId,
         );
-        if (floorEditSub === "move") {
+        if (floorEditSub === "move" || floorEditSub === "delete") {
           // cari vertex terdekat
           type VHit = { fid: string; ring: "outer" | number; idx: number; d: number };
           const hits: VHit[] = [];
@@ -4215,8 +4217,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
           hits.sort((a, b) => a.d - b.d);
           const bestV = hits[0];
-          pushHistory();
-          setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
+          if (floorEditSub === "move") {
+            pushHistory();
+            setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
+          } else {
+            // delete vertex
+            const target = flList.find((f) => f.id === bestV.fid);
+            if (!target) return;
+            if (bestV.ring === "outer") {
+              if (target.outer.length <= 3) {
+                toast.error("Outer minimal 3 titik — tidak bisa dihapus");
+                return;
+              }
+            } else {
+              const h = (target.holes ?? [])[bestV.ring as number];
+              if (!h) return;
+              // jika menjadi <3 titik → hapus seluruh void
+            }
+            pushHistory();
+            const nextFloors = (sketch.floors ?? []).map((fl) => {
+              if (fl.id !== bestV.fid) return fl;
+              if (bestV.ring === "outer") {
+                const next = fl.outer.slice();
+                next.splice(bestV.idx, 1);
+                return { ...fl, outer: next };
+              }
+              const holes = (fl.holes ?? [])
+                .map((h, hi) => {
+                  if (hi !== bestV.ring) return h;
+                  const nh = h.slice();
+                  nh.splice(bestV.idx, 1);
+                  return nh;
+                })
+                .filter((h) => h.length >= 3);
+              return { ...fl, holes: holes.length ? holes : undefined };
+            });
+            onChange({ floors: nextFloors });
+            toast.success("Titik dihapus");
+          }
         } else {
           // tambah titik: cari segmen terdekat, sisipkan vertex baru di proyeksi
           type EHit = { fid: string; ring: "outer" | number; segIdx: number; proj: Point; d: number };
@@ -5704,6 +5742,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
             editSub={floorEditSub}
             onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); }}
+            floorsInLevel={(sketch.floors ?? []).filter((f) => f.levelId === activeLvlId)}
+            clipboardCount={floorClipboard.length}
+            onCopyFloors={() => {
+              const inLvl = (sketch.floors ?? []).filter((f) => f.levelId === activeLvlId);
+              if (inLvl.length === 0) { toast.error("Tidak ada lantai untuk disalin"); return; }
+              const clones: Floor[] = inLvl.map((f) => ({
+                ...f,
+                outer: f.outer.map((p) => ({ x: p.x, y: p.y })),
+                holes: f.holes ? f.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))) : undefined,
+              }));
+              setFloorClipboard(clones);
+              toast.success(`${clones.length} lantai disalin`);
+            }}
+            onPasteFloors={() => {
+              if (floorClipboard.length === 0) return;
+              const { activeId } = ensureLevels();
+              pushHistory();
+              const pasted: Floor[] = floorClipboard.map((f) => ({
+                ...f,
+                id: genFloorId(),
+                levelId: activeId,
+                createdAt: Date.now(),
+                outer: f.outer.map((p) => ({ x: p.x, y: p.y })),
+                holes: f.holes ? f.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))) : undefined,
+              }));
+              onChange({ floors: [...(sketch.floors ?? []), ...pasted] });
+              toast.success(`${pasted.length} lantai ditempel di level ini`);
+            }}
+            onDeleteFloors={() => {
+              const inLvl = (sketch.floors ?? []).filter((f) => f.levelId === activeLvlId);
+              if (inLvl.length === 0) { toast.error("Tidak ada lantai untuk dihapus"); return; }
+              pushHistory();
+              const remaining = (sketch.floors ?? []).filter((f) => f.levelId !== activeLvlId);
+              onChange({ floors: remaining });
+              setFloorDraft(null);
+              setFloorVertexDrag(null);
+              toast.success(`${inLvl.length} lantai dihapus dari level ini`);
+            }}
           />
         )}
         {tool === "offset" && (
@@ -7556,6 +7632,11 @@ function FloorToolPanel({
   onCancel,
   editSub,
   onEditSub,
+  floorsInLevel,
+  clipboardCount,
+  onCopyFloors,
+  onPasteFloors,
+  onDeleteFloors,
 }: {
   mode: FloorMode;
   onMode: (m: FloorMode) => void;
@@ -7563,12 +7644,20 @@ function FloorToolPanel({
   level: Level | null;
   onCommit: () => void;
   onCancel: () => void;
-  editSub: "move" | "add";
-  onEditSub: (s: "move" | "add") => void;
+  editSub: "move" | "add" | "delete";
+  onEditSub: (s: "move" | "add" | "delete") => void;
+  floorsInLevel: Floor[];
+  clipboardCount: number;
+  onCopyFloors: () => void;
+  onPasteFloors: () => void;
+  onDeleteFloors: () => void;
 }) {
   const hasOuter = !!(draft && draft.outer && draft.outer.length >= 3);
   const holeCount = draft?.holes?.length ?? 0;
   const isReplace = !!draft?.replaceFloorId;
+  const canCopy = floorsInLevel.length > 0;
+  const canDelete = floorsInLevel.length > 0;
+  const canPaste = clipboardCount > 0;
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
       <div className="flex items-center justify-between">
@@ -7586,7 +7675,7 @@ function FloorToolPanel({
             { id: "line", label: "Garis", hint: "Klik dua titik tiap segmen, dobel-klik tutup" },
             { id: "polyline", label: "Polyline", hint: "Klik banyak titik, dobel-klik tutup" },
             { id: "attach", label: "Attach Garis", hint: "Klik segmen perimeter (outer), lalu segmen lubang (void)" },
-            { id: "edit", label: "Edit Titik", hint: "Geser titik atau tambah titik baru pada lantai existing" },
+            { id: "edit", label: "Edit Titik", hint: "Geser / tambah / hapus titik pada lantai existing" },
           ] as { id: FloorMode; label: string; hint: string }[]
         ).map((m) => (
           <Button
@@ -7605,29 +7694,37 @@ function FloorToolPanel({
         {mode === "attach"
           ? "Klik segmen pada perimeter terluar untuk men-set outer; klik segmen poligon di dalamnya untuk menambah void."
           : mode === "edit"
-          ? "Pilih sub-mode di bawah. Geser: tarik titik existing. Tambah Titik: klik tepi lantai untuk menyisipkan titik baru."
+          ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus."
           : mode === "rect"
           ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
           : "Klik titik-titik membentuk poligon, tutup di titik awal. Tekan Simpan Area untuk finalisasi."}
       </p>
 
       {mode === "edit" && (
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5">
           <Button
             size="sm"
             variant={editSub === "move" ? "default" : "outline"}
-            className={cn("h-8 text-xs", editSub === "move" && "bg-gradient-ember shadow-ember")}
+            className={cn("h-8 text-[11px]", editSub === "move" && "bg-gradient-ember shadow-ember")}
             onClick={() => onEditSub("move")}
           >
-            Geser Titik
+            Geser
           </Button>
           <Button
             size="sm"
             variant={editSub === "add" ? "default" : "outline"}
-            className={cn("h-8 text-xs", editSub === "add" && "bg-gradient-ember shadow-ember")}
+            className={cn("h-8 text-[11px]", editSub === "add" && "bg-gradient-ember shadow-ember")}
             onClick={() => onEditSub("add")}
           >
-            Tambah Titik
+            Tambah
+          </Button>
+          <Button
+            size="sm"
+            variant={editSub === "delete" ? "default" : "outline"}
+            className={cn("h-8 text-[11px]", editSub === "delete" && "bg-destructive text-destructive-foreground")}
+            onClick={() => onEditSub("delete")}
+          >
+            Hapus
           </Button>
         </div>
       )}
@@ -7652,6 +7749,42 @@ function FloorToolPanel({
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-3 gap-1.5 border-t border-border/60 pt-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canCopy}
+          onClick={onCopyFloors}
+          className="h-7 text-[10px]"
+          title="Salin semua lantai di level aktif"
+        >
+          <Copy className="mr-1 h-3 w-3" /> Copy
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canPaste}
+          onClick={onPasteFloors}
+          className="h-7 text-[10px]"
+          title="Tempel lantai pada koordinat X/Y yang sama di level aktif"
+        >
+          <ClipboardPaste className="mr-1 h-3 w-3" /> Paste
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canDelete}
+          onClick={onDeleteFloors}
+          className="h-7 text-[10px] text-destructive hover:text-destructive"
+          title="Hapus semua lantai di level aktif"
+        >
+          <X className="mr-1 h-3 w-3" /> Hapus
+        </Button>
+      </div>
+      <p className="text-[9px] text-muted-foreground">
+        {floorsInLevel.length} lantai di level ini · clipboard: {clipboardCount}
+      </p>
     </div>
   );
 }
