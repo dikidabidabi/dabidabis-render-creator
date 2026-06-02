@@ -959,6 +959,25 @@ function SketchPage() {
     toast.success(`${next.title} ditambahkan`);
   };
 
+  const duplicateSketch = (id: string) => {
+    setSketches((prev) => {
+      const src = prev.find((s) => s.id === id);
+      if (!src) return prev;
+      const clone: Sketch = JSON.parse(JSON.stringify(src));
+      clone.id = `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      clone.title = `${src.title} (salinan)`;
+      const now = Date.now();
+      clone.createdAt = now;
+      clone.updatedAt = now;
+      const idx = prev.findIndex((s) => s.id === id);
+      const next = [...prev];
+      next.splice(idx + 1, 0, clone);
+      setOpenId(clone.id);
+      return next;
+    });
+    toast.success("Sketsa disalin — data progres tetap utuh");
+  };
+
   const deleteSketch = (id: string) => {
     setSketches((prev) => {
       const next = prev.filter((s) => s.id !== id);
