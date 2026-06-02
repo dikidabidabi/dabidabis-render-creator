@@ -3881,7 +3881,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
-    const p = getWorldPos(e);
+    const p = tool === "floor" && floorMode === "rect"
+      ? snapPointToMillimeterGrid(getWorldPosRaw(e), true)
+      : getWorldPos(e);
     if (tool === "grid") {
       const rawWorld = getWorldPosRaw(e);
       // Konversi ke frame lokal grid (un-rotate di sekitar origin) untuk hit-test
@@ -4461,7 +4463,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
-    const p = getWorldPos(e);
+    const p = tool === "floor" && floorMode === "rect"
+      ? snapPointToMillimeterGrid(getWorldPosRaw(e), true)
+      : getWorldPos(e);
     setHover(p);
     if (tool === "edit") {
       const raw = getWorldPosRaw(e);
