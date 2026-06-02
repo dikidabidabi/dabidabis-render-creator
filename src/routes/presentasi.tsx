@@ -41,6 +41,7 @@ import {
   type EdgeSegment,
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
+import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
@@ -75,6 +76,7 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[];
   edgeAttrs?: Record<string, EdgeMaterial>;
   doors?: Door[];
+  floors?: Floor[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -3961,6 +3963,7 @@ function AxonometricView({
 
   type Face = {
     pts: { x: number; y: number }[];
+    holes?: { x: number; y: number }[][];
     fill: string;
     stroke: string;
     depth: number;
@@ -4072,6 +4075,48 @@ function AxonometricView({
 
   // Kolom struktur sengaja tidak dirender di stacking diagram (Aksonometrik).
 
+  // Slab lantai (entitas Floor) — extrude 150mm ke bawah dari MDPL level.
+  const SLAB_TOP = "#cfcfcf";
+  const SLAB_SIDE = "#9c9c9c";
+  const slabThk = FLOOR_THICKNESS_MM / 1000;
+  for (const fl of sketch.floors ?? []) {
+    const lv = ascLevels.find((l) => l.id === fl.levelId);
+    if (!lv) continue;
+    const topY = lv.mdpl;
+    const botY = topY - slabThk;
+    const outerPm = fl.outer.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
+    if (outerPm.length < 3) continue;
+    const holesPm = (fl.holes ?? [])
+      .map((h) => h.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx })))
+      .filter((h) => h.length >= 3);
+    // Sisi luar
+    for (let i = 0; i < outerPm.length; i++) {
+      const a = outerPm[i];
+      const b = outerPm[(i + 1) % outerPm.length];
+      const quad = [
+        project(a.x, a.z, botY),
+        project(b.x, b.z, botY),
+        project(b.x, b.z, topY),
+        project(a.x, a.z, topY),
+      ];
+      const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
+      faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+    }
+    // Permukaan atas (dengan void)
+    const topPts = outerPm.map((p) => project(p.x, p.z, topY));
+    const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
+    const avg = outerPm.reduce((s, p) => s + p.x + p.z, 0) / outerPm.length;
+    faces.push({
+      pts: topPts,
+      holes: holesTop.length ? holesTop : undefined,
+      fill: SLAB_TOP,
+      stroke: "rgba(0,0,0,0.5)",
+      depth: avg + topY * 0.01 - 0.001,
+      sw: 0.5,
+      kind: "top",
+    });
+  }
+
   const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
   faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
 
@@ -4096,18 +4141,36 @@ function AxonometricView({
       preserveAspectRatio="xMidYMid meet"
       style={{ width: "100%", height: "100%", display: "block" }}
     >
-      {faces.map((f, i) => (
-        <polygon
-          key={i}
-          points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
-          fill={f.fill}
-          stroke={f.stroke}
-          strokeWidth={baseStroke * f.sw * 2}
-          strokeLinejoin="round"
-          opacity={1}
-          fillOpacity={1}
-        />
-      ))}
+      {faces.map((f, i) => {
+        if (f.holes && f.holes.length) {
+          const ring = (pts: { x: number; y: number }[]) =>
+            `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ") + " Z";
+          const d = [f.pts, ...f.holes].map(ring).join(" ");
+          return (
+            <path
+              key={i}
+              d={d}
+              fill={f.fill}
+              fillRule="evenodd"
+              stroke={f.stroke}
+              strokeWidth={baseStroke * f.sw * 2}
+              strokeLinejoin="round"
+            />
+          );
+        }
+        return (
+          <polygon
+            key={i}
+            points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill={f.fill}
+            stroke={f.stroke}
+            strokeWidth={baseStroke * f.sw * 2}
+            strokeLinejoin="round"
+            opacity={1}
+            fillOpacity={1}
+          />
+        );
+      })}
     </svg>
   );
 }
@@ -4326,6 +4389,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
 
   type Face = {
     pts: { x: number; y: number }[];
+    holes?: { x: number; y: number }[][];
     fill: string; stroke: string; depth: number; sw: number;
     kind: "top" | "side";
   };
@@ -4378,6 +4442,58 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
       annos.push({ from: project(cx, cz, topY), label: ly.name, floorIdx: idx });
     }
   });
+
+  // Slab lantai pada lantai representatif.
+  // Pemetaan: levelId di tiap floor → idx grup representatif (atau anggotanya).
+  const SLAB_TOP_R = "#cfcfcf", SLAB_SIDE_R = "#9c9c9c";
+  const slabThk = FLOOR_THICKNESS_MM / 1000;
+  const groupIdxOf = (levelId: string): number => {
+    for (let i = 0; i < reps.length; i++) {
+      if (reps[i].members.some((m) => m.id === levelId)) return i;
+    }
+    return -1;
+  };
+  // Pilih 1 floor per grup (yang levelId-nya adalah rep, atau fallback floor pertama yang termasuk grup).
+  const floorByGroup = new Map<number, Floor>();
+  for (const fl of sketch.floors ?? []) {
+    const gi = groupIdxOf(fl.levelId);
+    if (gi < 0) continue;
+    const cur = floorByGroup.get(gi);
+    if (!cur || fl.levelId === reps[gi].rep.id) floorByGroup.set(gi, fl);
+  }
+  for (const [gi, fl] of floorByGroup) {
+    const topY = gi * (floorH + gap);
+    const botY = topY - slabThk;
+    const outerPm = fl.outer.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
+    if (outerPm.length < 3) continue;
+    const holesPm = (fl.holes ?? [])
+      .map((h) => h.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx })))
+      .filter((h) => h.length >= 3);
+    for (let i = 0; i < outerPm.length; i++) {
+      const a = outerPm[i];
+      const b = outerPm[(i + 1) % outerPm.length];
+      const quad = [
+        project(a.x, a.z, botY),
+        project(b.x, b.z, botY),
+        project(b.x, b.z, topY),
+        project(a.x, a.z, topY),
+      ];
+      const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
+      faces.push({ pts: quad, fill: SLAB_SIDE_R, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+    }
+    const topPts = outerPm.map((p) => project(p.x, p.z, topY));
+    const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
+    const avg = outerPm.reduce((s, p) => s + p.x + p.z, 0) / outerPm.length;
+    faces.push({
+      pts: topPts,
+      holes: holesTop.length ? holesTop : undefined,
+      fill: SLAB_TOP_R,
+      stroke: "rgba(0,0,0,0.5)",
+      depth: avg + topY * 0.01 - 0.001,
+      sw: 0.5,
+      kind: "top",
+    });
+  }
 
   const faceLayer = (k: Face["kind"]) => (k === "top" ? 1 : 2);
   faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
@@ -4443,16 +4559,34 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     <div style={{ display: "flex", gap: 20, width: "100%", height: "100%", overflow: "hidden" }}>
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 10, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
         <svg viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
-          {faces.map((f, i) => (
-            <polygon
-              key={i}
-              points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
-              fill={f.fill}
-              stroke={f.stroke}
-              strokeWidth={baseStroke * f.sw * 2}
-              strokeLinejoin="round"
-            />
-          ))}
+          {faces.map((f, i) => {
+            if (f.holes && f.holes.length) {
+              const ring = (pts: { x: number; y: number }[]) =>
+                `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ") + " Z";
+              const d = [f.pts, ...f.holes].map(ring).join(" ");
+              return (
+                <path
+                  key={i}
+                  d={d}
+                  fill={f.fill}
+                  fillRule="evenodd"
+                  stroke={f.stroke}
+                  strokeWidth={baseStroke * f.sw * 2}
+                  strokeLinejoin="round"
+                />
+              );
+            }
+            return (
+              <polygon
+                key={i}
+                points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill={f.fill}
+                stroke={f.stroke}
+                strokeWidth={baseStroke * f.sw * 2}
+                strokeLinejoin="round"
+              />
+            );
+          })}
           {leaders.map((l, i) => (
             <g key={`ld-${i}`}>
               <circle cx={l.x1} cy={l.y1} r={baseStroke * 1.1} fill="#0a0a0a" />
