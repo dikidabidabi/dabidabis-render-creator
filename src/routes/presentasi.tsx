@@ -2269,6 +2269,50 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
+          {(sketch.floors ?? []).filter((fl) => fl.levelId === level.id).map((fl) => {
+            const ring = (pts: { x: number; y: number }[]) =>
+              pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + " Z";
+            const d = [fl.outer, ...(fl.holes ?? [])].map(ring).join(" ");
+            return (
+              <g key={`fl-${fl.id}`} pointerEvents="none">
+                <path d={d} fillRule="evenodd"
+                  fill="rgba(232,93,58,0.10)"
+                  stroke="rgba(232,93,58,0.75)"
+                  strokeWidth={sw * 0.0015} />
+                {(fl.holes ?? []).map((h, hi) => {
+                  let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+                  for (const p of h) {
+                    if (p.x < mnx) mnx = p.x;
+                    if (p.y < mny) mny = p.y;
+                    if (p.x > mxx) mxx = p.x;
+                    if (p.y > mxy) mxy = p.y;
+                  }
+                  const clipId = `fvoid-${slide.id}-${fl.id}-${hi}`;
+                  const hPts = h.map((p) => `${p.x},${p.y}`).join(" ");
+                  return (
+                    <g key={`fh-${hi}`}>
+                      <defs>
+                        <clipPath id={clipId}>
+                          <polygon points={hPts} />
+                        </clipPath>
+                      </defs>
+                      <polygon points={hPts}
+                        fill="#ffffff"
+                        stroke="rgba(120,40,20,0.9)"
+                        strokeWidth={sw * 0.0012}
+                        strokeDasharray={`${sw * 0.006} ${sw * 0.004}`} />
+                      <g clipPath={`url(#${clipId})`}>
+                        <line x1={mnx} y1={mny} x2={mxx} y2={mxy}
+                          stroke="rgba(120,40,20,0.85)" strokeWidth={sw * 0.001} />
+                        <line x1={mxx} y1={mny} x2={mnx} y2={mxy}
+                          stroke="rgba(120,40,20,0.85)" strokeWidth={sw * 0.001} />
+                      </g>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })}
           <MaterialEdges
             lines={lines}
             edgeAttrs={sketch.edgeAttrs ?? {}}
