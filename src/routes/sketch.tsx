@@ -4134,7 +4134,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
         } else {
           // tambah titik: cari segmen terdekat, sisipkan vertex baru di proyeksi
-          let best: { fid: string; ring: "outer" | number; segIdx: number; proj: Point; d: number } | null = null;
+          type EHit = { fid: string; ring: "outer" | number; segIdx: number; proj: Point; d: number };
+          const ehits: EHit[] = [];
           const projectOnSeg = (p: Point, a: Point, b: Point): Point => {
             const dx = b.x - a.x, dy = b.y - a.y;
             const len2 = dx * dx + dy * dy;
@@ -4148,32 +4149,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               const a = ring[i];
               const b = ring[(i + 1) % ring.length];
               const d = pointToSegmentDist(raw, a, b);
-              if (d < tolPx && (!best || d < best.d)) {
-                best = { fid, ring: ringKey, segIdx: i, proj: projectOnSeg(raw, a, b), d };
-              }
+              if (d < tolPx) ehits.push({ fid, ring: ringKey, segIdx: i, proj: projectOnSeg(raw, a, b), d });
             }
           };
           for (const fl of flList) {
             scan(fl.outer, fl.id, "outer");
             (fl.holes ?? []).forEach((h, hi) => scan(h, fl.id, hi));
           }
-          if (!best) {
+          if (ehits.length === 0) {
             toast.error("Tidak ada tepi lantai di dekat klik");
             return;
           }
-          const snapped = snapPointToMillimeterGrid(best.proj, true);
+          ehits.sort((a, b) => a.d - b.d);
+          const bestE = ehits[0];
+          const snapped = snapPointToMillimeterGrid(bestE.proj, true);
           pushHistory();
           const nextFloors = (sketch.floors ?? []).map((fl) => {
-            if (fl.id !== best!.fid) return fl;
-            if (best!.ring === "outer") {
+            if (fl.id !== bestE.fid) return fl;
+            if (bestE.ring === "outer") {
               const next = fl.outer.slice();
-              next.splice(best!.segIdx + 1, 0, snapped);
+              next.splice(bestE.segIdx + 1, 0, snapped);
               return { ...fl, outer: next };
             }
             const holes = (fl.holes ?? []).map((h, hi) => {
-              if (hi !== best!.ring) return h;
+              if (hi !== bestE.ring) return h;
               const nh = h.slice();
-              nh.splice(best!.segIdx + 1, 0, snapped);
+              nh.splice(bestE.segIdx + 1, 0, snapped);
               return nh;
             });
             return { ...fl, holes };
