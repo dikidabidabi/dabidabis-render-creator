@@ -3104,6 +3104,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const allFloors = sketch.floors ?? [];
     if (allFloors.length) {
       ctx.save();
+      ctx.translate(view.tx, view.ty);
+      ctx.rotate(view.r);
+      ctx.scale(view.s, view.s);
       for (const fl of allFloors) {
         const lvl = levels.find((l) => l.id === fl.levelId);
         const alpha = !lvl || activeLvlId == null || lvl.id === activeLvlId ? 1 : Math.min(lvl.opacity, 0.35);
@@ -3174,6 +3177,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Floor draft preview (mode "attach"): tampilkan outer + holes yang sedang dipilih
     if (tool === "floor" && floorDraft && floorDraft.outer) {
       ctx.save();
+      ctx.translate(view.tx, view.ty);
+      ctx.rotate(view.r);
+      ctx.scale(view.s, view.s);
       ctx.beginPath();
       floorDraft.outer.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
       ctx.closePath();
