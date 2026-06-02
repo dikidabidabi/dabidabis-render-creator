@@ -4141,9 +4141,10 @@ function AxonometricView({
     stroke: string;
     depth: number;
     sw: number;
-    kind: "base" | "top" | "side";
+    kind: "base" | "top" | "side" | "slab";
   };
   const faces: Face[] = [];
+
 
   const groundLevel = findMdplZeroLevel(ascLevels) ?? ascLevels[0];
   const groundLevelId = groundLevel?.id;
