@@ -3094,7 +3094,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.lineWidth = 2 / view.s;
         ctx.strokeStyle = "rgba(232,93,58,0.85)";
         ctx.stroke();
-        // hole outlines extra emphasis
+        // hole outlines + tanda silang (X) untuk menandai void
         for (const hole of fl.holes ?? []) {
           ctx.beginPath();
           hole.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
@@ -3104,6 +3104,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.lineWidth = 1.5 / view.s;
           ctx.stroke();
           ctx.setLineDash([]);
+          // bounding box untuk tanda silang
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const p of hole) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+          }
+          ctx.beginPath();
+          ctx.moveTo(minX, minY); ctx.lineTo(maxX, maxY);
+          ctx.moveTo(maxX, minY); ctx.lineTo(minX, maxY);
+          ctx.strokeStyle = "rgba(120,40,20,0.7)";
+          ctx.lineWidth = 1 / view.s;
+          ctx.stroke();
         }
       }
       ctx.globalAlpha = 1;
