@@ -4582,7 +4582,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
-    const p = tool === "floor" && floorMode === "rect"
+    if (floorVertexDrag) {
+      const newPos = snapPointToMillimeterGrid(getWorldPosRaw(e), true);
+      const fd = floorVertexDrag;
+      const nextFloors = (sketch.floors ?? []).map((fl) => {
+        if (fl.id !== fd.fid) return fl;
+        if (fd.ring === "outer") {
+          const next = fl.outer.slice();
+          if (fd.idx < next.length) next[fd.idx] = newPos;
+          return { ...fl, outer: next };
+        }
+        const holes = (fl.holes ?? []).map((h, hi) => {
+          if (hi !== fd.ring) return h;
+          const nh = h.slice();
+          if (fd.idx < nh.length) nh[fd.idx] = newPos;
+          return nh;
+        });
+        return { ...fl, holes };
+      });
+      onChange({ floors: nextFloors });
+      return;
+    }
+
       ? snapPointToMillimeterGrid(getWorldPosRaw(e), true)
       : getWorldPos(e);
     setHover(p);
