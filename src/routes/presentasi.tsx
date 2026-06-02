@@ -1990,6 +1990,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 const yTop = my(topM);
                 const ySlabBot = my(topM - SLAB_M);
                 const yBeamBot = my(topM - SLAB_M - BEAM_H_M);
+                const EDGE_BEAM_W_M = 0.2;
                 return (
                   <g key={`slab-${fl.id}-${cp.id}`}>
                     {intervals.map(([a, b], i) => (
@@ -2010,6 +2011,17 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                           width={w} height={yBeamBot - yTopBeam}
                           fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
                       );
+                    })}
+                    {/* Balok tepi pada setiap ujung lantai / tepi void — 200mm × 700mm */}
+                    {intervals.flatMap(([a, b], i) => {
+                      const w = EDGE_BEAM_W_M * scalePxPerM;
+                      const yTopBeam = ySlabBot - 0.2;
+                      return [a, b].map((edge, k) => (
+                        <rect key={`eb${i}-${k}`}
+                          x={mx(edge - EDGE_BEAM_W_M / 2)} y={yTopBeam}
+                          width={w} height={yBeamBot - yTopBeam}
+                          fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                      ));
                     })}
                     {intervals.map(([a, b], i) => (
                       <line key={`bl${i}`}
