@@ -4250,13 +4250,27 @@ function AxonometricView({
   // Kolom struktur sengaja tidak dirender di stacking diagram (Aksonometrik).
 
   // Slab lantai (entitas Floor) — extrude 150mm ke bawah dari MDPL level.
-  const SLAB_TOP = "#cfcfcf";
-  const SLAB_SIDE = "#9c9c9c";
+  // Ditandai kind "slab" supaya selalu tampak di atas dinding (painter's last).
+  const SLAB_TOP = "#d6d2c8";
+  const SLAB_SIDE = "#8a8578";
+  const SLAB_STROKE = "#1a1a1a";
   const slabThk = FLOOR_THICKNESS_MM / 1000;
+  const SLAB_OVERHANG_M = 0.08; // 80mm overhang agar tepi slab keluar dari dinding
   for (const fl of sketch.floors ?? []) {
     const copies = expanded.filter((e) => e.sourceId === fl.levelId);
     if (!copies.length) continue;
-    const outerPm = fl.outer.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
+    // Hitung centroid outer (px) lalu offset tiap titik ke luar agar slab sedikit lebih besar dari dinding.
+    let cxp = 0, cyp = 0;
+    for (const p of fl.outer) { cxp += p.x; cyp += p.y; }
+    cxp /= Math.max(1, fl.outer.length);
+    cyp /= Math.max(1, fl.outer.length);
+    const expandPx = SLAB_OVERHANG_M / mPerPx;
+    const outerExpanded = fl.outer.map((p) => {
+      const dx = p.x - cxp, dy = p.y - cyp;
+      const len = Math.hypot(dx, dy) || 1;
+      return { x: p.x + (dx / len) * expandPx, y: p.y + (dy / len) * expandPx };
+    });
+    const outerPm = outerExpanded.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx }));
     if (outerPm.length < 3) continue;
     const holesPm = (fl.holes ?? [])
       .map((h) => h.map((p) => ({ x: -(p.x - ox) * mPerPx, z: -(p.y - oy) * mPerPx })))
@@ -4274,7 +4288,7 @@ function AxonometricView({
           project(a.x, a.z, topY),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
-        faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+        faces.push({ pts: quad, fill: SLAB_SIDE, stroke: SLAB_STROKE, depth, sw: 0.6, kind: "slab" });
       }
       const topPts = outerPm.map((p) => project(p.x, p.z, topY));
       const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
@@ -4283,16 +4297,18 @@ function AxonometricView({
         pts: topPts,
         holes: holesTop.length ? holesTop : undefined,
         fill: SLAB_TOP,
-        stroke: "rgba(0,0,0,0.5)",
-        depth: avg + topY * 0.01 - 0.001,
-        sw: 0.5,
-        kind: "top",
+        stroke: SLAB_STROKE,
+        depth: avg + topY * 0.01 + 1e6, // pastikan slab top selalu di atas
+        sw: 0.6,
+        kind: "slab",
       });
     }
   }
 
-  const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  const faceLayer = (kind: Face["kind"]) =>
+    kind === "base" ? 0 : kind === "top" ? 1 : kind === "side" ? 2 : 3;
   faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
+
 
   // Compute viewBox
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
