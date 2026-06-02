@@ -1018,6 +1018,7 @@ function SketchPage() {
             onMinimize={() => minimizeSketch(s.id)}
             onChange={(patch) => updateSketch(s.id, patch)}
             onRequestDelete={() => setConfirmDeleteId(s.id)}
+            onDuplicate={() => duplicateSketch(s.id)}
             onEnterFullscreen={() => {
               setOpenId(s.id);
               setFullscreenId(s.id);
