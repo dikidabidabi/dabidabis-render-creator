@@ -4110,25 +4110,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         );
         if (floorEditSub === "move") {
           // cari vertex terdekat
-          let best: { fid: string; ring: "outer" | number; idx: number; d: number } | null = null;
+          type VHit = { fid: string; ring: "outer" | number; idx: number; d: number };
+          let best: VHit | null = null;
           for (const fl of flList) {
             fl.outer.forEach((v, i) => {
               const d = Math.hypot(v.x - raw.x, v.y - raw.y);
-              if (d < tolPx && (!best || d < best.d)) best = { fid: fl.id, ring: "outer", idx: i, d };
+              const b: VHit | null = best;
+              if (d < tolPx && (!b || d < b.d)) best = { fid: fl.id, ring: "outer", idx: i, d };
             });
             (fl.holes ?? []).forEach((h, hi) => {
               h.forEach((v, i) => {
                 const d = Math.hypot(v.x - raw.x, v.y - raw.y);
-                if (d < tolPx && (!best || d < best.d)) best = { fid: fl.id, ring: hi, idx: i, d };
+                const b: VHit | null = best;
+                if (d < tolPx && (!b || d < b.d)) best = { fid: fl.id, ring: hi, idx: i, d };
               });
             });
           }
-          if (!best) {
+          const bestV: VHit | null = best;
+          if (!bestV) {
             toast.error("Tidak ada titik lantai di dekat klik");
             return;
           }
           pushHistory();
-          setFloorVertexDrag({ fid: best.fid, ring: best.ring, idx: best.idx });
+          setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
         } else {
           // tambah titik: cari segmen terdekat, sisipkan vertex baru di proyeksi
           let best: { fid: string; ring: "outer" | number; segIdx: number; proj: Point; d: number } | null = null;
