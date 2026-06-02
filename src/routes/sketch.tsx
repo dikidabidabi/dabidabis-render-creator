@@ -1676,7 +1676,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
-    | { outer: Point[] | null; holes: Point[][]; levelId: string | null }
+    | { outer: Point[] | null; holes: Point[][]; levelId: string | null; replaceFloorId?: string }
+    | null
+  >(null);
+  // Edit Titik (lantai) — sub-mode + drag state
+  const [floorEditSub, setFloorEditSub] = useState<"move" | "add">("move");
+  const [floorVertexDrag, setFloorVertexDrag] = useState<
+    | { fid: string; ring: "outer" | number; idx: number }
     | null
   >(null);
   // Circle tool — center + drag radius
