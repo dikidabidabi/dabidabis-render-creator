@@ -4101,6 +4101,83 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           setFloorDraft({ outer: cur.outer, holes: [...cur.holes, cycle], levelId: cur.levelId });
           toast.success(`Void #${cur.holes.length + 1} ditambahkan`);
         }
+      } else if (floorMode === "edit") {
+        // Edit Titik — sub-mode "move" (geser) atau "add" (tambah titik).
+        const raw = getWorldPosRaw(e);
+        const tolPx = 14 / view.s;
+        const flList = (sketch.floors ?? []).filter(
+          (f) => !activeLvlId || f.levelId === activeLvlId,
+        );
+        if (floorEditSub === "move") {
+          // cari vertex terdekat
+          let best: { fid: string; ring: "outer" | number; idx: number; d: number } | null = null;
+          for (const fl of flList) {
+            fl.outer.forEach((v, i) => {
+              const d = Math.hypot(v.x - raw.x, v.y - raw.y);
+              if (d < tolPx && (!best || d < best.d)) best = { fid: fl.id, ring: "outer", idx: i, d };
+            });
+            (fl.holes ?? []).forEach((h, hi) => {
+              h.forEach((v, i) => {
+                const d = Math.hypot(v.x - raw.x, v.y - raw.y);
+                if (d < tolPx && (!best || d < best.d)) best = { fid: fl.id, ring: hi, idx: i, d };
+              });
+            });
+          }
+          if (!best) {
+            toast.error("Tidak ada titik lantai di dekat klik");
+            return;
+          }
+          pushHistory();
+          setFloorVertexDrag({ fid: best.fid, ring: best.ring, idx: best.idx });
+        } else {
+          // tambah titik: cari segmen terdekat, sisipkan vertex baru di proyeksi
+          let best: { fid: string; ring: "outer" | number; segIdx: number; proj: Point; d: number } | null = null;
+          const projectOnSeg = (p: Point, a: Point, b: Point): Point => {
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const len2 = dx * dx + dy * dy;
+            if (len2 < 1e-9) return { x: a.x, y: a.y };
+            let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+            t = Math.max(0, Math.min(1, t));
+            return { x: a.x + t * dx, y: a.y + t * dy };
+          };
+          const scan = (ring: Point[], fid: string, ringKey: "outer" | number) => {
+            for (let i = 0; i < ring.length; i++) {
+              const a = ring[i];
+              const b = ring[(i + 1) % ring.length];
+              const d = pointToSegmentDist(raw, a, b);
+              if (d < tolPx && (!best || d < best.d)) {
+                best = { fid, ring: ringKey, segIdx: i, proj: projectOnSeg(raw, a, b), d };
+              }
+            }
+          };
+          for (const fl of flList) {
+            scan(fl.outer, fl.id, "outer");
+            (fl.holes ?? []).forEach((h, hi) => scan(h, fl.id, hi));
+          }
+          if (!best) {
+            toast.error("Tidak ada tepi lantai di dekat klik");
+            return;
+          }
+          const snapped = snapPointToMillimeterGrid(best.proj, true);
+          pushHistory();
+          const nextFloors = (sketch.floors ?? []).map((fl) => {
+            if (fl.id !== best!.fid) return fl;
+            if (best!.ring === "outer") {
+              const next = fl.outer.slice();
+              next.splice(best!.segIdx + 1, 0, snapped);
+              return { ...fl, outer: next };
+            }
+            const holes = (fl.holes ?? []).map((h, hi) => {
+              if (hi !== best!.ring) return h;
+              const nh = h.slice();
+              nh.splice(best!.segIdx + 1, 0, snapped);
+              return nh;
+            });
+            return { ...fl, holes };
+          });
+          onChange({ floors: nextFloors });
+          toast.success("Titik ditambahkan");
+        }
       }
       return;
     }
