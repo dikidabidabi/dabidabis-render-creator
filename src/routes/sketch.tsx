@@ -4679,23 +4679,39 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
       const p4 = rotateAround({ x: lminX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
       const rectPts = [p1, p2, p3, p4];
-      // Jika rect ini berada di dalam floor existing pada level aktif → jadikan void
+      // Stage rect sebagai draft (belum permanen). User menekan "Simpan Area" untuk commit.
+      // Aturan:
+      //  - Jika draft sudah punya outer & rect baru ada di dalam outer → push ke holes draft.
+      //  - Jika belum ada draft, dan rect ada di dalam floor existing pada level aktif →
+      //    seed draft dari floor itu + tambah rect sebagai hole; replaceFloorId di-set.
+      //  - Selain itu, set rect baru sebagai outer draft.
       const existing = sketch.floors ?? [];
-      const hostIdx = existing.findIndex((fl) =>
-        fl.levelId === activeLvlId &&
-        rectPts.every((c) => floorPointInPolygon(c, fl.outer)) &&
-        !(fl.holes ?? []).some((h) => rectPts.every((c) => floorPointInPolygon(c, h))),
-      );
-      if (hostIdx >= 0) {
-        pushHistory();
-        const next = existing.slice();
-        const host = next[hostIdx];
-        next[hostIdx] = { ...host, holes: [...(host.holes ?? []), rectPts] };
-        onChange({ floors: next });
-        toast.success("Void ditambahkan ke lantai");
+      const cur = floorDraft;
+      if (cur && cur.outer && rectPts.every((c) => floorPointInPolygon(c, cur.outer!))) {
+        setFloorDraft({ ...cur, holes: [...cur.holes, rectPts] });
+        toast.success(`Void #${cur.holes.length + 1} ditambahkan ke draft`);
         return;
       }
-      commitFloorFromPolys(rectPts, []);
+      if (!cur || !cur.outer) {
+        const hostIdx = existing.findIndex((fl) =>
+          fl.levelId === activeLvlId &&
+          rectPts.every((c) => floorPointInPolygon(c, fl.outer)) &&
+          !(fl.holes ?? []).some((h) => rectPts.every((c) => floorPointInPolygon(c, h))),
+        );
+        if (hostIdx >= 0) {
+          const host = existing[hostIdx];
+          setFloorDraft({
+            outer: host.outer.slice(),
+            holes: [...(host.holes ?? []).map((h) => h.slice()), rectPts],
+            levelId: activeLvlId,
+            replaceFloorId: host.id,
+          });
+          toast.success("Void disiapkan — tekan Simpan Area");
+          return;
+        }
+      }
+      setFloorDraft({ outer: rectPts, holes: [], levelId: activeLvlId });
+      toast.success("Area disiapkan — tekan Simpan Area atau tambah void");
       return;
     }
 
