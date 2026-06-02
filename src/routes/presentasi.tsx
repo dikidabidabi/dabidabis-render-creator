@@ -4141,18 +4141,36 @@ function AxonometricView({
       preserveAspectRatio="xMidYMid meet"
       style={{ width: "100%", height: "100%", display: "block" }}
     >
-      {faces.map((f, i) => (
-        <polygon
-          key={i}
-          points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
-          fill={f.fill}
-          stroke={f.stroke}
-          strokeWidth={baseStroke * f.sw * 2}
-          strokeLinejoin="round"
-          opacity={1}
-          fillOpacity={1}
-        />
-      ))}
+      {faces.map((f, i) => {
+        if (f.holes && f.holes.length) {
+          const ring = (pts: { x: number; y: number }[]) =>
+            `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ") + " Z";
+          const d = [f.pts, ...f.holes].map(ring).join(" ");
+          return (
+            <path
+              key={i}
+              d={d}
+              fill={f.fill}
+              fillRule="evenodd"
+              stroke={f.stroke}
+              strokeWidth={baseStroke * f.sw * 2}
+              strokeLinejoin="round"
+            />
+          );
+        }
+        return (
+          <polygon
+            key={i}
+            points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill={f.fill}
+            stroke={f.stroke}
+            strokeWidth={baseStroke * f.sw * 2}
+            strokeLinejoin="round"
+            opacity={1}
+            fillOpacity={1}
+          />
+        );
+      })}
     </svg>
   );
 }
