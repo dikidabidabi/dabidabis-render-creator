@@ -3963,6 +3963,7 @@ function AxonometricView({
 
   type Face = {
     pts: { x: number; y: number }[];
+    holes?: { x: number; y: number }[][];
     fill: string;
     stroke: string;
     depth: number;
