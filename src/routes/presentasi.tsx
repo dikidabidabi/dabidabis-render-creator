@@ -1759,6 +1759,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 </pattern>
               );
             })()}
+            {/* Notasi beton — pola titik (bintik) untuk slab lantai & balok. */}
+            <pattern id={`concrete-dot-${slide.id}`} width={5} height={5} patternUnits="userSpaceOnUse">
+              <rect width={5} height={5} fill="#ece6d3" />
+              <circle cx={1.2} cy={1.2} r={0.55} fill="#1a1a1a" />
+              <circle cx={3.7} cy={3.7} r={0.55} fill="#1a1a1a" />
+              <circle cx={3.7} cy={1.2} r={0.32} fill="#3a3a3a" />
+              <circle cx={1.2} cy={3.7} r={0.32} fill="#3a3a3a" />
+            </pattern>
           </defs>
           <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
 
@@ -1907,6 +1915,108 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               );
             })
           )}
+
+          {/* Slab lantai (150 mm) + Balok (400×700 mm) di setiap as grid.
+              Notasi: beton dengan pola bintik. */}
+          {(() => {
+            const floors = sketch.floors ?? [];
+            if (!floors.length) return null;
+            const SLAB_M = FLOOR_THICKNESS_MM / 1000;
+            const BEAM_W_M = 0.4;
+            const BEAM_H_M = 0.7;
+
+            // Cut intersection intervals (in cut-meters) untuk satu floor (outer minus holes).
+            const intervalsFor = (fl: Floor): Array<[number, number]> => {
+              const outer = cutPolygonIntervals(cut.p1, cut.p2, fl.outer);
+              if (!outer.length) return [];
+              const holes = (fl.holes ?? []).flatMap((h) => cutPolygonIntervals(cut.p1, cut.p2, h));
+              let segs: Array<[number, number]> = outer.map(([a, b]) => [a, b]);
+              for (const [ha, hb] of holes) {
+                const next: Array<[number, number]> = [];
+                for (const [a, b] of segs) {
+                  if (hb <= a || ha >= b) { next.push([a, b]); continue; }
+                  if (ha > a) next.push([a, Math.min(b, ha)]);
+                  if (hb < b) next.push([Math.max(a, hb), b]);
+                }
+                segs = next;
+              }
+              return segs
+                .filter(([a, b]) => b - a > 1e-5)
+                .map(([a, b]) => [a * cutLenM, b * cutLenM] as [number, number]);
+            };
+
+            // Pusat balok (cut-meters) — proyeksi semua as grid X & Y ke garis potongan.
+            const ppm = pxPerMeter;
+            const ddx = cut.p2.x - cut.p1.x;
+            const ddy = cut.p2.y - cut.p1.y;
+            const beamCenters: number[] = [];
+            for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
+              const axX = axisPositions(grid.spansX);
+              for (let i = 0; i < axX.length; i++) {
+                const planX = grid.origin.x + axX[i] * ppm;
+                if (Math.abs(ddx) < 1e-6) continue;
+                const t = (planX - cut.p1.x) / ddx;
+                if (t < -0.001 || t > 1.001) continue;
+                beamCenters.push(Math.max(0, Math.min(1, t)) * cutLenM);
+              }
+              if (!grid.lineOnly) {
+                const axY = axisPositions(grid.spansY);
+                for (let j = 0; j < axY.length; j++) {
+                  const planY = grid.origin.y + axY[j] * ppm;
+                  if (Math.abs(ddy) < 1e-6) continue;
+                  const t = (planY - cut.p1.y) / ddy;
+                  if (t < -0.001 || t > 1.001) continue;
+                  beamCenters.push(Math.max(0, Math.min(1, t)) * cutLenM);
+                }
+              }
+            }
+            // Dedupe pusat balok yang terlalu dekat (< setengah lebar balok).
+            beamCenters.sort((a, b) => a - b);
+            const uniqCenters: number[] = [];
+            for (const c of beamCenters) {
+              if (!uniqCenters.length || c - uniqCenters[uniqCenters.length - 1] > BEAM_W_M * 0.5) {
+                uniqCenters.push(c);
+              }
+            }
+
+            const fill = `url(#concrete-dot-${slide.id})`;
+            return floors.map((fl) => {
+              const lv = lvls.find((l) => l.id === fl.levelId);
+              if (!lv) return null;
+              const topM = lv.mdpl;
+              const intervals = intervalsFor(fl);
+              if (!intervals.length) return null;
+              const yTop = my(topM);
+              const ySlabBot = my(topM - SLAB_M);
+              const yBeamBot = my(topM - SLAB_M - BEAM_H_M);
+              return (
+                <g key={`slab-${fl.id}`}>
+                  {intervals.map(([a, b], i) => (
+                    <rect key={`s${i}`}
+                      x={mx(a)} y={yTop}
+                      width={(b - a) * scalePxPerM} height={ySlabBot - yTop}
+                      fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                  ))}
+                  {uniqCenters.map((bc, i) => {
+                    const inside = intervals.some(([a, b]) => bc >= a - 1e-3 && bc <= b + 1e-3);
+                    if (!inside) return null;
+                    const x0 = mx(bc - BEAM_W_M / 2);
+                    const w = BEAM_W_M * scalePxPerM;
+                    // Balok menyatu dengan slab: tarik sedikit ke atas agar garis batas hilang.
+                    const yTopBeam = ySlabBot - 0.2;
+                    return (
+                      <rect key={`b${i}`}
+                        x={x0} y={yTopBeam}
+                        width={w} height={yBeamBot - yTopBeam}
+                        fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                    );
+                  })}
+                </g>
+              );
+            });
+          })()}
+
+
 
           {/* Notasi material selubung pada potongan — dihitung dari edgeAttrs */}
           {(() => {
@@ -5405,6 +5515,50 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       kind: "top",
     });
   }
+
+  // Slab lantai (entitas Floor) — 150mm di bawah MDPL level. Konsisten dgn Model 3D.
+  {
+    const slabThk = FLOOR_THICKNESS_MM / 1000;
+    const minExp = expanded.length ? Math.min(...expanded.map((e) => e.mdpl)) : 0;
+    for (const fl of sketch.floors ?? []) {
+      const lv = levels.find((l) => l.id === fl.levelId);
+      if (!lv) continue;
+      if (fl.outer.length < 3) continue;
+      const topRel = lv.mdpl - minExp;
+      const botRel = topRel - slabThk;
+      // Sisi luar slab
+      for (let i = 0; i < fl.outer.length; i++) {
+        const a = fl.outer[i];
+        const b = fl.outer[(i + 1) % fl.outer.length];
+        const p1 = project(a.x, a.y, botRel);
+        const p2 = project(b.x, b.y, botRel);
+        const p3 = project(b.x, b.y, topRel);
+        const p4 = project(a.x, a.y, topRel);
+        const mxv = (a.x + b.x) / 2 - cx;
+        const myv = (a.y + b.y) / 2 - cy;
+        quads.push({
+          pts: [p1, p2, p3, p4],
+          depth: mxv + myv + botRel * 0.01,
+          fill: "#9c9c9c",
+          stroke: "rgba(0,0,0,0.45)",
+          sw: 1.0,
+          kind: "wall",
+        });
+      }
+      // Permukaan atas
+      const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
+      quads.push({
+        pts: topPts,
+        depth: avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
+        fill: "#cfcfcf",
+        stroke: "rgba(0,0,0,0.5)",
+        sw: 1.0,
+        kind: "top",
+      });
+    }
+  }
+
+
 
   const quadLayer = (kind: Quad["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
   quads.sort((a, b) => quadLayer(a.kind) - quadLayer(b.kind) || a.depth - b.depth);
