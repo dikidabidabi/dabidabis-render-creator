@@ -762,6 +762,44 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    floors: (() => {
+      const raw = s?.floors;
+      if (!Array.isArray(raw)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const validRing = (r: any): Point[] | null => {
+        if (!Array.isArray(r)) return null;
+        const pts: Point[] = [];
+        for (const p of r) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+          pts.push({ x, y });
+        }
+        return pts.length >= 3 ? pts : null;
+      };
+      const out: Floor[] = [];
+      for (const f of raw) {
+        if (!f || typeof f !== "object") continue;
+        const outer = validRing(f.outer);
+        if (!outer) continue;
+        const holes: Point[][] = [];
+        if (Array.isArray(f.holes)) {
+          for (const h of f.holes) {
+            const hh = validRing(h);
+            if (hh) holes.push(hh);
+          }
+        }
+        const lid = typeof f.levelId === "string" && validLvl.has(f.levelId) ? f.levelId : fallback;
+        out.push({
+          id: typeof f.id === "string" && f.id ? f.id : `FL${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: lid,
+          outer,
+          holes: holes.length ? holes : undefined,
+          thicknessMm: Number.isFinite(Number(f.thicknessMm)) && Number(f.thicknessMm) > 0 ? Number(f.thicknessMm) : 150,
+          createdAt: Number.isFinite(Number(f.createdAt)) ? Number(f.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
   };
 }
 
