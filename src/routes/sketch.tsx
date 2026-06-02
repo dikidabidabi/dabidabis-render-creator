@@ -1179,6 +1179,14 @@ function SketchCard(props: SketchCardProps) {
           <Button
             variant="outline"
             size="sm"
+            onClick={onDuplicate}
+            title="Duplikat sketsa — buat salinan penuh untuk dikembangkan tanpa mengubah progres asli"
+          >
+            <Copy className="mr-1.5 h-4 w-4" /> Salin
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onRequestDelete}
             className="border-ember/40 text-ember hover:bg-ember/10 hover:text-ember"
           >
