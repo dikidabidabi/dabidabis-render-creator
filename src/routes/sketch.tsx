@@ -1858,15 +1858,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return () => ro.disconnect();
   }, []);
 
-  const snapPoint = useCallback(
-    (p: Point): Point => {
-      if (!snap) return p;
-      return {
-        x: Math.round(p.x / MINOR_PX) * MINOR_PX,
-        y: Math.round(p.y / MINOR_PX) * MINOR_PX,
-      };
+  const snapPointToMillimeterGrid = useCallback(
+    (p: Point, force = false): Point => {
+      if (!force && !snap) return p;
+      if (Math.abs(mmGridRotRad) < 1e-9) {
+        return {
+          x: Math.round(p.x / MINOR_PX) * MINOR_PX,
+          y: Math.round(p.y / MINOR_PX) * MINOR_PX,
+        };
+      }
+      const cs0 = Math.cos(-mmGridRotRad), sn0 = Math.sin(-mmGridRotRad);
+      const lx = p.x * cs0 - p.y * sn0;
+      const ly = p.x * sn0 + p.y * cs0;
+      const sx = Math.round(lx / MINOR_PX) * MINOR_PX;
+      const sy = Math.round(ly / MINOR_PX) * MINOR_PX;
+      const cs1 = Math.cos(mmGridRotRad), sn1 = Math.sin(mmGridRotRad);
+      return { x: sx * cs1 - sy * sn1, y: sx * sn1 + sy * cs1 };
     },
-    [snap],
+    [snap, mmGridRotRad],
+  );
+
+  const snapPoint = useCallback(
+    (p: Point): Point => snapPointToMillimeterGrid(p),
+    [snapPointToMillimeterGrid],
   );
 
   const lockedLineKeys = useMemo(() => {
