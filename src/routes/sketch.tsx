@@ -3201,6 +3201,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.restore();
     }
 
+    // Vertex handles untuk Edit Titik Lantai
+    if (tool === "floor" && floorMode === "edit") {
+      ctx.save();
+      const flList = (sketch.floors ?? []).filter((f) => !activeLvlId || f.levelId === activeLvlId);
+      const drawHandle = (w: Point) => {
+        const s = worldToScreen(w);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : "#fff";
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.lineWidth = 1.5;
+        ctx.fill();
+        ctx.stroke();
+      };
+      for (const fl of flList) {
+        fl.outer.forEach(drawHandle);
+        (fl.holes ?? []).forEach((h) => h.forEach(drawHandle));
+      }
+      ctx.restore();
+    }
+
 
     // Active line length label, screen-space
     if (drawing) {
