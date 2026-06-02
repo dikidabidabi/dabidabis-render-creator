@@ -2360,7 +2360,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.lineWidth = 2 / s;
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
-      if (tool === "rect") {
+      const isRectPreview = tool === "rect" || (tool === "floor" && floorMode === "rect");
+      if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), lalu rotasi balik 4 sudutnya.
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
@@ -2375,8 +2376,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
         ctx.closePath();
         ctx.stroke();
-        ctx.fillStyle = "rgba(232, 93, 58, 0.10)";
+        ctx.fillStyle = tool === "floor"
+          ? "rgba(232, 93, 58, 0.18)"
+          : "rgba(232, 93, 58, 0.10)";
         ctx.fill();
+        // Tanda silang preview bila rect berada di dalam floor existing (calon void)
+        if (tool === "floor" && floorMode === "rect") {
+          const floors = sketch.floors ?? [];
+          const cornersWorld = corners;
+          const allInside = floors.some((fl) =>
+            fl.levelId === activeLvlId &&
+            cornersWorld.every((c) => floorPointInPolygon(c, fl.outer)) &&
+            !(fl.holes ?? []).some((h) => cornersWorld.every((c) => floorPointInPolygon(c, h))),
+          );
+          if (allInside) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(120,40,20,0.95)";
+            ctx.lineWidth = 1.5 / s;
+            ctx.setLineDash([4 / s, 3 / s]);
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y); ctx.lineTo(corners[2].x, corners[2].y);
+            ctx.moveTo(corners[1].x, corners[1].y); ctx.lineTo(corners[3].x, corners[3].y);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
       } else {
         ctx.moveTo(drawing.a.x, drawing.a.y);
         if (lineKind === "arc") {
