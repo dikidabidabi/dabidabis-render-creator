@@ -1718,11 +1718,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
   // Edit Titik (lantai) — sub-mode + drag state
-  const [floorEditSub, setFloorEditSub] = useState<"move" | "add">("move");
+  const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete">("move");
   const [floorVertexDrag, setFloorVertexDrag] = useState<
     | { fid: string; ring: "outer" | number; idx: number }
     | null
   >(null);
+  // Clipboard untuk Copy/Paste Lantai antar level
+  const [floorClipboard, setFloorClipboard] = useState<Floor[]>([]);
   // Circle tool — center + drag radius
   const [circleDraft, setCircleDraft] = useState<{ c: Point; cur: Point; levelId?: string } | null>(null);
   // Offset tool — jarak offset (cm pada skala asli)
