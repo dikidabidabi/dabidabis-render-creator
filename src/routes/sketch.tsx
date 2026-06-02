@@ -1692,6 +1692,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
   const [doorEraseMode, setDoorEraseMode] = useState(false);
+  const [doorClipboard, setDoorClipboard] = useState<Door[]>([]);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
