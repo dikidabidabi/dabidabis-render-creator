@@ -4559,16 +4559,34 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     <div style={{ display: "flex", gap: 20, width: "100%", height: "100%", overflow: "hidden" }}>
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 10, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
         <svg viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
-          {faces.map((f, i) => (
-            <polygon
-              key={i}
-              points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
-              fill={f.fill}
-              stroke={f.stroke}
-              strokeWidth={baseStroke * f.sw * 2}
-              strokeLinejoin="round"
-            />
-          ))}
+          {faces.map((f, i) => {
+            if (f.holes && f.holes.length) {
+              const ring = (pts: { x: number; y: number }[]) =>
+                `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ") + " Z";
+              const d = [f.pts, ...f.holes].map(ring).join(" ");
+              return (
+                <path
+                  key={i}
+                  d={d}
+                  fill={f.fill}
+                  fillRule="evenodd"
+                  stroke={f.stroke}
+                  strokeWidth={baseStroke * f.sw * 2}
+                  strokeLinejoin="round"
+                />
+              );
+            }
+            return (
+              <polygon
+                key={i}
+                points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill={f.fill}
+                stroke={f.stroke}
+                strokeWidth={baseStroke * f.sw * 2}
+                strokeLinejoin="round"
+              />
+            );
+          })}
           {leaders.map((l, i) => (
             <g key={`ld-${i}`}>
               <circle cx={l.x1} cy={l.y1} r={baseStroke * 1.1} fill="#0a0a0a" />
