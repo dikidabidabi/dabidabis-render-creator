@@ -4743,6 +4743,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setEditDrag(null);
       return;
     }
+    if (floorVertexDrag) {
+      setFloorVertexDrag(null);
+      return;
+    }
     if (polyDraft && tool === "polyline") {
       // Tambahkan sample terakhir bila cukup jauh dari vertex terakhir
       const pts = polyDraft.points.slice();
