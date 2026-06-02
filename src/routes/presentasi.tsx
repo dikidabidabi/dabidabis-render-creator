@@ -76,6 +76,7 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[];
   edgeAttrs?: Record<string, EdgeMaterial>;
   doors?: Door[];
+  floors?: Floor[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
