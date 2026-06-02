@@ -1676,7 +1676,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
-    | { outer: Point[] | null; holes: Point[][]; levelId: string | null }
+    | { outer: Point[] | null; holes: Point[][]; levelId: string | null; replaceFloorId?: string }
+    | null
+  >(null);
+  // Edit Titik (lantai) — sub-mode + drag state
+  const [floorEditSub, setFloorEditSub] = useState<"move" | "add">("move");
+  const [floorVertexDrag, setFloorVertexDrag] = useState<
+    | { fid: string; ring: "outer" | number; idx: number }
     | null
   >(null);
   // Circle tool — center + drag radius
@@ -3195,6 +3201,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.restore();
     }
 
+    // Vertex handles untuk Edit Titik Lantai
+    if (tool === "floor" && floorMode === "edit") {
+      ctx.save();
+      const flList = (sketch.floors ?? []).filter((f) => !activeLvlId || f.levelId === activeLvlId);
+      const drawHandle = (w: Point) => {
+        const s = worldToScreen(w);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : "#fff";
+        ctx.strokeStyle = "#1a1a1a";
+        ctx.lineWidth = 1.5;
+        ctx.fill();
+        ctx.stroke();
+      };
+      for (const fl of flList) {
+        fl.outer.forEach(drawHandle);
+        (fl.holes ?? []).forEach((h) => h.forEach(drawHandle));
+      }
+      ctx.restore();
+    }
+
 
     // Active line length label, screen-space
     if (drawing) {
@@ -3209,7 +3236,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -3489,24 +3516,34 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Commit floor (slab) — outer polygon + optional holes. Nama lantai otomatis
   // mengikuti nama level aktif. Top permukaan = MDPL level, ketebalan 150mm ke bawah.
   const commitFloorFromPolys = useCallback(
-    (outer: Point[], holes: Point[][]) => {
+    (outer: Point[], holes: Point[][], replaceFloorId?: string) => {
       if (outer.length < 3) {
         toast.error("Outline lantai minimal 3 titik");
         return;
       }
       const { levels: nextLevelsBase, activeId } = ensureLevels();
       const validHoles = holes.filter((h) => h.length >= 3);
-      const floor: Floor = {
-        id: genFloorId(),
-        levelId: activeId,
-        outer,
-        holes: validHoles.length ? validHoles : undefined,
-        thicknessMm: FLOOR_THICKNESS_MM,
-        createdAt: Date.now(),
-      };
-      pushHistory();
       const prev = sketch.floors ?? [];
-      const patch: Partial<Sketch> = { floors: [...prev, floor] };
+      pushHistory();
+      let nextFloors: Floor[];
+      if (replaceFloorId) {
+        nextFloors = prev.map((f) =>
+          f.id === replaceFloorId
+            ? { ...f, outer, holes: validHoles.length ? validHoles : undefined }
+            : f,
+        );
+      } else {
+        const floor: Floor = {
+          id: genFloorId(),
+          levelId: activeId,
+          outer,
+          holes: validHoles.length ? validHoles : undefined,
+          thicknessMm: FLOOR_THICKNESS_MM,
+          createdAt: Date.now(),
+        };
+        nextFloors = [...prev, floor];
+      }
+      const patch: Partial<Sketch> = { floors: nextFloors };
       if (nextLevelsBase !== levels) {
         patch.levels = nextLevelsBase;
         patch.activeLevelId = activeId;
@@ -3516,20 +3553,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange(patch);
       const areaPx = floorPolyArea(outer) - validHoles.reduce((s, h) => s + floorPolyArea(h), 0);
       const areaM2 = Math.max(0, areaPx) / (pxPerMeter * pxPerMeter);
-      toast.success(`Lantai dibuat — ${areaM2.toFixed(2)} m²${validHoles.length ? ` · ${validHoles.length} void` : ""}`);
+      toast.success(
+        `${replaceFloorId ? "Lantai diperbarui" : "Lantai disimpan"} — ${areaM2.toFixed(2)} m²${validHoles.length ? ` · ${validHoles.length} void` : ""}`,
+      );
       setFloorDraft(null);
     },
     [sketch.floors, levels, activeLvlId, pxPerMeter, pushHistory, onChange, ensureLevels],
   );
 
-  // Commit dari floorDraft (mode "attach"). Mode lain (rect/polyline/line) langsung
-  // memanggil commitFloorFromPolys saat gesture selesai.
+  // Commit dari floorDraft (semua mode: rect/line/polyline/attach).
   const commitFloor = useCallback(() => {
     if (!floorDraft || !floorDraft.outer || floorDraft.outer.length < 3) {
-      toast.error("Pilih perimeter terluar dulu");
+      toast.error("Belum ada area lantai untuk disimpan");
       return;
     }
-    commitFloorFromPolys(floorDraft.outer, floorDraft.holes);
+    commitFloorFromPolys(floorDraft.outer, floorDraft.holes, floorDraft.replaceFloorId);
   }, [floorDraft, commitFloorFromPolys]);
 
 
@@ -4037,7 +4075,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           if (polyDraft.points.length >= 3 && dist(p, first) <= tolClose) {
             const pts = polyDraft.points.slice();
             setPolyDraft(null);
-            commitFloorFromPolys(pts, []);
+            setFloorDraft({ outer: pts, holes: [], levelId: activeLvlId });
+            toast.success("Area disiapkan — tekan Simpan Area");
           } else {
             setPolyDraft({ ...polyDraft, points: [...polyDraft.points, p], lastSample: p, cursor: p });
           }
@@ -4082,6 +4121,87 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
           setFloorDraft({ outer: cur.outer, holes: [...cur.holes, cycle], levelId: cur.levelId });
           toast.success(`Void #${cur.holes.length + 1} ditambahkan`);
+        }
+      } else if (floorMode === "edit") {
+        // Edit Titik — sub-mode "move" (geser) atau "add" (tambah titik).
+        const raw = getWorldPosRaw(e);
+        const tolPx = 14 / view.s;
+        const flList = (sketch.floors ?? []).filter(
+          (f) => !activeLvlId || f.levelId === activeLvlId,
+        );
+        if (floorEditSub === "move") {
+          // cari vertex terdekat
+          type VHit = { fid: string; ring: "outer" | number; idx: number; d: number };
+          const hits: VHit[] = [];
+          for (const fl of flList) {
+            fl.outer.forEach((v, i) => {
+              const d = Math.hypot(v.x - raw.x, v.y - raw.y);
+              if (d < tolPx) hits.push({ fid: fl.id, ring: "outer", idx: i, d });
+            });
+            (fl.holes ?? []).forEach((h, hi) => {
+              h.forEach((v, i) => {
+                const d = Math.hypot(v.x - raw.x, v.y - raw.y);
+                if (d < tolPx) hits.push({ fid: fl.id, ring: hi, idx: i, d });
+              });
+            });
+          }
+          if (hits.length === 0) {
+            toast.error("Tidak ada titik lantai di dekat klik");
+            return;
+          }
+          hits.sort((a, b) => a.d - b.d);
+          const bestV = hits[0];
+          pushHistory();
+          setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
+        } else {
+          // tambah titik: cari segmen terdekat, sisipkan vertex baru di proyeksi
+          type EHit = { fid: string; ring: "outer" | number; segIdx: number; proj: Point; d: number };
+          const ehits: EHit[] = [];
+          const projectOnSeg = (p: Point, a: Point, b: Point): Point => {
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const len2 = dx * dx + dy * dy;
+            if (len2 < 1e-9) return { x: a.x, y: a.y };
+            let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+            t = Math.max(0, Math.min(1, t));
+            return { x: a.x + t * dx, y: a.y + t * dy };
+          };
+          const scan = (ring: Point[], fid: string, ringKey: "outer" | number) => {
+            for (let i = 0; i < ring.length; i++) {
+              const a = ring[i];
+              const b = ring[(i + 1) % ring.length];
+              const d = pointToSegmentDist(raw, a, b);
+              if (d < tolPx) ehits.push({ fid, ring: ringKey, segIdx: i, proj: projectOnSeg(raw, a, b), d });
+            }
+          };
+          for (const fl of flList) {
+            scan(fl.outer, fl.id, "outer");
+            (fl.holes ?? []).forEach((h, hi) => scan(h, fl.id, hi));
+          }
+          if (ehits.length === 0) {
+            toast.error("Tidak ada tepi lantai di dekat klik");
+            return;
+          }
+          ehits.sort((a, b) => a.d - b.d);
+          const bestE = ehits[0];
+          const snapped = snapPointToMillimeterGrid(bestE.proj, true);
+          pushHistory();
+          const nextFloors = (sketch.floors ?? []).map((fl) => {
+            if (fl.id !== bestE.fid) return fl;
+            if (bestE.ring === "outer") {
+              const next = fl.outer.slice();
+              next.splice(bestE.segIdx + 1, 0, snapped);
+              return { ...fl, outer: next };
+            }
+            const holes = (fl.holes ?? []).map((h, hi) => {
+              if (hi !== bestE.ring) return h;
+              const nh = h.slice();
+              nh.splice(bestE.segIdx + 1, 0, snapped);
+              return nh;
+            });
+            return { ...fl, holes };
+          });
+          onChange({ floors: nextFloors });
+          toast.success("Titik ditambahkan");
         }
       }
       return;
@@ -4483,6 +4603,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (floorVertexDrag) {
+      const newPos = snapPointToMillimeterGrid(getWorldPosRaw(e), true);
+      const fd = floorVertexDrag;
+      const nextFloors = (sketch.floors ?? []).map((fl) => {
+        if (fl.id !== fd.fid) return fl;
+        if (fd.ring === "outer") {
+          const next = fl.outer.slice();
+          if (fd.idx < next.length) next[fd.idx] = newPos;
+          return { ...fl, outer: next };
+        }
+        const holes = (fl.holes ?? []).map((h, hi) => {
+          if (hi !== fd.ring) return h;
+          const nh = h.slice();
+          if (fd.idx < nh.length) nh[fd.idx] = newPos;
+          return nh;
+        });
+        return { ...fl, holes };
+      });
+      onChange({ floors: nextFloors });
+      return;
+    }
     const p = tool === "floor" && floorMode === "rect"
       ? snapPointToMillimeterGrid(getWorldPosRaw(e), true)
       : getWorldPos(e);
@@ -4623,6 +4764,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setEditDrag(null);
       return;
     }
+    if (floorVertexDrag) {
+      setFloorVertexDrag(null);
+      return;
+    }
     if (polyDraft && tool === "polyline") {
       // Tambahkan sample terakhir bila cukup jauh dari vertex terakhir
       const pts = polyDraft.points.slice();
@@ -4662,23 +4807,39 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
       const p4 = rotateAround({ x: lminX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
       const rectPts = [p1, p2, p3, p4];
-      // Jika rect ini berada di dalam floor existing pada level aktif → jadikan void
+      // Stage rect sebagai draft (belum permanen). User menekan "Simpan Area" untuk commit.
+      // Aturan:
+      //  - Jika draft sudah punya outer & rect baru ada di dalam outer → push ke holes draft.
+      //  - Jika belum ada draft, dan rect ada di dalam floor existing pada level aktif →
+      //    seed draft dari floor itu + tambah rect sebagai hole; replaceFloorId di-set.
+      //  - Selain itu, set rect baru sebagai outer draft.
       const existing = sketch.floors ?? [];
-      const hostIdx = existing.findIndex((fl) =>
-        fl.levelId === activeLvlId &&
-        rectPts.every((c) => floorPointInPolygon(c, fl.outer)) &&
-        !(fl.holes ?? []).some((h) => rectPts.every((c) => floorPointInPolygon(c, h))),
-      );
-      if (hostIdx >= 0) {
-        pushHistory();
-        const next = existing.slice();
-        const host = next[hostIdx];
-        next[hostIdx] = { ...host, holes: [...(host.holes ?? []), rectPts] };
-        onChange({ floors: next });
-        toast.success("Void ditambahkan ke lantai");
+      const cur = floorDraft;
+      if (cur && cur.outer && rectPts.every((c) => floorPointInPolygon(c, cur.outer!))) {
+        setFloorDraft({ ...cur, holes: [...cur.holes, rectPts] });
+        toast.success(`Void #${cur.holes.length + 1} ditambahkan ke draft`);
         return;
       }
-      commitFloorFromPolys(rectPts, []);
+      if (!cur || !cur.outer) {
+        const hostIdx = existing.findIndex((fl) =>
+          fl.levelId === activeLvlId &&
+          rectPts.every((c) => floorPointInPolygon(c, fl.outer)) &&
+          !(fl.holes ?? []).some((h) => rectPts.every((c) => floorPointInPolygon(c, h))),
+        );
+        if (hostIdx >= 0) {
+          const host = existing[hostIdx];
+          setFloorDraft({
+            outer: host.outer.slice(),
+            holes: [...(host.holes ?? []).map((h) => h.slice()), rectPts],
+            levelId: activeLvlId,
+            replaceFloorId: host.id,
+          });
+          toast.success("Void disiapkan — tekan Simpan Area");
+          return;
+        }
+      }
+      setFloorDraft({ outer: rectPts, holes: [], levelId: activeLvlId });
+      toast.success("Area disiapkan — tekan Simpan Area atau tambah void");
       return;
     }
 
@@ -5472,11 +5633,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {tool === "floor" && (
           <FloorToolPanel
             mode={floorMode}
-            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
+            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); }}
             draft={floorDraft}
             level={levels.find((l) => l.id === activeLvlId) ?? null}
             onCommit={() => commitFloor()}
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
+            editSub={floorEditSub}
+            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); }}
           />
         )}
         {tool === "offset" && (
@@ -7327,16 +7490,21 @@ function FloorToolPanel({
   level,
   onCommit,
   onCancel,
+  editSub,
+  onEditSub,
 }: {
   mode: FloorMode;
   onMode: (m: FloorMode) => void;
-  draft: { outer: Point[] | null; holes: Point[][] } | null;
+  draft: { outer: Point[] | null; holes: Point[][]; replaceFloorId?: string } | null;
   level: Level | null;
   onCommit: () => void;
   onCancel: () => void;
+  editSub: "move" | "add";
+  onEditSub: (s: "move" | "add") => void;
 }) {
   const hasOuter = !!(draft && draft.outer && draft.outer.length >= 3);
   const holeCount = draft?.holes?.length ?? 0;
+  const isReplace = !!draft?.replaceFloorId;
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
       <div className="flex items-center justify-between">
@@ -7354,6 +7522,7 @@ function FloorToolPanel({
             { id: "line", label: "Garis", hint: "Klik dua titik tiap segmen, dobel-klik tutup" },
             { id: "polyline", label: "Polyline", hint: "Klik banyak titik, dobel-klik tutup" },
             { id: "attach", label: "Attach Garis", hint: "Klik segmen perimeter (outer), lalu segmen lubang (void)" },
+            { id: "edit", label: "Edit Titik", hint: "Geser titik atau tambah titik baru pada lantai existing" },
           ] as { id: FloorMode; label: string; hint: string }[]
         ).map((m) => (
           <Button
@@ -7371,21 +7540,49 @@ function FloorToolPanel({
       <p className="text-[10px] leading-snug text-muted-foreground">
         {mode === "attach"
           ? "Klik segmen pada perimeter terluar untuk men-set outer; klik segmen poligon di dalamnya untuk menambah void."
-          : "Outer langsung di-commit setelah gesture selesai (tanpa void)."}
+          : mode === "edit"
+          ? "Pilih sub-mode di bawah. Geser: tarik titik existing. Tambah Titik: klik tepi lantai untuk menyisipkan titik baru."
+          : mode === "rect"
+          ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
+          : "Klik titik-titik membentuk poligon, tutup di titik awal. Tekan Simpan Area untuk finalisasi."}
       </p>
-      {mode === "attach" && (
+
+      {mode === "edit" && (
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button
+            size="sm"
+            variant={editSub === "move" ? "default" : "outline"}
+            className={cn("h-8 text-xs", editSub === "move" && "bg-gradient-ember shadow-ember")}
+            onClick={() => onEditSub("move")}
+          >
+            Geser Titik
+          </Button>
+          <Button
+            size="sm"
+            variant={editSub === "add" ? "default" : "outline"}
+            className={cn("h-8 text-xs", editSub === "add" && "bg-gradient-ember shadow-ember")}
+            onClick={() => onEditSub("add")}
+          >
+            Tambah Titik
+          </Button>
+        </div>
+      )}
+
+      {mode !== "edit" && (
         <div className="rounded-sm bg-background/60 p-2 text-[10px]">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">
-              Outer: <span className={cn(hasOuter ? "text-ember" : "text-muted-foreground")}>{hasOuter ? "OK" : "—"}</span>
+              Area: <span className={cn(hasOuter ? "text-ember" : "text-muted-foreground")}>{hasOuter ? "Siap" : "—"}</span>
             </span>
-            <span className="text-muted-foreground">Void: {holeCount}</span>
+            <span className="text-muted-foreground">
+              Void: {holeCount}{isReplace ? " · update lantai" : ""}
+            </span>
           </div>
           <div className="mt-2 flex gap-1.5">
             <Button size="sm" className="h-7 flex-1 text-[10px]" disabled={!hasOuter} onClick={onCommit}>
-              <Check className="mr-1 h-3 w-3" /> Selesai
+              <Check className="mr-1 h-3 w-3" /> Simpan Area
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={onCancel}>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" disabled={!hasOuter} onClick={onCancel}>
               <X className="mr-1 h-3 w-3" /> Batal
             </Button>
           </div>

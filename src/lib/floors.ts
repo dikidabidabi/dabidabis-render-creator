@@ -10,7 +10,7 @@
 
 export type Point = { x: number; y: number };
 
-export type FloorMode = "rect" | "line" | "polyline" | "attach";
+export type FloorMode = "rect" | "line" | "polyline" | "attach" | "edit";
 
 export type Floor = {
   id: string;
