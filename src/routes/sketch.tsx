@@ -7490,16 +7490,21 @@ function FloorToolPanel({
   level,
   onCommit,
   onCancel,
+  editSub,
+  onEditSub,
 }: {
   mode: FloorMode;
   onMode: (m: FloorMode) => void;
-  draft: { outer: Point[] | null; holes: Point[][] } | null;
+  draft: { outer: Point[] | null; holes: Point[][]; replaceFloorId?: string } | null;
   level: Level | null;
   onCommit: () => void;
   onCancel: () => void;
+  editSub: "move" | "add";
+  onEditSub: (s: "move" | "add") => void;
 }) {
   const hasOuter = !!(draft && draft.outer && draft.outer.length >= 3);
   const holeCount = draft?.holes?.length ?? 0;
+  const isReplace = !!draft?.replaceFloorId;
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
       <div className="flex items-center justify-between">
@@ -7517,6 +7522,7 @@ function FloorToolPanel({
             { id: "line", label: "Garis", hint: "Klik dua titik tiap segmen, dobel-klik tutup" },
             { id: "polyline", label: "Polyline", hint: "Klik banyak titik, dobel-klik tutup" },
             { id: "attach", label: "Attach Garis", hint: "Klik segmen perimeter (outer), lalu segmen lubang (void)" },
+            { id: "edit", label: "Edit Titik", hint: "Geser titik atau tambah titik baru pada lantai existing" },
           ] as { id: FloorMode; label: string; hint: string }[]
         ).map((m) => (
           <Button
@@ -7534,21 +7540,49 @@ function FloorToolPanel({
       <p className="text-[10px] leading-snug text-muted-foreground">
         {mode === "attach"
           ? "Klik segmen pada perimeter terluar untuk men-set outer; klik segmen poligon di dalamnya untuk menambah void."
-          : "Outer langsung di-commit setelah gesture selesai (tanpa void)."}
+          : mode === "edit"
+          ? "Pilih sub-mode di bawah. Geser: tarik titik existing. Tambah Titik: klik tepi lantai untuk menyisipkan titik baru."
+          : mode === "rect"
+          ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
+          : "Klik titik-titik membentuk poligon, tutup di titik awal. Tekan Simpan Area untuk finalisasi."}
       </p>
-      {mode === "attach" && (
+
+      {mode === "edit" && (
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button
+            size="sm"
+            variant={editSub === "move" ? "default" : "outline"}
+            className={cn("h-8 text-xs", editSub === "move" && "bg-gradient-ember shadow-ember")}
+            onClick={() => onEditSub("move")}
+          >
+            Geser Titik
+          </Button>
+          <Button
+            size="sm"
+            variant={editSub === "add" ? "default" : "outline"}
+            className={cn("h-8 text-xs", editSub === "add" && "bg-gradient-ember shadow-ember")}
+            onClick={() => onEditSub("add")}
+          >
+            Tambah Titik
+          </Button>
+        </div>
+      )}
+
+      {mode !== "edit" && (
         <div className="rounded-sm bg-background/60 p-2 text-[10px]">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">
-              Outer: <span className={cn(hasOuter ? "text-ember" : "text-muted-foreground")}>{hasOuter ? "OK" : "—"}</span>
+              Area: <span className={cn(hasOuter ? "text-ember" : "text-muted-foreground")}>{hasOuter ? "Siap" : "—"}</span>
             </span>
-            <span className="text-muted-foreground">Void: {holeCount}</span>
+            <span className="text-muted-foreground">
+              Void: {holeCount}{isReplace ? " · update lantai" : ""}
+            </span>
           </div>
           <div className="mt-2 flex gap-1.5">
             <Button size="sm" className="h-7 flex-1 text-[10px]" disabled={!hasOuter} onClick={onCommit}>
-              <Check className="mr-1 h-3 w-3" /> Selesai
+              <Check className="mr-1 h-3 w-3" /> Simpan Area
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={onCancel}>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" disabled={!hasOuter} onClick={onCancel}>
               <X className="mr-1 h-3 w-3" /> Batal
             </Button>
           </div>
