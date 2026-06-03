@@ -4821,6 +4821,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
+      setSelectedEditVertex({ target: hit.target, coord: hit.coord });
     } else if (tool === "pick") {
       if (!activeLvlId) {
         toast.error("Pilih Level aktif terlebih dahulu");
