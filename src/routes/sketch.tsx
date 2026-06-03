@@ -6045,6 +6045,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Move className="mr-1.5 h-4 w-4" /> Edit Titik
           </Button>
           <Button
+            variant={tool === "move" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("move"); }}
+            className={cn(tool === "move" && "bg-gradient-ember shadow-ember")}
+            title="Move — pilih satu/banyak objek lalu drag (snap mm) atau geser numerik ΔX/ΔY mm."
+          >
+            <GripHorizontal className="mr-1.5 h-4 w-4" /> Move
+          <Button
             variant={tool === "erase" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("erase"); }}
