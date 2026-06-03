@@ -2011,8 +2011,136 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
 
-          {/* Room slices & garis lantai/dinding tebal dipindah ke bawah
-              (digambar setelah slab+balok + notasi material) */}
+          {/* Room slices per level — digambar lebih dulu agar notasi
+              dinding / lantai / balok berada DI ATAS layer ruang. */}
+          {boxes.map((b) =>
+            b.slices.map((sl, i) => {
+              const x = mx(sl.x0);
+              const w = (sl.x1 - sl.x0) * scalePxPerM;
+              const sliceHM = sl.heightOverride ?? (b.topM - b.baseM);
+              const sliceBaseM = b.baseM + (sl.baseDelta ?? 0);
+              const sliceTopM = sliceBaseM + sliceHM;
+              const y = my(sliceTopM);
+              const h = sliceHM * scalePxPerM;
+              const cx = x + w / 2, cy = y + h / 2;
+              const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
+              return (
+                <g key={`${b.id}-${i}`}>
+                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
+                  {w > 28 && h > 18 && (
+                    <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
+                      {sl.name}
+                    </text>
+                  )}
+                </g>
+              );
+            })
+          )}
+
+          {/* Level boxes — pelat lantai tebal HANYA di bawah ruang;
+              di luar ruang berupa garis putus-putus tipis.
+              Dinding luar level basement (di bawah MDPL 0) dan lantai paling bawah
+              dibuat 2x lebih tebal dari garis lantai.
+              Digambar SETELAH room slices agar selalu terlihat di atas warna ruang. */}
+          {(() => {
+            const roomIntervalsByBox = new Map<string, Array<[number, number]>>();
+            for (const b of boxes) {
+              const arr: Array<[number, number]> = b.slices.map((s) => [s.x0, s.x1]);
+              arr.sort((a, c) => a[0] - c[0]);
+              const merged: Array<[number, number]> = [];
+              for (const iv of arr) {
+                if (merged.length && iv[0] <= merged[merged.length - 1][1]) {
+                  merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], iv[1]);
+                } else merged.push([iv[0], iv[1]]);
+              }
+              roomIntervalsByBox.set(b.id, merged);
+            }
+            const FLOOR_THICK = 2.4;
+            const FLOOR_THICK_HEAVY = 4.8;
+            const bottomBoxId = boxes.length
+              ? boxes.reduce((a, b) => (a.baseM <= b.baseM ? a : b)).id
+              : null;
+            const renderFloorLine = (
+              key: string,
+              yy: number,
+              underBoxId: string | null,
+              heavy = false,
+            ) => {
+              const rooms = underBoxId ? (roomIntervalsByBox.get(underBoxId) ?? []) : [];
+              const voids = underBoxId ? (voidIntervalsByBox.get(underBoxId) ?? []) : [];
+              let segs: Array<{ a: number; b: number; thick: boolean }> = [];
+              let cursor = 0;
+              for (const [r0, r1] of rooms) {
+                const a = Math.max(0, r0);
+                const b2 = Math.min(cutLenM, r1);
+                if (b2 <= a) continue;
+                if (a > cursor) segs.push({ a: cursor, b: a, thick: false });
+                segs.push({ a, b: b2, thick: true });
+                cursor = b2;
+              }
+              if (cursor < cutLenM) segs.push({ a: cursor, b: cutLenM, thick: false });
+              for (const [v0, v1] of voids) {
+                const va = Math.max(0, v0), vb = Math.min(cutLenM, v1);
+                if (vb <= va) continue;
+                const next: typeof segs = [];
+                for (const s of segs) {
+                  if (vb <= s.a || va >= s.b) { next.push(s); continue; }
+                  if (va > s.a) next.push({ a: s.a, b: va, thick: s.thick });
+                  if (vb < s.b) next.push({ a: vb, b: s.b, thick: s.thick });
+                }
+                segs = next;
+              }
+              const thickW = heavy ? FLOOR_THICK_HEAVY : FLOOR_THICK;
+              return (
+                <g key={key}>
+                  {segs.map((s, i) =>
+                    s.thick ? (
+                      <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
+                        stroke="#111" strokeWidth={thickW} strokeLinecap="square" />
+                    ) : (
+                      <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
+                        stroke="#111" strokeWidth={0.6} strokeDasharray="3 3" />
+                    )
+                  )}
+                </g>
+              );
+            };
+            return boxes.map((b) => {
+              const x = mx(0);
+              const y = my(b.topM);
+              const w = cutLenM * scalePxPerM;
+              const h = (b.topM - b.baseM) * scalePxPerM;
+              const upper = boxes.find((o) => Math.abs(o.baseM - b.topM) < 1e-3);
+              const isBasement = b.topM <= groundMdpl + 1e-3;
+              const isBottom = b.id === bottomBoxId;
+              const rooms = roomIntervalsByBox.get(b.id) ?? [];
+              const roomMin = rooms.length ? Math.max(0, rooms[0][0]) : null;
+              const roomMax = rooms.length ? Math.min(cutLenM, rooms[rooms.length - 1][1]) : null;
+              return (
+                <g key={b.id}>
+                  {/* Batas luar potongan — garis tipis */}
+                  <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
+                  <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
+                  {/* Dinding terluar ruang pada level basement — tebal 2x */}
+                  {isBasement && roomMin !== null && roomMax !== null && (
+                    <>
+                      <line x1={mx(roomMin)} y1={y} x2={mx(roomMin)} y2={y + h}
+                        stroke="#111" strokeWidth={FLOOR_THICK_HEAVY} strokeLinecap="square" />
+                      <line x1={mx(roomMax)} y1={y} x2={mx(roomMax)} y2={y + h}
+                        stroke="#111" strokeWidth={FLOOR_THICK_HEAVY} strokeLinecap="square" />
+                    </>
+                  )}
+                  {renderFloorLine(`${b.id}-top`, y, upper ? upper.id : null)}
+                  {renderFloorLine(`${b.id}-bot`, y + h, b.id, isBottom)}
+                  {Array.from({ length: b.count - 1 }).map((_, i) => {
+                    const yy = my(b.baseM + (i + 1) * b.floorH);
+                    return renderFloorLine(`${b.id}-mid-${i}`, yy, b.id);
+                  })}
+                </g>
+              );
+            });
+          })()}
 
           {/* Slab lantai (150 mm) + Balok (400×700 mm) di setiap as grid.
               Notasi: beton dengan pola bintik. */}
@@ -2211,137 +2339,6 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               </g>
             );
           })()}
-
-          {/* Room slices per level — digambar SETELAH slab+balok & notasi
-              material agar warna ruang menimpa, lalu garis lantai/dinding
-              tebal di-render di atasnya. */}
-          {boxes.map((b) =>
-            b.slices.map((sl, i) => {
-              const x = mx(sl.x0);
-              const w = (sl.x1 - sl.x0) * scalePxPerM;
-              const sliceHM = sl.heightOverride ?? (b.topM - b.baseM);
-              const sliceBaseM = b.baseM + (sl.baseDelta ?? 0);
-              const sliceTopM = sliceBaseM + sliceHM;
-              const y = my(sliceTopM);
-              const h = sliceHM * scalePxPerM;
-              const cx = x + w / 2, cy = y + h / 2;
-              const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
-              return (
-                <g key={`${b.id}-${i}`}>
-                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
-                  {w > 28 && h > 18 && (
-                    <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
-                      {sl.name}
-                    </text>
-                  )}
-                </g>
-              );
-            })
-          )}
-
-          {/* Garis lantai/dinding tebal — digambar paling akhir agar berada
-              di atas room slices maupun notasi slab/balok/material. */}
-          {(() => {
-            const roomIntervalsByBox = new Map<string, Array<[number, number]>>();
-            for (const b of boxes) {
-              const arr: Array<[number, number]> = b.slices.map((s) => [s.x0, s.x1]);
-              arr.sort((a, c) => a[0] - c[0]);
-              const merged: Array<[number, number]> = [];
-              for (const iv of arr) {
-                if (merged.length && iv[0] <= merged[merged.length - 1][1]) {
-                  merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], iv[1]);
-                } else merged.push([iv[0], iv[1]]);
-              }
-              roomIntervalsByBox.set(b.id, merged);
-            }
-            const FLOOR_THICK = 2.4;
-            const FLOOR_THICK_HEAVY = 4.8;
-            const bottomBoxId = boxes.length
-              ? boxes.reduce((a, b) => (a.baseM <= b.baseM ? a : b)).id
-              : null;
-            const renderFloorLine = (
-              key: string,
-              yy: number,
-              underBoxId: string | null,
-              heavy = false,
-            ) => {
-              const rooms = underBoxId ? (roomIntervalsByBox.get(underBoxId) ?? []) : [];
-              const voids = underBoxId ? (voidIntervalsByBox.get(underBoxId) ?? []) : [];
-              let segs: Array<{ a: number; b: number; thick: boolean }> = [];
-              let cursor = 0;
-              for (const [r0, r1] of rooms) {
-                const a = Math.max(0, r0);
-                const b2 = Math.min(cutLenM, r1);
-                if (b2 <= a) continue;
-                if (a > cursor) segs.push({ a: cursor, b: a, thick: false });
-                segs.push({ a, b: b2, thick: true });
-                cursor = b2;
-              }
-              if (cursor < cutLenM) segs.push({ a: cursor, b: cutLenM, thick: false });
-              for (const [v0, v1] of voids) {
-                const va = Math.max(0, v0), vb = Math.min(cutLenM, v1);
-                if (vb <= va) continue;
-                const next: typeof segs = [];
-                for (const s of segs) {
-                  if (vb <= s.a || va >= s.b) { next.push(s); continue; }
-                  if (va > s.a) next.push({ a: s.a, b: va, thick: s.thick });
-                  if (vb < s.b) next.push({ a: vb, b: s.b, thick: s.thick });
-                }
-                segs = next;
-              }
-              const thickW = heavy ? FLOOR_THICK_HEAVY : FLOOR_THICK;
-              return (
-                <g key={key}>
-                  {segs.map((s, i) =>
-                    s.thick ? (
-                      <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
-                        stroke="#111" strokeWidth={thickW} strokeLinecap="square" />
-                    ) : (
-                      <line key={i} x1={mx(s.a)} y1={yy} x2={mx(s.b)} y2={yy}
-                        stroke="#111" strokeWidth={0.6} strokeDasharray="3 3" />
-                    )
-                  )}
-                </g>
-              );
-            };
-            return boxes.map((b) => {
-              const x = mx(0);
-              const y = my(b.topM);
-              const w = cutLenM * scalePxPerM;
-              const h = (b.topM - b.baseM) * scalePxPerM;
-              const upper = boxes.find((o) => Math.abs(o.baseM - b.topM) < 1e-3);
-              const isBasement = b.topM <= groundMdpl + 1e-3;
-              const isBottom = b.id === bottomBoxId;
-              const rooms = roomIntervalsByBox.get(b.id) ?? [];
-              const roomMin = rooms.length ? Math.max(0, rooms[0][0]) : null;
-              const roomMax = rooms.length ? Math.min(cutLenM, rooms[rooms.length - 1][1]) : null;
-              return (
-                <g key={b.id}>
-                  {/* Batas luar potongan — garis tipis */}
-                  <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
-                  <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
-                  {/* Dinding terluar ruang pada level basement — tebal 2x */}
-                  {isBasement && roomMin !== null && roomMax !== null && (
-                    <>
-                      <line x1={mx(roomMin)} y1={y} x2={mx(roomMin)} y2={y + h}
-                        stroke="#111" strokeWidth={FLOOR_THICK_HEAVY} strokeLinecap="square" />
-                      <line x1={mx(roomMax)} y1={y} x2={mx(roomMax)} y2={y + h}
-                        stroke="#111" strokeWidth={FLOOR_THICK_HEAVY} strokeLinecap="square" />
-                    </>
-                  )}
-                  {renderFloorLine(`${b.id}-top`, y, upper ? upper.id : null)}
-                  {renderFloorLine(`${b.id}-bot`, y + h, b.id, isBottom)}
-                  {Array.from({ length: b.count - 1 }).map((_, i) => {
-                    const yy = my(b.baseM + (i + 1) * b.floorH);
-                    return renderFloorLine(`${b.id}-mid-${i}`, yy, b.id);
-                  })}
-                </g>
-              );
-            });
-          })()}
-
-
 
 
 
