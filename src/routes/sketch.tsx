@@ -4836,6 +4836,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (moveDrag) {
+      const raw = getWorldPosRaw(e);
+      const rawDx = raw.x - moveDrag.startWorld.x;
+      const rawDy = raw.y - moveDrag.startWorld.y;
+      const moved = moveDrag.moved || Math.hypot(rawDx, rawDy) * view.s > 4;
+      const { dx, dy } = snapDeltaMm(rawDx, rawDy);
+      if (moved && (dx !== moveDrag.appliedDx || dy !== moveDrag.appliedDy)) {
+        const patch = buildTranslatedPatch(moveDrag.snapshot, moveSel, dx, dy);
+        onChange(patch);
+        setMoveDrag({ ...moveDrag, moved: true, appliedDx: dx, appliedDy: dy });
+      } else if (moved !== moveDrag.moved) {
+        setMoveDrag({ ...moveDrag, moved: true });
+      }
+      return;
+    }
+    if (moveMarquee) {
+      const raw = getWorldPosRaw(e);
+      setMoveMarquee({ ...moveMarquee, cur: raw });
+      return;
+    }
+
+
+
     if (gridDrag) {
       const rawWorld = getWorldPosRaw(e);
       if (gridDrag.kind === "move") {
