@@ -8569,7 +8569,6 @@ function FloorToolPanel({
             Hapus
           </Button>
         </div>
-        </div>
       )}
 
       {mode === "edit" && editSub === "move" && (
