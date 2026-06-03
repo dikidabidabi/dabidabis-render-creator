@@ -8512,6 +8512,8 @@ function FloorToolPanel({
   onPasteFloors,
   onDeleteFloors,
   selectedFloorVertex,
+  selectedFloorVertexCount,
+  onClearFloorSelection,
   floorVxDxMm,
   floorVxDyMm,
   onFloorVxDxMm,
