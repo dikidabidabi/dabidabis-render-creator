@@ -425,7 +425,7 @@ function PresentasiBox({
     for (let i = 0; i < pages.length; i++) {
       onProgress?.(i + 1, pages.length);
       const canvas = await html2canvas(pages[i], { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
-      images.push(canvas.toDataURL("image/jpeg", 0.85));
+      images.push(canvas.toDataURL("image/jpeg", 1.0));
       // Free canvas memory immediately
       canvas.width = 0;
       canvas.height = 0;
@@ -487,7 +487,7 @@ function PresentasiBox({
           useCORS: true,
           logging: false,
         });
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        const dataUrl = canvas.toDataURL("image/jpeg", 1.0);
 
         if (i > 0) pdf.addPage("a3", "landscape");
         pdf.addImage(dataUrl, "JPEG", 0, 0, 420, 297, undefined, "FAST");
