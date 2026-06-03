@@ -8628,9 +8628,11 @@ function FloorToolPanel({
               Geser Numerik (mm)
             </Label>
             <span className="text-[10px] text-muted-foreground">
-              {selectedFloorVertex
+              {selectedFloorVertexCount === 0
+                ? "Pilih titik dulu"
+                : selectedFloorVertexCount === 1 && selectedFloorVertex
                 ? `Titik (${(selectedFloorVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedFloorVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
-                : "Pilih titik dulu"}
+                : `${selectedFloorVertexCount} titik dipilih`}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
@@ -8655,16 +8657,26 @@ function FloorToolPanel({
               />
             </div>
           </div>
-          <Button
-            size="sm"
-            className="w-full bg-gradient-ember shadow-ember"
-            disabled={!selectedFloorVertex}
-            onClick={onApplyFloorVertexMove}
-          >
-            Apply Geser
-          </Button>
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              className="flex-1 bg-gradient-ember shadow-ember"
+              disabled={selectedFloorVertexCount === 0}
+              onClick={onApplyFloorVertexMove}
+            >
+              Apply Geser
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedFloorVertexCount === 0}
+              onClick={onClearFloorSelection}
+            >
+              Reset Pilih
+            </Button>
+          </div>
           <p className="text-[10px] leading-snug text-muted-foreground">
-            Klik titik lantai dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+            Klik titik untuk pilih. Shift/Ctrl+klik untuk tambah/buang. Titik terpilih berwarna cyan. Positif ΔX = kanan, positif ΔY = bawah.
           </p>
         </div>
       )}
