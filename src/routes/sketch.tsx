@@ -4639,15 +4639,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           hits.sort((a, b) => a.d - b.d);
           const bestV = hits[0];
           if (floorEditSub === "move") {
+            const tgt = flList.find((f) => f.id === bestV.fid);
+            const coord = tgt
+              ? (bestV.ring === "outer"
+                  ? tgt.outer[bestV.idx]
+                  : (tgt.holes ?? [])[bestV.ring as number]?.[bestV.idx])
+              : null;
+            if (!coord) { return; }
+            const sel: FloorVertexSel = { fid: bestV.fid, ring: bestV.ring, idx: bestV.idx, coord: { x: coord.x, y: coord.y } };
+            const keyEq = (a: FloorVertexSel, b: FloorVertexSel) =>
+              a.fid === b.fid && a.ring === b.ring && a.idx === b.idx;
+            if (e.shiftKey || e.metaKey || e.ctrlKey) {
+              setSelectedFloorEditVertices((prev) => {
+                const exists = prev.some((p) => keyEq(p, sel));
+                return exists ? prev.filter((p) => !keyEq(p, sel)) : [...prev, sel];
+              });
+              return;
+            }
             pushHistory();
             setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
-            const tgt = flList.find((f) => f.id === bestV.fid);
-            if (tgt) {
-              const coord = bestV.ring === "outer"
-                ? tgt.outer[bestV.idx]
-                : (tgt.holes ?? [])[bestV.ring as number]?.[bestV.idx];
-              if (coord) setSelectedFloorEditVertex({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx, coord: { x: coord.x, y: coord.y } });
-            }
+            setSelectedFloorEditVertices((prev) => (prev.some((p) => keyEq(p, sel)) ? prev : [sel]));
           } else {
             // delete vertex
             const target = flList.find((f) => f.id === bestV.fid);
