@@ -1025,7 +1025,7 @@ function SketchViewer({
         >
           <Canvas
             key={projection}
-            shadows
+            shadows={!noLight}
             gl={{ preserveDrawingBuffer: true, antialias: true }}
             dpr={[1, 2]}
           >
@@ -1052,6 +1052,7 @@ function SketchViewer({
               highlightLevelId={highlight}
               sunHour={sunHour}
               colorMode={colorMode}
+              noLight={noLight}
             />
             <OrbitControls
               ref={orbitRef}
@@ -1059,6 +1060,7 @@ function SketchViewer({
               dampingFactor={0.08}
               makeDefault
             />
+            {projection === "persp" && autoTilt && <AutoTilt controlsRef={orbitRef} />}
           </Canvas>
 
           <div className="absolute right-2 top-2 flex flex-wrap justify-end gap-1">
