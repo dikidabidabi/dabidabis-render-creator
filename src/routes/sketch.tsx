@@ -4651,6 +4651,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             });
           }
           if (hits.length === 0) {
+            if (floorEditSub === "move") {
+              // Mulai marquee untuk pilih banyak titik lantai dengan stylus.
+              setFloorVertexMarquee({ start: raw, cur: raw, additive: e.shiftKey || e.metaKey || e.ctrlKey });
+              return;
+            }
             toast.error("Tidak ada titik lantai di dekat klik");
             return;
           }
