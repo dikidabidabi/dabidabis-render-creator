@@ -2163,6 +2163,147 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [],
   );
 
+  // ===== Copy / Paste lintas-level =====
+  // Salin entitas terpilih (moveSel) ke clipboard. Section cuts dilewati
+  // karena bersifat global (tidak terikat level).
+  const handleCopySelection = useCallback(() => {
+    if (moveSel.size === 0) {
+      toast.error("Tidak ada objek terpilih untuk disalin");
+      return;
+    }
+    const clip: MoveClipboard = {
+      lines: [],
+      layers: [],
+      circles: [],
+      doors: [],
+      floors: [],
+      sourceLevelId: activeLvlId ?? undefined,
+    };
+    lines.forEach((ln, i) => {
+      if (!moveSel.has(`line:${i}`)) return;
+      clip.lines.push({
+        ...ln,
+        a: { ...ln.a },
+        b: { ...ln.b },
+        c1: ln.c1 ? { ...ln.c1 } : undefined,
+        c2: ln.c2 ? { ...ln.c2 } : undefined,
+      });
+    });
+    layers.forEach((ly) => {
+      if (!moveSel.has(`layer:${ly.id}`)) return;
+      clip.layers.push({ ...ly, points: ly.points.map((p) => ({ ...p })) });
+    });
+    (sketch.circles ?? []).forEach((c) => {
+      if (!moveSel.has(`circle:${c.id}`)) return;
+      clip.circles.push({ ...c, c: { ...c.c } });
+    });
+    (sketch.doors ?? []).forEach((d) => {
+      if (!moveSel.has(`door:${d.id}`)) return;
+      clip.doors.push({ ...d, a: { ...d.a }, b: { ...d.b } });
+    });
+    (sketch.floors ?? []).forEach((f) => {
+      if (!moveSel.has(`floor:${f.id}`)) return;
+      clip.floors.push({
+        ...f,
+        outer: f.outer.map((p) => ({ ...p })),
+        holes: f.holes ? f.holes.map((h) => h.map((p) => ({ ...p }))) : undefined,
+      });
+    });
+    const total =
+      clip.lines.length + clip.layers.length + clip.circles.length +
+      clip.doors.length + clip.floors.length;
+    if (total === 0) {
+      toast.error("Pilihan tidak berisi objek yang dapat disalin");
+      return;
+    }
+    setMoveClipboard(clip);
+    toast.success(`Tersalin ${total} objek ke clipboard`);
+  }, [moveSel, lines, layers, sketch.circles, sketch.doors, sketch.floors, activeLvlId]);
+
+  // Tempel clipboard ke level aktif (atau ke `targetLevelId` jika diberikan).
+  // ID baru di-generate; posisi koordinat dipertahankan sehingga objek tetap
+  // di lokasi yang sama (berguna untuk salin tipikal antar-lantai).
+  const handlePasteClipboard = useCallback(
+    (targetLevelId?: string) => {
+      const clip = moveClipboard;
+      if (!clip) {
+        toast.error("Clipboard kosong — salin (copy) dulu");
+        return;
+      }
+      const lvlId = targetLevelId ?? activeLvlId ?? undefined;
+      const rand = () => Math.random().toString(36).slice(2, 7);
+      const newSel = new Set<MoveSelKey>();
+      pushHistory();
+      // Lines: append; index = posisi setelah append.
+      const pastedLines: Line[] = clip.lines.map((ln) => ({
+        ...ln,
+        a: { ...ln.a },
+        b: { ...ln.b },
+        c1: ln.c1 ? { ...ln.c1 } : undefined,
+        c2: ln.c2 ? { ...ln.c2 } : undefined,
+        levelId: lvlId,
+      }));
+      const nextLines = [...lines, ...pastedLines];
+      pastedLines.forEach((_, i) => newSel.add(`line:${lines.length + i}`));
+      // Layers
+      const pastedLayers: Layer[] = clip.layers.map((ly) => {
+        const nid = `L${Date.now()}_${rand()}`;
+        newSel.add(`layer:${nid}`);
+        return {
+          ...ly,
+          id: nid,
+          levelId: lvlId,
+          points: ly.points.map((p) => ({ ...p })),
+        };
+      });
+      const nextLayers = [...layers, ...pastedLayers];
+      // Circles
+      const pastedCircles = clip.circles.map((c) => {
+        const nid = `CIR${Date.now()}_${rand()}`;
+        newSel.add(`circle:${nid}`);
+        return { ...c, id: nid, levelId: lvlId, c: { ...c.c } };
+      });
+      const nextCircles = [...(sketch.circles ?? []), ...pastedCircles];
+      // Doors
+      const pastedDoors = clip.doors.map((d) => {
+        const nid = genDoorId();
+        newSel.add(`door:${nid}`);
+        return { ...d, id: nid, levelId: lvlId, a: { ...d.a }, b: { ...d.b } };
+      });
+      const nextDoors = [...(sketch.doors ?? []), ...pastedDoors];
+      // Floors
+      const pastedFloors = clip.floors.map((f) => {
+        const nid = genFloorId();
+        newSel.add(`floor:${nid}`);
+        return {
+          ...f,
+          id: nid,
+          levelId: lvlId ?? f.levelId,
+          createdAt: Date.now(),
+          outer: f.outer.map((p) => ({ ...p })),
+          holes: f.holes ? f.holes.map((h) => h.map((p) => ({ ...p }))) : undefined,
+        };
+      });
+      const nextFloors = [...(sketch.floors ?? []), ...pastedFloors];
+      onChange({
+        lines: nextLines,
+        layers: nextLayers,
+        circles: nextCircles,
+        doors: nextDoors,
+        floors: nextFloors,
+      });
+      setMoveSel(newSel);
+      const total =
+        pastedLines.length + pastedLayers.length + pastedCircles.length +
+        pastedDoors.length + pastedFloors.length;
+      const lvlName = levels.find((l) => l.id === lvlId)?.name ?? "level aktif";
+      toast.success(`Tempel ${total} objek ke ${lvlName}`);
+    },
+    [moveClipboard, activeLvlId, lines, layers, sketch.circles, sketch.doors, sketch.floors, onChange, pushHistory, levels],
+  );
+
+
+
   // Redraw
   useEffect(() => {
     const canvas = canvasRef.current;
