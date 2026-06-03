@@ -297,8 +297,10 @@ function PresentasiPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [narasiStore, setNarasiStore] = useState<NarasiStore>({});
+  const [perspektifStore, setPerspektifStore] = useState<PerspektifStore>({});
   const lastRawRef = useRef<string | null>(null);
   const lastNarasiRawRef = useRef<string | null>(null);
+  const lastPerspektifRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
@@ -322,6 +324,11 @@ function PresentasiPage() {
         lastNarasiRawRef.current = nraw;
         setNarasiStore(loadNarasiStore());
       }
+      const praw = localStorage.getItem(PERSPEKTIF_KEY);
+      if (praw !== lastPerspektifRawRef.current) {
+        lastPerspektifRawRef.current = praw;
+        setPerspektifStore(loadPerspektifStore());
+      }
     } catch { /* ignore */ }
   };
 
@@ -329,7 +336,7 @@ function PresentasiPage() {
     load();
     setLoaded(true);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY || e.key === NARASI_KEY) load();
+      if (e.key === STORAGE_KEY || e.key === NARASI_KEY || e.key === PERSPEKTIF_KEY) load();
     };
     const onVis = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("storage", onStorage);
@@ -369,6 +376,7 @@ function PresentasiPage() {
               key={sk.id}
               sketch={sk}
               narasi={narasiForSketch(narasiStore, sk.id)}
+              perspektif={perspektifForSketch(perspektifStore, sk.id)}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
             />
