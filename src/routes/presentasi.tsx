@@ -582,6 +582,23 @@ function PresentasiBox({
 
               </div>
             </div>
+            {exporting && exportProgress && exportProgress.total > 0 && (
+              <div className="mb-2 rounded-md border border-border bg-background/60 px-3 py-2">
+                <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                  <span>
+                    Merender Slide {exportProgress.current} dari {exportProgress.total}
+                    {exporting === "pdf" ? " (PDF)" : " (PPTX)"}…
+                  </span>
+                  <span>{Math.round((exportProgress.current / exportProgress.total) * 100)}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-200"
+                    style={{ width: `${(exportProgress.current / exportProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
             {/* Thumbs */}
             <div className="flex gap-2 overflow-x-auto pb-1">
               {slides.map((s, i) => (
