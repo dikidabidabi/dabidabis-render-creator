@@ -4506,8 +4506,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "move") {
+      const raw = getWorldPosRaw(e);
+      const tol = 10 / view.s;
+      const hit = moveHitTest(raw, tol);
+      const shift = e.shiftKey;
+      if (hit) {
+        // Tentukan selection awal drag.
+        let nextSel = new Set(moveSel);
+        const wasSelected = nextSel.has(hit);
+        if (shift) {
+          // Shift: tambahkan ke selection (jangan hapus pilihan lain).
+          if (!wasSelected) nextSel.add(hit);
+        } else if (!wasSelected) {
+          // Klik baru pada entitas → ganti selection.
+          nextSel = new Set([hit]);
+        }
+        setMoveSel(nextSel);
+        // Mulai potensi drag.
+        pushHistory();
+        setMoveDrag({
+          startWorld: raw,
+          snapshot: buildMoveSnapshot(),
+          moved: false,
+          hitKey: hit,
+          hitWasSelected: wasSelected,
+          prevSel: new Set(moveSel),
+          shiftKey: shift,
+          appliedDx: 0,
+          appliedDy: 0,
+        });
+      } else {
+        // Klik di area kosong → mulai rubber-band marquee.
+        setMoveMarquee({ start: raw, cur: raw, additive: shift });
+      }
+      return;
+    }
     if (tool === "line" || tool === "rect" || tool === "section") {
       setDrawing({ a: p, b: p });
+
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
