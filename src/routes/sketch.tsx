@@ -5235,7 +5235,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return { ...fl, holes };
       });
       onChange({ floors: nextFloors });
-      setSelectedFloorEditVertex({ fid: fd.fid, ring: fd.ring, idx: fd.idx, coord: newPos });
+      setSelectedFloorEditVertices((prev) => prev.map((p) => (p.fid === fd.fid && p.ring === fd.ring && p.idx === fd.idx ? { ...p, coord: newPos } : p)));
       return;
     }
     const p = tool === "floor" && floorMode === "rect"
