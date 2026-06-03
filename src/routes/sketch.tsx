@@ -1999,6 +1999,160 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [lockedLineKeys],
   );
 
+  // ===== Move Tool — helpers =====
+  // Hit-test entitas pada level aktif. `raw` di koordinat world. `tolPx` toleransi.
+  const moveHitTest = useCallback(
+    (raw: Point, tolPx: number): MoveSelKey | null => {
+      const lvl = activeLvlId;
+      const inLvl = (l?: string) => !lvl || !l || l === lvl;
+      // Prioritas: door > circle > line > section > layer-edge > floor > layer-fill
+      const doors = sketch.doors ?? [];
+      for (const d of doors) {
+        if (!inLvl(d.levelId)) continue;
+        const proj = projectOnSegment(raw, d.a, d.b);
+        if (dist(raw, proj) <= tolPx) return `door:${d.id}`;
+      }
+      const circles = sketch.circles ?? [];
+      for (const c of circles) {
+        if (!inLvl(c.levelId)) continue;
+        const dd = Math.hypot(raw.x - c.c.x, raw.y - c.c.y);
+        if (Math.abs(dd - c.r) <= tolPx) return `circle:${c.id}`;
+      }
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        if (!inLvl(ln.levelId)) continue;
+        if ((ln.kind ?? "straight") !== "straight") continue;
+        const proj = projectOnSegment(raw, ln.a, ln.b);
+        if (dist(raw, proj) <= tolPx) return `line:${i}`;
+      }
+      const cuts = sketch.sectionCuts ?? [];
+      for (let i = 0; i < cuts.length; i++) {
+        const c = cuts[i];
+        const proj = projectOnSegment(raw, c.p1, c.p2);
+        if (dist(raw, proj) <= tolPx) return `section:${i}`;
+      }
+      for (const ly of layers) {
+        if (!inLvl(ly.levelId)) continue;
+        if (ly.points.length < 2) continue;
+        for (let i = 0; i < ly.points.length; i++) {
+          const a = ly.points[i];
+          const b = ly.points[(i + 1) % ly.points.length];
+          const proj = projectOnSegment(raw, a, b);
+          if (dist(raw, proj) <= tolPx) return `layer:${ly.id}`;
+        }
+      }
+      const floors = sketch.floors ?? [];
+      for (const fl of floors) {
+        if (!inLvl(fl.levelId)) continue;
+        if (fl.outer.length < 2) continue;
+        for (let i = 0; i < fl.outer.length; i++) {
+          const a = fl.outer[i];
+          const b = fl.outer[(i + 1) % fl.outer.length];
+          const proj = projectOnSegment(raw, a, b);
+          if (dist(raw, proj) <= tolPx) return `floor:${fl.id}`;
+        }
+      }
+      // Hit-fill (di dalam polygon) sebagai fallback
+      for (const ly of layers) {
+        if (!inLvl(ly.levelId)) continue;
+        if (ly.points.length >= 3 && pointInPolygon(raw, ly.points)) return `layer:${ly.id}`;
+      }
+      for (const fl of floors) {
+        if (!inLvl(fl.levelId)) continue;
+        if (fl.outer.length >= 3 && pointInPolygon(raw, fl.outer)) return `floor:${fl.id}`;
+      }
+      for (const c of circles) {
+        if (!inLvl(c.levelId)) continue;
+        if (Math.hypot(raw.x - c.c.x, raw.y - c.c.y) <= c.r) return `circle:${c.id}`;
+      }
+      return null;
+    },
+    [activeLvlId, lines, layers, sketch.doors, sketch.circles, sketch.floors, sketch.sectionCuts],
+  );
+
+  // Daftar semua entitas di level aktif sebagai keys (utk "Pilih semua").
+  const moveAllKeysActiveLevel = useCallback((): MoveSelKey[] => {
+    const lvl = activeLvlId;
+    const inLvl = (l?: string) => !lvl || !l || l === lvl;
+    const out: MoveSelKey[] = [];
+    lines.forEach((ln, i) => { if (inLvl(ln.levelId)) out.push(`line:${i}`); });
+    layers.forEach((ly) => { if (inLvl(ly.levelId)) out.push(`layer:${ly.id}`); });
+    (sketch.circles ?? []).forEach((c) => { if (inLvl(c.levelId)) out.push(`circle:${c.id}`); });
+    (sketch.doors ?? []).forEach((d) => { if (inLvl(d.levelId)) out.push(`door:${d.id}`); });
+    (sketch.floors ?? []).forEach((f) => { if (inLvl(f.levelId)) out.push(`floor:${f.id}`); });
+    (sketch.sectionCuts ?? []).forEach((_, i) => out.push(`section:${i}`));
+    return out;
+  }, [activeLvlId, lines, layers, sketch.circles, sketch.doors, sketch.floors, sketch.sectionCuts]);
+
+  // Bangun snapshot untuk drag.
+  const buildMoveSnapshot = useCallback((): MoveSnapshot => ({
+    lines: lines.map((l) => ({ ...l, a: { ...l.a }, b: { ...l.b }, c1: l.c1 ? { ...l.c1 } : undefined, c2: l.c2 ? { ...l.c2 } : undefined })),
+    layers: layers.map((l) => ({ ...l, points: l.points.map((p) => ({ ...p })) })),
+    circles: (sketch.circles ?? []).map((c) => ({ ...c, c: { ...c.c } })),
+    doors: (sketch.doors ?? []).map((d) => ({ ...d, a: { ...d.a }, b: { ...d.b } })),
+    floors: (sketch.floors ?? []).map((f) => ({
+      ...f,
+      outer: f.outer.map((p) => ({ ...p })),
+      holes: f.holes ? f.holes.map((h) => h.map((p) => ({ ...p }))) : undefined,
+    })),
+    sectionCuts: (sketch.sectionCuts ?? []).map((c) => ({ ...c, p1: { ...c.p1 }, p2: { ...c.p2 } })),
+  }), [lines, layers, sketch.circles, sketch.doors, sketch.floors, sketch.sectionCuts]);
+
+  // Snap delta translasi ke 1 blok mm-grid (MINOR_PX) di frame mm-grid lokal.
+  const snapDeltaMm = useCallback((dx: number, dy: number): { dx: number; dy: number } => {
+    const cs0 = Math.cos(-mmGridRotRad), sn0 = Math.sin(-mmGridRotRad);
+    const lx = dx * cs0 - dy * sn0;
+    const ly = dx * sn0 + dy * cs0;
+    const sx = Math.round(lx / MINOR_PX) * MINOR_PX;
+    const sy = Math.round(ly / MINOR_PX) * MINOR_PX;
+    const cs1 = Math.cos(mmGridRotRad), sn1 = Math.sin(mmGridRotRad);
+    return { dx: sx * cs1 - sy * sn1, dy: sx * sn1 + sy * cs1 };
+  }, [mmGridRotRad]);
+
+  // Translasi snapshot menjadi patch sketsa berdasar selection.
+  const buildTranslatedPatch = useCallback(
+    (snap: MoveSnapshot, sel: Set<MoveSelKey>, dx: number, dy: number): Partial<Sketch> => {
+      const T = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
+      const nextLines = snap.lines.map((ln, i) => {
+        if (!sel.has(`line:${i}`)) return ln;
+        return { ...ln, a: T(ln.a), b: T(ln.b), c1: ln.c1 ? T(ln.c1) : undefined, c2: ln.c2 ? T(ln.c2) : undefined };
+      });
+      const nextLayers = snap.layers.map((ly) =>
+        sel.has(`layer:${ly.id}`) ? { ...ly, points: ly.points.map(T) } : ly,
+      );
+      const nextCircles = snap.circles.map((c) =>
+        sel.has(`circle:${c.id}`) ? { ...c, c: T(c.c) } : c,
+      );
+      const nextDoors = snap.doors.map((d) =>
+        sel.has(`door:${d.id}`) ? { ...d, a: T(d.a), b: T(d.b) } : d,
+      );
+      const nextFloors = snap.floors.map((f) => {
+        if (!sel.has(`floor:${f.id}`)) return f;
+        return {
+          ...f,
+          outer: f.outer.map(T),
+          holes: f.holes ? f.holes.map((h) => h.map(T)) : undefined,
+        };
+      });
+      const nextCuts = snap.sectionCuts.map((c, i) =>
+        sel.has(`section:${i}`) ? { ...c, p1: T(c.p1), p2: T(c.p2), updatedAt: Date.now() } : c,
+      );
+      const patch: Partial<Sketch> = {
+        lines: nextLines,
+        layers: nextLayers,
+        circles: nextCircles,
+        doors: nextDoors,
+        floors: nextFloors,
+      };
+      // Hanya overwrite sectionCuts bila memang ada perubahan.
+      if (snap.sectionCuts.some((_, i) => sel.has(`section:${i}`))) {
+        patch.sectionCuts = nextCuts;
+      }
+      return patch;
+    },
+    [],
+  );
+
   // Redraw
   useEffect(() => {
     const canvas = canvasRef.current;
