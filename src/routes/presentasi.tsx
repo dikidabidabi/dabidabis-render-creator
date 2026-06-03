@@ -1005,6 +1005,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     switch (s.kind) {
       case "site": return "Analisa Tapak";
       case "konsep": return "Konsep";
+      case "perspektif": return "Perspektif";
       case "level": return "Denah per Level";
       case "section": return "Potongan Prinsip";
       case "matahari":
