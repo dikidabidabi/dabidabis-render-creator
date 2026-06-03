@@ -929,6 +929,19 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "explode-axo", id: "explode-axo", title: "Diagram Aksonometri Eksplode · Tipe Layout", sketch: sk });
+  // Slide Perspektif — ditempatkan setelah Aksonometri Eksplode.
+  perspektifList.forEach((p, i) => {
+    out.push({
+      kind: "perspektif",
+      id: `perspektif-${p.id}`,
+      title: p.title.trim() || (perspektifList.length > 1 ? `Perspektif ${i + 1}` : "Perspektif"),
+      sketch: sk,
+      image: p.image,
+      caption: p.title.trim() || (perspektifList.length > 1 ? `Perspektif ${i + 1}` : "Perspektif"),
+      index: i,
+      total: perspektifList.length,
+    });
+  });
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   // Rincian per Level — paginated jika tidak muat satu slide.
   {
