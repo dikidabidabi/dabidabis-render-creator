@@ -5207,6 +5207,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return { ...fl, holes };
       });
       onChange({ floors: nextFloors });
+      setSelectedFloorEditVertex({ fid: fd.fid, ring: fd.ring, idx: fd.idx, coord: newPos });
       return;
     }
     const p = tool === "floor" && floorMode === "rect"
