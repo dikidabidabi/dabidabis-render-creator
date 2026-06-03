@@ -1349,7 +1349,7 @@ function ManualScaleBox({
 }
 function SlideContent({ slide }: { slide?: Slide }) {
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
