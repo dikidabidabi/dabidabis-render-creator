@@ -868,7 +868,7 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -892,6 +892,20 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
       narasi: n,
       index: i,
       total: narasiList.length,
+    });
+  });
+  // Slide Perspektif — satu slide per gambar perspektif yang diunggah.
+  const perspektifList = perspektif.filter((p): p is PerspektifItem & { image: string } => !!p.image);
+  perspektifList.forEach((p, i) => {
+    out.push({
+      kind: "perspektif",
+      id: `perspektif-${p.id}`,
+      title: p.title.trim() || (perspektifList.length > 1 ? `Perspektif ${i + 1}` : "Perspektif"),
+      sketch: sk,
+      image: p.image,
+      caption: p.title.trim() || (perspektifList.length > 1 ? `Perspektif ${i + 1}` : "Perspektif"),
+      index: i,
+      total: perspektifList.length,
     });
   });
   for (const lv of levels) {
