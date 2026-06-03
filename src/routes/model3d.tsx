@@ -717,33 +717,43 @@ function LibraryGrid({
   );
 }
 
-// Animates the orbit camera with a gentle vertical (polar) oscillation
-// around the current target while preserving azimuth and radius.
-function AutoTilt({ controlsRef }: { controlsRef: React.MutableRefObject<any> }) {
-  const phaseRef = useRef(0);
-  useFrame((_, dt) => {
+// Vertical perspective correction: forces the camera's forward vector to be
+// horizontal (so vertical edges in the world stay vertical in the image)
+// and compensates the framing via a lens-shift on the projection matrix.
+function VerticalPerspectiveCorrection({
+  controlsRef,
+}: {
+  controlsRef: React.MutableRefObject<any>;
+}) {
+  const { size } = useThree();
+  useEffect(() => {
+    return () => {
+      const ctrl = controlsRef.current;
+      const cam = ctrl?.object as THREE.PerspectiveCamera | undefined;
+      if (cam && (cam as any).isPerspectiveCamera) {
+        cam.clearViewOffset();
+      }
+    };
+  }, [controlsRef]);
+  useFrame(() => {
     const ctrl = controlsRef.current;
     if (!ctrl?.object) return;
-    phaseRef.current += dt * 0.35;
-    const cam = ctrl.object as THREE.Camera;
+    const cam = ctrl.object as THREE.PerspectiveCamera;
+    if (!(cam as any).isPerspectiveCamera) return;
     const target = ctrl.target as THREE.Vector3;
-    const offset = cam.position.clone().sub(target);
-    const radius = offset.length();
-    if (radius < 1e-3) return;
-    const azimuth = Math.atan2(offset.x, offset.z);
-    // Oscillate polar between ~18° and ~62° from vertical
-    const center = (Math.PI / 180) * 40;
-    const amp = (Math.PI / 180) * 22;
-    const polar = center + Math.sin(phaseRef.current) * amp;
-    const sinP = Math.sin(polar);
-    offset.set(
-      radius * sinP * Math.sin(azimuth),
-      radius * Math.cos(polar),
-      radius * sinP * Math.cos(azimuth),
-    );
-    cam.position.copy(target).add(offset);
-    cam.lookAt(target);
-    ctrl.update();
+    const dx = target.x - cam.position.x;
+    const dz = target.z - cam.position.z;
+    const dy = target.y - cam.position.y;
+    const horiz = Math.hypot(dx, dz);
+    if (horiz < 1e-3) return;
+    // Force the camera to look horizontally (same height as itself)
+    cam.up.set(0, 1, 0);
+    cam.lookAt(target.x, cam.position.y, target.z);
+    // Lens-shift the projection so the target stays framed vertically
+    const fovY = (cam.fov * Math.PI) / 180;
+    const ndcY = dy / horiz / Math.tan(fovY / 2);
+    const shiftPx = -ndcY * (size.height / 2);
+    cam.setViewOffset(size.width, size.height, 0, shiftPx, size.width, size.height);
   });
   return null;
 }
