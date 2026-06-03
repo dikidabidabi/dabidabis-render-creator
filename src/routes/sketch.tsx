@@ -5061,6 +5061,79 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     endPointer(e);
     if (wasGesture) return;
 
+    if (moveDrag) {
+      const md = moveDrag;
+      setMoveDrag(null);
+      if (!md.moved) {
+        // Klik tanpa drag → toggle / pertahankan selection.
+        if (md.hitKey) {
+          if (md.shiftKey && md.hitWasSelected) {
+            // Shift+klik pada item yg sudah terpilih → lepaskan.
+            const next = new Set(moveSel);
+            next.delete(md.hitKey);
+            setMoveSel(next);
+          } else if (!md.shiftKey && md.hitWasSelected && md.prevSel.size > 1) {
+            // Klik (tanpa shift) pada item yg sudah terpilih dalam multi-select
+            // tanpa menggeser → fokuskan hanya ke item itu.
+            setMoveSel(new Set([md.hitKey]));
+          }
+          // Selain itu: selection sudah benar (saat down).
+        }
+      }
+      // Drag yang sudah moved → state sudah ter-commit via onChange. Selesai.
+      return;
+    }
+    if (moveMarquee) {
+      const mm = moveMarquee;
+      setMoveMarquee(null);
+      const moved = Math.hypot(mm.cur.x - mm.start.x, mm.cur.y - mm.start.y) * view.s > 4;
+      if (!moved) {
+        // Klik kosong → kosongkan selection (kecuali shift).
+        if (!mm.additive) setMoveSel(new Set());
+        return;
+      }
+      const x0 = Math.min(mm.start.x, mm.cur.x);
+      const x1 = Math.max(mm.start.x, mm.cur.x);
+      const y0 = Math.min(mm.start.y, mm.cur.y);
+      const y1 = Math.max(mm.start.y, mm.cur.y);
+      const inRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const lvl = activeLvlId;
+      const inLvl = (l?: string) => !lvl || !l || l === lvl;
+      const next = new Set(mm.additive ? moveSel : []);
+      lines.forEach((ln, i) => {
+        if (!inLvl(ln.levelId)) return;
+        if ((ln.kind ?? "straight") !== "straight") return;
+        if (inRect(ln.a) && inRect(ln.b)) next.add(`line:${i}`);
+      });
+      layers.forEach((ly) => {
+        if (!inLvl(ly.levelId)) return;
+        if (ly.points.length < 2) return;
+        if (ly.points.every(inRect)) next.add(`layer:${ly.id}`);
+      });
+      (sketch.circles ?? []).forEach((c) => {
+        if (!inLvl(c.levelId)) return;
+        if (c.c.x - c.r >= x0 && c.c.x + c.r <= x1 && c.c.y - c.r >= y0 && c.c.y + c.r <= y1) {
+          next.add(`circle:${c.id}`);
+        }
+      });
+      (sketch.doors ?? []).forEach((d) => {
+        if (!inLvl(d.levelId)) return;
+        if (inRect(d.a) && inRect(d.b)) next.add(`door:${d.id}`);
+      });
+      (sketch.floors ?? []).forEach((f) => {
+        if (!inLvl(f.levelId)) return;
+        if (f.outer.length < 2) return;
+        if (f.outer.every(inRect)) next.add(`floor:${f.id}`);
+      });
+      (sketch.sectionCuts ?? []).forEach((c, i) => {
+        if (inRect(c.p1) && inRect(c.p2)) next.add(`section:${i}`);
+      });
+      setMoveSel(next);
+      return;
+    }
+
+
+
     if (gridDrag) {
       setGridDrag(null);
       return;
