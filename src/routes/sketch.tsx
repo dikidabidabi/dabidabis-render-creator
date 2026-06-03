@@ -7279,6 +7279,75 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <span className="text-[11px] text-muted-foreground">m</span>
               </div>
             )}
+            {editMode === "move" && (
+              <div className="space-y-1.5 rounded-md border border-border/60 bg-background/40 p-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Geser Numerik (mm)
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    {selectedEditVertex
+                      ? `Titik (${(selectedEditVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedEditVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
+                      : "Pilih titik dulu"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">ΔX</Label>
+                    <Input
+                      type="number"
+                      value={editVxDxMm}
+                      onChange={(e) => setEditVxDxMm(e.target.value)}
+                      className="h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">ΔY</Label>
+                    <Input
+                      type="number"
+                      value={editVxDyMm}
+                      onChange={(e) => setEditVxDyMm(e.target.value)}
+                      className="h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full bg-gradient-ember shadow-ember"
+                  disabled={!selectedEditVertex}
+                  onClick={() => {
+                    if (!selectedEditVertex) return;
+                    const dxMm = Number(editVxDxMm) || 0;
+                    const dyMm = Number(editVxDyMm) || 0;
+                    if (dxMm === 0 && dyMm === 0) {
+                      toast.error("Isi ΔX atau ΔY terlebih dahulu");
+                      return;
+                    }
+                    const newPos: Point = {
+                      x: selectedEditVertex.coord.x + (dxMm / 1000) * pxPerMeter,
+                      y: selectedEditVertex.coord.y + (dyMm / 1000) * pxPerMeter,
+                    };
+                    if (lockedVertexKeys.has(keyOf(selectedEditVertex.coord))) {
+                      toast.error("Titik terkunci");
+                      return;
+                    }
+                    pushHistory();
+                    moveVertexTarget(selectedEditVertex.target, selectedEditVertex.coord, newPos);
+                    setSelectedEditVertex({ target: selectedEditVertex.target, coord: newPos });
+                    setEditVxDxMm("0");
+                    setEditVxDyMm("0");
+                    toast.success(`Titik digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                  }}
+                >
+                  Apply Geser
+                </Button>
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Klik satu titik dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+                </p>
+              </div>
+            )}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {editMode === "move"
                 ? "Tarik titik (vertex) pada level aktif ke posisi baru. Titik terkunci tidak dapat digeser."
