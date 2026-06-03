@@ -6329,49 +6329,57 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {tool === "floor" && (
           <FloorToolPanel
             mode={floorMode}
-            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); setSelectedFloorEditVertex(null); }}
+            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); }}
             draft={floorDraft}
             level={levels.find((l) => l.id === activeLvlId) ?? null}
             onCommit={() => commitFloor()}
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
             editSub={floorEditSub}
-            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertex(null); }}
+            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); }}
             selectedFloorVertex={selectedFloorEditVertex}
+            selectedFloorVertexCount={selectedFloorEditVertices.length}
+            onClearFloorSelection={() => setSelectedFloorEditVertices([])}
             floorVxDxMm={floorVxDxMm}
             floorVxDyMm={floorVxDyMm}
             onFloorVxDxMm={setFloorVxDxMm}
             onFloorVxDyMm={setFloorVxDyMm}
             pxPerMeter={pxPerMeter}
             onApplyFloorVertexMove={() => {
-              if (!selectedFloorEditVertex) return;
+              if (selectedFloorEditVertices.length === 0) return;
               const dxMm = Number(floorVxDxMm) || 0;
               const dyMm = Number(floorVxDyMm) || 0;
               if (dxMm === 0 && dyMm === 0) { toast.error("Isi ΔX atau ΔY terlebih dahulu"); return; }
-              const sv = selectedFloorEditVertex;
-              const newPos: Point = {
-                x: sv.coord.x + (dxMm / 1000) * pxPerMeter,
-                y: sv.coord.y + (dyMm / 1000) * pxPerMeter,
-              };
+              const dxPx = (dxMm / 1000) * pxPerMeter;
+              const dyPx = (dyMm / 1000) * pxPerMeter;
               pushHistory();
+              const selByFid = new Map<string, FloorVertexSel[]>();
+              for (const s of selectedFloorEditVertices) {
+                const arr = selByFid.get(s.fid) ?? [];
+                arr.push(s); selByFid.set(s.fid, arr);
+              }
               const nextFloors = (sketch.floors ?? []).map((fl) => {
-                if (fl.id !== sv.fid) return fl;
-                if (sv.ring === "outer") {
-                  const next = fl.outer.slice();
-                  if (sv.idx < next.length) next[sv.idx] = newPos;
-                  return { ...fl, outer: next };
+                const sels = selByFid.get(fl.id);
+                if (!sels || sels.length === 0) return fl;
+                const outerSet = new Set(sels.filter((s) => s.ring === "outer").map((s) => s.idx));
+                const holeMap = new Map<number, Set<number>>();
+                for (const s of sels) {
+                  if (s.ring === "outer") continue;
+                  const ri = s.ring as number;
+                  const set = holeMap.get(ri) ?? new Set<number>();
+                  set.add(s.idx); holeMap.set(ri, set);
                 }
-                const holes = (fl.holes ?? []).map((h, hi) => {
-                  if (hi !== sv.ring) return h;
-                  const nh = h.slice();
-                  if (sv.idx < nh.length) nh[sv.idx] = newPos;
-                  return nh;
+                const nextOuter = fl.outer.map((p, i) => outerSet.has(i) ? { x: p.x + dxPx, y: p.y + dyPx } : p);
+                const nextHoles = (fl.holes ?? []).map((h, hi) => {
+                  const set = holeMap.get(hi);
+                  if (!set) return h;
+                  return h.map((p, i) => set.has(i) ? { x: p.x + dxPx, y: p.y + dyPx } : p);
                 });
-                return { ...fl, holes };
+                return { ...fl, outer: nextOuter, holes: nextHoles.length ? nextHoles : fl.holes };
               });
               onChange({ floors: nextFloors });
-              setSelectedFloorEditVertex({ ...sv, coord: newPos });
+              setSelectedFloorEditVertices((prev) => prev.map((p) => ({ ...p, coord: { x: p.coord.x + dxPx, y: p.coord.y + dyPx } })));
               setFloorVxDxMm("0"); setFloorVxDyMm("0");
-              toast.success(`Titik lantai digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+              toast.success(`${selectedFloorEditVertices.length} titik lantai digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
             }}
             floorsInLevel={(sketch.floors ?? []).filter((f) => f.levelId === activeLvlId)}
             clipboardCount={floorClipboard.length}
