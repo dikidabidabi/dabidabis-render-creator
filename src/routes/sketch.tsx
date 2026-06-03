@@ -6398,6 +6398,89 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             )}
           </div>
         )}
+        {tool === "move" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Move — {moveSel.size} terpilih
+            </Label>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Klik objek untuk pilih (Shift untuk tambah). Drag area kosong = marquee.
+              Drag objek terpilih = geser (snap 1 blok milimeter). Atau isi ΔX/ΔY mm di bawah.
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMoveSel(new Set(moveAllKeysActiveLevel()))}
+              >
+                Pilih Semua
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMoveSel(new Set())}
+                disabled={moveSel.size === 0}
+              >
+                Kosongkan
+              </Button>
+            </div>
+            <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Geser Numerik (mm)
+              </Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">ΔX</Label>
+                  <Input
+                    type="number"
+                    value={moveDxMm}
+                    onChange={(e) => setMoveDxMm(e.target.value)}
+                    className="h-8 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">ΔY</Label>
+                  <Input
+                    type="number"
+                    value={moveDyMm}
+                    onChange={(e) => setMoveDyMm(e.target.value)}
+                    className="h-8 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="w-full bg-gradient-ember shadow-ember"
+                disabled={moveSel.size === 0}
+                onClick={() => {
+                  const dxMm = Number(moveDxMm) || 0;
+                  const dyMm = Number(moveDyMm) || 0;
+                  if (dxMm === 0 && dyMm === 0) {
+                    toast.error("Isi ΔX atau ΔY terlebih dahulu");
+                    return;
+                  }
+                  // Konversi mm → px world. 1 m = pxPerMeter px.
+                  const dxPx = (dxMm / 1000) * pxPerMeter;
+                  const dyPx = (dyMm / 1000) * pxPerMeter;
+                  pushHistory();
+                  const snap = buildMoveSnapshot();
+                  const patch = buildTranslatedPatch(snap, moveSel, dxPx, dyPx);
+                  onChange(patch);
+                  toast.success(`Digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                  setMoveDxMm("0"); setMoveDyMm("0");
+                }}
+              >
+                Apply
+              </Button>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Positif ΔX = ke kanan, positif ΔY = ke bawah (mengikuti orientasi mm-grid layar).
+              </p>
+            </div>
+          </div>
+        )}
+
         {tool === "grid" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <div className="flex items-center justify-between">
