@@ -3276,7 +3276,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fill();
     }
 
+    // ----- Move Tool: highlight selection + marquee (world-space) -----
+    if (tool === "move") {
+      ctx.save();
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(232,93,58,0.95)";
+      ctx.fillStyle = "rgba(232,93,58,0.18)";
+      ctx.lineWidth = 2.2 / s;
+      ctx.setLineDash([]);
+      const strokeLine = (a: Point, b: Point) => {
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      };
+      moveSel.forEach((key) => {
+        const [kind, id] = key.split(":");
+        if (kind === "line") {
+          const ln = lines[Number(id)];
+          if (ln) strokeLine(ln.a, ln.b);
+        } else if (kind === "layer") {
+          const ly = layers.find((l) => l.id === id);
+          if (ly && ly.points.length >= 2) {
+            ctx.beginPath();
+            ly.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "circle") {
+          const c = (sketch.circles ?? []).find((x) => x.id === id);
+          if (c) {
+            ctx.beginPath(); ctx.arc(c.c.x, c.c.y, c.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "door") {
+          const d = (sketch.doors ?? []).find((x) => x.id === id);
+          if (d) strokeLine(d.a, d.b);
+        } else if (kind === "floor") {
+          const f = (sketch.floors ?? []).find((x) => x.id === id);
+          if (f && f.outer.length >= 2) {
+            ctx.beginPath();
+            f.outer.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "section") {
+          const c = (sketch.sectionCuts ?? [])[Number(id)];
+          if (c) strokeLine(c.p1, c.p2);
+        }
+      });
+      // Marquee
+      if (moveMarquee) {
+        const mm = moveMarquee;
+        const x0 = Math.min(mm.start.x, mm.cur.x);
+        const y0 = Math.min(mm.start.y, mm.cur.y);
+        const w = Math.abs(mm.cur.x - mm.start.x);
+        const h = Math.abs(mm.cur.y - mm.start.y);
+        ctx.setLineDash([6 / s, 4 / s]);
+        ctx.lineWidth = 1.2 / s;
+        ctx.strokeStyle = "rgba(232,93,58,0.9)";
+        ctx.fillStyle = "rgba(232,93,58,0.08)";
+        ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+
     ctx.restore();
+
 
     // ----- Screen-space overlays (labels, so they stay upright & legible) -----
     const worldToScreen = (p: Point): Point => {
