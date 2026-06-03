@@ -1820,6 +1820,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [moveMarquee, setMoveMarquee] = useState<MoveMarqueeState | null>(null);
   const [moveDxMm, setMoveDxMm] = useState<string>("0");
   const [moveDyMm, setMoveDyMm] = useState<string>("0");
+  // Clipboard untuk Copy/Paste lintas-level. Berisi deep-clone entitas terpilih.
+  type MoveClipboard = {
+    lines: Line[];
+    layers: Layer[];
+    circles: NonNullable<Sketch["circles"]>;
+    doors: Door[];
+    floors: NonNullable<Sketch["floors"]>;
+    sourceLevelId?: string;
+  };
+  const [moveClipboard, setMoveClipboard] = useState<MoveClipboard | null>(null);
   // Reset selection saat ganti tool atau ganti sketch / level aktif.
   useEffect(() => {
     if (tool !== "move") {
