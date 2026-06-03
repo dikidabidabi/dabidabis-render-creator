@@ -502,11 +502,13 @@ function Scene({
   highlightLevelId,
   sunHour,
   colorMode,
+  noLight,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
   sunHour: number;
   colorMode: "sketch" | "bw";
+  noLight: boolean;
 }) {
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
@@ -547,21 +549,27 @@ function Scene({
 
   return (
     <>
-      <ambientLight intensity={0.35} />
-      <directionalLight
-        position={[sunPos.x, sunPos.y, sunPos.z]}
-        intensity={sunPos.intensity}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-60}
-        shadow-camera-right={60}
-        shadow-camera-top={60}
-        shadow-camera-bottom={-60}
-        shadow-camera-near={0.5}
-        shadow-camera-far={300}
-      />
-      <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
+      {noLight ? (
+        <ambientLight intensity={1.0} />
+      ) : (
+        <>
+          <ambientLight intensity={0.35} />
+          <directionalLight
+            position={[sunPos.x, sunPos.y, sunPos.z]}
+            intensity={sunPos.intensity}
+            castShadow
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+            shadow-camera-left={-60}
+            shadow-camera-right={60}
+            shadow-camera-top={60}
+            shadow-camera-bottom={-60}
+            shadow-camera-near={0.5}
+            shadow-camera-far={300}
+          />
+          <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
+        </>
+      )}
 
       {lahanLayers.map((ly) => (
         <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
