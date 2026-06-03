@@ -1791,6 +1791,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [clipDraft, setClipDraft] = useState<{ pts: Point[] } | null>(null); // titik dalam METER relatif origin
   const [clipDrag, setClipDrag] = useState<ClipDrag | null>(null);
 
+  // ===== Move Tool — multi-select & translate seluruh entitas pada level aktif =====
+  // Selection key format: "line:<idx>" | "layer:<id>" | "circle:<id>" |
+  // "door:<id>" | "floor:<id>" | "section:<idx>"
+  type MoveSelKey = string;
+  type MoveSnapshot = {
+    lines: Line[];
+    layers: Layer[];
+    circles: Circle[];
+    doors: Door[];
+    floors: Floor[];
+    sectionCuts: SectionCut[];
+  };
+  type MoveDragState = {
+    startWorld: Point;
+    snapshot: MoveSnapshot;
+    moved: boolean;
+    hitKey: MoveSelKey | null;
+    hitWasSelected: boolean;
+    prevSel: Set<MoveSelKey>;
+    shiftKey: boolean;
+    appliedDx: number;
+    appliedDy: number;
+  };
+  type MoveMarqueeState = { start: Point; cur: Point; additive: boolean };
+  const [moveSel, setMoveSel] = useState<Set<MoveSelKey>>(new Set());
+  const [moveDrag, setMoveDrag] = useState<MoveDragState | null>(null);
+  const [moveMarquee, setMoveMarquee] = useState<MoveMarqueeState | null>(null);
+  const [moveDxMm, setMoveDxMm] = useState<string>("0");
+  const [moveDyMm, setMoveDyMm] = useState<string>("0");
+  // Reset selection saat ganti tool atau ganti sketch / level aktif.
+  useEffect(() => {
+    if (tool !== "move") {
+      setMoveDrag(null);
+      setMoveMarquee(null);
+    }
+  }, [tool]);
+  useEffect(() => {
+    setMoveSel(new Set());
+    setMoveDrag(null);
+    setMoveMarquee(null);
+  }, [id, activeLvlId]);
+
+
+
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
   const [past, setPast] = useState<Snap[]>([]);
