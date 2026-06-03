@@ -3754,6 +3754,127 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
   );
 }
 
+function PerspektifBody({ slide }: { slide: Extract<Slide, { kind: "perspektif" }> }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        background: "#000",
+      }}
+    >
+      {/* Full-bleed perspektif image */}
+      <img
+        src={slide.image}
+        alt={slide.caption}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+
+      {/* Top scrim for header legibility */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 220,
+          background: "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Header / Kop — white text */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          padding: `${PAD}px ${PAD}px 20px ${PAD}px`,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 24,
+          color: "#ffffff",
+          borderBottom: "1px solid rgba(255,255,255,0.35)",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>
+            Perspektif
+            {slide.total > 1 ? ` · ${slide.index + 1}/${slide.total}` : ""}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-display, Sora, sans-serif)",
+              fontSize: 58, lineHeight: 1.02, letterSpacing: "-0.03em", fontWeight: 600, marginTop: 6,
+              color: "#ffffff",
+              textShadow: "0 2px 14px rgba(0,0,0,0.45)",
+            }}
+          >
+            {slide.title}
+          </div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "#ffffff" }}>
+            {slide.sketch.title}
+          </div>
+          <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", marginTop: 4 }}>
+            Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom-left caption — black text on light scrim */}
+      <div
+        style={{
+          position: "absolute",
+          left: PAD,
+          bottom: PAD,
+          maxWidth: "55%",
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(4px)",
+          padding: "16px 22px",
+          borderRadius: 4,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>
+          Judul Perspektif
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-display, Sora, sans-serif)",
+            fontSize: 30,
+            lineHeight: 1.18,
+            color: "#000000",
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+            wordBreak: "break-word",
+          }}
+        >
+          {slide.caption}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+
 
 
 
