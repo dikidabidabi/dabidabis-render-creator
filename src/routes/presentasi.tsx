@@ -2650,9 +2650,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             return (
               <g key={`fl-${fl.id}`} pointerEvents="none">
                 <path d={d} fillRule="evenodd"
-                  fill="rgba(232,93,58,0.10)"
-                  stroke="rgba(232,93,58,0.75)"
-                  strokeWidth={sw * 0.0015} />
+                  fill="rgba(160,160,160,0.15)"
+                  stroke="rgba(90,90,90,0.85)"
+                  strokeWidth={sw * 0.0012} />
                 {(fl.holes ?? []).map((h, hi) => {
                   let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
                   for (const p of h) {
