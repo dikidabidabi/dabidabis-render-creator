@@ -5134,6 +5134,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setMoveMarquee({ ...moveMarquee, cur: raw });
       return;
     }
+    if (editVertexMarquee) {
+      const raw = getWorldPosRaw(e);
+      setEditVertexMarquee({ ...editVertexMarquee, cur: raw });
+      return;
+    }
+    if (floorVertexMarquee) {
+      const raw = getWorldPosRaw(e);
+      setFloorVertexMarquee({ ...floorVertexMarquee, cur: raw });
+      return;
+    }
 
 
 
