@@ -5210,7 +5210,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
       setEditDrag({ key: keyOf(newPos), coord: newPos, target: editDrag.target });
-      setSelectedEditVertex({ target: editDrag.target, coord: newPos });
+      setSelectedEditVertices((prev) => prev.map((p) => (keyOf(p.coord) === keyOf(editDrag.coord) ? { target: editDrag.target, coord: newPos } : p)));
       setEditHover(newPos);
       setEditHover(newPos);
       return;
