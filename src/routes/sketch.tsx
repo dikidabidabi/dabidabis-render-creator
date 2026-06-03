@@ -1755,6 +1755,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [editDrag, setEditDrag] = useState<{ key: string; coord: Point; target: EditTarget } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
   const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
+  // Selected vertex (Edit Titik — Geser) untuk move numerik
+  const [selectedEditVertex, setSelectedEditVertex] = useState<{ target: EditTarget; coord: Point } | null>(null);
+  const [editVxDxMm, setEditVxDxMm] = useState<string>("0");
+  const [editVxDyMm, setEditVxDyMm] = useState<string>("0");
+  // Selected vertex (Lantai Edit Titik — Geser) untuk move numerik
+  const [selectedFloorEditVertex, setSelectedFloorEditVertex] = useState<
+    { fid: string; ring: "outer" | number; idx: number; coord: Point } | null
+  >(null);
+  const [floorVxDxMm, setFloorVxDxMm] = useState<string>("0");
+  const [floorVxDyMm, setFloorVxDyMm] = useState<string>("0");
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
   const [filletSegments] = useState<number>(10);
   const [addPointPreview, setAddPointPreview] = useState<Point | null>(null);
@@ -4630,6 +4640,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           if (floorEditSub === "move") {
             pushHistory();
             setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
+            const tgt = flList.find((f) => f.id === bestV.fid);
+            if (tgt) {
+              const coord = bestV.ring === "outer"
+                ? tgt.outer[bestV.idx]
+                : (tgt.holes ?? [])[bestV.ring as number]?.[bestV.idx];
+              if (coord) setSelectedFloorEditVertex({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx, coord: { x: coord.x, y: coord.y } });
+            }
           } else {
             // delete vertex
             const target = flList.find((f) => f.id === bestV.fid);
@@ -4811,6 +4828,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
+      setSelectedEditVertex({ target: hit.target, coord: hit.coord });
     } else if (tool === "pick") {
       if (!activeLvlId) {
         toast.error("Pilih Level aktif terlebih dahulu");
@@ -5171,6 +5189,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
       setEditDrag({ key: keyOf(newPos), coord: newPos, target: editDrag.target });
+      setSelectedEditVertex({ target: editDrag.target, coord: newPos });
+      setEditHover(newPos);
       setEditHover(newPos);
       return;
     }
@@ -5194,6 +5214,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return { ...fl, holes };
       });
       onChange({ floors: nextFloors });
+      setSelectedFloorEditVertex({ fid: fd.fid, ring: fd.ring, idx: fd.idx, coord: newPos });
       return;
     }
     const p = tool === "floor" && floorMode === "rect"
@@ -6287,13 +6308,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {tool === "floor" && (
           <FloorToolPanel
             mode={floorMode}
-            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); }}
+            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); setSelectedFloorEditVertex(null); }}
             draft={floorDraft}
             level={levels.find((l) => l.id === activeLvlId) ?? null}
             onCommit={() => commitFloor()}
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
             editSub={floorEditSub}
-            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); }}
+            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertex(null); }}
+            selectedFloorVertex={selectedFloorEditVertex}
+            floorVxDxMm={floorVxDxMm}
+            floorVxDyMm={floorVxDyMm}
+            onFloorVxDxMm={setFloorVxDxMm}
+            onFloorVxDyMm={setFloorVxDyMm}
+            pxPerMeter={pxPerMeter}
+            onApplyFloorVertexMove={() => {
+              if (!selectedFloorEditVertex) return;
+              const dxMm = Number(floorVxDxMm) || 0;
+              const dyMm = Number(floorVxDyMm) || 0;
+              if (dxMm === 0 && dyMm === 0) { toast.error("Isi ΔX atau ΔY terlebih dahulu"); return; }
+              const sv = selectedFloorEditVertex;
+              const newPos: Point = {
+                x: sv.coord.x + (dxMm / 1000) * pxPerMeter,
+                y: sv.coord.y + (dyMm / 1000) * pxPerMeter,
+              };
+              pushHistory();
+              const nextFloors = (sketch.floors ?? []).map((fl) => {
+                if (fl.id !== sv.fid) return fl;
+                if (sv.ring === "outer") {
+                  const next = fl.outer.slice();
+                  if (sv.idx < next.length) next[sv.idx] = newPos;
+                  return { ...fl, outer: next };
+                }
+                const holes = (fl.holes ?? []).map((h, hi) => {
+                  if (hi !== sv.ring) return h;
+                  const nh = h.slice();
+                  if (sv.idx < nh.length) nh[sv.idx] = newPos;
+                  return nh;
+                });
+                return { ...fl, holes };
+              });
+              onChange({ floors: nextFloors });
+              setSelectedFloorEditVertex({ ...sv, coord: newPos });
+              setFloorVxDxMm("0"); setFloorVxDyMm("0");
+              toast.success(`Titik lantai digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+            }}
             floorsInLevel={(sketch.floors ?? []).filter((f) => f.levelId === activeLvlId)}
             clipboardCount={floorClipboard.length}
             onCopyFloors={() => {
@@ -7256,6 +7314,75 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   className="h-7 w-20 text-xs"
                 />
                 <span className="text-[11px] text-muted-foreground">m</span>
+              </div>
+            )}
+            {editMode === "move" && (
+              <div className="space-y-1.5 rounded-md border border-border/60 bg-background/40 p-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Geser Numerik (mm)
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    {selectedEditVertex
+                      ? `Titik (${(selectedEditVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedEditVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
+                      : "Pilih titik dulu"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">ΔX</Label>
+                    <Input
+                      type="number"
+                      value={editVxDxMm}
+                      onChange={(e) => setEditVxDxMm(e.target.value)}
+                      className="h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">ΔY</Label>
+                    <Input
+                      type="number"
+                      value={editVxDyMm}
+                      onChange={(e) => setEditVxDyMm(e.target.value)}
+                      className="h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full bg-gradient-ember shadow-ember"
+                  disabled={!selectedEditVertex}
+                  onClick={() => {
+                    if (!selectedEditVertex) return;
+                    const dxMm = Number(editVxDxMm) || 0;
+                    const dyMm = Number(editVxDyMm) || 0;
+                    if (dxMm === 0 && dyMm === 0) {
+                      toast.error("Isi ΔX atau ΔY terlebih dahulu");
+                      return;
+                    }
+                    const newPos: Point = {
+                      x: selectedEditVertex.coord.x + (dxMm / 1000) * pxPerMeter,
+                      y: selectedEditVertex.coord.y + (dyMm / 1000) * pxPerMeter,
+                    };
+                    if (lockedVertexKeys.has(keyOf(selectedEditVertex.coord))) {
+                      toast.error("Titik terkunci");
+                      return;
+                    }
+                    pushHistory();
+                    moveVertexTarget(selectedEditVertex.target, selectedEditVertex.coord, newPos);
+                    setSelectedEditVertex({ target: selectedEditVertex.target, coord: newPos });
+                    setEditVxDxMm("0");
+                    setEditVxDyMm("0");
+                    toast.success(`Titik digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                  }}
+                >
+                  Apply Geser
+                </Button>
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Klik satu titik dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+                </p>
               </div>
             )}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -8338,6 +8465,13 @@ function FloorToolPanel({
   onCopyFloors,
   onPasteFloors,
   onDeleteFloors,
+  selectedFloorVertex,
+  floorVxDxMm,
+  floorVxDyMm,
+  onFloorVxDxMm,
+  onFloorVxDyMm,
+  pxPerMeter,
+  onApplyFloorVertexMove,
 }: {
   mode: FloorMode;
   onMode: (m: FloorMode) => void;
@@ -8352,6 +8486,13 @@ function FloorToolPanel({
   onCopyFloors: () => void;
   onPasteFloors: () => void;
   onDeleteFloors: () => void;
+  selectedFloorVertex: { fid: string; ring: "outer" | number; idx: number; coord: Point } | null;
+  floorVxDxMm: string;
+  floorVxDyMm: string;
+  onFloorVxDxMm: (v: string) => void;
+  onFloorVxDyMm: (v: string) => void;
+  pxPerMeter: number;
+  onApplyFloorVertexMove: () => void;
 }) {
   const hasOuter = !!(draft && draft.outer && draft.outer.length >= 3);
   const holeCount = draft?.holes?.length ?? 0;
@@ -8427,6 +8568,54 @@ function FloorToolPanel({
           >
             Hapus
           </Button>
+        </div>
+      )}
+
+      {mode === "edit" && editSub === "move" && (
+        <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Geser Numerik (mm)
+            </Label>
+            <span className="text-[10px] text-muted-foreground">
+              {selectedFloorVertex
+                ? `Titik (${(selectedFloorVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedFloorVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
+                : "Pilih titik dulu"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">ΔX</Label>
+              <Input
+                type="number"
+                value={floorVxDxMm}
+                onChange={(e) => onFloorVxDxMm(e.target.value)}
+                className="h-8 text-xs"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">ΔY</Label>
+              <Input
+                type="number"
+                value={floorVxDyMm}
+                onChange={(e) => onFloorVxDyMm(e.target.value)}
+                className="h-8 text-xs"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="w-full bg-gradient-ember shadow-ember"
+            disabled={!selectedFloorVertex}
+            onClick={onApplyFloorVertexMove}
+          >
+            Apply Geser
+          </Button>
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            Klik titik lantai dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+          </p>
         </div>
       )}
 
