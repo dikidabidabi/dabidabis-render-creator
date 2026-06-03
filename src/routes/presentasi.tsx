@@ -390,6 +390,29 @@ function PresentasiBox({
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = window.setInterval(() => setIdx((i) => (i + 1) % slides.length), 4500);
+    return () => window.clearInterval(id);
+  }, [playing, slides.length]);
+
+  const prev = useCallback(() => setIdx((i) => (i - 1 + slides.length) % slides.length), [slides.length]);
+  const next = useCallback(() => setIdx((i) => (i + 1) % slides.length), [slides.length]);
+
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); next(); }
+      else if (e.key === "ArrowLeft") prev();
+      else if (e.key === "Escape") { setFull(false); setPlaying(false); }
+      else if (e.key.toLowerCase() === "p") setPlaying((p) => !p);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [full, next, prev]);
+
   const renderSlideImages = useCallback(async (
     onProgress?: (current: number, total: number) => void,
   ): Promise<string[]> => {
