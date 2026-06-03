@@ -659,23 +659,44 @@ function PresentasiBox({
         />
       )}
 
-      {/* Offscreen export container (full A3 canvas, captured by html2canvas for both PDF and PPTX) */}
-      {exporting && (
+      {/* Offscreen export container — only ONE slide mounted at a time to
+          keep peak memory low. Captured sequentially by doExportPdf/Pptx. */}
+      {exporting && exportSlideIdx !== null && slides[exportSlideIdx] && (
         <div
           ref={exportRootRef}
           className="no-print"
           style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
           aria-hidden
         >
-          {slides.map((s) => (
-            <div
-              key={s.id}
-              data-slide-page
-              style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}
-            >
-              <SlideContent slide={s} />
+          <div
+            key={slides[exportSlideIdx].id}
+            data-slide-page
+            style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}
+          >
+            <SlideContent slide={slides[exportSlideIdx]} />
+          </div>
+        </div>
+      )}
+
+      {/* Export progress overlay */}
+      {exporting && exportProgress && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-[min(420px,90vw)] rounded-xl border border-border bg-background p-5 shadow-xl">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Mengekspor {exporting === "pdf" ? "PDF" : "PPTX"}
             </div>
-          ))}
+            <div className="mb-3 text-xs text-muted-foreground">{exportProgress.label}</div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${Math.round((exportProgress.current / Math.max(1, exportProgress.total)) * 100)}%` }}
+              />
+            </div>
+            <div className="mt-2 text-right text-[11px] tabular-nums text-muted-foreground">
+              {exportProgress.current} / {exportProgress.total}
+            </div>
+          </div>
         </div>
       )}
     </div>
