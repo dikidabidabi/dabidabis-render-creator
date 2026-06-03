@@ -33,12 +33,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
-  buildMeshes,
-  meshesToObj,
-  meshesTo3ds,
+  buildExportGroup,
+  disposeGroup,
+  exportGroupAsObj,
+  exportGroupAsGlb,
   triggerDownload,
   type MeshInput,
 } from "@/lib/model3d-export";
+
 import {
   type StructuralGrid,
   axisPositions,
@@ -939,21 +941,30 @@ function SketchViewer({
 
   const safeTitle = (sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 40) || "model";
 
-  const handleExport = useCallback((fmt: "obj" | "3ds") => {
-    const meshes = buildMeshes(buildExportInputs());
-    if (!meshes.length) {
+  const handleExport = useCallback(async (fmt: "obj" | "glb") => {
+    const inputs = buildExportInputs();
+    const group = buildExportGroup(inputs, safeTitle);
+    if (group.children.length === 0) {
+      disposeGroup(group);
       alert("Tidak ada geometri yang bisa diekspor.");
       return;
     }
-    if (fmt === "obj") {
-      const { obj, mtl, mtlName } = meshesToObj(meshes, safeTitle);
-      triggerDownload(obj, `${safeTitle}.obj`, "text/plain");
-      triggerDownload(mtl, mtlName, "text/plain");
-    } else {
-      const data = meshesTo3ds(meshes);
-      triggerDownload(data, `${safeTitle}.3ds`, "application/octet-stream");
+    try {
+      if (fmt === "obj") {
+        const obj = exportGroupAsObj(group);
+        triggerDownload(obj, `${safeTitle}.obj`, "text/plain");
+      } else {
+        const buf = await exportGroupAsGlb(group);
+        triggerDownload(buf, `${safeTitle}.glb`, "model/gltf-binary");
+      }
+    } catch (e) {
+      console.error("Export failed", e);
+      alert("Ekspor gagal. Silakan coba lagi.");
+    } finally {
+      disposeGroup(group);
     }
   }, [buildExportInputs, safeTitle]);
+
 
   const viewerBody = (
     <div
@@ -1231,11 +1242,12 @@ function SketchViewer({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[180px]">
                 <DropdownMenuItem onClick={() => handleExport("obj")}>
-                  Wavefront (.obj + .mtl)
+                  Wavefront (.obj)
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport("3ds")}>
-                  Autodesk (.3ds)
+                <DropdownMenuItem onClick={() => handleExport("glb")}>
+                  glTF Binary (.glb)
                 </DropdownMenuItem>
+
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
