@@ -3023,13 +3023,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         l.points.forEach(pushVert);
       });
       const deleteMode = editMode === "delete";
+      const selKeys = new Set(selectedEditVertices.map((sv) => keyOf(sv.coord)));
       verts.forEach((v) => {
+        const k = keyOf(v.p);
+        const isSel = selKeys.has(k);
         ctx.beginPath();
-        ctx.arc(v.p.x, v.p.y, 6 / s, 0, Math.PI * 2);
-        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : (deleteMode ? "rgba(220,40,40,0.95)" : "#fff");
+        ctx.arc(v.p.x, v.p.y, (isSel ? 7.5 : 6) / s, 0, Math.PI * 2);
+        ctx.fillStyle = isSel
+          ? "rgba(0,212,255,0.95)"
+          : v.locked
+          ? "rgba(120,120,120,0.85)"
+          : (deleteMode ? "rgba(220,40,40,0.95)" : "#fff");
         ctx.fill();
-        ctx.lineWidth = 2 / s;
-        ctx.strokeStyle = v.locked ? "#666" : (deleteMode ? "#7a1010" : "rgba(232,93,58,1)");
+        ctx.lineWidth = (isSel ? 2.5 : 2) / s;
+        ctx.strokeStyle = isSel
+          ? "rgba(0,150,200,1)"
+          : v.locked
+          ? "#666"
+          : (deleteMode ? "#7a1010" : "rgba(232,93,58,1)");
         ctx.stroke();
       });
       if (editHover) {
