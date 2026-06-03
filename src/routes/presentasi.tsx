@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import SunCalc from "suncalc";
 import { drawOsmTiles } from "@/lib/geo";
 import {
