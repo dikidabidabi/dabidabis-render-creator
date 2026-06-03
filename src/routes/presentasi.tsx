@@ -1979,7 +1979,9 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               }
             }
 
-            const fill = `url(#concrete-dot-${slide.id})`;
+            const fill = "#e8e8e8";
+            const strokeCol = "#9a9a9a";
+            const swSlab = 0.3;
             return floors.flatMap((fl) => {
               const copies = floorsExp.filter((e) => e.sourceId === fl.levelId);
               if (!copies.length) return [];
@@ -1997,7 +1999,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                       <rect key={`s${i}`}
                         x={mx(a)} y={yTop}
                         width={(b - a) * scalePxPerM} height={ySlabBot - yTop}
-                        fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                        fill={fill} stroke={strokeCol} strokeWidth={swSlab} strokeLinejoin="miter" />
                     ))}
                     {uniqCenters.map((bc, i) => {
                       const inside = intervals.some(([a, b]) => bc >= a - 1e-3 && bc <= b + 1e-3);
@@ -2009,7 +2011,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         <rect key={`b${i}`}
                           x={x0} y={yTopBeam}
                           width={w} height={yBeamBot - yTopBeam}
-                          fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                          fill={fill} stroke={strokeCol} strokeWidth={swSlab} strokeLinejoin="miter" />
                       );
                     })}
                     {/* Balok tepi pada setiap ujung lantai / tepi void — 200mm × 700mm */}
@@ -2020,14 +2022,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         <rect key={`eb${i}-${k}`}
                           x={mx(edge - EDGE_BEAM_W_M / 2)} y={yTopBeam}
                           width={w} height={yBeamBot - yTopBeam}
-                          fill={fill} stroke="#0a0a0a" strokeWidth={0.8} strokeLinejoin="miter" />
+                          fill={fill} stroke={strokeCol} strokeWidth={swSlab} strokeLinejoin="miter" />
                       ));
                     })}
                     {intervals.map(([a, b], i) => (
                       <line key={`bl${i}`}
                         x1={mx(a)} y1={yBeamBot}
                         x2={mx(b)} y2={yBeamBot}
-                        stroke="#0a0a0a" strokeWidth={0.25} />
+                        stroke={strokeCol} strokeWidth={0.25} />
                     ))}
                   </g>
                 );
