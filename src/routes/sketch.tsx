@@ -1710,7 +1710,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move">("line");
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -1790,6 +1790,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
   const [clipDraft, setClipDraft] = useState<{ pts: Point[] } | null>(null); // titik dalam METER relatif origin
   const [clipDrag, setClipDrag] = useState<ClipDrag | null>(null);
+
+  // ===== Move Tool — multi-select & translate seluruh entitas pada level aktif =====
+  // Selection key format: "line:<idx>" | "layer:<id>" | "circle:<id>" |
+  // "door:<id>" | "floor:<id>" | "section:<idx>"
+  type MoveSelKey = string;
+  type MoveSnapshot = {
+    lines: Line[];
+    layers: Layer[];
+    circles: Circle[];
+    doors: Door[];
+    floors: Floor[];
+    sectionCuts: SectionCut[];
+  };
+  type MoveDragState = {
+    startWorld: Point;
+    snapshot: MoveSnapshot;
+    moved: boolean;
+    hitKey: MoveSelKey | null;
+    hitWasSelected: boolean;
+    prevSel: Set<MoveSelKey>;
+    shiftKey: boolean;
+    appliedDx: number;
+    appliedDy: number;
+  };
+  type MoveMarqueeState = { start: Point; cur: Point; additive: boolean };
+  const [moveSel, setMoveSel] = useState<Set<MoveSelKey>>(new Set());
+  const [moveDrag, setMoveDrag] = useState<MoveDragState | null>(null);
+  const [moveMarquee, setMoveMarquee] = useState<MoveMarqueeState | null>(null);
+  const [moveDxMm, setMoveDxMm] = useState<string>("0");
+  const [moveDyMm, setMoveDyMm] = useState<string>("0");
+  // Reset selection saat ganti tool atau ganti sketch / level aktif.
+  useEffect(() => {
+    if (tool !== "move") {
+      setMoveDrag(null);
+      setMoveMarquee(null);
+    }
+  }, [tool]);
+  useEffect(() => {
+    setMoveSel(new Set());
+    setMoveDrag(null);
+    setMoveMarquee(null);
+  }, [id, activeLvlId]);
+
+
 
   // Undo/redo history snapshots: {lines, layers}
   type Snap = { lines: Line[]; layers: Layer[] };
@@ -1953,6 +1997,160 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return lockedLineKeys.has(k);
     },
     [lockedLineKeys],
+  );
+
+  // ===== Move Tool — helpers =====
+  // Hit-test entitas pada level aktif. `raw` di koordinat world. `tolPx` toleransi.
+  const moveHitTest = useCallback(
+    (raw: Point, tolPx: number): MoveSelKey | null => {
+      const lvl = activeLvlId;
+      const inLvl = (l?: string) => !lvl || !l || l === lvl;
+      // Prioritas: door > circle > line > section > layer-edge > floor > layer-fill
+      const doors = sketch.doors ?? [];
+      for (const d of doors) {
+        if (!inLvl(d.levelId)) continue;
+        const proj = projectOnSegment(raw, d.a, d.b);
+        if (dist(raw, proj) <= tolPx) return `door:${d.id}`;
+      }
+      const circles = sketch.circles ?? [];
+      for (const c of circles) {
+        if (!inLvl(c.levelId)) continue;
+        const dd = Math.hypot(raw.x - c.c.x, raw.y - c.c.y);
+        if (Math.abs(dd - c.r) <= tolPx) return `circle:${c.id}`;
+      }
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        if (!inLvl(ln.levelId)) continue;
+        if ((ln.kind ?? "straight") !== "straight") continue;
+        const proj = projectOnSegment(raw, ln.a, ln.b);
+        if (dist(raw, proj) <= tolPx) return `line:${i}`;
+      }
+      const cuts = sketch.sectionCuts ?? [];
+      for (let i = 0; i < cuts.length; i++) {
+        const c = cuts[i];
+        const proj = projectOnSegment(raw, c.p1, c.p2);
+        if (dist(raw, proj) <= tolPx) return `section:${i}`;
+      }
+      for (const ly of layers) {
+        if (!inLvl(ly.levelId)) continue;
+        if (ly.points.length < 2) continue;
+        for (let i = 0; i < ly.points.length; i++) {
+          const a = ly.points[i];
+          const b = ly.points[(i + 1) % ly.points.length];
+          const proj = projectOnSegment(raw, a, b);
+          if (dist(raw, proj) <= tolPx) return `layer:${ly.id}`;
+        }
+      }
+      const floors = sketch.floors ?? [];
+      for (const fl of floors) {
+        if (!inLvl(fl.levelId)) continue;
+        if (fl.outer.length < 2) continue;
+        for (let i = 0; i < fl.outer.length; i++) {
+          const a = fl.outer[i];
+          const b = fl.outer[(i + 1) % fl.outer.length];
+          const proj = projectOnSegment(raw, a, b);
+          if (dist(raw, proj) <= tolPx) return `floor:${fl.id}`;
+        }
+      }
+      // Hit-fill (di dalam polygon) sebagai fallback
+      for (const ly of layers) {
+        if (!inLvl(ly.levelId)) continue;
+        if (ly.points.length >= 3 && pointInPolygon(raw, ly.points)) return `layer:${ly.id}`;
+      }
+      for (const fl of floors) {
+        if (!inLvl(fl.levelId)) continue;
+        if (fl.outer.length >= 3 && pointInPolygon(raw, fl.outer)) return `floor:${fl.id}`;
+      }
+      for (const c of circles) {
+        if (!inLvl(c.levelId)) continue;
+        if (Math.hypot(raw.x - c.c.x, raw.y - c.c.y) <= c.r) return `circle:${c.id}`;
+      }
+      return null;
+    },
+    [activeLvlId, lines, layers, sketch.doors, sketch.circles, sketch.floors, sketch.sectionCuts],
+  );
+
+  // Daftar semua entitas di level aktif sebagai keys (utk "Pilih semua").
+  const moveAllKeysActiveLevel = useCallback((): MoveSelKey[] => {
+    const lvl = activeLvlId;
+    const inLvl = (l?: string) => !lvl || !l || l === lvl;
+    const out: MoveSelKey[] = [];
+    lines.forEach((ln, i) => { if (inLvl(ln.levelId)) out.push(`line:${i}`); });
+    layers.forEach((ly) => { if (inLvl(ly.levelId)) out.push(`layer:${ly.id}`); });
+    (sketch.circles ?? []).forEach((c) => { if (inLvl(c.levelId)) out.push(`circle:${c.id}`); });
+    (sketch.doors ?? []).forEach((d) => { if (inLvl(d.levelId)) out.push(`door:${d.id}`); });
+    (sketch.floors ?? []).forEach((f) => { if (inLvl(f.levelId)) out.push(`floor:${f.id}`); });
+    (sketch.sectionCuts ?? []).forEach((_, i) => out.push(`section:${i}`));
+    return out;
+  }, [activeLvlId, lines, layers, sketch.circles, sketch.doors, sketch.floors, sketch.sectionCuts]);
+
+  // Bangun snapshot untuk drag.
+  const buildMoveSnapshot = useCallback((): MoveSnapshot => ({
+    lines: lines.map((l) => ({ ...l, a: { ...l.a }, b: { ...l.b }, c1: l.c1 ? { ...l.c1 } : undefined, c2: l.c2 ? { ...l.c2 } : undefined })),
+    layers: layers.map((l) => ({ ...l, points: l.points.map((p) => ({ ...p })) })),
+    circles: (sketch.circles ?? []).map((c) => ({ ...c, c: { ...c.c } })),
+    doors: (sketch.doors ?? []).map((d) => ({ ...d, a: { ...d.a }, b: { ...d.b } })),
+    floors: (sketch.floors ?? []).map((f) => ({
+      ...f,
+      outer: f.outer.map((p) => ({ ...p })),
+      holes: f.holes ? f.holes.map((h) => h.map((p) => ({ ...p }))) : undefined,
+    })),
+    sectionCuts: (sketch.sectionCuts ?? []).map((c) => ({ ...c, p1: { ...c.p1 }, p2: { ...c.p2 } })),
+  }), [lines, layers, sketch.circles, sketch.doors, sketch.floors, sketch.sectionCuts]);
+
+  // Snap delta translasi ke 1 blok mm-grid (MINOR_PX) di frame mm-grid lokal.
+  const snapDeltaMm = useCallback((dx: number, dy: number): { dx: number; dy: number } => {
+    const cs0 = Math.cos(-mmGridRotRad), sn0 = Math.sin(-mmGridRotRad);
+    const lx = dx * cs0 - dy * sn0;
+    const ly = dx * sn0 + dy * cs0;
+    const sx = Math.round(lx / MINOR_PX) * MINOR_PX;
+    const sy = Math.round(ly / MINOR_PX) * MINOR_PX;
+    const cs1 = Math.cos(mmGridRotRad), sn1 = Math.sin(mmGridRotRad);
+    return { dx: sx * cs1 - sy * sn1, dy: sx * sn1 + sy * cs1 };
+  }, [mmGridRotRad]);
+
+  // Translasi snapshot menjadi patch sketsa berdasar selection.
+  const buildTranslatedPatch = useCallback(
+    (snap: MoveSnapshot, sel: Set<MoveSelKey>, dx: number, dy: number): Partial<Sketch> => {
+      const T = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
+      const nextLines = snap.lines.map((ln, i) => {
+        if (!sel.has(`line:${i}`)) return ln;
+        return { ...ln, a: T(ln.a), b: T(ln.b), c1: ln.c1 ? T(ln.c1) : undefined, c2: ln.c2 ? T(ln.c2) : undefined };
+      });
+      const nextLayers = snap.layers.map((ly) =>
+        sel.has(`layer:${ly.id}`) ? { ...ly, points: ly.points.map(T) } : ly,
+      );
+      const nextCircles = snap.circles.map((c) =>
+        sel.has(`circle:${c.id}`) ? { ...c, c: T(c.c) } : c,
+      );
+      const nextDoors = snap.doors.map((d) =>
+        sel.has(`door:${d.id}`) ? { ...d, a: T(d.a), b: T(d.b) } : d,
+      );
+      const nextFloors = snap.floors.map((f) => {
+        if (!sel.has(`floor:${f.id}`)) return f;
+        return {
+          ...f,
+          outer: f.outer.map(T),
+          holes: f.holes ? f.holes.map((h) => h.map(T)) : undefined,
+        };
+      });
+      const nextCuts = snap.sectionCuts.map((c, i) =>
+        sel.has(`section:${i}`) ? { ...c, p1: T(c.p1), p2: T(c.p2), updatedAt: Date.now() } : c,
+      );
+      const patch: Partial<Sketch> = {
+        lines: nextLines,
+        layers: nextLayers,
+        circles: nextCircles,
+        doors: nextDoors,
+        floors: nextFloors,
+      };
+      // Hanya overwrite sectionCuts bila memang ada perubahan.
+      if (snap.sectionCuts.some((_, i) => sel.has(`section:${i}`))) {
+        patch.sectionCuts = nextCuts;
+      }
+      return patch;
+    },
+    [],
   );
 
   // Redraw
@@ -3078,7 +3276,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fill();
     }
 
+    // ----- Move Tool: highlight selection + marquee (world-space) -----
+    if (tool === "move") {
+      ctx.save();
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(232,93,58,0.95)";
+      ctx.fillStyle = "rgba(232,93,58,0.18)";
+      ctx.lineWidth = 2.2 / s;
+      ctx.setLineDash([]);
+      const strokeLine = (a: Point, b: Point) => {
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      };
+      moveSel.forEach((key) => {
+        const [kind, id] = key.split(":");
+        if (kind === "line") {
+          const ln = lines[Number(id)];
+          if (ln) strokeLine(ln.a, ln.b);
+        } else if (kind === "layer") {
+          const ly = layers.find((l) => l.id === id);
+          if (ly && ly.points.length >= 2) {
+            ctx.beginPath();
+            ly.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "circle") {
+          const c = (sketch.circles ?? []).find((x) => x.id === id);
+          if (c) {
+            ctx.beginPath(); ctx.arc(c.c.x, c.c.y, c.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "door") {
+          const d = (sketch.doors ?? []).find((x) => x.id === id);
+          if (d) strokeLine(d.a, d.b);
+        } else if (kind === "floor") {
+          const f = (sketch.floors ?? []).find((x) => x.id === id);
+          if (f && f.outer.length >= 2) {
+            ctx.beginPath();
+            f.outer.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "section") {
+          const c = (sketch.sectionCuts ?? [])[Number(id)];
+          if (c) strokeLine(c.p1, c.p2);
+        }
+      });
+      // Marquee
+      if (moveMarquee) {
+        const mm = moveMarquee;
+        const x0 = Math.min(mm.start.x, mm.cur.x);
+        const y0 = Math.min(mm.start.y, mm.cur.y);
+        const w = Math.abs(mm.cur.x - mm.start.x);
+        const h = Math.abs(mm.cur.y - mm.start.y);
+        ctx.setLineDash([6 / s, 4 / s]);
+        ctx.lineWidth = 1.2 / s;
+        ctx.strokeStyle = "rgba(232,93,58,0.9)";
+        ctx.fillStyle = "rgba(232,93,58,0.08)";
+        ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+
     ctx.restore();
+
 
     // ----- Screen-space overlays (labels, so they stay upright & legible) -----
     const worldToScreen = (p: Point): Point => {
@@ -3302,7 +3561,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -4308,8 +4567,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "move") {
+      const raw = getWorldPosRaw(e);
+      const tol = 10 / view.s;
+      const hit = moveHitTest(raw, tol);
+      const shift = e.shiftKey;
+      if (hit) {
+        // Tentukan selection awal drag.
+        let nextSel = new Set(moveSel);
+        const wasSelected = nextSel.has(hit);
+        if (shift) {
+          // Shift: tambahkan ke selection (jangan hapus pilihan lain).
+          if (!wasSelected) nextSel.add(hit);
+        } else if (!wasSelected) {
+          // Klik baru pada entitas → ganti selection.
+          nextSel = new Set([hit]);
+        }
+        setMoveSel(nextSel);
+        // Mulai potensi drag.
+        pushHistory();
+        setMoveDrag({
+          startWorld: raw,
+          snapshot: buildMoveSnapshot(),
+          moved: false,
+          hitKey: hit,
+          hitWasSelected: wasSelected,
+          prevSel: new Set(moveSel),
+          shiftKey: shift,
+          appliedDx: 0,
+          appliedDy: 0,
+        });
+      } else {
+        // Klik di area kosong → mulai rubber-band marquee.
+        setMoveMarquee({ start: raw, cur: raw, additive: shift });
+      }
+      return;
+    }
     if (tool === "line" || tool === "rect" || tool === "section") {
       setDrawing({ a: p, b: p });
+
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
@@ -4601,6 +4897,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (moveDrag) {
+      const raw = getWorldPosRaw(e);
+      const rawDx = raw.x - moveDrag.startWorld.x;
+      const rawDy = raw.y - moveDrag.startWorld.y;
+      const moved = moveDrag.moved || Math.hypot(rawDx, rawDy) * view.s > 4;
+      const { dx, dy } = snapDeltaMm(rawDx, rawDy);
+      if (moved && (dx !== moveDrag.appliedDx || dy !== moveDrag.appliedDy)) {
+        const patch = buildTranslatedPatch(moveDrag.snapshot, moveSel, dx, dy);
+        onChange(patch);
+        setMoveDrag({ ...moveDrag, moved: true, appliedDx: dx, appliedDy: dy });
+      } else if (moved !== moveDrag.moved) {
+        setMoveDrag({ ...moveDrag, moved: true });
+      }
+      return;
+    }
+    if (moveMarquee) {
+      const raw = getWorldPosRaw(e);
+      setMoveMarquee({ ...moveMarquee, cur: raw });
+      return;
+    }
+
+
+
     if (gridDrag) {
       const rawWorld = getWorldPosRaw(e);
       if (gridDrag.kind === "move") {
@@ -4802,6 +5121,79 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const wasGesture = !!gestureRef.current;
     endPointer(e);
     if (wasGesture) return;
+
+    if (moveDrag) {
+      const md = moveDrag;
+      setMoveDrag(null);
+      if (!md.moved) {
+        // Klik tanpa drag → toggle / pertahankan selection.
+        if (md.hitKey) {
+          if (md.shiftKey && md.hitWasSelected) {
+            // Shift+klik pada item yg sudah terpilih → lepaskan.
+            const next = new Set(moveSel);
+            next.delete(md.hitKey);
+            setMoveSel(next);
+          } else if (!md.shiftKey && md.hitWasSelected && md.prevSel.size > 1) {
+            // Klik (tanpa shift) pada item yg sudah terpilih dalam multi-select
+            // tanpa menggeser → fokuskan hanya ke item itu.
+            setMoveSel(new Set([md.hitKey]));
+          }
+          // Selain itu: selection sudah benar (saat down).
+        }
+      }
+      // Drag yang sudah moved → state sudah ter-commit via onChange. Selesai.
+      return;
+    }
+    if (moveMarquee) {
+      const mm = moveMarquee;
+      setMoveMarquee(null);
+      const moved = Math.hypot(mm.cur.x - mm.start.x, mm.cur.y - mm.start.y) * view.s > 4;
+      if (!moved) {
+        // Klik kosong → kosongkan selection (kecuali shift).
+        if (!mm.additive) setMoveSel(new Set());
+        return;
+      }
+      const x0 = Math.min(mm.start.x, mm.cur.x);
+      const x1 = Math.max(mm.start.x, mm.cur.x);
+      const y0 = Math.min(mm.start.y, mm.cur.y);
+      const y1 = Math.max(mm.start.y, mm.cur.y);
+      const inRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const lvl = activeLvlId;
+      const inLvl = (l?: string) => !lvl || !l || l === lvl;
+      const next = new Set(mm.additive ? moveSel : []);
+      lines.forEach((ln, i) => {
+        if (!inLvl(ln.levelId)) return;
+        if ((ln.kind ?? "straight") !== "straight") return;
+        if (inRect(ln.a) && inRect(ln.b)) next.add(`line:${i}`);
+      });
+      layers.forEach((ly) => {
+        if (!inLvl(ly.levelId)) return;
+        if (ly.points.length < 2) return;
+        if (ly.points.every(inRect)) next.add(`layer:${ly.id}`);
+      });
+      (sketch.circles ?? []).forEach((c) => {
+        if (!inLvl(c.levelId)) return;
+        if (c.c.x - c.r >= x0 && c.c.x + c.r <= x1 && c.c.y - c.r >= y0 && c.c.y + c.r <= y1) {
+          next.add(`circle:${c.id}`);
+        }
+      });
+      (sketch.doors ?? []).forEach((d) => {
+        if (!inLvl(d.levelId)) return;
+        if (inRect(d.a) && inRect(d.b)) next.add(`door:${d.id}`);
+      });
+      (sketch.floors ?? []).forEach((f) => {
+        if (!inLvl(f.levelId)) return;
+        if (f.outer.length < 2) return;
+        if (f.outer.every(inRect)) next.add(`floor:${f.id}`);
+      });
+      (sketch.sectionCuts ?? []).forEach((c, i) => {
+        if (inRect(c.p1) && inRect(c.p2)) next.add(`section:${i}`);
+      });
+      setMoveSel(next);
+      return;
+    }
+
+
 
     if (gridDrag) {
       setGridDrag(null);
@@ -5653,6 +6045,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Move className="mr-1.5 h-4 w-4" /> Edit Titik
           </Button>
           <Button
+            variant={tool === "move" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("move"); }}
+            className={cn(tool === "move" && "bg-gradient-ember shadow-ember")}
+            title="Move — pilih satu/banyak objek lalu drag (snap mm) atau geser numerik ΔX/ΔY mm."
+          >
+            <GripHorizontal className="mr-1.5 h-4 w-4" /> Move
+          </Button>
+          <Button
             variant={tool === "erase" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("erase"); }}
@@ -5997,6 +6398,89 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             )}
           </div>
         )}
+        {tool === "move" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Move — {moveSel.size} terpilih
+            </Label>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Klik objek untuk pilih (Shift untuk tambah). Drag area kosong = marquee.
+              Drag objek terpilih = geser (snap 1 blok milimeter). Atau isi ΔX/ΔY mm di bawah.
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMoveSel(new Set(moveAllKeysActiveLevel()))}
+              >
+                Pilih Semua
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMoveSel(new Set())}
+                disabled={moveSel.size === 0}
+              >
+                Kosongkan
+              </Button>
+            </div>
+            <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Geser Numerik (mm)
+              </Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">ΔX</Label>
+                  <Input
+                    type="number"
+                    value={moveDxMm}
+                    onChange={(e) => setMoveDxMm(e.target.value)}
+                    className="h-8 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">ΔY</Label>
+                  <Input
+                    type="number"
+                    value={moveDyMm}
+                    onChange={(e) => setMoveDyMm(e.target.value)}
+                    className="h-8 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="w-full bg-gradient-ember shadow-ember"
+                disabled={moveSel.size === 0}
+                onClick={() => {
+                  const dxMm = Number(moveDxMm) || 0;
+                  const dyMm = Number(moveDyMm) || 0;
+                  if (dxMm === 0 && dyMm === 0) {
+                    toast.error("Isi ΔX atau ΔY terlebih dahulu");
+                    return;
+                  }
+                  // Konversi mm → px world. 1 m = pxPerMeter px.
+                  const dxPx = (dxMm / 1000) * pxPerMeter;
+                  const dyPx = (dyMm / 1000) * pxPerMeter;
+                  pushHistory();
+                  const snap = buildMoveSnapshot();
+                  const patch = buildTranslatedPatch(snap, moveSel, dxPx, dyPx);
+                  onChange(patch);
+                  toast.success(`Digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                  setMoveDxMm("0"); setMoveDyMm("0");
+                }}
+              >
+                Apply
+              </Button>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Positif ΔX = ke kanan, positif ΔY = ke bawah (mengikuti orientasi mm-grid layar).
+              </p>
+            </div>
+          </div>
+        )}
+
         {tool === "grid" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <div className="flex items-center justify-between">
