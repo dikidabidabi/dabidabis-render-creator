@@ -4850,7 +4850,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       const hit = findVertexTargetAt(raw, tol);
-      if (!hit) return;
+      if (!hit) {
+        // Tidak ada titik di bawah kursor → mulai marquee untuk pilih banyak titik.
+        setEditVertexMarquee({ start: raw, cur: raw, additive: e.shiftKey || e.metaKey || e.ctrlKey });
+        return;
+      }
       const k = keyOf(hit.coord);
       const sel = { target: hit.target, coord: hit.coord };
       if (e.shiftKey || e.metaKey || e.ctrlKey) {
