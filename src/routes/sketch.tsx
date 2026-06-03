@@ -4834,13 +4834,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const hit = findVertexTargetAt(raw, tol);
       if (!hit) return;
       const k = keyOf(hit.coord);
+      const sel = { target: hit.target, coord: hit.coord };
+      if (e.shiftKey || e.metaKey || e.ctrlKey) {
+        // toggle membership; do not drag
+        setSelectedEditVertices((prev) => {
+          const exists = prev.some((p) => keyOf(p.coord) === k);
+          return exists ? prev.filter((p) => keyOf(p.coord) !== k) : [...prev, sel];
+        });
+        return;
+      }
       if (lockedVertexKeys.has(k)) {
         toast.error("Titik terkunci");
         return;
       }
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
-      setSelectedEditVertex({ target: hit.target, coord: hit.coord });
+      setSelectedEditVertices((prev) => (prev.some((p) => keyOf(p.coord) === k) ? prev : [sel]));
     } else if (tool === "pick") {
       if (!activeLvlId) {
         toast.error("Pilih Level aktif terlebih dahulu");
