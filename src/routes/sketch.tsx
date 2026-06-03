@@ -8535,6 +8535,8 @@ function FloorToolPanel({
   onPasteFloors: () => void;
   onDeleteFloors: () => void;
   selectedFloorVertex: { fid: string; ring: "outer" | number; idx: number; coord: Point } | null;
+  selectedFloorVertexCount: number;
+  onClearFloorSelection: () => void;
   floorVxDxMm: string;
   floorVxDyMm: string;
   onFloorVxDxMm: (v: string) => void;
