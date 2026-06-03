@@ -1298,7 +1298,7 @@ function ManualScaleBox({
 }
 function SlideContent({ slide }: { slide?: Slide }) {
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
@@ -3541,28 +3541,140 @@ function LingkunganPanel({ greenN, blueN, radius }: { greenN: number; blueN: num
 }
 
 function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
-
   const imgs = slide.narasi.images.filter((s): s is string => typeof s === "string" && s.length > 0);
+  const bgImage = imgs[0] ?? null;
   const text = slide.narasi.text.trim();
-  // Pisahkan judul gagasan (baris pertama) dengan badan narasi.
   const firstBreak = text.indexOf("\n");
   const heading = firstBreak === -1 ? text : text.slice(0, firstBreak).trim();
   const body = firstBreak === -1 ? "" : text.slice(firstBreak + 1).trim();
 
   return (
-    <div style={{ height: "100%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, alignItems: "stretch" }}>
-      {/* Kiri: narasi */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 18, paddingRight: 8, minWidth: 0 }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 600 }}>
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        background: bgImage ? "#000" : "#f5f5f5",
+      }}
+    >
+      {/* Full-bleed background image */}
+      {bgImage ? (
+        <img
+          src={bgImage}
+          alt={`Konsep ${slide.index + 1}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#999",
+            fontSize: 14,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+          }}
+        >
+          Unggah gambar di halaman Narasi
+        </div>
+      )}
+
+      {/* Top scrim for header legibility */}
+      {bgImage && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 220,
+            background: "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0) 100%)",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
+      {/* Header / Kop — white text */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          padding: `${PAD}px ${PAD}px 20px ${PAD}px`,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 24,
+          color: "#ffffff",
+          borderBottom: "1px solid rgba(255,255,255,0.35)",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>
+            Konsep · Narasi
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-display, Sora, sans-serif)",
+              fontSize: 58, lineHeight: 1.02, letterSpacing: "-0.03em", fontWeight: 600, marginTop: 6,
+              color: "#ffffff",
+              textShadow: "0 2px 14px rgba(0,0,0,0.45)",
+            }}
+          >
+            {slide.title}
+          </div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "#ffffff" }}>
+            {slide.sketch.title}
+          </div>
+          <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", marginTop: 4 }}>
+            Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* Left-side narasi — black text on light scrim */}
+      <div
+        style={{
+          position: "absolute",
+          left: PAD,
+          bottom: PAD,
+          width: "38%",
+          maxHeight: "62%",
+          overflow: "hidden",
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(4px)",
+          padding: "22px 24px",
+          borderRadius: 4,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
+        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>
           Gagasan Utama · Narasi {slide.index + 1}
         </div>
         {heading && (
           <div
             style={{
               fontFamily: "var(--font-display, Sora, sans-serif)",
-              fontSize: 30,
+              fontSize: 26,
               lineHeight: 1.2,
-              color: "#0a0a0a",
+              color: "#000000",
               fontWeight: 700,
               letterSpacing: "-0.01em",
               wordBreak: "break-word",
@@ -3574,82 +3686,22 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
         <div
           style={{
             fontFamily: "var(--font-body, Manrope, sans-serif)",
-            fontSize: 16,
+            fontSize: 15,
             lineHeight: 1.55,
-            color: text ? "#222" : "#bbb",
+            color: text ? "#000000" : "#888",
             fontWeight: 400,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
+            overflow: "hidden",
           }}
         >
           {body || (heading ? "" : "Tulis gagasan utama narasi di halaman Narasi.")}
         </div>
       </div>
-
-      {/* Kanan: gambar persegi dalam satu deret horizontal */}
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-start" }}>
-        {imgs.length === 0 ? (
-          <div
-            style={{
-              aspectRatio: "1 / 1",
-              width: "100%",
-              border: "1px dashed #bbb",
-              borderRadius: 6,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#999",
-              fontSize: 13,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              textAlign: "center",
-              padding: 12,
-            }}
-          >
-            Unggah gambar di halaman Narasi
-          </div>
-        ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${imgs.length}, 1fr)`,
-              gap: 12,
-              width: "100%",
-            }}
-          >
-            {imgs.map((src, i) => (
-              <div
-                key={i}
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  aspectRatio: "1 / 1",
-                  border: "1px solid #e5e5e5",
-                  borderRadius: 6,
-                  overflow: "hidden",
-                  background: "#f5f5f5",
-                }}
-              >
-                <img
-                  src={src}
-                  alt={`Konsep ${slide.index + 1} gambar ${i + 1}`}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    display: "block",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
+
 
 
 
