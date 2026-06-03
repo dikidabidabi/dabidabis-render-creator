@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import SunCalc from "suncalc";
 import { drawOsmTiles } from "@/lib/geo";
 import {
@@ -425,6 +426,36 @@ function PresentasiBox({
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const toggleHidden = useCallback((id: string) => {
+    setHidden((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+  // First slide (title) and last slide (closing/terima kasih) are always kept
+  const protectedIds = useMemo(() => {
+    const s = new Set<string>();
+    if (slides.length > 0) s.add(slides[0].id);
+    if (slides.length > 1) s.add(slides[slides.length - 1].id);
+    return s;
+  }, [slides]);
+  const allHiddenChecked = useMemo(
+    () => slides.length > 0 && slides.every((s) => protectedIds.has(s.id) || hidden.has(s.id)),
+    [slides, hidden, protectedIds],
+  );
+  const checkAllHidden = useCallback(() => {
+    if (allHiddenChecked) {
+      setHidden(new Set());
+    } else {
+      const n = new Set<string>();
+      for (const s of slides) if (!protectedIds.has(s.id)) n.add(s.id);
+      setHidden(n);
+    }
+  }, [slides, protectedIds, allHiddenChecked]);
+  const visibleSlides = useMemo(() => slides.filter((s) => !hidden.has(s.id)), [slides, hidden]);
+
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
 
   useEffect(() => {
@@ -679,11 +710,67 @@ function PresentasiBox({
                     i === idx
                       ? "border-primary bg-primary/10 text-foreground"
                       : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+                    hidden.has(s.id) && "opacity-40 line-through",
                   )}
                 >
                   {i + 1}. {s.title}
                 </button>
               ))}
+            </div>
+
+            {/* Hide Slide checklist */}
+            <div className="rounded-lg border border-border bg-background/40">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <div className="text-xs font-semibold">Sembunyikan Slide</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-[10px] text-muted-foreground">
+                    {hidden.size} disembunyikan · {visibleSlides.length}/{slides.length} akan dicetak
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={checkAllHidden}
+                  >
+                    {allHiddenChecked ? "Uncheck All" : "Check All"}
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-48 overflow-y-auto px-3 py-2">
+                <ul className="space-y-1">
+                  {slides.map((s, i) => {
+                    const isProtected = protectedIds.has(s.id);
+                    const checked = hidden.has(s.id);
+                    return (
+                      <li key={s.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`hide-${s.id}`}
+                          checked={checked}
+                          disabled={isProtected}
+                          onCheckedChange={() => !isProtected && toggleHidden(s.id)}
+                        />
+                        <label
+                          htmlFor={`hide-${s.id}`}
+                          className={cn(
+                            "flex-1 cursor-pointer truncate text-xs",
+                            isProtected && "cursor-not-allowed text-muted-foreground",
+                            checked && "line-through opacity-60",
+                          )}
+                          title={isProtected ? "Slide ini tidak dapat disembunyikan" : s.title}
+                        >
+                          {i + 1}. {s.title}
+                          {isProtected && (
+                            <span className="ml-2 rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                              wajib
+                            </span>
+                          )}
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -708,7 +795,7 @@ function PresentasiBox({
           style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
           aria-hidden
         >
-          {slides.map((s) => (
+          {visibleSlides.map((s) => (
             <div
               key={s.id}
               data-slide-page
