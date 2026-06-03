@@ -8569,6 +8569,55 @@ function FloorToolPanel({
             Hapus
           </Button>
         </div>
+        </div>
+      )}
+
+      {mode === "edit" && editSub === "move" && (
+        <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Geser Numerik (mm)
+            </Label>
+            <span className="text-[10px] text-muted-foreground">
+              {selectedFloorVertex
+                ? `Titik (${(selectedFloorVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedFloorVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
+                : "Pilih titik dulu"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <Label className="text-[10px] text-muted-foreground">ΔX</Label>
+              <Input
+                type="number"
+                value={floorVxDxMm}
+                onChange={(e) => onFloorVxDxMm(e.target.value)}
+                className="h-8 text-xs"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-muted-foreground">ΔY</Label>
+              <Input
+                type="number"
+                value={floorVxDyMm}
+                onChange={(e) => onFloorVxDyMm(e.target.value)}
+                className="h-8 text-xs"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="w-full bg-gradient-ember shadow-ember"
+            disabled={!selectedFloorVertex}
+            onClick={onApplyFloorVertexMove}
+          >
+            Apply Geser
+          </Button>
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            Klik titik lantai dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+          </p>
+        </div>
       )}
 
       {mode !== "edit" && (
