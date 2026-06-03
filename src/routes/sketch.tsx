@@ -3512,7 +3512,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.restore();
     }
 
+    // ----- Edit-Titik / Lantai-Geser marquee (world-space, cyan) -----
+    {
+      const drawVertexMarquee = (mm: { start: Point; cur: Point }) => {
+        const s2 = view.s;
+        const x0 = Math.min(mm.start.x, mm.cur.x);
+        const y0 = Math.min(mm.start.y, mm.cur.y);
+        const w = Math.abs(mm.cur.x - mm.start.x);
+        const h = Math.abs(mm.cur.y - mm.start.y);
+        ctx.save();
+        ctx.setLineDash([6 / s2, 4 / s2]);
+        ctx.lineWidth = 1.2 / s2;
+        ctx.strokeStyle = "rgba(0,212,255,0.95)";
+        ctx.fillStyle = "rgba(0,212,255,0.12)";
+        ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      };
+      if (editVertexMarquee) drawVertexMarquee(editVertexMarquee);
+      if (floorVertexMarquee) drawVertexMarquee(floorVertexMarquee);
+    }
+
     ctx.restore();
+
 
 
     // ----- Screen-space overlays (labels, so they stay upright & legible) -----
