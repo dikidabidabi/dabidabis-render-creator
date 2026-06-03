@@ -710,11 +710,67 @@ function PresentasiBox({
                     i === idx
                       ? "border-primary bg-primary/10 text-foreground"
                       : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+                    hidden.has(s.id) && "opacity-40 line-through",
                   )}
                 >
                   {i + 1}. {s.title}
                 </button>
               ))}
+            </div>
+
+            {/* Hide Slide checklist */}
+            <div className="rounded-lg border border-border bg-background/40">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <div className="text-xs font-semibold">Sembunyikan Slide</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-[10px] text-muted-foreground">
+                    {hidden.size} disembunyikan · {visibleSlides.length}/{slides.length} akan dicetak
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={checkAllHidden}
+                  >
+                    {allHiddenChecked ? "Uncheck All" : "Check All"}
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-48 overflow-y-auto px-3 py-2">
+                <ul className="space-y-1">
+                  {slides.map((s, i) => {
+                    const isProtected = protectedIds.has(s.id);
+                    const checked = hidden.has(s.id);
+                    return (
+                      <li key={s.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`hide-${s.id}`}
+                          checked={checked}
+                          disabled={isProtected}
+                          onCheckedChange={() => !isProtected && toggleHidden(s.id)}
+                        />
+                        <label
+                          htmlFor={`hide-${s.id}`}
+                          className={cn(
+                            "flex-1 cursor-pointer truncate text-xs",
+                            isProtected && "cursor-not-allowed text-muted-foreground",
+                            checked && "line-through opacity-60",
+                          )}
+                          title={isProtected ? "Slide ini tidak dapat disembunyikan" : s.title}
+                        >
+                          {i + 1}. {s.title}
+                          {isProtected && (
+                            <span className="ml-2 rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+                              wajib
+                            </span>
+                          )}
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             </div>
           </div>
         </div>
