@@ -2343,6 +2343,22 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               })}
             </g>
           ))}
+          {/* Perimeter level di bawah level yang ditampilkan — garis tipis abu */}
+          {(sketch.levels ?? [])
+            .filter((lv) => lv.id !== level.id && lv.mdpl < level.mdpl)
+            .flatMap((lv) =>
+              (sketch.layers ?? [])
+                .filter((l) => l.levelId === lv.id && !isLahan(l.name) && !isVoid(l.name) && l.points.length >= 3)
+                .map((l) => (
+                  <polygon
+                    key={`below-${lv.id}-${l.id}`}
+                    points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke="rgba(0,0,0,0.35)"
+                    strokeWidth={sw * 0.0008}
+                  />
+                ))
+            )}
           {layers.filter((l) => !isLahan(l.name)).map((l, i) => {
             if (isVoid(l.name)) {
               let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
