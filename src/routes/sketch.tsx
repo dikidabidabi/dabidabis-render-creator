@@ -7703,8 +7703,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
-          <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 font-display text-xs font-semibold text-foreground shadow-soft backdrop-blur">
-            Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m
+          <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 shadow-soft backdrop-blur">
+            <div className="font-display text-xs font-semibold">
+              {activeLvlId && (() => {
+                const lvl = levels.find((l) => l.id === activeLvlId);
+                return lvl ? (
+                  <span className="text-ember">{lvl.name}</span>
+                ) : null;
+              })()}
+              {activeLvlId && <span className="mx-1.5 text-border">·</span>}
+              <span className="text-foreground">Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m</span>
+            </div>
           </div>
           <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
             <CompassMarker rotation={northRotation} size={64} />
