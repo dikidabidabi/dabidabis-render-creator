@@ -387,6 +387,7 @@ function PresentasiBox({
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<null | "pptx" | "pdf">(null);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
@@ -412,28 +413,34 @@ function PresentasiBox({
     return () => window.removeEventListener("keydown", onKey);
   }, [full, next, prev]);
 
-  const renderSlideImages = useCallback(async (): Promise<string[]> => {
-    // Wait two frames so the offscreen render mounts at full A3 size.
+  const renderSlideImages = useCallback(async (
+    onProgress?: (current: number, total: number) => void,
+  ): Promise<string[]> => {
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     const root = exportRootRef.current;
     if (!root) throw new Error("Render container tidak siap");
     const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
     const { default: html2canvas } = await import("html2canvas-pro");
     const images: string[] = [];
-    for (const el of pages) {
-      const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
-      images.push(canvas.toDataURL("image/png"));
+    for (let i = 0; i < pages.length; i++) {
+      onProgress?.(i + 1, pages.length);
+      const canvas = await html2canvas(pages[i], { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
+      images.push(canvas.toDataURL("image/jpeg", 0.85));
+      // Free canvas memory immediately
+      canvas.width = 0;
+      canvas.height = 0;
+      await new Promise<void>((r) => setTimeout(r, 0));
     }
     return images;
   }, []);
 
   const doExportPptx = useCallback(async () => {
     setExporting("pptx");
+    setExportProgress({ current: 0, total: 0 });
     try {
-      const images = await renderSlideImages();
+      const images = await renderSlideImages((c, t) => setExportProgress({ current: c, total: t }));
       const { default: PptxGenJS } = await import("pptxgenjs");
       const pres = new PptxGenJS();
-      // A3 landscape: 420mm x 297mm = 16.54in x 11.69in
       pres.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
       pres.layout = "A3";
       images.forEach((data) => {
@@ -448,20 +455,50 @@ function PresentasiBox({
       window.alert("Gagal mengekspor PPTX: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setExporting(null);
+      setExportProgress(null);
     }
   }, [sketch.title, renderSlideImages]);
 
   const doExportPdf = useCallback(async () => {
     setExporting("pdf");
+    setExportProgress({ current: 0, total: 0 });
     try {
-      const images = await renderSlideImages();
-      const { default: jsPDF } = await import("jspdf");
-      // A3 landscape: 420mm x 297mm
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
-      images.forEach((data, i) => {
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      const root = exportRootRef.current;
+      if (!root) throw new Error("Render container tidak siap");
+      const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
+      const total = pages.length;
+      if (total === 0) throw new Error("Tidak ada slide untuk diekspor");
+
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("jspdf"),
+      ]);
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3", compress: true });
+
+      for (let i = 0; i < total; i++) {
+        setExportProgress({ current: i + 1, total });
+        // Yield to browser so the progress UI repaints before heavy work
+        await new Promise<void>((r) => setTimeout(r, 0));
+
+        const canvas = await html2canvas(pages[i], {
+          backgroundColor: "#ffffff",
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+
         if (i > 0) pdf.addPage("a3", "landscape");
-        pdf.addImage(data, "PNG", 0, 0, 420, 297, undefined, "FAST");
-      });
+        pdf.addImage(dataUrl, "JPEG", 0, 0, 420, 297, undefined, "FAST");
+
+        // Aggressive cleanup: nullify canvas backing store so GC can reclaim it
+        canvas.width = 0;
+        canvas.height = 0;
+        // Hint GC between slides
+        await new Promise<void>((r) => setTimeout(r, 0));
+      }
+
       const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pdf`;
       pdf.save(fname);
     } catch (err) {
@@ -469,8 +506,9 @@ function PresentasiBox({
       window.alert("Gagal mengekspor PDF: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setExporting(null);
+      setExportProgress(null);
     }
-  }, [sketch.title, renderSlideImages]);
+  }, [sketch.title]);
 
 
   return (
@@ -544,6 +582,23 @@ function PresentasiBox({
 
               </div>
             </div>
+            {exporting && exportProgress && exportProgress.total > 0 && (
+              <div className="mb-2 rounded-md border border-border bg-background/60 px-3 py-2">
+                <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                  <span>
+                    Merender Slide {exportProgress.current} dari {exportProgress.total}
+                    {exporting === "pdf" ? " (PDF)" : " (PPTX)"}…
+                  </span>
+                  <span>{Math.round((exportProgress.current / exportProgress.total) * 100)}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-200"
+                    style={{ width: `${(exportProgress.current / exportProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
             {/* Thumbs */}
             <div className="flex gap-2 overflow-x-auto pb-1">
               {slides.map((s, i) => (
