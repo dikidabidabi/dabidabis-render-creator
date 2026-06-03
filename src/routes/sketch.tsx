@@ -1829,6 +1829,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [moveSel, setMoveSel] = useState<Set<MoveSelKey>>(new Set());
   const [moveDrag, setMoveDrag] = useState<MoveDragState | null>(null);
   const [moveMarquee, setMoveMarquee] = useState<MoveMarqueeState | null>(null);
+  // Marquee (rubber-band) untuk memilih banyak titik di mode Edit Titik / Lantai-Geser.
+  const [editVertexMarquee, setEditVertexMarquee] = useState<MoveMarqueeState | null>(null);
+  const [floorVertexMarquee, setFloorVertexMarquee] = useState<MoveMarqueeState | null>(null);
   const [moveDxMm, setMoveDxMm] = useState<string>("0");
   const [moveDyMm, setMoveDyMm] = useState<string>("0");
   // Clipboard untuk Copy/Paste lintas-level. Berisi deep-clone entitas terpilih.
