@@ -7352,9 +7352,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                     Geser Numerik (mm)
                   </Label>
                   <span className="text-[10px] text-muted-foreground">
-                    {selectedEditVertex
-                      ? `Titik (${(selectedEditVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedEditVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
-                      : "Pilih titik dulu"}
+                    {selectedEditVertices.length === 0
+                      ? "Pilih titik dulu"
+                      : selectedEditVertices.length === 1
+                      ? `Titik (${(selectedEditVertices[0].coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedEditVertices[0].coord.y / pxPerMeter * 1000).toFixed(0)})`
+                      : `${selectedEditVertices.length} titik dipilih`}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -7379,38 +7381,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                     />
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  className="w-full bg-gradient-ember shadow-ember"
-                  disabled={!selectedEditVertex}
-                  onClick={() => {
-                    if (!selectedEditVertex) return;
-                    const dxMm = Number(editVxDxMm) || 0;
-                    const dyMm = Number(editVxDyMm) || 0;
-                    if (dxMm === 0 && dyMm === 0) {
-                      toast.error("Isi ΔX atau ΔY terlebih dahulu");
-                      return;
-                    }
-                    const newPos: Point = {
-                      x: selectedEditVertex.coord.x + (dxMm / 1000) * pxPerMeter,
-                      y: selectedEditVertex.coord.y + (dyMm / 1000) * pxPerMeter,
-                    };
-                    if (lockedVertexKeys.has(keyOf(selectedEditVertex.coord))) {
-                      toast.error("Titik terkunci");
-                      return;
-                    }
-                    pushHistory();
-                    moveVertexTarget(selectedEditVertex.target, selectedEditVertex.coord, newPos);
-                    setSelectedEditVertex({ target: selectedEditVertex.target, coord: newPos });
-                    setEditVxDxMm("0");
-                    setEditVxDyMm("0");
-                    toast.success(`Titik digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
-                  }}
-                >
-                  Apply Geser
-                </Button>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-gradient-ember shadow-ember"
+                    disabled={selectedEditVertices.length === 0}
+                    onClick={() => {
+                      if (selectedEditVertices.length === 0) return;
+                      const dxMm = Number(editVxDxMm) || 0;
+                      const dyMm = Number(editVxDyMm) || 0;
+                      if (dxMm === 0 && dyMm === 0) {
+                        toast.error("Isi ΔX atau ΔY terlebih dahulu");
+                        return;
+                      }
+                      const dxPx = (dxMm / 1000) * pxPerMeter;
+                      const dyPx = (dyMm / 1000) * pxPerMeter;
+                      const movable = selectedEditVertices.filter((v) => !lockedVertexKeys.has(keyOf(v.coord)));
+                      if (movable.length === 0) { toast.error("Semua titik terkunci"); return; }
+                      pushHistory();
+                      for (const v of movable) {
+                        const newPos: Point = { x: v.coord.x + dxPx, y: v.coord.y + dyPx };
+                        moveVertexTarget(v.target, v.coord, newPos);
+                      }
+                      setSelectedEditVertices((prev) =>
+                        prev.map((v) =>
+                          lockedVertexKeys.has(keyOf(v.coord))
+                            ? v
+                            : { target: v.target, coord: { x: v.coord.x + dxPx, y: v.coord.y + dyPx } },
+                        ),
+                      );
+                      setEditVxDxMm("0");
+                      setEditVxDyMm("0");
+                      toast.success(`${movable.length} titik digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                    }}
+                  >
+                    Apply Geser
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={selectedEditVertices.length === 0}
+                    onClick={() => setSelectedEditVertices([])}
+                  >
+                    Reset Pilih
+                  </Button>
+                </div>
                 <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik satu titik dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+                  Klik titik untuk pilih. Shift/Ctrl+klik untuk tambah/buang dari pilihan. Titik terpilih berwarna cyan. Positif ΔX = kanan, positif ΔY = bawah.
                 </p>
               </div>
             )}
