@@ -2206,8 +2206,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             }
 
             const fill = "#e8e8e8";
-            const strokeCol = "#9a9a9a";
-            const swSlab = 0.3;
+            const strokeCol = "#111";
+            const swSlab = 0.4;
             return floors.flatMap((fl) => {
               const copies = floorsExp.filter((e) => e.sourceId === fl.levelId);
               if (!copies.length) return [];
@@ -2251,11 +2251,12 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                           fill={fill} stroke={strokeCol} strokeWidth={swSlab} strokeLinejoin="miter" />
                       ));
                     })}
+                    {/* Garis tipis penghubung ujung bawah balok dengan kedua ujung dinding (slab) */}
                     {intervals.map(([a, b], i) => (
                       <line key={`bl${i}`}
                         x1={mx(a)} y1={yBeamBot}
                         x2={mx(b)} y2={yBeamBot}
-                        stroke={strokeCol} strokeWidth={0.25} />
+                        stroke={strokeCol} strokeWidth={0.4} strokeLinecap="square" />
                     ))}
                   </g>
                 );
