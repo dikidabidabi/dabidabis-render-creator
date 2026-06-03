@@ -795,7 +795,7 @@ function PresentasiBox({
           style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
           aria-hidden
         >
-          {slides.map((s) => (
+          {visibleSlides.map((s) => (
             <div
               key={s.id}
               data-slide-page
