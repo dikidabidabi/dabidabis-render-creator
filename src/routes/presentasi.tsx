@@ -437,27 +437,60 @@ function PresentasiBox({
   const doExportPptx = useCallback(async () => {
     setExporting("pptx");
     setExportProgress({ current: 0, total: 0 });
+    let pres: any = null;
     try {
-      const images = await renderSlideImages((c, t) => setExportProgress({ current: c, total: t }));
-      const { default: PptxGenJS } = await import("pptxgenjs");
-      const pres = new PptxGenJS();
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      const root = exportRootRef.current;
+      if (!root) throw new Error("Render container tidak siap");
+      const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
+      const total = pages.length;
+      if (total === 0) throw new Error("Tidak ada slide untuk diekspor");
+
+      const [{ default: html2canvas }, { default: PptxGenJS }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("pptxgenjs"),
+      ]);
+      pres = new PptxGenJS();
       pres.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
       pres.layout = "A3";
-      images.forEach((data) => {
+
+      for (let i = 0; i < total; i++) {
+        setExportProgress({ current: i + 1, total });
+        // Yield so progress UI repaints before heavy work
+        await new Promise<void>((r) => setTimeout(r, 0));
+
+        const canvas = await html2canvas(pages[i], {
+          backgroundColor: "#ffffff",
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+        let data: string | null = canvas.toDataURL("image/jpeg", 1.0);
+
         const slide = pres.addSlide();
         slide.background = { color: "FFFFFF" };
         slide.addImage({ data, x: 0, y: 0, w: 16.54, h: 11.69 });
-      });
+
+        // Aggressive cleanup — release base64 and canvas backing store before next slide
+        data = null;
+        canvas.width = 0;
+        canvas.height = 0;
+        await new Promise<void>((r) => setTimeout(r, 0));
+      }
+
       const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
+      // writeFile is async — keep UI thread responsive during zipping
       await pres.writeFile({ fileName: fname });
     } catch (err) {
       console.error(err);
       window.alert("Gagal mengekspor PPTX: " + (err instanceof Error ? err.message : String(err)));
     } finally {
+      // Destroy PPT instance so internal slide buffers can be GC'd
+      pres = null;
       setExporting(null);
       setExportProgress(null);
     }
-  }, [sketch.title, renderSlideImages]);
+  }, [sketch.title]);
 
   const doExportPdf = useCallback(async () => {
     setExporting("pdf");
