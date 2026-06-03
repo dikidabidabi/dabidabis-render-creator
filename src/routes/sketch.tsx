@@ -1829,6 +1829,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [moveSel, setMoveSel] = useState<Set<MoveSelKey>>(new Set());
   const [moveDrag, setMoveDrag] = useState<MoveDragState | null>(null);
   const [moveMarquee, setMoveMarquee] = useState<MoveMarqueeState | null>(null);
+  // Marquee (rubber-band) untuk memilih banyak titik di mode Edit Titik / Lantai-Geser.
+  const [editVertexMarquee, setEditVertexMarquee] = useState<MoveMarqueeState | null>(null);
+  const [floorVertexMarquee, setFloorVertexMarquee] = useState<MoveMarqueeState | null>(null);
   const [moveDxMm, setMoveDxMm] = useState<string>("0");
   const [moveDyMm, setMoveDyMm] = useState<string>("0");
   // Clipboard untuk Copy/Paste lintas-level. Berisi deep-clone entitas terpilih.
@@ -1847,11 +1850,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setMoveDrag(null);
       setMoveMarquee(null);
     }
+    if (tool !== "edit") setEditVertexMarquee(null);
+    if (tool !== "floor") setFloorVertexMarquee(null);
   }, [tool]);
   useEffect(() => {
     setMoveSel(new Set());
     setMoveDrag(null);
     setMoveMarquee(null);
+    setEditVertexMarquee(null);
+    setFloorVertexMarquee(null);
   }, [id, activeLvlId]);
 
 
@@ -3509,7 +3516,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.restore();
     }
 
+    // ----- Edit-Titik / Lantai-Geser marquee (world-space, cyan) -----
+    {
+      const drawVertexMarquee = (mm: { start: Point; cur: Point }) => {
+        const s2 = view.s;
+        const x0 = Math.min(mm.start.x, mm.cur.x);
+        const y0 = Math.min(mm.start.y, mm.cur.y);
+        const w = Math.abs(mm.cur.x - mm.start.x);
+        const h = Math.abs(mm.cur.y - mm.start.y);
+        ctx.save();
+        ctx.setLineDash([6 / s2, 4 / s2]);
+        ctx.lineWidth = 1.2 / s2;
+        ctx.strokeStyle = "rgba(0,212,255,0.95)";
+        ctx.fillStyle = "rgba(0,212,255,0.12)";
+        ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      };
+      if (editVertexMarquee) drawVertexMarquee(editVertexMarquee);
+      if (floorVertexMarquee) drawVertexMarquee(floorVertexMarquee);
+    }
+
     ctx.restore();
+
 
 
     // ----- Screen-space overlays (labels, so they stay upright & legible) -----
@@ -3738,7 +3767,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -4648,6 +4677,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             });
           }
           if (hits.length === 0) {
+            if (floorEditSub === "move") {
+              // Mulai marquee untuk pilih banyak titik lantai dengan stylus.
+              setFloorVertexMarquee({ start: raw, cur: raw, additive: e.shiftKey || e.metaKey || e.ctrlKey });
+              return;
+            }
             toast.error("Tidak ada titik lantai di dekat klik");
             return;
           }
@@ -4847,7 +4881,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
       const hit = findVertexTargetAt(raw, tol);
-      if (!hit) return;
+      if (!hit) {
+        // Tidak ada titik di bawah kursor → mulai marquee untuk pilih banyak titik.
+        setEditVertexMarquee({ start: raw, cur: raw, additive: e.shiftKey || e.metaKey || e.ctrlKey });
+        return;
+      }
       const k = keyOf(hit.coord);
       const sel = { target: hit.target, coord: hit.coord };
       if (e.shiftKey || e.metaKey || e.ctrlKey) {
@@ -5120,6 +5158,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     if (moveMarquee) {
       const raw = getWorldPosRaw(e);
       setMoveMarquee({ ...moveMarquee, cur: raw });
+      return;
+    }
+    if (editVertexMarquee) {
+      const raw = getWorldPosRaw(e);
+      setEditVertexMarquee({ ...editVertexMarquee, cur: raw });
+      return;
+    }
+    if (floorVertexMarquee) {
+      const raw = getWorldPosRaw(e);
+      setFloorVertexMarquee({ ...floorVertexMarquee, cur: raw });
       return;
     }
 
@@ -5468,6 +5516,91 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     if (floorVertexDrag) {
       setFloorVertexDrag(null);
+      return;
+    }
+    if (editVertexMarquee) {
+      const mm = editVertexMarquee;
+      setEditVertexMarquee(null);
+      const moved = Math.hypot(mm.cur.x - mm.start.x, mm.cur.y - mm.start.y) * view.s > 4;
+      if (!moved) {
+        if (!mm.additive) setSelectedEditVertices([]);
+        return;
+      }
+      const x0 = Math.min(mm.start.x, mm.cur.x);
+      const x1 = Math.max(mm.start.x, mm.cur.x);
+      const y0 = Math.min(mm.start.y, mm.cur.y);
+      const y1 = Math.max(mm.start.y, mm.cur.y);
+      const inRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const collected: { target: EditTarget; coord: Point }[] = [];
+      const seenKeys = new Set<string>();
+      const pushSel = (target: EditTarget, coord: Point) => {
+        const k = keyOf(coord);
+        if (seenKeys.has(k)) return;
+        seenKeys.add(k);
+        collected.push({ target, coord });
+      };
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach((pt, i) => {
+          if (inRect(pt)) pushSel({ kind: "layer", layerId: l.id, idx: i }, pt);
+        });
+      });
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        if (inRect(ln.a)) pushSel({ kind: "line", lineIdx: i, end: "a" }, ln.a);
+        if (inRect(ln.b)) pushSel({ kind: "line", lineIdx: i, end: "b" }, ln.b);
+      });
+      setSelectedEditVertices((prev) => {
+        if (!mm.additive) return collected;
+        const merged = [...prev];
+        const exist = new Set(prev.map((p) => keyOf(p.coord)));
+        for (const s of collected) {
+          const k = keyOf(s.coord);
+          if (!exist.has(k)) { exist.add(k); merged.push(s); }
+        }
+        return merged;
+      });
+      if (collected.length > 0) toast.success(`${collected.length} titik dipilih`);
+      return;
+    }
+    if (floorVertexMarquee) {
+      const mm = floorVertexMarquee;
+      setFloorVertexMarquee(null);
+      const moved = Math.hypot(mm.cur.x - mm.start.x, mm.cur.y - mm.start.y) * view.s > 4;
+      if (!moved) {
+        if (!mm.additive) setSelectedFloorEditVertices([]);
+        return;
+      }
+      const x0 = Math.min(mm.start.x, mm.cur.x);
+      const x1 = Math.max(mm.start.x, mm.cur.x);
+      const y0 = Math.min(mm.start.y, mm.cur.y);
+      const y1 = Math.max(mm.start.y, mm.cur.y);
+      const inRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const flList = (sketch.floors ?? []).filter(
+        (f) => !activeLvlId || f.levelId === activeLvlId,
+      );
+      const collected: FloorVertexSel[] = [];
+      const keyEq = (a: FloorVertexSel, b: FloorVertexSel) =>
+        a.fid === b.fid && a.ring === b.ring && a.idx === b.idx;
+      for (const fl of flList) {
+        fl.outer.forEach((v, i) => {
+          if (inRect(v)) collected.push({ fid: fl.id, ring: "outer", idx: i, coord: { x: v.x, y: v.y } });
+        });
+        (fl.holes ?? []).forEach((h, hi) => {
+          h.forEach((v, i) => {
+            if (inRect(v)) collected.push({ fid: fl.id, ring: hi, idx: i, coord: { x: v.x, y: v.y } });
+          });
+        });
+      }
+      setSelectedFloorEditVertices((prev) => {
+        if (!mm.additive) return collected;
+        const merged = [...prev];
+        for (const s of collected) {
+          if (!merged.some((p) => keyEq(p, s))) merged.push(s);
+        }
+        return merged;
+      });
+      if (collected.length > 0) toast.success(`${collected.length} titik lantai dipilih`);
       return;
     }
     if (polyDraft && tool === "polyline") {
