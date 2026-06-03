@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import SunCalc from "suncalc";
@@ -17,6 +17,10 @@ import {
   Camera,
   Palette,
   Trash2,
+  Save,
+  Sun,
+  SunDim,
+  Move3d,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -498,11 +502,13 @@ function Scene({
   highlightLevelId,
   sunHour,
   colorMode,
+  noLight,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
   sunHour: number;
   colorMode: "sketch" | "bw";
+  noLight: boolean;
 }) {
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
@@ -543,21 +549,27 @@ function Scene({
 
   return (
     <>
-      <ambientLight intensity={0.35} />
-      <directionalLight
-        position={[sunPos.x, sunPos.y, sunPos.z]}
-        intensity={sunPos.intensity}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-60}
-        shadow-camera-right={60}
-        shadow-camera-top={60}
-        shadow-camera-bottom={-60}
-        shadow-camera-near={0.5}
-        shadow-camera-far={300}
-      />
-      <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
+      {noLight ? (
+        <ambientLight intensity={1.0} />
+      ) : (
+        <>
+          <ambientLight intensity={0.35} />
+          <directionalLight
+            position={[sunPos.x, sunPos.y, sunPos.z]}
+            intensity={sunPos.intensity}
+            castShadow
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+            shadow-camera-left={-60}
+            shadow-camera-right={60}
+            shadow-camera-top={60}
+            shadow-camera-bottom={-60}
+            shadow-camera-near={0.5}
+            shadow-camera-far={300}
+          />
+          <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
+        </>
+      )}
 
       {lahanLayers.map((ly) => (
         <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
@@ -705,6 +717,37 @@ function LibraryGrid({
   );
 }
 
+// Animates the orbit camera with a gentle vertical (polar) oscillation
+// around the current target while preserving azimuth and radius.
+function AutoTilt({ controlsRef }: { controlsRef: React.MutableRefObject<any> }) {
+  const phaseRef = useRef(0);
+  useFrame((_, dt) => {
+    const ctrl = controlsRef.current;
+    if (!ctrl?.object) return;
+    phaseRef.current += dt * 0.35;
+    const cam = ctrl.object as THREE.Camera;
+    const target = ctrl.target as THREE.Vector3;
+    const offset = cam.position.clone().sub(target);
+    const radius = offset.length();
+    if (radius < 1e-3) return;
+    const azimuth = Math.atan2(offset.x, offset.z);
+    // Oscillate polar between ~18° and ~62° from vertical
+    const center = (Math.PI / 180) * 40;
+    const amp = (Math.PI / 180) * 22;
+    const polar = center + Math.sin(phaseRef.current) * amp;
+    const sinP = Math.sin(polar);
+    offset.set(
+      radius * sinP * Math.sin(azimuth),
+      radius * Math.cos(polar),
+      radius * sinP * Math.cos(azimuth),
+    );
+    cam.position.copy(target).add(offset);
+    cam.lookAt(target);
+    ctrl.update();
+  });
+  return null;
+}
+
 // ---------- Per-sketch viewer card ----------
 function SketchViewer({
   sketch,
@@ -720,8 +763,52 @@ function SketchViewer({
   const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [shots, setShots] = useState<{ id: string; dataUrl: string; ts: number }[]>([]);
+  const [noLight, setNoLight] = useState(false);
+  const [autoTilt, setAutoTilt] = useState(false);
+  const [hasSavedView, setHasSavedView] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
+
+  const viewKey = `dabidabis_model3d_view_${sketch.id}`;
+  useEffect(() => {
+    try {
+      setHasSavedView(!!localStorage.getItem(viewKey));
+    } catch {
+      setHasSavedView(false);
+    }
+  }, [viewKey]);
+
+  const savePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    const cam = ctrl.object as THREE.Camera;
+    const t = ctrl.target as THREE.Vector3;
+    const payload = {
+      pos: [cam.position.x, cam.position.y, cam.position.z],
+      target: [t.x, t.y, t.z],
+    };
+    try {
+      localStorage.setItem(viewKey, JSON.stringify(payload));
+      setHasSavedView(true);
+    } catch {
+      // ignore
+    }
+  }, [viewKey]);
+
+  const restorePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    try {
+      const raw = localStorage.getItem(viewKey);
+      if (!raw) return;
+      const { pos, target } = JSON.parse(raw) as { pos: number[]; target: number[] };
+      ctrl.object.position.set(pos[0], pos[1], pos[2]);
+      ctrl.target.set(target[0], target[1], target[2]);
+      ctrl.update();
+    } catch {
+      // ignore
+    }
+  }, [viewKey]);
 
   const shotsKey = `dabidabis_model3d_shots_${sketch.id}`;
   useEffect(() => {
@@ -969,7 +1056,7 @@ function SketchViewer({
         >
           <Canvas
             key={projection}
-            shadows
+            shadows={!noLight}
             gl={{ preserveDrawingBuffer: true, antialias: true }}
             dpr={[1, 2]}
           >
@@ -996,6 +1083,7 @@ function SketchViewer({
               highlightLevelId={highlight}
               sunHour={sunHour}
               colorMode={colorMode}
+              noLight={noLight}
             />
             <OrbitControls
               ref={orbitRef}
@@ -1003,6 +1091,7 @@ function SketchViewer({
               dampingFactor={0.08}
               makeDefault
             />
+            {projection === "persp" && autoTilt && <AutoTilt controlsRef={orbitRef} />}
           </Canvas>
 
           <div className="absolute right-2 top-2 flex flex-wrap justify-end gap-1">
@@ -1066,6 +1155,48 @@ function SketchViewer({
             >
               <RotateCcw className="h-3 w-3" /> Reset
             </Button>
+            {projection === "persp" && (
+              <>
+                <Button
+                  variant={autoTilt ? "default" : "secondary"}
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => setAutoTilt((v) => !v)}
+                  title="Auto vertical tilt"
+                >
+                  <Move3d className="h-3 w-3" /> {autoTilt ? "Tilt: On" : "Auto Tilt"}
+                </Button>
+                <Button
+                  variant={noLight ? "default" : "secondary"}
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => setNoLight((v) => !v)}
+                  title="Matikan cahaya & bayangan"
+                >
+                  {noLight ? <SunDim className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
+                  {noLight ? "No Light" : "Cahaya"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={savePerspectiveView}
+                  title="Simpan sudut pandang perspektif"
+                >
+                  <Save className="h-3 w-3" /> Save View
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs disabled:opacity-50"
+                  onClick={restorePerspectiveView}
+                  disabled={!hasSavedView}
+                  title="Pulihkan sudut pandang tersimpan"
+                >
+                  <RotateCcw className="h-3 w-3" /> Restore
+                </Button>
+              </>
+            )}
             <Button
               variant="secondary"
               size="sm"
