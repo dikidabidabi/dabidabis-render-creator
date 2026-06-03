@@ -1155,6 +1155,48 @@ function SketchViewer({
             >
               <RotateCcw className="h-3 w-3" /> Reset
             </Button>
+            {projection === "persp" && (
+              <>
+                <Button
+                  variant={autoTilt ? "default" : "secondary"}
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => setAutoTilt((v) => !v)}
+                  title="Auto vertical tilt"
+                >
+                  <Move3d className="h-3 w-3" /> {autoTilt ? "Tilt: On" : "Auto Tilt"}
+                </Button>
+                <Button
+                  variant={noLight ? "default" : "secondary"}
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={() => setNoLight((v) => !v)}
+                  title="Matikan cahaya & bayangan"
+                >
+                  {noLight ? <SunDim className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
+                  {noLight ? "No Light" : "Cahaya"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={savePerspectiveView}
+                  title="Simpan sudut pandang perspektif"
+                >
+                  <Save className="h-3 w-3" /> Save View
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs disabled:opacity-50"
+                  onClick={restorePerspectiveView}
+                  disabled={!hasSavedView}
+                  title="Pulihkan sudut pandang tersimpan"
+                >
+                  <RotateCcw className="h-3 w-3" /> Restore
+                </Button>
+              </>
+            )}
             <Button
               variant="secondary"
               size="sm"
