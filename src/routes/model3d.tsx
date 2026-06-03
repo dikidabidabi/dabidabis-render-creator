@@ -1101,7 +1101,7 @@ function SketchViewer({
               dampingFactor={0.08}
               makeDefault
             />
-            {projection === "persp" && autoTilt && <AutoTilt controlsRef={orbitRef} />}
+            {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
           </Canvas>
 
           <div className="absolute right-2 top-2 flex flex-wrap justify-end gap-1">
