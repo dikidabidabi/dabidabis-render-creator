@@ -732,8 +732,52 @@ function SketchViewer({
   const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
   const [libraryOpen, setLibraryOpen] = useState(true);
   const [shots, setShots] = useState<{ id: string; dataUrl: string; ts: number }[]>([]);
+  const [noLight, setNoLight] = useState(false);
+  const [autoTilt, setAutoTilt] = useState(false);
+  const [hasSavedView, setHasSavedView] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
+
+  const viewKey = `dabidabis_model3d_view_${sketch.id}`;
+  useEffect(() => {
+    try {
+      setHasSavedView(!!localStorage.getItem(viewKey));
+    } catch {
+      setHasSavedView(false);
+    }
+  }, [viewKey]);
+
+  const savePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    const cam = ctrl.object as THREE.Camera;
+    const t = ctrl.target as THREE.Vector3;
+    const payload = {
+      pos: [cam.position.x, cam.position.y, cam.position.z],
+      target: [t.x, t.y, t.z],
+    };
+    try {
+      localStorage.setItem(viewKey, JSON.stringify(payload));
+      setHasSavedView(true);
+    } catch {
+      // ignore
+    }
+  }, [viewKey]);
+
+  const restorePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    try {
+      const raw = localStorage.getItem(viewKey);
+      if (!raw) return;
+      const { pos, target } = JSON.parse(raw) as { pos: number[]; target: number[] };
+      ctrl.object.position.set(pos[0], pos[1], pos[2]);
+      ctrl.target.set(target[0], target[1], target[2]);
+      ctrl.update();
+    } catch {
+      // ignore
+    }
+  }, [viewKey]);
 
   const shotsKey = `dabidabis_model3d_shots_${sketch.id}`;
   useEffect(() => {
