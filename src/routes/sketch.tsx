@@ -5492,6 +5492,91 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setFloorVertexDrag(null);
       return;
     }
+    if (editVertexMarquee) {
+      const mm = editVertexMarquee;
+      setEditVertexMarquee(null);
+      const moved = Math.hypot(mm.cur.x - mm.start.x, mm.cur.y - mm.start.y) * view.s > 4;
+      if (!moved) {
+        if (!mm.additive) setSelectedEditVertices([]);
+        return;
+      }
+      const x0 = Math.min(mm.start.x, mm.cur.x);
+      const x1 = Math.max(mm.start.x, mm.cur.x);
+      const y0 = Math.min(mm.start.y, mm.cur.y);
+      const y1 = Math.max(mm.start.y, mm.cur.y);
+      const inRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const collected: { target: EditTarget; coord: Point }[] = [];
+      const seenKeys = new Set<string>();
+      const pushSel = (target: EditTarget, coord: Point) => {
+        const k = keyOf(coord);
+        if (seenKeys.has(k)) return;
+        seenKeys.add(k);
+        collected.push({ target, coord });
+      };
+      layers.forEach((l) => {
+        if (activeLvlId && l.levelId !== activeLvlId) return;
+        l.points.forEach((pt, i) => {
+          if (inRect(pt)) pushSel({ kind: "layer", layerId: l.id, idx: i }, pt);
+        });
+      });
+      lines.forEach((ln, i) => {
+        if (activeLvlId && ln.levelId !== activeLvlId) return;
+        if (inRect(ln.a)) pushSel({ kind: "line", lineIdx: i, end: "a" }, ln.a);
+        if (inRect(ln.b)) pushSel({ kind: "line", lineIdx: i, end: "b" }, ln.b);
+      });
+      setSelectedEditVertices((prev) => {
+        if (!mm.additive) return collected;
+        const merged = [...prev];
+        const exist = new Set(prev.map((p) => keyOf(p.coord)));
+        for (const s of collected) {
+          const k = keyOf(s.coord);
+          if (!exist.has(k)) { exist.add(k); merged.push(s); }
+        }
+        return merged;
+      });
+      if (collected.length > 0) toast.success(`${collected.length} titik dipilih`);
+      return;
+    }
+    if (floorVertexMarquee) {
+      const mm = floorVertexMarquee;
+      setFloorVertexMarquee(null);
+      const moved = Math.hypot(mm.cur.x - mm.start.x, mm.cur.y - mm.start.y) * view.s > 4;
+      if (!moved) {
+        if (!mm.additive) setSelectedFloorEditVertices([]);
+        return;
+      }
+      const x0 = Math.min(mm.start.x, mm.cur.x);
+      const x1 = Math.max(mm.start.x, mm.cur.x);
+      const y0 = Math.min(mm.start.y, mm.cur.y);
+      const y1 = Math.max(mm.start.y, mm.cur.y);
+      const inRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const flList = (sketch.floors ?? []).filter(
+        (f) => !activeLvlId || f.levelId === activeLvlId,
+      );
+      const collected: FloorVertexSel[] = [];
+      const keyEq = (a: FloorVertexSel, b: FloorVertexSel) =>
+        a.fid === b.fid && a.ring === b.ring && a.idx === b.idx;
+      for (const fl of flList) {
+        fl.outer.forEach((v, i) => {
+          if (inRect(v)) collected.push({ fid: fl.id, ring: "outer", idx: i, coord: { x: v.x, y: v.y } });
+        });
+        (fl.holes ?? []).forEach((h, hi) => {
+          h.forEach((v, i) => {
+            if (inRect(v)) collected.push({ fid: fl.id, ring: hi, idx: i, coord: { x: v.x, y: v.y } });
+          });
+        });
+      }
+      setSelectedFloorEditVertices((prev) => {
+        if (!mm.additive) return collected;
+        const merged = [...prev];
+        for (const s of collected) {
+          if (!merged.some((p) => keyEq(p, s))) merged.push(s);
+        }
+        return merged;
+      });
+      if (collected.length > 0) toast.success(`${collected.length} titik lantai dipilih`);
+      return;
+    }
     if (polyDraft && tool === "polyline") {
       // Tambahkan sample terakhir bila cukup jauh dari vertex terakhir
       const pts = polyDraft.points.slice();
