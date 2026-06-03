@@ -2011,10 +2011,38 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
 
+          {/* Room slices per level — digambar lebih dulu agar notasi
+              dinding / lantai / balok berada DI ATAS layer ruang. */}
+          {boxes.map((b) =>
+            b.slices.map((sl, i) => {
+              const x = mx(sl.x0);
+              const w = (sl.x1 - sl.x0) * scalePxPerM;
+              const sliceHM = sl.heightOverride ?? (b.topM - b.baseM);
+              const sliceBaseM = b.baseM + (sl.baseDelta ?? 0);
+              const sliceTopM = sliceBaseM + sliceHM;
+              const y = my(sliceTopM);
+              const h = sliceHM * scalePxPerM;
+              const cx = x + w / 2, cy = y + h / 2;
+              const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
+              return (
+                <g key={`${b.id}-${i}`}>
+                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
+                  {w > 28 && h > 18 && (
+                    <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
+                      style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
+                      {sl.name}
+                    </text>
+                  )}
+                </g>
+              );
+            })
+          )}
+
           {/* Level boxes — pelat lantai tebal HANYA di bawah ruang;
               di luar ruang berupa garis putus-putus tipis.
               Dinding luar level basement (di bawah MDPL 0) dan lantai paling bawah
-              dibuat 2x lebih tebal dari garis lantai. */}
+              dibuat 2x lebih tebal dari garis lantai.
+              Digambar SETELAH room slices agar selalu terlihat di atas warna ruang. */}
           {(() => {
             const roomIntervalsByBox = new Map<string, Array<[number, number]>>();
             for (const b of boxes) {
@@ -2029,7 +2057,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               roomIntervalsByBox.set(b.id, merged);
             }
             const FLOOR_THICK = 2.4;
-            const FLOOR_THICK_HEAVY = 4.8; // 2x lebih tebal dari garis lantai
+            const FLOOR_THICK_HEAVY = 4.8;
             const bottomBoxId = boxes.length
               ? boxes.reduce((a, b) => (a.baseM <= b.baseM ? a : b)).id
               : null;
@@ -2052,7 +2080,6 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 cursor = b2;
               }
               if (cursor < cutLenM) segs.push({ a: cursor, b: cutLenM, thick: false });
-              // Cut out segments that fall under Void rooms — no floor line below void.
               for (const [v0, v1] of voids) {
                 const va = Math.max(0, v0), vb = Math.min(cutLenM, v1);
                 if (vb <= va) continue;
@@ -2092,7 +2119,6 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const roomMax = rooms.length ? Math.min(cutLenM, rooms[rooms.length - 1][1]) : null;
               return (
                 <g key={b.id}>
-                  <rect x={x} y={y} width={w} height={h} fill="#ffffff" fillOpacity={0.65} stroke="none" />
                   {/* Batas luar potongan — garis tipis */}
                   <line x1={x} y1={y} x2={x} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
                   <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke="#111" strokeWidth={0.5} strokeLinecap="square" />
@@ -2115,33 +2141,6 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               );
             });
           })()}
-
-          {/* Room slices per level */}
-          {boxes.map((b) =>
-            b.slices.map((sl, i) => {
-              const x = mx(sl.x0);
-              const w = (sl.x1 - sl.x0) * scalePxPerM;
-              const sliceHM = sl.heightOverride ?? (b.topM - b.baseM);
-              // baseM is the floor level mdpl; baseDelta shifts the slab (e.g. balkon -0.1m).
-              const sliceBaseM = b.baseM + (sl.baseDelta ?? 0);
-              const sliceTopM = sliceBaseM + sliceHM;
-              const y = my(sliceTopM);
-              const h = sliceHM * scalePxPerM;
-              const cx = x + w / 2, cy = y + h / 2;
-              const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
-              return (
-                <g key={`${b.id}-${i}`}>
-                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
-                  {w > 28 && h > 18 && (
-                    <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
-                      {sl.name}
-                    </text>
-                  )}
-                </g>
-              );
-            })
-          )}
 
           {/* Slab lantai (150 mm) + Balok (400×700 mm) di setiap as grid.
               Notasi: beton dengan pola bintik. */}
