@@ -1755,14 +1755,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [editDrag, setEditDrag] = useState<{ key: string; coord: Point; target: EditTarget } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
   const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
-  // Selected vertex (Edit Titik — Geser) untuk move numerik
-  const [selectedEditVertex, setSelectedEditVertex] = useState<{ target: EditTarget; coord: Point } | null>(null);
+  // Selected vertices (Edit Titik — Geser) — multi-select via shift-click, untuk move numerik
+  const [selectedEditVertices, setSelectedEditVertices] = useState<{ target: EditTarget; coord: Point }[]>([]);
+  const selectedEditVertex = selectedEditVertices.length > 0 ? selectedEditVertices[selectedEditVertices.length - 1] : null;
   const [editVxDxMm, setEditVxDxMm] = useState<string>("0");
   const [editVxDyMm, setEditVxDyMm] = useState<string>("0");
-  // Selected vertex (Lantai Edit Titik — Geser) untuk move numerik
-  const [selectedFloorEditVertex, setSelectedFloorEditVertex] = useState<
-    { fid: string; ring: "outer" | number; idx: number; coord: Point } | null
-  >(null);
+  // Selected vertices (Lantai Edit Titik — Geser) — multi-select
+  type FloorVertexSel = { fid: string; ring: "outer" | number; idx: number; coord: Point };
+  const [selectedFloorEditVertices, setSelectedFloorEditVertices] = useState<FloorVertexSel[]>([]);
+  const selectedFloorEditVertex = selectedFloorEditVertices.length > 0 ? selectedFloorEditVertices[selectedFloorEditVertices.length - 1] : null;
   const [floorVxDxMm, setFloorVxDxMm] = useState<string>("0");
   const [floorVxDyMm, setFloorVxDyMm] = useState<string>("0");
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
@@ -3022,13 +3023,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         l.points.forEach(pushVert);
       });
       const deleteMode = editMode === "delete";
+      const selKeys = new Set(selectedEditVertices.map((sv) => keyOf(sv.coord)));
       verts.forEach((v) => {
+        const k = keyOf(v.p);
+        const isSel = selKeys.has(k);
         ctx.beginPath();
-        ctx.arc(v.p.x, v.p.y, 6 / s, 0, Math.PI * 2);
-        ctx.fillStyle = v.locked ? "rgba(120,120,120,0.85)" : (deleteMode ? "rgba(220,40,40,0.95)" : "#fff");
+        ctx.arc(v.p.x, v.p.y, (isSel ? 7.5 : 6) / s, 0, Math.PI * 2);
+        ctx.fillStyle = isSel
+          ? "rgba(0,212,255,0.95)"
+          : v.locked
+          ? "rgba(120,120,120,0.85)"
+          : (deleteMode ? "rgba(220,40,40,0.95)" : "#fff");
         ctx.fill();
-        ctx.lineWidth = 2 / s;
-        ctx.strokeStyle = v.locked ? "#666" : (deleteMode ? "#7a1010" : "rgba(232,93,58,1)");
+        ctx.lineWidth = (isSel ? 2.5 : 2) / s;
+        ctx.strokeStyle = isSel
+          ? "rgba(0,150,200,1)"
+          : v.locked
+          ? "#666"
+          : (deleteMode ? "#7a1010" : "rgba(232,93,58,1)");
         ctx.stroke();
       });
       if (editHover) {
@@ -3691,19 +3703,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     if (tool === "floor" && floorMode === "edit") {
       ctx.save();
       const flList = (sketch.floors ?? []).filter((f) => !activeLvlId || f.levelId === activeLvlId);
-      const drawHandle = (w: Point) => {
+      const selKey = (fid: string, ring: "outer" | number, idx: number) => `${fid}|${ring}|${idx}`;
+      const selSet = new Set(selectedFloorEditVertices.map((sv) => selKey(sv.fid, sv.ring, sv.idx)));
+      const drawHandle = (w: Point, isSel: boolean) => {
         const s = worldToScreen(w);
         ctx.beginPath();
-        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
-        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : floorEditSub === "delete" ? "#c62828" : "#fff";
-        ctx.strokeStyle = "#1a1a1a";
-        ctx.lineWidth = 1.5;
+        ctx.arc(s.x, s.y, isSel ? 6.5 : 5, 0, Math.PI * 2);
+        ctx.fillStyle = isSel
+          ? "rgba(0,212,255,0.95)"
+          : floorEditSub === "move" ? "#e85d3a" : floorEditSub === "delete" ? "#c62828" : "#fff";
+        ctx.strokeStyle = isSel ? "rgba(0,120,160,1)" : "#1a1a1a";
+        ctx.lineWidth = isSel ? 2 : 1.5;
         ctx.fill();
         ctx.stroke();
       };
       for (const fl of flList) {
-        fl.outer.forEach(drawHandle);
-        (fl.holes ?? []).forEach((h) => h.forEach(drawHandle));
+        fl.outer.forEach((p, i) => drawHandle(p, selSet.has(selKey(fl.id, "outer", i))));
+        (fl.holes ?? []).forEach((h, hi) => h.forEach((p, i) => drawHandle(p, selSet.has(selKey(fl.id, hi, i)))));
       }
       ctx.restore();
     }
@@ -3722,7 +3738,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices]);
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -4638,15 +4654,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           hits.sort((a, b) => a.d - b.d);
           const bestV = hits[0];
           if (floorEditSub === "move") {
+            const tgt = flList.find((f) => f.id === bestV.fid);
+            const coord = tgt
+              ? (bestV.ring === "outer"
+                  ? tgt.outer[bestV.idx]
+                  : (tgt.holes ?? [])[bestV.ring as number]?.[bestV.idx])
+              : null;
+            if (!coord) { return; }
+            const sel: FloorVertexSel = { fid: bestV.fid, ring: bestV.ring, idx: bestV.idx, coord: { x: coord.x, y: coord.y } };
+            const keyEq = (a: FloorVertexSel, b: FloorVertexSel) =>
+              a.fid === b.fid && a.ring === b.ring && a.idx === b.idx;
+            if (e.shiftKey || e.metaKey || e.ctrlKey) {
+              setSelectedFloorEditVertices((prev) => {
+                const exists = prev.some((p) => keyEq(p, sel));
+                return exists ? prev.filter((p) => !keyEq(p, sel)) : [...prev, sel];
+              });
+              return;
+            }
             pushHistory();
             setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
-            const tgt = flList.find((f) => f.id === bestV.fid);
-            if (tgt) {
-              const coord = bestV.ring === "outer"
-                ? tgt.outer[bestV.idx]
-                : (tgt.holes ?? [])[bestV.ring as number]?.[bestV.idx];
-              if (coord) setSelectedFloorEditVertex({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx, coord: { x: coord.x, y: coord.y } });
-            }
+            setSelectedFloorEditVertices((prev) => (prev.some((p) => keyEq(p, sel)) ? prev : [sel]));
           } else {
             // delete vertex
             const target = flList.find((f) => f.id === bestV.fid);
@@ -4822,13 +4849,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const hit = findVertexTargetAt(raw, tol);
       if (!hit) return;
       const k = keyOf(hit.coord);
+      const sel = { target: hit.target, coord: hit.coord };
+      if (e.shiftKey || e.metaKey || e.ctrlKey) {
+        // toggle membership; do not drag
+        setSelectedEditVertices((prev) => {
+          const exists = prev.some((p) => keyOf(p.coord) === k);
+          return exists ? prev.filter((p) => keyOf(p.coord) !== k) : [...prev, sel];
+        });
+        return;
+      }
       if (lockedVertexKeys.has(k)) {
         toast.error("Titik terkunci");
         return;
       }
       pushHistory();
       setEditDrag({ key: k, coord: hit.coord, target: hit.target });
-      setSelectedEditVertex({ target: hit.target, coord: hit.coord });
+      setSelectedEditVertices((prev) => (prev.some((p) => keyOf(p.coord) === k) ? prev : [sel]));
     } else if (tool === "pick") {
       if (!activeLvlId) {
         toast.error("Pilih Level aktif terlebih dahulu");
@@ -5189,7 +5225,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const newPos = getWorldPos(e);
       moveVertexTarget(editDrag.target, editDrag.coord, newPos);
       setEditDrag({ key: keyOf(newPos), coord: newPos, target: editDrag.target });
-      setSelectedEditVertex({ target: editDrag.target, coord: newPos });
+      setSelectedEditVertices((prev) => prev.map((p) => (keyOf(p.coord) === keyOf(editDrag.coord) ? { target: editDrag.target, coord: newPos } : p)));
       setEditHover(newPos);
       setEditHover(newPos);
       return;
@@ -5214,7 +5250,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return { ...fl, holes };
       });
       onChange({ floors: nextFloors });
-      setSelectedFloorEditVertex({ fid: fd.fid, ring: fd.ring, idx: fd.idx, coord: newPos });
+      setSelectedFloorEditVertices((prev) => prev.map((p) => (p.fid === fd.fid && p.ring === fd.ring && p.idx === fd.idx ? { ...p, coord: newPos } : p)));
       return;
     }
     const p = tool === "floor" && floorMode === "rect"
@@ -6308,49 +6344,57 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {tool === "floor" && (
           <FloorToolPanel
             mode={floorMode}
-            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); setSelectedFloorEditVertex(null); }}
+            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); }}
             draft={floorDraft}
             level={levels.find((l) => l.id === activeLvlId) ?? null}
             onCommit={() => commitFloor()}
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
             editSub={floorEditSub}
-            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertex(null); }}
+            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); }}
             selectedFloorVertex={selectedFloorEditVertex}
+            selectedFloorVertexCount={selectedFloorEditVertices.length}
+            onClearFloorSelection={() => setSelectedFloorEditVertices([])}
             floorVxDxMm={floorVxDxMm}
             floorVxDyMm={floorVxDyMm}
             onFloorVxDxMm={setFloorVxDxMm}
             onFloorVxDyMm={setFloorVxDyMm}
             pxPerMeter={pxPerMeter}
             onApplyFloorVertexMove={() => {
-              if (!selectedFloorEditVertex) return;
+              if (selectedFloorEditVertices.length === 0) return;
               const dxMm = Number(floorVxDxMm) || 0;
               const dyMm = Number(floorVxDyMm) || 0;
               if (dxMm === 0 && dyMm === 0) { toast.error("Isi ΔX atau ΔY terlebih dahulu"); return; }
-              const sv = selectedFloorEditVertex;
-              const newPos: Point = {
-                x: sv.coord.x + (dxMm / 1000) * pxPerMeter,
-                y: sv.coord.y + (dyMm / 1000) * pxPerMeter,
-              };
+              const dxPx = (dxMm / 1000) * pxPerMeter;
+              const dyPx = (dyMm / 1000) * pxPerMeter;
               pushHistory();
+              const selByFid = new Map<string, FloorVertexSel[]>();
+              for (const s of selectedFloorEditVertices) {
+                const arr = selByFid.get(s.fid) ?? [];
+                arr.push(s); selByFid.set(s.fid, arr);
+              }
               const nextFloors = (sketch.floors ?? []).map((fl) => {
-                if (fl.id !== sv.fid) return fl;
-                if (sv.ring === "outer") {
-                  const next = fl.outer.slice();
-                  if (sv.idx < next.length) next[sv.idx] = newPos;
-                  return { ...fl, outer: next };
+                const sels = selByFid.get(fl.id);
+                if (!sels || sels.length === 0) return fl;
+                const outerSet = new Set(sels.filter((s) => s.ring === "outer").map((s) => s.idx));
+                const holeMap = new Map<number, Set<number>>();
+                for (const s of sels) {
+                  if (s.ring === "outer") continue;
+                  const ri = s.ring as number;
+                  const set = holeMap.get(ri) ?? new Set<number>();
+                  set.add(s.idx); holeMap.set(ri, set);
                 }
-                const holes = (fl.holes ?? []).map((h, hi) => {
-                  if (hi !== sv.ring) return h;
-                  const nh = h.slice();
-                  if (sv.idx < nh.length) nh[sv.idx] = newPos;
-                  return nh;
+                const nextOuter = fl.outer.map((p, i) => outerSet.has(i) ? { x: p.x + dxPx, y: p.y + dyPx } : p);
+                const nextHoles = (fl.holes ?? []).map((h, hi) => {
+                  const set = holeMap.get(hi);
+                  if (!set) return h;
+                  return h.map((p, i) => set.has(i) ? { x: p.x + dxPx, y: p.y + dyPx } : p);
                 });
-                return { ...fl, holes };
+                return { ...fl, outer: nextOuter, holes: nextHoles.length ? nextHoles : fl.holes };
               });
               onChange({ floors: nextFloors });
-              setSelectedFloorEditVertex({ ...sv, coord: newPos });
+              setSelectedFloorEditVertices((prev) => prev.map((p) => ({ ...p, coord: { x: p.coord.x + dxPx, y: p.coord.y + dyPx } })));
               setFloorVxDxMm("0"); setFloorVxDyMm("0");
-              toast.success(`Titik lantai digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+              toast.success(`${selectedFloorEditVertices.length} titik lantai digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
             }}
             floorsInLevel={(sketch.floors ?? []).filter((f) => f.levelId === activeLvlId)}
             clipboardCount={floorClipboard.length}
@@ -7323,9 +7367,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                     Geser Numerik (mm)
                   </Label>
                   <span className="text-[10px] text-muted-foreground">
-                    {selectedEditVertex
-                      ? `Titik (${(selectedEditVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedEditVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
-                      : "Pilih titik dulu"}
+                    {selectedEditVertices.length === 0
+                      ? "Pilih titik dulu"
+                      : selectedEditVertices.length === 1
+                      ? `Titik (${(selectedEditVertices[0].coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedEditVertices[0].coord.y / pxPerMeter * 1000).toFixed(0)})`
+                      : `${selectedEditVertices.length} titik dipilih`}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -7350,38 +7396,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                     />
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  className="w-full bg-gradient-ember shadow-ember"
-                  disabled={!selectedEditVertex}
-                  onClick={() => {
-                    if (!selectedEditVertex) return;
-                    const dxMm = Number(editVxDxMm) || 0;
-                    const dyMm = Number(editVxDyMm) || 0;
-                    if (dxMm === 0 && dyMm === 0) {
-                      toast.error("Isi ΔX atau ΔY terlebih dahulu");
-                      return;
-                    }
-                    const newPos: Point = {
-                      x: selectedEditVertex.coord.x + (dxMm / 1000) * pxPerMeter,
-                      y: selectedEditVertex.coord.y + (dyMm / 1000) * pxPerMeter,
-                    };
-                    if (lockedVertexKeys.has(keyOf(selectedEditVertex.coord))) {
-                      toast.error("Titik terkunci");
-                      return;
-                    }
-                    pushHistory();
-                    moveVertexTarget(selectedEditVertex.target, selectedEditVertex.coord, newPos);
-                    setSelectedEditVertex({ target: selectedEditVertex.target, coord: newPos });
-                    setEditVxDxMm("0");
-                    setEditVxDyMm("0");
-                    toast.success(`Titik digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
-                  }}
-                >
-                  Apply Geser
-                </Button>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    className="flex-1 bg-gradient-ember shadow-ember"
+                    disabled={selectedEditVertices.length === 0}
+                    onClick={() => {
+                      if (selectedEditVertices.length === 0) return;
+                      const dxMm = Number(editVxDxMm) || 0;
+                      const dyMm = Number(editVxDyMm) || 0;
+                      if (dxMm === 0 && dyMm === 0) {
+                        toast.error("Isi ΔX atau ΔY terlebih dahulu");
+                        return;
+                      }
+                      const dxPx = (dxMm / 1000) * pxPerMeter;
+                      const dyPx = (dyMm / 1000) * pxPerMeter;
+                      const movable = selectedEditVertices.filter((v) => !lockedVertexKeys.has(keyOf(v.coord)));
+                      if (movable.length === 0) { toast.error("Semua titik terkunci"); return; }
+                      pushHistory();
+                      for (const v of movable) {
+                        const newPos: Point = { x: v.coord.x + dxPx, y: v.coord.y + dyPx };
+                        moveVertexTarget(v.target, v.coord, newPos);
+                      }
+                      setSelectedEditVertices((prev) =>
+                        prev.map((v) =>
+                          lockedVertexKeys.has(keyOf(v.coord))
+                            ? v
+                            : { target: v.target, coord: { x: v.coord.x + dxPx, y: v.coord.y + dyPx } },
+                        ),
+                      );
+                      setEditVxDxMm("0");
+                      setEditVxDyMm("0");
+                      toast.success(`${movable.length} titik digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                    }}
+                  >
+                    Apply Geser
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={selectedEditVertices.length === 0}
+                    onClick={() => setSelectedEditVertices([])}
+                  >
+                    Reset Pilih
+                  </Button>
+                </div>
                 <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik satu titik dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+                  Klik titik untuk pilih. Shift/Ctrl+klik untuk tambah/buang dari pilihan. Titik terpilih berwarna cyan. Positif ΔX = kanan, positif ΔY = bawah.
                 </p>
               </div>
             )}
@@ -8466,6 +8527,8 @@ function FloorToolPanel({
   onPasteFloors,
   onDeleteFloors,
   selectedFloorVertex,
+  selectedFloorVertexCount,
+  onClearFloorSelection,
   floorVxDxMm,
   floorVxDyMm,
   onFloorVxDxMm,
@@ -8487,6 +8550,8 @@ function FloorToolPanel({
   onPasteFloors: () => void;
   onDeleteFloors: () => void;
   selectedFloorVertex: { fid: string; ring: "outer" | number; idx: number; coord: Point } | null;
+  selectedFloorVertexCount: number;
+  onClearFloorSelection: () => void;
   floorVxDxMm: string;
   floorVxDyMm: string;
   onFloorVxDxMm: (v: string) => void;
@@ -8578,9 +8643,11 @@ function FloorToolPanel({
               Geser Numerik (mm)
             </Label>
             <span className="text-[10px] text-muted-foreground">
-              {selectedFloorVertex
+              {selectedFloorVertexCount === 0
+                ? "Pilih titik dulu"
+                : selectedFloorVertexCount === 1 && selectedFloorVertex
                 ? `Titik (${(selectedFloorVertex.coord.x / pxPerMeter * 1000).toFixed(0)}, ${(selectedFloorVertex.coord.y / pxPerMeter * 1000).toFixed(0)})`
-                : "Pilih titik dulu"}
+                : `${selectedFloorVertexCount} titik dipilih`}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
@@ -8605,16 +8672,26 @@ function FloorToolPanel({
               />
             </div>
           </div>
-          <Button
-            size="sm"
-            className="w-full bg-gradient-ember shadow-ember"
-            disabled={!selectedFloorVertex}
-            onClick={onApplyFloorVertexMove}
-          >
-            Apply Geser
-          </Button>
+          <div className="flex gap-1.5">
+            <Button
+              size="sm"
+              className="flex-1 bg-gradient-ember shadow-ember"
+              disabled={selectedFloorVertexCount === 0}
+              onClick={onApplyFloorVertexMove}
+            >
+              Apply Geser
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedFloorVertexCount === 0}
+              onClick={onClearFloorSelection}
+            >
+              Reset Pilih
+            </Button>
+          </div>
           <p className="text-[10px] leading-snug text-muted-foreground">
-            Klik titik lantai dulu di kanvas (atau drag) untuk memilih, lalu isi ΔX/ΔY (mm). Positif ΔX = kanan, positif ΔY = bawah.
+            Klik titik untuk pilih. Shift/Ctrl+klik untuk tambah/buang. Titik terpilih berwarna cyan. Positif ΔX = kanan, positif ΔY = bawah.
           </p>
         </div>
       )}
