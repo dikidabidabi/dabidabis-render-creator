@@ -83,6 +83,7 @@ type StoreShape = { sketches: Sketch[]; openId: string | null };
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const COST_KEY = "dabidabis_cost_v1";
 const NARASI_KEY = "dabidabis_narasi_v1";
+const PERSPEKTIF_KEY = "dabidabis_perspektif_v1";
 
 // ---------- Narasi store (sinkron dengan halaman /narasi) ----------
 type NarasiItem = { id: string; text: string; images: (string | null)[] };
@@ -112,6 +113,32 @@ function narasiForSketch(store: NarasiStore, sketchId: string): NarasiItem[] {
   const arr = store[sketchId];
   if (arr && arr.length > 0) return arr;
   return [{ id: `default-${sketchId}`, text: "", images: [null, null, null, null] }];
+}
+
+// ---------- Perspektif store (sinkron dengan halaman /narasi tab Perspektif) ----------
+type PerspektifItem = { id: string; title: string; image: string | null };
+type PerspektifStore = Record<string, PerspektifItem[]>;
+function loadPerspektifStore(): PerspektifStore {
+  try {
+    const raw = localStorage.getItem(PERSPEKTIF_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== "object") return {};
+    const out: PerspektifStore = {};
+    for (const k of Object.keys(v)) {
+      const arr = (v as any)[k];
+      if (!Array.isArray(arr)) continue;
+      out[k] = arr.map((p: any) => ({
+        id: String(p?.id ?? `${k}_${Math.random().toString(36).slice(2, 7)}`),
+        title: typeof p?.title === "string" ? p.title : "",
+        image: typeof p?.image === "string" ? p.image : null,
+      }));
+    }
+    return out;
+  } catch { return {}; }
+}
+function perspektifForSketch(store: PerspektifStore, sketchId: string): PerspektifItem[] {
+  return (store[sketchId] ?? []).filter((p) => !!p.image);
 }
 
 // A3 landscape: 420 × 297 mm. Internal slide canvas in px (proportional, 1mm ≈ 3.3674px).
@@ -270,8 +297,10 @@ function PresentasiPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [narasiStore, setNarasiStore] = useState<NarasiStore>({});
+  const [perspektifStore, setPerspektifStore] = useState<PerspektifStore>({});
   const lastRawRef = useRef<string | null>(null);
   const lastNarasiRawRef = useRef<string | null>(null);
+  const lastPerspektifRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
@@ -295,6 +324,11 @@ function PresentasiPage() {
         lastNarasiRawRef.current = nraw;
         setNarasiStore(loadNarasiStore());
       }
+      const praw = localStorage.getItem(PERSPEKTIF_KEY);
+      if (praw !== lastPerspektifRawRef.current) {
+        lastPerspektifRawRef.current = praw;
+        setPerspektifStore(loadPerspektifStore());
+      }
     } catch { /* ignore */ }
   };
 
@@ -302,7 +336,7 @@ function PresentasiPage() {
     load();
     setLoaded(true);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY || e.key === NARASI_KEY) load();
+      if (e.key === STORAGE_KEY || e.key === NARASI_KEY || e.key === PERSPEKTIF_KEY) load();
     };
     const onVis = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("storage", onStorage);
@@ -342,6 +376,7 @@ function PresentasiPage() {
               key={sk.id}
               sketch={sk}
               narasi={narasiForSketch(narasiStore, sk.id)}
+              perspektif={perspektifForSketch(perspektifStore, sk.id)}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
             />
@@ -379,9 +414,9 @@ function PrintStyles() {
 
 // ---------- Sketch Box ----------
 function PresentasiBox({
-  sketch, narasi, open, onToggle,
-}: { sketch: Sketch; narasi: NarasiItem[]; open: boolean; onToggle: () => void }) {
-  const slides = useMemo(() => buildSlides(sketch, narasi), [sketch, narasi]);
+  sketch, narasi, perspektif, open, onToggle,
+}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
+  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif), [sketch, narasi, perspektif]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
@@ -804,6 +839,7 @@ type Slide =
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
+  | { kind: "perspektif"; id: string; title: string; sketch: Sketch; image: string; caption: string; index: number; total: number }
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "shadow-seasonal"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
@@ -832,7 +868,7 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -856,6 +892,20 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
       narasi: n,
       index: i,
       total: narasiList.length,
+    });
+  });
+  // Slide Perspektif — satu slide per gambar perspektif yang diunggah.
+  const perspektifList = perspektif.filter((p): p is PerspektifItem & { image: string } => !!p.image);
+  perspektifList.forEach((p, i) => {
+    out.push({
+      kind: "perspektif",
+      id: `perspektif-${p.id}`,
+      title: p.title.trim() || (perspektifList.length > 1 ? `Perspektif ${i + 1}` : "Perspektif"),
+      sketch: sk,
+      image: p.image,
+      caption: p.title.trim() || (perspektifList.length > 1 ? `Perspektif ${i + 1}` : "Perspektif"),
+      index: i,
+      total: perspektifList.length,
     });
   });
   for (const lv of levels) {
@@ -955,6 +1005,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = []): Slide[] {
     switch (s.kind) {
       case "site": return "Analisa Tapak";
       case "konsep": return "Konsep";
+      case "perspektif": return "Perspektif";
       case "level": return "Denah per Level";
       case "section": return "Potongan Prinsip";
       case "matahari":
@@ -1298,7 +1349,7 @@ function ManualScaleBox({
 }
 function SlideContent({ slide }: { slide?: Slide }) {
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
@@ -1308,6 +1359,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "section" && <SectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
+      {slide.kind === "perspektif" && <PerspektifBody slide={slide} />}
       {slide.kind === "matahari" && <MatahariBody slide={slide} />}
       {slide.kind === "shadow-seasonal" && <ShadowSeasonalBody slide={slide} />}
       {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
@@ -3701,6 +3753,127 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
     </div>
   );
 }
+
+function PerspektifBody({ slide }: { slide: Extract<Slide, { kind: "perspektif" }> }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        background: "#000",
+      }}
+    >
+      {/* Full-bleed perspektif image */}
+      <img
+        src={slide.image}
+        alt={slide.caption}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+
+      {/* Top scrim for header legibility */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 220,
+          background: "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Header / Kop — white text */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          padding: `${PAD}px ${PAD}px 20px ${PAD}px`,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 24,
+          color: "#ffffff",
+          borderBottom: "1px solid rgba(255,255,255,0.35)",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>
+            Perspektif
+            {slide.total > 1 ? ` · ${slide.index + 1}/${slide.total}` : ""}
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-display, Sora, sans-serif)",
+              fontSize: 58, lineHeight: 1.02, letterSpacing: "-0.03em", fontWeight: 600, marginTop: 6,
+              color: "#ffffff",
+              textShadow: "0 2px 14px rgba(0,0,0,0.45)",
+            }}
+          >
+            {slide.title}
+          </div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", color: "#ffffff" }}>
+            {slide.sketch.title}
+          </div>
+          <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: "rgba(255,255,255,0.75)", marginTop: 4 }}>
+            Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom-left caption — black text on light scrim */}
+      <div
+        style={{
+          position: "absolute",
+          left: PAD,
+          bottom: PAD,
+          maxWidth: "55%",
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(4px)",
+          padding: "16px 22px",
+          borderRadius: 4,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>
+          Judul Perspektif
+        </div>
+        <div
+          style={{
+            fontFamily: "var(--font-display, Sora, sans-serif)",
+            fontSize: 30,
+            lineHeight: 1.18,
+            color: "#000000",
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+            wordBreak: "break-word",
+          }}
+        >
+          {slide.caption}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
 
 
 
