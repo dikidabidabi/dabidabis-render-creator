@@ -414,9 +414,9 @@ function PrintStyles() {
 
 // ---------- Sketch Box ----------
 function PresentasiBox({
-  sketch, narasi, open, onToggle,
-}: { sketch: Sketch; narasi: NarasiItem[]; open: boolean; onToggle: () => void }) {
-  const slides = useMemo(() => buildSlides(sketch, narasi), [sketch, narasi]);
+  sketch, narasi, perspektif, open, onToggle,
+}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
+  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif), [sketch, narasi, perspektif]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
