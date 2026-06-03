@@ -4640,6 +4640,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           if (floorEditSub === "move") {
             pushHistory();
             setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
+            const tgt = flList.find((f) => f.id === bestV.fid);
+            if (tgt) {
+              const coord = bestV.ring === "outer"
+                ? tgt.outer[bestV.idx]
+                : (tgt.holes ?? [])[bestV.ring as number]?.[bestV.idx];
+              if (coord) setSelectedFloorEditVertex({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx, coord: { x: coord.x, y: coord.y } });
+            }
           } else {
             // delete vertex
             const target = flList.find((f) => f.id === bestV.fid);
