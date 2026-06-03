@@ -426,6 +426,36 @@ function PresentasiBox({
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const toggleHidden = useCallback((id: string) => {
+    setHidden((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+  // First slide (title) and last slide (closing/terima kasih) are always kept
+  const protectedIds = useMemo(() => {
+    const s = new Set<string>();
+    if (slides.length > 0) s.add(slides[0].id);
+    if (slides.length > 1) s.add(slides[slides.length - 1].id);
+    return s;
+  }, [slides]);
+  const allHiddenChecked = useMemo(
+    () => slides.length > 0 && slides.every((s) => protectedIds.has(s.id) || hidden.has(s.id)),
+    [slides, hidden, protectedIds],
+  );
+  const checkAllHidden = useCallback(() => {
+    if (allHiddenChecked) {
+      setHidden(new Set());
+    } else {
+      const n = new Set<string>();
+      for (const s of slides) if (!protectedIds.has(s.id)) n.add(s.id);
+      setHidden(n);
+    }
+  }, [slides, protectedIds, allHiddenChecked]);
+  const visibleSlides = useMemo(() => slides.filter((s) => !hidden.has(s.id)), [slides, hidden]);
+
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
 
   useEffect(() => {
