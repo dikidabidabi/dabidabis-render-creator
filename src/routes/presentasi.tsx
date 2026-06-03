@@ -83,6 +83,7 @@ type StoreShape = { sketches: Sketch[]; openId: string | null };
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const COST_KEY = "dabidabis_cost_v1";
 const NARASI_KEY = "dabidabis_narasi_v1";
+const PERSPEKTIF_KEY = "dabidabis_perspektif_v1";
 
 // ---------- Narasi store (sinkron dengan halaman /narasi) ----------
 type NarasiItem = { id: string; text: string; images: (string | null)[] };
@@ -112,6 +113,32 @@ function narasiForSketch(store: NarasiStore, sketchId: string): NarasiItem[] {
   const arr = store[sketchId];
   if (arr && arr.length > 0) return arr;
   return [{ id: `default-${sketchId}`, text: "", images: [null, null, null, null] }];
+}
+
+// ---------- Perspektif store (sinkron dengan halaman /narasi tab Perspektif) ----------
+type PerspektifItem = { id: string; title: string; image: string | null };
+type PerspektifStore = Record<string, PerspektifItem[]>;
+function loadPerspektifStore(): PerspektifStore {
+  try {
+    const raw = localStorage.getItem(PERSPEKTIF_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== "object") return {};
+    const out: PerspektifStore = {};
+    for (const k of Object.keys(v)) {
+      const arr = (v as any)[k];
+      if (!Array.isArray(arr)) continue;
+      out[k] = arr.map((p: any) => ({
+        id: String(p?.id ?? `${k}_${Math.random().toString(36).slice(2, 7)}`),
+        title: typeof p?.title === "string" ? p.title : "",
+        image: typeof p?.image === "string" ? p.image : null,
+      }));
+    }
+    return out;
+  } catch { return {}; }
+}
+function perspektifForSketch(store: PerspektifStore, sketchId: string): PerspektifItem[] {
+  return (store[sketchId] ?? []).filter((p) => !!p.image);
 }
 
 // A3 landscape: 420 × 297 mm. Internal slide canvas in px (proportional, 1mm ≈ 3.3674px).
