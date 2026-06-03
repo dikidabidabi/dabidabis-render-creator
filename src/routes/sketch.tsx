@@ -6575,6 +6575,63 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 Kosongkan
               </Button>
             </div>
+            {/* ===== Copy / Paste lintas-level ===== */}
+            <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Clipboard
+                </Label>
+                <span className="text-[10px] text-muted-foreground">
+                  {moveClipboard
+                    ? `${moveClipboard.lines.length + moveClipboard.layers.length + moveClipboard.circles.length + moveClipboard.doors.length + moveClipboard.floors.length} obj`
+                    : "kosong"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopySelection}
+                  disabled={moveSel.size === 0}
+                  title="Salin objek terpilih (Ctrl+C konseptual)"
+                >
+                  Copy
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-gradient-ember shadow-ember"
+                  onClick={() => handlePasteClipboard()}
+                  disabled={!moveClipboard}
+                  title="Tempel ke level aktif"
+                >
+                  Paste
+                </Button>
+              </div>
+              {moveClipboard && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">
+                    Tempel ke level tertentu
+                  </Label>
+                  <div className="flex flex-wrap gap-1">
+                    {levels.map((lv) => (
+                      <Button
+                        key={lv.id}
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-[10px]"
+                        onClick={() => handlePasteClipboard(lv.id)}
+                      >
+                        {lv.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Salin objek dari level mana pun, lalu tempel ke level aktif atau pilih level tujuan di atas. Koordinat dipertahankan; ID baru dibuat otomatis.
+              </p>
+            </div>
+
             <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Geser Numerik (mm)
