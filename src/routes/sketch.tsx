@@ -6052,6 +6052,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Move — pilih satu/banyak objek lalu drag (snap mm) atau geser numerik ΔX/ΔY mm."
           >
             <GripHorizontal className="mr-1.5 h-4 w-4" /> Move
+          </Button>
           <Button
             variant={tool === "erase" ? "default" : "outline"}
             size="sm"
