@@ -1755,14 +1755,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [editDrag, setEditDrag] = useState<{ key: string; coord: Point; target: EditTarget } | null>(null);
   const [editHover, setEditHover] = useState<Point | null>(null);
   const [editMode, setEditMode] = useState<"move" | "addPoint" | "delete" | "fillet">("move");
-  // Selected vertex (Edit Titik — Geser) untuk move numerik
-  const [selectedEditVertex, setSelectedEditVertex] = useState<{ target: EditTarget; coord: Point } | null>(null);
+  // Selected vertices (Edit Titik — Geser) — multi-select via shift-click, untuk move numerik
+  const [selectedEditVertices, setSelectedEditVertices] = useState<{ target: EditTarget; coord: Point }[]>([]);
+  const selectedEditVertex = selectedEditVertices.length > 0 ? selectedEditVertices[selectedEditVertices.length - 1] : null;
   const [editVxDxMm, setEditVxDxMm] = useState<string>("0");
   const [editVxDyMm, setEditVxDyMm] = useState<string>("0");
-  // Selected vertex (Lantai Edit Titik — Geser) untuk move numerik
-  const [selectedFloorEditVertex, setSelectedFloorEditVertex] = useState<
-    { fid: string; ring: "outer" | number; idx: number; coord: Point } | null
-  >(null);
+  // Selected vertices (Lantai Edit Titik — Geser) — multi-select
+  type FloorVertexSel = { fid: string; ring: "outer" | number; idx: number; coord: Point };
+  const [selectedFloorEditVertices, setSelectedFloorEditVertices] = useState<FloorVertexSel[]>([]);
+  const selectedFloorEditVertex = selectedFloorEditVertices.length > 0 ? selectedFloorEditVertices[selectedFloorEditVertices.length - 1] : null;
   const [floorVxDxMm, setFloorVxDxMm] = useState<string>("0");
   const [floorVxDyMm, setFloorVxDyMm] = useState<string>("0");
   const [filletRadiusM, setFilletRadiusM] = useState<number>(0.5);
