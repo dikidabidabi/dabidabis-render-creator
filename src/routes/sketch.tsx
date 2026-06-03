@@ -3703,19 +3703,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     if (tool === "floor" && floorMode === "edit") {
       ctx.save();
       const flList = (sketch.floors ?? []).filter((f) => !activeLvlId || f.levelId === activeLvlId);
-      const drawHandle = (w: Point) => {
+      const selKey = (fid: string, ring: "outer" | number, idx: number) => `${fid}|${ring}|${idx}`;
+      const selSet = new Set(selectedFloorEditVertices.map((sv) => selKey(sv.fid, sv.ring, sv.idx)));
+      const drawHandle = (w: Point, isSel: boolean) => {
         const s = worldToScreen(w);
         ctx.beginPath();
-        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
-        ctx.fillStyle = floorEditSub === "move" ? "#e85d3a" : floorEditSub === "delete" ? "#c62828" : "#fff";
-        ctx.strokeStyle = "#1a1a1a";
-        ctx.lineWidth = 1.5;
+        ctx.arc(s.x, s.y, isSel ? 6.5 : 5, 0, Math.PI * 2);
+        ctx.fillStyle = isSel
+          ? "rgba(0,212,255,0.95)"
+          : floorEditSub === "move" ? "#e85d3a" : floorEditSub === "delete" ? "#c62828" : "#fff";
+        ctx.strokeStyle = isSel ? "rgba(0,120,160,1)" : "#1a1a1a";
+        ctx.lineWidth = isSel ? 2 : 1.5;
         ctx.fill();
         ctx.stroke();
       };
       for (const fl of flList) {
-        fl.outer.forEach(drawHandle);
-        (fl.holes ?? []).forEach((h) => h.forEach(drawHandle));
+        fl.outer.forEach((p, i) => drawHandle(p, selSet.has(selKey(fl.id, "outer", i))));
+        (fl.holes ?? []).forEach((h, hi) => h.forEach((p, i) => drawHandle(p, selSet.has(selKey(fl.id, hi, i)))));
       }
       ctx.restore();
     }
