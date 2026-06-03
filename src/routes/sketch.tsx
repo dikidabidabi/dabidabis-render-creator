@@ -1850,11 +1850,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setMoveDrag(null);
       setMoveMarquee(null);
     }
+    if (tool !== "edit") setEditVertexMarquee(null);
+    if (tool !== "floor") setFloorVertexMarquee(null);
   }, [tool]);
   useEffect(() => {
     setMoveSel(new Set());
     setMoveDrag(null);
     setMoveMarquee(null);
+    setEditVertexMarquee(null);
+    setFloorVertexMarquee(null);
   }, [id, activeLvlId]);
 
 
