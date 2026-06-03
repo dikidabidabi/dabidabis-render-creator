@@ -8465,6 +8465,13 @@ function FloorToolPanel({
   onCopyFloors,
   onPasteFloors,
   onDeleteFloors,
+  selectedFloorVertex,
+  floorVxDxMm,
+  floorVxDyMm,
+  onFloorVxDxMm,
+  onFloorVxDyMm,
+  pxPerMeter,
+  onApplyFloorVertexMove,
 }: {
   mode: FloorMode;
   onMode: (m: FloorMode) => void;
@@ -8479,6 +8486,13 @@ function FloorToolPanel({
   onCopyFloors: () => void;
   onPasteFloors: () => void;
   onDeleteFloors: () => void;
+  selectedFloorVertex: { fid: string; ring: "outer" | number; idx: number; coord: Point } | null;
+  floorVxDxMm: string;
+  floorVxDyMm: string;
+  onFloorVxDxMm: (v: string) => void;
+  onFloorVxDyMm: (v: string) => void;
+  pxPerMeter: number;
+  onApplyFloorVertexMove: () => void;
 }) {
   const hasOuter = !!(draft && draft.outer && draft.outer.length >= 3);
   const holeCount = draft?.holes?.length ?? 0;
