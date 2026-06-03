@@ -387,6 +387,8 @@ function PresentasiBox({
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<null | "pptx" | "pdf">(null);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number; label: string } | null>(null);
+  const [exportSlideIdx, setExportSlideIdx] = useState<number | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
@@ -412,56 +414,103 @@ function PresentasiBox({
     return () => window.removeEventListener("keydown", onKey);
   }, [full, next, prev]);
 
-  const renderSlideImages = useCallback(async (): Promise<string[]> => {
-    // Wait two frames so the offscreen render mounts at full A3 size.
+  /**
+   * Mount one slide offscreen, capture it as JPEG (raster) plus a list of
+   * SVG elements with their bounding rects so the caller can overlay them as
+   * native vectors. Returns the page element's pixel dimensions so the
+   * caller can map px → mm.
+   */
+  const captureOneSlide = useCallback(async (slideIndex: number) => {
+    setExportSlideIdx(slideIndex);
+    // Two RAFs + small delay so React mounts the offscreen page at full A3 size,
+    // and any canvases (e.g. three.js) have a chance to draw.
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    await new Promise((r) => setTimeout(r, 80));
     const root = exportRootRef.current;
-    if (!root) throw new Error("Render container tidak siap");
-    const pages = Array.from(root.querySelectorAll<HTMLElement>("[data-slide-page]"));
-    const { default: html2canvas } = await import("html2canvas-pro");
-    const images: string[] = [];
-    for (const el of pages) {
-      const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true, logging: false });
-      images.push(canvas.toDataURL("image/png"));
-    }
-    return images;
-  }, []);
+    const pageEl = root?.querySelector<HTMLElement>("[data-slide-page]");
+    if (!pageEl) throw new Error("Render container tidak siap");
+    const pageRect = pageEl.getBoundingClientRect();
 
-  const doExportPptx = useCallback(async () => {
-    setExporting("pptx");
-    try {
-      const images = await renderSlideImages();
-      const { default: PptxGenJS } = await import("pptxgenjs");
-      const pres = new PptxGenJS();
-      // A3 landscape: 420mm x 297mm = 16.54in x 11.69in
-      pres.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
-      pres.layout = "A3";
-      images.forEach((data) => {
-        const slide = pres.addSlide();
-        slide.background = { color: "FFFFFF" };
-        slide.addImage({ data, x: 0, y: 0, w: 16.54, h: 11.69 });
-      });
-      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
-      await pres.writeFile({ fileName: fname });
-    } catch (err) {
-      console.error(err);
-      window.alert("Gagal mengekspor PPTX: " + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setExporting(null);
-    }
-  }, [sketch.title, renderSlideImages]);
+    // Collect SVGs for native vector overlay (crisp lines, tiny file size).
+    const svgEls = Array.from(pageEl.querySelectorAll<SVGSVGElement>("svg"));
+    const svgEntries = svgEls.map((svg) => {
+      const r = svg.getBoundingClientRect();
+      return {
+        svg,
+        x: r.left - pageRect.left,
+        y: r.top - pageRect.top,
+        w: r.width,
+        h: r.height,
+      };
+    });
+
+    const { default: html2canvas } = await import("html2canvas-pro");
+    // Lower scale (1.5 instead of 2) — vector SVG overlay keeps lines crisp,
+    // and JPEG compression keeps file size + memory in check.
+    const canvas = await html2canvas(pageEl, {
+      backgroundColor: "#ffffff",
+      scale: 1.5,
+      useCORS: true,
+      logging: false,
+    });
+    const jpeg = canvas.toDataURL("image/jpeg", 0.85);
+    // Free the offscreen canvas immediately.
+    canvas.width = 0;
+    canvas.height = 0;
+
+    return {
+      jpeg,
+      svgEntries,
+      pageW: pageRect.width,
+      pageH: pageRect.height,
+    };
+  }, []);
 
   const doExportPdf = useCallback(async () => {
     setExporting("pdf");
+    setExportProgress({ current: 0, total: slides.length, label: "Menyiapkan…" });
     try {
-      const images = await renderSlideImages();
       const { default: jsPDF } = await import("jspdf");
-      // A3 landscape: 420mm x 297mm
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
-      images.forEach((data, i) => {
+      const svg2pdfMod = await import("svg2pdf.js").catch(() => null);
+      const svg2pdf = svg2pdfMod?.svg2pdf ?? null;
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3", compress: true });
+      const PAGE_W_MM = 420;
+      const PAGE_H_MM = 297;
+
+      for (let i = 0; i < slides.length; i++) {
+        setExportProgress({ current: i + 1, total: slides.length, label: `Merender slide ${i + 1} dari ${slides.length}…` });
+        const cap = await captureOneSlide(i);
+
         if (i > 0) pdf.addPage("a3", "landscape");
-        pdf.addImage(data, "PNG", 0, 0, 420, 297, undefined, "FAST");
-      });
+        // 1) JPEG raster background — covers all non-SVG content + 3D canvases.
+        pdf.addImage(cap.jpeg, "JPEG", 0, 0, PAGE_W_MM, PAGE_H_MM, undefined, "FAST");
+
+        // 2) Vector overlay for each <svg> so lines stay sharp at any zoom.
+        if (svg2pdf) {
+          const sx = PAGE_W_MM / cap.pageW;
+          const sy = PAGE_H_MM / cap.pageH;
+          for (const e of cap.svgEntries) {
+            if (e.w <= 0 || e.h <= 0) continue;
+            try {
+              await svg2pdf(e.svg, pdf, {
+                x: e.x * sx,
+                y: e.y * sy,
+                width: e.w * sx,
+                height: e.h * sy,
+              });
+            } catch (err) {
+              // Vector failed for this SVG — raster underneath remains visible.
+              console.warn("svg2pdf failed for one element, falling back to raster", err);
+            }
+          }
+        }
+
+        // Unmount the slide to free DOM/memory before the next iteration.
+        setExportSlideIdx(null);
+        await new Promise((r) => setTimeout(r, 20));
+      }
+
+      setExportProgress({ current: slides.length, total: slides.length, label: "Menyimpan PDF…" });
       const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pdf`;
       pdf.save(fname);
     } catch (err) {
@@ -469,8 +518,41 @@ function PresentasiBox({
       window.alert("Gagal mengekspor PDF: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setExporting(null);
+      setExportProgress(null);
+      setExportSlideIdx(null);
     }
-  }, [sketch.title, renderSlideImages]);
+  }, [sketch.title, slides, captureOneSlide]);
+
+  const doExportPptx = useCallback(async () => {
+    setExporting("pptx");
+    setExportProgress({ current: 0, total: slides.length, label: "Menyiapkan…" });
+    try {
+      const { default: PptxGenJS } = await import("pptxgenjs");
+      const pres = new PptxGenJS();
+      // A3 landscape: 420mm x 297mm = 16.54in x 11.69in
+      pres.defineLayout({ name: "A3", width: 16.54, height: 11.69 });
+      pres.layout = "A3";
+      for (let i = 0; i < slides.length; i++) {
+        setExportProgress({ current: i + 1, total: slides.length, label: `Merender slide ${i + 1} dari ${slides.length}…` });
+        const cap = await captureOneSlide(i);
+        const slide = pres.addSlide();
+        slide.background = { color: "FFFFFF" };
+        slide.addImage({ data: cap.jpeg, x: 0, y: 0, w: 16.54, h: 11.69 });
+        setExportSlideIdx(null);
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      setExportProgress({ current: slides.length, total: slides.length, label: "Menyimpan PPTX…" });
+      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
+      await pres.writeFile({ fileName: fname });
+    } catch (err) {
+      console.error(err);
+      window.alert("Gagal mengekspor PPTX: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExporting(null);
+      setExportProgress(null);
+      setExportSlideIdx(null);
+    }
+  }, [sketch.title, slides, captureOneSlide]);
 
 
   return (
@@ -577,23 +659,44 @@ function PresentasiBox({
         />
       )}
 
-      {/* Offscreen export container (full A3 canvas, captured by html2canvas for both PDF and PPTX) */}
-      {exporting && (
+      {/* Offscreen export container — only ONE slide mounted at a time to
+          keep peak memory low. Captured sequentially by doExportPdf/Pptx. */}
+      {exporting && exportSlideIdx !== null && slides[exportSlideIdx] && (
         <div
           ref={exportRootRef}
           className="no-print"
           style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
           aria-hidden
         >
-          {slides.map((s) => (
-            <div
-              key={s.id}
-              data-slide-page
-              style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}
-            >
-              <SlideContent slide={s} />
+          <div
+            key={slides[exportSlideIdx].id}
+            data-slide-page
+            style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}
+          >
+            <SlideContent slide={slides[exportSlideIdx]} />
+          </div>
+        </div>
+      )}
+
+      {/* Export progress overlay */}
+      {exporting && exportProgress && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-[min(420px,90vw)] rounded-xl border border-border bg-background p-5 shadow-xl">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Mengekspor {exporting === "pdf" ? "PDF" : "PPTX"}
             </div>
-          ))}
+            <div className="mb-3 text-xs text-muted-foreground">{exportProgress.label}</div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${Math.round((exportProgress.current / Math.max(1, exportProgress.total)) * 100)}%` }}
+              />
+            </div>
+            <div className="mt-2 text-right text-[11px] tabular-nums text-muted-foreground">
+              {exportProgress.current} / {exportProgress.total}
+            </div>
+          </div>
         </div>
       )}
     </div>
