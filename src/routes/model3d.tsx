@@ -1172,9 +1172,9 @@ function SketchViewer({
                   size="sm"
                   className="h-7 gap-1 px-2 text-xs"
                   onClick={() => setAutoTilt((v) => !v)}
-                  title="Auto vertical tilt"
+                  title="Koreksi perspektif vertikal (garis vertikal tetap lurus)"
                 >
-                  <Move3d className="h-3 w-3" /> {autoTilt ? "Tilt: On" : "Auto Tilt"}
+                  <Move3d className="h-3 w-3" /> {autoTilt ? "Koreksi V: On" : "Koreksi V"}
                 </Button>
                 <Button
                   variant={noLight ? "default" : "secondary"}
