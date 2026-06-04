@@ -8813,7 +8813,7 @@ function FloorToolPanel({
             <div>
               <Label className="text-[10px] text-muted-foreground">ΔX</Label>
               <Input
-                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                 value={floorVxDxMm}
                 onChange={(e) => onFloorVxDxMm(e.target.value)}
                 className="h-8 text-xs"
@@ -8823,7 +8823,7 @@ function FloorToolPanel({
             <div>
               <Label className="text-[10px] text-muted-foreground">ΔY</Label>
               <Input
-                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                 value={floorVxDyMm}
                 onChange={(e) => onFloorVxDyMm(e.target.value)}
                 className="h-8 text-xs"
