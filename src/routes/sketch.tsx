@@ -1364,7 +1364,7 @@ function GeoPanel({
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Latitude</Label>
             <Input
-              type="number"
+              type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
               step="0.000001"
               value={g.lat}
               onChange={(e) => setG({ lat: parseFloat(e.target.value) || 0 })}
@@ -1374,7 +1374,7 @@ function GeoPanel({
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Longitude</Label>
             <Input
-              type="number"
+              type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
               step="0.000001"
               value={g.lon}
               onChange={(e) => setG({ lon: parseFloat(e.target.value) || 0 })}
@@ -1417,7 +1417,7 @@ function GeoPanel({
           </div>
           <div className="flex items-center gap-1">
             <Input
-              type="number"
+              type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
               value={Number(g.mapRotation) || 0}
               onChange={(e) => setG({ mapRotation: Number(e.target.value) || 0 })}
               className="h-7 w-16 text-xs"
@@ -5995,7 +5995,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">KDB</Label>
               <div className="flex items-center gap-1.5">
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                   min={0}
                   max={100}
                   step={1}
@@ -6038,7 +6038,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">KLB</Label>
               <div className="flex items-center gap-1.5">
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                   min={0}
                   step={0.1}
                   placeholder="0"
@@ -6078,7 +6078,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">KDH</Label>
               <div className="flex items-center gap-1.5">
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                   min={0}
                   max={100}
                   step={1}
@@ -6121,7 +6121,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">KTB</Label>
               <div className="flex items-center gap-1.5">
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                   min={0}
                   max={100}
                   step={1}
@@ -6237,7 +6237,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex items-center gap-1.5">
               <Input
-                type="number"
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                 step="1"
                 value={Number.isFinite(northRotation) ? northRotation : 0}
                 onChange={(e) => {
@@ -6276,7 +6276,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             </div>
             <div className="flex items-center gap-1.5">
               <Input
-                type="number"
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                 step="1"
                 value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
                 onChange={(e) => {
@@ -6311,7 +6311,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             </div>
             <div className="flex items-center gap-1.5">
               <Input
-                type="number"
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                 step="1"
                 value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
                 onChange={(e) => {
@@ -6573,7 +6573,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Offset — Jarak (cm)</Label>
             <Input
-              type="number"
+              type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
               min={1}
               max={10000}
               step={1}
@@ -6627,7 +6627,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               <div className="flex items-center justify-between">
                 <Label className="text-[11px] text-muted-foreground">Lebar (cm)</Label>
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                   min={90}
                   max={200}
                   step={5}
@@ -6875,7 +6875,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <div>
                   <Label className="text-[10px] text-muted-foreground">ΔX</Label>
                   <Input
-                    type="number"
+                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                     value={moveDxMm}
                     onChange={(e) => setMoveDxMm(e.target.value)}
                     className="h-8 text-xs"
@@ -6885,7 +6885,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <div>
                   <Label className="text-[10px] text-muted-foreground">ΔY</Label>
                   <Input
-                    type="number"
+                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                     value={moveDyMm}
                     onChange={(e) => setMoveDyMm(e.target.value)}
                     className="h-8 text-xs"
@@ -7038,7 +7038,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 ))}
                 <Input
                   className="h-6 w-16 text-[10px]"
-                  type="number" min={10} step={5}
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*" min={10} step={5}
                   value={grid.colSizeCm}
                   onChange={(e) => updateGrid({ colSizeCm: Math.max(5, Number(e.target.value) || 50) })}
                 />
@@ -7483,7 +7483,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   Radius
                 </span>
                 <Input
-                  type="number"
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                   step="0.1"
                   min="0.05"
                   value={filletRadiusM}
@@ -7511,7 +7511,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   <div>
                     <Label className="text-[10px] text-muted-foreground">ΔX</Label>
                     <Input
-                      type="number"
+                      type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                       value={editVxDxMm}
                       onChange={(e) => setEditVxDxMm(e.target.value)}
                       className="h-8 text-xs"
@@ -7521,7 +7521,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   <div>
                     <Label className="text-[10px] text-muted-foreground">ΔY</Label>
                     <Input
-                      type="number"
+                      type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                       value={editVxDyMm}
                       onChange={(e) => setEditVxDyMm(e.target.value)}
                       className="h-8 text-xs"
@@ -8343,7 +8343,7 @@ function LevelsPanel({
                   <>
                     <span className="text-[10px] uppercase tracking-wider text-ember/80">×</span>
                     <Input
-                      type="number"
+                      type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                       inputMode="numeric"
                       min={1}
                       max={99}
@@ -8370,7 +8370,7 @@ function LevelsPanel({
                     <span className="text-[10px] text-ember/80">tip</span>
                     <span className="text-[10px] text-ember/80">@</span>
                     <Input
-                      type="number"
+                      type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                       inputMode="decimal"
                       min={0.1}
                       max={99}
@@ -8610,7 +8610,7 @@ function LevelsPanel({
                                               GSB {i + 1}
                                             </span>
                                             <Input
-                                              type="number"
+                                              type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                                               inputMode="decimal"
                                               step="0.1"
                                               min="0"
@@ -8816,7 +8816,7 @@ function FloorToolPanel({
             <div>
               <Label className="text-[10px] text-muted-foreground">ΔX</Label>
               <Input
-                type="number"
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                 value={floorVxDxMm}
                 onChange={(e) => onFloorVxDxMm(e.target.value)}
                 className="h-8 text-xs"
@@ -8826,7 +8826,7 @@ function FloorToolPanel({
             <div>
               <Label className="text-[10px] text-muted-foreground">ΔY</Label>
               <Input
-                type="number"
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                 value={floorVxDyMm}
                 onChange={(e) => onFloorVxDyMm(e.target.value)}
                 className="h-8 text-xs"
