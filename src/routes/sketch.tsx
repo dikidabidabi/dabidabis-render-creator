@@ -7547,10 +7547,39 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                       const movable = selectedEditVertices.filter((v) => !lockedVertexKeys.has(keyOf(v.coord)));
                       if (movable.length === 0) { toast.error("Semua titik terkunci"); return; }
                       pushHistory();
-                      for (const v of movable) {
-                        const newPos: Point = { x: v.coord.x + dxPx, y: v.coord.y + dyPx };
-                        moveVertexTarget(v.target, v.coord, newPos);
-                      }
+                      // Batched translation: shift every line endpoint / layer point
+                      // whose coord matches any selected vertex by (dxPx, dyPx) in one
+                      // onChange. Loop-by-loop moveVertexTarget calls would stomp each
+                      // other because the closure's `lines`/`layers` don't refresh until
+                      // the next render.
+                      const selKeys = new Set(movable.map((v) => keyOf(v.coord)));
+                      const nextLines = lines.map((ln) => {
+                        if (activeLvlId && ln.levelId !== activeLvlId) return ln;
+                        const moveA = selKeys.has(keyOf(ln.a));
+                        const moveB = selKeys.has(keyOf(ln.b));
+                        if (!moveA && !moveB) return ln;
+                        let next: Line = { ...ln };
+                        if (moveA) {
+                          next.a = { x: ln.a.x + dxPx, y: ln.a.y + dyPx };
+                          if (ln.kind === "bezier" && ln.c1) next.c1 = { x: ln.c1.x + dxPx, y: ln.c1.y + dyPx };
+                        }
+                        if (moveB) {
+                          next.b = { x: ln.b.x + dxPx, y: ln.b.y + dyPx };
+                          if (ln.kind === "bezier" && ln.c2) next.c2 = { x: ln.c2.x + dxPx, y: ln.c2.y + dyPx };
+                        }
+                        return next;
+                      });
+                      const nextLayers = layers.map((l) => {
+                        if (activeLvlId && l.levelId !== activeLvlId) return l;
+                        let touched = false;
+                        const pts = l.points.map((p) => {
+                          if (selKeys.has(keyOf(p))) { touched = true; return { x: p.x + dxPx, y: p.y + dyPx }; }
+                          return p;
+                        });
+                        if (!touched) return l;
+                        return { ...l, points: pts, areaM2: polygonAreaPx(pts) / (pxPerMeter * pxPerMeter) };
+                      });
+                      onChange({ lines: nextLines, layers: nextLayers });
                       setSelectedEditVertices((prev) =>
                         prev.map((v) =>
                           lockedVertexKeys.has(keyOf(v.coord))
