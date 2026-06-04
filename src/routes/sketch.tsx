@@ -8344,7 +8344,6 @@ function LevelsPanel({
                     <span className="text-[10px] uppercase tracking-wider text-ember/80">×</span>
                     <Input
                       type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                      inputMode="numeric"
                       min={1}
                       max={99}
                       step={1}
@@ -8371,7 +8370,6 @@ function LevelsPanel({
                     <span className="text-[10px] text-ember/80">@</span>
                     <Input
                       type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                      inputMode="decimal"
                       min={0.1}
                       max={99}
                       step={0.1}
@@ -8611,7 +8609,6 @@ function LevelsPanel({
                                             </span>
                                             <Input
                                               type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                                              inputMode="decimal"
                                               step="0.1"
                                               min="0"
                                               disabled={sl.locked}
