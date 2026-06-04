@@ -6875,7 +6875,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <div>
                   <Label className="text-[10px] text-muted-foreground">ΔX</Label>
                   <Input
-                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                    type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                     value={moveDxMm}
                     onChange={(e) => setMoveDxMm(e.target.value)}
                     className="h-8 text-xs"
@@ -6885,7 +6885,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <div>
                   <Label className="text-[10px] text-muted-foreground">ΔY</Label>
                   <Input
-                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                    type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                     value={moveDyMm}
                     onChange={(e) => setMoveDyMm(e.target.value)}
                     className="h-8 text-xs"
@@ -7511,7 +7511,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   <div>
                     <Label className="text-[10px] text-muted-foreground">ΔX</Label>
                     <Input
-                      type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                      type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                       value={editVxDxMm}
                       onChange={(e) => setEditVxDxMm(e.target.value)}
                       className="h-8 text-xs"
@@ -7521,7 +7521,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   <div>
                     <Label className="text-[10px] text-muted-foreground">ΔY</Label>
                     <Input
-                      type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                      type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                       value={editVxDyMm}
                       onChange={(e) => setEditVxDyMm(e.target.value)}
                       className="h-8 text-xs"
@@ -8344,7 +8344,6 @@ function LevelsPanel({
                     <span className="text-[10px] uppercase tracking-wider text-ember/80">×</span>
                     <Input
                       type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                      inputMode="numeric"
                       min={1}
                       max={99}
                       step={1}
@@ -8371,7 +8370,6 @@ function LevelsPanel({
                     <span className="text-[10px] text-ember/80">@</span>
                     <Input
                       type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                      inputMode="decimal"
                       min={0.1}
                       max={99}
                       step={0.1}
@@ -8611,7 +8609,6 @@ function LevelsPanel({
                                             </span>
                                             <Input
                                               type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                                              inputMode="decimal"
                                               step="0.1"
                                               min="0"
                                               disabled={sl.locked}
@@ -8816,7 +8813,7 @@ function FloorToolPanel({
             <div>
               <Label className="text-[10px] text-muted-foreground">ΔX</Label>
               <Input
-                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                 value={floorVxDxMm}
                 onChange={(e) => onFloorVxDxMm(e.target.value)}
                 className="h-8 text-xs"
@@ -8826,7 +8823,7 @@ function FloorToolPanel({
             <div>
               <Label className="text-[10px] text-muted-foreground">ΔY</Label>
               <Input
-                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*"
                 value={floorVxDyMm}
                 onChange={(e) => onFloorVxDyMm(e.target.value)}
                 className="h-8 text-xs"
