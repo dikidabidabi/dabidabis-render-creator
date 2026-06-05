@@ -268,6 +268,8 @@ type Sketch = {
   updatedAt: number;
   scale: Scale;
   snap: boolean;
+  snapVertex?: boolean;
+  snapMidpoint?: boolean;
   lines: Line[];
   layers: Layer[];
   levels: Level[];
