@@ -268,6 +268,8 @@ type Sketch = {
   updatedAt: number;
   scale: Scale;
   snap: boolean;
+  snapVertex?: boolean;
+  snapMidpoint?: boolean;
   lines: Line[];
   layers: Layer[];
   levels: Level[];
@@ -622,6 +624,8 @@ function newSketch(idx: number): Sketch {
     updatedAt: now,
     scale: "1:100",
     snap: true,
+    snapVertex: true,
+    snapMidpoint: true,
     lines: [],
     layers: [],
     levels: [lvl],
@@ -674,6 +678,8 @@ function normalizeSketch(s: any): Sketch {
     updatedAt: s?.updatedAt ?? Date.now(),
     scale: s?.scale ?? "1:100",
     snap: s?.snap ?? true,
+    snapVertex: s?.snapVertex ?? true,
+    snapMidpoint: s?.snapMidpoint ?? true,
     lines,
     layers,
     levels,
@@ -1456,6 +1462,8 @@ type EditorProps = {
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
+  const snapVertex = sketch.snapVertex ?? true;
+  const snapMidpoint = sketch.snapMidpoint ?? true;
   // ----- Grid Struktur: primer + extras (paste grid) -----
   // Index 0 = grid primer (sketch.structuralGrid).
   // Index 1..N = sketch.structuralGridExtras[idx-1].
@@ -1999,8 +2007,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   );
 
   const snapPoint = useCallback(
-    (p: Point): Point => snapPointToMillimeterGrid(p),
-    [snapPointToMillimeterGrid],
+    (p: Point): Point => {
+      if (!snap) return p;
+      // Cari kandidat snap dari vertex / midpoint pada level aktif (jika diaktifkan).
+      const tolPx = 12 / Math.max(0.0001, view.s);
+      let best: { p: Point; d: number } | null = null;
+      const consider = (q: Point) => {
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d <= tolPx && (!best || d < best.d)) best = { p: q, d };
+      };
+      const lvl = activeLvlId;
+      const inLvl = (l?: string) => !lvl || !l || l === lvl;
+      if (snapVertex || snapMidpoint) {
+        for (let i = 0; i < lines.length; i++) {
+          const ln = lines[i];
+          if (!inLvl(ln.levelId)) continue;
+          if (snapVertex) { consider(ln.a); consider(ln.b); }
+          if (snapMidpoint) consider({ x: (ln.a.x + ln.b.x) / 2, y: (ln.a.y + ln.b.y) / 2 });
+        }
+        for (const ly of layers) {
+          if (!inLvl(ly.levelId)) continue;
+          const pts = ly.points;
+          for (let i = 0; i < pts.length; i++) {
+            const a = pts[i];
+            if (snapVertex) consider(a);
+            if (snapMidpoint && pts.length >= 2) {
+              const b = pts[(i + 1) % pts.length];
+              consider({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            }
+          }
+        }
+        for (const fl of (sketch.floors ?? [])) {
+          if (!inLvl(fl.levelId)) continue;
+          const pts = fl.outer;
+          for (let i = 0; i < pts.length; i++) {
+            const a = pts[i];
+            if (snapVertex) consider(a);
+            if (snapMidpoint && pts.length >= 2) {
+              const b = pts[(i + 1) % pts.length];
+              consider({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            }
+          }
+        }
+      }
+      if (best) return (best as { p: Point; d: number }).p;
+      return snapPointToMillimeterGrid(p);
+    },
+    [snap, snapVertex, snapMidpoint, view.s, activeLvlId, lines, layers, sketch.floors, snapPointToMillimeterGrid],
   );
 
   const lockedLineKeys = useMemo(() => {
@@ -7710,16 +7763,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
       {!hideSideExtras && (
         <>
-          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <Magnet className="h-4 w-4 text-ember" />
-              <div>
-                <div className="text-sm font-medium">Snap to Grid</div>
-                <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
+          <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Magnet className="h-4 w-4 text-ember" />
+                <div>
+                  <div className="text-sm font-medium">Snap</div>
+                  <div className="text-[11px] text-muted-foreground">Kunci titik ke target terdekat</div>
+                </div>
               </div>
+              <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
             </div>
-            <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
+            {snap && (
+              <div className="ml-6 space-y-1.5 border-l border-border/40 pl-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs">Grid (kotak milimeter)</div>
+                  <Switch checked={true} disabled />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs">Vertex (titik)</div>
+                  <Switch checked={snapVertex} onCheckedChange={(v) => onChange({ snapVertex: v })} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs">Midpoint (tengah segmen)</div>
+                  <Switch checked={snapMidpoint} onCheckedChange={(v) => onChange({ snapMidpoint: v })} />
+                </div>
+              </div>
+            )}
           </div>
+
 
           <LevelsPanel
             levels={levels}
