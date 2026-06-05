@@ -5764,6 +5764,7 @@ function KLegend({ color, label, count, area, pct }: { color: string; label: str
   );
 }
 
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ padding: 22, border: "1px solid #ececec", borderRadius: 4, background: "#fafafa", display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888", fontWeight: 600 }}>{title}</div>
