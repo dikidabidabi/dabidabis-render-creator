@@ -2007,8 +2007,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   );
 
   const snapPoint = useCallback(
-    (p: Point): Point => snapPointToMillimeterGrid(p),
-    [snapPointToMillimeterGrid],
+    (p: Point): Point => {
+      if (!snap) return p;
+      // Cari kandidat snap dari vertex / midpoint pada level aktif (jika diaktifkan).
+      const tolPx = 12 / Math.max(0.0001, view.s);
+      let best: { p: Point; d: number } | null = null;
+      const consider = (q: Point) => {
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d <= tolPx && (!best || d < best.d)) best = { p: q, d };
+      };
+      const lvl = activeLvlId;
+      const inLvl = (l?: string) => !lvl || !l || l === lvl;
+      if (snapVertex || snapMidpoint) {
+        for (let i = 0; i < lines.length; i++) {
+          const ln = lines[i];
+          if (!inLvl(ln.levelId)) continue;
+          if (snapVertex) { consider(ln.a); consider(ln.b); }
+          if (snapMidpoint) consider({ x: (ln.a.x + ln.b.x) / 2, y: (ln.a.y + ln.b.y) / 2 });
+        }
+        for (const ly of layers) {
+          if (!inLvl(ly.levelId)) continue;
+          const pts = ly.points;
+          for (let i = 0; i < pts.length; i++) {
+            const a = pts[i];
+            if (snapVertex) consider(a);
+            if (snapMidpoint && pts.length >= 2) {
+              const b = pts[(i + 1) % pts.length];
+              consider({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            }
+          }
+        }
+        for (const fl of (sketch.floors ?? [])) {
+          if (!inLvl(fl.levelId)) continue;
+          const pts = fl.outer;
+          for (let i = 0; i < pts.length; i++) {
+            const a = pts[i];
+            if (snapVertex) consider(a);
+            if (snapMidpoint && pts.length >= 2) {
+              const b = pts[(i + 1) % pts.length];
+              consider({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            }
+          }
+        }
+      }
+      if (best) return (best as { p: Point; d: number }).p;
+      return snapPointToMillimeterGrid(p);
+    },
+    [snap, snapVertex, snapMidpoint, view.s, activeLvlId, lines, layers, sketch.floors, snapPointToMillimeterGrid],
   );
 
   const lockedLineKeys = useMemo(() => {
