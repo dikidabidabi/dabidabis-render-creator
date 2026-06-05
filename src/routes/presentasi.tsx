@@ -935,6 +935,7 @@ type Slide =
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
@@ -1082,6 +1083,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     }
   }
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
+  out.push({ kind: "komposisi", id: "komposisi", title: "Komposisi Ruang", sketch: sk, data });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
@@ -1103,6 +1105,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "rekap": return "Rekapitulasi";
       case "rincian": return "Rincian per Level";
       case "infografis": return "Infografis";
+      case "komposisi": return "Komposisi Ruang";
       case "biaya": return "Estimasi Biaya";
       case "closing": return "Penutup";
       default: return null;
@@ -1455,6 +1458,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "rincian" && <RincianBody slide={slide} />}
       {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "komposisi" && <KomposisiBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
     </>
   );
@@ -1507,6 +1511,7 @@ function SlideHeader({ slide }: { slide: Slide }) {
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
     : slide.kind === "infografis" ? "Tabulasi · Infografis"
+    : slide.kind === "komposisi" ? "Tabulasi · Komposisi"
     : "Tabulasi · Estimasi";
   return (
     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, borderBottom: "1px solid #111", paddingBottom: 18 }}>
@@ -5458,6 +5463,303 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
           })}
         </div>
       </Panel>
+    </div>
+  );
+}
+
+// ---- Komposisi Ruang ----
+const KOMPOSISI_PALETTE = [
+  "#0a0a0a", "#e85d3a", "#1e3a8a", "#0f766e", "#b45309",
+  "#7c3aed", "#be123c", "#0369a1", "#15803d", "#a16207",
+  "#9333ea", "#dc2626", "#0891b2", "#65a30d", "#c2410c",
+];
+
+function normalizeRoomName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[0-9]+/g, " ")
+    .replace(/[._\-/()]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function roomGroupKey(name: string): { key: string; label: string } {
+  const norm = normalizeRoomName(name);
+  if (!norm) return { key: "lainnya", label: "Lainnya" };
+  const tokens = norm.split(" ").filter((t) => t.length >= 3);
+  const key = (tokens[0] || norm).trim();
+  const label = key
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+  return { key, label };
+}
+
+type RoomGroup = {
+  key: string;
+  label: string;
+  count: number;
+  areaM2: number;
+  perLevel: Record<string, number>; // levelId -> area (with typical mul)
+  color: string;
+};
+
+function computeRoomGroups(sketch: Sketch): {
+  groups: RoomGroup[];
+  totalArea: number;
+  totalCount: number;
+} {
+  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const levels = sketch.levels ?? [];
+  const mul: Record<string, number> = {};
+  for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
+  const byKey = new Map<string, RoomGroup>();
+  for (const l of layers) {
+    const { key, label } = roomGroupKey(l.name);
+    const k = (l.levelId && mul[l.levelId]) || 1;
+    const a = (l.areaM2 || 0) * k;
+    let g = byKey.get(key);
+    if (!g) {
+      g = { key, label, count: 0, areaM2: 0, perLevel: {}, color: "#000" };
+      byKey.set(key, g);
+    }
+    g.count += k;
+    g.areaM2 += a;
+    if (l.levelId) g.perLevel[l.levelId] = (g.perLevel[l.levelId] || 0) + a;
+  }
+  const groups = [...byKey.values()].sort((a, b) => b.areaM2 - a.areaM2);
+  groups.forEach((g, i) => { g.color = KOMPOSISI_PALETTE[i % KOMPOSISI_PALETTE.length]; });
+  const totalArea = groups.reduce((s, g) => s + g.areaM2, 0);
+  const totalCount = groups.reduce((s, g) => s + g.count, 0);
+  return { groups, totalArea, totalCount };
+}
+
+function loadModel3DShot(sketchId: string): string | null {
+  try {
+    const raw = localStorage.getItem(`dabidabis_model3d_shots_${sketchId}`);
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr[0]?.dataUrl) return arr[0].dataUrl as string;
+    return null;
+  } catch { return null; }
+}
+
+function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch }) {
+  void _data;
+  const { groups, totalArea, totalCount } = useMemo(() => computeRoomGroups(sketch), [sketch]);
+  const [shot, setShot] = useState<string | null>(() => loadModel3DShot(sketch.id));
+  useEffect(() => {
+    setShot(loadModel3DShot(sketch.id));
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === `dabidabis_model3d_shots_${sketch.id}`) setShot(loadModel3DShot(sketch.id));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [sketch.id]);
+
+  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const displayNames = computeLevelDisplayNames(levels, sketch.layers ?? []);
+  const mul: Record<string, number> = {};
+  for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
+
+  // Koefisien grouping
+  const coefBuckets = [
+    { key: "ef", label: "Efektif", coef: 1, color: "#0a0a0a" },
+    { key: "se", label: "Semi", coef: 0.5, color: "#999999" },
+    { key: "sa", label: "Sarana", coef: 0, color: "#dddddd" },
+  ];
+  const coefData = coefBuckets.map((b) => {
+    const items = layers.filter((l) => (l.coefficient ?? 1) === b.coef);
+    const area = items.reduce((s, l) => s + l.areaM2 * ((l.levelId && mul[l.levelId]) || 1), 0);
+    return { ...b, count: items.reduce((s, l) => s + ((l.levelId && mul[l.levelId]) || 1), 0), area };
+  });
+  const coefTotal = coefData.reduce((s, b) => s + b.area, 0) || 1;
+
+  // Tipikalitas grouping (by typicalCount)
+  const tipMap = new Map<number, { count: number; area: number; levels: string[] }>();
+  for (const lv of levels) {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const area = layers.filter((l) => l.levelId === lv.id).reduce((s, l) => s + l.areaM2 * k, 0);
+    const cnt = layers.filter((l) => l.levelId === lv.id).length * k;
+    const e = tipMap.get(k) || { count: 0, area: 0, levels: [] };
+    e.count += cnt; e.area += area; e.levels.push(displayNames[lv.id] ?? lv.name);
+    tipMap.set(k, e);
+  }
+  const tipData = [...tipMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([k, v], i) => ({
+      key: `tip-${k}`, label: k > 1 ? `Tipikal ×${k}` : "Non-tipikal",
+      count: v.count, area: v.area, color: KOMPOSISI_PALETTE[(i + 3) % KOMPOSISI_PALETTE.length],
+      sub: v.levels.join(", "),
+    }));
+  const tipTotal = tipData.reduce((s, b) => s + b.area, 0) || 1;
+
+  // Per-level distribution (use group colors for stacked bar by group)
+  const perLevelTotals = levels.map((lv) => {
+    const area = layers.filter((l) => l.levelId === lv.id).reduce(
+      (s, l) => s + l.areaM2 * mul[lv.id],
+      0,
+    );
+    return { lv, area, name: displayNames[lv.id] ?? lv.name };
+  });
+  const maxLevelArea = Math.max(1, ...perLevelTotals.map((p) => p.area));
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: 22, width: "100%", height: "100%" }}>
+      {/* Kiri: Aksonometri dari Model 3D */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+        <Panel title="Aksonometri · Screenshot Model 3D">
+          <div style={{ position: "relative", flex: 1, minHeight: 0, background: "#f4f4f4", border: "1px solid #e5e5e5", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            {shot ? (
+              <img src={shot} alt="Aksonometri" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            ) : (
+              <div style={{ fontSize: 12, color: "#888", textAlign: "center", padding: 24, lineHeight: 1.5 }}>
+                Belum ada screenshot di halaman <strong>3D Model</strong>.<br />
+                Ambil screenshot pertama untuk menampilkan aksonometri di sini.
+              </div>
+            )}
+          </div>
+        </Panel>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <KStat label="Total Kelompok" value={`${groups.length}`} hint="kelompok ruang" />
+          <KStat label="Total Item" value={`${totalCount}`} hint="termasuk tipikal" />
+          <KStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="setelah pengali tipikal" />
+          <KStat label="Lantai" value={`${levels.length}`} hint="level pada sketsa" />
+        </div>
+      </div>
+
+      {/* Kanan: grafis & angka */}
+      <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 14, minHeight: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <Panel title="Tipe Koefisien">
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Donut
+                size={130} thickness={11}
+                segments={coefData.map((b) => ({ value: (b.area / coefTotal) * 100, color: b.color }))}
+                centerValue={`${coefData.length}`} centerLabel="tipe"
+              />
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+                {coefData.map((b) => (
+                  <KLegend key={b.key} color={b.color} label={b.label}
+                    count={b.count} area={b.area} pct={(b.area / coefTotal) * 100} />
+                ))}
+              </div>
+            </div>
+          </Panel>
+          <Panel title="Tipikalitas Lantai">
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Donut
+                size={130} thickness={11}
+                segments={tipData.map((b) => ({ value: (b.area / tipTotal) * 100, color: b.color }))}
+                centerValue={`${tipData.length}`} centerLabel="tipe"
+              />
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+                {tipData.map((b) => (
+                  <KLegend key={b.key} color={b.color} label={b.label}
+                    count={b.count} area={b.area} pct={(b.area / tipTotal) * 100} />
+                ))}
+              </div>
+            </div>
+          </Panel>
+          <Panel title="Distribusi per Lantai">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+              {perLevelTotals.map(({ lv, area, name }) => {
+                const pct = (area / maxLevelArea) * 100;
+                return (
+                  <div key={lv.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                      <span style={{ fontWeight: 600 }}>{name}</span>
+                      <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>{fmt(area)} m²</span>
+                    </div>
+                    <div style={{ height: 5, width: "100%", background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: "#0a0a0a", borderRadius: 999 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Panel>
+        </div>
+
+        {/* Tabel pengelompokkan ruang */}
+        <Panel title="Pengelompokkan Ruang">
+          <div style={{ display: "flex", gap: 14, height: "100%", minHeight: 0 }}>
+            <Donut
+              size={170} thickness={14}
+              segments={groups.map((g) => ({ value: (g.areaM2 / (totalArea || 1)) * 100, color: g.color }))}
+              centerValue={`${groups.length}`} centerLabel="kelompok"
+            />
+            <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: "#fafafa", color: "#666", textTransform: "uppercase", letterSpacing: "0.12em", fontSize: 9 }}>
+                    <th style={kth}>Kelompok</th>
+                    <th style={{ ...kth, textAlign: "right" }}>Jumlah</th>
+                    <th style={{ ...kth, textAlign: "right" }}>Luas m²</th>
+                    <th style={{ ...kth, textAlign: "right" }}>%</th>
+                    <th style={kth}>Lantai</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((g) => {
+                    const pct = (g.areaM2 / (totalArea || 1)) * 100;
+                    const lvls = Object.keys(g.perLevel)
+                      .map((id) => displayNames[id] ?? (levels.find((l) => l.id === id)?.name ?? ""))
+                      .filter(Boolean);
+                    return (
+                      <tr key={g.key} style={{ borderTop: "1px solid #eee" }}>
+                        <td style={ktd}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color, display: "inline-block" }} />
+                            <span style={{ fontWeight: 600 }}>{g.label}</span>
+                          </span>
+                        </td>
+                        <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.count}</td>
+                        <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(g.areaM2)}</td>
+                        <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(pct, 1)}%</td>
+                        <td style={{ ...ktd, color: "#666", fontSize: 10 }}>{lvls.join(", ")}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{ borderTop: "1px solid #111", background: "#fafafa", fontWeight: 700 }}>
+                    <td style={ktd}>Total</td>
+                    <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{totalCount}</td>
+                    <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalArea)}</td>
+                    <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>100%</td>
+                    <td style={ktd} />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+const kth: React.CSSProperties = { padding: "6px 8px", textAlign: "left", fontWeight: 700 };
+const ktd: React.CSSProperties = { padding: "6px 8px", verticalAlign: "middle" };
+
+function KStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div style={{ border: "1px solid #ececec", borderRadius: 4, background: "#fafafa", padding: 12 }}>
+      <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888", fontWeight: 700 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", marginTop: 4 }}>{value}</div>
+      {hint && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function KLegend({ color, label, count, area, pct }: { color: string; label: string; count: number; area: number; pct: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, lineHeight: 1.3 }}>
+      <span style={{ width: 9, height: 9, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <span style={{ flex: 1, fontWeight: 600, color: "#333" }}>{label}</span>
+      <span style={{ color: "#666", fontVariantNumeric: "tabular-nums", fontSize: 10 }}>
+        {count} · {fmt(area, 0)} m² · {fmt(pct, 0)}%
+      </span>
     </div>
   );
 }
