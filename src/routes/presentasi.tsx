@@ -1511,6 +1511,7 @@ function SlideHeader({ slide }: { slide: Slide }) {
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
     : slide.kind === "infografis" ? "Tabulasi · Infografis"
+    : slide.kind === "komposisi" ? "Tabulasi · Komposisi"
     : "Tabulasi · Estimasi";
   return (
     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, borderBottom: "1px solid #111", paddingBottom: 18 }}>
