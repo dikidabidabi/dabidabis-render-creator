@@ -678,6 +678,8 @@ function normalizeSketch(s: any): Sketch {
     updatedAt: s?.updatedAt ?? Date.now(),
     scale: s?.scale ?? "1:100",
     snap: s?.snap ?? true,
+    snapVertex: s?.snapVertex ?? true,
+    snapMidpoint: s?.snapMidpoint ?? true,
     lines,
     layers,
     levels,
