@@ -7763,16 +7763,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
       {!hideSideExtras && (
         <>
-          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <Magnet className="h-4 w-4 text-ember" />
-              <div>
-                <div className="text-sm font-medium">Snap to Grid</div>
-                <div className="text-[11px] text-muted-foreground">Kunci titik ke garis kotak</div>
+          <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Magnet className="h-4 w-4 text-ember" />
+                <div>
+                  <div className="text-sm font-medium">Snap</div>
+                  <div className="text-[11px] text-muted-foreground">Kunci titik ke target terdekat</div>
+                </div>
               </div>
+              <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
             </div>
-            <Switch checked={snap} onCheckedChange={(v) => onChange({ snap: v })} />
+            {snap && (
+              <div className="ml-6 space-y-1.5 border-l border-border/40 pl-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs">Grid (kotak milimeter)</div>
+                  <Switch checked={true} disabled />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs">Vertex (titik)</div>
+                  <Switch checked={snapVertex} onCheckedChange={(v) => onChange({ snapVertex: v })} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs">Midpoint (tengah segmen)</div>
+                  <Switch checked={snapMidpoint} onCheckedChange={(v) => onChange({ snapMidpoint: v })} />
+                </div>
+              </div>
+            )}
           </div>
+
 
           <LevelsPanel
             levels={levels}
