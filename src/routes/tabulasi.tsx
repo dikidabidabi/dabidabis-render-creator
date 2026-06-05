@@ -942,3 +942,174 @@ function CostEstimateSection({ sketch }: { sketch: Sketch }) {
   );
 }
 
+// ---------- Komposisi Ruang ----------
+
+const KOMPOSISI_PALETTE = [
+  "hsl(152 65% 45%)", "hsl(20 85% 55%)", "hsl(220 70% 55%)", "hsl(280 60% 55%)",
+  "hsl(38 92% 55%)", "hsl(0 84% 60%)", "hsl(190 75% 45%)", "hsl(100 55% 45%)",
+  "hsl(330 70% 55%)", "hsl(45 80% 50%)", "hsl(260 60% 60%)", "hsl(170 60% 40%)",
+];
+
+function normalizeRoomName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[0-9]+/g, " ")
+    .replace(/[._\-/()]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function roomGroupKey(name: string): { key: string; label: string } {
+  const norm = normalizeRoomName(name);
+  if (!norm) return { key: "lainnya", label: "Lainnya" };
+  const tokens = norm.split(" ").filter((t) => t.length >= 3);
+  const key = (tokens[0] || norm).trim();
+  const label = key.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return { key, label };
+}
+
+function KomposisiSection({ sketch }: { sketch: Sketch }) {
+  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const mul: Record<string, number> = {};
+  for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
+
+  type G = { key: string; label: string; count: number; area: number; levelIds: Set<string>; color: string };
+  const map = new Map<string, G>();
+  for (const l of layers) {
+    const { key, label } = roomGroupKey(l.name);
+    const k = (l.levelId && mul[l.levelId]) || 1;
+    let g = map.get(key);
+    if (!g) { g = { key, label, count: 0, area: 0, levelIds: new Set(), color: "#000" }; map.set(key, g); }
+    g.count += k;
+    g.area += (l.areaM2 || 0) * k;
+    if (l.levelId) g.levelIds.add(l.levelId);
+  }
+  const groups = [...map.values()].sort((a, b) => b.area - a.area);
+  groups.forEach((g, i) => { g.color = KOMPOSISI_PALETTE[i % KOMPOSISI_PALETTE.length]; });
+  const totalArea = groups.reduce((s, g) => s + g.area, 0);
+  const totalCount = groups.reduce((s, g) => s + g.count, 0);
+
+  // Koefisien
+  const coefBuckets = [
+    { label: "Efektif", coef: 1 },
+    { label: "Semi", coef: 0.5 },
+    { label: "Sarana", coef: 0 },
+  ].map((b) => {
+    const items = layers.filter((l) => (l.coefficient ?? 1) === b.coef);
+    return {
+      ...b,
+      count: items.reduce((s, l) => s + ((l.levelId && mul[l.levelId]) || 1), 0),
+      area: items.reduce((s, l) => s + (l.areaM2 || 0) * ((l.levelId && mul[l.levelId]) || 1), 0),
+    };
+  });
+  const coefTotal = coefBuckets.reduce((s, b) => s + b.area, 0) || 1;
+
+  // Tipikalitas
+  const tipMap = new Map<number, { area: number; count: number; levels: string[] }>();
+  for (const lv of levels) {
+    const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
+    const items = layers.filter((l) => l.levelId === lv.id);
+    const e = tipMap.get(k) || { area: 0, count: 0, levels: [] };
+    e.area += items.reduce((s, l) => s + (l.areaM2 || 0) * k, 0);
+    e.count += items.length * k;
+    e.levels.push(lv.name);
+    tipMap.set(k, e);
+  }
+  const tipData = [...tipMap.entries()].sort((a, b) => a[0] - b[0]).map(([k, v]) => ({
+    k, label: k > 1 ? `Tipikal ×${k}` : "Non-tipikal", ...v,
+  }));
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex items-center gap-3">
+        <DonutMulti
+          size={110}
+          thickness={9}
+          segments={groups.map((g) => ({ label: g.label, value: (g.area / (totalArea || 1)) * 100, color: g.color }))}
+          centerValue={`${groups.length}`}
+          centerLabel="kelompok"
+        />
+        <div className="flex-1 text-xs">
+          <div className="mb-1 font-medium text-muted-foreground">Ringkasan</div>
+          <Row label="Total kelompok" value={`${groups.length}`} />
+          <Row label="Total item" value={`${totalCount}`} />
+          <Row label="Total luas" value={`${fmt(totalArea)} m²`} />
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs font-medium text-muted-foreground">Pengelompokkan Ruang</div>
+        <div className="max-h-[260px] overflow-y-auto rounded-md border border-border/60">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/30 text-muted-foreground">
+              <tr>
+                <th className="px-2 py-1 text-left font-normal">Kelompok</th>
+                <th className="px-2 py-1 text-right font-normal">Jumlah</th>
+                <th className="px-2 py-1 text-right font-normal">Luas m²</th>
+                <th className="px-2 py-1 text-right font-normal">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((g) => (
+                <tr key={g.key} className="border-t border-border/40">
+                  <td className="px-2 py-1">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-sm" style={{ background: g.color }} />
+                      {g.label}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono tabular-nums">{g.count}</td>
+                  <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(g.area)}</td>
+                  <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt((g.area / (totalArea || 1)) * 100, 1)}%</td>
+                </tr>
+              ))}
+              <tr className="border-t border-border bg-muted/20 font-medium">
+                <td className="px-2 py-1">Total</td>
+                <td className="px-2 py-1 text-right font-mono tabular-nums">{totalCount}</td>
+                <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalArea)}</td>
+                <td className="px-2 py-1 text-right font-mono tabular-nums">100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs font-medium text-muted-foreground">Tipe Koefisien</div>
+        <div className="space-y-1">
+          {coefBuckets.map((b) => (
+            <div key={b.label}>
+              <div className="mb-0.5 flex items-center justify-between text-xs">
+                <span>{b.label} <span className="text-muted-foreground">({b.count} item)</span></span>
+                <span className="font-mono tabular-nums text-muted-foreground">{fmt(b.area)} m² · {fmt((b.area / coefTotal) * 100, 1)}%</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (b.area / coefTotal) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs font-medium text-muted-foreground">Tipikalitas Lantai</div>
+        <div className="space-y-1 text-xs">
+          {tipData.map((t) => (
+            <div key={t.k} className="flex items-center justify-between gap-2 border-t border-border/40 pt-1 first:border-t-0 first:pt-0">
+              <div className="min-w-0">
+                <div className="font-medium">{t.label}</div>
+                <div className="truncate text-[10px] text-muted-foreground">{t.levels.join(", ")}</div>
+              </div>
+              <div className="text-right font-mono tabular-nums text-muted-foreground">
+                {t.count} · {fmt(t.area)} m²
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
