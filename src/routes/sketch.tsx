@@ -624,6 +624,8 @@ function newSketch(idx: number): Sketch {
     updatedAt: now,
     scale: "1:100",
     snap: true,
+    snapVertex: true,
+    snapMidpoint: true,
     lines: [],
     layers: [],
     levels: [lvl],
