@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download } from "lucide-react";
+import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
