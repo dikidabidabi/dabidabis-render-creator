@@ -1083,6 +1083,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     }
   }
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
+  out.push({ kind: "komposisi", id: "komposisi", title: "Komposisi Ruang", sketch: sk, data });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
