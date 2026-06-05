@@ -1462,6 +1462,8 @@ type EditorProps = {
 
 function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
+  const snapVertex = sketch.snapVertex ?? true;
+  const snapMidpoint = sketch.snapMidpoint ?? true;
   // ----- Grid Struktur: primer + extras (paste grid) -----
   // Index 0 = grid primer (sketch.structuralGrid).
   // Index 1..N = sketch.structuralGridExtras[idx-1].
