@@ -935,6 +935,7 @@ type Slide =
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
