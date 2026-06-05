@@ -1105,6 +1105,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "rekap": return "Rekapitulasi";
       case "rincian": return "Rincian per Level";
       case "infografis": return "Infografis";
+      case "komposisi": return "Komposisi Ruang";
       case "biaya": return "Estimasi Biaya";
       case "closing": return "Penutup";
       default: return null;
