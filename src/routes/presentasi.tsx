@@ -4908,7 +4908,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
         {rows.map((r) => {
           const widthPct = 14 + (r.area / maxArea) * 86;
           return (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 1 30px", minHeight: 22 }}>
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 0", minHeight: 0, maxHeight: 30 }}>
               <div style={{ width: 58, textAlign: "right", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
                 {fmt(r.mdpl, 1)} m
               </div>
