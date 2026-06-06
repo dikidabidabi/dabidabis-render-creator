@@ -1412,7 +1412,7 @@ function Model3DPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Model 3D</h1>
           <p className="text-sm text-muted-foreground">
-            Ekstrusi otomatis dari sketsa milimeter block. Tiap lantai diposisikan sesuai MDPL.
+            Ekstrusi otomatis dari sketsa milimeter block. Tiap lantai diposisikan sesuai Elevasi.
           </p>
         </div>
       </div>
