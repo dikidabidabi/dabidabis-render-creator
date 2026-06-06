@@ -2549,7 +2549,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               ? ABU_MUDA_FILL_RGBA
               : isTamanLayerName(layer.name)
                 ? TAMAN_FILL_RGBA
-                : layer.color;
+                : (colorForRoomName(layer.name) ?? layer.color);
           ctx.fillStyle = fillBase.replace("ALPHA", layer.locked ? "0.4" : "0.32");
           ctx.fill();
           ctx.strokeStyle = fillBase.replace("ALPHA", "0.95");
