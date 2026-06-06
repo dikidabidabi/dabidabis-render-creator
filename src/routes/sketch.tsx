@@ -6713,6 +6713,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <GripHorizontal className="mr-1.5 h-4 w-4" /> Move
           </Button>
           <Button
+            variant={tool === "mirror" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("mirror"); }}
+            className={cn(tool === "mirror" && "bg-gradient-ember shadow-ember")}
+            title="Mirror — pilih objek lewat Move, lalu tarik sumbu (snap 0/45/90/135°) untuk menduplikasi cerminan."
+          >
+            <FlipHorizontal className="mr-1.5 h-4 w-4" /> Mirror
+          </Button>
+          <Button
             variant={tool === "erase" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("erase"); }}
