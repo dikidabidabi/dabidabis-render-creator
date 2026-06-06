@@ -1930,39 +1930,46 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
     }
   }
 
-  // Build legend: unique rooms keyed by NAMA (case-insensitive, termasuk
-  // angka dalam nama) — "Unit 1 Htl" & "Unit 2 Htl" tetap dua nomor berbeda,
-  // sedangkan beberapa layer bernama "Unit 1 Htl" memakai nomor yang sama.
+  // Build legend: kelompokkan berdasar NAMA, lalu pecah lagi jika
+  // selisih luas antar item > 2 m². Setiap kelompok menampilkan rata-rata
+  // luas (bukan akumulasi).
   const nameKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-  type LR = { key: string; number: number; name: string; color: string; areaM2: number; levelName: string };
-  const legendByKey = new Map<string, LR>();
+  const AREA_TOL = 2; // m²
+  type LR = {
+    key: string; number: number; name: string; color: string;
+    areas: number[]; areaM2: number; levelName: string; layerIds: string[];
+  };
+  const legendByName = new Map<string, LR[]>();
   const legendRooms: LR[] = [];
   const sortedBoxesForLegend = [...boxes].sort((a, b) => a.baseM - b.baseM);
   for (const b of sortedBoxesForLegend) {
     for (const sl of b.slices) {
-      const k = nameKey(sl.name);
-      const ex = legendByKey.get(k);
-      if (ex) {
-        ex.areaM2 += sl.areaM2;
-        continue;
+      const nk = nameKey(sl.name);
+      const buckets = legendByName.get(nk) ?? [];
+      // cari bucket dengan rata-rata luas dalam toleransi
+      let bucket = buckets.find((bk) => Math.abs(bk.areaM2 - sl.areaM2) <= AREA_TOL);
+      if (!bucket) {
+        bucket = {
+          key: `${nk}#${buckets.length + 1}`,
+          number: legendRooms.length + 1,
+          name: sl.name,
+          color: sl.color,
+          areas: [],
+          areaM2: 0,
+          levelName: b.name,
+          layerIds: [],
+        };
+        buckets.push(bucket);
+        legendByName.set(nk, buckets);
+        legendRooms.push(bucket);
       }
-      const entry: LR = {
-        key: k,
-        number: legendRooms.length + 1,
-        name: sl.name,
-        color: sl.color,
-        areaM2: sl.areaM2,
-        levelName: b.name,
-      };
-      legendByKey.set(k, entry);
-      legendRooms.push(entry);
+      bucket.areas.push(sl.areaM2);
+      bucket.areaM2 = bucket.areas.reduce((a, x) => a + x, 0) / bucket.areas.length;
+      bucket.layerIds.push(sl.layerId);
     }
   }
   const numberByLayerId = new Map<string, number>();
-  for (const b of boxes) for (const sl of b.slices) {
-    const e = legendByKey.get(nameKey(sl.name));
-    if (e) numberByLayerId.set(sl.layerId, e.number);
-  }
+  for (const r of legendRooms) for (const id of r.layerIds) numberByLayerId.set(id, r.number);
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
