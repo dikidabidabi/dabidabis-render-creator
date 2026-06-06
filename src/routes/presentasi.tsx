@@ -3079,8 +3079,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           label="Level"
           value={displayName}
           hint={k > 1
-            ? `${fmt(level.mdpl, 1)} mdpl · tipikal ${k}×`
-            : `${fmt(level.mdpl, 1)} mdpl`}
+            ? `${fmt(level.mdpl, 1)} Elev · tipikal ${k}×`
+            : `${fmt(level.mdpl, 1)} Elev`}
         />
         <BigStat compact label="Jumlah Ruang" value={String(layers.filter((l) => !isLahan(l.name)).length)} />
         <BigStat
