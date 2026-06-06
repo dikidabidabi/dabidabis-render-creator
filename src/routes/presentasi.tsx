@@ -3116,7 +3116,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
       </div>
-      <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
+      <div style={{ width: (layers.filter((l) => !isLahan(l.name)).length > 60 ? 420 : layers.filter((l) => !isLahan(l.name)).length > 32 ? 360 : 300), flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
         <BigStat
           compact
           label="Level"
