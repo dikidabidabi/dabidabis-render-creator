@@ -2737,8 +2737,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             }
             const overrideFill = roomFillOverride(l.name, "0.45");
             const overrideStroke = roomStrokeOverride(l.name);
-            const fillCol = overrideFill ?? l.color.replace("ALPHA", "0.28");
-            const strokeCol = overrideStroke ?? l.color.replace("ALPHA", "1");
+            const baseCol = colorForRoomName(l.name) ?? l.color;
+            const fillCol = overrideFill ?? baseCol.replace("ALPHA", "0.28");
+            const strokeCol = overrideStroke ?? baseCol.replace("ALPHA", "1");
             return (
               <g key={l.id}>
                 <polygon
