@@ -3743,7 +3743,7 @@ function LokasiPanel({ sketch, lahanCount, buildCount, mPerSPx }: {
   sketch: Sketch; lahanCount: number; buildCount: number; mPerSPx: number;
 }) {
   const lahanM2 = (sketch.layers ?? []).filter((l) => isLahan(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const buildM2 = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
+  const buildM2 = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
