@@ -38,6 +38,7 @@ import {
   Crop,
   MoveHorizontal,
   Box as BoxIcon,
+  FlipHorizontal,
 } from "lucide-react";
 import {
   type Floor,
@@ -1719,7 +1720,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror">("line");
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -1861,6 +1862,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     if (tool !== "edit") setEditVertexMarquee(null);
     if (tool !== "floor") setFloorVertexMarquee(null);
+    if (tool !== "mirror") setMirrorDraft(null);
   }, [tool]);
   useEffect(() => {
     setMoveSel(new Set());
@@ -2373,6 +2375,166 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     },
     [moveClipboard, activeLvlId, lines, layers, sketch.circles, sketch.doors, sketch.floors, onChange, pushHistory, levels],
   );
+
+  // ===== Mirror Tool =====
+  // Duplikasi entitas terpilih (moveSel) dengan refleksi melintasi sumbu
+  // melalui titik origin pada sudut 0/45/90/135 derajat. Sumbu ditentukan
+  // dengan menarik dari titik origin (snap vertex/grid) ke arah; sudut
+  // arah di-snap ke 0/45/90/135 (mod 180).
+  type MirrorDraft = {
+    origin: Point;
+    cur: Point;
+    angleDeg: 0 | 45 | 90 | 135;
+  };
+  const [mirrorDraft, setMirrorDraft] = useState<MirrorDraft | null>(null);
+
+  const snapMirrorAngle = useCallback((origin: Point, cur: Point): 0 | 45 | 90 | 135 => {
+    const dx = cur.x - origin.x;
+    const dy = cur.y - origin.y;
+    if (Math.hypot(dx, dy) < 1e-6) return 0;
+    const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const mod = ((ang % 180) + 180) % 180; // 0..180
+    const cands: (0 | 45 | 90 | 135)[] = [0, 45, 90, 135];
+    let best: 0 | 45 | 90 | 135 = 0;
+    let bestD = Infinity;
+    for (const c of cands) {
+      const d = Math.min(Math.abs(c - mod), Math.abs(c + 180 - mod));
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    return best;
+  }, []);
+
+  const reflectPt = useCallback((p: Point, origin: Point, angleRad: number): Point => {
+    const dx = p.x - origin.x, dy = p.y - origin.y;
+    const c = Math.cos(2 * angleRad), s = Math.sin(2 * angleRad);
+    return { x: origin.x + dx * c + dy * s, y: origin.y + dx * s - dy * c };
+  }, []);
+
+  const reflectDir = useCallback((d: Point, angleRad: number): Point => {
+    const c = Math.cos(2 * angleRad), s = Math.sin(2 * angleRad);
+    return { x: d.x * c + d.y * s, y: d.x * s - d.y * c };
+  }, []);
+
+  const applyMirrorCommit = useCallback((draft: MirrorDraft) => {
+    if (moveSel.size === 0) {
+      toast.error("Pilih objek dulu lewat tool Move sebelum mirror");
+      return;
+    }
+    const angleRad = (draft.angleDeg * Math.PI) / 180;
+    const R = (p: Point) => reflectPt(p, draft.origin, angleRad);
+    const rand = () => Math.random().toString(36).slice(2, 7);
+    const lvlId = activeLvlId ?? undefined;
+    const newSel = new Set<MoveSelKey>();
+    pushHistory();
+
+    // Lines
+    const newLines: Line[] = [];
+    lines.forEach((ln, i) => {
+      if (!moveSel.has(`line:${i}`)) return;
+      // Refleksi membalik orientasi — agar arc/bezier visual mirror, tukar a<->b
+      // dan tukar control point c1<->c2.
+      const aR = R(ln.b);
+      const bR = R(ln.a);
+      const c1R = ln.c2 ? R(ln.c2) : undefined;
+      const c2R = ln.c1 ? R(ln.c1) : undefined;
+      const bulge = typeof ln.bulge === "number" ? -ln.bulge : undefined;
+      newLines.push({
+        ...ln,
+        a: aR,
+        b: bR,
+        c1: c1R,
+        c2: c2R,
+        bulge,
+        levelId: ln.levelId ?? lvlId,
+      });
+    });
+    const nextLines = [...lines, ...newLines];
+    newLines.forEach((_, i) => newSel.add(`line:${lines.length + i}`));
+
+    // Layers — reverse winding agar tetap konsisten
+    const newLayers: Layer[] = layers.flatMap((ly) => {
+      if (!moveSel.has(`layer:${ly.id}`)) return [];
+      const nid = `L${Date.now()}_${rand()}`;
+      newSel.add(`layer:${nid}`);
+      return [{
+        ...ly,
+        id: nid,
+        points: ly.points.map(R).reverse(),
+      }];
+    });
+    const nextLayers = [...layers, ...newLayers];
+
+    // Circles
+    const newCircles = (sketch.circles ?? []).flatMap((c) => {
+      if (!moveSel.has(`circle:${c.id}`)) return [];
+      const nid = `CIR${Date.now()}_${rand()}`;
+      newSel.add(`circle:${nid}`);
+      return [{ ...c, id: nid, c: R(c.c) }];
+    });
+    const nextCircles = [...(sketch.circles ?? []), ...newCircles];
+
+    // Doors — reflect endpoints dan vektor normal arah ayun
+    const newDoors = (sketch.doors ?? []).flatMap((d) => {
+      if (!moveSel.has(`door:${d.id}`)) return [];
+      const nid = genDoorId();
+      newSel.add(`door:${nid}`);
+      const n = reflectDir({ x: d.nx, y: d.ny }, angleRad);
+      return [{
+        ...d,
+        id: nid,
+        a: R(d.a),
+        b: R(d.b),
+        nx: n.x,
+        ny: n.y,
+      }];
+    });
+    const nextDoors = [...(sketch.doors ?? []), ...newDoors];
+
+    // Floors — reverse winding
+    const newFloors = (sketch.floors ?? []).flatMap((f) => {
+      if (!moveSel.has(`floor:${f.id}`)) return [];
+      const nid = genFloorId();
+      newSel.add(`floor:${nid}`);
+      return [{
+        ...f,
+        id: nid,
+        createdAt: Date.now(),
+        outer: f.outer.map(R).reverse(),
+        holes: f.holes ? f.holes.map((h) => h.map(R).reverse()) : undefined,
+      }];
+    });
+    const nextFloors = [...(sketch.floors ?? []), ...newFloors];
+
+    // Section cuts
+    let cutsChanged = false;
+    const nextCuts = [...(sketch.sectionCuts ?? [])];
+    (sketch.sectionCuts ?? []).forEach((c, i) => {
+      if (!moveSel.has(`section:${i}`)) return;
+      cutsChanged = true;
+      nextCuts.push({ ...c, p1: R(c.p1), p2: R(c.p2), updatedAt: Date.now() });
+      newSel.add(`section:${nextCuts.length - 1}`);
+    });
+
+    const patch: Partial<Sketch> = {
+      lines: nextLines,
+      layers: nextLayers,
+      circles: nextCircles,
+      doors: nextDoors,
+      floors: nextFloors,
+    };
+    if (cutsChanged) patch.sectionCuts = nextCuts;
+    onChange(patch);
+    setMoveSel(newSel);
+    const total =
+      newLines.length + newLayers.length + newCircles.length +
+      newDoors.length + newFloors.length;
+    toast.success(`Mirror ${total} objek pada sumbu ${draft.angleDeg}°`);
+  }, [
+    moveSel, lines, layers, sketch.circles, sketch.doors, sketch.floors,
+    sketch.sectionCuts, onChange, pushHistory, activeLvlId,
+    reflectPt, reflectDir,
+  ]);
+
 
 
 
@@ -3511,7 +3673,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     // ----- Move Tool: highlight selection + marquee (world-space) -----
-    if (tool === "move") {
+    if (tool === "move" || tool === "mirror") {
       ctx.save();
       ctx.lineJoin = "round";
       ctx.strokeStyle = "rgba(232,93,58,0.95)";
@@ -3567,6 +3729,80 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.fill(); ctx.stroke();
         ctx.setLineDash([]);
       }
+      ctx.restore();
+    }
+
+    // ----- Mirror Tool: axis preview + reflected ghost -----
+    if (tool === "mirror" && mirrorDraft) {
+      const md = mirrorDraft;
+      const angleRad = (md.angleDeg * Math.PI) / 180;
+      const ux = Math.cos(angleRad), uy = Math.sin(angleRad);
+      const L = 100000 / s;
+      const ax = { x: md.origin.x - ux * L, y: md.origin.y - uy * L };
+      const bx = { x: md.origin.x + ux * L, y: md.origin.y + uy * L };
+      ctx.save();
+      // Axis line
+      ctx.strokeStyle = "rgba(34,211,238,0.9)";
+      ctx.lineWidth = 1.5 / s;
+      ctx.setLineDash([8 / s, 5 / s]);
+      ctx.beginPath();
+      ctx.moveTo(ax.x, ax.y); ctx.lineTo(bx.x, bx.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Origin marker
+      ctx.fillStyle = "rgba(34,211,238,1)";
+      ctx.beginPath();
+      ctx.arc(md.origin.x, md.origin.y, 5 / s, 0, Math.PI * 2);
+      ctx.fill();
+      // Reflected ghost of selected items
+      const R = (p: Point) => reflectPt(p, md.origin, angleRad);
+      ctx.strokeStyle = "rgba(34,211,238,0.85)";
+      ctx.fillStyle = "rgba(34,211,238,0.15)";
+      ctx.lineWidth = 1.6 / s;
+      const sLine = (a: Point, b: Point) => {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      };
+      moveSel.forEach((key) => {
+        const [kind, id] = key.split(":");
+        if (kind === "line") {
+          const ln = lines[Number(id)];
+          if (ln) sLine(R(ln.a), R(ln.b));
+        } else if (kind === "layer") {
+          const ly = layers.find((l) => l.id === id);
+          if (ly && ly.points.length >= 2) {
+            ctx.beginPath();
+            ly.points.forEach((p, i) => {
+              const q = R(p);
+              i === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y);
+            });
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "circle") {
+          const c = (sketch.circles ?? []).find((x) => x.id === id);
+          if (c) {
+            const cc = R(c.c);
+            ctx.beginPath(); ctx.arc(cc.x, cc.y, c.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "door") {
+          const d = (sketch.doors ?? []).find((x) => x.id === id);
+          if (d) sLine(R(d.a), R(d.b));
+        } else if (kind === "floor") {
+          const f = (sketch.floors ?? []).find((x) => x.id === id);
+          if (f && f.outer.length >= 2) {
+            ctx.beginPath();
+            f.outer.forEach((p, i) => {
+              const q = R(p);
+              i === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y);
+            });
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "section") {
+          const c = (sketch.sectionCuts ?? [])[Number(id)];
+          if (c) sLine(R(c.p1), R(c.p2));
+        }
+      });
       ctx.restore();
     }
 
@@ -4850,6 +5086,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "mirror") {
+      if (moveSel.size === 0) {
+        toast.error("Pilih objek dulu di tool Move sebelum mirror");
+        return;
+      }
+      const origin = snapPoint(getWorldPosRaw(e));
+      setMirrorDraft({ origin, cur: origin, angleDeg: 0 });
+      return;
+    }
     if (tool === "move") {
       const raw = getWorldPosRaw(e);
       const tol = 10 / view.s;
@@ -5194,6 +5439,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (mirrorDraft && tool === "mirror") {
+      const raw = getWorldPosRaw(e);
+      const ang = snapMirrorAngle(mirrorDraft.origin, raw);
+      setMirrorDraft({ ...mirrorDraft, cur: raw, angleDeg: ang });
+      return;
+    }
+
     if (moveDrag) {
       const raw = getWorldPosRaw(e);
       const rawDx = raw.x - moveDrag.startWorld.x;
@@ -5431,6 +5683,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const wasGesture = !!gestureRef.current;
     endPointer(e);
     if (wasGesture) return;
+
+    if (mirrorDraft && tool === "mirror") {
+      const draft = mirrorDraft;
+      setMirrorDraft(null);
+      const dragPx = Math.hypot(draft.cur.x - draft.origin.x, draft.cur.y - draft.origin.y) * view.s;
+      if (dragPx < 6) {
+        toast.error("Tarik untuk menentukan arah sumbu mirror");
+        return;
+      }
+      applyMirrorCommit(draft);
+      return;
+    }
 
     if (moveDrag) {
       const md = moveDrag;
@@ -6449,6 +6713,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <GripHorizontal className="mr-1.5 h-4 w-4" /> Move
           </Button>
           <Button
+            variant={tool === "mirror" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("mirror"); }}
+            className={cn(tool === "mirror" && "bg-gradient-ember shadow-ember")}
+            title="Mirror — pilih objek lewat Move, lalu tarik sumbu (snap 0/45/90/135°) untuk menduplikasi cerminan."
+          >
+            <FlipHorizontal className="mr-1.5 h-4 w-4" /> Mirror
+          </Button>
+          <Button
             variant={tool === "erase" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("erase"); }}
@@ -6977,6 +7250,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             </div>
           </div>
         )}
+
+        {tool === "mirror" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Mirror — {moveSel.size} terpilih
+            </Label>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              1. Pilih objek dulu di tool <b>Move</b> (garis, ruang, lantai, lingkaran, pintu, atau garis potong).<br />
+              2. Kembali ke tool ini. Klik titik pusat sumbu (snap ke vertex / midpoint / grid sesuai snap aktif), lalu tarik untuk menentukan arah.<br />
+              3. Sudut sumbu otomatis <b>snap</b> ke 0° / 45° / 90° / 135°.<br />
+              4. Lepaskan untuk mencerminkan — objek baru dibuat sebagai duplikat terpisah (tidak terhubung dengan sumber).
+            </p>
+            {mirrorDraft && (
+              <div className="rounded-md border border-border/40 bg-surface/30 p-2 text-[11px]">
+                Sumbu aktif: <b>{mirrorDraft.angleDeg}°</b>
+              </div>
+            )}
+            {moveSel.size === 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setTool("move")}
+              >
+                Buka tool Move untuk memilih
+              </Button>
+            )}
+          </div>
+        )}
+
+
 
         {tool === "grid" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
