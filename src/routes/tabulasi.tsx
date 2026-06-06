@@ -491,7 +491,7 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
         return (
           <div key={lv.id} className="rounded-md border border-border/60">
             <div className="flex items-center justify-between bg-muted/30 px-2 py-1.5 text-xs font-medium">
-              <span>{lv.name} · {fmt(lv.mdpl, 1)} mdpl</span>
+              <span>{lv.name} · {fmt(lv.mdpl, 1)} Elev</span>
               <span className="font-mono tabular-nums text-muted-foreground">
                 {fmt(totalEfektif)} m² efektif
               </span>
