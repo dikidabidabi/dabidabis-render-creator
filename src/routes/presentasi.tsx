@@ -4992,10 +4992,10 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const groundLv = findMdplZeroLevel(levelsAsc) ?? levelsAsc[0];
   const groundId = groundLv?.id;
-  // Taman di level dasar (MDPL 0 / LT 1) adalah lansekap, bukan luasan bangunan,
-  // sehingga tidak diakumulasi dengan ruang lain di level dasar.
+  // Taman tidak dihitung sebagai luasan bangunan (lansekap), tidak masuk stacking di level manapun.
+  void groundId;
   const build = (sketch.layers ?? []).filter(
-    (l) => !isLahan(l.name) && !isVoid(l.name) && !(isTaman(l.name) && l.levelId === groundId),
+    (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
   );
   const displayNames = computeLevelDisplayNames(levelsAsc, sketch.layers ?? []);
 
