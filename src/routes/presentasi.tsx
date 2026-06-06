@@ -2019,27 +2019,27 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Room slices per level — digambar lebih dulu agar notasi
               dinding / lantai / balok berada DI ATAS layer ruang. */}
           {boxes.map((b) =>
-            b.slices.map((sl, i) => {
+            b.slices.flatMap((sl, i) => {
               const x = mx(sl.x0);
               const w = (sl.x1 - sl.x0) * scalePxPerM;
-              const sliceHM = sl.heightOverride ?? (b.topM - b.baseM);
-              const sliceBaseM = b.baseM + (sl.baseDelta ?? 0);
-              const sliceTopM = sliceBaseM + sliceHM;
-              const y = my(sliceTopM);
-              const h = sliceHM * scalePxPerM;
-              const cx = x + w / 2, cy = y + h / 2;
-              const labelFs = Math.max(8, Math.min(13, w / Math.max(8, sl.name.length) * 1.4));
-              return (
-                <g key={`${b.id}-${i}`}>
-                  <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
-                  {w > 28 && h > 18 && (
+              const sliceHM = sl.heightOverride ?? b.floorH;
+              return Array.from({ length: Math.max(1, b.count) }).map((_, fi) => {
+                const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
+                const sliceTopM = sliceBaseM + sliceHM;
+                const y = my(sliceTopM);
+                const h = sliceHM * scalePxPerM;
+                const cx = x + w / 2, cy = y + h / 2;
+                const labelFs = Math.max(7, Math.min(13, Math.min(w / Math.max(6, sl.name.length) * 1.5, h * 0.55)));
+                return (
+                  <g key={`${b.id}-${i}-${fi}`}>
+                    <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
                     <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
                       style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
                       {sl.name}
                     </text>
-                  )}
-                </g>
-              );
+                  </g>
+                );
+              });
             })
           )}
 
