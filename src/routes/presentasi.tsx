@@ -5638,7 +5638,7 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 
 
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
+  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   const displayNames = computeLevelDisplayNames(levels, sketch.layers ?? []);
   const perLevel = levels.map((lv) => {
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
