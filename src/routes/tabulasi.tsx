@@ -969,7 +969,7 @@ function roomGroupKey(name: string): { key: string; label: string } {
 }
 
 function KomposisiSection({ sketch }: { sketch: Sketch }) {
-  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const mul: Record<string, number> = {};
   for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
