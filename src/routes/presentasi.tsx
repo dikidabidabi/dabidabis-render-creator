@@ -1929,26 +1929,39 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
     }
   }
 
-  // Build legend: unique rooms (by layer id) yang muncul pada potongan ini,
-  // diurutkan berdasarkan kemunculan dari level paling bawah ke atas.
-  const legendSeen = new Set<string>();
-  const legendRooms: Array<{ id: string; number: number; name: string; color: string; areaM2: number; levelName: string }> = [];
+  // Build legend: unique rooms keyed by NAMA (case-insensitive, termasuk
+  // angka dalam nama) — "Unit 1 Htl" & "Unit 2 Htl" tetap dua nomor berbeda,
+  // sedangkan beberapa layer bernama "Unit 1 Htl" memakai nomor yang sama.
+  const nameKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+  type LR = { key: string; number: number; name: string; color: string; areaM2: number; levelName: string };
+  const legendByKey = new Map<string, LR>();
+  const legendRooms: LR[] = [];
   const sortedBoxesForLegend = [...boxes].sort((a, b) => a.baseM - b.baseM);
   for (const b of sortedBoxesForLegend) {
     for (const sl of b.slices) {
-      if (legendSeen.has(sl.layerId)) continue;
-      legendSeen.add(sl.layerId);
-      legendRooms.push({
-        id: sl.layerId,
+      const k = nameKey(sl.name);
+      const ex = legendByKey.get(k);
+      if (ex) {
+        ex.areaM2 += sl.areaM2;
+        continue;
+      }
+      const entry: LR = {
+        key: k,
         number: legendRooms.length + 1,
         name: sl.name,
         color: sl.color,
         areaM2: sl.areaM2,
         levelName: b.name,
-      });
+      };
+      legendByKey.set(k, entry);
+      legendRooms.push(entry);
     }
   }
-  const numberByLayerId = new Map(legendRooms.map((r) => [r.id, r.number]));
+  const numberByLayerId = new Map<string, number>();
+  for (const b of boxes) for (const sl of b.slices) {
+    const e = legendByKey.get(nameKey(sl.name));
+    if (e) numberByLayerId.set(sl.layerId, e.number);
+  }
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
