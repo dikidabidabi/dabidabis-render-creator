@@ -608,7 +608,7 @@ function downloadSketchExcel(sketch: Sketch, data: Stats) {
     rows.push(["TOTAL", "", Number(totalAsli.toFixed(2)), Number(totalEfektif.toFixed(2))]);
     sections.push(
       tableHtml(
-        `Rincian — ${lv.name} (${fmt(lv.mdpl, 1)} mdpl)`,
+        `Rincian — ${lv.name} (${fmt(lv.mdpl, 1)} Elev)`,
         ["Ruang", "Koef.", "Luas (m²)", "Efektif (m²)"],
         rows,
       ),
