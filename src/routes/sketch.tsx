@@ -5610,6 +5610,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     endPointer(e);
     if (wasGesture) return;
 
+    if (mirrorDraft && tool === "mirror") {
+      const draft = mirrorDraft;
+      setMirrorDraft(null);
+      const dragPx = Math.hypot(draft.cur.x - draft.origin.x, draft.cur.y - draft.origin.y) * view.s;
+      if (dragPx < 6) {
+        toast.error("Tarik untuk menentukan arah sumbu mirror");
+        return;
+      }
+      applyMirrorCommit(draft);
+      return;
+    }
+
     if (moveDrag) {
       const md = moveDrag;
       setMoveDrag(null);
