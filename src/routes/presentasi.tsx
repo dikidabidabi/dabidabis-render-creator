@@ -2698,9 +2698,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 key={`below-floor-${fl.id}`}
                 points={fl.outer.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
-                stroke="rgba(0,0,0,0.45)"
+                stroke="rgba(0,0,0,0.55)"
                 strokeWidth={sw * 0.001}
-                strokeDasharray={`${sw * 0.004} ${sw * 0.003}`}
               />
             ));
           })()}
