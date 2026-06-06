@@ -58,7 +58,7 @@ export const Route = createFileRoute("/model3d")({
       {
         name: "description",
         content:
-          "Generator model 3D dari sketsa milimeter block. Ekstrusi polygon per-lantai berdasarkan MDPL dengan tampilan interaktif.",
+          "Generator model 3D dari sketsa milimeter block. Ekstrusi polygon per-lantai berdasarkan Elevasi dengan tampilan interaktif.",
       },
     ],
   }),
