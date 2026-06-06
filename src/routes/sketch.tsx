@@ -3673,7 +3673,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     // ----- Move Tool: highlight selection + marquee (world-space) -----
-    if (tool === "move") {
+    if (tool === "move" || tool === "mirror") {
       ctx.save();
       ctx.lineJoin = "round";
       ctx.strokeStyle = "rgba(232,93,58,0.95)";
