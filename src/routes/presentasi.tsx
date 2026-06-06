@@ -2390,7 +2390,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Elevation labels (kiri) — per lantai, termasuk setiap floor pada level tipikal */}
           {boxes.flatMap((b) => {
             const xLabel = mx(0) - 8;
-            const out: JSX.Element[] = [];
+            const out: React.ReactNode[] = [];
             for (let fi = 0; fi < Math.max(1, b.count); fi++) {
               const baseM = b.baseM + fi * b.floorH;
               const topM = baseM + b.floorH;
@@ -2418,7 +2418,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Dimensi tinggi bersih per lantai (kanan), termasuk setiap floor pada level tipikal */}
           {boxes.flatMap((b) => {
             const x = mx(cutLenM) + 8;
-            const out: JSX.Element[] = [];
+            const out: React.ReactNode[] = [];
             for (let fi = 0; fi < Math.max(1, b.count); fi++) {
               const baseM = b.baseM + fi * b.floorH;
               const topM = baseM + b.floorH;
