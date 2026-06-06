@@ -2028,7 +2028,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Lahan / ground line — terikat MDPL 0 */}
           <line x1={mx(0) - 30} y1={my(groundMdpl)} x2={mx(cutLenM) + 30} y2={my(groundMdpl)} stroke="#111" strokeWidth={1.6} />
           <text x={mx(0) - 36} y={my(groundMdpl) - 5} fontSize={10} textAnchor="end" fill="#111" style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700 }}>
-            Lahan ±0 mdpl
+            Lahan ±0 Elev
           </text>
           {/* Hatching lahan */}
           {Array.from({ length: 18 }).map((_, i) => {
