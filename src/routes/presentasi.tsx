@@ -3123,7 +3123,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       fontVariantNumeric: "tabular-nums",
                     }}>{i + 1}.</span>
                     <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.name}
+                      {r.name}:{fmt(r.areaM2 || 0, 1)}m²
                     </span>
                   </li>
                 ))}
