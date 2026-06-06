@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { solidColorForRoomName } from "@/lib/room-color";
 import {
   buildExportGroup,
   disposeGroup,
@@ -596,11 +597,11 @@ function Scene({
         return layersOfLevel.map((ly, idx) => {
           const override = roomExtrudeOverride(ly.name);
           if (override && override.height <= 0) return null;
-          const sketchColor =
+          const sketchColor = solidColorForRoomName(ly.name,
             ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
               const parts = body.split(",").map((s: string) => s.trim());
               return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-            }) || "#e85d3a";
+            }) || "#e85d3a");
           const baseColor = override ? override.color : sketchColor;
           const color = colorMode === "bw" ? "#dcdcdc" : baseColor;
           const h = override ? override.height : lv.height;
@@ -921,10 +922,11 @@ function SketchViewer({
         if (override && override.height <= 0) continue;
         const rgb = override
           ? override.color
-          : ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
-              const parts = body.split(",").map((s: string) => s.trim());
-              return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-            }) || "#e85d3a";
+          : solidColorForRoomName(ly.name,
+              ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+                const parts = body.split(",").map((s: string) => s.trim());
+                return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+              }) || "#e85d3a");
         inputs.push({
           name: `${lv.name}_${ly.name}`,
           points: ly.points,

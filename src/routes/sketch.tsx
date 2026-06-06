@@ -73,6 +73,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
 import polygonClipping from "polygon-clipping";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
@@ -2549,7 +2550,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               ? ABU_MUDA_FILL_RGBA
               : isTamanLayerName(layer.name)
                 ? TAMAN_FILL_RGBA
-                : layer.color;
+                : (colorForRoomName(layer.name) ?? layer.color);
           ctx.fillStyle = fillBase.replace("ALPHA", layer.locked ? "0.4" : "0.32");
           ctx.fill();
           ctx.strokeStyle = fillBase.replace("ALPHA", "0.95");
@@ -8536,7 +8537,7 @@ function LevelsPanel({
                             <div className="flex items-center gap-1.5">
                             <span
                               className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
-                              style={{ background: sl.color.replace("ALPHA", "0.9") }}
+                              style={{ background: (colorForRoomName(sl.name) ?? sl.color).replace("ALPHA", "0.9") }}
                             />
                             {editing ? (
                               <Input

@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { colorForRoomName } from "@/lib/room-color";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import SunCalc from "suncalc";
@@ -1922,7 +1923,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
         x1: t1 * cutLenM,
         layerId: layer.id,
         name: layer.name,
-        color: roomFillOverride(layer.name, "0.55") ?? (layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)"),
+        color: roomFillOverride(layer.name, "0.55") ?? ((colorForRoomName(layer.name) ?? layer.color)?.replace("ALPHA", "0.55") ?? "rgba(232,93,58,0.5)"),
         areaM2: layer.areaM2 || 0,
         heightOverride,
         baseDelta,
@@ -2736,8 +2737,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             }
             const overrideFill = roomFillOverride(l.name, "0.45");
             const overrideStroke = roomStrokeOverride(l.name);
-            const fillCol = overrideFill ?? l.color.replace("ALPHA", "0.28");
-            const strokeCol = overrideStroke ?? l.color.replace("ALPHA", "1");
+            const baseCol = colorForRoomName(l.name) ?? l.color;
+            const fillCol = overrideFill ?? baseCol.replace("ALPHA", "0.28");
+            const strokeCol = overrideStroke ?? baseCol.replace("ALPHA", "1");
             return (
               <g key={l.id}>
                 <polygon
@@ -3160,7 +3162,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       flexShrink: 0,
                       minWidth: 16,
                       fontWeight: 700,
-                      color: r.color.replace("ALPHA", "1"),
+                      color: (colorForRoomName(r.name) ?? r.color).replace("ALPHA", "1"),
                       fontVariantNumeric: "tabular-nums",
                     }}>{i + 1}.</span>
                     <span style={{ flex: 1, minWidth: 0, color: "#222", wordBreak: "break-word" }}>
