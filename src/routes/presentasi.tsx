@@ -5718,8 +5718,8 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
   const maxLevelArea = Math.max(1, ...perLevelTotals.map((p) => p.area));
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: 22, width: "100%", height: "100%" }}>
-      {/* Kiri: Aksonometri dari Model 3D */}
+    <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1.1fr", gap: 18, width: "100%", height: "100%", minHeight: 0 }}>
+      {/* Kiri: Aksonometri (besar) */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
         <Panel title="Aksonometri · Screenshot Model 3D">
           <div style={{ position: "relative", flex: 1, minHeight: 0, background: "#f4f4f4", border: "1px solid #e5e5e5", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
@@ -5733,7 +5733,7 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
             )}
           </div>
         </Panel>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>
           <KStat label="Total Kelompok" value={`${groups.length}`} hint="kelompok ruang" />
           <KStat label="Total Item" value={`${totalCount}`} hint="termasuk tipikal" />
           <KStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="setelah pengali tipikal" />
@@ -5741,96 +5741,93 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
         </div>
       </div>
 
-      {/* Kanan: grafis & angka */}
-      <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 14, minHeight: 0 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-          <Panel title="Tipe Koefisien">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <Donut
-                size={130} thickness={11}
-                segments={coefData.map((b) => ({ value: (b.area / coefTotal) * 100, color: b.color }))}
-                centerValue={`${coefData.length}`} centerLabel="tipe"
-              />
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
-                {coefData.map((b) => (
-                  <KLegend key={b.key} color={b.color} label={b.label}
-                    count={b.count} area={b.area} pct={(b.area / coefTotal) * 100} />
-                ))}
-              </div>
-            </div>
-          </Panel>
-          <Panel title="Tipikalitas Lantai">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <Donut
-                size={130} thickness={11}
-                segments={tipData.map((b) => ({ value: (b.area / tipTotal) * 100, color: b.color }))}
-                centerValue={`${tipData.length}`} centerLabel="tipe"
-              />
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
-                {tipData.map((b) => (
-                  <KLegend key={b.key} color={b.color} label={b.label}
-                    count={b.count} area={b.area} pct={(b.area / tipTotal) * 100} />
-                ))}
-              </div>
-            </div>
-          </Panel>
-          <Panel title="Distribusi per Lantai">
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
-              {perLevelTotals.map(({ lv, area, name }) => {
-                const pct = (area / maxLevelArea) * 100;
-                return (
-                  <div key={lv.id}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ fontWeight: 600 }}>{name}</span>
-                      <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>{fmt(area)} m²</span>
-                    </div>
-                    <div style={{ height: 5, width: "100%", background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: "#0a0a0a", borderRadius: 999 }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Panel>
-        </div>
-
-        {/* Tabel pengelompokkan ruang */}
-        <Panel title="Pengelompokkan Ruang">
-          <div style={{ display: "flex", gap: 14, height: "100%", minHeight: 0 }}>
+      {/* Tengah: tiga donut/diagram bertumpuk */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+        <Panel title="Tipe Koefisien">
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Donut
-              size={170} thickness={14}
-              segments={groups.map((g) => ({ value: (g.areaM2 / (totalArea || 1)) * 100, color: g.color }))}
-              centerValue={`${groups.length}`} centerLabel="kelompok"
+              size={110} thickness={10}
+              segments={coefData.map((b) => ({ value: (b.area / coefTotal) * 100, color: b.color }))}
+              centerValue={`${coefData.length}`} centerLabel="tipe"
             />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
+              {coefData.map((b) => (
+                <KLegend key={b.key} color={b.color} label={b.label}
+                  count={b.count} area={b.area} pct={(b.area / coefTotal) * 100} />
+              ))}
+            </div>
+          </div>
+        </Panel>
+        <Panel title="Tipikalitas Lantai">
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Donut
+              size={110} thickness={10}
+              segments={tipData.map((b) => ({ value: (b.area / tipTotal) * 100, color: b.color }))}
+              centerValue={`${tipData.length}`} centerLabel="tipe"
+            />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
+              {tipData.map((b) => (
+                <KLegend key={b.key} color={b.color} label={b.label}
+                  count={b.count} area={b.area} pct={(b.area / tipTotal) * 100} />
+              ))}
+            </div>
+          </div>
+        </Panel>
+        <Panel title="Distribusi per Lantai">
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
+            {perLevelTotals.map(({ lv, area, name }) => {
+              const pct = (area / maxLevelArea) * 100;
+              return (
+                <div key={lv.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <span style={{ fontWeight: 600 }}>{name}</span>
+                    <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>{fmt(area)} m²</span>
+                  </div>
+                  <div style={{ height: 4, width: "100%", background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: "#0a0a0a", borderRadius: 999 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Kanan: tabel pengelompokkan ruang */}
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <Panel title="Pengelompokkan Ruang">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%", minHeight: 0 }}>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <Donut
+                size={150} thickness={13}
+                segments={groups.map((g) => ({ value: (g.areaM2 / (totalArea || 1)) * 100, color: g.color }))}
+                centerValue={`${groups.length}`} centerLabel="kelompok"
+              />
+            </div>
             <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
                 <thead>
-                  <tr style={{ background: "#fafafa", color: "#666", textTransform: "uppercase", letterSpacing: "0.12em", fontSize: 9 }}>
+                  <tr style={{ background: "#fafafa", color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", fontSize: 8 }}>
                     <th style={kth}>Kelompok</th>
-                    <th style={{ ...kth, textAlign: "right" }}>Jumlah</th>
-                    <th style={{ ...kth, textAlign: "right" }}>Luas m²</th>
+                    <th style={{ ...kth, textAlign: "right" }}>n</th>
+                    <th style={{ ...kth, textAlign: "right" }}>m²</th>
                     <th style={{ ...kth, textAlign: "right" }}>%</th>
-                    <th style={kth}>Lantai</th>
                   </tr>
                 </thead>
                 <tbody>
                   {groups.map((g) => {
                     const pct = (g.areaM2 / (totalArea || 1)) * 100;
-                    const lvls = Object.keys(g.perLevel)
-                      .map((id) => displayNames[id] ?? (levels.find((l) => l.id === id)?.name ?? ""))
-                      .filter(Boolean);
                     return (
                       <tr key={g.key} style={{ borderTop: "1px solid #eee" }}>
                         <td style={ktd}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color, display: "inline-block" }} />
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: 2, background: g.color, display: "inline-block" }} />
                             <span style={{ fontWeight: 600 }}>{g.label}</span>
                           </span>
                         </td>
                         <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.count}</td>
                         <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(g.areaM2)}</td>
-                        <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(pct, 1)}%</td>
-                        <td style={{ ...ktd, color: "#666", fontSize: 10 }}>{lvls.join(", ")}</td>
+                        <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(pct, 1)}</td>
                       </tr>
                     );
                   })}
@@ -5838,8 +5835,7 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
                     <td style={ktd}>Total</td>
                     <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{totalCount}</td>
                     <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalArea)}</td>
-                    <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>100%</td>
-                    <td style={ktd} />
+                    <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>100</td>
                   </tr>
                 </tbody>
               </table>
