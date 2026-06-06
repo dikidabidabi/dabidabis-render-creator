@@ -2390,6 +2390,36 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             });
           })()}
 
+          {/* Pohon di permukaan Taman pada potongan — kanopi hijau solid 50%,
+              tinggi total acak (kanopi..5 m) dari permukaan level. */}
+          {boxes.flatMap((b) =>
+            b.slices.filter((sl) => isTaman(sl.name)).flatMap((sl) =>
+              Array.from({ length: Math.max(1, b.count) }).flatMap((_, fi) => {
+                const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
+                const sliceHM = sl.heightOverride ?? b.floorH;
+                const surfaceMdpl = sliceBaseM + sliceHM;
+                const trees = planTamanTreesAlong(sl.x0, sl.x1, `taman-sec-${b.id}-${sl.layerId}-${fi}`);
+                return trees.map((t, ti) => {
+                  const cxPx = mx(t.xM);
+                  const rPx = (t.canopyDm / 2) * scalePxPerM;
+                  const canopyCenterMdpl = surfaceMdpl + t.heightM - t.canopyDm / 2;
+                  const trunkBotPx = my(surfaceMdpl);
+                  const trunkTopPx = my(canopyCenterMdpl);
+                  return (
+                    <g key={`taman-tree-${b.id}-${sl.layerId}-${fi}-${ti}`} pointerEvents="none">
+                      <line x1={cxPx} y1={trunkBotPx} x2={cxPx} y2={trunkTopPx}
+                        stroke="#5a3a1e" strokeWidth={Math.max(0.8, scalePxPerM * 0.08)} strokeLinecap="round" />
+                      <circle cx={cxPx} cy={my(canopyCenterMdpl)} r={rPx}
+                        fill="rgba(22,163,74,0.5)" />
+                    </g>
+                  );
+                });
+              })
+            )
+          )}
+
+
+
 
 
           {/* Notasi material selubung pada potongan — dihitung dari edgeAttrs */}
