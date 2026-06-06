@@ -8537,7 +8537,7 @@ function LevelsPanel({
                             <div className="flex items-center gap-1.5">
                             <span
                               className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
-                              style={{ background: sl.color.replace("ALPHA", "0.9") }}
+                              style={{ background: (colorForRoomName(sl.name) ?? sl.color).replace("ALPHA", "0.9") }}
                             />
                             {editing ? (
                               <Input
