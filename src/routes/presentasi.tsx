@@ -2892,6 +2892,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             sw={sw}
           />
 
+          {/* Pohon pada permukaan Taman — lingkaran hijau solid opacity 50%,
+              diameter acak 1..3 m, jarak antar pohon minimal 3.2 m. */}
+          {layers.filter((l) => isTaman(l.name)).map((l) => {
+            const trees = planTamanTreesInPoly(l.points, pxPerM, `taman-plan-${l.id}`);
+            return (
+              <g key={`taman-trees-${l.id}`} pointerEvents="none">
+                {trees.map((t, ti) => (
+                  <circle key={ti}
+                    cx={t.x} cy={t.y} r={(t.dM / 2) * pxPerM}
+                    fill="rgba(22,163,74,0.5)" />
+                ))}
+              </g>
+            );
+          })}
+
+
+
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             void gIdx;
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
