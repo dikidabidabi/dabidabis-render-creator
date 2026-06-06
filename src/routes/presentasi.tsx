@@ -4917,10 +4917,10 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 58, textAlign: "right", fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
-            MDPL
+            ELEV
           </div>
           <div style={{ flex: 1, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
-            Tanah · MDPL 0
+            Tanah · Elev 0
           </div>
         </div>
       </div>
