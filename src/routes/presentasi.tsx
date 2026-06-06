@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import * as React from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Fragment } from "react";
 import {
@@ -2390,7 +2391,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Elevation labels (kiri) — per lantai, termasuk setiap floor pada level tipikal */}
           {boxes.flatMap((b) => {
             const xLabel = mx(0) - 8;
-            const out: React.ReactNode[] = [];
+            const out: Array<React.ReactNode> = [];
             for (let fi = 0; fi < Math.max(1, b.count); fi++) {
               const baseM = b.baseM + fi * b.floorH;
               const topM = baseM + b.floorH;
@@ -2418,7 +2419,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Dimensi tinggi bersih per lantai (kanan), termasuk setiap floor pada level tipikal */}
           {boxes.flatMap((b) => {
             const x = mx(cutLenM) + 8;
-            const out: React.ReactNode[] = [];
+            const out: Array<React.ReactNode> = [];
             for (let fi = 0; fi < Math.max(1, b.count); fi++) {
               const baseM = b.baseM + fi * b.floorH;
               const topM = baseM + b.floorH;
@@ -4442,7 +4443,7 @@ function MaterialEdges({
               {(() => {
                 const mPerSeg = 1.2 * pxPerM;
                 const n = Math.max(1, Math.floor(len / mPerSeg));
-                const out: React.ReactNode[] = [];
+                const out: Array<React.ReactNode> = [];
                 for (let k = 1; k < n; k++) {
                   const t = k / n;
                   const p1 = { x: a1.x + (b1.x - a1.x) * t, y: a1.y + (b1.y - a1.y) * t };
