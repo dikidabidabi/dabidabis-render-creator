@@ -5746,7 +5746,7 @@ function computeRoomGroups(sketch: Sketch): {
   totalArea: number;
   totalCount: number;
 } {
-  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   const levels = sketch.levels ?? [];
   const mul: Record<string, number> = {};
   for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
