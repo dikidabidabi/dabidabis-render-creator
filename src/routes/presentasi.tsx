@@ -2727,7 +2727,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const lines = (sketch.lines ?? []).filter((l) => l.levelId === level.id);
   const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
   const k = Math.max(1, Math.round(level.typicalCount ?? 1));
-  const luasPerLantai = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
+  const luasPerLantai = layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name)).reduce((s, l) => s + l.areaM2, 0);
   const totalLuas = luasPerLantai * k;
   const displayNames = computeLevelDisplayNames(sketch.levels ?? [], sketch.layers ?? []);
   const displayName = displayNames[level.id] ?? level.name;
