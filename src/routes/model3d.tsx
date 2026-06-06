@@ -1011,7 +1011,7 @@ function SketchViewer({
                     </div>
                     <div>
                       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        MDPL (m)
+                        Elev (m)
                       </Label>
                       <Input
                         type="number"
