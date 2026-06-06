@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import * as React from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Fragment } from "react";
 import {
@@ -1929,26 +1930,39 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
     }
   }
 
-  // Build legend: unique rooms (by layer id) yang muncul pada potongan ini,
-  // diurutkan berdasarkan kemunculan dari level paling bawah ke atas.
-  const legendSeen = new Set<string>();
-  const legendRooms: Array<{ id: string; number: number; name: string; color: string; areaM2: number; levelName: string }> = [];
+  // Build legend: unique rooms keyed by NAMA (case-insensitive, termasuk
+  // angka dalam nama) — "Unit 1 Htl" & "Unit 2 Htl" tetap dua nomor berbeda,
+  // sedangkan beberapa layer bernama "Unit 1 Htl" memakai nomor yang sama.
+  const nameKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+  type LR = { key: string; number: number; name: string; color: string; areaM2: number; levelName: string };
+  const legendByKey = new Map<string, LR>();
+  const legendRooms: LR[] = [];
   const sortedBoxesForLegend = [...boxes].sort((a, b) => a.baseM - b.baseM);
   for (const b of sortedBoxesForLegend) {
     for (const sl of b.slices) {
-      if (legendSeen.has(sl.layerId)) continue;
-      legendSeen.add(sl.layerId);
-      legendRooms.push({
-        id: sl.layerId,
+      const k = nameKey(sl.name);
+      const ex = legendByKey.get(k);
+      if (ex) {
+        ex.areaM2 += sl.areaM2;
+        continue;
+      }
+      const entry: LR = {
+        key: k,
         number: legendRooms.length + 1,
         name: sl.name,
         color: sl.color,
         areaM2: sl.areaM2,
         levelName: b.name,
-      });
+      };
+      legendByKey.set(k, entry);
+      legendRooms.push(entry);
     }
   }
-  const numberByLayerId = new Map(legendRooms.map((r) => [r.id, r.number]));
+  const numberByLayerId = new Map<string, number>();
+  for (const b of boxes) for (const sl of b.slices) {
+    const e = legendByKey.get(nameKey(sl.name));
+    if (e) numberByLayerId.set(sl.layerId, e.number);
+  }
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
@@ -2374,44 +2388,58 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
 
 
-          {/* Elevation labels (kiri) — MDPL per level */}
-          {boxes.map((b) => {
-            const yBase = my(b.baseM);
-            const yTop = my(b.topM);
+          {/* Elevation labels (kiri) — per lantai, termasuk setiap floor pada level tipikal */}
+          {boxes.flatMap((b) => {
             const xLabel = mx(0) - 8;
-            return (
-              <g key={`elev-${b.id}`}>
-                <line x1={mx(0) - 36} y1={yTop} x2={mx(0)} y2={yTop} stroke="#111" strokeWidth={0.6} />
-                <text x={xLabel} y={yTop - 3} fontSize={9} textAnchor="end" fill="#111"
-                  style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.topM.toFixed(2)} Elev
-                </text>
-                <text x={xLabel} y={yBase - 3} fontSize={9} textAnchor="end" fill="#444"
-                  style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.baseM.toFixed(2)} Elev
-                </text>
-              </g>
-            );
+            const out: Array<React.ReactNode> = [];
+            for (let fi = 0; fi < Math.max(1, b.count); fi++) {
+              const baseM = b.baseM + fi * b.floorH;
+              const topM = baseM + b.floorH;
+              const yBase = my(baseM);
+              const yTop = my(topM);
+              out.push(
+                <g key={`elev-${b.id}-${fi}`}>
+                  <line x1={mx(0) - 36} y1={yTop} x2={mx(0)} y2={yTop} stroke="#111" strokeWidth={0.6} />
+                  <text x={xLabel} y={yTop - 3} fontSize={9} textAnchor="end" fill="#111"
+                    style={{ fontFamily: "Manrope, sans-serif" }}>
+                    +{topM.toFixed(2)} Elev
+                  </text>
+                  {fi === 0 && (
+                    <text x={xLabel} y={yBase - 3} fontSize={9} textAnchor="end" fill="#444"
+                      style={{ fontFamily: "Manrope, sans-serif" }}>
+                      +{baseM.toFixed(2)} Elev
+                    </text>
+                  )}
+                </g>
+              );
+            }
+            return out;
           })}
 
-          {/* Dimensi tinggi bersih antar level (kanan) */}
-          {boxes.map((b) => {
+          {/* Dimensi tinggi bersih per lantai (kanan), termasuk setiap floor pada level tipikal */}
+          {boxes.flatMap((b) => {
             const x = mx(cutLenM) + 8;
-            const y1 = my(b.topM);
-            const y2 = my(b.baseM);
-            const cy = (y1 + y2) / 2;
-            const dim = Math.round((b.topM - b.baseM) * 1000);
-            return (
-              <g key={`dim-${b.id}`}>
-                <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111" strokeWidth={0.8} />
-                <line x1={x - 4} y1={y1} x2={x + 4} y2={y1} stroke="#111" strokeWidth={0.8} />
-                <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#111" strokeWidth={0.8} />
-                <text x={x + 8} y={cy + 3} fontSize={9} fill="#111"
-                  style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
-                  {dim} mm
-                </text>
-              </g>
-            );
+            const out: Array<React.ReactNode> = [];
+            for (let fi = 0; fi < Math.max(1, b.count); fi++) {
+              const baseM = b.baseM + fi * b.floorH;
+              const topM = baseM + b.floorH;
+              const y1 = my(topM);
+              const y2 = my(baseM);
+              const cy = (y1 + y2) / 2;
+              const dim = Math.round(b.floorH * 1000);
+              out.push(
+                <g key={`dim-${b.id}-${fi}`}>
+                  <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111" strokeWidth={0.8} />
+                  <line x1={x - 4} y1={y1} x2={x + 4} y2={y1} stroke="#111" strokeWidth={0.8} />
+                  <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#111" strokeWidth={0.8} />
+                  <text x={x + 8} y={cy + 3} fontSize={9} fill="#111"
+                    style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
+                    {dim} mm
+                  </text>
+                </g>
+              );
+            }
+            return out;
           })}
 
           {/* Nama Level di sisi paling kanan potongan */}
@@ -2524,12 +2552,12 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
         </svg>
         </div>
         {/* Legenda ruang potongan */}
-        <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", borderLeft: "1px solid #e5e5e5", paddingLeft: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8, flexShrink: 0 }}>
+        <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", borderLeft: "1px solid #e5e5e5", paddingLeft: 14 }}>
+          <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
             Legenda Ruang
           </div>
           {legendRooms.length === 0 ? (
-            <div style={{ fontSize: 11, color: "#999", fontFamily: "Manrope, sans-serif" }}>
+            <div style={{ fontSize: 13, color: "#999", fontFamily: "Manrope, sans-serif" }}>
               Tidak ada ruang teriris pada garis potong ini.
             </div>
           ) : (
@@ -2537,25 +2565,25 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               listStyle: "none",
               margin: 0,
               padding: 0,
-              columnCount: legendRooms.length > 24 ? 2 : 1,
-              columnGap: 10,
-              fontSize: legendRooms.length > 24 ? 9 : legendRooms.length > 14 ? 10 : 11,
+              columnCount: legendRooms.length > 28 ? 2 : 1,
+              columnGap: 12,
+              fontSize: legendRooms.length > 36 ? 11 : legendRooms.length > 22 ? 12 : 13,
               lineHeight: 1.35,
               flex: "1 1 auto",
-              overflow: "hidden",
+              overflowY: "auto",
               fontFamily: "Manrope, sans-serif",
             }}>
               {legendRooms.map((r) => (
-                <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: 3 }}>
+                <li key={r.key} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: 4 }}>
                   <span style={{
                     flexShrink: 0,
-                    minWidth: 16,
+                    minWidth: 20,
                     fontWeight: 700,
                     color: r.color,
                     fontVariantNumeric: "tabular-nums",
                   }}>{r.number}.</span>
-                  <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.name}:{fmt(r.areaM2, 1)}m²
+                  <span style={{ flex: 1, minWidth: 0, color: "#222", wordBreak: "break-word" }}>
+                    {r.name} : {fmt(r.areaM2, 1)} m²
                   </span>
                 </li>
               ))}
@@ -3094,12 +3122,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           const roomList = layers.filter((l) => !isLahan(l.name));
           if (roomList.length === 0) return null;
           const n = roomList.length;
-          const cols = n > 24 ? 3 : n > 10 ? 2 : 1;
-          const fontPx = n > 36 ? 9 : n > 20 ? 10 : 11;
-          const gapPx = n > 24 ? 2 : 3;
+          const cols = n > 32 ? 3 : n > 14 ? 2 : 1;
+          const fontPx = n > 44 ? 11 : n > 28 ? 12 : 13;
+          const gapPx = n > 28 ? 3 : 4;
           return (
             <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8, flexShrink: 0 }}>
+              <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
                 Legenda Ruang
               </div>
               <ol style={{
@@ -3107,23 +3135,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 margin: 0,
                 padding: 0,
                 columnCount: cols,
-                columnGap: 10,
+                columnGap: 12,
                 fontSize: fontPx,
                 lineHeight: 1.35,
                 flex: "1 1 auto",
-                overflow: "hidden",
+                overflowY: "auto",
               }}>
                 {roomList.map((r, i) => (
-                  <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: gapPx }}>
+                  <li key={r.id} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: gapPx }}>
                     <span style={{
                       flexShrink: 0,
-                      minWidth: 16,
+                      minWidth: 20,
                       fontWeight: 700,
                       color: r.color.replace("ALPHA", "1"),
                       fontVariantNumeric: "tabular-nums",
                     }}>{i + 1}.</span>
-                    <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.name}:{fmt(r.areaM2 || 0, 1)}m²
+                    <span style={{ flex: 1, minWidth: 0, color: "#222", wordBreak: "break-word" }}>
+                      {r.name} : {fmt(r.areaM2 || 0, 1)} m²
                     </span>
                   </li>
                 ))}
@@ -4415,7 +4443,7 @@ function MaterialEdges({
               {(() => {
                 const mPerSeg = 1.2 * pxPerM;
                 const n = Math.max(1, Math.floor(len / mPerSeg));
-                const out: React.ReactNode[] = [];
+                const out: Array<React.ReactNode> = [];
                 for (let k = 1; k < n; k++) {
                   const t = k / n;
                   const p1 = { x: a1.x + (b1.x - a1.x) * t, y: a1.y + (b1.y - a1.y) * t };
@@ -4880,7 +4908,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
         {rows.map((r) => {
           const widthPct = 14 + (r.area / maxArea) * 86;
           return (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, flex: "0 1 30px", minHeight: 22 }}>
+            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 0", minHeight: 0, maxHeight: 30 }}>
               <div style={{ width: 58, textAlign: "right", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "#777", fontVariantNumeric: "tabular-nums" }}>
                 {fmt(r.mdpl, 1)} m
               </div>
@@ -5547,7 +5575,6 @@ const KOMPOSISI_PALETTE = [
 function normalizeRoomName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[0-9]+/g, " ")
     .replace(/[._\-/()]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
@@ -5556,10 +5583,8 @@ function normalizeRoomName(name: string): string {
 function roomGroupKey(name: string): { key: string; label: string } {
   const norm = normalizeRoomName(name);
   if (!norm) return { key: "lainnya", label: "Lainnya" };
-  // Gunakan SELURUH nama (tanpa angka) sebagai key agar nama dua suku kata
-  // yang berbeda tidak dilebur hanya karena kata depan sama.
-  // Contoh: "Ruang Tidur 1" & "Ruang Tidur 2" → "ruang tidur" (sama),
-  //         "Ruang Tamu" tetap terpisah dari "Ruang Tidur".
+  // Pengelompokan berdasarkan nama PERSIS (termasuk angka). Contoh:
+  // "Unit 1 Htl" → satu kelompok; "Unit 2 Htl" → kelompok berbeda.
   const key = norm;
   const label = key
     .split(" ")
