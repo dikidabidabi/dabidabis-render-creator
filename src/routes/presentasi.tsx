@@ -1967,7 +1967,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           width="100%" height="100%"
           viewBox={`0 0 ${AREA_W} ${AREA_H}`}
           preserveAspectRatio="xMidYMid meet"
-          style={{ display: "block", background: "#fcfcfa" }}
+          style={{ display: "block", background: "#ffffff" }}
         >
           <defs>
             <pattern id={`mm-minor-${slide.id}`} width={gridMinor} height={gridMinor} patternUnits="userSpaceOnUse">
