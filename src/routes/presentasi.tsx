@@ -1873,9 +1873,9 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const TYPICAL_H = 3;
   type LvlBox = {
     id: string; name: string; baseM: number; topM: number; count: number; floorH: number;
-    slices: Array<{ x0: number; x1: number; name: string; color: string; heightOverride?: number; baseDelta?: number }>;
+    slices: Array<{ x0: number; x1: number; layerId: string; name: string; color: string; areaM2: number; heightOverride?: number; baseDelta?: number }>;
   };
-  // Gunakan expand untuk turunkan tinggi tiap lantai sesuai MDPL gap (k=1) atau
+  // Gunakan expand untuk turunkan tinggi tiap lantai sesuai Elev gap (k=1) atau
   // typicalHeight (k>1). Lalu group balik per sourceId untuk gambar 1 box per level.
   const floorsExp = expandLevelsForView(lvls);
   const groupBySource = new Map<string, typeof floorsExp>();
@@ -1919,13 +1919,36 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
       box.slices.push({
         x0: t0 * cutLenM,
         x1: t1 * cutLenM,
+        layerId: layer.id,
         name: layer.name,
         color: roomFillOverride(layer.name, "0.55") ?? (layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)"),
+        areaM2: layer.areaM2 || 0,
         heightOverride,
         baseDelta,
       });
     }
   }
+
+  // Build legend: unique rooms (by layer id) yang muncul pada potongan ini,
+  // diurutkan berdasarkan kemunculan dari level paling bawah ke atas.
+  const legendSeen = new Set<string>();
+  const legendRooms: Array<{ id: string; number: number; name: string; color: string; areaM2: number; levelName: string }> = [];
+  const sortedBoxesForLegend = [...boxes].sort((a, b) => a.baseM - b.baseM);
+  for (const b of sortedBoxesForLegend) {
+    for (const sl of b.slices) {
+      if (legendSeen.has(sl.layerId)) continue;
+      legendSeen.add(sl.layerId);
+      legendRooms.push({
+        id: sl.layerId,
+        number: legendRooms.length + 1,
+        name: sl.name,
+        color: sl.color,
+        areaM2: sl.areaM2,
+        levelName: b.name,
+      });
+    }
+  }
+  const numberByLayerId = new Map(legendRooms.map((r) => [r.id, r.number]));
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
