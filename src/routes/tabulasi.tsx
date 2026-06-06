@@ -478,7 +478,7 @@ function DeviationRow({ dev, invert }: { dev: number; invert?: boolean }) {
 
 function LevelDetailSection({ sketch }: { sketch: Sketch }) {
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
+  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
