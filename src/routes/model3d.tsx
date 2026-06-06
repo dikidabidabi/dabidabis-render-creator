@@ -922,10 +922,11 @@ function SketchViewer({
         if (override && override.height <= 0) continue;
         const rgb = override
           ? override.color
-          : ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
-              const parts = body.split(",").map((s: string) => s.trim());
-              return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-            }) || "#e85d3a";
+          : solidColorForRoomName(ly.name,
+              ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+                const parts = body.split(",").map((s: string) => s.trim());
+                return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+              }) || "#e85d3a");
         inputs.push({
           name: `${lv.name}_${ly.name}`,
           points: ly.points,
