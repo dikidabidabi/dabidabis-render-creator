@@ -5575,7 +5575,6 @@ const KOMPOSISI_PALETTE = [
 function normalizeRoomName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[0-9]+/g, " ")
     .replace(/[._\-/()]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
@@ -5584,10 +5583,8 @@ function normalizeRoomName(name: string): string {
 function roomGroupKey(name: string): { key: string; label: string } {
   const norm = normalizeRoomName(name);
   if (!norm) return { key: "lainnya", label: "Lainnya" };
-  // Gunakan SELURUH nama (tanpa angka) sebagai key agar nama dua suku kata
-  // yang berbeda tidak dilebur hanya karena kata depan sama.
-  // Contoh: "Ruang Tidur 1" & "Ruang Tidur 2" → "ruang tidur" (sama),
-  //         "Ruang Tamu" tetap terpisah dari "Ruang Tidur".
+  // Pengelompokan berdasarkan nama PERSIS (termasuk angka). Contoh:
+  // "Unit 1 Htl" → satu kelompok; "Unit 2 Htl" → kelompok berbeda.
   const key = norm;
   const label = key
     .split(" ")
