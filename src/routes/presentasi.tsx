@@ -2559,7 +2559,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               fontFamily: "Manrope, sans-serif",
             }}>
               {legendRooms.map((r) => (
-                <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: 3 }}>
+                <li key={r.key} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: 4 }}>
                   <span style={{
                     flexShrink: 0,
                     minWidth: 16,
