@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { solidColorForRoomName } from "@/lib/room-color";
 import {
   buildExportGroup,
   disposeGroup,
