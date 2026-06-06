@@ -38,6 +38,7 @@ import {
   Crop,
   MoveHorizontal,
   Box as BoxIcon,
+  FlipHorizontal,
 } from "lucide-react";
 import {
   type Floor,
