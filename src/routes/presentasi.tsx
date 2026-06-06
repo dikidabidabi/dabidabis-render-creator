@@ -2383,11 +2383,11 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 <line x1={mx(0) - 36} y1={yTop} x2={mx(0)} y2={yTop} stroke="#111" strokeWidth={0.6} />
                 <text x={xLabel} y={yTop - 3} fontSize={9} textAnchor="end" fill="#111"
                   style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.topM.toFixed(2)} mdpl
+                  +{b.topM.toFixed(2)} Elev
                 </text>
                 <text x={xLabel} y={yBase - 3} fontSize={9} textAnchor="end" fill="#444"
                   style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.baseM.toFixed(2)} mdpl
+                  +{b.baseM.toFixed(2)} Elev
                 </text>
               </g>
             );
