@@ -2522,6 +2522,46 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
         </svg>
+        </div>
+        {/* Legenda ruang potongan */}
+        <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", borderLeft: "1px solid #e5e5e5", paddingLeft: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8, flexShrink: 0 }}>
+            Legenda Ruang
+          </div>
+          {legendRooms.length === 0 ? (
+            <div style={{ fontSize: 11, color: "#999", fontFamily: "Manrope, sans-serif" }}>
+              Tidak ada ruang teriris pada garis potong ini.
+            </div>
+          ) : (
+            <ol style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              columnCount: legendRooms.length > 24 ? 2 : 1,
+              columnGap: 10,
+              fontSize: legendRooms.length > 24 ? 9 : legendRooms.length > 14 ? 10 : 11,
+              lineHeight: 1.35,
+              flex: "1 1 auto",
+              overflow: "hidden",
+              fontFamily: "Manrope, sans-serif",
+            }}>
+              {legendRooms.map((r) => (
+                <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: 3 }}>
+                  <span style={{
+                    flexShrink: 0,
+                    minWidth: 16,
+                    fontWeight: 700,
+                    color: r.color,
+                    fontVariantNumeric: "tabular-nums",
+                  }}>{r.number}.</span>
+                  <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.name}:{fmt(r.areaM2, 1)}m²
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </div>
       <div style={{ fontSize: 11, color: "#444", textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
         Potongan dihasilkan otomatis dari garis irisan {cut.label || "A-A"} pada kanvas sketsa ·
