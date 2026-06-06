@@ -2387,44 +2387,58 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
 
 
-          {/* Elevation labels (kiri) — MDPL per level */}
-          {boxes.map((b) => {
-            const yBase = my(b.baseM);
-            const yTop = my(b.topM);
+          {/* Elevation labels (kiri) — per lantai, termasuk setiap floor pada level tipikal */}
+          {boxes.flatMap((b) => {
             const xLabel = mx(0) - 8;
-            return (
-              <g key={`elev-${b.id}`}>
-                <line x1={mx(0) - 36} y1={yTop} x2={mx(0)} y2={yTop} stroke="#111" strokeWidth={0.6} />
-                <text x={xLabel} y={yTop - 3} fontSize={9} textAnchor="end" fill="#111"
-                  style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.topM.toFixed(2)} Elev
-                </text>
-                <text x={xLabel} y={yBase - 3} fontSize={9} textAnchor="end" fill="#444"
-                  style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.baseM.toFixed(2)} Elev
-                </text>
-              </g>
-            );
+            const out: JSX.Element[] = [];
+            for (let fi = 0; fi < Math.max(1, b.count); fi++) {
+              const baseM = b.baseM + fi * b.floorH;
+              const topM = baseM + b.floorH;
+              const yBase = my(baseM);
+              const yTop = my(topM);
+              out.push(
+                <g key={`elev-${b.id}-${fi}`}>
+                  <line x1={mx(0) - 36} y1={yTop} x2={mx(0)} y2={yTop} stroke="#111" strokeWidth={0.6} />
+                  <text x={xLabel} y={yTop - 3} fontSize={9} textAnchor="end" fill="#111"
+                    style={{ fontFamily: "Manrope, sans-serif" }}>
+                    +{topM.toFixed(2)} Elev
+                  </text>
+                  {fi === 0 && (
+                    <text x={xLabel} y={yBase - 3} fontSize={9} textAnchor="end" fill="#444"
+                      style={{ fontFamily: "Manrope, sans-serif" }}>
+                      +{baseM.toFixed(2)} Elev
+                    </text>
+                  )}
+                </g>
+              );
+            }
+            return out;
           })}
 
-          {/* Dimensi tinggi bersih antar level (kanan) */}
-          {boxes.map((b) => {
+          {/* Dimensi tinggi bersih per lantai (kanan), termasuk setiap floor pada level tipikal */}
+          {boxes.flatMap((b) => {
             const x = mx(cutLenM) + 8;
-            const y1 = my(b.topM);
-            const y2 = my(b.baseM);
-            const cy = (y1 + y2) / 2;
-            const dim = Math.round((b.topM - b.baseM) * 1000);
-            return (
-              <g key={`dim-${b.id}`}>
-                <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111" strokeWidth={0.8} />
-                <line x1={x - 4} y1={y1} x2={x + 4} y2={y1} stroke="#111" strokeWidth={0.8} />
-                <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#111" strokeWidth={0.8} />
-                <text x={x + 8} y={cy + 3} fontSize={9} fill="#111"
-                  style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
-                  {dim} mm
-                </text>
-              </g>
-            );
+            const out: JSX.Element[] = [];
+            for (let fi = 0; fi < Math.max(1, b.count); fi++) {
+              const baseM = b.baseM + fi * b.floorH;
+              const topM = baseM + b.floorH;
+              const y1 = my(topM);
+              const y2 = my(baseM);
+              const cy = (y1 + y2) / 2;
+              const dim = Math.round(b.floorH * 1000);
+              out.push(
+                <g key={`dim-${b.id}-${fi}`}>
+                  <line x1={x} y1={y1} x2={x} y2={y2} stroke="#111" strokeWidth={0.8} />
+                  <line x1={x - 4} y1={y1} x2={x + 4} y2={y1} stroke="#111" strokeWidth={0.8} />
+                  <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#111" strokeWidth={0.8} />
+                  <text x={x + 8} y={cy + 3} fontSize={9} fill="#111"
+                    style={{ fontFamily: "Manrope, sans-serif", fontWeight: 600 }}>
+                    {dim} mm
+                  </text>
+                </g>
+              );
+            }
+            return out;
           })}
 
           {/* Nama Level di sisi paling kanan potongan */}
