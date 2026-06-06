@@ -1108,7 +1108,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   // Rincian per Level — paginated jika tidak muat satu slide.
   {
-    const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name));
+    const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
     const MAX_ROWS_PER_CHUNK = 18;
     const SECTION_OVERHEAD = 130; // px (header + thead + total row + margin)
     const ROW_HEIGHT = 28;
