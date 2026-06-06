@@ -3162,7 +3162,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       flexShrink: 0,
                       minWidth: 16,
                       fontWeight: 700,
-                      color: r.color.replace("ALPHA", "1"),
+                      color: (colorForRoomName(r.name) ?? r.color).replace("ALPHA", "1"),
                       fontVariantNumeric: "tabular-nums",
                     }}>{i + 1}.</span>
                     <span style={{ flex: 1, minWidth: 0, color: "#222", wordBreak: "break-word" }}>
