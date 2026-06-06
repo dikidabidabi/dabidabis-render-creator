@@ -979,7 +979,7 @@ function SketchViewer({
       {!fullscreen && (
         <div className="rounded-lg border border-border bg-card/40 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (MDPL)</h3>
+            <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (Elevasi)</h3>
           </div>
           <div className="space-y-3">
             {sourceLevels.length === 0 && (
