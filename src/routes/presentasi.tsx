@@ -2559,11 +2559,18 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
         </svg>
         </div>
         {/* Legenda ruang potongan */}
-        <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", borderLeft: "1px solid #e5e5e5", paddingLeft: 14 }}>
+        {(() => {
+          const n = legendRooms.length;
+          const cols = n > 60 ? 4 : n > 36 ? 3 : n > 16 ? 2 : 1;
+          const width = cols === 4 ? 460 : cols === 3 ? 380 : cols === 2 ? 320 : 240;
+          const fs = n > 80 ? 8 : n > 60 ? 9 : n > 40 ? 10 : n > 24 ? 11 : 12;
+          const mb = n > 60 ? 2 : n > 30 ? 3 : 4;
+          return (
+        <div style={{ width, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, borderLeft: "1px solid #e5e5e5", paddingLeft: 14 }}>
           <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
             Legenda Ruang
           </div>
-          {legendRooms.length === 0 ? (
+          {n === 0 ? (
             <div style={{ fontSize: 13, color: "#999", fontFamily: "Manrope, sans-serif" }}>
               Tidak ada ruang teriris pada garis potong ini.
             </div>
@@ -2572,19 +2579,18 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               listStyle: "none",
               margin: 0,
               padding: 0,
-              columnCount: legendRooms.length > 28 ? 2 : 1,
-              columnGap: 12,
-              fontSize: legendRooms.length > 36 ? 11 : legendRooms.length > 22 ? 12 : 13,
-              lineHeight: 1.35,
+              columnCount: cols,
+              columnGap: 10,
+              fontSize: fs,
+              lineHeight: 1.3,
               flex: "1 1 auto",
-              overflowY: "auto",
               fontFamily: "Manrope, sans-serif",
             }}>
               {legendRooms.map((r) => (
-                <li key={r.key} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: 4 }}>
+                <li key={r.key} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: mb }}>
                   <span style={{
                     flexShrink: 0,
-                    minWidth: 20,
+                    minWidth: 16,
                     fontWeight: 700,
                     color: r.color,
                     fontVariantNumeric: "tabular-nums",
@@ -2597,6 +2603,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             </ol>
           )}
         </div>
+          );
+        })()}
       </div>
       <div style={{ fontSize: 11, color: "#444", textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
         Potongan dihasilkan otomatis dari garis irisan {cut.label || "A-A"} pada kanvas sketsa ·
