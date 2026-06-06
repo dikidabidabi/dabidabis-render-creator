@@ -627,7 +627,7 @@ function downloadSketchExcel(sketch: Sketch, data: Stats) {
   const costMap = loadCostMap();
   const rate = costMap[sketch.id] ?? 0;
   const totalCostM2 = (sketch.layers ?? [])
-    .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+    .filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
     .reduce((s, l) => s + (l.areaM2 || 0), 0);
   const totalCost = totalCostM2 * rate;
   sections.push(
