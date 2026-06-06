@@ -7251,6 +7251,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </div>
         )}
 
+        {tool === "mirror" && (
+          <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Mirror — {moveSel.size} terpilih
+            </Label>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              1. Pilih objek dulu di tool <b>Move</b> (garis, ruang, lantai, lingkaran, pintu, atau garis potong).<br />
+              2. Kembali ke tool ini. Klik titik pusat sumbu (snap ke vertex / midpoint / grid sesuai snap aktif), lalu tarik untuk menentukan arah.<br />
+              3. Sudut sumbu otomatis <b>snap</b> ke 0° / 45° / 90° / 135°.<br />
+              4. Lepaskan untuk mencerminkan — objek baru dibuat sebagai duplikat terpisah (tidak terhubung dengan sumber).
+            </p>
+            {mirrorDraft && (
+              <div className="rounded-md border border-border/40 bg-surface/30 p-2 text-[11px]">
+                Sumbu aktif: <b>{mirrorDraft.angleDeg}°</b>
+              </div>
+            )}
+            {moveSel.size === 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setTool("move")}
+              >
+                Buka tool Move untuk memilih
+              </Button>
+            )}
+          </div>
+        )}
+
+
+
         {tool === "grid" && (
           <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
             <div className="flex items-center justify-between">
