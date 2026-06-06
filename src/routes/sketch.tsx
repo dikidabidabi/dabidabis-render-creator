@@ -2376,6 +2376,166 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [moveClipboard, activeLvlId, lines, layers, sketch.circles, sketch.doors, sketch.floors, onChange, pushHistory, levels],
   );
 
+  // ===== Mirror Tool =====
+  // Duplikasi entitas terpilih (moveSel) dengan refleksi melintasi sumbu
+  // melalui titik origin pada sudut 0/45/90/135 derajat. Sumbu ditentukan
+  // dengan menarik dari titik origin (snap vertex/grid) ke arah; sudut
+  // arah di-snap ke 0/45/90/135 (mod 180).
+  type MirrorDraft = {
+    origin: Point;
+    cur: Point;
+    angleDeg: 0 | 45 | 90 | 135;
+  };
+  const [mirrorDraft, setMirrorDraft] = useState<MirrorDraft | null>(null);
+
+  const snapMirrorAngle = useCallback((origin: Point, cur: Point): 0 | 45 | 90 | 135 => {
+    const dx = cur.x - origin.x;
+    const dy = cur.y - origin.y;
+    if (Math.hypot(dx, dy) < 1e-6) return 0;
+    const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const mod = ((ang % 180) + 180) % 180; // 0..180
+    const cands: (0 | 45 | 90 | 135)[] = [0, 45, 90, 135];
+    let best: 0 | 45 | 90 | 135 = 0;
+    let bestD = Infinity;
+    for (const c of cands) {
+      const d = Math.min(Math.abs(c - mod), Math.abs(c + 180 - mod));
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    return best;
+  }, []);
+
+  const reflectPt = useCallback((p: Point, origin: Point, angleRad: number): Point => {
+    const dx = p.x - origin.x, dy = p.y - origin.y;
+    const c = Math.cos(2 * angleRad), s = Math.sin(2 * angleRad);
+    return { x: origin.x + dx * c + dy * s, y: origin.y + dx * s - dy * c };
+  }, []);
+
+  const reflectDir = useCallback((d: Point, angleRad: number): Point => {
+    const c = Math.cos(2 * angleRad), s = Math.sin(2 * angleRad);
+    return { x: d.x * c + d.y * s, y: d.x * s - d.y * c };
+  }, []);
+
+  const applyMirrorCommit = useCallback((draft: MirrorDraft) => {
+    if (moveSel.size === 0) {
+      toast.error("Pilih objek dulu lewat tool Move sebelum mirror");
+      return;
+    }
+    const angleRad = (draft.angleDeg * Math.PI) / 180;
+    const R = (p: Point) => reflectPt(p, draft.origin, angleRad);
+    const rand = () => Math.random().toString(36).slice(2, 7);
+    const lvlId = activeLvlId ?? undefined;
+    const newSel = new Set<MoveSelKey>();
+    pushHistory();
+
+    // Lines
+    const newLines: Line[] = [];
+    lines.forEach((ln, i) => {
+      if (!moveSel.has(`line:${i}`)) return;
+      // Refleksi membalik orientasi — agar arc/bezier visual mirror, tukar a<->b
+      // dan tukar control point c1<->c2.
+      const aR = R(ln.b);
+      const bR = R(ln.a);
+      const c1R = ln.c2 ? R(ln.c2) : undefined;
+      const c2R = ln.c1 ? R(ln.c1) : undefined;
+      const bulge = typeof ln.bulge === "number" ? -ln.bulge : undefined;
+      newLines.push({
+        ...ln,
+        a: aR,
+        b: bR,
+        c1: c1R,
+        c2: c2R,
+        bulge,
+        levelId: ln.levelId ?? lvlId,
+      });
+    });
+    const nextLines = [...lines, ...newLines];
+    newLines.forEach((_, i) => newSel.add(`line:${lines.length + i}`));
+
+    // Layers — reverse winding agar tetap konsisten
+    const newLayers: Layer[] = layers.flatMap((ly) => {
+      if (!moveSel.has(`layer:${ly.id}`)) return [];
+      const nid = `L${Date.now()}_${rand()}`;
+      newSel.add(`layer:${nid}`);
+      return [{
+        ...ly,
+        id: nid,
+        points: ly.points.map(R).reverse(),
+      }];
+    });
+    const nextLayers = [...layers, ...newLayers];
+
+    // Circles
+    const newCircles = (sketch.circles ?? []).flatMap((c) => {
+      if (!moveSel.has(`circle:${c.id}`)) return [];
+      const nid = `CIR${Date.now()}_${rand()}`;
+      newSel.add(`circle:${nid}`);
+      return [{ ...c, id: nid, c: R(c.c) }];
+    });
+    const nextCircles = [...(sketch.circles ?? []), ...newCircles];
+
+    // Doors — reflect endpoints dan vektor normal arah ayun
+    const newDoors = (sketch.doors ?? []).flatMap((d) => {
+      if (!moveSel.has(`door:${d.id}`)) return [];
+      const nid = genDoorId();
+      newSel.add(`door:${nid}`);
+      const n = reflectDir({ x: d.nx, y: d.ny }, angleRad);
+      return [{
+        ...d,
+        id: nid,
+        a: R(d.a),
+        b: R(d.b),
+        nx: n.x,
+        ny: n.y,
+      }];
+    });
+    const nextDoors = [...(sketch.doors ?? []), ...newDoors];
+
+    // Floors — reverse winding
+    const newFloors = (sketch.floors ?? []).flatMap((f) => {
+      if (!moveSel.has(`floor:${f.id}`)) return [];
+      const nid = genFloorId();
+      newSel.add(`floor:${nid}`);
+      return [{
+        ...f,
+        id: nid,
+        createdAt: Date.now(),
+        outer: f.outer.map(R).reverse(),
+        holes: f.holes ? f.holes.map((h) => h.map(R).reverse()) : undefined,
+      }];
+    });
+    const nextFloors = [...(sketch.floors ?? []), ...newFloors];
+
+    // Section cuts
+    let cutsChanged = false;
+    const nextCuts = [...(sketch.sectionCuts ?? [])];
+    (sketch.sectionCuts ?? []).forEach((c, i) => {
+      if (!moveSel.has(`section:${i}`)) return;
+      cutsChanged = true;
+      nextCuts.push({ ...c, p1: R(c.p1), p2: R(c.p2), updatedAt: Date.now() });
+      newSel.add(`section:${nextCuts.length - 1}`);
+    });
+
+    const patch: Partial<Sketch> = {
+      lines: nextLines,
+      layers: nextLayers,
+      circles: nextCircles,
+      doors: nextDoors,
+      floors: nextFloors,
+    };
+    if (cutsChanged) patch.sectionCuts = nextCuts;
+    onChange(patch);
+    setMoveSel(newSel);
+    const total =
+      newLines.length + newLayers.length + newCircles.length +
+      newDoors.length + newFloors.length;
+    toast.success(`Mirror ${total} objek pada sumbu ${draft.angleDeg}°`);
+  }, [
+    moveSel, lines, layers, sketch.circles, sketch.doors, sketch.floors,
+    sketch.sectionCuts, onChange, pushHistory, activeLvlId,
+    reflectPt, reflectDir,
+  ]);
+
+
 
 
   // Redraw
