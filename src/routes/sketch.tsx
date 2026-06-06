@@ -1862,6 +1862,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     if (tool !== "edit") setEditVertexMarquee(null);
     if (tool !== "floor") setFloorVertexMarquee(null);
+    if (tool !== "mirror") setMirrorDraft(null);
   }, [tool]);
   useEffect(() => {
     setMoveSel(new Set());
