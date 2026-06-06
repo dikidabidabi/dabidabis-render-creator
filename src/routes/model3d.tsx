@@ -58,7 +58,7 @@ export const Route = createFileRoute("/model3d")({
       {
         name: "description",
         content:
-          "Generator model 3D dari sketsa milimeter block. Ekstrusi polygon per-lantai berdasarkan MDPL dengan tampilan interaktif.",
+          "Generator model 3D dari sketsa milimeter block. Ekstrusi polygon per-lantai berdasarkan Elevasi dengan tampilan interaktif.",
       },
     ],
   }),
@@ -979,7 +979,7 @@ function SketchViewer({
       {!fullscreen && (
         <div className="rounded-lg border border-border bg-card/40 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (MDPL)</h3>
+            <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (Elevasi)</h3>
           </div>
           <div className="space-y-3">
             {sourceLevels.length === 0 && (
@@ -1011,7 +1011,7 @@ function SketchViewer({
                     </div>
                     <div>
                       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        MDPL (m)
+                        Elev (m)
                       </Label>
                       <Input
                         type="number"
@@ -1412,7 +1412,7 @@ function Model3DPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Model 3D</h1>
           <p className="text-sm text-muted-foreground">
-            Ekstrusi otomatis dari sketsa milimeter block. Tiap lantai diposisikan sesuai MDPL.
+            Ekstrusi otomatis dari sketsa milimeter block. Tiap lantai diposisikan sesuai Elevasi.
           </p>
         </div>
       </div>

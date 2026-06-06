@@ -1873,9 +1873,9 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const TYPICAL_H = 3;
   type LvlBox = {
     id: string; name: string; baseM: number; topM: number; count: number; floorH: number;
-    slices: Array<{ x0: number; x1: number; name: string; color: string; heightOverride?: number; baseDelta?: number }>;
+    slices: Array<{ x0: number; x1: number; layerId: string; name: string; color: string; areaM2: number; heightOverride?: number; baseDelta?: number }>;
   };
-  // Gunakan expand untuk turunkan tinggi tiap lantai sesuai MDPL gap (k=1) atau
+  // Gunakan expand untuk turunkan tinggi tiap lantai sesuai Elev gap (k=1) atau
   // typicalHeight (k>1). Lalu group balik per sourceId untuk gambar 1 box per level.
   const floorsExp = expandLevelsForView(lvls);
   const groupBySource = new Map<string, typeof floorsExp>();
@@ -1919,13 +1919,36 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
       box.slices.push({
         x0: t0 * cutLenM,
         x1: t1 * cutLenM,
+        layerId: layer.id,
         name: layer.name,
         color: roomFillOverride(layer.name, "0.55") ?? (layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)"),
+        areaM2: layer.areaM2 || 0,
         heightOverride,
         baseDelta,
       });
     }
   }
+
+  // Build legend: unique rooms (by layer id) yang muncul pada potongan ini,
+  // diurutkan berdasarkan kemunculan dari level paling bawah ke atas.
+  const legendSeen = new Set<string>();
+  const legendRooms: Array<{ id: string; number: number; name: string; color: string; areaM2: number; levelName: string }> = [];
+  const sortedBoxesForLegend = [...boxes].sort((a, b) => a.baseM - b.baseM);
+  for (const b of sortedBoxesForLegend) {
+    for (const sl of b.slices) {
+      if (legendSeen.has(sl.layerId)) continue;
+      legendSeen.add(sl.layerId);
+      legendRooms.push({
+        id: sl.layerId,
+        number: legendRooms.length + 1,
+        name: sl.name,
+        color: sl.color,
+        areaM2: sl.areaM2,
+        levelName: b.name,
+      });
+    }
+  }
+  const numberByLayerId = new Map(legendRooms.map((r) => [r.id, r.number]));
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
@@ -1962,7 +1985,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, alignItems: "stretch" }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: "relative" }}>
         <svg
           width="100%" height="100%"
           viewBox={`0 0 ${AREA_W} ${AREA_H}`}
@@ -2005,7 +2029,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Lahan / ground line — terikat MDPL 0 */}
           <line x1={mx(0) - 30} y1={my(groundMdpl)} x2={mx(cutLenM) + 30} y2={my(groundMdpl)} stroke="#111" strokeWidth={1.6} />
           <text x={mx(0) - 36} y={my(groundMdpl) - 5} fontSize={10} textAnchor="end" fill="#111" style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700 }}>
-            Lahan ±0 mdpl
+            Lahan ±0 Elev
           </text>
           {/* Hatching lahan */}
           {Array.from({ length: 18 }).map((_, i) => {
@@ -2023,19 +2047,21 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const x = mx(sl.x0);
               const w = (sl.x1 - sl.x0) * scalePxPerM;
               const sliceHM = sl.heightOverride ?? b.floorH;
+              const num = numberByLayerId.get(sl.layerId);
+              const label = num != null ? String(num) : "";
               return Array.from({ length: Math.max(1, b.count) }).map((_, fi) => {
                 const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
                 const sliceTopM = sliceBaseM + sliceHM;
                 const y = my(sliceTopM);
                 const h = sliceHM * scalePxPerM;
                 const cx = x + w / 2, cy = y + h / 2;
-                const labelFs = Math.max(7, Math.min(13, Math.min(w / Math.max(6, sl.name.length) * 1.5, h * 0.55)));
+                const labelFs = Math.max(8, Math.min(16, Math.min(w * 0.5, h * 0.6)));
                 return (
                   <g key={`${b.id}-${i}-${fi}`}>
                     <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
                     <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
-                      {sl.name}
+                      style={{ fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
+                      {label}
                     </text>
                   </g>
                 );
@@ -2358,11 +2384,11 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 <line x1={mx(0) - 36} y1={yTop} x2={mx(0)} y2={yTop} stroke="#111" strokeWidth={0.6} />
                 <text x={xLabel} y={yTop - 3} fontSize={9} textAnchor="end" fill="#111"
                   style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.topM.toFixed(2)} mdpl
+                  +{b.topM.toFixed(2)} Elev
                 </text>
                 <text x={xLabel} y={yBase - 3} fontSize={9} textAnchor="end" fill="#444"
                   style={{ fontFamily: "Manrope, sans-serif" }}>
-                  +{b.baseM.toFixed(2)} mdpl
+                  +{b.baseM.toFixed(2)} Elev
                 </text>
               </g>
             );
@@ -2496,6 +2522,46 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
         </svg>
+        </div>
+        {/* Legenda ruang potongan */}
+        <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", borderLeft: "1px solid #e5e5e5", paddingLeft: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8, flexShrink: 0 }}>
+            Legenda Ruang
+          </div>
+          {legendRooms.length === 0 ? (
+            <div style={{ fontSize: 11, color: "#999", fontFamily: "Manrope, sans-serif" }}>
+              Tidak ada ruang teriris pada garis potong ini.
+            </div>
+          ) : (
+            <ol style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              columnCount: legendRooms.length > 24 ? 2 : 1,
+              columnGap: 10,
+              fontSize: legendRooms.length > 24 ? 9 : legendRooms.length > 14 ? 10 : 11,
+              lineHeight: 1.35,
+              flex: "1 1 auto",
+              overflow: "hidden",
+              fontFamily: "Manrope, sans-serif",
+            }}>
+              {legendRooms.map((r) => (
+                <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: 3 }}>
+                  <span style={{
+                    flexShrink: 0,
+                    minWidth: 16,
+                    fontWeight: 700,
+                    color: r.color,
+                    fontVariantNumeric: "tabular-nums",
+                  }}>{r.number}.</span>
+                  <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.name}:{fmt(r.areaM2, 1)}m²
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </div>
       <div style={{ fontSize: 11, color: "#444", textAlign: "center", fontFamily: "Manrope, sans-serif" }}>
         Potongan dihasilkan otomatis dari garis irisan {cut.label || "A-A"} pada kanvas sketsa ·
@@ -3013,8 +3079,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           label="Level"
           value={displayName}
           hint={k > 1
-            ? `${fmt(level.mdpl, 1)} mdpl · tipikal ${k}×`
-            : `${fmt(level.mdpl, 1)} mdpl`}
+            ? `${fmt(level.mdpl, 1)} Elev · tipikal ${k}×`
+            : `${fmt(level.mdpl, 1)} Elev`}
         />
         <BigStat compact label="Jumlah Ruang" value={String(layers.filter((l) => !isLahan(l.name)).length)} />
         <BigStat
@@ -3057,7 +3123,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       fontVariantNumeric: "tabular-nums",
                     }}>{i + 1}.</span>
                     <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.name}
+                      {r.name}:{fmt(r.areaM2 || 0, 1)}m²
                     </span>
                   </li>
                 ))}
@@ -4851,10 +4917,10 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 58, textAlign: "right", fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
-            MDPL
+            ELEV
           </div>
           <div style={{ flex: 1, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>
-            Tanah · MDPL 0
+            Tanah · Elev 0
           </div>
         </div>
       </div>
