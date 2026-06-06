@@ -5125,7 +5125,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
           </div>
         </div>
         <BigStat label="Jumlah Lapis" value={String(totalFloors)} compact />
-        <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" compact />
+        <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan, Void & Taman" compact />
         <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="termasuk tipikal" compact />
       </div>
     </div>
@@ -5532,7 +5532,7 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       />
 
       <GridStat label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
-      <GridStat label="Total Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan & Void" />
+      <GridStat label="Total Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan, Void & Taman" />
       <GridStat label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
       <GridStat label="Luas Semi" value={`${fmt(data.totalSetengahM2)} m²`} />
       <GridStat label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
@@ -6023,7 +6023,7 @@ function BiayaBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, width: "100%" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <GridStat label="Total Luas Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan & Void" />
+        <GridStat label="Total Luas Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan, Void & Taman" />
         <GridStat label="Biaya per m²" value={fmtRp(rate)} hint="diatur di halaman Tabulasi" />
         <GridStat label="Fungsi" value={sketch.fungsi ?? "—"} />
       </div>
