@@ -2046,19 +2046,21 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const x = mx(sl.x0);
               const w = (sl.x1 - sl.x0) * scalePxPerM;
               const sliceHM = sl.heightOverride ?? b.floorH;
+              const num = numberByLayerId.get(sl.layerId);
+              const label = num != null ? String(num) : "";
               return Array.from({ length: Math.max(1, b.count) }).map((_, fi) => {
                 const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
                 const sliceTopM = sliceBaseM + sliceHM;
                 const y = my(sliceTopM);
                 const h = sliceHM * scalePxPerM;
                 const cx = x + w / 2, cy = y + h / 2;
-                const labelFs = Math.max(7, Math.min(13, Math.min(w / Math.max(6, sl.name.length) * 1.5, h * 0.55)));
+                const labelFs = Math.max(8, Math.min(16, Math.min(w * 0.5, h * 0.6)));
                 return (
                   <g key={`${b.id}-${i}-${fi}`}>
                     <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
                     <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontFamily: "Manrope, sans-serif", fontWeight: 500 }}>
-                      {sl.name}
+                      style={{ fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
+                      {label}
                     </text>
                   </g>
                 );
