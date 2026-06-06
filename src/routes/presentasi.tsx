@@ -2575,22 +2575,26 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               })}
             </g>
           ))}
-          {/* Perimeter level di bawah level yang ditampilkan — garis tipis abu */}
-          {(sketch.levels ?? [])
-            .filter((lv) => lv.id !== level.id && lv.mdpl < level.mdpl)
-            .flatMap((lv) =>
-              (sketch.layers ?? [])
-                .filter((l) => l.levelId === lv.id && !isLahan(l.name) && !isVoid(l.name) && l.points.length >= 3)
-                .map((l) => (
-                  <polygon
-                    key={`below-${lv.id}-${l.id}`}
-                    points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                    fill="none"
-                    stroke="rgba(0,0,0,0.35)"
-                    strokeWidth={sw * 0.0008}
-                  />
-                ))
-            )}
+          {/* Hanya perimeter luar elemen "Lantai" (slab) dari SATU level
+              tepat di bawah level ini yang ditampilkan. Garis dinding/objek
+              di bawah slab tidak ditampilkan karena slab tidak transparan. */}
+          {(() => {
+            const lvls = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            const idx = lvls.findIndex((lv) => lv.id === level.id);
+            const below = idx > 0 ? lvls[idx - 1] : null;
+            if (!below) return null;
+            const floorsBelow = (sketch.floors ?? []).filter((fl) => fl.levelId === below.id);
+            return floorsBelow.map((fl) => (
+              <polygon
+                key={`below-floor-${fl.id}`}
+                points={fl.outer.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="none"
+                stroke="rgba(0,0,0,0.45)"
+                strokeWidth={sw * 0.001}
+                strokeDasharray={`${sw * 0.004} ${sw * 0.003}`}
+              />
+            ));
+          })()}
           {layers.filter((l) => !isLahan(l.name)).map((l, i) => {
             if (isVoid(l.name)) {
               let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
@@ -5486,8 +5490,11 @@ function normalizeRoomName(name: string): string {
 function roomGroupKey(name: string): { key: string; label: string } {
   const norm = normalizeRoomName(name);
   if (!norm) return { key: "lainnya", label: "Lainnya" };
-  const tokens = norm.split(" ").filter((t) => t.length >= 3);
-  const key = (tokens[0] || norm).trim();
+  // Gunakan SELURUH nama (tanpa angka) sebagai key agar nama dua suku kata
+  // yang berbeda tidak dilebur hanya karena kata depan sama.
+  // Contoh: "Ruang Tidur 1" & "Ruang Tidur 2" → "ruang tidur" (sama),
+  //         "Ruang Tamu" tetap terpisah dari "Ruang Tidur".
+  const key = norm;
   const label = key
     .split(" ")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
