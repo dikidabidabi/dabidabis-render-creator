@@ -1985,7 +1985,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, alignItems: "stretch" }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: "relative" }}>
         <svg
           width="100%" height="100%"
           viewBox={`0 0 ${AREA_W} ${AREA_H}`}
