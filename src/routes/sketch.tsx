@@ -5365,6 +5365,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (mirrorDraft && tool === "mirror") {
+      const raw = getWorldPosRaw(e);
+      const ang = snapMirrorAngle(mirrorDraft.origin, raw);
+      setMirrorDraft({ ...mirrorDraft, cur: raw, angleDeg: ang });
+      return;
+    }
+
     if (moveDrag) {
       const raw = getWorldPosRaw(e);
       const rawDx = raw.x - moveDrag.startWorld.x;
