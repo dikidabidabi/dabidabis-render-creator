@@ -3088,18 +3088,22 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   />
                   {/* Endpoint label bubbles + segitiga siku-siku */}
                   {[{ pt: bA, txt: tag }, { pt: bB, txt: `${tag}'` }].map((b, j) => {
-                    const h1 = { x: b.pt.x - ux * hLeg, y: b.pt.y - uy * hLeg };
-                    const h2 = { x: b.pt.x + ux * hLeg, y: b.pt.y + uy * hLeg };
-                    const apex = { x: b.pt.x + px * hLeg, y: b.pt.y + py * hLeg };
+                    // Hypotenuse midpoint berada di tepi depan bubble (arah potongan),
+                    // sehingga seluruh segitiga tampak di luar bubble.
+                    const mid = { x: b.pt.x + px * rBub, y: b.pt.y + py * rBub };
+                    const h1 = { x: mid.x - ux * hLeg, y: mid.y - uy * hLeg };
+                    const h2 = { x: mid.x + ux * hLeg, y: mid.y + uy * hLeg };
+                    const apex = { x: mid.x + px * hLeg, y: mid.y + py * hLeg };
                     return (
                       <g key={j}>
-                        {/* Dua sisi tegak siku — sisi miring tidak digambar */}
+                        {/* Dua sisi tegak siku — sisi miring tidak digambar.
+                            Digambar dulu agar bubble menutup pangkalnya. */}
                         <line x1={h1.x} y1={h1.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={sw * 0.0016} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={sw * 0.0018} strokeLinecap="round" />
                         <line x1={h2.x} y1={h2.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={sw * 0.0016} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={sw * 0.0018} strokeLinecap="round" />
                         <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
-                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0016} />
+                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0018} />
                         <text x={b.pt.x} y={b.pt.y}
                           textAnchor="middle" dominantBaseline="central"
                           fontSize={sw * 0.018} fontWeight={800} fill="#0a0a0a"
