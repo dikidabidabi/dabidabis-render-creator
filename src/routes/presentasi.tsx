@@ -1108,7 +1108,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   // Rincian per Level — paginated jika tidak muat satu slide.
   {
-    const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name));
+    const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
     const MAX_ROWS_PER_CHUNK = 18;
     const SECTION_OVERHEAD = 130; // px (header + thead + total row + margin)
     const ROW_HEIGHT = 28;
@@ -1268,7 +1268,7 @@ function computeStats(sk: Sketch): Stats {
   );
   const ketinggianM = baseHeight + typicalExtra;
   const totalTerhitungM2 = layers
-    .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+    .filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
     .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
   const struct = computeAllStructuralStats(sk.structuralGrid, sk.structuralGridExtras, levels);
   return {
@@ -2727,7 +2727,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const lines = (sketch.lines ?? []).filter((l) => l.levelId === level.id);
   const lahanAll = (sketch.layers ?? []).filter((l) => isLahan(l.name));
   const k = Math.max(1, Math.round(level.typicalCount ?? 1));
-  const luasPerLantai = layers.filter((l) => !isLahan(l.name)).reduce((s, l) => s + l.areaM2, 0);
+  const luasPerLantai = layers.filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name)).reduce((s, l) => s + l.areaM2, 0);
   const totalLuas = luasPerLantai * k;
   const displayNames = computeLevelDisplayNames(sketch.levels ?? [], sketch.layers ?? []);
   const displayName = displayNames[level.id] ?? level.name;
@@ -3743,7 +3743,7 @@ function LokasiPanel({ sketch, lahanCount, buildCount, mPerSPx }: {
   sketch: Sketch; lahanCount: number; buildCount: number; mPerSPx: number;
 }) {
   const lahanM2 = (sketch.layers ?? []).filter((l) => isLahan(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
-  const buildM2 = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
+  const buildM2 = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name)).reduce((s, l) => s + (l.areaM2 || 0), 0);
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -4992,10 +4992,10 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
   const levelsAsc = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const groundLv = findMdplZeroLevel(levelsAsc) ?? levelsAsc[0];
   const groundId = groundLv?.id;
-  // Taman di level dasar (MDPL 0 / LT 1) adalah lansekap, bukan luasan bangunan,
-  // sehingga tidak diakumulasi dengan ruang lain di level dasar.
+  // Taman tidak dihitung sebagai luasan bangunan (lansekap), tidak masuk stacking di level manapun.
+  void groundId;
   const build = (sketch.layers ?? []).filter(
-    (l) => !isLahan(l.name) && !isVoid(l.name) && !(isTaman(l.name) && l.levelId === groundId),
+    (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
   );
   const displayNames = computeLevelDisplayNames(levelsAsc, sketch.layers ?? []);
 
@@ -5125,7 +5125,7 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
           </div>
         </div>
         <BigStat label="Jumlah Lapis" value={String(totalFloors)} compact />
-        <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan & Void" compact />
+        <BigStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="tanpa Lahan, Void & Taman" compact />
         <BigStat label="Ketinggian" value={`${fmt(ketinggian, 1)} m`} hint="termasuk tipikal" compact />
       </div>
     </div>
@@ -5532,7 +5532,7 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       />
 
       <GridStat label="Total Luas Ruang" value={`${fmt(data.totalRuangM2)} m²`} />
-      <GridStat label="Total Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan & Void" />
+      <GridStat label="Total Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan, Void & Taman" />
       <GridStat label="Luas Efektif" value={`${fmt(data.totalEfektifM2)} m²`} />
       <GridStat label="Luas Semi" value={`${fmt(data.totalSetengahM2)} m²`} />
       <GridStat label="Luas Sarana" value={`${fmt(data.totalSaranaM2)} m²`} />
@@ -5638,7 +5638,7 @@ function InfografisBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
 
 
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
+  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   const displayNames = computeLevelDisplayNames(levels, sketch.layers ?? []);
   const perLevel = levels.map((lv) => {
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
@@ -5746,7 +5746,7 @@ function computeRoomGroups(sketch: Sketch): {
   totalArea: number;
   totalCount: number;
 } {
-  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   const levels = sketch.levels ?? [];
   const mul: Record<string, number> = {};
   for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
@@ -6023,7 +6023,7 @@ function BiayaBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 28, width: "100%" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <GridStat label="Total Luas Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan & Void" />
+        <GridStat label="Total Luas Terhitung" value={`${fmt(data.totalTerhitungM2)} m²`} hint="tanpa Lahan, Void & Taman" />
         <GridStat label="Biaya per m²" value={fmtRp(rate)} hint="diatur di halaman Tabulasi" />
         <GridStat label="Fungsi" value={sketch.fungsi ?? "—"} />
       </div>

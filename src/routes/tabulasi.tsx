@@ -478,7 +478,7 @@ function DeviationRow({ dev, invert }: { dev: number; invert?: boolean }) {
 
 function LevelDetailSection({ sketch }: { sketch: Sketch }) {
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
+  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
@@ -627,7 +627,7 @@ function downloadSketchExcel(sketch: Sketch, data: Stats) {
   const costMap = loadCostMap();
   const rate = costMap[sketch.id] ?? 0;
   const totalCostM2 = (sketch.layers ?? [])
-    .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+    .filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
     .reduce((s, l) => s + (l.areaM2 || 0), 0);
   const totalCost = totalCostM2 * rate;
   sections.push(
@@ -864,7 +864,7 @@ function RingStat({ label, value, caption, invert }: { label: string; value: num
 function CostEstimateSection({ sketch }: { sketch: Sketch }) {
   const totalM2 = useMemo(() => {
     return (sketch.layers ?? [])
-      .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+      .filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
       .reduce((s, l) => s + (l.areaM2 || 0), 0);
   }, [sketch]);
 
@@ -969,7 +969,7 @@ function roomGroupKey(name: string): { key: string; label: string } {
 }
 
 function KomposisiSection({ sketch }: { sketch: Sketch }) {
-  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name));
+  const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const mul: Record<string, number> = {};
   for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
