@@ -3107,12 +3107,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           const roomList = layers.filter((l) => !isLahan(l.name));
           if (roomList.length === 0) return null;
           const n = roomList.length;
-          const cols = n > 24 ? 3 : n > 10 ? 2 : 1;
-          const fontPx = n > 36 ? 9 : n > 20 ? 10 : 11;
-          const gapPx = n > 24 ? 2 : 3;
+          const cols = n > 32 ? 3 : n > 14 ? 2 : 1;
+          const fontPx = n > 44 ? 11 : n > 28 ? 12 : 13;
+          const gapPx = n > 28 ? 3 : 4;
           return (
             <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8, flexShrink: 0 }}>
+              <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
                 Legenda Ruang
               </div>
               <ol style={{
@@ -3120,23 +3120,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 margin: 0,
                 padding: 0,
                 columnCount: cols,
-                columnGap: 10,
+                columnGap: 12,
                 fontSize: fontPx,
                 lineHeight: 1.35,
                 flex: "1 1 auto",
-                overflow: "hidden",
+                overflowY: "auto",
               }}>
                 {roomList.map((r, i) => (
-                  <li key={r.id} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: gapPx }}>
+                  <li key={r.id} style={{ display: "flex", gap: 6, breakInside: "avoid", marginBottom: gapPx }}>
                     <span style={{
                       flexShrink: 0,
-                      minWidth: 16,
+                      minWidth: 20,
                       fontWeight: 700,
                       color: r.color.replace("ALPHA", "1"),
                       fontVariantNumeric: "tabular-nums",
                     }}>{i + 1}.</span>
-                    <span style={{ flex: 1, minWidth: 0, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.name}:{fmt(r.areaM2 || 0, 1)}m²
+                    <span style={{ flex: 1, minWidth: 0, color: "#222", wordBreak: "break-word" }}>
+                      {r.name} : {fmt(r.areaM2 || 0, 1)} m²
                     </span>
                   </li>
                 ))}
