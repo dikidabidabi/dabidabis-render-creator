@@ -5012,6 +5012,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "mirror") {
+      if (moveSel.size === 0) {
+        toast.error("Pilih objek dulu di tool Move sebelum mirror");
+        return;
+      }
+      const origin = snapPoint(getWorldPosRaw(e));
+      setMirrorDraft({ origin, cur: origin, angleDeg: 0 });
+      return;
+    }
     if (tool === "move") {
       const raw = getWorldPosRaw(e);
       const tol = 10 / view.s;
