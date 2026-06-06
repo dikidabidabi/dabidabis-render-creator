@@ -197,6 +197,79 @@ function bindLahanToMdplZero(sketch: Sketch): Sketch {
   };
 }
 
+// --- Pohon acak pada permukaan "Taman" (denah & potongan) ---
+function _hashStr32(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
+function _mulberry32(seed: number) {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6D2B79F5) >>> 0;
+    let x = t;
+    x = Math.imul(x ^ (x >>> 15), x | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+type TamanTreePlan = { x: number; y: number; dM: number };
+function planTamanTreesInPoly(poly: Point[], pxPerM: number, seedKey: string): TamanTreePlan[] {
+  if (poly.length < 3 || pxPerM <= 0) return [];
+  let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+  for (const p of poly) {
+    if (p.x < mnx) mnx = p.x; if (p.y < mny) mny = p.y;
+    if (p.x > mxx) mxx = p.x; if (p.y > mxy) mxy = p.y;
+  }
+  const rng = _mulberry32(_hashStr32(seedKey));
+  const minSepPx = 3.2 * pxPerM;
+  const areaM2 = ((mxx - mnx) * (mxy - mny)) / (pxPerM * pxPerM);
+  const tries = Math.min(2500, Math.max(80, Math.round(areaM2 * 3)));
+  const out: TamanTreePlan[] = [];
+  for (let i = 0; i < tries; i++) {
+    const x = mnx + rng() * (mxx - mnx);
+    const y = mny + rng() * (mxy - mny);
+    if (!pointInPolyPres({ x, y }, poly)) continue;
+    const dM = 1 + rng() * 2; // diameter 1..3 m
+    const rPx = (dM / 2) * pxPerM;
+    // Pastikan kanopi tidak melewati tepi taman
+    let okEdge = true;
+    for (let k = 0, j = poly.length - 1; k < poly.length; j = k++) {
+      const ax = poly[j].x, ay = poly[j].y, bx = poly[k].x, by = poly[k].y;
+      const vx = bx - ax, vy = by - ay;
+      const wx = x - ax, wy = y - ay;
+      const L2 = vx * vx + vy * vy || 1e-9;
+      const tt = Math.max(0, Math.min(1, (vx * wx + vy * wy) / L2));
+      const ex = ax + tt * vx, ey = ay + tt * vy;
+      if (Math.hypot(x - ex, y - ey) < rPx) { okEdge = false; break; }
+    }
+    if (!okEdge) continue;
+    let okSep = true;
+    for (const t of out) if (Math.hypot(t.x - x, t.y - y) < minSepPx) { okSep = false; break; }
+    if (!okSep) continue;
+    out.push({ x, y, dM });
+  }
+  return out;
+}
+type TamanTreeSecPlan = { xM: number; canopyDm: number; heightM: number };
+function planTamanTreesAlong(x0M: number, x1M: number, seedKey: string): TamanTreeSecPlan[] {
+  const len = x1M - x0M;
+  if (len <= 0.5) return [];
+  const rng = _mulberry32(_hashStr32(seedKey));
+  const tries = Math.max(20, Math.round(len * 4));
+  const out: TamanTreeSecPlan[] = [];
+  for (let i = 0; i < tries; i++) {
+    const xM = x0M + rng() * len;
+    const dM = 1 + rng() * 2; // canopy 1..3 m
+    const hM = Math.max(dM, Math.min(5, 2 + rng() * 3)); // total tinggi 2..5 m
+    let ok = true;
+    for (const t of out) if (Math.abs(t.xM - xM) < 3.2) { ok = false; break; }
+    if (!ok) continue;
+    out.push({ xM, canopyDm: dM, heightM: hM });
+  }
+  return out;
+}
+
 // Typical floor logic — kept in sync with sketch.tsx
 const TYPICAL_FLOOR_H = 3;
 function tipH(lv: { typicalHeight?: number }): number {
