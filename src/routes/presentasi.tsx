@@ -1923,7 +1923,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
         x1: t1 * cutLenM,
         layerId: layer.id,
         name: layer.name,
-        color: roomFillOverride(layer.name, "0.55") ?? (layer.color ? layer.color.replace("ALPHA", "0.55") : "rgba(232,93,58,0.5)"),
+        color: roomFillOverride(layer.name, "0.55") ?? ((colorForRoomName(layer.name) ?? layer.color)?.replace("ALPHA", "0.55") ?? "rgba(232,93,58,0.5)"),
         areaM2: layer.areaM2 || 0,
         heightOverride,
         baseDelta,
