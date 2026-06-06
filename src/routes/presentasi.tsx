@@ -1268,7 +1268,7 @@ function computeStats(sk: Sketch): Stats {
   );
   const ketinggianM = baseHeight + typicalExtra;
   const totalTerhitungM2 = layers
-    .filter((l) => !isLahan(l.name) && !isVoid(l.name))
+    .filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name))
     .reduce((s, l) => s + (l.areaM2 || 0) * kOf(l.levelId), 0);
   const struct = computeAllStructuralStats(sk.structuralGrid, sk.structuralGridExtras, levels);
   return {
