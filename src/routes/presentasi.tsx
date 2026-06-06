@@ -3069,17 +3069,16 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               // Perpendicular (rotated +90° CW in screen frame) = viewing direction
               const px = -uy, py = ux;
               const rBub = sw * 0.018;
-              const arrowLen = sw * 0.028;
-              const arrowHead = sw * 0.008;
-              const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
               // Bubble positions extend beyond each endpoint along the line
               const bA = { x: p1.x - ux * (rBub + sw * 0.004), y: p1.y - uy * (rBub + sw * 0.004) };
               const bB = { x: p2.x + ux * (rBub + sw * 0.004), y: p2.y + uy * (rBub + sw * 0.004) };
-              const tipX = mid.x + px * arrowLen;
-              const tipY = mid.y + py * arrowLen;
+              // Right-angle isoceles triangle at each bubble:
+              // hypotenuse sejajar garis potongan (melalui pusat buble, tidak digambar),
+              // sudut siku-siku menunjuk arah potongan (px, py).
+              const hLeg = rBub; // half hypotenuse length & apex distance
               return (
                 <g key={`cut-${idx}`} pointerEvents="none">
-                  {/* Dashed section line — tipis, hitam */}
+                  {/* Garis potongan — tipis, hitam, putus-putus */}
                   <line
                     x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
                     stroke="#0a0a0a"
@@ -3087,28 +3086,29 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     strokeDasharray={`${sw * 0.012} ${sw * 0.006} ${sw * 0.0025} ${sw * 0.006}`}
                     strokeLinecap="round"
                   />
-                  {/* Viewing-direction arrow at mid */}
-                  <line
-                    x1={mid.x} y1={mid.y} x2={tipX} y2={tipY}
-                    stroke="#0a0a0a" strokeWidth={sw * 0.0014} strokeLinecap="round"
-                  />
-                  <polygon
-                    points={`${tipX},${tipY} ${tipX - px * arrowHead + py * arrowHead * 0.7},${tipY - py * arrowHead - px * arrowHead * 0.7} ${tipX - px * arrowHead - py * arrowHead * 0.7},${tipY - py * arrowHead + px * arrowHead * 0.7}`}
-                    fill="#0a0a0a"
-                  />
-                  {/* Endpoint label bubbles */}
-                  {[{ pt: bA, txt: tag }, { pt: bB, txt: `${tag}'` }].map((b, j) => (
-                    <g key={j}>
-                      <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
-                        fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0016} />
-                      <text x={b.pt.x} y={b.pt.y}
-                        textAnchor="middle" dominantBaseline="central"
-                        fontSize={sw * 0.018} fontWeight={800} fill="#0a0a0a"
-                        fontFamily="Sora, sans-serif">
-                        {b.txt}
-                      </text>
-                    </g>
-                  ))}
+                  {/* Endpoint label bubbles + segitiga siku-siku */}
+                  {[{ pt: bA, txt: tag }, { pt: bB, txt: `${tag}'` }].map((b, j) => {
+                    const h1 = { x: b.pt.x - ux * hLeg, y: b.pt.y - uy * hLeg };
+                    const h2 = { x: b.pt.x + ux * hLeg, y: b.pt.y + uy * hLeg };
+                    const apex = { x: b.pt.x + px * hLeg, y: b.pt.y + py * hLeg };
+                    return (
+                      <g key={j}>
+                        {/* Dua sisi tegak siku — sisi miring tidak digambar */}
+                        <line x1={h1.x} y1={h1.y} x2={apex.x} y2={apex.y}
+                          stroke="#0a0a0a" strokeWidth={sw * 0.0016} strokeLinecap="round" />
+                        <line x1={h2.x} y1={h2.y} x2={apex.x} y2={apex.y}
+                          stroke="#0a0a0a" strokeWidth={sw * 0.0016} strokeLinecap="round" />
+                        <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
+                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0016} />
+                        <text x={b.pt.x} y={b.pt.y}
+                          textAnchor="middle" dominantBaseline="central"
+                          fontSize={sw * 0.018} fontWeight={800} fill="#0a0a0a"
+                          fontFamily="Sora, sans-serif">
+                          {b.txt}
+                        </text>
+                      </g>
+                    );
+                  })}
                 </g>
               );
             });
