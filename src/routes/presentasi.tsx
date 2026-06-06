@@ -5486,8 +5486,11 @@ function normalizeRoomName(name: string): string {
 function roomGroupKey(name: string): { key: string; label: string } {
   const norm = normalizeRoomName(name);
   if (!norm) return { key: "lainnya", label: "Lainnya" };
-  const tokens = norm.split(" ").filter((t) => t.length >= 3);
-  const key = (tokens[0] || norm).trim();
+  // Gunakan SELURUH nama (tanpa angka) sebagai key agar nama dua suku kata
+  // yang berbeda tidak dilebur hanya karena kata depan sama.
+  // Contoh: "Ruang Tidur 1" & "Ruang Tidur 2" → "ruang tidur" (sama),
+  //         "Ruang Tamu" tetap terpisah dari "Ruang Tidur".
+  const key = norm;
   const label = key
     .split(" ")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
