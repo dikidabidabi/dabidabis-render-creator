@@ -3732,6 +3732,80 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.restore();
     }
 
+    // ----- Mirror Tool: axis preview + reflected ghost -----
+    if (tool === "mirror" && mirrorDraft) {
+      const md = mirrorDraft;
+      const angleRad = (md.angleDeg * Math.PI) / 180;
+      const ux = Math.cos(angleRad), uy = Math.sin(angleRad);
+      const L = 100000 / s;
+      const ax = { x: md.origin.x - ux * L, y: md.origin.y - uy * L };
+      const bx = { x: md.origin.x + ux * L, y: md.origin.y + uy * L };
+      ctx.save();
+      // Axis line
+      ctx.strokeStyle = "rgba(34,211,238,0.9)";
+      ctx.lineWidth = 1.5 / s;
+      ctx.setLineDash([8 / s, 5 / s]);
+      ctx.beginPath();
+      ctx.moveTo(ax.x, ax.y); ctx.lineTo(bx.x, bx.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Origin marker
+      ctx.fillStyle = "rgba(34,211,238,1)";
+      ctx.beginPath();
+      ctx.arc(md.origin.x, md.origin.y, 5 / s, 0, Math.PI * 2);
+      ctx.fill();
+      // Reflected ghost of selected items
+      const R = (p: Point) => reflectPt(p, md.origin, angleRad);
+      ctx.strokeStyle = "rgba(34,211,238,0.85)";
+      ctx.fillStyle = "rgba(34,211,238,0.15)";
+      ctx.lineWidth = 1.6 / s;
+      const sLine = (a: Point, b: Point) => {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      };
+      moveSel.forEach((key) => {
+        const [kind, id] = key.split(":");
+        if (kind === "line") {
+          const ln = lines[Number(id)];
+          if (ln) sLine(R(ln.a), R(ln.b));
+        } else if (kind === "layer") {
+          const ly = layers.find((l) => l.id === id);
+          if (ly && ly.points.length >= 2) {
+            ctx.beginPath();
+            ly.points.forEach((p, i) => {
+              const q = R(p);
+              i === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y);
+            });
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "circle") {
+          const c = (sketch.circles ?? []).find((x) => x.id === id);
+          if (c) {
+            const cc = R(c.c);
+            ctx.beginPath(); ctx.arc(cc.x, cc.y, c.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "door") {
+          const d = (sketch.doors ?? []).find((x) => x.id === id);
+          if (d) sLine(R(d.a), R(d.b));
+        } else if (kind === "floor") {
+          const f = (sketch.floors ?? []).find((x) => x.id === id);
+          if (f && f.outer.length >= 2) {
+            ctx.beginPath();
+            f.outer.forEach((p, i) => {
+              const q = R(p);
+              i === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y);
+            });
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+          }
+        } else if (kind === "section") {
+          const c = (sketch.sectionCuts ?? [])[Number(id)];
+          if (c) sLine(R(c.p1), R(c.p2));
+        }
+      });
+      ctx.restore();
+    }
+
     // ----- Edit-Titik / Lantai-Geser marquee (world-space, cyan) -----
     {
       const drawVertexMarquee = (mm: { start: Point; cur: Point }) => {
