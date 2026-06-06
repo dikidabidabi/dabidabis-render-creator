@@ -2000,7 +2000,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               <circle cx={1.2} cy={3.7} r={0.32} fill="#3a3a3a" />
             </pattern>
           </defs>
-          <rect x={0} y={0} width={AREA_W} height={AREA_H} fill={`url(#mm-major-${slide.id})`} />
+          <rect x={0} y={0} width={AREA_W} height={AREA_H} fill="#ffffff" />
 
           {/* Lahan / ground line — terikat MDPL 0 */}
           <line x1={mx(0) - 30} y1={my(groundMdpl)} x2={mx(cutLenM) + 30} y2={my(groundMdpl)} stroke="#111" strokeWidth={1.6} />
