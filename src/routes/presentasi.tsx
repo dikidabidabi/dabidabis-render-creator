@@ -821,31 +821,23 @@ function PresentasiBox({
               <div className="max-h-48 overflow-y-auto px-3 py-2">
                 <ul className="space-y-1">
                   {slides.map((s, i) => {
-                    const isProtected = protectedIds.has(s.id);
                     const checked = hidden.has(s.id);
                     return (
                       <li key={s.id} className="flex items-center gap-2">
                         <Checkbox
                           id={`hide-${s.id}`}
                           checked={checked}
-                          disabled={isProtected}
-                          onCheckedChange={() => !isProtected && toggleHidden(s.id)}
+                          onCheckedChange={() => toggleHidden(s.id)}
                         />
                         <label
                           htmlFor={`hide-${s.id}`}
                           className={cn(
                             "flex-1 cursor-pointer truncate text-xs",
-                            isProtected && "cursor-not-allowed text-muted-foreground",
                             checked && "line-through opacity-60",
                           )}
-                          title={isProtected ? "Slide ini tidak dapat disembunyikan" : s.title}
+                          title={s.title}
                         >
                           {i + 1}. {s.title}
-                          {isProtected && (
-                            <span className="ml-2 rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-                              wajib
-                            </span>
-                          )}
                         </label>
                       </li>
                     );
