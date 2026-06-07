@@ -522,26 +522,19 @@ function PresentasiBox({
       return n;
     });
   }, []);
-  // First slide (title) and last slide (closing/terima kasih) are always kept
-  const protectedIds = useMemo(() => {
-    const s = new Set<string>();
-    if (slides.length > 0) s.add(slides[0].id);
-    if (slides.length > 1) s.add(slides[slides.length - 1].id);
-    return s;
-  }, [slides]);
   const allHiddenChecked = useMemo(
-    () => slides.length > 0 && slides.every((s) => protectedIds.has(s.id) || hidden.has(s.id)),
-    [slides, hidden, protectedIds],
+    () => slides.length > 0 && slides.every((s) => hidden.has(s.id)),
+    [slides, hidden],
   );
   const checkAllHidden = useCallback(() => {
     if (allHiddenChecked) {
       setHidden(new Set());
     } else {
       const n = new Set<string>();
-      for (const s of slides) if (!protectedIds.has(s.id)) n.add(s.id);
+      for (const s of slides) n.add(s.id);
       setHidden(n);
     }
-  }, [slides, protectedIds, allHiddenChecked]);
+  }, [slides, allHiddenChecked]);
   const visibleSlides = useMemo(() => slides.filter((s) => !hidden.has(s.id)), [slides, hidden]);
 
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
