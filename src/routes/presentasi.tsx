@@ -1531,6 +1531,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "toc" && <TocBody slide={slide} />}
       {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
+      {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
