@@ -1053,6 +1053,15 @@ function SketchViewer({
                   onMouseEnter={() => setHighlight(lv.id)}
                   onMouseLeave={() => setHighlight(null)}
                 >
+                  <label className="mb-2 flex cursor-pointer items-center gap-2 text-[11px] font-medium text-foreground">
+                    <Checkbox
+                      checked={visibleLevels[lv.id] !== false}
+                      onCheckedChange={(c) =>
+                        setVisibleLevels((prev) => ({ ...prev, [lv.id]: c !== false }))
+                      }
+                    />
+                    <span>Tampilkan di 3D</span>
+                  </label>
                   <div className="grid grid-cols-[1fr_90px] gap-2">
                     <div>
                       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
