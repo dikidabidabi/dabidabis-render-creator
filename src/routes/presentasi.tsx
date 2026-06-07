@@ -1061,6 +1061,14 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   const perspektifList = perspektif.filter((p): p is PerspektifItem & { image: string } => !!p.image);
   for (const lv of levels) {
     out.push({
+      kind: "bubble",
+      id: `bubble-${lv.id}`,
+      title: `Diagram Hubungan Ruang · ${displayNames[lv.id] ?? lv.name}`,
+      sketch: sk,
+      level: lv,
+      bounds,
+    });
+    out.push({
       kind: "level",
       id: `lvl-${lv.id}`,
       title: displayNames[lv.id] ?? lv.name,
