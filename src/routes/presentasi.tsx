@@ -3205,11 +3205,6 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             mode="base"
           />
 
-          <DoorNotation
-            doors={(sketch.doors ?? []).filter((d) => d.levelId === level.id)}
-            pxPerM={pxPerM}
-            sw={sw}
-          />
 
           {/* Pohon pada permukaan Taman — lingkaran hijau solid opacity 50%,
               diameter acak 1..3 m, jarak antar pohon minimal 3.2 m. */}
@@ -3537,6 +3532,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             pxPerM={pxPerM}
             sw={sw}
             mode="overlay"
+          />
+          {/* Pintu digambar paling akhir agar bukaan pintu menutupi material/dinding di bawahnya. */}
+          <DoorNotation
+            doors={(sketch.doors ?? []).filter((d) => d.levelId === level.id)}
+            pxPerM={pxPerM}
+            sw={sw}
           />
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
