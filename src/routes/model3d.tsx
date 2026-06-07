@@ -484,7 +484,7 @@ function StructuralColumns({
       }
     }
     return out;
-  }, [grids, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl]);
+  }, [grids, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl, visibleGrids]);
 
 
   if (items.length === 0) return null;
