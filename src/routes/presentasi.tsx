@@ -1820,7 +1820,7 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
         <span style={{ fontWeight: 700, color: "#111" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
-        <span>Cetak {formatCetak(useNowOnMount())}</span>
+        <span>Cetak {formatCetak(now)}</span>
       </div>
     </div>
   );
