@@ -796,6 +796,21 @@ function SketchViewer({
   const [noLight, setNoLight] = useState(false);
   const [autoTilt, setAutoTilt] = useState(false);
   const [hasSavedView, setHasSavedView] = useState(false);
+  const [visibleLevels, setVisibleLevels] = useState<Record<string, boolean>>({});
+  // Ensure new levels default to visible (true) without clobbering user toggles.
+  useEffect(() => {
+    setVisibleLevels((prev) => {
+      let changed = false;
+      const next: Record<string, boolean> = { ...prev };
+      for (const lv of sketch.levels) {
+        if (next[lv.id] === undefined) {
+          next[lv.id] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [sketch.levels]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
