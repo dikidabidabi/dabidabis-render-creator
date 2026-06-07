@@ -585,9 +585,18 @@ function Scene({
         </>
       )}
 
-      {lahanLayers.map((ly) => (
-        <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
-      ))}
+      {lahanLayers.map((ly) => {
+        const lvId = ly.levelId ?? groundLevel?.id;
+        return (
+          <group
+            key={`lahangrp_${ly.id}`}
+            name={`levelGroupLahan_${lvId ?? "none"}`}
+            visible={isLevelVisible(lvId)}
+          >
+            <GroundPlane points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
+          </group>
+        );
+      })}
 
       <Grid
         args={[200, 200]}
