@@ -512,6 +512,7 @@ function Scene({
   colorMode,
   noLight,
   visibleLevels,
+  visibleGrids,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
@@ -519,6 +520,7 @@ function Scene({
   colorMode: "sketch" | "bw";
   noLight: boolean;
   visibleLevels?: Record<string, boolean>;
+  visibleGrids?: Record<number, boolean>;
 }) {
   const isLevelVisible = (id: string | undefined | null) =>
     !id ? true : visibleLevels?.[id] !== false;
