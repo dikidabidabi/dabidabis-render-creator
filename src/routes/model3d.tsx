@@ -1085,6 +1085,32 @@ function SketchViewer({
         <div className="rounded-lg border border-border bg-card/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (Elevasi)</h3>
+            {sourceLevels.length > 0 && (
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    for (const lv of sourceLevels) next[lv.id] = true;
+                    setVisibleLevels(next);
+                  }}
+                >
+                  Check all
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    for (const lv of sourceLevels) next[lv.id] = false;
+                    setVisibleLevels(next);
+                  }}
+                >
+                  Uncheck all
+                </button>
+              </div>
+            )}
           </div>
           <div className="space-y-3">
             {sourceLevels.length === 0 && (
