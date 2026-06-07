@@ -145,6 +145,13 @@ function Header() {
               >
                 Galeri
               </Link>
+              <Link
+                to="/akun"
+                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
+                activeProps={{ className: "text-foreground font-medium" }}
+              >
+                Akun
+              </Link>
               <Button variant="ghost" size="sm" onClick={() => signOut()}>
                 Keluar
               </Button>
