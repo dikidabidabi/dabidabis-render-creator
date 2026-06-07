@@ -836,10 +836,24 @@ function SketchViewer({
   const saveShots = useCallback(
     (next: { id: string; dataUrl: string; ts: number }[]) => {
       setShots(next);
-      try {
-        localStorage.setItem(shotsKey, JSON.stringify(next));
-      } catch {
-        // ignore quota
+      // localStorage punya quota ~5MB. Bila penuh, kecilkan list secara progresif
+      // agar screenshot terbaru (mis. aksonometri) tetap tersimpan dan terbaca
+      // oleh slide "Komposisi Ruang".
+      let attempt = next.slice();
+      for (let i = 0; i < 10; i++) {
+        try {
+          localStorage.setItem(shotsKey, JSON.stringify(attempt));
+          return;
+        } catch {
+          if (attempt.length <= 1) {
+            try { localStorage.removeItem(shotsKey); } catch { /* ignore */ }
+            try { localStorage.setItem(shotsKey, JSON.stringify(attempt)); return; } catch { /* fall through */ }
+            return;
+          }
+          // Buang item paling lama (di akhir array) lalu coba lagi.
+          attempt = attempt.slice(0, attempt.length - 1);
+          setShots(attempt);
+        }
       }
     },
     [shotsKey],
@@ -848,9 +862,15 @@ function SketchViewer({
     const el = canvasRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
     if (!el) return;
     try {
-      const dataUrl = el.toDataURL("image/png");
+      // JPEG jauh lebih kecil dari PNG → muat lebih banyak shot dalam quota
+      // localStorage. Background canvas sudah opaque sehingga JPEG aman.
+      const dataUrl = el.toDataURL("image/jpeg", 0.9);
+      if (!dataUrl || dataUrl.length < 1000) {
+        console.warn("Screenshot kosong — canvas belum siap.");
+        return;
+      }
       const item = { id: `s_${Date.now()}`, dataUrl, ts: Date.now() };
-      saveShots([item, ...shots].slice(0, 24));
+      saveShots([item, ...shots].slice(0, 12));
     } catch (e) {
       console.error(e);
     }
