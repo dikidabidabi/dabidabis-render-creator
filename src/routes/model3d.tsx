@@ -1159,6 +1159,7 @@ function SketchViewer({
               sunHour={sunHour}
               colorMode={colorMode}
               noLight={noLight}
+              visibleLevels={visibleLevels}
             />
             <OrbitControls
               ref={orbitRef}
