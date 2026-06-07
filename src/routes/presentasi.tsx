@@ -3188,7 +3188,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               const ux = dx / len, uy = dy / len;
               // Perpendicular (rotated +90° CW in screen frame) = viewing direction
               const px = -uy, py = ux;
-              const rBub = sw * 0.0045;
+              const rBub = sw * 0.009;
+              const bubSW = sw * 0.0003;
+              const bubFs = sw * 0.008;
               // Bubble positions extend beyond each endpoint along the line
               const bA = { x: p1.x - ux * (rBub + sw * 0.001), y: p1.y - uy * (rBub + sw * 0.001) };
               const bB = { x: p2.x + ux * (rBub + sw * 0.001), y: p2.y + uy * (rBub + sw * 0.001) };
@@ -3220,14 +3222,14 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                         {/* Dua sisi tegak siku — sisi miring tidak digambar.
                             Digambar dulu agar bubble menutup pangkalnya. */}
                         <line x1={h1.x} y1={h1.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={sw * 0.0012} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={bubSW} strokeLinecap="round" />
                         <line x1={h2.x} y1={h2.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={sw * 0.0012} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={bubSW} strokeLinecap="round" />
                         <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
-                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0012} />
+                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={bubSW} />
                         <text x={b.pt.x} y={b.pt.y}
                           textAnchor="middle" dominantBaseline="central"
-                          fontSize={sw * 0.0045} fontWeight={800} fill="#0a0a0a"
+                          fontSize={bubFs} fontWeight={700} fill="#0a0a0a"
                           fontFamily="Sora, sans-serif">
                           {b.txt}
                         </text>
