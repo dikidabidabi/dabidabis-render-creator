@@ -2748,6 +2748,244 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   );
 }
 
+// ---- Bubble Diagram (Diagram Hubungan Ruang) ----
+type SimNode = SimulationNodeDatum & RoomNode & { r: number };
+type SimLink = SimulationLinkDatum<SimNode> & { weight: number; hasDoor: boolean };
+
+const BUBBLE_VB_W = 1240;
+const BUBBLE_VB_H = 720;
+
+function radiusForArea(areaM2: number): number {
+  // Proporsional terhadap sqrt(luas) — area ~ pi*r^2 secara visual.
+  const a = Math.max(0.1, areaM2);
+  const r = 14 + Math.sqrt(a) * 7.5;
+  return Math.max(22, Math.min(95, r));
+}
+
+function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
+  const { sketch, level } = slide;
+  const layersOnLevel = (sketch.layers ?? []).filter(
+    (l) => l.levelId === level.id && !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name) && l.points.length >= 3,
+  );
+  const doorsOnLevel = (sketch.doors ?? []).filter((d) => d.levelId === level.id);
+
+  // Tolerance ~ 1 m (anggap ruang yang dindingnya berjarak ≤ 1m sebagai bertetangga).
+  const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
+  const tolerancePx = (1 / mPerSPx) * 0.6;
+
+  const graph = useMemo(() => {
+    const rooms = layersOnLevel.map((l) => {
+      const baseColor = colorForRoomName(l.name) ?? l.color ?? "rgba(120,120,120,ALPHA)";
+      const fill = roomFillOverride(l.name, "ALPHA") ?? baseColor;
+      return {
+        id: l.id,
+        name: l.name,
+        points: l.points,
+        areaM2: l.areaM2,
+        color: fill,
+        coefficient: l.coefficient ?? 1,
+        levelId: l.levelId,
+      };
+    });
+    return buildBubbleGraph(rooms, doorsOnLevel, tolerancePx);
+    // re-compute when any room polygon changes or doors change
+  }, [
+    JSON.stringify(layersOnLevel.map((l) => ({ id: l.id, n: l.name, a: l.areaM2, p: l.points, c: l.coefficient }))),
+    JSON.stringify(doorsOnLevel),
+    tolerancePx,
+  ]);
+
+  const [tick, setTick] = useState(0);
+  const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
+  const nodesRef = useRef<SimNode[]>([]);
+  const linksRef = useRef<SimLink[]>([]);
+
+  useEffect(() => {
+    // Bangun ulang simulasi setiap kali graph berubah.
+    const cx = BUBBLE_VB_W / 2;
+    const cy = BUBBLE_VB_H / 2;
+    const nodes: SimNode[] = graph.nodes.map((n, i) => {
+      const angle = (i / Math.max(1, graph.nodes.length)) * Math.PI * 2;
+      const ring = 140 + (i % 3) * 40;
+      return {
+        ...n,
+        r: radiusForArea(n.areaM2),
+        x: cx + Math.cos(angle) * ring,
+        y: cy + Math.sin(angle) * ring,
+      };
+    });
+    const byId = new Map(nodes.map((n) => [n.layerId, n]));
+    const links: SimLink[] = graph.links
+      .map((l) => {
+        const s = byId.get(l.source);
+        const t = byId.get(l.target);
+        if (!s || !t) return null;
+        return { source: s, target: t, weight: l.weight, hasDoor: l.hasDoor } as SimLink;
+      })
+      .filter((x): x is SimLink => x !== null);
+
+    nodesRef.current = nodes;
+    linksRef.current = links;
+
+    if (simRef.current) simRef.current.stop();
+    const sim = forceSimulation<SimNode, SimLink>(nodes)
+      .force(
+        "link",
+        forceLink<SimNode, SimLink>(links)
+          .id((d) => d.layerId)
+          .distance((l) => (l.source as SimNode).r + (l.target as SimNode).r + 26)
+          .strength(0.6),
+      )
+      .force("charge", forceManyBody<SimNode>().strength(-260))
+      .force("collide", forceCollide<SimNode>().radius((d) => d.r + 6).iterations(2))
+      .force("center", forceCenter<SimNode>(cx, cy).strength(0.05))
+      .force("x", forceX<SimNode>(cx).strength(0.04))
+      .force("y", forceY<SimNode>(cy).strength(0.05))
+      .alpha(1)
+      .alphaDecay(0.035)
+      .on("tick", () => setTick((t) => (t + 1) % 1000000));
+    simRef.current = sim;
+    return () => {
+      sim.stop();
+    };
+  }, [graph]);
+
+  // Clamp nodes ke viewBox setelah setiap tick.
+  for (const n of nodesRef.current) {
+    if (n.x !== undefined) n.x = Math.max(n.r + 8, Math.min(BUBBLE_VB_W - n.r - 8, n.x));
+    if (n.y !== undefined) n.y = Math.max(n.r + 8, Math.min(BUBBLE_VB_H - n.r - 8, n.y));
+  }
+  void tick;
+
+  const nodes = nodesRef.current;
+  const links = linksRef.current;
+
+  // Statistik kecil.
+  const totalArea = layersOnLevel.reduce((s, l) => s + l.areaM2, 0);
+  const doorCount = links.filter((l) => l.hasDoor).length;
+  const adjCount = links.length;
+
+  return (
+    <div style={{ display: "flex", gap: 28, width: "100%", height: "100%", alignItems: "stretch" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg
+          viewBox={`0 0 ${BUBBLE_VB_W} ${BUBBLE_VB_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ width: "100%", height: "100%", display: "block", background: "#fafaf7", border: "1px solid #e5e5e5" }}
+        >
+          <defs>
+            <pattern id="bubble-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect x={0} y={0} width={BUBBLE_VB_W} height={BUBBLE_VB_H} fill="url(#bubble-grid)" />
+
+          {/* Edges */}
+          {links.map((l, i) => {
+            const s = l.source as SimNode;
+            const t = l.target as SimNode;
+            if (s.x == null || s.y == null || t.x == null || t.y == null) return null;
+            const sw = l.hasDoor ? 3.2 : 1.4;
+            const color = l.hasDoor ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.45)";
+            return (
+              <line
+                key={`e-${i}`}
+                x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+                stroke={color}
+                strokeWidth={sw}
+                strokeDasharray={l.hasDoor ? undefined : "4 4"}
+              />
+            );
+          })}
+
+          {/* Nodes */}
+          {nodes.map((n) => {
+            if (n.x == null || n.y == null) return null;
+            const fill = (n.color || "rgba(180,180,180,ALPHA)").replace("ALPHA", "0.78");
+            const stroke = (n.color || "rgba(80,80,80,ALPHA)").replace("ALPHA", "1");
+            const labelSize = Math.max(10, Math.min(18, n.r * 0.32));
+            const areaSize = Math.max(8, labelSize - 3);
+            return (
+              <g key={`n-${n.layerId}`}>
+                <circle cx={n.x} cy={n.y} r={n.r} fill={fill} stroke={stroke} strokeWidth={1.4} />
+                <text
+                  x={n.x} y={n.y - 2}
+                  textAnchor="middle" dominantBaseline="central"
+                  fontSize={labelSize} fontWeight={600} fill="#0a0a0a"
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 2.5 } as React.CSSProperties}
+                >
+                  {n.name}
+                </text>
+                <text
+                  x={n.x} y={n.y + labelSize}
+                  textAnchor="middle" dominantBaseline="central"
+                  fontSize={areaSize} fill="#333"
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 2 } as React.CSSProperties}
+                >
+                  {n.areaM2.toFixed(1)} m²
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Side panel */}
+      <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ border: "1px solid #111", padding: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>
+            Topologi
+          </div>
+          <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 26, fontWeight: 700, marginTop: 6, letterSpacing: "-0.02em" }}>
+            {nodes.length} Ruang
+          </div>
+          <div style={{ fontSize: 13, color: "#444", marginTop: 4 }}>
+            {adjCount} relasi adjacency · {doorCount} hubungan pintu
+          </div>
+          <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+            Total luas: {totalArea.toFixed(1)} m²
+          </div>
+        </div>
+
+        <div style={{ border: "1px solid #ddd", padding: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>
+            Legenda
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#141414" strokeWidth={3.2} /></svg>
+            <span style={{ fontSize: 12 }}>Terhubung pintu</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#666" strokeWidth={1.4} strokeDasharray="4 4" /></svg>
+            <span style={{ fontSize: 12 }}>Bersebelahan (dinding)</span>
+          </div>
+          <div style={{ fontSize: 11, color: "#888", marginTop: 12, lineHeight: 1.5 }}>
+            Ukuran lingkaran proporsional terhadap luas ruang (m²). Warna menyesuaikan warna ruang pada Stacking 3D. Diagram otomatis ter-update mengikuti perubahan denah.
+          </div>
+        </div>
+
+        <div style={{ border: "1px solid #ddd", padding: 14, maxHeight: 260, overflow: "hidden" }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8 }}>
+            Daftar Ruang
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+            {nodes.slice(0, 14).map((n) => (
+              <div key={`li-${n.layerId}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 999, background: (n.color || "rgba(180,180,180,ALPHA)").replace("ALPHA", "1"), flexShrink: 0 }} />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.name}</span>
+                <span style={{ color: "#666" }}>{n.areaM2.toFixed(1)} m²</span>
+              </div>
+            ))}
+            {nodes.length > 14 ? (
+              <div style={{ color: "#888", marginTop: 4 }}>+{nodes.length - 14} ruang lain</div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Level body ----
 function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const { sketch, level, bounds } = slide;
