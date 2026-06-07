@@ -1203,6 +1203,7 @@ function SketchViewer({
               colorMode={colorMode}
               noLight={noLight}
               visibleLevels={visibleLevels}
+              visibleGrids={visibleGrids}
             />
             <OrbitControls
               ref={orbitRef}
