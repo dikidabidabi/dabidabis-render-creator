@@ -3202,6 +3202,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
             sw={sw}
+            mode="base"
           />
 
           <DoorNotation
