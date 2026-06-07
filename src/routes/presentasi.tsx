@@ -2567,13 +2567,18 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           })}
 
 
-          {/* Penanda A dan A' di ujung area gambar */}
-          <g>
-            <circle cx={mx(0)} cy={my(maxMdpl) - 18} r={10} fill="#111" />
-            <text x={mx(0)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>A</text>
-            <circle cx={mx(cutLenM)} cy={my(maxMdpl) - 18} r={10} fill="#111" />
-            <text x={mx(cutLenM)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>A'</text>
-          </g>
+          {/* Penanda bubble potongan di ujung area gambar — mengikuti label cut */}
+          {(() => {
+            const tag = ((cut.label || "A-A").split("-")[0] || "A").trim();
+            return (
+              <g>
+                <circle cx={mx(0)} cy={my(maxMdpl) - 18} r={10} fill="#111" />
+                <text x={mx(0)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>{tag}</text>
+                <circle cx={mx(cutLenM)} cy={my(maxMdpl) - 18} r={10} fill="#111" />
+                <text x={mx(cutLenM)} y={my(maxMdpl) - 18} fontSize={11} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontWeight={700}>{`${tag}'`}</text>
+              </g>
+            );
+          })()}
 
           {/* Skala panjang potongan dihapus — diganti dimensi bentang grid */}
 
@@ -3189,7 +3194,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               // Perpendicular (rotated +90° CW in screen frame) = viewing direction
               const px = -uy, py = ux;
               const rBub = sw * 0.009;
-              const bubSW = sw * 0.0003;
+              const bubSW = sw * 0.0006;
+              const triSW = bubSW * 1.2;
               const bubFs = sw * 0.008;
               // Bubble positions extend beyond each endpoint along the line
               const bA = { x: p1.x - ux * (rBub + sw * 0.001), y: p1.y - uy * (rBub + sw * 0.001) };
@@ -3222,9 +3228,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                         {/* Dua sisi tegak siku — sisi miring tidak digambar.
                             Digambar dulu agar bubble menutup pangkalnya. */}
                         <line x1={h1.x} y1={h1.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={bubSW} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={triSW} strokeLinecap="round" />
                         <line x1={h2.x} y1={h2.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={bubSW} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={triSW} strokeLinecap="round" />
                         <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
                           fill="#ffffff" stroke="#0a0a0a" strokeWidth={bubSW} />
                         <text x={b.pt.x} y={b.pt.y}
