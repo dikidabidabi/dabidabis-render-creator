@@ -4832,15 +4832,20 @@ function MaterialEdges({
       ))}
       {segs.map((s) => {
         const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
-        if (!mat) {
-          return (
-            <line
-              key={`s-${s.id}`}
-              x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
-              stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
-            />
-          );
-        }
+        if (mat) return null;
+        return (
+          <line
+            key={`s-${s.id}`}
+            x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
+            stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
+          />
+        );
+      })}
+      {/* Render elemen ber-material di lapisan teratas agar menutupi
+          garis dasar sketsa yang berada di bawahnya. */}
+      {segs.map((s) => {
+        const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
+        if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len, ny = dx / len;
@@ -4865,6 +4870,7 @@ function MaterialEdges({
           // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.
           return (
             <g key={`s-${s.id}`}>
+              <polygon points={pts} fill="#ffffff" stroke="none" />
               <polygon points={pts} fill="rgba(34,211,238,0.22)" stroke="none" />
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
                 stroke="#0a0a0a" strokeWidth={strokeFine} />
