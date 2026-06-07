@@ -1778,6 +1778,7 @@ function SlideCompass({ rotation, size = 92, draggableId }: { rotation: number; 
 }
 // ---- Title body ----
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
+  const now = useNowOnMount();
   const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
