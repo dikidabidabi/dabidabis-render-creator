@@ -687,6 +687,7 @@ function Scene({
         mPerPx={mPerPx}
         baseMdpl={baseMdpl}
         colorMode={colorMode}
+        visibleGrids={visibleGrids}
       />
     </>
   );
