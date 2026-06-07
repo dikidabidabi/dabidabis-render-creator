@@ -3530,6 +3530,14 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               );
             });
           })()}
+          {/* Overlay material di lapisan teratas, menutupi garis base sketsa. */}
+          <MaterialEdges
+            lines={lines}
+            edgeAttrs={sketch.edgeAttrs ?? {}}
+            pxPerM={pxPerM}
+            sw={sw}
+            mode="overlay"
+          />
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
