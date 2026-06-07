@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -506,13 +507,17 @@ function Scene({
   sunHour,
   colorMode,
   noLight,
+  visibleLevels,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
   sunHour: number;
   colorMode: "sketch" | "bw";
   noLight: boolean;
+  visibleLevels?: Record<string, boolean>;
 }) {
+  const isLevelVisible = (id: string | undefined | null) =>
+    !id ? true : visibleLevels?.[id] !== false;
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
   const floors = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
@@ -594,31 +599,39 @@ function Scene({
 
       {floors.map((lv) => {
         const layersOfLevel = buildLayers.filter((l) => l.levelId === lv.sourceId);
-        return layersOfLevel.map((ly, idx) => {
-          const override = roomExtrudeOverride(ly.name);
-          if (override && override.height <= 0) return null;
-          const sketchColor = solidColorForRoomName(ly.name,
-            ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
-              const parts = body.split(",").map((s: string) => s.trim());
-              return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-            }) || "#e85d3a");
-          const baseColor = override ? override.color : sketchColor;
-          const color = colorMode === "bw" ? "#dcdcdc" : baseColor;
-          const h = override ? override.height : lv.height;
-          const baseY = lv.baseMdpl - baseMdpl + (override ? override.baseDelta : 0);
-          return (
-            <ExtrudedFloor
-              key={`${lv.id}_${ly.id}_${idx}`}
-              points={ly.points}
-              origin={origin}
-              mPerPx={mPerPx}
-              baseY={baseY}
-              height={h}
-              color={color}
-              highlighted={highlightLevelId === lv.sourceId}
-            />
-          );
-        });
+        return (
+          <group
+            key={`lvgrp_${lv.id}`}
+            name={`levelGroup_${lv.sourceId}`}
+            visible={isLevelVisible(lv.sourceId)}
+          >
+            {layersOfLevel.map((ly, idx) => {
+              const override = roomExtrudeOverride(ly.name);
+              if (override && override.height <= 0) return null;
+              const sketchColor = solidColorForRoomName(ly.name,
+                ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+                  const parts = body.split(",").map((s: string) => s.trim());
+                  return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+                }) || "#e85d3a");
+              const baseColor = override ? override.color : sketchColor;
+              const color = colorMode === "bw" ? "#dcdcdc" : baseColor;
+              const h = override ? override.height : lv.height;
+              const baseY = lv.baseMdpl - baseMdpl + (override ? override.baseDelta : 0);
+              return (
+                <ExtrudedFloor
+                  key={`${lv.id}_${ly.id}_${idx}`}
+                  points={ly.points}
+                  origin={origin}
+                  mPerPx={mPerPx}
+                  baseY={baseY}
+                  height={h}
+                  color={color}
+                  highlighted={highlightLevelId === lv.sourceId}
+                />
+              );
+            })}
+          </group>
+        );
       })}
 
       {tamanLayers.map((ly, idx) => (
@@ -641,17 +654,22 @@ function Scene({
         const thick = (fl.thicknessMm ?? 150) / 1000;
         const slabColor = colorMode === "bw" ? "#c8c8c8" : "#a8a29e";
         return (
-          <FloorSlab
-            key={`slab_${fl.id}`}
-            outer={fl.outer}
-            holes={fl.holes}
-            origin={origin}
-            mPerPx={mPerPx}
-            topY={topY}
-            thickness={thick}
-            color={slabColor}
-            highlighted={highlightLevelId === lvl.id}
-          />
+          <group
+            key={`slabgrp_${fl.id}`}
+            name={`levelGroupSlab_${lvl.id}`}
+            visible={isLevelVisible(lvl.id)}
+          >
+            <FloorSlab
+              outer={fl.outer}
+              holes={fl.holes}
+              origin={origin}
+              mPerPx={mPerPx}
+              topY={topY}
+              thickness={thick}
+              color={slabColor}
+              highlighted={highlightLevelId === lvl.id}
+            />
+          </group>
         );
       })}
 
@@ -779,6 +797,21 @@ function SketchViewer({
   const [noLight, setNoLight] = useState(false);
   const [autoTilt, setAutoTilt] = useState(false);
   const [hasSavedView, setHasSavedView] = useState(false);
+  const [visibleLevels, setVisibleLevels] = useState<Record<string, boolean>>({});
+  // Ensure new levels default to visible (true) without clobbering user toggles.
+  useEffect(() => {
+    setVisibleLevels((prev) => {
+      let changed = false;
+      const next: Record<string, boolean> = { ...prev };
+      for (const lv of sketch.levels) {
+        if (next[lv.id] === undefined) {
+          next[lv.id] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [sketch.levels]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
@@ -1020,6 +1053,15 @@ function SketchViewer({
                   onMouseEnter={() => setHighlight(lv.id)}
                   onMouseLeave={() => setHighlight(null)}
                 >
+                  <label className="mb-2 flex cursor-pointer items-center gap-2 text-[11px] font-medium text-foreground">
+                    <Checkbox
+                      checked={visibleLevels[lv.id] !== false}
+                      onCheckedChange={(c) =>
+                        setVisibleLevels((prev) => ({ ...prev, [lv.id]: c !== false }))
+                      }
+                    />
+                    <span>Tampilkan di 3D</span>
+                  </label>
                   <div className="grid grid-cols-[1fr_90px] gap-2">
                     <div>
                       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -1127,6 +1169,7 @@ function SketchViewer({
               sunHour={sunHour}
               colorMode={colorMode}
               noLight={noLight}
+              visibleLevels={visibleLevels}
             />
             <OrbitControls
               ref={orbitRef}
