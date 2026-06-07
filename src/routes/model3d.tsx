@@ -1160,8 +1160,66 @@ function SketchViewer({
               <span className="font-mono">{sketch.scale}</span>
             </div>
           </div>
+
+          {gridList.length > 0 && (
+            <div className="mt-4 rounded-md border border-border/60 bg-background/40 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-xs font-semibold tracking-tight">Visibilitas Grid Kolom</h4>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                    onClick={() => {
+                      const next: Record<number, boolean> = {};
+                      for (let i = 0; i < gridList.length; i++) next[i] = true;
+                      setVisibleGrids(next);
+                    }}
+                  >
+                    Check all
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                    onClick={() => {
+                      const next: Record<number, boolean> = {};
+                      for (let i = 0; i < gridList.length; i++) next[i] = false;
+                      setVisibleGrids(next);
+                    }}
+                  >
+                    Uncheck all
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {gridList.map((g, gi) => (
+                  <label
+                    key={gi}
+                    className="flex cursor-pointer items-center gap-2 text-[11px] text-foreground"
+                  >
+                    <Checkbox
+                      checked={visibleGrids[gi] !== false}
+                      onCheckedChange={(c) =>
+                        setVisibleGrids((prev) => ({ ...prev, [gi]: c !== false }))
+                      }
+                    />
+                    <span>
+                      Grid Kolom {gi + 1}
+                      {g.lineOnly ? (
+                        <span className="ml-1 text-muted-foreground">(garis)</span>
+                      ) : (
+                        <span className="ml-1 text-muted-foreground">
+                          ({g.spansX.length + 1}×{g.spansY.length + 1} · {g.colSizeCm}cm)
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+
 
       {/* Canvas 3D + library */}
       <div className={cn("flex flex-col gap-3", fullscreen && "h-full min-h-0")}>
