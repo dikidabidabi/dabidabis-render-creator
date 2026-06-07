@@ -805,6 +805,7 @@ function SketchViewer({
   const [autoTilt, setAutoTilt] = useState(false);
   const [hasSavedView, setHasSavedView] = useState(false);
   const [visibleLevels, setVisibleLevels] = useState<Record<string, boolean>>({});
+  const [visibleGrids, setVisibleGrids] = useState<Record<number, boolean>>({});
   // Ensure new levels default to visible (true) without clobbering user toggles.
   useEffect(() => {
     setVisibleLevels((prev) => {
@@ -819,6 +820,31 @@ function SketchViewer({
       return changed ? next : prev;
     });
   }, [sketch.levels]);
+  const gridList = useMemo(
+    () => collectGrids(sketch.structuralGrid, sketch.structuralGridExtras),
+    [sketch.structuralGrid, sketch.structuralGridExtras],
+  );
+  useEffect(() => {
+    setVisibleGrids((prev) => {
+      let changed = false;
+      const next: Record<number, boolean> = { ...prev };
+      for (let i = 0; i < gridList.length; i++) {
+        if (next[i] === undefined) {
+          next[i] = true;
+          changed = true;
+        }
+      }
+      // Clean up indices beyond current grid count
+      for (const k of Object.keys(next)) {
+        const idx = Number(k);
+        if (idx >= gridList.length) {
+          delete next[idx];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [gridList.length]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
