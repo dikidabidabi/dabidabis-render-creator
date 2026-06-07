@@ -1889,6 +1889,7 @@ function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
 
 // ---- Closing body ----
 function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
+  const now = useNowOnMount();
   return (
     <div
       style={{
