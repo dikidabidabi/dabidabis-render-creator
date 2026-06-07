@@ -1922,9 +1922,9 @@ function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) 
         Atas perhatian dan kerja samanya dalam pembahasan desain proyek ini.
       </div>
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-        <span style={{ fontWeight: 700, color: "#fff" }}>Dabidabi's</span>
+        <span style={{ fontWeight: 700, color: "#fff" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span style={{ color: "#888" }}>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
-        <span style={{ color: "#888" }}>A3 · 420 × 297 mm</span>
+        <span style={{ color: "#888" }}>Cetak {formatCetak(now)}</span>
       </div>
     </div>
   );
