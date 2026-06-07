@@ -649,18 +649,26 @@ function Scene({
         );
       })}
 
-      {tamanLayers.map((ly, idx) => (
-        <ExtrudedFloor
-          key={`taman_${ly.id}_${idx}`}
-          points={ly.points}
-          origin={origin}
-          mPerPx={mPerPx}
-          baseY={tamanBaseY}
-          height={0.1}
-          color={colorMode === "bw" ? "#cfcfcf" : TAMAN_GREEN}
-          highlighted={false}
-        />
-      ))}
+      {tamanLayers.map((ly, idx) => {
+        const lvId = ly.levelId ?? groundLevel?.id;
+        return (
+          <group
+            key={`tamangrp_${ly.id}_${idx}`}
+            name={`levelGroupTaman_${lvId ?? "none"}`}
+            visible={isLevelVisible(lvId)}
+          >
+            <ExtrudedFloor
+              points={ly.points}
+              origin={origin}
+              mPerPx={mPerPx}
+              baseY={tamanBaseY}
+              height={0.1}
+              color={colorMode === "bw" ? "#cfcfcf" : TAMAN_GREEN}
+              highlighted={false}
+            />
+          </group>
+        );
+      })}
 
       {(sketch.floors ?? []).map((fl) => {
         const lvl = sketch.levels.find((l) => l.id === fl.levelId);
