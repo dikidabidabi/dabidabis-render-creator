@@ -413,12 +413,14 @@ function StructuralColumns({
   mPerPx,
   baseMdpl,
   colorMode,
+  visibleGrids,
 }: {
   sketch: Sketch;
   origin: Point;
   mPerPx: number;
   baseMdpl: number;
   colorMode: "sketch" | "bw";
+  visibleGrids?: Record<number, boolean>;
 }) {
   const grids = useMemo(
     () => collectGrids(sketch.structuralGrid, sketch.structuralGridExtras),
@@ -435,8 +437,10 @@ function StructuralColumns({
     const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number; rotY: number }> = [];
 
     for (let gi = 0; gi < grids.length; gi++) {
+      if (visibleGrids && visibleGrids[gi] === false) continue;
       const grid = grids[gi];
       if (grid.lineOnly) continue; // grid garis tunggal: tanpa kolom
+
       const colM = grid.colSizeCm / 100;
       const ox = (grid.origin.x - origin.x) * mPerPx;
       const oz = (grid.origin.y - origin.y) * mPerPx;
@@ -480,7 +484,7 @@ function StructuralColumns({
       }
     }
     return out;
-  }, [grids, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl]);
+  }, [grids, sortedLevels, origin.x, origin.y, mPerPx, baseMdpl, visibleGrids]);
 
 
   if (items.length === 0) return null;
@@ -508,6 +512,7 @@ function Scene({
   colorMode,
   noLight,
   visibleLevels,
+  visibleGrids,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
@@ -515,6 +520,7 @@ function Scene({
   colorMode: "sketch" | "bw";
   noLight: boolean;
   visibleLevels?: Record<string, boolean>;
+  visibleGrids?: Record<number, boolean>;
 }) {
   const isLevelVisible = (id: string | undefined | null) =>
     !id ? true : visibleLevels?.[id] !== false;
@@ -681,6 +687,7 @@ function Scene({
         mPerPx={mPerPx}
         baseMdpl={baseMdpl}
         colorMode={colorMode}
+        visibleGrids={visibleGrids}
       />
     </>
   );
@@ -798,6 +805,7 @@ function SketchViewer({
   const [autoTilt, setAutoTilt] = useState(false);
   const [hasSavedView, setHasSavedView] = useState(false);
   const [visibleLevels, setVisibleLevels] = useState<Record<string, boolean>>({});
+  const [visibleGrids, setVisibleGrids] = useState<Record<number, boolean>>({});
   // Ensure new levels default to visible (true) without clobbering user toggles.
   useEffect(() => {
     setVisibleLevels((prev) => {
@@ -812,6 +820,31 @@ function SketchViewer({
       return changed ? next : prev;
     });
   }, [sketch.levels]);
+  const gridList = useMemo(
+    () => collectGrids(sketch.structuralGrid, sketch.structuralGridExtras),
+    [sketch.structuralGrid, sketch.structuralGridExtras],
+  );
+  useEffect(() => {
+    setVisibleGrids((prev) => {
+      let changed = false;
+      const next: Record<number, boolean> = { ...prev };
+      for (let i = 0; i < gridList.length; i++) {
+        if (next[i] === undefined) {
+          next[i] = true;
+          changed = true;
+        }
+      }
+      // Clean up indices beyond current grid count
+      for (const k of Object.keys(next)) {
+        const idx = Number(k);
+        if (idx >= gridList.length) {
+          delete next[idx];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [gridList.length]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
 
@@ -1127,8 +1160,66 @@ function SketchViewer({
               <span className="font-mono">{sketch.scale}</span>
             </div>
           </div>
+
+          {gridList.length > 0 && (
+            <div className="mt-4 rounded-md border border-border/60 bg-background/40 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-xs font-semibold tracking-tight">Visibilitas Grid Kolom</h4>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                    onClick={() => {
+                      const next: Record<number, boolean> = {};
+                      for (let i = 0; i < gridList.length; i++) next[i] = true;
+                      setVisibleGrids(next);
+                    }}
+                  >
+                    Check all
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                    onClick={() => {
+                      const next: Record<number, boolean> = {};
+                      for (let i = 0; i < gridList.length; i++) next[i] = false;
+                      setVisibleGrids(next);
+                    }}
+                  >
+                    Uncheck all
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {gridList.map((g, gi) => (
+                  <label
+                    key={gi}
+                    className="flex cursor-pointer items-center gap-2 text-[11px] text-foreground"
+                  >
+                    <Checkbox
+                      checked={visibleGrids[gi] !== false}
+                      onCheckedChange={(c) =>
+                        setVisibleGrids((prev) => ({ ...prev, [gi]: c !== false }))
+                      }
+                    />
+                    <span>
+                      Grid Kolom {gi + 1}
+                      {g.lineOnly ? (
+                        <span className="ml-1 text-muted-foreground">(garis)</span>
+                      ) : (
+                        <span className="ml-1 text-muted-foreground">
+                          ({g.spansX.length + 1}×{g.spansY.length + 1} · {g.colSizeCm}cm)
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+
 
       {/* Canvas 3D + library */}
       <div className={cn("flex flex-col gap-3", fullscreen && "h-full min-h-0")}>
@@ -1170,6 +1261,7 @@ function SketchViewer({
               colorMode={colorMode}
               noLight={noLight}
               visibleLevels={visibleLevels}
+              visibleGrids={visibleGrids}
             />
             <OrbitControls
               ref={orbitRef}
