@@ -585,9 +585,18 @@ function Scene({
         </>
       )}
 
-      {lahanLayers.map((ly) => (
-        <GroundPlane key={ly.id} points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
-      ))}
+      {lahanLayers.map((ly) => {
+        const lvId = ly.levelId ?? groundLevel?.id;
+        return (
+          <group
+            key={`lahangrp_${ly.id}`}
+            name={`levelGroupLahan_${lvId ?? "none"}`}
+            visible={isLevelVisible(lvId)}
+          >
+            <GroundPlane points={ly.points} origin={origin} mPerPx={mPerPx} y={groundY - 0.02} />
+          </group>
+        );
+      })}
 
       <Grid
         args={[200, 200]}
@@ -640,18 +649,26 @@ function Scene({
         );
       })}
 
-      {tamanLayers.map((ly, idx) => (
-        <ExtrudedFloor
-          key={`taman_${ly.id}_${idx}`}
-          points={ly.points}
-          origin={origin}
-          mPerPx={mPerPx}
-          baseY={tamanBaseY}
-          height={0.1}
-          color={colorMode === "bw" ? "#cfcfcf" : TAMAN_GREEN}
-          highlighted={false}
-        />
-      ))}
+      {tamanLayers.map((ly, idx) => {
+        const lvId = ly.levelId ?? groundLevel?.id;
+        return (
+          <group
+            key={`tamangrp_${ly.id}_${idx}`}
+            name={`levelGroupTaman_${lvId ?? "none"}`}
+            visible={isLevelVisible(lvId)}
+          >
+            <ExtrudedFloor
+              points={ly.points}
+              origin={origin}
+              mPerPx={mPerPx}
+              baseY={tamanBaseY}
+              height={0.1}
+              color={colorMode === "bw" ? "#cfcfcf" : TAMAN_GREEN}
+              highlighted={false}
+            />
+          </group>
+        );
+      })}
 
       {(sketch.floors ?? []).map((fl) => {
         const lvl = sketch.levels.find((l) => l.id === fl.levelId);
@@ -1068,6 +1085,32 @@ function SketchViewer({
         <div className="rounded-lg border border-border bg-card/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold tracking-tight">Manajemen Level (Elevasi)</h3>
+            {sourceLevels.length > 0 && (
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    for (const lv of sourceLevels) next[lv.id] = true;
+                    setVisibleLevels(next);
+                  }}
+                >
+                  Check all
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-border/60 px-2 py-0.5 text-[10px] hover:bg-muted"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    for (const lv of sourceLevels) next[lv.id] = false;
+                    setVisibleLevels(next);
+                  }}
+                >
+                  Uncheck all
+                </button>
+              </div>
+            )}
           </div>
           <div className="space-y-3">
             {sourceLevels.length === 0 && (
