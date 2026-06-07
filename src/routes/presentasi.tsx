@@ -45,6 +45,19 @@ import {
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
+import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
+import {
+  forceSimulation,
+  forceLink,
+  forceManyBody,
+  forceCollide,
+  forceCenter,
+  forceX,
+  forceY,
+  type Simulation,
+  type SimulationNodeDatum,
+  type SimulationLinkDatum,
+} from "d3-force";
 
 export const Route = createFileRoute("/presentasi")({
   head: () => ({
