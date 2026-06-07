@@ -4824,7 +4824,7 @@ function MaterialEdges({
         </pattern>
       </defs>
       {/* Garis lengkung — render apa adanya (notasi material 2D hanya utk garis lurus). */}
-      {curved.map(({ ln, i }) => (
+      {mode !== "overlay" && curved.map(({ ln, i }) => (
         <path
           key={`c-${i}`}
           d={linePath(ln)}
@@ -4834,7 +4834,7 @@ function MaterialEdges({
           strokeLinecap="round"
         />
       ))}
-      {segs.map((s) => {
+      {mode !== "overlay" && segs.map((s) => {
         const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
         if (mat) return null;
         return (
@@ -4847,7 +4847,7 @@ function MaterialEdges({
       })}
       {/* Render elemen ber-material di lapisan teratas agar menutupi
           garis dasar sketsa yang berada di bawahnya. */}
-      {segs.map((s) => {
+      {mode !== "base" && segs.map((s) => {
         const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
         if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
