@@ -998,6 +998,7 @@ type Slide =
   | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
   | { kind: "closing"; id: string; title: string; sketch: Sketch }
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
