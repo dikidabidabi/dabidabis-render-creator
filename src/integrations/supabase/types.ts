@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      cloud_backups: {
+        Row: {
+          byte_size: number
+          sketch_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          byte_size?: number
+          sketch_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          byte_size?: number
+          sketch_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       renders: {
         Row: {
           accuracy: number
