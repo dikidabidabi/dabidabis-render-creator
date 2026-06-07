@@ -4785,11 +4785,15 @@ function MaterialEdges({
   edgeAttrs,
   pxPerM,
   sw,
+  mode = "all",
 }: {
   lines: Line[];
   edgeAttrs: Record<string, EdgeMaterial>;
   pxPerM: number;
   sw: number;
+  /** "base" = garis sketsa dasar saja; "overlay" = elemen ber-material saja
+   *  di lapisan teratas; "all" = keduanya. */
+  mode?: "base" | "overlay" | "all";
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
   const curved = lines
