@@ -506,13 +506,17 @@ function Scene({
   sunHour,
   colorMode,
   noLight,
+  visibleLevels,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
   sunHour: number;
   colorMode: "sketch" | "bw";
   noLight: boolean;
+  visibleLevels?: Record<string, boolean>;
 }) {
+  const isLevelVisible = (id: string | undefined | null) =>
+    !id ? true : visibleLevels?.[id] !== false;
   const mPerPx = metersPerPx(sketch.scale);
   const origin = useMemo(() => computeOrigin(sketch), [sketch]);
   const floors = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
