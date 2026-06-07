@@ -3188,14 +3188,17 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               const ux = dx / len, uy = dy / len;
               // Perpendicular (rotated +90° CW in screen frame) = viewing direction
               const px = -uy, py = ux;
-              const rBub = sw * 0.018;
+              const rBub = sw * 0.0045;
               // Bubble positions extend beyond each endpoint along the line
-              const bA = { x: p1.x - ux * (rBub + sw * 0.004), y: p1.y - uy * (rBub + sw * 0.004) };
-              const bB = { x: p2.x + ux * (rBub + sw * 0.004), y: p2.y + uy * (rBub + sw * 0.004) };
+              const bA = { x: p1.x - ux * (rBub + sw * 0.001), y: p1.y - uy * (rBub + sw * 0.001) };
+              const bB = { x: p2.x + ux * (rBub + sw * 0.001), y: p2.y + uy * (rBub + sw * 0.001) };
               // Right-angle isoceles triangle at each bubble:
               // hypotenuse sejajar garis potongan (melalui pusat buble, tidak digambar),
               // sudut siku-siku menunjuk arah potongan (px, py).
               const hLeg = rBub; // half hypotenuse length & apex distance
+              // Dekatkan segitiga ke bubble: midpoint hypotenuse berada di dalam bubble,
+              // sehingga base segitiga "menempel" pada bubble dan hanya apex terlihat di luar.
+              const midOff = rBub * 0.4;
               return (
                 <g key={`cut-${idx}`} pointerEvents="none">
                   {/* Garis potongan — tipis, hitam, putus-putus */}
@@ -3208,9 +3211,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   />
                   {/* Endpoint label bubbles + segitiga siku-siku */}
                   {[{ pt: bA, txt: tag }, { pt: bB, txt: `${tag}'` }].map((b, j) => {
-                    // Hypotenuse midpoint berada di tepi depan bubble (arah potongan),
-                    // sehingga seluruh segitiga tampak di luar bubble.
-                    const mid = { x: b.pt.x + px * rBub, y: b.pt.y + py * rBub };
+                    const mid = { x: b.pt.x + px * midOff, y: b.pt.y + py * midOff };
                     const h1 = { x: mid.x - ux * hLeg, y: mid.y - uy * hLeg };
                     const h2 = { x: mid.x + ux * hLeg, y: mid.y + uy * hLeg };
                     const apex = { x: mid.x + px * hLeg, y: mid.y + py * hLeg };
@@ -3219,14 +3220,14 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                         {/* Dua sisi tegak siku — sisi miring tidak digambar.
                             Digambar dulu agar bubble menutup pangkalnya. */}
                         <line x1={h1.x} y1={h1.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={sw * 0.0018} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={sw * 0.0012} strokeLinecap="round" />
                         <line x1={h2.x} y1={h2.y} x2={apex.x} y2={apex.y}
-                          stroke="#0a0a0a" strokeWidth={sw * 0.0018} strokeLinecap="round" />
+                          stroke="#0a0a0a" strokeWidth={sw * 0.0012} strokeLinecap="round" />
                         <circle cx={b.pt.x} cy={b.pt.y} r={rBub}
-                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0018} />
+                          fill="#ffffff" stroke="#0a0a0a" strokeWidth={sw * 0.0012} />
                         <text x={b.pt.x} y={b.pt.y}
                           textAnchor="middle" dominantBaseline="central"
-                          fontSize={sw * 0.018} fontWeight={800} fill="#0a0a0a"
+                          fontSize={sw * 0.0045} fontWeight={800} fill="#0a0a0a"
                           fontFamily="Sora, sans-serif">
                           {b.txt}
                         </text>
