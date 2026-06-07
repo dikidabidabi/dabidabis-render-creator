@@ -1640,12 +1640,30 @@ function SlideHeader({ slide }: { slide: Slide }) {
   );
 }
 
+function formatProduksi(ts: number) {
+  return new Date(ts || Date.now()).toLocaleDateString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+function formatCetak(ts: number) {
+  return new Date(ts).toLocaleString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+function useNowOnMount() {
+  const [now] = useState(() => Date.now());
+  return now;
+}
 function SlideFooter({ slide }: { slide: Slide }) {
+  const now = useNowOnMount();
+  const produksi = formatProduksi(slide.sketch.createdAt);
+  const cetak = formatCetak(now);
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e5e5e5", paddingTop: 14, fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-      <span style={{ fontWeight: 700, color: "#111" }}>Dabidabi's</span>
+      <span style={{ fontWeight: 700, color: "#111" }}>Produksi {produksi}</span>
       <span>{slide.title}</span>
-      <span>A3 · 420 × 297 mm</span>
+      <span>Cetak {cetak}</span>
     </div>
   );
 }
@@ -1760,6 +1778,7 @@ function SlideCompass({ rotation, size = 92, draggableId }: { rotation: number; 
 }
 // ---- Title body ----
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
+  const now = useNowOnMount();
   const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
@@ -1799,9 +1818,9 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
         {dateStr}
       </div>
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-        <span style={{ fontWeight: 700, color: "#111" }}>Dabidabi's</span>
+        <span style={{ fontWeight: 700, color: "#111" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
-        <span>A3 · 420 × 297 mm</span>
+        <span>Cetak {formatCetak(now)}</span>
       </div>
     </div>
   );
@@ -1870,6 +1889,7 @@ function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
 
 // ---- Closing body ----
 function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
+  const now = useNowOnMount();
   return (
     <div
       style={{
@@ -1902,9 +1922,9 @@ function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) 
         Atas perhatian dan kerja samanya dalam pembahasan desain proyek ini.
       </div>
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-        <span style={{ fontWeight: 700, color: "#fff" }}>Dabidabi's</span>
+        <span style={{ fontWeight: 700, color: "#fff" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span style={{ color: "#888" }}>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
-        <span style={{ color: "#888" }}>A3 · 420 × 297 mm</span>
+        <span style={{ color: "#888" }}>Cetak {formatCetak(now)}</span>
       </div>
     </div>
   );
@@ -3182,6 +3202,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
             sw={sw}
+            mode="base"
           />
 
           <DoorNotation
@@ -3509,6 +3530,14 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               );
             });
           })()}
+          {/* Overlay material di lapisan teratas, menutupi garis base sketsa. */}
+          <MaterialEdges
+            lines={lines}
+            edgeAttrs={sketch.edgeAttrs ?? {}}
+            pxPerM={pxPerM}
+            sw={sw}
+            mode="overlay"
+          />
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
@@ -4765,11 +4794,15 @@ function MaterialEdges({
   edgeAttrs,
   pxPerM,
   sw,
+  mode = "all",
 }: {
   lines: Line[];
   edgeAttrs: Record<string, EdgeMaterial>;
   pxPerM: number;
   sw: number;
+  /** "base" = garis sketsa dasar saja; "overlay" = elemen ber-material saja
+   *  di lapisan teratas; "all" = keduanya. */
+  mode?: "base" | "overlay" | "all";
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
   const curved = lines
@@ -4800,7 +4833,7 @@ function MaterialEdges({
         </pattern>
       </defs>
       {/* Garis lengkung — render apa adanya (notasi material 2D hanya utk garis lurus). */}
-      {curved.map(({ ln, i }) => (
+      {mode !== "overlay" && curved.map(({ ln, i }) => (
         <path
           key={`c-${i}`}
           d={linePath(ln)}
@@ -4810,17 +4843,22 @@ function MaterialEdges({
           strokeLinecap="round"
         />
       ))}
-      {segs.map((s) => {
+      {mode !== "overlay" && segs.map((s) => {
         const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
-        if (!mat) {
-          return (
-            <line
-              key={`s-${s.id}`}
-              x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
-              stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
-            />
-          );
-        }
+        if (mat) return null;
+        return (
+          <line
+            key={`s-${s.id}`}
+            x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
+            stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
+          />
+        );
+      })}
+      {/* Render elemen ber-material di lapisan teratas agar menutupi
+          garis dasar sketsa yang berada di bawahnya. */}
+      {mode !== "base" && segs.map((s) => {
+        const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
+        if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len, ny = dx / len;
@@ -4845,6 +4883,7 @@ function MaterialEdges({
           // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.
           return (
             <g key={`s-${s.id}`}>
+              <polygon points={pts} fill="#ffffff" stroke="none" />
               <polygon points={pts} fill="rgba(34,211,238,0.22)" stroke="none" />
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
                 stroke="#0a0a0a" strokeWidth={strokeFine} />
