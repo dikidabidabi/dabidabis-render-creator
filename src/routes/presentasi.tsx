@@ -522,26 +522,19 @@ function PresentasiBox({
       return n;
     });
   }, []);
-  // First slide (title) and last slide (closing/terima kasih) are always kept
-  const protectedIds = useMemo(() => {
-    const s = new Set<string>();
-    if (slides.length > 0) s.add(slides[0].id);
-    if (slides.length > 1) s.add(slides[slides.length - 1].id);
-    return s;
-  }, [slides]);
   const allHiddenChecked = useMemo(
-    () => slides.length > 0 && slides.every((s) => protectedIds.has(s.id) || hidden.has(s.id)),
-    [slides, hidden, protectedIds],
+    () => slides.length > 0 && slides.every((s) => hidden.has(s.id)),
+    [slides, hidden],
   );
   const checkAllHidden = useCallback(() => {
     if (allHiddenChecked) {
       setHidden(new Set());
     } else {
       const n = new Set<string>();
-      for (const s of slides) if (!protectedIds.has(s.id)) n.add(s.id);
+      for (const s of slides) n.add(s.id);
       setHidden(n);
     }
-  }, [slides, protectedIds, allHiddenChecked]);
+  }, [slides, allHiddenChecked]);
   const visibleSlides = useMemo(() => slides.filter((s) => !hidden.has(s.id)), [slides, hidden]);
 
   useEffect(() => { if (idx >= slides.length) setIdx(0); }, [slides.length, idx]);
@@ -828,31 +821,23 @@ function PresentasiBox({
               <div className="max-h-48 overflow-y-auto px-3 py-2">
                 <ul className="space-y-1">
                   {slides.map((s, i) => {
-                    const isProtected = protectedIds.has(s.id);
                     const checked = hidden.has(s.id);
                     return (
                       <li key={s.id} className="flex items-center gap-2">
                         <Checkbox
                           id={`hide-${s.id}`}
                           checked={checked}
-                          disabled={isProtected}
-                          onCheckedChange={() => !isProtected && toggleHidden(s.id)}
+                          onCheckedChange={() => toggleHidden(s.id)}
                         />
                         <label
                           htmlFor={`hide-${s.id}`}
                           className={cn(
                             "flex-1 cursor-pointer truncate text-xs",
-                            isProtected && "cursor-not-allowed text-muted-foreground",
                             checked && "line-through opacity-60",
                           )}
-                          title={isProtected ? "Slide ini tidak dapat disembunyikan" : s.title}
+                          title={s.title}
                         >
                           {i + 1}. {s.title}
-                          {isProtected && (
-                            <span className="ml-2 rounded bg-muted px-1 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">
-                              wajib
-                            </span>
-                          )}
                         </label>
                       </li>
                     );
