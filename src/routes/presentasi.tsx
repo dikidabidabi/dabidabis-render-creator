@@ -1640,12 +1640,30 @@ function SlideHeader({ slide }: { slide: Slide }) {
   );
 }
 
+function formatProduksi(ts: number) {
+  return new Date(ts || Date.now()).toLocaleDateString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
+}
+function formatCetak(ts: number) {
+  return new Date(ts).toLocaleString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+function useNowOnMount() {
+  const [now] = useState(() => Date.now());
+  return now;
+}
 function SlideFooter({ slide }: { slide: Slide }) {
+  const now = useNowOnMount();
+  const produksi = formatProduksi(slide.sketch.createdAt);
+  const cetak = formatCetak(now);
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e5e5e5", paddingTop: 14, fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-      <span style={{ fontWeight: 700, color: "#111" }}>Dabidabi's</span>
+      <span style={{ fontWeight: 700, color: "#111" }}>Produksi {produksi}</span>
       <span>{slide.title}</span>
-      <span>A3 · 420 × 297 mm</span>
+      <span>Cetak {cetak}</span>
     </div>
   );
 }
