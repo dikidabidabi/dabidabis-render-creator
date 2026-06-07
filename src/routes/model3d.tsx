@@ -413,12 +413,14 @@ function StructuralColumns({
   mPerPx,
   baseMdpl,
   colorMode,
+  visibleGrids,
 }: {
   sketch: Sketch;
   origin: Point;
   mPerPx: number;
   baseMdpl: number;
   colorMode: "sketch" | "bw";
+  visibleGrids?: Record<number, boolean>;
 }) {
   const grids = useMemo(
     () => collectGrids(sketch.structuralGrid, sketch.structuralGridExtras),
@@ -435,8 +437,10 @@ function StructuralColumns({
     const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number; rotY: number }> = [];
 
     for (let gi = 0; gi < grids.length; gi++) {
+      if (visibleGrids && visibleGrids[gi] === false) continue;
       const grid = grids[gi];
       if (grid.lineOnly) continue; // grid garis tunggal: tanpa kolom
+
       const colM = grid.colSizeCm / 100;
       const ox = (grid.origin.x - origin.x) * mPerPx;
       const oz = (grid.origin.y - origin.y) * mPerPx;
