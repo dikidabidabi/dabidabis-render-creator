@@ -1817,9 +1817,9 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
         {dateStr}
       </div>
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-        <span style={{ fontWeight: 700, color: "#111" }}>Dabidabi's</span>
+        <span style={{ fontWeight: 700, color: "#111" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
-        <span>A3 · 420 × 297 mm</span>
+        <span>Cetak {formatCetak(useNowOnMount())}</span>
       </div>
     </div>
   );
