@@ -653,17 +653,22 @@ function Scene({
         const thick = (fl.thicknessMm ?? 150) / 1000;
         const slabColor = colorMode === "bw" ? "#c8c8c8" : "#a8a29e";
         return (
-          <FloorSlab
-            key={`slab_${fl.id}`}
-            outer={fl.outer}
-            holes={fl.holes}
-            origin={origin}
-            mPerPx={mPerPx}
-            topY={topY}
-            thickness={thick}
-            color={slabColor}
-            highlighted={highlightLevelId === lvl.id}
-          />
+          <group
+            key={`slabgrp_${fl.id}`}
+            name={`levelGroupSlab_${lvl.id}`}
+            visible={isLevelVisible(lvl.id)}
+          >
+            <FloorSlab
+              outer={fl.outer}
+              holes={fl.holes}
+              origin={origin}
+              mPerPx={mPerPx}
+              topY={topY}
+              thickness={thick}
+              color={slabColor}
+              highlighted={highlightLevelId === lvl.id}
+            />
+          </group>
         );
       })}
 
