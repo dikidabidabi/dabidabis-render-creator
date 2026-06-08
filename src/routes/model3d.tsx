@@ -670,30 +670,35 @@ function Scene({
         );
       })}
 
-      {(sketch.floors ?? []).map((fl) => {
+      {(sketch.floors ?? []).flatMap((fl) => {
         const lvl = sketch.levels.find((l) => l.id === fl.levelId);
-        if (!lvl) return null;
-        const topY = lvl.mdpl - baseMdpl;
+        if (!lvl) return [];
         const thick = (fl.thicknessMm ?? 150) / 1000;
         const slabColor = colorMode === "bw" ? "#c8c8c8" : "#a8a29e";
-        return (
-          <group
-            key={`slabgrp_${fl.id}`}
-            name={`levelGroupSlab_${lvl.id}`}
-            visible={isLevelVisible(lvl.id)}
-          >
-            <FloorSlab
-              outer={fl.outer}
-              holes={fl.holes}
-              origin={origin}
-              mPerPx={mPerPx}
-              topY={topY}
-              thickness={thick}
-              color={slabColor}
-              highlighted={highlightLevelId === lvl.id}
-            />
-          </group>
-        );
+        // Replikasi sesuai expansion typical level: tiap instance level
+        // (baseMdpl + height) → slab dengan top di baseMdpl + height.
+        const instances = floors.filter((f) => f.sourceId === lvl.id);
+        return instances.map((inst) => {
+          const topY = inst.baseMdpl + inst.height - baseMdpl;
+          return (
+            <group
+              key={`slabgrp_${fl.id}_${inst.typicalIndex}`}
+              name={`levelGroupSlab_${lvl.id}_${inst.typicalIndex}`}
+              visible={isLevelVisible(lvl.id)}
+            >
+              <FloorSlab
+                outer={fl.outer}
+                holes={fl.holes}
+                origin={origin}
+                mPerPx={mPerPx}
+                topY={topY}
+                thickness={thick}
+                color={slabColor}
+                highlighted={highlightLevelId === lvl.id}
+              />
+            </group>
+          );
+        });
       })}
 
 
