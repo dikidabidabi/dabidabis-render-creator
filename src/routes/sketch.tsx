@@ -3021,10 +3021,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
         const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
-        const lx1 = snapL(Math.min(la.x, lb.x));
-        const lx2 = snapL(Math.max(la.x, lb.x));
-        const ly1 = snapL(Math.min(la.y, lb.y));
-        const ly2 = snapL(Math.max(la.y, lb.y));
+        // Floor rect: a/b sudah ter-snap (vertex/midpoint/grid) — jangan re-snap mm grid.
+        const sx = (v: number) => (isFloorRect ? v : snapL(v));
+        const lx1 = sx(Math.min(la.x, lb.x));
+        const lx2 = sx(Math.max(la.x, lb.x));
+        const ly1 = sx(Math.min(la.y, lb.y));
+        const ly2 = sx(Math.max(la.y, lb.y));
         const corners = [
           { x: lx1, y: ly1 }, { x: lx2, y: ly1 },
           { x: lx2, y: ly2 }, { x: lx1, y: ly2 },
