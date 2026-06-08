@@ -3021,10 +3021,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
         const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
-        const lx1 = snapL(Math.min(la.x, lb.x));
-        const lx2 = snapL(Math.max(la.x, lb.x));
-        const ly1 = snapL(Math.min(la.y, lb.y));
-        const ly2 = snapL(Math.max(la.y, lb.y));
+        // Floor rect: a/b sudah ter-snap (vertex/midpoint/grid) — jangan re-snap mm grid.
+        const sx = (v: number) => (isFloorRect ? v : snapL(v));
+        const lx1 = sx(Math.min(la.x, lb.x));
+        const lx2 = sx(Math.max(la.x, lb.x));
+        const ly1 = sx(Math.min(la.y, lb.y));
+        const ly2 = sx(Math.max(la.y, lb.y));
         const corners = [
           { x: lx1, y: ly1 }, { x: lx2, y: ly1 },
           { x: lx2, y: ly2 }, { x: lx1, y: ly2 },
@@ -4760,9 +4762,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
-    const p = tool === "floor" && floorMode === "rect"
-      ? snapPointToMillimeterGrid(getWorldPosRaw(e), true)
-      : getWorldPos(e);
+    const p = getWorldPos(e);
     if (tool === "grid") {
       const rawWorld = getWorldPosRaw(e);
       // Konversi ke frame lokal grid (un-rotate di sekitar origin) untuk hit-test
@@ -5063,7 +5063,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
           ehits.sort((a, b) => a.d - b.d);
           const bestE = ehits[0];
-          const snapped = snapPointToMillimeterGrid(bestE.proj, true);
+          const snapped = snapPoint(bestE.proj);
           pushHistory();
           const nextFloors = (sketch.floors ?? []).map((fl) => {
             if (fl.id !== bestE.fid) return fl;
@@ -5586,7 +5586,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     if (floorVertexDrag) {
-      const newPos = snapPointToMillimeterGrid(getWorldPosRaw(e), true);
+      const newPos = getWorldPos(e);
       const fd = floorVertexDrag;
       const nextFloors = (sketch.floors ?? []).map((fl) => {
         if (fl.id !== fd.fid) return fl;
@@ -5607,9 +5607,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       setSelectedFloorEditVertices((prev) => prev.map((p) => (p.fid === fd.fid && p.ring === fd.ring && p.idx === fd.idx ? { ...p, coord: newPos } : p)));
       return;
     }
-    const p = tool === "floor" && floorMode === "rect"
-      ? snapPointToMillimeterGrid(getWorldPosRaw(e), true)
-      : getWorldPos(e);
+    const p = getWorldPos(e);
     setHover(p);
     if (tool === "edit") {
       const raw = getWorldPosRaw(e);
@@ -5949,11 +5947,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       // Bangun persegi axis-aligned (mengikuti rotasi mm-grid) lalu commit sebagai outer floor.
       const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
       const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
-      const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
-      const lminX = snapL(Math.min(la.x, lb.x));
-      const lmaxX = snapL(Math.max(la.x, lb.x));
-      const lminY = snapL(Math.min(la.y, lb.y));
-      const lmaxY = snapL(Math.max(la.y, lb.y));
+      // a/b sudah ter-snap (vertex/midpoint/grid) lewat snapPoint di pointer handler;
+      // jangan re-snap ke mm-grid karena akan menghancurkan snap vertex/midpoint.
+      const lminX = Math.min(la.x, lb.x);
+      const lmaxX = Math.max(la.x, lb.x);
+      const lminY = Math.min(la.y, lb.y);
+      const lmaxY = Math.max(la.y, lb.y);
       if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
       const p1 = rotateAround({ x: lminX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
       const p2 = rotateAround({ x: lmaxX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
