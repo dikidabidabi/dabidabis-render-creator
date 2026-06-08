@@ -676,10 +676,10 @@ function Scene({
         const thick = (fl.thicknessMm ?? 150) / 1000;
         const slabColor = colorMode === "bw" ? "#c8c8c8" : "#a8a29e";
         // Replikasi sesuai expansion typical level: tiap instance level
-        // (baseMdpl + height) → slab dengan top di baseMdpl + height.
+        // hanya 1 slab di lantai level (baseMdpl), bukan di puncak level.
         const instances = floors.filter((f) => f.sourceId === lvl.id);
         return instances.map((inst) => {
-          const topY = inst.baseMdpl + inst.height - baseMdpl;
+          const topY = inst.baseMdpl - baseMdpl;
           return (
             <group
               key={`slabgrp_${fl.id}_${inst.typicalIndex}`}
