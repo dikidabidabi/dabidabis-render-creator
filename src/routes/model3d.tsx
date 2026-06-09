@@ -973,6 +973,47 @@ function SketchViewer({
     a.click();
     a.remove();
   };
+  const take2KScreenshot = useCallback(() => {
+    const r = r3fRef.current;
+    if (!r) {
+      console.warn("Canvas 3D belum siap.");
+      return;
+    }
+    const { gl, scene, camera } = r;
+    const prevSize = new THREE.Vector2();
+    gl.getSize(prevSize);
+    const prevPR = gl.getPixelRatio();
+    const aspect = prevSize.x > 0 && prevSize.y > 0 ? prevSize.x / prevSize.y : 16 / 9;
+    const targetW = 2560;
+    const targetH = Math.max(1, Math.round(targetW / aspect));
+    const persp = (camera as THREE.PerspectiveCamera).isPerspectiveCamera;
+    const prevAspect = persp ? (camera as THREE.PerspectiveCamera).aspect : 1;
+    try {
+      gl.setPixelRatio(1);
+      gl.setSize(targetW, targetH, false);
+      if (persp) {
+        (camera as THREE.PerspectiveCamera).aspect = targetW / targetH;
+        (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+      }
+      gl.render(scene, camera);
+      const dataUrl = gl.domElement.toDataURL("image/jpeg", 0.95);
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${(sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_")}_2K_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      gl.setPixelRatio(prevPR);
+      gl.setSize(prevSize.x, prevSize.y, false);
+      if (persp) {
+        (camera as THREE.PerspectiveCamera).aspect = prevAspect;
+        (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+      }
+    }
+  }, [sketch.title]);
 
   const expanded = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
   const baseMdpl = expanded[0]?.baseMdpl ?? 0;
