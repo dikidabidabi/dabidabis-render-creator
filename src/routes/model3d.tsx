@@ -767,6 +767,18 @@ function LibraryGrid({
   );
 }
 
+function R3FRefCapture({
+  target,
+}: {
+  target: React.MutableRefObject<{ gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera } | null>;
+}) {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    target.current = { gl, scene, camera };
+  }, [gl, scene, camera, target]);
+  return null;
+}
+
 // Vertical perspective correction: forces the camera's forward vector to be
 // horizontal (so vertical edges in the world stay vertical in the image)
 // and compensates the framing via a lens-shift on the projection matrix.
