@@ -3193,7 +3193,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
 
           {/* Pohon pada permukaan Taman — lingkaran hijau solid opacity 50%,
               diameter acak 1..3 m, jarak antar pohon minimal 3.2 m. */}
-          {layers.filter((l) => isTaman(l.name)).map((l) => {
+          {layers.filter((l) => isTaman(l.name) || isAtapHijau(l.name)).map((l) => {
             const trees = planTamanTreesInPoly(l.points, pxPerM, `taman-plan-${l.id}`);
             return (
               <g key={`taman-trees-${l.id}`} pointerEvents="none">
