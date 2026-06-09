@@ -869,6 +869,7 @@ function SketchViewer({
   }, [gridList.length]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
+  const r3fRef = useRef<{ gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera } | null>(null);
 
   const viewKey = `dabidabis_model3d_view_${sketch.id}`;
   useEffect(() => {
