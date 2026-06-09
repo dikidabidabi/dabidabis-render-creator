@@ -1372,6 +1372,7 @@ function SketchViewer({
               makeDefault
             />
             {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
+            <R3FRefCapture target={r3fRef} />
           </Canvas>
 
           <div className="absolute right-2 top-2 flex flex-wrap justify-end gap-1">
