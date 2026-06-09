@@ -2423,7 +2423,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Pohon di permukaan Taman pada potongan — kanopi hijau solid 50%,
               tinggi total acak (kanopi..5 m) dari permukaan level. */}
           {boxes.flatMap((b) =>
-            b.slices.filter((sl) => isTaman(sl.name)).flatMap((sl) =>
+            b.slices.filter((sl) => isTaman(sl.name) || isAtapHijau(sl.name)).flatMap((sl) =>
               Array.from({ length: Math.max(1, b.count) }).flatMap((_, fi) => {
                 const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
                 const sliceHM = sl.heightOverride ?? b.floorH;
