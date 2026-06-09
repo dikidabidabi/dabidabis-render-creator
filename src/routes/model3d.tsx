@@ -1432,6 +1432,15 @@ function SketchViewer({
               variant="secondary"
               size="sm"
               className="h-7 gap-1 px-2 text-xs"
+              onClick={take2KScreenshot}
+              title="Unduh tangkapan 2K (tidak disimpan ke library)"
+            >
+              <Download className="h-3 w-3" /> 2K
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
               onClick={resetCamera}
             >
               <RotateCcw className="h-3 w-3" /> Reset
