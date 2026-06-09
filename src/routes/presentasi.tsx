@@ -2423,7 +2423,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           {/* Pohon di permukaan Taman pada potongan — kanopi hijau solid 50%,
               tinggi total acak (kanopi..5 m) dari permukaan level. */}
           {boxes.flatMap((b) =>
-            b.slices.filter((sl) => isTaman(sl.name)).flatMap((sl) =>
+            b.slices.filter((sl) => isTaman(sl.name) || isAtapHijau(sl.name)).flatMap((sl) =>
               Array.from({ length: Math.max(1, b.count) }).flatMap((_, fi) => {
                 const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
                 const sliceHM = sl.heightOverride ?? b.floorH;
@@ -3193,7 +3193,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
 
           {/* Pohon pada permukaan Taman — lingkaran hijau solid opacity 50%,
               diameter acak 1..3 m, jarak antar pohon minimal 3.2 m. */}
-          {layers.filter((l) => isTaman(l.name)).map((l) => {
+          {layers.filter((l) => isTaman(l.name) || isAtapHijau(l.name)).map((l) => {
             const trees = planTamanTreesInPoly(l.points, pxPerM, `taman-plan-${l.id}`);
             return (
               <g key={`taman-trees-${l.id}`} pointerEvents="none">
