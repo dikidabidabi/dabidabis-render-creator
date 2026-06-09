@@ -985,7 +985,7 @@ function SketchViewer({
     a.click();
     a.remove();
   };
-  const take2KScreenshot = useCallback(() => {
+  const takeHiResScreenshot = useCallback((targetW: number, label: string) => {
     const r = r3fRef.current;
     if (!r) {
       console.warn("Canvas 3D belum siap.");
@@ -996,7 +996,6 @@ function SketchViewer({
     gl.getSize(prevSize);
     const prevPR = gl.getPixelRatio();
     const aspect = prevSize.x > 0 && prevSize.y > 0 ? prevSize.x / prevSize.y : 16 / 9;
-    const targetW = 2560;
     const targetH = Math.max(1, Math.round(targetW / aspect));
     const persp = (camera as THREE.PerspectiveCamera).isPerspectiveCamera;
     const prevAspect = persp ? (camera as THREE.PerspectiveCamera).aspect : 1;
@@ -1011,7 +1010,7 @@ function SketchViewer({
       const dataUrl = gl.domElement.toDataURL("image/jpeg", 0.95);
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `${(sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_")}_2K_${Date.now()}.jpg`;
+      a.download = `${(sketch.title || "model").replace(/[^a-zA-Z0-9_-]+/g, "_")}_${label}_${Date.now()}.jpg`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1026,6 +1025,8 @@ function SketchViewer({
       }
     }
   }, [sketch.title]);
+  const take2KScreenshot = useCallback(() => takeHiResScreenshot(2560, "2K"), [takeHiResScreenshot]);
+  const take4KScreenshot = useCallback(() => takeHiResScreenshot(3840, "4K"), [takeHiResScreenshot]);
 
   const expanded = useMemo(() => expandLevels(sketch.levels), [sketch.levels]);
   const baseMdpl = expanded[0]?.baseMdpl ?? 0;
@@ -1436,6 +1437,15 @@ function SketchViewer({
               title="Unduh tangkapan 2K (tidak disimpan ke library)"
             >
               <Download className="h-3 w-3" /> 2K
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={take4KScreenshot}
+              title="Unduh tangkapan 4K (tidak disimpan ke library)"
+            >
+              <Download className="h-3 w-3" /> 4K
             </Button>
             <Button
               variant="secondary"
