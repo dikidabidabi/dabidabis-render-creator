@@ -4,7 +4,7 @@
 
 export type Point = { x: number; y: number };
 
-export type EdgeMaterial = "solid" | "curtain" | "window";
+export type EdgeMaterial = "solid" | "curtain" | "window" | "railing";
 
 // Garis input (subset dari Line di sketch.tsx).
 export type StraightLineInput = {
@@ -164,10 +164,12 @@ export const MATERIAL_COLORS: Record<EdgeMaterial, string> = {
   solid: "#0a0a0a",
   curtain: "#22d3ee",
   window: "#1e3a8a",
+  railing: "#8b5a2b",
 };
 
 export const MATERIAL_LABELS: Record<EdgeMaterial, string> = {
   solid: "Dinding Solid",
   curtain: "Curtain Wall",
   window: "Window Wall",
+  railing: "Railing",
 };

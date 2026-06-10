@@ -742,7 +742,7 @@ function normalizeSketch(s: any): Sketch {
       if (!raw || typeof raw !== "object") return {};
       const valid: Record<string, EdgeMaterial> = {};
       for (const [k, v] of Object.entries(raw)) {
-        if (v === "solid" || v === "curtain" || v === "window") {
+        if (v === "solid" || v === "curtain" || v === "window" || v === "railing") {
           valid[k] = v;
         }
       }
@@ -7067,7 +7067,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               Material Selubung
             </Label>
             <div className="grid grid-cols-1 gap-1.5">
-              {(["solid", "curtain", "window"] as EdgeMaterial[]).map((m) => (
+              {(["solid", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
                 <button
                   key={m}
                   type="button"

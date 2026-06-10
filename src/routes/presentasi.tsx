@@ -2167,32 +2167,56 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
           {/* Room slices per level — digambar lebih dulu agar notasi
               dinding / lantai / balok berada DI ATAS layer ruang. */}
-          {boxes.map((b) =>
-            b.slices.flatMap((sl, i) => {
+          {boxes.map((b) => {
+            // Default font untuk slice non-taman/non-atap-hijau di box ini,
+            // dipakai sebagai ukuran label untuk Taman & Atap Hijau (yang
+            // umumnya tipis dan menghasilkan font sangat kecil bila dihitung
+            // dari geometri slice-nya sendiri).
+            const normalSlices = b.slices.filter(
+              (sl) => !isTaman(sl.name) && !isAtapHijau(sl.name),
+            );
+            let defaultFs = 12;
+            if (normalSlices.length) {
+              const widest = normalSlices.reduce((a, c) =>
+                (c.x1 - c.x0) > (a.x1 - a.x0) ? c : a,
+              );
+              const w0 = (widest.x1 - widest.x0) * scalePxPerM;
+              const h0 = (widest.heightOverride ?? b.floorH) * scalePxPerM;
+              defaultFs = Math.max(8, Math.min(16, Math.min(w0 * 0.5, h0 * 0.6)));
+            }
+            return b.slices.flatMap((sl, i) => {
               const x = mx(sl.x0);
               const w = (sl.x1 - sl.x0) * scalePxPerM;
               const sliceHM = sl.heightOverride ?? b.floorH;
               const num = numberByLayerId.get(sl.layerId);
               const label = num != null ? String(num) : "";
+              const isGreen = isTaman(sl.name) || isAtapHijau(sl.name);
               return Array.from({ length: Math.max(1, b.count) }).map((_, fi) => {
                 const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
                 const sliceTopM = sliceBaseM + sliceHM;
                 const y = my(sliceTopM);
                 const h = sliceHM * scalePxPerM;
                 const cx = x + w / 2, cy = y + h / 2;
-                const labelFs = Math.max(8, Math.min(16, Math.min(w * 0.5, h * 0.6)));
+                const labelFs = isGreen
+                  ? defaultFs
+                  : Math.max(8, Math.min(16, Math.min(w * 0.5, h * 0.6)));
+                // Untuk Taman/Atap Hijau, posisikan nomor 3 m di atas permukaan slice
+                // (mengikuti permintaan: nomor diletakkan 3 m di atas ruangnya).
+                const labelY = isGreen ? my(sliceTopM + 3) : cy;
                 return (
                   <g key={`${b.id}-${i}-${fi}`}>
                     <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
-                    <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
-                      {label}
-                    </text>
+                    {label && (
+                      <text x={cx} y={labelY} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
+                        {label}
+                      </text>
+                    )}
                   </g>
                 );
               });
-            })
-          )}
+            });
+          })}
 
           {/* Level boxes — pelat lantai tebal HANYA di bawah ruang;
               di luar ruang berupa garis putus-putus tipis.
@@ -2695,6 +2719,101 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               </g>
             );
           })}
+
+          {/* Notasi railing pada potongan — per lantai, tinggi 1.2 m, lebar 100 mm,
+              dua garis tipis vertikal + cap horizontal di puncak. */}
+          {(() => {
+            const attrs = sketch.edgeAttrs ?? {};
+            const allSegs = computeStraightSegments(
+              (sketch.lines ?? []).map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
+            );
+            const railingHits: Array<{ t: number; levelId?: string }> = [];
+            for (const seg of allSegs) {
+              if (attrs[segmentIdFor(seg.a, seg.b)] !== "railing") continue;
+              const t = intersectSegmentWithCut({ a: seg.a, b: seg.b }, cut.p1, cut.p2);
+              if (t == null) continue;
+              railingHits.push({ t, levelId: seg.levelId });
+            }
+            if (!railingHits.length) return null;
+            const bandW = Math.max(2, 0.1 * scalePxPerM);
+            const railH = 1.2 * scalePxPerM;
+            const sw = 0.7;
+            return (
+              <g>
+                {boxes.flatMap((b) => {
+                  const rel = railingHits.filter((h) => !h.levelId || h.levelId === b.id);
+                  return rel.flatMap((h, idx) =>
+                    Array.from({ length: Math.max(1, b.count) }).map((_, fi) => {
+                      const floorBaseM = b.baseM + fi * b.floorH;
+                      const cx = mx(h.t * cutLenM);
+                      const xL = cx - bandW / 2, xR = cx + bandW / 2;
+                      const yBot = my(floorBaseM);
+                      const yTop = yBot - railH;
+                      return (
+                        <g key={`rail-${b.id}-${idx}-${fi}`}>
+                          <line x1={xL} y1={yBot} x2={xL} y2={yTop} stroke={RAILING_COLOR} strokeWidth={sw} strokeLinecap="square" />
+                          <line x1={xR} y1={yBot} x2={xR} y2={yTop} stroke={RAILING_COLOR} strokeWidth={sw} strokeLinecap="square" />
+                          <line x1={xL} y1={yTop} x2={xR} y2={yTop} stroke={RAILING_COLOR} strokeWidth={sw} strokeLinecap="square" />
+                        </g>
+                      );
+                    })
+                  );
+                })}
+              </g>
+            );
+          })()}
+
+          {/* Garis batas lahan pada potongan — garis putus-putus vertikal
+              setinggi rentang elevasi, warna merah marun, 3x lebih tebal dari
+              garis dimensi. Di tengah ditimpa tulisan "BATAS LAHAN" vertikal,
+              yang memotong garis putus-putus sebelum huruf B dan setelah N. */}
+          {(() => {
+            const lahanLayers = (sketch.layers ?? []).filter((l) => isLahanSec(l.name));
+            if (!lahanLayers.length) return null;
+            const ts: number[] = [];
+            for (const ly of lahanLayers) {
+              const ivs = cutPolygonIntervals(cut.p1, cut.p2, ly.points);
+              for (const [a, b] of ivs) { ts.push(a); ts.push(b); }
+            }
+            ts.sort((a, b) => a - b);
+            const uniqTs: number[] = [];
+            for (const t of ts) {
+              if (!uniqTs.length || Math.abs(uniqTs[uniqTs.length - 1] - t) > 1e-3) uniqTs.push(t);
+            }
+            if (!uniqTs.length) return null;
+            const yT = my(maxMdpl);
+            const yB = my(minMdpl);
+            const midY = (yT + yB) / 2;
+            const fs = 11;
+            const TEXT = "BATAS LAHAN";
+            // Vertical text height ≈ char count × font size × 0.62 (Sora vertical advance).
+            const textH = TEXT.length * fs * 0.62;
+            const halfH = textH / 2 + 2;
+            const color = "#7a1f1f";
+            // Dimensi (kanan) memakai strokeWidth 0.8 — batas lahan 3x = 2.4.
+            const sw = 2.4;
+            return (
+              <g pointerEvents="none">
+                {uniqTs.map((t, i) => {
+                  const xx = mx(t * cutLenM);
+                  return (
+                    <g key={`bl-${i}`}>
+                      <line x1={xx} y1={yT} x2={xx} y2={midY - halfH}
+                        stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
+                      <line x1={xx} y1={midY + halfH} x2={xx} y2={yB}
+                        stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
+                      <text x={xx} y={midY} fontSize={fs} fill={color}
+                        textAnchor="middle" dominantBaseline="central"
+                        transform={`rotate(-90 ${xx} ${midY})`}
+                        style={{ fontFamily: "Sora, sans-serif", fontWeight: 700, letterSpacing: "0.18em" }}>
+                        {TEXT}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
         </svg>
         </div>
         {/* Legenda ruang potongan */}
@@ -4773,7 +4892,9 @@ const WALL_THICK_MM: Record<EdgeMaterial, number> = {
   solid: 150,
   curtain: 80,
   window: 150,
+  railing: 100,
 };
+const RAILING_COLOR = "#8b5a2b";
 
 function MaterialEdges({
   lines,
@@ -4889,6 +5010,17 @@ function MaterialEdges({
                 }
                 return out;
               })()}
+            </g>
+          );
+        }
+        if (mat === "railing") {
+          // Railing: 2 garis tipis berjarak 100 mm, warna coklat (tanpa fill/hatch).
+          return (
+            <g key={`s-${s.id}`}>
+              <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
+                stroke={RAILING_COLOR} strokeWidth={strokeFine} />
+              <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y}
+                stroke={RAILING_COLOR} strokeWidth={strokeFine} />
             </g>
           );
         }
