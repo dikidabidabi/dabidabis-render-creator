@@ -7067,7 +7067,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               Material Selubung
             </Label>
             <div className="grid grid-cols-1 gap-1.5">
-              {(["solid", "curtain", "window"] as EdgeMaterial[]).map((m) => (
+              {(["solid", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
                 <button
                   key={m}
                   type="button"
