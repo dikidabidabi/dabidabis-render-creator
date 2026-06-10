@@ -4894,6 +4894,17 @@ function MaterialEdges({
             </g>
           );
         }
+        if (mat === "railing") {
+          // Railing: 2 garis tipis berjarak 100 mm, warna coklat (tanpa fill/hatch).
+          return (
+            <g key={`s-${s.id}`}>
+              <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
+                stroke={RAILING_COLOR} strokeWidth={strokeFine} />
+              <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y}
+                stroke={RAILING_COLOR} strokeWidth={strokeFine} />
+            </g>
+          );
+        }
         // window (jendela): kontur tipis seragam + 3 garis sash kaca + hatch tipis pada band dinding.
         const off = half * 0.33;
         const cMid1 = { x: (a1.x + a2.x) / 2 + nx * off, y: (a1.y + a2.y) / 2 + ny * off };
