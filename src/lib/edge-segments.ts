@@ -4,7 +4,7 @@
 
 export type Point = { x: number; y: number };
 
-export type EdgeMaterial = "solid" | "curtain" | "window";
+export type EdgeMaterial = "solid" | "curtain" | "window" | "railing";
 
 // Garis input (subset dari Line di sketch.tsx).
 export type StraightLineInput = {
