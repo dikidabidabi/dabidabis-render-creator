@@ -742,7 +742,7 @@ function normalizeSketch(s: any): Sketch {
       if (!raw || typeof raw !== "object") return {};
       const valid: Record<string, EdgeMaterial> = {};
       for (const [k, v] of Object.entries(raw)) {
-        if (v === "solid" || v === "curtain" || v === "window") {
+        if (v === "solid" || v === "curtain" || v === "window" || v === "railing") {
           valid[k] = v;
         }
       }
