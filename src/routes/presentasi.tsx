@@ -2167,32 +2167,56 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
           {/* Room slices per level — digambar lebih dulu agar notasi
               dinding / lantai / balok berada DI ATAS layer ruang. */}
-          {boxes.map((b) =>
-            b.slices.flatMap((sl, i) => {
+          {boxes.map((b) => {
+            // Default font untuk slice non-taman/non-atap-hijau di box ini,
+            // dipakai sebagai ukuran label untuk Taman & Atap Hijau (yang
+            // umumnya tipis dan menghasilkan font sangat kecil bila dihitung
+            // dari geometri slice-nya sendiri).
+            const normalSlices = b.slices.filter(
+              (sl) => !isTaman(sl.name) && !isAtapHijau(sl.name),
+            );
+            let defaultFs = 12;
+            if (normalSlices.length) {
+              const widest = normalSlices.reduce((a, c) =>
+                (c.x1 - c.x0) > (a.x1 - a.x0) ? c : a,
+              );
+              const w0 = (widest.x1 - widest.x0) * scalePxPerM;
+              const h0 = (widest.heightOverride ?? b.floorH) * scalePxPerM;
+              defaultFs = Math.max(8, Math.min(16, Math.min(w0 * 0.5, h0 * 0.6)));
+            }
+            return b.slices.flatMap((sl, i) => {
               const x = mx(sl.x0);
               const w = (sl.x1 - sl.x0) * scalePxPerM;
               const sliceHM = sl.heightOverride ?? b.floorH;
               const num = numberByLayerId.get(sl.layerId);
               const label = num != null ? String(num) : "";
+              const isGreen = isTaman(sl.name) || isAtapHijau(sl.name);
               return Array.from({ length: Math.max(1, b.count) }).map((_, fi) => {
                 const sliceBaseM = b.baseM + fi * b.floorH + (sl.baseDelta ?? 0);
                 const sliceTopM = sliceBaseM + sliceHM;
                 const y = my(sliceTopM);
                 const h = sliceHM * scalePxPerM;
                 const cx = x + w / 2, cy = y + h / 2;
-                const labelFs = Math.max(8, Math.min(16, Math.min(w * 0.5, h * 0.6)));
+                const labelFs = isGreen
+                  ? defaultFs
+                  : Math.max(8, Math.min(16, Math.min(w * 0.5, h * 0.6)));
+                // Untuk Taman/Atap Hijau, posisikan nomor 3 m di atas permukaan slice
+                // (mengikuti permintaan: nomor diletakkan 3 m di atas ruangnya).
+                const labelY = isGreen ? my(sliceTopM + 3) : cy;
                 return (
                   <g key={`${b.id}-${i}-${fi}`}>
                     <rect x={x} y={y} width={w} height={h} fill={sl.color} stroke="#222" strokeWidth={0.5} />
-                    <text x={cx} y={cy} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
-                      style={{ fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
-                      {label}
-                    </text>
+                    {label && (
+                      <text x={cx} y={labelY} fontSize={labelFs} fill="#111" textAnchor="middle" dominantBaseline="middle"
+                        style={{ fontFamily: "Sora, sans-serif", fontWeight: 700 }}>
+                        {label}
+                      </text>
+                    )}
                   </g>
                 );
               });
-            })
-          )}
+            });
+          })}
 
           {/* Level boxes — pelat lantai tebal HANYA di bawah ruang;
               di luar ruang berupa garis putus-putus tipis.
