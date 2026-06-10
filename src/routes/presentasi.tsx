@@ -4773,7 +4773,9 @@ const WALL_THICK_MM: Record<EdgeMaterial, number> = {
   solid: 150,
   curtain: 80,
   window: 150,
+  railing: 100,
 };
+const RAILING_COLOR = "#8b5a2b";
 
 function MaterialEdges({
   lines,
