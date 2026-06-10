@@ -2763,55 +2763,84 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })()}
 
-          {/* Garis batas lahan pada potongan — garis putus-putus vertikal
-              setinggi rentang elevasi, warna merah marun, 3x lebih tebal dari
-              garis dimensi. Di tengah ditimpa tulisan "BATAS LAHAN" vertikal,
-              yang memotong garis putus-putus sebelum huruf B dan setelah N. */}
+          {/* Garis batas lahan & GSB pada potongan — garis putus-putus vertikal
+              setinggi rentang elevasi. Ketebalan sama dengan garis dimensi.
+              Batas lahan: merah marun. GSB: biru. Di tengah ditimpa tulisan
+              vertikal yang memotong garis putus-putus. */}
           {(() => {
             const lahanLayers = (sketch.layers ?? []).filter((l) => isLahanSec(l.name));
             if (!lahanLayers.length) return null;
-            const ts: number[] = [];
-            for (const ly of lahanLayers) {
-              const ivs = cutPolygonIntervals(cut.p1, cut.p2, ly.points);
-              for (const [a, b] of ivs) { ts.push(a); ts.push(b); }
-            }
-            ts.sort((a, b) => a - b);
-            const uniqTs: number[] = [];
-            for (const t of ts) {
-              if (!uniqTs.length || Math.abs(uniqTs[uniqTs.length - 1] - t) > 1e-3) uniqTs.push(t);
-            }
-            if (!uniqTs.length) return null;
             const yT = my(maxMdpl);
             const yB = my(minMdpl);
             const midY = (yT + yB) / 2;
             const fs = 11;
-            const TEXT = "BATAS LAHAN";
-            // Vertical text height ≈ char count × font size × 0.62 (Sora vertical advance).
-            const textH = TEXT.length * fs * 0.62;
-            const halfH = textH / 2 + 2;
-            const color = "#7a1f1f";
-            // Dimensi (kanan) memakai strokeWidth 0.8 — batas lahan 3x = 2.4.
-            const sw = 2.4;
+            const sw = 0.8; // sama dengan garis dimensi
+            const sketchPxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+
+            const collectTs = (segments: Array<{ a: Point; b: Point }>): number[] => {
+              const ts: number[] = [];
+              for (const s of segments) {
+                const t = cutSegmentIntersectParam(cut.p1, cut.p2, s.a, s.b);
+                if (t != null && t > 1e-6 && t < 1 - 1e-6) ts.push(t);
+              }
+              ts.sort((a, b) => a - b);
+              const uniq: number[] = [];
+              for (const t of ts) {
+                if (!uniq.length || Math.abs(uniq[uniq.length - 1] - t) > 1e-3) uniq.push(t);
+              }
+              return uniq;
+            };
+
+            // Batas lahan: edges of lahan polygons
+            const lahanSegs: Array<{ a: Point; b: Point }> = [];
+            for (const ly of lahanLayers) {
+              for (let i = 0; i < ly.points.length; i++) {
+                lahanSegs.push({ a: ly.points[i], b: ly.points[(i + 1) % ly.points.length] });
+              }
+            }
+            // GSB: inward-offset segment per edge dengan gsb>0
+            const gsbSegs: Array<{ a: Point; b: Point }> = [];
+            for (const ly of lahanLayers) {
+              for (let i = 0; i < ly.points.length; i++) {
+                const g = getLayerGsbM(ly, i);
+                if (g <= 0) continue;
+                const seg = inwardOffsetSegPx(ly.points, i, g * sketchPxPerM);
+                gsbSegs.push({ a: seg.a, b: seg.b });
+              }
+            }
+
+            const renderGroup = (ts: number[], color: string, text: string, keyPrefix: string) => {
+              if (!ts.length) return null;
+              const textH = text.length * fs * 0.62;
+              const halfH = textH / 2 + 2;
+              return (
+                <g pointerEvents="none">
+                  {ts.map((t, i) => {
+                    const xx = mx(t * cutLenM);
+                    return (
+                      <g key={`${keyPrefix}-${i}`}>
+                        <line x1={xx} y1={yT} x2={xx} y2={midY - halfH}
+                          stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
+                        <line x1={xx} y1={midY + halfH} x2={xx} y2={yB}
+                          stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
+                        <text x={xx} y={midY} fontSize={fs} fill={color}
+                          textAnchor="middle" dominantBaseline="central"
+                          transform={`rotate(-90 ${xx} ${midY})`}
+                          style={{ fontFamily: "Sora, sans-serif", fontWeight: 400, letterSpacing: "0.18em" }}>
+                          {text}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              );
+            };
+
             return (
-              <g pointerEvents="none">
-                {uniqTs.map((t, i) => {
-                  const xx = mx(t * cutLenM);
-                  return (
-                    <g key={`bl-${i}`}>
-                      <line x1={xx} y1={yT} x2={xx} y2={midY - halfH}
-                        stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
-                      <line x1={xx} y1={midY + halfH} x2={xx} y2={yB}
-                        stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
-                      <text x={xx} y={midY} fontSize={fs} fill={color}
-                        textAnchor="middle" dominantBaseline="central"
-                        transform={`rotate(-90 ${xx} ${midY})`}
-                        style={{ fontFamily: "Sora, sans-serif", fontWeight: 700, letterSpacing: "0.18em" }}>
-                        {TEXT}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
+              <>
+                {renderGroup(collectTs(lahanSegs), "#7a1f1f", "BATAS LAHAN", "bl")}
+                {renderGroup(collectTs(gsbSegs), "#1e40af", "GSB", "gsb")}
+              </>
             );
           })()}
         </svg>
