@@ -1186,6 +1186,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "matahari":
       case "shadow-seasonal":
       case "facade-zoning": return "Analisa Matahari & Fasad";
+      case "wind": return "Analisa Iklim · Angin";
       case "stacking": return "Stacking Diagram";
       case "explode-axo": return "Aksonometri Eksplode";
       case "rekap": return "Rekapitulasi";
