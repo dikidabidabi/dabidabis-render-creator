@@ -23,6 +23,7 @@ import { colorForRoomName } from "@/lib/room-color";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import SunCalc from "suncalc";
+import * as THREE from "three";
 import { drawOsmTiles } from "@/lib/geo";
 import {
   type StructuralGrid,
