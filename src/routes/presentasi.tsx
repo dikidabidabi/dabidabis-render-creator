@@ -5597,6 +5597,493 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
 }
 
 
+// ---- Simulasi Aliran Angin (Three.js, conceptual particle stream) ----
+function WindBody({ sketch }: { sketch: Sketch }) {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const [wind, setWind] = useState<{ dir: number; speed: number; source: string } | null>(null);
+  const [windError, setWindError] = useState<string | null>(null);
+
+  const lat = sketch.geo?.lat ?? -6.2;
+  const lon = sketch.geo?.lon ?? 106.816666;
+  const northRot = Number(sketch.northRotation) || 0;
+
+  // Fetch nilai angin rata-rata dari Open-Meteo (gratis, tanpa API key).
+  useEffect(() => {
+    let cancelled = false;
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
+      `&hourly=wind_direction_10m,wind_speed_10m&past_days=7&forecast_days=1&timezone=auto&wind_speed_unit=ms`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: any) => {
+        if (cancelled) return;
+        const dirs: number[] = Array.isArray(j?.hourly?.wind_direction_10m) ? j.hourly.wind_direction_10m.filter((v: any) => Number.isFinite(v)) : [];
+        const spds: number[] = Array.isArray(j?.hourly?.wind_speed_10m) ? j.hourly.wind_speed_10m.filter((v: any) => Number.isFinite(v)) : [];
+        if (!dirs.length || !spds.length) {
+          setWind({ dir: 90, speed: 3, source: "default" });
+          return;
+        }
+        // Rata-rata sudut (vector mean) supaya tidak bias di sekitar 0°/360°.
+        let sx = 0, sy = 0;
+        for (const d of dirs) {
+          const r = (d * Math.PI) / 180;
+          sx += Math.cos(r);
+          sy += Math.sin(r);
+        }
+        const dirAvg = ((Math.atan2(sy / dirs.length, sx / dirs.length) * 180) / Math.PI + 360) % 360;
+        const spdAvg = spds.reduce((a, b) => a + b, 0) / spds.length;
+        setWind({ dir: dirAvg, speed: spdAvg, source: "Open-Meteo" });
+      })
+      .catch((e: any) => {
+        if (cancelled) return;
+        setWindError(String(e?.message ?? e));
+        setWind({ dir: 90, speed: 3, source: "default" });
+      });
+    return () => { cancelled = true; };
+  }, [lat, lon]);
+
+  // Scene Three.js dipasang sekali; arah/kecepatan partikel diperbarui via ref.
+  const windRef = useRef(wind);
+  windRef.current = wind;
+
+  useEffect(() => {
+    const host = mountRef.current;
+    if (!host) return;
+    let stopped = false;
+
+    const W0 = Math.max(320, host.clientWidth);
+    const H0 = Math.max(240, host.clientHeight);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#0b1626");
+    scene.fog = new THREE.Fog("#0b1626", 80, 260);
+
+    const camera = new THREE.PerspectiveCamera(38, W0 / H0, 0.5, 1500);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(W0, H0);
+    host.appendChild(renderer.domElement);
+    (renderer.domElement.style as any).display = "block";
+
+    // Lighting (subtle, untuk MeshStandardMaterial)
+    scene.add(new THREE.HemisphereLight(0xb4cfe6, 0x1a2230, 0.95));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.6);
+    dl.position.set(40, 80, 30);
+    scene.add(dl);
+
+    // -------- Build massing group (clone dari data stacking yang sudah ada) --------
+    const massGroup = new THREE.Group();
+    scene.add(massGroup);
+
+    const mPerPx = stackMetersPerPx(sketch.scale);
+    const ascLevels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+    const expanded = expandLevelsForView(ascLevels);
+    const lahan = (sketch.layers ?? []).filter((l) => isLahan(l.name));
+    const build = (sketch.layers ?? []).filter(
+      (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
+    );
+
+    // Origin = centroid bbox semua titik (px → meter).
+    let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
+    for (const l of sketch.layers ?? []) for (const p of l.points) {
+      if (p.x < minPx) minPx = p.x; if (p.y < minPy) minPy = p.y;
+      if (p.x > maxPx) maxPx = p.x; if (p.y > maxPy) maxPy = p.y;
+    }
+    if (!Number.isFinite(minPx)) { minPx = 0; minPy = 0; maxPx = 100; maxPy = 100; }
+    const ox = (minPx + maxPx) / 2;
+    const oy = (minPy + maxPy) / 2;
+    const toXZ = (p: { x: number; y: number }) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx });
+
+    // Ground hijau gelap (lahan/site).
+    let siteMinX = Infinity, siteMinZ = Infinity, siteMaxX = -Infinity, siteMaxZ = -Infinity;
+    if (lahan.length > 0) {
+      for (const ly of lahan) {
+        const pts = ly.points.map(toXZ);
+        if (pts.length < 3) continue;
+        const shape = new THREE.Shape();
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        const geo = new THREE.ShapeGeometry(shape);
+        geo.rotateX(-Math.PI / 2);
+        const mat = new THREE.MeshStandardMaterial({ color: "#1f2d23", roughness: 0.95, metalness: 0 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = -0.01;
+        massGroup.add(mesh);
+        for (const p of pts) {
+          if (p.x < siteMinX) siteMinX = p.x;
+          if (p.z < siteMinZ) siteMinZ = p.z;
+          if (p.x > siteMaxX) siteMaxX = p.x;
+          if (p.z > siteMaxZ) siteMaxZ = p.z;
+        }
+      }
+    }
+
+    // Bangunan: extrude per layer per level (greyscale, supaya angin terbaca jelas).
+    type Box = { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number; cx: number; cz: number; rx: number; rz: number };
+    const boxes: Box[] = [];
+    for (const lv of expanded) {
+      const layers = build.filter((l) => l.levelId === lv.sourceId);
+      for (const ly of layers) {
+        const pts = ly.points.map(toXZ);
+        if (pts.length < 3) continue;
+        const ov = roomExtrudeOverride(ly.name);
+        const yBot = lv.mdpl + (ov?.baseDelta ?? 0);
+        const height = ov?.height ?? lv.height;
+        if (height <= 0.001) continue;
+        const yTop = yBot + height;
+
+        const shape = new THREE.Shape();
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(0, yTop, 0);
+        const isGreen = isAtapHijau(ly.name);
+        const color = isGreen ? "#3aa063" : "#cfd6dd";
+        const mat = new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.62,
+          metalness: 0.05,
+          flatShading: true,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        massGroup.add(mesh);
+
+        // Garis tepi tipis supaya massing terbaca.
+        const edges = new THREE.EdgesGeometry(geo, 25);
+        const elines = new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: 0x0b1626, transparent: true, opacity: 0.55 }),
+        );
+        massGroup.add(elines);
+
+        // Bounding box (XZ) untuk collision angin.
+        let bMinX = Infinity, bMaxX = -Infinity, bMinZ = Infinity, bMaxZ = -Infinity;
+        for (const p of pts) {
+          if (p.x < bMinX) bMinX = p.x; if (p.x > bMaxX) bMaxX = p.x;
+          if (p.z < bMinZ) bMinZ = p.z; if (p.z > bMaxZ) bMaxZ = p.z;
+        }
+        boxes.push({
+          minX: bMinX, maxX: bMaxX, minZ: bMinZ, maxZ: bMaxZ,
+          minY: yBot, maxY: yTop,
+          cx: (bMinX + bMaxX) / 2, cz: (bMinZ + bMaxZ) / 2,
+          rx: Math.max(0.5, (bMaxX - bMinX) / 2),
+          rz: Math.max(0.5, (bMaxZ - bMinZ) / 2),
+        });
+      }
+    }
+
+    // Domain partikel: bbox site bila ada, kalau tidak pakai bbox bangunan diperluas.
+    if (!Number.isFinite(siteMinX)) {
+      siteMinX = Infinity; siteMinZ = Infinity; siteMaxX = -Infinity; siteMaxZ = -Infinity;
+      for (const b of boxes) {
+        siteMinX = Math.min(siteMinX, b.minX); siteMaxX = Math.max(siteMaxX, b.maxX);
+        siteMinZ = Math.min(siteMinZ, b.minZ); siteMaxZ = Math.max(siteMaxZ, b.maxZ);
+      }
+      if (!Number.isFinite(siteMinX)) { siteMinX = -20; siteMaxX = 20; siteMinZ = -20; siteMaxZ = 20; }
+      const padX = Math.max(8, (siteMaxX - siteMinX) * 0.25);
+      const padZ = Math.max(8, (siteMaxZ - siteMinZ) * 0.25);
+      siteMinX -= padX; siteMaxX += padX; siteMinZ -= padZ; siteMaxZ += padZ;
+    }
+    const domW = siteMaxX - siteMinX;
+    const domD = siteMaxZ - siteMinZ;
+    const domCx = (siteMinX + siteMaxX) / 2;
+    const domCz = (siteMinZ + siteMaxZ) / 2;
+    const domR = Math.hypot(domW, domD) / 2;
+    const maxBuildY = boxes.reduce((m, b) => Math.max(m, b.maxY), 6);
+
+    // Kamera & orbit setup.
+    const camDist = Math.max(40, domR * 2.3);
+    camera.position.set(domCx + camDist * 0.65, maxBuildY + domR * 0.9, domCz + camDist * 0.65);
+    camera.lookAt(domCx, maxBuildY * 0.35, domCz);
+
+    // -------- Particle system (LineSegments antara prev & curr) --------
+    const N = 700;
+    const positions = new Float32Array(N * 3);
+    const prevPositions = new Float32Array(N * 3);
+    const ages = new Float32Array(N);
+    const maxAge = new Float32Array(N);
+
+    const geoLines = new THREE.BufferGeometry();
+    const segPositions = new Float32Array(N * 2 * 3); // pairs prev->curr
+    const segColors = new Float32Array(N * 2 * 3);
+    geoLines.setAttribute("position", new THREE.BufferAttribute(segPositions, 3));
+    geoLines.setAttribute("color", new THREE.BufferAttribute(segColors, 3));
+    const lineMat = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const lines = new THREE.LineSegments(geoLines, lineMat);
+    scene.add(lines);
+
+    // Helper: vektor angin (m/s) di koordinat dunia (x east, z south).
+    // Wind dir 0° = wind dari utara (sketch utara = -z di world). Kemudian apply northRotation
+    // supaya selaras dengan rotasi peta/utara di sketsa.
+    function windVec(): { vx: number; vz: number; speed: number } {
+      const w = windRef.current;
+      const dirDeg = w ? w.dir : 90;
+      const spdMs = w ? Math.max(0.3, w.speed) : 3;
+      const effDeg = (dirDeg - northRot + 360) % 360;
+      const t = (effDeg * Math.PI) / 180;
+      // Vektor TUJUAN angin (kebalikan dari arah datang)
+      const vx = -Math.sin(t);
+      const vz = Math.cos(t);
+      // Skala visual: skala kecepatan ke nilai yang nyaman secara visual.
+      const visSpeed = Math.min(18, 4 + spdMs * 1.2);
+      return { vx: vx * visSpeed, vz: vz * visSpeed, speed: spdMs };
+    }
+
+    function spawn(i: number) {
+      const w = windVec();
+      const dirLen = Math.hypot(w.vx, w.vz) || 1;
+      const nx = w.vx / dirLen;
+      const nz = w.vz / dirLen;
+      // Posisi spawn: di sisi upwind domain, sedikit di luar.
+      const upX = domCx - nx * (domR + 4);
+      const upZ = domCz - nz * (domR + 4);
+      // Spread perpendicular ke arah angin.
+      const px = -nz, pz = nx;
+      const spread = (Math.random() - 0.5) * 2 * (domR * 1.05);
+      const sx = upX + px * spread;
+      const sz = upZ + pz * spread;
+      const sy = 0.5 + Math.random() * Math.max(8, maxBuildY * 0.95);
+      const o = i * 3;
+      positions[o] = sx; positions[o + 1] = sy; positions[o + 2] = sz;
+      prevPositions[o] = sx; prevPositions[o + 1] = sy; prevPositions[o + 2] = sz;
+      ages[i] = 0;
+      maxAge[i] = 4 + Math.random() * 3;
+    }
+    for (let i = 0; i < N; i++) spawn(i);
+
+    const cyan = new THREE.Color("#7ce5ff");
+    const white = new THREE.Color("#ffffff");
+
+    let lastT = performance.now();
+    const clock = { t: 0 };
+
+    function tick() {
+      if (stopped) return;
+      const now = performance.now();
+      let dt = (now - lastT) / 1000;
+      lastT = now;
+      if (dt > 0.066) dt = 0.066; // clamp
+      clock.t += dt;
+
+      const w = windVec();
+
+      for (let i = 0; i < N; i++) {
+        const o = i * 3;
+        prevPositions[o] = positions[o];
+        prevPositions[o + 1] = positions[o + 1];
+        prevPositions[o + 2] = positions[o + 2];
+
+        let vx = w.vx;
+        let vy = 0;
+        let vz = w.vz;
+
+        const x = positions[o];
+        const y = positions[o + 1];
+        const z = positions[o + 2];
+
+        // Tabrakan ringan: cek bbox & belokkan ke atas + samping.
+        for (let k = 0; k < boxes.length; k++) {
+          const b = boxes[k];
+          if (y < b.minY - 0.5 || y > b.maxY + 4) continue;
+          const dx = x - b.cx;
+          const dz = z - b.cz;
+          const ex = Math.abs(dx) - b.rx;
+          const ez = Math.abs(dz) - b.rz;
+          // Jarak proksi ke bbox (negatif di dalam).
+          const proxy = Math.max(ex, ez);
+          const halo = 2.5;
+          if (proxy < halo) {
+            const intensity = Math.max(0, Math.min(1, (halo - proxy) / halo));
+            // Dorong ke samping (menjauh dari pusat) dan ke atas.
+            const lenH = Math.max(0.001, Math.hypot(dx, dz));
+            const pushX = (dx / lenH) * 14 * intensity;
+            const pushZ = (dz / lenH) * 14 * intensity;
+            const liftFactor = y < b.maxY ? 1 : 0.35;
+            const pushY = 9 * intensity * liftFactor;
+            vx += pushX;
+            vy += pushY;
+            vz += pushZ;
+            // Jika benar-benar di dalam box, paksa keluar lewat sisi terdekat.
+            if (proxy < 0) {
+              if (ex > ez) {
+                positions[o] = b.cx + Math.sign(dx || 1) * (b.rx + 0.1);
+              } else {
+                positions[o + 2] = b.cz + Math.sign(dz || 1) * (b.rz + 0.1);
+              }
+            }
+          }
+        }
+
+        // Sedikit turbulensi.
+        const turb = 0.6;
+        vx += (Math.sin(clock.t * 1.7 + i * 0.13) * turb);
+        vz += (Math.cos(clock.t * 1.3 + i * 0.21) * turb);
+        vy += (Math.sin(clock.t * 0.9 + i * 0.07) * 0.4);
+
+        positions[o] += vx * dt;
+        positions[o + 1] += vy * dt;
+        positions[o + 2] += vz * dt;
+
+        // Tahan partikel di atas tanah.
+        if (positions[o + 1] < 0.3) {
+          positions[o + 1] = 0.3;
+          // pantulkan sedikit ke atas
+          positions[o + 1] += 0.1;
+        }
+
+        ages[i] += dt;
+
+        // Recycle bila keluar domain atau terlalu tua.
+        const dxCx = positions[o] - domCx;
+        const dzCz = positions[o + 2] - domCz;
+        const outside = Math.hypot(dxCx, dzCz) > domR + 10 || positions[o + 1] > maxBuildY * 1.4 + 12;
+        if (outside || ages[i] > maxAge[i]) {
+          spawn(i);
+        }
+      }
+
+      // Tulis ke segment buffer (prev → curr).
+      for (let i = 0; i < N; i++) {
+        const o = i * 3;
+        const s = i * 6;
+        segPositions[s + 0] = prevPositions[o];
+        segPositions[s + 1] = prevPositions[o + 1];
+        segPositions[s + 2] = prevPositions[o + 2];
+        segPositions[s + 3] = positions[o];
+        segPositions[s + 4] = positions[o + 1];
+        segPositions[s + 5] = positions[o + 2];
+
+        // Warna: lebih cyan saat muda, memudar ke putih.
+        const a = ages[i] / Math.max(0.001, maxAge[i]);
+        const fade = Math.max(0, 1 - a);
+        const c = cyan.clone().lerp(white, 0.4 * (1 - fade));
+        segColors[s + 0] = c.r * fade;
+        segColors[s + 1] = c.g * fade;
+        segColors[s + 2] = c.b * fade;
+        segColors[s + 3] = c.r * fade;
+        segColors[s + 4] = c.g * fade;
+        segColors[s + 5] = c.b * fade;
+      }
+      (geoLines.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+      (geoLines.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+
+      // Rotasi kamera lambat untuk efek sinematik.
+      const ang = clock.t * 0.05;
+      const radius = camDist;
+      camera.position.x = domCx + Math.cos(ang) * radius * 0.65;
+      camera.position.z = domCz + Math.sin(ang) * radius * 0.65;
+      camera.position.y = maxBuildY + domR * 0.9;
+      camera.lookAt(domCx, maxBuildY * 0.35, domCz);
+
+      renderer.render(scene, camera);
+      rafId = requestAnimationFrame(tick);
+    }
+    let rafId = requestAnimationFrame(tick);
+
+    // Resize observer.
+    const ro = new ResizeObserver(() => {
+      const w = host.clientWidth;
+      const h = host.clientHeight;
+      if (w > 0 && h > 0) {
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+    });
+    ro.observe(host);
+
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+      // Dispose semua geometry/material agar memori tablet tetap terjaga.
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh & { geometry?: THREE.BufferGeometry; material?: any };
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) {
+          if (Array.isArray(mesh.material)) mesh.material.forEach((m: any) => m?.dispose?.());
+          else mesh.material.dispose?.();
+        }
+      });
+      geoLines.dispose();
+      lineMat.dispose();
+      renderer.dispose();
+      if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sketch.id, sketch.updatedAt]);
+
+  const dirLabel = wind ? `${wind.dir.toFixed(0)}°` : "—";
+  const spdLabel = wind ? `${wind.speed.toFixed(1)} m/s` : "—";
+  const cardinal = wind ? dirToCardinal(wind.dir) : "—";
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", background: "#0b1626", overflow: "hidden" }}>
+      <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
+      {/* Kompas arah angin */}
+      <div
+        style={{
+          position: "absolute",
+          top: 18,
+          left: 18,
+          color: "#cfeefb",
+          fontFamily: "var(--font-display, Sora, sans-serif)",
+          background: "rgba(11,22,38,0.55)",
+          border: "1px solid rgba(124,229,255,0.35)",
+          padding: "10px 14px",
+          minWidth: 180,
+          backdropFilter: "blur(4px)",
+        }}
+      >
+        <div style={{ fontSize: 10, letterSpacing: "0.28em", textTransform: "uppercase", color: "#7ce5ff", fontWeight: 600 }}>
+          Data Iklim
+        </div>
+        <div style={{ marginTop: 6, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
+          {dirLabel} <span style={{ color: "#7ce5ff", fontSize: 14, marginLeft: 4 }}>{cardinal}</span>
+        </div>
+        <div style={{ fontSize: 11, color: "#9fb4c7", marginTop: 2 }}>Arah Angin Dominan</div>
+        <div style={{ marginTop: 8, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
+          {spdLabel}
+        </div>
+        <div style={{ fontSize: 11, color: "#9fb4c7", marginTop: 2 }}>Kecepatan rata-rata</div>
+        <div style={{ marginTop: 8, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#5b768c" }}>
+          {wind?.source ?? (windError ? "fallback" : "memuat…")}
+        </div>
+      </div>
+      {/* Koordinat tapak */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 18,
+          right: 18,
+          color: "#9fb4c7",
+          fontFamily: "var(--font-sans, Manrope, sans-serif)",
+          fontSize: 10,
+          letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          background: "rgba(11,22,38,0.5)",
+          padding: "6px 10px",
+          border: "1px solid rgba(159,180,199,0.25)",
+        }}
+      >
+        {lat.toFixed(4)}°, {lon.toFixed(4)}° · partikel angin konseptual
+      </div>
+    </div>
+  );
+}
+
+function dirToCardinal(deg: number): string {
+  const dirs = ["U", "TL", "T", "TG", "S", "BD", "B", "BL"];
+  const i = Math.round(((deg % 360) / 45)) % 8;
+  return dirs[i];
+}
+
+
 // ---- Exploded Axonometric (per unique layout type) ----
 function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   const mPerPx = stackMetersPerPx(sketch.scale);
