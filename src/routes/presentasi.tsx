@@ -1005,6 +1005,7 @@ type Slide =
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "shadow-seasonal"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
+  | { kind: "wind"; id: string; title: string; sketch: Sketch }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "explode-axo"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
