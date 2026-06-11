@@ -1541,6 +1541,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "matahari" && <MatahariBody slide={slide} />}
       {slide.kind === "shadow-seasonal" && <ShadowSeasonalBody slide={slide} />}
       {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
+      {slide.kind === "wind" && <WindBody sketch={slide.sketch} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
       {slide.kind === "explode-axo" && <ExplodedAxoBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
