@@ -6012,7 +6012,7 @@ function WindBody({ sketch }: { sketch: Sketch }) {
   const cardinal = wind ? dirToCardinal(wind.dir) : "—";
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", background: "#0b1626", overflow: "hidden" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", background: "#f5f5f5", overflow: "hidden" }}>
       <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
       {/* Kompas arah angin */}
       <div
@@ -6020,27 +6020,27 @@ function WindBody({ sketch }: { sketch: Sketch }) {
           position: "absolute",
           top: 18,
           left: 18,
-          color: "#cfeefb",
+          color: "#0b2440",
           fontFamily: "var(--font-display, Sora, sans-serif)",
-          background: "rgba(11,22,38,0.55)",
-          border: "1px solid rgba(124,229,255,0.35)",
+          background: "rgba(255,255,255,0.78)",
+          border: "1px solid rgba(0,51,102,0.25)",
           padding: "10px 14px",
           minWidth: 180,
           backdropFilter: "blur(4px)",
         }}
       >
-        <div style={{ fontSize: 10, letterSpacing: "0.28em", textTransform: "uppercase", color: "#7ce5ff", fontWeight: 600 }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.28em", textTransform: "uppercase", color: "#003366", fontWeight: 600 }}>
           Data Iklim
         </div>
         <div style={{ marginTop: 6, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
-          {dirLabel} <span style={{ color: "#7ce5ff", fontSize: 14, marginLeft: 4 }}>{cardinal}</span>
+          {dirLabel} <span style={{ color: "#005588", fontSize: 14, marginLeft: 4 }}>{cardinal}</span>
         </div>
-        <div style={{ fontSize: 11, color: "#9fb4c7", marginTop: 2 }}>Arah Angin Dominan</div>
+        <div style={{ fontSize: 11, color: "#52677c", marginTop: 2 }}>Arah Angin Dominan</div>
         <div style={{ marginTop: 8, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
           {spdLabel}
         </div>
-        <div style={{ fontSize: 11, color: "#9fb4c7", marginTop: 2 }}>Kecepatan rata-rata</div>
-        <div style={{ marginTop: 8, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#5b768c" }}>
+        <div style={{ fontSize: 11, color: "#52677c", marginTop: 2 }}>Kecepatan rata-rata</div>
+        <div style={{ marginTop: 8, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#7a8a9c" }}>
           {wind?.source ?? (windError ? "fallback" : "memuat…")}
         </div>
       </div>
@@ -6050,14 +6050,14 @@ function WindBody({ sketch }: { sketch: Sketch }) {
           position: "absolute",
           bottom: 18,
           right: 18,
-          color: "#9fb4c7",
+          color: "#52677c",
           fontFamily: "var(--font-sans, Manrope, sans-serif)",
           fontSize: 10,
           letterSpacing: "0.22em",
           textTransform: "uppercase",
-          background: "rgba(11,22,38,0.5)",
+          background: "rgba(255,255,255,0.7)",
           padding: "6px 10px",
-          border: "1px solid rgba(159,180,199,0.25)",
+          border: "1px solid rgba(0,51,102,0.18)",
         }}
       >
         {lat.toFixed(4)}°, {lon.toFixed(4)}° · partikel angin konseptual
