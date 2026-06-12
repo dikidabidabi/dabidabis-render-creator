@@ -5670,9 +5670,298 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     // Lighting tema terang.
     scene.add(new THREE.HemisphereLight(0xffffff, 0xc8d2dc, 1.1));
     const dl = new THREE.DirectionalLight(0xffffff, 0.6);
+    dl.position.set(40, 80, 30);
+    scene.add(dl);
 
+    // -------- Build massing group --------
+    const massGroup = new THREE.Group();
+    scene.add(massGroup);
 
-      // Rotasi kamera lambat untuk efek sinematik.
+    const mPerPx = stackMetersPerPx(sketch.scale);
+    const ascLevels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+    const expanded = expandLevelsForView(ascLevels);
+    const lahan = (sketch.layers ?? []).filter((l) => isLahan(l.name));
+    const build = (sketch.layers ?? []).filter(
+      (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
+    );
+
+    let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
+    for (const l of sketch.layers ?? []) for (const p of l.points) {
+      if (p.x < minPx) minPx = p.x; if (p.y < minPy) minPy = p.y;
+      if (p.x > maxPx) maxPx = p.x; if (p.y > maxPy) maxPy = p.y;
+    }
+    if (!Number.isFinite(minPx)) { minPx = 0; minPy = 0; maxPx = 100; maxPy = 100; }
+    const ox = (minPx + maxPx) / 2;
+    const oy = (minPy + maxPy) / 2;
+    const toXZ = (p: { x: number; y: number }) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx });
+
+    // Ground site (warna terang).
+    let siteMinX = Infinity, siteMinZ = Infinity, siteMaxX = -Infinity, siteMaxZ = -Infinity;
+    if (lahan.length > 0) {
+      for (const ly of lahan) {
+        const pts = ly.points.map(toXZ);
+        if (pts.length < 3) continue;
+        const shape = new THREE.Shape();
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        const geo = new THREE.ShapeGeometry(shape);
+        geo.rotateX(-Math.PI / 2);
+        const mat = new THREE.MeshStandardMaterial({ color: "#e6e9ec", roughness: 0.95, metalness: 0 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = -0.01;
+        massGroup.add(mesh);
+        for (const p of pts) {
+          if (p.x < siteMinX) siteMinX = p.x;
+          if (p.z < siteMinZ) siteMinZ = p.z;
+          if (p.x > siteMaxX) siteMaxX = p.x;
+          if (p.z > siteMaxZ) siteMaxZ = p.z;
+        }
+      }
+    }
+
+    // Bangunan: extrude per layer per level (greyscale terang).
+    type Box = { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number; cx: number; cz: number; rx: number; rz: number };
+    const boxes: Box[] = [];
+    for (const lv of expanded) {
+      const layers = build.filter((l) => l.levelId === lv.sourceId);
+      for (const ly of layers) {
+        const pts = ly.points.map(toXZ);
+        if (pts.length < 3) continue;
+        const ov = roomExtrudeOverride(ly.name);
+        const yBot = lv.mdpl + (ov?.baseDelta ?? 0);
+        const height = ov?.height ?? lv.height;
+        if (height <= 0.001) continue;
+        const yTop = yBot + height;
+
+        const shape = new THREE.Shape();
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(0, yTop, 0);
+        const isGreen = isAtapHijau(ly.name);
+        const color = isGreen ? "#7fb98a" : "#e2e6ea";
+        const mat = new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.7,
+          metalness: 0.02,
+          flatShading: true,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        massGroup.add(mesh);
+
+        const edges = new THREE.EdgesGeometry(geo, 25);
+        const elines = new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: 0x1a2a3a, transparent: true, opacity: 0.75 }),
+        );
+        massGroup.add(elines);
+
+        let bMinX = Infinity, bMaxX = -Infinity, bMinZ = Infinity, bMaxZ = -Infinity;
+        for (const p of pts) {
+          if (p.x < bMinX) bMinX = p.x; if (p.x > bMaxX) bMaxX = p.x;
+          if (p.z < bMinZ) bMinZ = p.z; if (p.z > bMaxZ) bMaxZ = p.z;
+        }
+        boxes.push({
+          minX: bMinX, maxX: bMaxX, minZ: bMinZ, maxZ: bMaxZ,
+          minY: yBot, maxY: yTop,
+          cx: (bMinX + bMaxX) / 2, cz: (bMinZ + bMaxZ) / 2,
+          rx: Math.max(0.5, (bMaxX - bMinX) / 2),
+          rz: Math.max(0.5, (bMaxZ - bMinZ) / 2),
+        });
+      }
+    }
+
+    if (!Number.isFinite(siteMinX)) {
+      siteMinX = Infinity; siteMinZ = Infinity; siteMaxX = -Infinity; siteMaxZ = -Infinity;
+      for (const b of boxes) {
+        siteMinX = Math.min(siteMinX, b.minX); siteMaxX = Math.max(siteMaxX, b.maxX);
+        siteMinZ = Math.min(siteMinZ, b.minZ); siteMaxZ = Math.max(siteMaxZ, b.maxZ);
+      }
+      if (!Number.isFinite(siteMinX)) { siteMinX = -20; siteMaxX = 20; siteMinZ = -20; siteMaxZ = 20; }
+      const padX = Math.max(8, (siteMaxX - siteMinX) * 0.25);
+      const padZ = Math.max(8, (siteMaxZ - siteMinZ) * 0.25);
+      siteMinX -= padX; siteMaxX += padX; siteMinZ -= padZ; siteMaxZ += padZ;
+    }
+    const domW = siteMaxX - siteMinX;
+    const domD = siteMaxZ - siteMinZ;
+    const domCx = (siteMinX + siteMaxX) / 2;
+    const domCz = (siteMinZ + siteMaxZ) / 2;
+    const domR = Math.hypot(domW, domD) / 2;
+    const maxBuildY = boxes.reduce((m, b) => Math.max(m, b.maxY), 6);
+
+    const camDist = Math.max(40, domR * 2.3);
+    camera.position.set(domCx + camDist * 0.65, maxBuildY + domR * 0.9, domCz + camDist * 0.65);
+    camera.lookAt(domCx, maxBuildY * 0.35, domCz);
+
+    // -------- Particle TRAIL system: 7000 partikel × tail TAIL_MAX, satu BufferGeometry --------
+    const N = 7000;
+    const TAIL_MAX = 20;
+    const SEG_PER = TAIL_MAX - 1;
+    const VTX_TOTAL = N * TAIL_MAX;
+    const positions = new Float32Array(VTX_TOTAL * 3);
+    const colors = new Float32Array(VTX_TOTAL * 3);
+    const indices = new Uint32Array(N * SEG_PER * 2);
+    for (let i = 0; i < N; i++) {
+      const base = i * TAIL_MAX;
+      const ix0 = i * SEG_PER * 2;
+      for (let k = 0; k < SEG_PER; k++) {
+        indices[ix0 + k * 2] = base + k;
+        indices[ix0 + k * 2 + 1] = base + k + 1;
+      }
+    }
+    const ages = new Float32Array(N);
+    const maxAge = new Float32Array(N);
+    const tailLen = new Uint8Array(N);
+
+    const colHead = new THREE.Color("#003366");
+    const colTail = new THREE.Color("#7aa8c8");
+    const colBg = new THREE.Color(BG_HEX);
+
+    function paintColors(i: number) {
+      const tl = tailLen[i];
+      const base = i * TAIL_MAX;
+      for (let k = 0; k < TAIL_MAX; k++) {
+        const within = k >= (TAIL_MAX - tl);
+        const c = within
+          ? colTail.clone().lerp(colHead, (k - (TAIL_MAX - tl)) / Math.max(1, tl - 1))
+          : colBg;
+        const off = (base + k) * 3;
+        colors[off] = c.r;
+        colors[off + 1] = c.g;
+        colors[off + 2] = c.b;
+      }
+    }
+
+    const geoLines = new THREE.BufferGeometry();
+    geoLines.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geoLines.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geoLines.setIndex(new THREE.BufferAttribute(indices, 1));
+    const lineMat = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    });
+    const lines = new THREE.LineSegments(geoLines, lineMat);
+    scene.add(lines);
+
+    const windRefLocal = windRef;
+    function windVec(): { vx: number; vz: number; speed: number } {
+      const w = windRefLocal.current;
+      const dirDeg = w ? w.dir : 90;
+      const spdMs = w ? Math.max(0.3, w.speed) : 3;
+      const effDeg = (dirDeg - northRot + 360) % 360;
+      const t = (effDeg * Math.PI) / 180;
+      const vx = -Math.sin(t);
+      const vz = Math.cos(t);
+      const visSpeed = Math.min(18, 4 + spdMs * 1.2);
+      return { vx: vx * visSpeed, vz: vz * visSpeed, speed: spdMs };
+    }
+
+    function spawn(i: number) {
+      const w = windVec();
+      const dirLen = Math.hypot(w.vx, w.vz) || 1;
+      const nx = w.vx / dirLen;
+      const nz = w.vz / dirLen;
+      const upX = domCx - nx * (domR + 4);
+      const upZ = domCz - nz * (domR + 4);
+      const px = -nz, pz = nx;
+      const spread = (Math.random() - 0.5) * 2 * (domR * 1.05);
+      const sx = upX + px * spread;
+      const sz = upZ + pz * spread;
+      const sy = 0.5 + Math.random() * Math.max(8, maxBuildY * 0.95);
+      const base = i * TAIL_MAX;
+      for (let k = 0; k < TAIL_MAX; k++) {
+        const o = (base + k) * 3;
+        positions[o] = sx; positions[o + 1] = sy; positions[o + 2] = sz;
+      }
+      ages[i] = 0;
+      maxAge[i] = 4 + Math.random() * 4;
+      tailLen[i] = 12 + Math.floor(Math.random() * (TAIL_MAX - 11));
+      paintColors(i);
+    }
+    for (let i = 0; i < N; i++) spawn(i);
+    (geoLines.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+
+    let lastT = performance.now();
+    const clock = { t: 0 };
+
+    function tick() {
+      if (stopped) return;
+      const now = performance.now();
+      let dt = (now - lastT) / 1000;
+      lastT = now;
+      if (dt > 0.066) dt = 0.066;
+      clock.t += dt;
+
+      const w = windVec();
+      const wvx = w.vx, wvz = w.vz;
+
+      for (let i = 0; i < N; i++) {
+        const base = i * TAIL_MAX;
+        const headOff = (base + TAIL_MAX - 1) * 3;
+        const x = positions[headOff];
+        const y = positions[headOff + 1];
+        const z = positions[headOff + 2];
+
+        let vx = wvx;
+        let vy = 0;
+        let vz = wvz;
+
+        for (let k = 0; k < boxes.length; k++) {
+          const b = boxes[k];
+          if (y < b.minY - 0.5 || y > b.maxY + 4) continue;
+          const dx = x - b.cx;
+          const dz = z - b.cz;
+          const ex = Math.abs(dx) - b.rx;
+          const ez = Math.abs(dz) - b.rz;
+          const proxy = Math.max(ex, ez);
+          const halo = 3.0;
+          if (proxy < halo) {
+            const intensity = Math.max(0, Math.min(1, (halo - proxy) / halo));
+            const lenH = Math.max(0.001, Math.hypot(dx, dz));
+            const pushX = (dx / lenH) * 12 * intensity;
+            const pushZ = (dz / lenH) * 12 * intensity;
+            const liftFactor = y < b.maxY ? 1 : 0.35;
+            const pushY = 8 * intensity * liftFactor;
+            vx += pushX; vy += pushY; vz += pushZ;
+            if (proxy < 0) {
+              if (ex > ez) {
+                positions[headOff] = b.cx + Math.sign(dx || 1) * (b.rx + 0.1);
+              } else {
+                positions[headOff + 2] = b.cz + Math.sign(dz || 1) * (b.rz + 0.1);
+              }
+            }
+          }
+        }
+
+        const turb = 0.6;
+        vx += Math.sin(clock.t * 1.7 + i * 0.13) * turb;
+        vz += Math.cos(clock.t * 1.3 + i * 0.21) * turb;
+        vy += Math.sin(clock.t * 0.9 + i * 0.07) * 0.4;
+
+        // Geser riwayat: slot 1..TAIL_MAX-1 → 0..TAIL_MAX-2.
+        positions.copyWithin(base * 3, base * 3 + 3, (base + TAIL_MAX) * 3);
+
+        let nxp = positions[headOff] + vx * dt;
+        let nyp = positions[headOff + 1] + vy * dt;
+        let nzp = positions[headOff + 2] + vz * dt;
+        if (nyp < 0.3) nyp = 0.3;
+        positions[headOff] = nxp;
+        positions[headOff + 1] = nyp;
+        positions[headOff + 2] = nzp;
+
+        ages[i] += dt;
+        const dxCx = nxp - domCx;
+        const dzCz = nzp - domCz;
+        const outside = Math.hypot(dxCx, dzCz) > domR + 10 || nyp > maxBuildY * 1.4 + 12;
+        if (outside || ages[i] > maxAge[i]) {
+          spawn(i);
+        }
+      }
+
+      (geoLines.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+
+      // Orbit kamera lambat untuk efek sinematik.
       const ang = clock.t * 0.05;
       const radius = camDist;
       camera.position.x = domCx + Math.cos(ang) * radius * 0.65;
