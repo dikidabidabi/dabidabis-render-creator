@@ -5654,24 +5654,26 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     const W0 = Math.max(320, host.clientWidth);
     const H0 = Math.max(240, host.clientHeight);
 
+    const BG_HEX = "#f5f5f5";
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#0b1626");
-    scene.fog = new THREE.Fog("#0b1626", 80, 260);
+    scene.background = new THREE.Color(BG_HEX);
+    scene.fog = new THREE.Fog(BG_HEX, 120, 320);
 
     const camera = new THREE.PerspectiveCamera(38, W0 / H0, 0.5, 1500);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    // preserveDrawingBuffer agar snapshot toDataURL (PDF export) menangkap frame terakhir.
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.setSize(W0, H0);
     host.appendChild(renderer.domElement);
     (renderer.domElement.style as any).display = "block";
 
-    // Lighting (subtle, untuk MeshStandardMaterial)
-    scene.add(new THREE.HemisphereLight(0xb4cfe6, 0x1a2230, 0.95));
+    // Lighting tema terang.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xc8d2dc, 1.1));
     const dl = new THREE.DirectionalLight(0xffffff, 0.6);
     dl.position.set(40, 80, 30);
     scene.add(dl);
 
-    // -------- Build massing group (clone dari data stacking yang sudah ada) --------
+    // -------- Build massing group --------
     const massGroup = new THREE.Group();
     scene.add(massGroup);
 
@@ -5683,7 +5685,6 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
     );
 
-    // Origin = centroid bbox semua titik (px → meter).
     let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
     for (const l of sketch.layers ?? []) for (const p of l.points) {
       if (p.x < minPx) minPx = p.x; if (p.y < minPy) minPy = p.y;
@@ -5694,7 +5695,7 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     const oy = (minPy + maxPy) / 2;
     const toXZ = (p: { x: number; y: number }) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx });
 
-    // Ground hijau gelap (lahan/site).
+    // Ground site (warna terang).
     let siteMinX = Infinity, siteMinZ = Infinity, siteMaxX = -Infinity, siteMaxZ = -Infinity;
     if (lahan.length > 0) {
       for (const ly of lahan) {
@@ -5704,7 +5705,7 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
         const geo = new THREE.ShapeGeometry(shape);
         geo.rotateX(-Math.PI / 2);
-        const mat = new THREE.MeshStandardMaterial({ color: "#1f2d23", roughness: 0.95, metalness: 0 });
+        const mat = new THREE.MeshStandardMaterial({ color: "#e6e9ec", roughness: 0.95, metalness: 0 });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.y = -0.01;
         massGroup.add(mesh);
@@ -5717,7 +5718,7 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       }
     }
 
-    // Bangunan: extrude per layer per level (greyscale, supaya angin terbaca jelas).
+    // Bangunan: extrude per layer per level (greyscale terang).
     type Box = { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number; cx: number; cz: number; rx: number; rz: number };
     const boxes: Box[] = [];
     for (const lv of expanded) {
@@ -5737,25 +5738,23 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         geo.rotateX(-Math.PI / 2);
         geo.translate(0, yTop, 0);
         const isGreen = isAtapHijau(ly.name);
-        const color = isGreen ? "#3aa063" : "#cfd6dd";
+        const color = isGreen ? "#7fb98a" : "#e2e6ea";
         const mat = new THREE.MeshStandardMaterial({
           color,
-          roughness: 0.62,
-          metalness: 0.05,
+          roughness: 0.7,
+          metalness: 0.02,
           flatShading: true,
         });
         const mesh = new THREE.Mesh(geo, mat);
         massGroup.add(mesh);
 
-        // Garis tepi tipis supaya massing terbaca.
         const edges = new THREE.EdgesGeometry(geo, 25);
         const elines = new THREE.LineSegments(
           edges,
-          new THREE.LineBasicMaterial({ color: 0x0b1626, transparent: true, opacity: 0.55 }),
+          new THREE.LineBasicMaterial({ color: 0x1a2a3a, transparent: true, opacity: 0.75 }),
         );
         massGroup.add(elines);
 
-        // Bounding box (XZ) untuk collision angin.
         let bMinX = Infinity, bMaxX = -Infinity, bMinZ = Infinity, bMaxZ = -Infinity;
         for (const p of pts) {
           if (p.x < bMinX) bMinX = p.x; if (p.x > bMaxX) bMaxX = p.x;
@@ -5771,7 +5770,6 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       }
     }
 
-    // Domain partikel: bbox site bila ada, kalau tidak pakai bbox bangunan diperluas.
     if (!Number.isFinite(siteMinX)) {
       siteMinX = Infinity; siteMinZ = Infinity; siteMaxX = -Infinity; siteMaxZ = -Infinity;
       for (const b of boxes) {
@@ -5790,46 +5788,71 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     const domR = Math.hypot(domW, domD) / 2;
     const maxBuildY = boxes.reduce((m, b) => Math.max(m, b.maxY), 6);
 
-    // Kamera & orbit setup.
     const camDist = Math.max(40, domR * 2.3);
     camera.position.set(domCx + camDist * 0.65, maxBuildY + domR * 0.9, domCz + camDist * 0.65);
     camera.lookAt(domCx, maxBuildY * 0.35, domCz);
 
-    // -------- Particle system (LineSegments antara prev & curr) --------
-    const N = 700;
-    const positions = new Float32Array(N * 3);
-    const prevPositions = new Float32Array(N * 3);
+    // -------- Particle TRAIL system: 7000 partikel × tail TAIL_MAX, satu BufferGeometry --------
+    const N = 7000;
+    const TAIL_MAX = 20;
+    const SEG_PER = TAIL_MAX - 1;
+    const VTX_TOTAL = N * TAIL_MAX;
+    const positions = new Float32Array(VTX_TOTAL * 3);
+    const colors = new Float32Array(VTX_TOTAL * 3);
+    const indices = new Uint32Array(N * SEG_PER * 2);
+    for (let i = 0; i < N; i++) {
+      const base = i * TAIL_MAX;
+      const ix0 = i * SEG_PER * 2;
+      for (let k = 0; k < SEG_PER; k++) {
+        indices[ix0 + k * 2] = base + k;
+        indices[ix0 + k * 2 + 1] = base + k + 1;
+      }
+    }
     const ages = new Float32Array(N);
     const maxAge = new Float32Array(N);
+    const tailLen = new Uint8Array(N);
+
+    const colHead = new THREE.Color("#003366");
+    const colTail = new THREE.Color("#7aa8c8");
+    const colBg = new THREE.Color(BG_HEX);
+
+    function paintColors(i: number) {
+      const tl = tailLen[i];
+      const base = i * TAIL_MAX;
+      for (let k = 0; k < TAIL_MAX; k++) {
+        const within = k >= (TAIL_MAX - tl);
+        const c = within
+          ? colTail.clone().lerp(colHead, (k - (TAIL_MAX - tl)) / Math.max(1, tl - 1))
+          : colBg;
+        const off = (base + k) * 3;
+        colors[off] = c.r;
+        colors[off + 1] = c.g;
+        colors[off + 2] = c.b;
+      }
+    }
 
     const geoLines = new THREE.BufferGeometry();
-    const segPositions = new Float32Array(N * 2 * 3); // pairs prev->curr
-    const segColors = new Float32Array(N * 2 * 3);
-    geoLines.setAttribute("position", new THREE.BufferAttribute(segPositions, 3));
-    geoLines.setAttribute("color", new THREE.BufferAttribute(segColors, 3));
+    geoLines.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geoLines.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geoLines.setIndex(new THREE.BufferAttribute(indices, 1));
     const lineMat = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.85,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.9,
       depthWrite: false,
     });
     const lines = new THREE.LineSegments(geoLines, lineMat);
     scene.add(lines);
 
-    // Helper: vektor angin (m/s) di koordinat dunia (x east, z south).
-    // Wind dir 0° = wind dari utara (sketch utara = -z di world). Kemudian apply northRotation
-    // supaya selaras dengan rotasi peta/utara di sketsa.
+    const windRefLocal = windRef;
     function windVec(): { vx: number; vz: number; speed: number } {
-      const w = windRef.current;
+      const w = windRefLocal.current;
       const dirDeg = w ? w.dir : 90;
       const spdMs = w ? Math.max(0.3, w.speed) : 3;
       const effDeg = (dirDeg - northRot + 360) % 360;
       const t = (effDeg * Math.PI) / 180;
-      // Vektor TUJUAN angin (kebalikan dari arah datang)
       const vx = -Math.sin(t);
       const vz = Math.cos(t);
-      // Skala visual: skala kecepatan ke nilai yang nyaman secara visual.
       const visSpeed = Math.min(18, 4 + spdMs * 1.2);
       return { vx: vx * visSpeed, vz: vz * visSpeed, speed: spdMs };
     }
@@ -5839,25 +5862,25 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       const dirLen = Math.hypot(w.vx, w.vz) || 1;
       const nx = w.vx / dirLen;
       const nz = w.vz / dirLen;
-      // Posisi spawn: di sisi upwind domain, sedikit di luar.
       const upX = domCx - nx * (domR + 4);
       const upZ = domCz - nz * (domR + 4);
-      // Spread perpendicular ke arah angin.
       const px = -nz, pz = nx;
       const spread = (Math.random() - 0.5) * 2 * (domR * 1.05);
       const sx = upX + px * spread;
       const sz = upZ + pz * spread;
       const sy = 0.5 + Math.random() * Math.max(8, maxBuildY * 0.95);
-      const o = i * 3;
-      positions[o] = sx; positions[o + 1] = sy; positions[o + 2] = sz;
-      prevPositions[o] = sx; prevPositions[o + 1] = sy; prevPositions[o + 2] = sz;
+      const base = i * TAIL_MAX;
+      for (let k = 0; k < TAIL_MAX; k++) {
+        const o = (base + k) * 3;
+        positions[o] = sx; positions[o + 1] = sy; positions[o + 2] = sz;
+      }
       ages[i] = 0;
-      maxAge[i] = 4 + Math.random() * 3;
+      maxAge[i] = 4 + Math.random() * 4;
+      tailLen[i] = 12 + Math.floor(Math.random() * (TAIL_MAX - 11));
+      paintColors(i);
     }
     for (let i = 0; i < N; i++) spawn(i);
-
-    const cyan = new THREE.Color("#7ce5ff");
-    const white = new THREE.Color("#ffffff");
+    (geoLines.attributes.color as THREE.BufferAttribute).needsUpdate = true;
 
     let lastT = performance.now();
     const clock = { t: 0 };
@@ -5867,26 +5890,23 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       const now = performance.now();
       let dt = (now - lastT) / 1000;
       lastT = now;
-      if (dt > 0.066) dt = 0.066; // clamp
+      if (dt > 0.066) dt = 0.066;
       clock.t += dt;
 
       const w = windVec();
+      const wvx = w.vx, wvz = w.vz;
 
       for (let i = 0; i < N; i++) {
-        const o = i * 3;
-        prevPositions[o] = positions[o];
-        prevPositions[o + 1] = positions[o + 1];
-        prevPositions[o + 2] = positions[o + 2];
+        const base = i * TAIL_MAX;
+        const headOff = (base + TAIL_MAX - 1) * 3;
+        const x = positions[headOff];
+        const y = positions[headOff + 1];
+        const z = positions[headOff + 2];
 
-        let vx = w.vx;
+        let vx = wvx;
         let vy = 0;
-        let vz = w.vz;
+        let vz = wvz;
 
-        const x = positions[o];
-        const y = positions[o + 1];
-        const z = positions[o + 2];
-
-        // Tabrakan ringan: cek bbox & belokkan ke atas + samping.
         for (let k = 0; k < boxes.length; k++) {
           const b = boxes[k];
           if (y < b.minY - 0.5 || y > b.maxY + 4) continue;
@@ -5894,85 +5914,54 @@ function WindBody({ sketch }: { sketch: Sketch }) {
           const dz = z - b.cz;
           const ex = Math.abs(dx) - b.rx;
           const ez = Math.abs(dz) - b.rz;
-          // Jarak proksi ke bbox (negatif di dalam).
           const proxy = Math.max(ex, ez);
-          const halo = 2.5;
+          const halo = 3.0;
           if (proxy < halo) {
             const intensity = Math.max(0, Math.min(1, (halo - proxy) / halo));
-            // Dorong ke samping (menjauh dari pusat) dan ke atas.
             const lenH = Math.max(0.001, Math.hypot(dx, dz));
-            const pushX = (dx / lenH) * 14 * intensity;
-            const pushZ = (dz / lenH) * 14 * intensity;
+            const pushX = (dx / lenH) * 12 * intensity;
+            const pushZ = (dz / lenH) * 12 * intensity;
             const liftFactor = y < b.maxY ? 1 : 0.35;
-            const pushY = 9 * intensity * liftFactor;
-            vx += pushX;
-            vy += pushY;
-            vz += pushZ;
-            // Jika benar-benar di dalam box, paksa keluar lewat sisi terdekat.
+            const pushY = 8 * intensity * liftFactor;
+            vx += pushX; vy += pushY; vz += pushZ;
             if (proxy < 0) {
               if (ex > ez) {
-                positions[o] = b.cx + Math.sign(dx || 1) * (b.rx + 0.1);
+                positions[headOff] = b.cx + Math.sign(dx || 1) * (b.rx + 0.1);
               } else {
-                positions[o + 2] = b.cz + Math.sign(dz || 1) * (b.rz + 0.1);
+                positions[headOff + 2] = b.cz + Math.sign(dz || 1) * (b.rz + 0.1);
               }
             }
           }
         }
 
-        // Sedikit turbulensi.
         const turb = 0.6;
-        vx += (Math.sin(clock.t * 1.7 + i * 0.13) * turb);
-        vz += (Math.cos(clock.t * 1.3 + i * 0.21) * turb);
-        vy += (Math.sin(clock.t * 0.9 + i * 0.07) * 0.4);
+        vx += Math.sin(clock.t * 1.7 + i * 0.13) * turb;
+        vz += Math.cos(clock.t * 1.3 + i * 0.21) * turb;
+        vy += Math.sin(clock.t * 0.9 + i * 0.07) * 0.4;
 
-        positions[o] += vx * dt;
-        positions[o + 1] += vy * dt;
-        positions[o + 2] += vz * dt;
+        // Geser riwayat: slot 1..TAIL_MAX-1 → 0..TAIL_MAX-2.
+        positions.copyWithin(base * 3, base * 3 + 3, (base + TAIL_MAX) * 3);
 
-        // Tahan partikel di atas tanah.
-        if (positions[o + 1] < 0.3) {
-          positions[o + 1] = 0.3;
-          // pantulkan sedikit ke atas
-          positions[o + 1] += 0.1;
-        }
+        let nxp = positions[headOff] + vx * dt;
+        let nyp = positions[headOff + 1] + vy * dt;
+        let nzp = positions[headOff + 2] + vz * dt;
+        if (nyp < 0.3) nyp = 0.3;
+        positions[headOff] = nxp;
+        positions[headOff + 1] = nyp;
+        positions[headOff + 2] = nzp;
 
         ages[i] += dt;
-
-        // Recycle bila keluar domain atau terlalu tua.
-        const dxCx = positions[o] - domCx;
-        const dzCz = positions[o + 2] - domCz;
-        const outside = Math.hypot(dxCx, dzCz) > domR + 10 || positions[o + 1] > maxBuildY * 1.4 + 12;
+        const dxCx = nxp - domCx;
+        const dzCz = nzp - domCz;
+        const outside = Math.hypot(dxCx, dzCz) > domR + 10 || nyp > maxBuildY * 1.4 + 12;
         if (outside || ages[i] > maxAge[i]) {
           spawn(i);
         }
       }
 
-      // Tulis ke segment buffer (prev → curr).
-      for (let i = 0; i < N; i++) {
-        const o = i * 3;
-        const s = i * 6;
-        segPositions[s + 0] = prevPositions[o];
-        segPositions[s + 1] = prevPositions[o + 1];
-        segPositions[s + 2] = prevPositions[o + 2];
-        segPositions[s + 3] = positions[o];
-        segPositions[s + 4] = positions[o + 1];
-        segPositions[s + 5] = positions[o + 2];
-
-        // Warna: lebih cyan saat muda, memudar ke putih.
-        const a = ages[i] / Math.max(0.001, maxAge[i]);
-        const fade = Math.max(0, 1 - a);
-        const c = cyan.clone().lerp(white, 0.4 * (1 - fade));
-        segColors[s + 0] = c.r * fade;
-        segColors[s + 1] = c.g * fade;
-        segColors[s + 2] = c.b * fade;
-        segColors[s + 3] = c.r * fade;
-        segColors[s + 4] = c.g * fade;
-        segColors[s + 5] = c.b * fade;
-      }
       (geoLines.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-      (geoLines.attributes.color as THREE.BufferAttribute).needsUpdate = true;
 
-      // Rotasi kamera lambat untuk efek sinematik.
+      // Orbit kamera lambat untuk efek sinematik.
       const ang = clock.t * 0.05;
       const radius = camDist;
       camera.position.x = domCx + Math.cos(ang) * radius * 0.65;
@@ -6023,7 +6012,7 @@ function WindBody({ sketch }: { sketch: Sketch }) {
   const cardinal = wind ? dirToCardinal(wind.dir) : "—";
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", background: "#0b1626", overflow: "hidden" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", background: "#f5f5f5", overflow: "hidden" }}>
       <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
       {/* Kompas arah angin */}
       <div
@@ -6031,27 +6020,27 @@ function WindBody({ sketch }: { sketch: Sketch }) {
           position: "absolute",
           top: 18,
           left: 18,
-          color: "#cfeefb",
+          color: "#0b2440",
           fontFamily: "var(--font-display, Sora, sans-serif)",
-          background: "rgba(11,22,38,0.55)",
-          border: "1px solid rgba(124,229,255,0.35)",
+          background: "rgba(255,255,255,0.78)",
+          border: "1px solid rgba(0,51,102,0.25)",
           padding: "10px 14px",
           minWidth: 180,
           backdropFilter: "blur(4px)",
         }}
       >
-        <div style={{ fontSize: 10, letterSpacing: "0.28em", textTransform: "uppercase", color: "#7ce5ff", fontWeight: 600 }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.28em", textTransform: "uppercase", color: "#003366", fontWeight: 600 }}>
           Data Iklim
         </div>
         <div style={{ marginTop: 6, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
-          {dirLabel} <span style={{ color: "#7ce5ff", fontSize: 14, marginLeft: 4 }}>{cardinal}</span>
+          {dirLabel} <span style={{ color: "#005588", fontSize: 14, marginLeft: 4 }}>{cardinal}</span>
         </div>
-        <div style={{ fontSize: 11, color: "#9fb4c7", marginTop: 2 }}>Arah Angin Dominan</div>
+        <div style={{ fontSize: 11, color: "#52677c", marginTop: 2 }}>Arah Angin Dominan</div>
         <div style={{ marginTop: 8, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
           {spdLabel}
         </div>
-        <div style={{ fontSize: 11, color: "#9fb4c7", marginTop: 2 }}>Kecepatan rata-rata</div>
-        <div style={{ marginTop: 8, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#5b768c" }}>
+        <div style={{ fontSize: 11, color: "#52677c", marginTop: 2 }}>Kecepatan rata-rata</div>
+        <div style={{ marginTop: 8, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", color: "#7a8a9c" }}>
           {wind?.source ?? (windError ? "fallback" : "memuat…")}
         </div>
       </div>
@@ -6061,14 +6050,14 @@ function WindBody({ sketch }: { sketch: Sketch }) {
           position: "absolute",
           bottom: 18,
           right: 18,
-          color: "#9fb4c7",
+          color: "#52677c",
           fontFamily: "var(--font-sans, Manrope, sans-serif)",
           fontSize: 10,
           letterSpacing: "0.22em",
           textTransform: "uppercase",
-          background: "rgba(11,22,38,0.5)",
+          background: "rgba(255,255,255,0.7)",
           padding: "6px 10px",
-          border: "1px solid rgba(159,180,199,0.25)",
+          border: "1px solid rgba(0,51,102,0.18)",
         }}
       >
         {lat.toFixed(4)}°, {lon.toFixed(4)}° · partikel angin konseptual
