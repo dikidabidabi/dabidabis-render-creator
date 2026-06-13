@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Layers } from "lucide-react";
+import { ProjectHydrationGate } from "@/components/project-hydration-gate";
 
 import appCss from "../styles.css?url";
 
@@ -180,11 +181,13 @@ function Header() {
 function RootComponent() {
   return (
     <AuthProvider>
-      <div className="grain min-h-screen">
-        <Header />
-        <Outlet />
-        <Toaster theme="dark" position="top-center" richColors />
-      </div>
+      <ProjectHydrationGate>
+        <div className="grain min-h-screen">
+          <Header />
+          <Outlet />
+          <Toaster theme="dark" position="top-center" richColors />
+        </div>
+      </ProjectHydrationGate>
     </AuthProvider>
   );
 }
