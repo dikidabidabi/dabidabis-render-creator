@@ -41,11 +41,15 @@ export function restoreWorkspace(snap: WorkspaceSnapshot, opts?: { wipe?: boolea
       if (k && k.startsWith(PREFIX) && !EXCLUDE.has(k)) toRemove.push(k);
     }
     toRemove.forEach((k) => localStorage.removeItem(k));
+    // Fire-and-forget clear of IndexedDB; subsequent writes below will repopulate.
+    void clearProjectStorage();
   }
   let n = 0;
+  const toIdb: Record<string, string> = {};
   for (const [k, v] of Object.entries(snap.entries)) {
     if (!k.startsWith(PREFIX) || EXCLUDE.has(k)) continue;
     localStorage.setItem(k, v);
+    toIdb[k] = v;
     n++;
     // Notify same-tab listeners
     try {
@@ -54,7 +58,15 @@ export function restoreWorkspace(snap: WorkspaceSnapshot, opts?: { wipe?: boolea
       /* ignore */
     }
   }
+  // Push synchronously to IndexedDB so backups survive immediate refresh.
+  void bulkWriteIndexedDB(toIdb);
   return n;
+}
+
+// Optional helper for callers that want to ensure all debounced writes have
+// landed in IndexedDB before continuing (e.g. before uploading a backup).
+export async function flushProjectStorage(): Promise<void> {
+  await flushIndexedDB();
 }
 
 export function countSketches(snap: WorkspaceSnapshot): number {
