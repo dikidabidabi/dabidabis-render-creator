@@ -91,21 +91,58 @@ function patchLocalStorage() {
   const origSet = proto.setItem.bind(localStorage);
   const origRemove = proto.removeItem.bind(localStorage);
   const origClear = proto.clear.bind(localStorage);
+  const origGet = proto.getItem.bind(localStorage);
+  const origKey = proto.key.bind(localStorage);
+  const origLength = Object.getOwnPropertyDescriptor(proto, "length")?.get;
 
   localStorage.setItem = (k: string, v: string) => {
-    origSet(k, v);
-    if (k.startsWith(PREFIX)) scheduleWrite(k, v);
+    if (!k.startsWith(PREFIX)) {
+      origSet(k, v);
+      return;
+    }
+    memoryCache.set(k, v);
+    scheduleWrite(k, v);
+    try {
+      origSet(k, v);
+    } catch (e) {
+      if (!isQuotaError(e)) throw e;
+      try {
+        origRemove(k);
+      } catch {
+        /* ignore cache cleanup */
+      }
+    }
   };
   localStorage.removeItem = (k: string) => {
+    if (k.startsWith(PREFIX)) memoryCache.delete(k);
     origRemove(k);
     if (k.startsWith(PREFIX)) scheduleWrite(k, null);
   };
+  localStorage.getItem = (k: string) => {
+    if (k.startsWith(PREFIX) && memoryCache.has(k)) return memoryCache.get(k)!;
+    return origGet(k);
+  };
+  localStorage.key = (i: number) => {
+    const keys = [...memoryCache.keys()];
+    if (i < keys.length) return keys[i] ?? null;
+    return origKey(i - keys.length);
+  };
+  if (origLength) {
+    Object.defineProperty(localStorage, "length", {
+      configurable: true,
+      get() {
+        return origLength.call(localStorage) + memoryCache.size;
+      },
+    });
+  }
   localStorage.clear = () => {
     const keys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
+    for (const k of memoryCache.keys()) keys.push(k);
+    for (let i = 0; i < origLength?.call(localStorage); i++) {
+      const k = origKey(i);
       if (k && k.startsWith(PREFIX)) keys.push(k);
     }
+    memoryCache.clear();
     origClear();
     for (const k of keys) scheduleWrite(k, null);
   };
