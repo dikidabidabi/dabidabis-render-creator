@@ -185,9 +185,20 @@ export function hydrateFromIndexedDB(): Promise<void> {
         try {
           const v = await db.getItem<string>(k);
           if (typeof v === "string") {
-            // bypass patched setItem to avoid scheduling a redundant write
+            memoryCache.set(k, v);
+            // bypass patched setItem to avoid scheduling a redundant write;
+            // large values may intentionally live only in memory + IndexedDB.
             const proto = Object.getPrototypeOf(localStorage) as Storage;
-            proto.setItem.call(localStorage, k, v);
+            try {
+              proto.setItem.call(localStorage, k, v);
+            } catch (e) {
+              if (!isQuotaError(e)) throw e;
+              try {
+                proto.removeItem.call(localStorage, k);
+              } catch {
+                /* ignore cache cleanup */
+              }
+            }
           }
         } catch {
           /* ignore individual key errors */
@@ -208,6 +219,27 @@ export function hydrateFromIndexedDB(): Promise<void> {
 
 export async function flushIndexedDB(): Promise<void> {
   await flushPending();
+}
+
+export async function setProjectItem(key: string, value: string): Promise<void> {
+  if (!key.startsWith(PREFIX)) {
+    localStorage.setItem(key, value);
+    return;
+  }
+  memoryCache.set(key, value);
+  await writeNow(key, value);
+  try {
+    const proto = Object.getPrototypeOf(localStorage) as Storage;
+    proto.setItem.call(localStorage, key, value);
+  } catch (e) {
+    if (!isQuotaError(e)) throw e;
+    const proto = Object.getPrototypeOf(localStorage) as Storage;
+    try {
+      proto.removeItem.call(localStorage, key);
+    } catch {
+      /* ignore cache cleanup */
+    }
+  }
 }
 
 export async function clearProjectStorage(): Promise<void> {
