@@ -29,6 +29,17 @@ let store: LocalForage | null = null;
 let hydratePromise: Promise<void> | null = null;
 let patched = false;
 const debounceTimers = new Map<string, number>();
+const memoryCache = new Map<string, string>();
+
+function isQuotaError(error: unknown): boolean {
+  const maybe = error as { name?: string; code?: number } | null;
+  return (
+    maybe?.name === "QuotaExceededError" ||
+    maybe?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    maybe?.code === 22 ||
+    maybe?.code === 1014
+  );
+}
 
 function getStore(): LocalForage {
   if (store) return store;
@@ -55,12 +66,21 @@ function scheduleWrite(key: string, value: string | null) {
   debounceTimers.set(key, t);
 }
 
+async function writeNow(key: string, value: string | null): Promise<void> {
+  const prev = debounceTimers.get(key);
+  if (prev) window.clearTimeout(prev);
+  debounceTimers.delete(key);
+  const db = getStore();
+  if (value == null) await db.removeItem(key);
+  else await db.setItem(key, value);
+}
+
 function flushPending(): Promise<void> {
   const tasks: Promise<unknown>[] = [];
   for (const [key, t] of debounceTimers) {
     window.clearTimeout(t);
     const db = getStore();
-    const v = localStorage.getItem(key);
+    const v = memoryCache.has(key) ? memoryCache.get(key)! : localStorage.getItem(key);
     tasks.push(v == null ? db.removeItem(key) : db.setItem(key, v));
   }
   debounceTimers.clear();
@@ -74,21 +94,63 @@ function patchLocalStorage() {
   const origSet = proto.setItem.bind(localStorage);
   const origRemove = proto.removeItem.bind(localStorage);
   const origClear = proto.clear.bind(localStorage);
+  const origGet = proto.getItem.bind(localStorage);
+  const origKey = proto.key.bind(localStorage);
+  const origLengthGetter = Object.getOwnPropertyDescriptor(proto, "length")?.get;
+  const origLength = () => origLengthGetter?.call(localStorage) ?? 0;
+  const visibleKeys = () => {
+    const keys = [...memoryCache.keys()];
+    const seen = new Set(keys);
+    for (let i = 0; i < origLength(); i++) {
+      const k = origKey(i);
+      if (k && !seen.has(k)) keys.push(k);
+    }
+    return keys;
+  };
 
   localStorage.setItem = (k: string, v: string) => {
-    origSet(k, v);
-    if (k.startsWith(PREFIX)) scheduleWrite(k, v);
+    if (!k.startsWith(PREFIX)) {
+      origSet(k, v);
+      return;
+    }
+    memoryCache.set(k, v);
+    scheduleWrite(k, v);
+    try {
+      origSet(k, v);
+    } catch (e) {
+      if (!isQuotaError(e)) throw e;
+      try {
+        origRemove(k);
+      } catch {
+        /* ignore cache cleanup */
+      }
+    }
   };
   localStorage.removeItem = (k: string) => {
+    if (k.startsWith(PREFIX)) memoryCache.delete(k);
     origRemove(k);
     if (k.startsWith(PREFIX)) scheduleWrite(k, null);
   };
+  localStorage.getItem = (k: string) => {
+    if (k.startsWith(PREFIX) && memoryCache.has(k)) return memoryCache.get(k)!;
+    return origGet(k);
+  };
+  localStorage.key = (i: number) => {
+    return visibleKeys()[i] ?? null;
+  };
+  try {
+    Object.defineProperty(localStorage, "length", {
+      configurable: true,
+      get() {
+        return visibleKeys().length;
+      },
+    });
+  } catch {
+    /* length is read-only in some browsers; getItem remains quota-safe */
+  }
   localStorage.clear = () => {
-    const keys: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(PREFIX)) keys.push(k);
-    }
+    const keys = visibleKeys().filter((k) => k.startsWith(PREFIX));
+    memoryCache.clear();
     origClear();
     for (const k of keys) scheduleWrite(k, null);
   };
@@ -131,9 +193,20 @@ export function hydrateFromIndexedDB(): Promise<void> {
         try {
           const v = await db.getItem<string>(k);
           if (typeof v === "string") {
-            // bypass patched setItem to avoid scheduling a redundant write
+            memoryCache.set(k, v);
+            // bypass patched setItem to avoid scheduling a redundant write;
+            // large values may intentionally live only in memory + IndexedDB.
             const proto = Object.getPrototypeOf(localStorage) as Storage;
-            proto.setItem.call(localStorage, k, v);
+            try {
+              proto.setItem.call(localStorage, k, v);
+            } catch (e) {
+              if (!isQuotaError(e)) throw e;
+              try {
+                proto.removeItem.call(localStorage, k);
+              } catch {
+                /* ignore cache cleanup */
+              }
+            }
           }
         } catch {
           /* ignore individual key errors */
@@ -156,10 +229,32 @@ export async function flushIndexedDB(): Promise<void> {
   await flushPending();
 }
 
+export async function setProjectItem(key: string, value: string): Promise<void> {
+  if (!key.startsWith(PREFIX)) {
+    localStorage.setItem(key, value);
+    return;
+  }
+  memoryCache.set(key, value);
+  await writeNow(key, value);
+  try {
+    const proto = Object.getPrototypeOf(localStorage) as Storage;
+    proto.setItem.call(localStorage, key, value);
+  } catch (e) {
+    if (!isQuotaError(e)) throw e;
+    const proto = Object.getPrototypeOf(localStorage) as Storage;
+    try {
+      proto.removeItem.call(localStorage, key);
+    } catch {
+      /* ignore cache cleanup */
+    }
+  }
+}
+
 export async function clearProjectStorage(): Promise<void> {
   await flushPending();
   const db = getStore();
   await db.clear();
+  memoryCache.clear();
   const keys: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -189,7 +284,13 @@ export async function bulkWriteIndexedDB(entries: Record<string, string>): Promi
   for (const [k, v] of Object.entries(entries)) {
     if (!k.startsWith(PREFIX)) continue;
     await db.setItem(k, v);
+    memoryCache.set(k, v);
     const proto = Object.getPrototypeOf(localStorage) as Storage;
-    proto.setItem.call(localStorage, k, v);
+    try {
+      proto.setItem.call(localStorage, k, v);
+    } catch (e) {
+      if (!isQuotaError(e)) throw e;
+      proto.removeItem.call(localStorage, k);
+    }
   }
 }
