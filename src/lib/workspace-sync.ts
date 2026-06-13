@@ -1,5 +1,8 @@
-// Mengumpulkan & memulihkan seluruh data proyek lokal (localStorage)
-// agar dapat di-backup ke Lovable Cloud Storage per akun.
+// Mengumpulkan & memulihkan seluruh data proyek lokal agar dapat di-backup
+// ke Lovable Cloud Storage per akun. Sumber kebenaran adalah IndexedDB
+// (lihat src/lib/storage/idb-bridge.ts); localStorage hanya cache sinkron.
+
+import { bulkWriteIndexedDB, clearProjectStorage, flushIndexedDB, snapshotIndexedDB } from "@/lib/storage/idb-bridge";
 
 const PREFIX = "dabidabis_";
 const EXCLUDE = new Set<string>(["dabidabis_google_api_key"]);
