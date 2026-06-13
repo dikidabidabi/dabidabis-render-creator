@@ -928,6 +928,7 @@ function SketchPage() {
     openId: null,
     loaded: false,
   });
+  latestStoreRef.current = { sketches, openId, loaded };
 
   // Load
   useEffect(() => {
@@ -974,7 +975,6 @@ function SketchPage() {
 
   // Save
   useEffect(() => {
-    latestStoreRef.current = { sketches, openId, loaded };
     if (!loaded) return;
     const payload = JSON.stringify({ sketches, openId } as StoreShape);
     const handle = setTimeout(() => {
