@@ -109,6 +109,7 @@ import {
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
 import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
+import { setProjectItem } from "@/lib/storage/idb-bridge";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -922,6 +923,11 @@ function SketchPage() {
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const latestStoreRef = useRef<{ sketches: Sketch[]; openId: string | null; loaded: boolean }>({
+    sketches: [],
+    openId: null,
+    loaded: false,
+  });
 
   // Load
   useEffect(() => {
@@ -968,16 +974,25 @@ function SketchPage() {
 
   // Save
   useEffect(() => {
+    latestStoreRef.current = { sketches, openId, loaded };
     if (!loaded) return;
+    const payload = JSON.stringify({ sketches, openId } as StoreShape);
     const handle = setTimeout(() => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ sketches, openId } as StoreShape));
-      } catch {
-        // ignore
-      }
+      void setProjectItem(STORAGE_KEY, payload);
     }, 400);
     return () => clearTimeout(handle);
   }, [sketches, openId, loaded]);
+
+  useEffect(() => {
+    return () => {
+      const latest = latestStoreRef.current;
+      if (!latest.loaded) return;
+      void setProjectItem(
+        STORAGE_KEY,
+        JSON.stringify({ sketches: latest.sketches, openId: latest.openId } as StoreShape),
+      );
+    };
+  }, []);
 
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) =>
