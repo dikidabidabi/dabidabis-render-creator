@@ -246,6 +246,7 @@ export async function clearProjectStorage(): Promise<void> {
   await flushPending();
   const db = getStore();
   await db.clear();
+  memoryCache.clear();
   const keys: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
@@ -275,7 +276,13 @@ export async function bulkWriteIndexedDB(entries: Record<string, string>): Promi
   for (const [k, v] of Object.entries(entries)) {
     if (!k.startsWith(PREFIX)) continue;
     await db.setItem(k, v);
+    memoryCache.set(k, v);
     const proto = Object.getPrototypeOf(localStorage) as Storage;
-    proto.setItem.call(localStorage, k, v);
+    try {
+      proto.setItem.call(localStorage, k, v);
+    } catch (e) {
+      if (!isQuotaError(e)) throw e;
+      proto.removeItem.call(localStorage, k);
+    }
   }
 }
