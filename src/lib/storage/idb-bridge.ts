@@ -95,6 +95,15 @@ function patchLocalStorage() {
   const origKey = proto.key.bind(localStorage);
   const origLengthGetter = Object.getOwnPropertyDescriptor(proto, "length")?.get;
   const origLength = () => origLengthGetter?.call(localStorage) ?? 0;
+  const visibleKeys = () => {
+    const keys = [...memoryCache.keys()];
+    const seen = new Set(keys);
+    for (let i = 0; i < origLength(); i++) {
+      const k = origKey(i);
+      if (k && !seen.has(k)) keys.push(k);
+    }
+    return keys;
+  };
 
   localStorage.setItem = (k: string, v: string) => {
     if (!k.startsWith(PREFIX)) {
@@ -124,24 +133,16 @@ function patchLocalStorage() {
     return origGet(k);
   };
   localStorage.key = (i: number) => {
-    const keys = [...memoryCache.keys()];
-    if (i < keys.length) return keys[i] ?? null;
-    return origKey(i - keys.length);
+    return visibleKeys()[i] ?? null;
   };
   Object.defineProperty(localStorage, "length", {
     configurable: true,
     get() {
-      const memoryOnly = [...memoryCache.keys()].filter((k) => origGet(k) == null).length;
-      return origLength() + memoryOnly;
+      return visibleKeys().length;
     },
   });
   localStorage.clear = () => {
-    const keys: string[] = [];
-    for (const k of memoryCache.keys()) keys.push(k);
-    for (let i = 0; i < origLength(); i++) {
-      const k = origKey(i);
-      if (k && k.startsWith(PREFIX)) keys.push(k);
-    }
+    const keys = visibleKeys().filter((k) => k.startsWith(PREFIX));
     memoryCache.clear();
     origClear();
     for (const k of keys) scheduleWrite(k, null);
