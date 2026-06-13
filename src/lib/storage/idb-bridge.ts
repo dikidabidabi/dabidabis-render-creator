@@ -29,6 +29,14 @@ let store: LocalForage | null = null;
 let hydratePromise: Promise<void> | null = null;
 let patched = false;
 const debounceTimers = new Map<string, number>();
+const memoryCache = new Map<string, string>();
+
+function isQuotaError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+  );
+}
 
 function getStore(): LocalForage {
   if (store) return store;
@@ -55,12 +63,21 @@ function scheduleWrite(key: string, value: string | null) {
   debounceTimers.set(key, t);
 }
 
+async function writeNow(key: string, value: string | null): Promise<void> {
+  const prev = debounceTimers.get(key);
+  if (prev) window.clearTimeout(prev);
+  debounceTimers.delete(key);
+  const db = getStore();
+  if (value == null) await db.removeItem(key);
+  else await db.setItem(key, value);
+}
+
 function flushPending(): Promise<void> {
   const tasks: Promise<unknown>[] = [];
   for (const [key, t] of debounceTimers) {
     window.clearTimeout(t);
     const db = getStore();
-    const v = localStorage.getItem(key);
+    const v = memoryCache.has(key) ? memoryCache.get(key)! : localStorage.getItem(key);
     tasks.push(v == null ? db.removeItem(key) : db.setItem(key, v));
   }
   debounceTimers.clear();
