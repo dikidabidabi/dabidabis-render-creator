@@ -32,9 +32,12 @@ const debounceTimers = new Map<string, number>();
 const memoryCache = new Map<string, string>();
 
 function isQuotaError(error: unknown): boolean {
+  const maybe = error as { name?: string; code?: number } | null;
   return (
-    error instanceof DOMException &&
-    (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+    maybe?.name === "QuotaExceededError" ||
+    maybe?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    maybe?.code === 22 ||
+    maybe?.code === 1014
   );
 }
 
@@ -135,12 +138,16 @@ function patchLocalStorage() {
   localStorage.key = (i: number) => {
     return visibleKeys()[i] ?? null;
   };
-  Object.defineProperty(localStorage, "length", {
-    configurable: true,
-    get() {
-      return visibleKeys().length;
-    },
-  });
+  try {
+    Object.defineProperty(localStorage, "length", {
+      configurable: true,
+      get() {
+        return visibleKeys().length;
+      },
+    });
+  } catch {
+    /* length is read-only in some browsers; getItem remains quota-safe */
+  }
   localStorage.clear = () => {
     const keys = visibleKeys().filter((k) => k.startsWith(PREFIX));
     memoryCache.clear();
