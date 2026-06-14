@@ -4077,6 +4077,74 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
 
+
+    // ===== Render area parkir + stall (level aktif) =====
+    {
+      const areas = (sketch.parkingAreas ?? []).filter(
+        (p) => !activeLvlId || p.levelId === activeLvlId,
+      );
+      const stallsByArea = new Map(parkingStallsActive.map((x) => [x.areaId, x.stalls]));
+      for (const area of areas) {
+        // outline area
+        ctx.save();
+        ctx.translate(area.center.x, area.center.y);
+        ctx.rotate(area.rotation);
+        ctx.strokeStyle = "rgba(14, 165, 233, 0.85)";
+        ctx.lineWidth = 1.2 / s;
+        ctx.setLineDash([6 / s, 4 / s]);
+        ctx.strokeRect(-area.halfW, -area.halfH, area.halfW * 2, area.halfH * 2);
+        ctx.setLineDash([]);
+        ctx.restore();
+        // stalls
+        const stalls = stallsByArea.get(area.id) ?? [];
+        for (const st of stalls) {
+          if (!st.valid) continue;
+          ctx.beginPath();
+          ctx.moveTo(st.poly[0].x, st.poly[0].y);
+          for (let i = 1; i < st.poly.length; i++) ctx.lineTo(st.poly[i].x, st.poly[i].y);
+          ctx.closePath();
+          ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
+          ctx.lineWidth = 1.2 / s;
+          ctx.stroke();
+        }
+        // label kapasitas
+        const validCount = stalls.filter((x) => x.valid).length;
+        const sp = worldToScreen(area.center);
+        const label = `${validCount} mobil`;
+        ctx.font = "600 11px Manrope, sans-serif";
+        const w = ctx.measureText(label).width + 10;
+        ctx.fillStyle = "rgba(14,165,233,0.95)";
+        ctx.fillRect(sp.x - w / 2, sp.y - 9, w, 18);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, sp.x - w / 2 + 5, sp.y + 4);
+      }
+      // preview drag parkir
+      if (drawing && tool === "parking") {
+        const ang = structGridRotRad || 0;
+        const la = rotateAround(drawing.a, { x: 0, y: 0 }, -ang);
+        const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -ang);
+        const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
+        const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
+        const corners = [
+          { x: minX, y: minY }, { x: maxX, y: minY },
+          { x: maxX, y: maxY }, { x: minX, y: maxY },
+        ].map((p) => rotateAround(p, { x: 0, y: 0 }, ang));
+        ctx.save();
+        ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
+        ctx.fillStyle = "rgba(14, 165, 233, 0.10)";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([6 / s, 4 / s]);
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x, corners[0].y);
+        for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
     // Active line length label, screen-space
     if (drawing) {
       const meters = dist(drawing.a, drawing.b) / pxPerMeter;
@@ -4090,7 +4158,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
+
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
