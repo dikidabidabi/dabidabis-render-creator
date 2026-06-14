@@ -42,6 +42,7 @@ type Layer = {
   coefficient?: number;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
+type Line = { a: Point; b: Point; kind?: string; levelId?: string };
 type Sketch = {
   id: string;
   title: string;
@@ -50,12 +51,14 @@ type Sketch = {
   scale: string;
   layers: Layer[];
   levels: Level[];
+  lines?: Line[];
   kdbPct?: number;
   klbCoef?: number;
   kdhPct?: number;
   ktbPct?: number;
   structuralGrid?: StructuralGrid;
   structuralGridExtras?: StructuralGrid[];
+  parkingAreas?: ParkingArea[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
