@@ -819,6 +819,11 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    parkingAreas: (() => {
+      const arr = normalizeParkingAreas(s?.parkingAreas);
+      const validLvl = new Set(levels.map((l) => l.id));
+      return arr.map((p) => (p.levelId && validLvl.has(p.levelId) ? p : { ...p, levelId: fallback }));
+    })(),
   };
 }
 
