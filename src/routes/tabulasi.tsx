@@ -309,6 +309,10 @@ type Stats = {
   ketinggianM: number;
   totalKolom: number;
   volumeBetonM3: number;
+  parkingTotal: number;
+  parkingAreaTotalM2: number;
+  parkingEfficiencyPct: number;
+  parkingByLevel: Array<{ levelId: string; levelName: string; count: number }>;
 };
 
 function computeStats(sk: Sketch): Stats {
