@@ -528,9 +528,24 @@ function RekapSection({ data }: { data: Stats }) {
           <Row label="Volume Beton Kolom" value={`${fmt(data.volumeBetonM3, 2)} m³`} />
         </>
       )}
+      {data.parkingAreaTotalM2 > 0 && (
+        <>
+          <div className="my-2 h-px bg-border" />
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Car className="h-3.5 w-3.5" /> Parkir Mobil
+          </div>
+          <Row label="Kapasitas Parkir" value={`${data.parkingTotal} mobil`} />
+          <Row label="Luas Area Parkir" value={`${fmt(data.parkingAreaTotalM2)} m²`} />
+          <Row label="Rasio Efisiensi Parkir" value={`${fmt(data.parkingEfficiencyPct, 1)} %`} />
+          {data.parkingByLevel.length > 1 && data.parkingByLevel.map((pl) => (
+            <Row key={pl.levelId} label={`· ${pl.levelName}`} value={`${pl.count} mobil`} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
+
 
 
 function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
