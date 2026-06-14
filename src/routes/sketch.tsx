@@ -39,6 +39,7 @@ import {
   MoveHorizontal,
   Box as BoxIcon,
   FlipHorizontal,
+  Car,
 } from "lucide-react";
 import {
   type Floor,
@@ -91,6 +92,7 @@ import {
   parseYAxisLabel,
   spansForLevel,
   isNodeActive,
+  isColumnVisible,
   isColumnClipped,
   levelInRange,
   computeStructuralStats,
@@ -109,6 +111,14 @@ import {
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
 import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
+import {
+  type ParkingArea,
+  type ParkingStall,
+  type ParkingObstacle,
+  normalizeParkingAreas,
+  generateStalls,
+  genParkingId,
+} from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 
 export const Route = createFileRoute("/sketch")({
@@ -293,6 +303,7 @@ type Sketch = {
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
+  parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
 };
 
 type Circle = {
@@ -808,6 +819,11 @@ function normalizeSketch(s: any): Sketch {
         });
       }
       return out;
+    })(),
+    parkingAreas: (() => {
+      const arr = normalizeParkingAreas(s?.parkingAreas);
+      const validLvl = new Set(levels.map((l) => l.id));
+      return arr.map((p) => (p.levelId && validLvl.has(p.levelId) ? p : { ...p, levelId: fallback }));
     })(),
   };
 }
@@ -1735,7 +1751,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking">("line");
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -2552,6 +2568,60 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
 
 
+
+  // ===== Parkir: obstacle index + generator stall (per level aktif) =====
+  const parkingObstacles = useMemo<ParkingObstacle[]>(() => {
+    const obs: ParkingObstacle[] = [];
+    const wallBufferPx = 0.075 * pxPerMeter; // 7.5 cm
+    for (const ln of lines) {
+      if (activeLvlId && ln.levelId !== activeLvlId) continue;
+      if ((ln.kind ?? "straight") !== "straight") continue;
+      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBufferPx });
+    }
+    const grids = collectGrids(primaryGrid, gridExtras);
+    const lv = levels.find((l) => l.id === activeLvlId);
+    if (lv) {
+      for (const g of grids) {
+        if (g.lineOnly) continue;
+        if (!levelInRange(g, lv, levels)) continue;
+        const { spansX, spansY } = spansForLevel(g, lv.id);
+        const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
+        const ang = ((g.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        const posX = axisPositions(spansX);
+        const posY = axisPositions(spansY);
+        for (let j = 0; j < posY.length; j++) {
+          for (let i = 0; i < posX.length; i++) {
+            if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
+            const lx = posX[i] * pxPerMeter;
+            const ly = posY[j] * pxPerMeter;
+            const wx = g.origin.x + lx * cos - ly * sin;
+            const wy = g.origin.y + lx * sin + ly * cos;
+            const corners = [
+              { x: -halfCol, y: -halfCol },
+              { x:  halfCol, y: -halfCol },
+              { x:  halfCol, y:  halfCol },
+              { x: -halfCol, y:  halfCol },
+            ].map((c) => ({
+              x: wx + c.x * cos - c.y * sin,
+              y: wy + c.x * sin + c.y * cos,
+            }));
+            obs.push({ kind: "polygon", poly: corners });
+          }
+        }
+      }
+    }
+    return obs;
+  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels]);
+
+  const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
+    const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
+    const areas = (sketch.parkingAreas ?? []).filter((p) => !activeLvlId || p.levelId === activeLvlId);
+    for (const area of areas) {
+      out.push({ areaId: area.id, stalls: generateStalls(area, pxPerMeter, parkingObstacles) });
+    }
+    return out;
+  }, [sketch.parkingAreas, activeLvlId, pxPerMeter, parkingObstacles]);
 
   // Redraw
   useEffect(() => {
@@ -4061,6 +4131,74 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
 
+
+    // ===== Render area parkir + stall (level aktif) =====
+    {
+      const areas = (sketch.parkingAreas ?? []).filter(
+        (p) => !activeLvlId || p.levelId === activeLvlId,
+      );
+      const stallsByArea = new Map(parkingStallsActive.map((x) => [x.areaId, x.stalls]));
+      for (const area of areas) {
+        // outline area
+        ctx.save();
+        ctx.translate(area.center.x, area.center.y);
+        ctx.rotate(area.rotation);
+        ctx.strokeStyle = "rgba(14, 165, 233, 0.85)";
+        ctx.lineWidth = 1.2 / s;
+        ctx.setLineDash([6 / s, 4 / s]);
+        ctx.strokeRect(-area.halfW, -area.halfH, area.halfW * 2, area.halfH * 2);
+        ctx.setLineDash([]);
+        ctx.restore();
+        // stalls
+        const stalls = stallsByArea.get(area.id) ?? [];
+        for (const st of stalls) {
+          if (!st.valid) continue;
+          ctx.beginPath();
+          ctx.moveTo(st.poly[0].x, st.poly[0].y);
+          for (let i = 1; i < st.poly.length; i++) ctx.lineTo(st.poly[i].x, st.poly[i].y);
+          ctx.closePath();
+          ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
+          ctx.lineWidth = 1.2 / s;
+          ctx.stroke();
+        }
+        // label kapasitas
+        const validCount = stalls.filter((x) => x.valid).length;
+        const sp = worldToScreen(area.center);
+        const label = `${validCount} mobil`;
+        ctx.font = "600 11px Manrope, sans-serif";
+        const w = ctx.measureText(label).width + 10;
+        ctx.fillStyle = "rgba(14,165,233,0.95)";
+        ctx.fillRect(sp.x - w / 2, sp.y - 9, w, 18);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, sp.x - w / 2 + 5, sp.y + 4);
+      }
+      // preview drag parkir
+      if (drawing && tool === "parking") {
+        const ang = structGridRotRad || 0;
+        const la = rotateAround(drawing.a, { x: 0, y: 0 }, -ang);
+        const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -ang);
+        const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
+        const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
+        const corners = [
+          { x: minX, y: minY }, { x: maxX, y: minY },
+          { x: maxX, y: maxY }, { x: minX, y: maxY },
+        ].map((p) => rotateAround(p, { x: 0, y: 0 }, ang));
+        ctx.save();
+        ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
+        ctx.fillStyle = "rgba(14, 165, 233, 0.10)";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([6 / s, 4 / s]);
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x, corners[0].y);
+        for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
     // Active line length label, screen-space
     if (drawing) {
       const meters = dist(drawing.a, drawing.b) / pxPerMeter;
@@ -4074,7 +4212,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
+
 
   const getScreenPos = (e: React.PointerEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -4086,7 +4225,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
 
+
+
+
   // ===== Grid Struktur stylus interaksi =====
+
   // Hitung bounds grid pada level aktif (dalam koordinat world px).
   const gridBounds = useCallback((): null | {
     xs: number[]; ys: number[]; xMin: number; xMax: number; yMin: number; yMax: number; spansX: number[]; spansY: number[];
@@ -5146,7 +5289,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
-    if (tool === "line" || tool === "rect" || tool === "section") {
+    if (tool === "line" || tool === "rect" || tool === "section" || tool === "parking") {
       setDrawing({ a: p, b: p });
 
     } else if (tool === "polyline") {
@@ -5432,6 +5575,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         pushHistory();
         onChange({ circles: circles.filter((_, i) => i !== cIdx) });
         return;
+      }
+      // Coba hapus area parkir bila klik di dalam bbox-nya
+      const parkAreas = sketch.parkingAreas ?? [];
+      for (let i = parkAreas.length - 1; i >= 0; i--) {
+        const a = parkAreas[i];
+        if (activeLvlId && a.levelId !== activeLvlId) continue;
+        // Hit-test di koordinat lokal area (un-rotate dulu).
+        const local = rotateAround(p, a.center, -a.rotation);
+        const dx = local.x - a.center.x;
+        const dy = local.y - a.center.y;
+        if (Math.abs(dx) <= a.halfW && Math.abs(dy) <= a.halfH) {
+          pushHistory();
+          onChange({ parkingAreas: parkAreas.filter((_, j) => j !== i) });
+          toast.success("Area parkir dihapus");
+          return;
+        }
       }
       const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
       if (hitLocked) toast.error("Garis terkunci");
@@ -6014,6 +6173,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       commitRect(a, b);
       return;
     }
+
+    if (curTool === "parking") {
+      // Bangun bounding box parkir di koordinat dunia, snap rotasi ke grid
+      // struktural aktif (jika ada) supaya deret stall otomatis sejajar grid.
+      const ang = structGridRotRad || 0;
+      // Un-rotate ke frame lokal grid, hitung min/max, lalu rotasi balik untuk
+      // mencari center & half-extent dalam frame ter-rotasi.
+      const la = rotateAround(a, { x: 0, y: 0 }, -ang);
+      const lb = rotateAround(b, { x: 0, y: 0 }, -ang);
+      const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
+      const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
+      const halfW = (maxX - minX) / 2;
+      const halfH = (maxY - minY) / 2;
+      // Minimum 5 m × 5 m supaya muat satu modul minimum.
+      if (halfW * 2 < pxPerMeter * 5 || halfH * 2 < pxPerMeter * 5) {
+        toast.error("Area parkir terlalu kecil (min 5 m × 5 m)");
+        return;
+      }
+      const centerLocal = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+      const center = rotateAround(centerLocal, { x: 0, y: 0 }, ang);
+      const newArea: ParkingArea = {
+        id: genParkingId(),
+        levelId: activeLvlId ?? undefined,
+        center,
+        halfW,
+        halfH,
+        rotation: ang,
+        orientation: "auto",
+      };
+      pushHistory();
+      const prev = sketch.parkingAreas ?? [];
+      onChange({ parkingAreas: [...prev, newArea] });
+      toast.success("Area parkir ditambahkan");
+      return;
+    }
+
 
     if (curTool === "section") {
       // Garis Potong: simpan bidang irisan baru ke sketch (A-A, B-B, …).
@@ -6813,6 +7008,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Alat Lantai — slab 150mm di bawah MDPL level aktif (Persegi / Garis / Polyline / Attach Garis)"
           >
             <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
+          </Button>
+          <Button
+            variant={tool === "parking" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); }}
+            className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
+            title="Lot Parkir — tarik bounding box; deret 2.5×5 m otomatis di-snap ke grid struktur, kolom/dinding diabaikan otomatis."
+          >
+            <Car className="mr-1.5 h-4 w-4" /> Lot Parkir
           </Button>
         </div>
         {tool === "floor" && (
@@ -8174,7 +8378,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
@@ -8279,6 +8483,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Offset (tap garis pada sisi tujuan)"
           >
             <MoveHorizontal className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "parking" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); }}
+            className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
+            title="Lot Parkir (tarik bbox; deret stall otomatis hindari kolom/dinding)"
+          >
+            <Car className="h-4 w-4" />
           </Button>
           {tool === "edit" && (
             <>
@@ -8441,7 +8654,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 shadow-soft backdrop-blur">
