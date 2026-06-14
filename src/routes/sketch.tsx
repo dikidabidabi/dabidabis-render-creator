@@ -302,6 +302,7 @@ type Sketch = {
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
+  parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
 };
 
 type Circle = {
