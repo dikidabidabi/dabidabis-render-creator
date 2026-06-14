@@ -5576,6 +5576,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         onChange({ circles: circles.filter((_, i) => i !== cIdx) });
         return;
       }
+      // Coba hapus area parkir bila klik di dalam bbox-nya
+      const parkAreas = sketch.parkingAreas ?? [];
+      for (let i = parkAreas.length - 1; i >= 0; i--) {
+        const a = parkAreas[i];
+        if (activeLvlId && a.levelId !== activeLvlId) continue;
+        // Hit-test di koordinat lokal area (un-rotate dulu).
+        const local = rotateAround(p, a.center, -a.rotation);
+        const dx = local.x - a.center.x;
+        const dy = local.y - a.center.y;
+        if (Math.abs(dx) <= a.halfW && Math.abs(dy) <= a.halfH) {
+          pushHistory();
+          onChange({ parkingAreas: parkAreas.filter((_, j) => j !== i) });
+          toast.success("Area parkir dihapus");
+          return;
+        }
+      }
       const hitLocked = lines.find((ln) => (!activeLvlId || ln.levelId === activeLvlId) && isLineLocked(ln) && pointToLine(p, ln) <= tol);
       if (hitLocked) toast.error("Garis terkunci");
     }
