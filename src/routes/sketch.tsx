@@ -39,6 +39,7 @@ import {
   MoveHorizontal,
   Box as BoxIcon,
   FlipHorizontal,
+  Car,
 } from "lucide-react";
 import {
   type Floor,
