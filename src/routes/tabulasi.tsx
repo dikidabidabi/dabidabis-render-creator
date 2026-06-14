@@ -371,6 +371,68 @@ function computeStats(sk: Sketch): Stats {
 
   const { totalColumns, concreteVolumeM3 } = computeAllStructuralStats(sk.structuralGrid, sk.structuralGridExtras, levels);
 
+  // ===== Parkir =====
+  const MINOR_PX = 8, MAJOR_EVERY = 10;
+  const SCALE_M: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10 };
+  const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / (SCALE_M[sk.scale] ?? 1);
+  const allLines: Line[] = sk.lines ?? [];
+  const grids = collectGrids(sk.structuralGrid, sk.structuralGridExtras);
+  const obstaclesForLevel = (lvId: string | undefined): ParkingObstacle[] => {
+    const obs: ParkingObstacle[] = [];
+    const wallBufferPx = 0.075 * pxPerMeter;
+    for (const ln of allLines) {
+      if (lvId && ln.levelId !== lvId) continue;
+      if ((ln.kind ?? "straight") !== "straight") continue;
+      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBufferPx });
+    }
+    const lv = levels.find((l) => l.id === lvId);
+    if (!lv) return obs;
+    for (const g of grids) {
+      if (g.lineOnly) continue;
+      if (!levelInRange(g, lv, levels)) continue;
+      const { spansX, spansY } = spansForLevel(g, lv.id);
+      const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
+      const ang = ((g.rotation ?? 0) * Math.PI) / 180;
+      const cos = Math.cos(ang), sin = Math.sin(ang);
+      const posX = axisPositions(spansX);
+      const posY = axisPositions(spansY);
+      for (let j = 0; j < posY.length; j++) {
+        for (let i = 0; i < posX.length; i++) {
+          if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
+          const lx = posX[i] * pxPerMeter;
+          const ly = posY[j] * pxPerMeter;
+          const wx = g.origin.x + lx * cos - ly * sin;
+          const wy = g.origin.y + lx * sin + ly * cos;
+          const corners = [
+            { x: -halfCol, y: -halfCol },
+            { x:  halfCol, y: -halfCol },
+            { x:  halfCol, y:  halfCol },
+            { x: -halfCol, y:  halfCol },
+          ].map((c) => ({
+            x: wx + c.x * cos - c.y * sin,
+            y: wy + c.x * sin + c.y * cos,
+          }));
+          obs.push({ kind: "polygon", poly: corners });
+        }
+      }
+    }
+    return obs;
+  };
+  const parkingAreas: ParkingArea[] = sk.parkingAreas ?? [];
+  let parkingTotal = 0;
+  let parkingAreaTotalM2 = 0;
+  const parkingByLevel = new Map<string, number>();
+  for (const area of parkingAreas) {
+    const stalls = generateStalls(area, pxPerMeter, obstaclesForLevel(area.levelId));
+    const valid = stalls.filter((s) => s.valid).length;
+    parkingTotal += valid;
+    parkingAreaTotalM2 += ((area.halfW * 2) / pxPerMeter) * ((area.halfH * 2) / pxPerMeter);
+    if (area.levelId) parkingByLevel.set(area.levelId, (parkingByLevel.get(area.levelId) ?? 0) + valid);
+  }
+  const parkingEfficiencyPct = parkingAreaTotalM2 > 0
+    ? (parkingTotal * STALL_AREA_M2 * 100) / parkingAreaTotalM2
+    : 0;
+
   return {
     totalLahanM2,
     totalRuangM2,
@@ -393,6 +455,14 @@ function computeStats(sk: Sketch): Stats {
     ketinggianM,
     totalKolom: totalColumns,
     volumeBetonM3: concreteVolumeM3,
+    parkingTotal,
+    parkingAreaTotalM2,
+    parkingEfficiencyPct,
+    parkingByLevel: Array.from(parkingByLevel.entries()).map(([levelId, count]) => ({
+      levelId,
+      levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
+      count,
+    })),
   };
 }
 
