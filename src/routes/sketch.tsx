@@ -2569,6 +2569,60 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
 
 
+  // ===== Parkir: obstacle index + generator stall (per level aktif) =====
+  const parkingObstacles = useMemo<ParkingObstacle[]>(() => {
+    const obs: ParkingObstacle[] = [];
+    const wallBufferPx = 0.075 * pxPerMeter; // 7.5 cm
+    for (const ln of lines) {
+      if (activeLvlId && ln.levelId !== activeLvlId) continue;
+      if ((ln.kind ?? "straight") !== "straight") continue;
+      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBufferPx });
+    }
+    const grids = collectGrids(primaryGrid, gridExtras);
+    const lv = levels.find((l) => l.id === activeLvlId);
+    if (lv) {
+      for (const g of grids) {
+        if (g.lineOnly) continue;
+        if (!levelInRange(g, lv, levels)) continue;
+        const { spansX, spansY } = spansForLevel(g, lv.id);
+        const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
+        const ang = ((g.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        const posX = axisPositions(spansX);
+        const posY = axisPositions(spansY);
+        for (let j = 0; j < posY.length; j++) {
+          for (let i = 0; i < posX.length; i++) {
+            if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
+            const lx = posX[i] * pxPerMeter;
+            const ly = posY[j] * pxPerMeter;
+            const wx = g.origin.x + lx * cos - ly * sin;
+            const wy = g.origin.y + lx * sin + ly * cos;
+            const corners = [
+              { x: -halfCol, y: -halfCol },
+              { x:  halfCol, y: -halfCol },
+              { x:  halfCol, y:  halfCol },
+              { x: -halfCol, y:  halfCol },
+            ].map((c) => ({
+              x: wx + c.x * cos - c.y * sin,
+              y: wy + c.x * sin + c.y * cos,
+            }));
+            obs.push({ kind: "polygon", poly: corners });
+          }
+        }
+      }
+    }
+    return obs;
+  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels]);
+
+  const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
+    const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
+    const areas = (sketch.parkingAreas ?? []).filter((p) => !activeLvlId || p.levelId === activeLvlId);
+    for (const area of areas) {
+      out.push({ areaId: area.id, stalls: generateStalls(area, pxPerMeter, parkingObstacles) });
+    }
+    return out;
+  }, [sketch.parkingAreas, activeLvlId, pxPerMeter, parkingObstacles]);
+
   // Redraw
   useEffect(() => {
     const canvas = canvasRef.current;
