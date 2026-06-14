@@ -6030,6 +6030,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (curTool === "parking") {
+      // Bangun bounding box parkir di koordinat dunia, snap rotasi ke grid
+      // struktural aktif (jika ada) supaya deret stall otomatis sejajar grid.
+      const ang = structGridRotRad || 0;
+      // Un-rotate ke frame lokal grid, hitung min/max, lalu rotasi balik untuk
+      // mencari center & half-extent dalam frame ter-rotasi.
+      const la = rotateAround(a, { x: 0, y: 0 }, -ang);
+      const lb = rotateAround(b, { x: 0, y: 0 }, -ang);
+      const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
+      const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
+      const halfW = (maxX - minX) / 2;
+      const halfH = (maxY - minY) / 2;
+      // Minimum 5 m × 5 m supaya muat satu modul minimum.
+      if (halfW * 2 < pxPerMeter * 5 || halfH * 2 < pxPerMeter * 5) {
+        toast.error("Area parkir terlalu kecil (min 5 m × 5 m)");
+        return;
+      }
+      const centerLocal = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+      const center = rotateAround(centerLocal, { x: 0, y: 0 }, ang);
+      const newArea: ParkingArea = {
+        id: genParkingId(),
+        levelId: activeLvlId ?? undefined,
+        center,
+        halfW,
+        halfH,
+        rotation: ang,
+        orientation: "auto",
+      };
+      pushHistory();
+      const prev = sketch.parkingAreas ?? [];
+      onChange({ parkingAreas: [...prev, newArea] });
+      toast.success("Area parkir ditambahkan");
+      return;
+    }
+
+
     if (curTool === "section") {
       // Garis Potong: simpan bidang irisan baru ke sketch (A-A, B-B, …).
       // Slide presentasi "Potongan Prinsip Skematik X-X" akan otomatis muncul.
