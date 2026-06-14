@@ -91,6 +91,7 @@ import {
   parseYAxisLabel,
   spansForLevel,
   isNodeActive,
+  isColumnVisible,
   isColumnClipped,
   levelInRange,
   computeStructuralStats,
