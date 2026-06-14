@@ -8469,6 +8469,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <MoveHorizontal className="h-4 w-4" />
           </Button>
+          <Button
+            variant={tool === "parking" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); }}
+            className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
+            title="Lot Parkir (tarik bbox; deret stall otomatis hindari kolom/dinding)"
+          >
+            <Car className="h-4 w-4" />
           {tool === "edit" && (
             <>
               <div className="h-6 w-px bg-border/60" />
