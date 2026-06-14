@@ -5161,7 +5161,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
-    if (tool === "line" || tool === "rect" || tool === "section") {
+    if (tool === "line" || tool === "rect" || tool === "section" || tool === "parking") {
       setDrawing({ a: p, b: p });
 
     } else if (tool === "polyline") {
