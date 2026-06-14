@@ -118,7 +118,6 @@ import {
   normalizeParkingAreas,
   generateStalls,
   genParkingId,
-  STALL_AREA_M2,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 
