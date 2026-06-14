@@ -109,6 +109,15 @@ import {
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
 import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
+import {
+  type ParkingArea,
+  type ParkingStall,
+  type ParkingObstacle,
+  normalizeParkingAreas,
+  generateStalls,
+  genParkingId,
+  STALL_AREA_M2,
+} from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 
 export const Route = createFileRoute("/sketch")({
