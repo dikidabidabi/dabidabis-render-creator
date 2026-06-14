@@ -6994,6 +6994,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
           </Button>
+          <Button
+            variant={tool === "parking" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); }}
+            className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
+            title="Lot Parkir — tarik bounding box; deret 2.5×5 m otomatis di-snap ke grid struktur, kolom/dinding diabaikan otomatis."
+          >
+            <Car className="mr-1.5 h-4 w-4" /> Lot Parkir
+          </Button>
         </div>
         {tool === "floor" && (
           <FloorToolPanel
