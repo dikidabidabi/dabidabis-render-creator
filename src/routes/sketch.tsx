@@ -8477,6 +8477,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Lot Parkir (tarik bbox; deret stall otomatis hindari kolom/dinding)"
           >
             <Car className="h-4 w-4" />
+          </Button>
           {tool === "edit" && (
             <>
               <div className="h-6 w-px bg-border/60" />
