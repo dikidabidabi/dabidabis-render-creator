@@ -1754,6 +1754,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [size, setSize] = useState({ w: 800, h: 600 });
 
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking">("line");
+  // Parking sub-tool state
+  type ParkingSubTool = "draw" | "move" | "addPoint" | "removePoint" | "rotate";
+  const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
+  const [parkingSelectedId, setParkingSelectedId] = useState<string | null>(null);
+  const [parkingDrag, setParkingDrag] = useState<
+    | { kind: "vertex"; areaId: string; idx: number }
+    | { kind: "rotate"; areaId: string; startAngle: number; startRot: number; centerWorld: { x: number; y: number } }
+    | { kind: "area"; areaId: string; startWorld: { x: number; y: number }; startPoints: { x: number; y: number }[] }
+    | null
+  >(null);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -5638,11 +5648,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       for (let i = parkAreas.length - 1; i >= 0; i--) {
         const a = parkAreas[i];
         if (activeLvlId && a.levelId !== activeLvlId) continue;
-        // Hit-test di koordinat lokal area (un-rotate dulu).
-        const local = rotateAround(p, a.center, -a.rotation);
-        const dx = local.x - a.center.x;
-        const dy = local.y - a.center.y;
-        if (Math.abs(dx) <= a.halfW && Math.abs(dy) <= a.halfH) {
+        // Hit-test polygon di koordinat dunia.
+        const worldPoly = a.pointsLocal.map((q) => ({
+          x: q.x * Math.cos(mmGridRotRad) - q.y * Math.sin(mmGridRotRad),
+          y: q.x * Math.sin(mmGridRotRad) + q.y * Math.cos(mmGridRotRad),
+        }));
+        let inside = false;
+        for (let k = 0, j2 = worldPoly.length - 1; k < worldPoly.length; j2 = k++) {
+          const xi = worldPoly[k].x, yi = worldPoly[k].y;
+          const xj = worldPoly[j2].x, yj = worldPoly[j2].y;
+          if ((yi > p.y) !== (yj > p.y) &&
+              p.x < ((xj - xi) * (p.y - yi)) / (yj - yi + 1e-12) + xi) {
+            inside = !inside;
+          }
+        }
+        if (inside) {
           pushHistory();
           onChange({ parkingAreas: parkAreas.filter((_, j) => j !== i) });
           toast.success("Area parkir dihapus");
@@ -6232,36 +6252,34 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     if (curTool === "parking") {
-      // Bangun bounding box parkir di koordinat dunia, snap rotasi ke grid
-      // struktural aktif (jika ada) supaya deret stall otomatis sejajar grid.
-      const ang = structGridRotRad || 0;
-      // Un-rotate ke frame lokal grid, hitung min/max, lalu rotasi balik untuk
-      // mencari center & half-extent dalam frame ter-rotasi.
+      // Hanya draw mode yang membuat area baru.
+      if (parkingSubTool !== "draw") return;
+      // Tarik kotak parkir di KOORDINAT LOKAL mm-grid; saat grid berputar,
+      // area otomatis ikut karena disimpan di local-frame.
+      const ang = mmGridRotRad || 0;
       const la = rotateAround(a, { x: 0, y: 0 }, -ang);
       const lb = rotateAround(b, { x: 0, y: 0 }, -ang);
       const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
       const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
-      const halfW = (maxX - minX) / 2;
-      const halfH = (maxY - minY) / 2;
-      // Minimum 5 m × 5 m supaya muat satu modul minimum.
-      if (halfW * 2 < pxPerMeter * 5 || halfH * 2 < pxPerMeter * 5) {
+      if ((maxX - minX) < pxPerMeter * 5 || (maxY - minY) < pxPerMeter * 5) {
         toast.error("Area parkir terlalu kecil (min 5 m × 5 m)");
         return;
       }
-      const centerLocal = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-      const center = rotateAround(centerLocal, { x: 0, y: 0 }, ang);
+      const pointsLocal = [
+        { x: minX, y: minY }, { x: maxX, y: minY },
+        { x: maxX, y: maxY }, { x: minX, y: maxY },
+      ];
       const newArea: ParkingArea = {
         id: genParkingId(),
         levelId: activeLvlId ?? undefined,
-        center,
-        halfW,
-        halfH,
-        rotation: ang,
+        pointsLocal,
         orientation: "auto",
+        stallRotation: 0,
       };
       pushHistory();
       const prev = sketch.parkingAreas ?? [];
       onChange({ parkingAreas: [...prev, newArea] });
+      setParkingSelectedId(newArea.id);
       toast.success("Area parkir ditambahkan");
       return;
     }
