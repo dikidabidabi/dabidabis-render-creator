@@ -59,6 +59,7 @@ type Sketch = {
   structuralGrid?: StructuralGrid;
   structuralGridExtras?: StructuralGrid[];
   parkingAreas?: ParkingArea[];
+  mmGridRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
