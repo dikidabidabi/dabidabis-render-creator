@@ -821,7 +821,9 @@ function normalizeSketch(s: any): Sketch {
       return out;
     })(),
     parkingAreas: (() => {
-      const arr = normalizeParkingAreas(s?.parkingAreas);
+      const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
+      const mmRotRad = (mmRotDeg * Math.PI) / 180;
+      const arr = normalizeParkingAreas(s?.parkingAreas, mmRotRad);
       const validLvl = new Set(levels.map((l) => l.id));
       return arr.map((p) => (p.levelId && validLvl.has(p.levelId) ? p : { ...p, levelId: fallback }));
     })(),
@@ -2618,7 +2620,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
     const areas = (sketch.parkingAreas ?? []).filter((p) => !activeLvlId || p.levelId === activeLvlId);
     for (const area of areas) {
-      out.push({ areaId: area.id, stalls: generateStalls(area, pxPerMeter, parkingObstacles) });
+      out.push({ areaId: area.id, stalls: generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles) });
     }
     return out;
   }, [sketch.parkingAreas, activeLvlId, pxPerMeter, parkingObstacles]);
