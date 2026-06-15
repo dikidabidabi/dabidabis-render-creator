@@ -4987,6 +4987,164 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    // ===== Parking sub-tool interactions =====
+    if (tool === "parking" && parkingSubTool !== "draw") {
+      const rawWp = getWorldPosRaw(e);
+      const tol = 12 / view.s;
+      const areas = (sketch.parkingAreas ?? []).filter(
+        (pa) => !activeLvlId || pa.levelId === activeLvlId,
+      );
+      // helper: local-from-world
+      const lfw = (q: { x: number; y: number }) => ({
+        x: q.x * Math.cos(-mmGridRotRad) - q.y * Math.sin(-mmGridRotRad),
+        y: q.x * Math.sin(-mmGridRotRad) + q.y * Math.cos(-mmGridRotRad),
+      });
+      // 1) Rotation handle hit (jika selected)
+      if (parkingSelectedId) {
+        const sel = areas.find((aa) => aa.id === parkingSelectedId);
+        if (sel) {
+          const worldPoly = sel.pointsLocal.map((q) => ({
+            x: q.x * Math.cos(mmGridRotRad) - q.y * Math.sin(mmGridRotRad),
+            y: q.x * Math.sin(mmGridRotRad) + q.y * Math.cos(mmGridRotRad),
+          }));
+          const cx = worldPoly.reduce((s2, q) => s2 + q.x, 0) / worldPoly.length;
+          const cy = worldPoly.reduce((s2, q) => s2 + q.y, 0) / worldPoly.length;
+          const totalRot = mmGridRotRad + (sel.stallRotation ?? 0);
+          let maxR = 0;
+          for (const q of worldPoly) {
+            const d = Math.hypot(q.x - cx, q.y - cy);
+            if (d > maxR) maxR = d;
+          }
+          const hr = maxR + 24 / view.s;
+          const hx = cx + Math.cos(totalRot - Math.PI / 2) * hr;
+          const hy = cy + Math.sin(totalRot - Math.PI / 2) * hr;
+          if (Math.hypot(rawWp.x - hx, rawWp.y - hy) <= tol) {
+            const startAng = Math.atan2(rawWp.y - cy, rawWp.x - cx);
+            setParkingDrag({
+              kind: "rotate",
+              areaId: sel.id,
+              startAngle: startAng,
+              startRot: sel.stallRotation ?? 0,
+              centerWorld: { x: cx, y: cy },
+            });
+            return;
+          }
+        }
+      }
+      // 2) Vertex hit (move sub-tool)
+      if (parkingSubTool === "move") {
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          const worldPoly = area.pointsLocal.map((q) => ({
+            x: q.x * Math.cos(mmGridRotRad) - q.y * Math.sin(mmGridRotRad),
+            y: q.x * Math.sin(mmGridRotRad) + q.y * Math.cos(mmGridRotRad),
+          }));
+          for (let i = 0; i < worldPoly.length; i++) {
+            if (Math.hypot(rawWp.x - worldPoly[i].x, rawWp.y - worldPoly[i].y) <= tol) {
+              setParkingSelectedId(area.id);
+              pushHistory();
+              setParkingDrag({ kind: "vertex", areaId: area.id, idx: i });
+              return;
+            }
+          }
+        }
+      }
+      // 3) Remove point: klik vertex menghapus
+      if (parkingSubTool === "removePoint") {
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          const worldPoly = area.pointsLocal.map((q) => ({
+            x: q.x * Math.cos(mmGridRotRad) - q.y * Math.sin(mmGridRotRad),
+            y: q.x * Math.sin(mmGridRotRad) + q.y * Math.cos(mmGridRotRad),
+          }));
+          for (let i = 0; i < worldPoly.length; i++) {
+            if (Math.hypot(rawWp.x - worldPoly[i].x, rawWp.y - worldPoly[i].y) <= tol) {
+              if (area.pointsLocal.length <= 3) {
+                toast.error("Minimal 3 titik");
+                return;
+              }
+              pushHistory();
+              const newPts = area.pointsLocal.filter((_, k) => k !== i);
+              onChange({
+                parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                  a2.id === area.id ? { ...a2, pointsLocal: newPts } : a2,
+                ),
+              });
+              setParkingSelectedId(area.id);
+              return;
+            }
+          }
+        }
+        return;
+      }
+      // 4) Add point: klik edge menyisipkan titik baru
+      if (parkingSubTool === "addPoint") {
+        const localP = lfw(rawWp);
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          const pts = area.pointsLocal;
+          let bestI = -1, bestD = Infinity, bestProj: { x: number; y: number } | null = null;
+          for (let i = 0; i < pts.length; i++) {
+            const a2 = pts[i], b2 = pts[(i + 1) % pts.length];
+            const vx = b2.x - a2.x, vy = b2.y - a2.y;
+            const wx = localP.x - a2.x, wy = localP.y - a2.y;
+            const c2 = vx * vx + vy * vy;
+            if (c2 < 1e-6) continue;
+            const t = Math.max(0, Math.min(1, (vx * wx + vy * wy) / c2));
+            const px = a2.x + t * vx, py = a2.y + t * vy;
+            const d = Math.hypot(localP.x - px, localP.y - py);
+            if (d < bestD) { bestD = d; bestI = i; bestProj = { x: px, y: py }; }
+          }
+          if (bestI >= 0 && bestProj && bestD <= tol) {
+            pushHistory();
+            const newPts = [...area.pointsLocal];
+            newPts.splice(bestI + 1, 0, bestProj);
+            onChange({
+              parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                a2.id === area.id ? { ...a2, pointsLocal: newPts } : a2,
+              ),
+            });
+            setParkingSelectedId(area.id);
+            return;
+          }
+        }
+        return;
+      }
+      // 5) Move sub-tool: klik di dalam area → drag area; klik kosong → deselect
+      if (parkingSubTool === "move") {
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          const worldPoly = area.pointsLocal.map((q) => ({
+            x: q.x * Math.cos(mmGridRotRad) - q.y * Math.sin(mmGridRotRad),
+            y: q.x * Math.sin(mmGridRotRad) + q.y * Math.cos(mmGridRotRad),
+          }));
+          let inside = false;
+          for (let k = 0, j2 = worldPoly.length - 1; k < worldPoly.length; j2 = k++) {
+            const xi = worldPoly[k].x, yi = worldPoly[k].y;
+            const xj = worldPoly[j2].x, yj = worldPoly[j2].y;
+            if ((yi > rawWp.y) !== (yj > rawWp.y) &&
+                rawWp.x < ((xj - xi) * (rawWp.y - yi)) / (yj - yi + 1e-12) + xi) {
+              inside = !inside;
+            }
+          }
+          if (inside) {
+            setParkingSelectedId(area.id);
+            pushHistory();
+            setParkingDrag({
+              kind: "area",
+              areaId: area.id,
+              startWorld: rawWp,
+              startPoints: area.pointsLocal.map((q) => ({ x: q.x, y: q.y })),
+            });
+            return;
+          }
+        }
+        setParkingSelectedId(null);
+        return;
+      }
+      return;
+    }
+
     const p = getWorldPos(e);
     if (tool === "grid") {
       const rawWorld = getWorldPosRaw(e);
