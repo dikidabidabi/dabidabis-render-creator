@@ -423,14 +423,24 @@ function computeStats(sk: Sketch): Stats {
     return obs;
   };
   const parkingAreas: ParkingArea[] = sk.parkingAreas ?? [];
+  const mmRotDeg = Number.isFinite(Number(sk.mmGridRotation)) ? Number(sk.mmGridRotation) : 0;
+  const mmRotRad = (mmRotDeg * Math.PI) / 180;
   let parkingTotal = 0;
   let parkingAreaTotalM2 = 0;
   const parkingByLevel = new Map<string, number>();
   for (const area of parkingAreas) {
-    const stalls = generateStalls(area, pxPerMeter, obstaclesForLevel(area.levelId));
+    const stalls = generateStalls(area, pxPerMeter, mmRotRad, obstaclesForLevel(area.levelId));
     const valid = stalls.filter((s) => s.valid).length;
     parkingTotal += valid;
-    parkingAreaTotalM2 += ((area.halfW * 2) / pxPerMeter) * ((area.halfH * 2) / pxPerMeter);
+    // luas polygon area (shoelace)
+    const pts = area.pointsLocal ?? [];
+    let acc = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      acc += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+    }
+    const areaPx = Math.abs(acc) / 2;
+    parkingAreaTotalM2 += areaPx / (pxPerMeter * pxPerMeter);
     if (area.levelId) parkingByLevel.set(area.levelId, (parkingByLevel.get(area.levelId) ?? 0) + valid);
   }
   const parkingEfficiencyPct = parkingAreaTotalM2 > 0
