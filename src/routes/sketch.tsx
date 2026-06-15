@@ -40,7 +40,6 @@ import {
   Box as BoxIcon,
   FlipHorizontal,
   Car,
-  Trash2,
   RotateCw,
 } from "lucide-react";
 import {
