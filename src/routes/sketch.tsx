@@ -40,6 +40,8 @@ import {
   Box as BoxIcon,
   FlipHorizontal,
   Car,
+  Trash2,
+  RotateCw,
 } from "lucide-react";
 import {
   type Floor,
@@ -120,6 +122,7 @@ import {
   genParkingId,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
+import { useProjectStore } from "@/store/project-store";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
