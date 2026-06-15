@@ -1766,6 +1766,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | { kind: "area"; areaId: string; startWorld: { x: number; y: number }; startPoints: { x: number; y: number }[] }
     | null
   >(null);
+  const parkingClipboard = useProjectStore((s) => s.parkingClipboard);
+  const setParkingClipboard = useProjectStore((s) => s.setParkingClipboard);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -5516,7 +5518,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
-    if (tool === "line" || tool === "rect" || tool === "section" || tool === "parking") {
+    if (
+      tool === "line" || tool === "rect" || tool === "section" ||
+      (tool === "parking" && parkingSubTool === "draw")
+    ) {
       setDrawing({ a: p, b: p });
 
     } else if (tool === "polyline") {
