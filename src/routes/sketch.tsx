@@ -7308,13 +7308,51 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button
             variant={tool === "parking" ? "default" : "outline"}
             size="sm"
-            onClick={() => { cancelPendingCurve(); setTool("parking"); }}
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingSubTool("draw"); }}
             className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
-            title="Lot Parkir — tarik bounding box; deret 2.5×5 m otomatis di-snap ke grid struktur, kolom/dinding diabaikan otomatis."
+            title="Lot Parkir — tarik bounding box; deret 2.5×5 m otomatis di-snap ke grid mm, kolom/dinding/ruang dihindari (geser, tidak skip)."
           >
             <Car className="mr-1.5 h-4 w-4" /> Lot Parkir
           </Button>
         </div>
+        {tool === "parking" && (
+          <ParkingSubToolbar
+            sub={parkingSubTool}
+            setSub={setParkingSubTool}
+            selectedId={parkingSelectedId}
+            clipboardSize={parkingClipboard?.length ?? 0}
+            onCopy={() => {
+              if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
+              const sel = (sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId);
+              if (!sel) return;
+              setParkingClipboard([{ ...sel, levelId: undefined }]);
+              toast.success("Disalin ke clipboard");
+            }}
+            onPaste={() => {
+              if (!parkingClipboard || parkingClipboard.length === 0) { toast.error("Clipboard kosong"); return; }
+              pushHistory();
+              const offset = 30; // px lokal supaya tidak menumpuk
+              const pasted: ParkingArea[] = parkingClipboard.map((a) => ({
+                ...a,
+                id: genParkingId(),
+                levelId: activeLvlId ?? undefined,
+                pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + offset, y: q.y + offset })),
+              }));
+              onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
+              setParkingSelectedId(pasted[0]?.id ?? null);
+              toast.success(`Ditempel di ${activeLvlId ? "level aktif" : "proyek"}`);
+            }}
+            onDelete={() => {
+              if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
+              pushHistory();
+              onChange({
+                parkingAreas: (sketch.parkingAreas ?? []).filter((a) => a.id !== parkingSelectedId),
+              });
+              setParkingSelectedId(null);
+              toast.success("Area parkir dihapus");
+            }}
+          />
+        )}
         {tool === "floor" && (
           <FloorToolPanel
             mode={floorMode}
@@ -8783,12 +8821,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           <Button
             variant={tool === "parking" ? "default" : "ghost"}
             size="sm"
-            onClick={() => { cancelPendingCurve(); setTool("parking"); }}
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingSubTool("draw"); }}
             className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
-            title="Lot Parkir (tarik bbox; deret stall otomatis hindari kolom/dinding)"
+            title="Lot Parkir (tarik bbox terikat grid mm; deret stall geser dekat kolom/dinding)"
           >
             <Car className="h-4 w-4" />
           </Button>
+          {tool === "parking" && (
+            <ParkingSubToolbarMobile
+              sub={parkingSubTool}
+              setSub={setParkingSubTool}
+              selectedId={parkingSelectedId}
+              clipboardSize={parkingClipboard?.length ?? 0}
+              onCopy={() => {
+                if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
+                const sel = (sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId);
+                if (!sel) return;
+                setParkingClipboard([{ ...sel, levelId: undefined }]);
+                toast.success("Disalin");
+              }}
+              onPaste={() => {
+                if (!parkingClipboard || parkingClipboard.length === 0) { toast.error("Clipboard kosong"); return; }
+                pushHistory();
+                const offset = 30;
+                const pasted: ParkingArea[] = parkingClipboard.map((a) => ({
+                  ...a,
+                  id: genParkingId(),
+                  levelId: activeLvlId ?? undefined,
+                  pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + offset, y: q.y + offset })),
+                }));
+                onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
+                setParkingSelectedId(pasted[0]?.id ?? null);
+                toast.success("Ditempel");
+              }}
+              onDelete={() => {
+                if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
+                pushHistory();
+                onChange({
+                  parkingAreas: (sketch.parkingAreas ?? []).filter((a) => a.id !== parkingSelectedId),
+                });
+                setParkingSelectedId(null);
+                toast.success("Dihapus");
+              }}
+            />
+          )}
           {tool === "edit" && (
             <>
               <div className="h-6 w-px bg-border/60" />
