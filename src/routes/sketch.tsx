@@ -2679,8 +2679,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
       }
     }
+    // Floors (ruang/polygon tertutup) → polygon obstacle.
+    for (const f of (sketch.floors ?? [])) {
+      if (activeLvlId && f.levelId !== activeLvlId) continue;
+      if (Array.isArray(f.outer) && f.outer.length >= 3) {
+        obs.push({ kind: "polygon", poly: f.outer.map((p) => ({ x: p.x, y: p.y })) });
+      }
+    }
     return obs;
-  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels]);
+  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, sketch.floors]);
 
   const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
     const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
@@ -2689,7 +2696,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       out.push({ areaId: area.id, stalls: generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles) });
     }
     return out;
-  }, [sketch.parkingAreas, activeLvlId, pxPerMeter, parkingObstacles]);
+  }, [sketch.parkingAreas, activeLvlId, pxPerMeter, mmGridRotRad, parkingObstacles]);
 
   // Redraw
   useEffect(() => {
