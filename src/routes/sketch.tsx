@@ -4141,16 +4141,69 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       );
       const stallsByArea = new Map(parkingStallsActive.map((x) => [x.areaId, x.stalls]));
       for (const area of areas) {
-        // outline area
+        // Polygon area di koordinat dunia (rotasi mengikuti mm-grid).
+        const worldPoly = area.pointsLocal.map((p) => ({
+          x: p.x * Math.cos(mmGridRotRad) - p.y * Math.sin(mmGridRotRad),
+          y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
+        }));
         ctx.save();
-        ctx.translate(area.center.x, area.center.y);
-        ctx.rotate(area.rotation);
         ctx.strokeStyle = "rgba(14, 165, 233, 0.85)";
         ctx.lineWidth = 1.2 / s;
         ctx.setLineDash([6 / s, 4 / s]);
-        ctx.strokeRect(-area.halfW, -area.halfH, area.halfW * 2, area.halfH * 2);
+        ctx.beginPath();
+        ctx.moveTo(worldPoly[0].x, worldPoly[0].y);
+        for (let i = 1; i < worldPoly.length; i++) ctx.lineTo(worldPoly[i].x, worldPoly[i].y);
+        ctx.closePath();
+        ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
+        // Selected highlight + handles (geser/rotasi/add/remove)
+        if (parkingSelectedId === area.id) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(244, 114, 22, 0.95)";
+          ctx.lineWidth = 2 / s;
+          ctx.beginPath();
+          ctx.moveTo(worldPoly[0].x, worldPoly[0].y);
+          for (let i = 1; i < worldPoly.length; i++) ctx.lineTo(worldPoly[i].x, worldPoly[i].y);
+          ctx.closePath();
+          ctx.stroke();
+          // titik vertex
+          const r = 5 / s;
+          ctx.fillStyle = "#f47216";
+          for (const p of worldPoly) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // handle rotasi: di luar bbox sisi atas
+          const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
+          const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
+          const totalRot = mmGridRotRad + (area.stallRotation ?? 0);
+          // Hitung jarak dari center ke titik terjauh
+          let maxR = 0;
+          for (const p of worldPoly) {
+            const d = Math.hypot(p.x - cx, p.y - cy);
+            if (d > maxR) maxR = d;
+          }
+          const hr = maxR + 24 / s;
+          const hx = cx + Math.cos(totalRot - Math.PI / 2) * hr;
+          const hy = cy + Math.sin(totalRot - Math.PI / 2) * hr;
+          ctx.strokeStyle = "rgba(244, 114, 22, 0.7)";
+          ctx.setLineDash([4 / s, 3 / s]);
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "#fff";
+          ctx.strokeStyle = "#f47216";
+          ctx.lineWidth = 2 / s;
+          ctx.beginPath();
+          ctx.arc(hx, hy, 7 / s, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
         // stalls
         const stalls = stallsByArea.get(area.id) ?? [];
         for (const st of stalls) {
@@ -4165,7 +4218,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         // label kapasitas
         const validCount = stalls.filter((x) => x.valid).length;
-        const sp = worldToScreen(area.center);
+        const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
+        const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
+        const sp = worldToScreen({ x: cx, y: cy });
         const label = `${validCount} mobil`;
         ctx.font = "600 11px Manrope, sans-serif";
         const w = ctx.measureText(label).width + 10;
@@ -4174,9 +4229,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.fillStyle = "#fff";
         ctx.fillText(label, sp.x - w / 2 + 5, sp.y + 4);
       }
-      // preview drag parkir
-      if (drawing && tool === "parking") {
-        const ang = structGridRotRad || 0;
+      // preview drag parkir (4-titik rect ter-snap mm-grid)
+      if (drawing && tool === "parking" && parkingSubTool === "draw") {
+        const ang = mmGridRotRad || 0;
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -ang);
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -ang);
         const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
