@@ -936,6 +936,58 @@ function SpanRow({
   );
 }
 
+type ParkingSubToolbarProps = {
+  sub: "draw" | "move" | "addPoint" | "removePoint" | "rotate";
+  setSub: (s: "draw" | "move" | "addPoint" | "removePoint" | "rotate") => void;
+  selectedId: string | null;
+  clipboardSize: number;
+  onCopy: () => void;
+  onPaste: () => void;
+  onDelete: () => void;
+};
+
+function ParkingSubToolbar(props: ParkingSubToolbarProps) {
+  const { sub, setSub, selectedId, clipboardSize, onCopy, onPaste, onDelete } = props;
+  const opts: Array<{ k: typeof sub; label: string; hint: string }> = [
+    { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
+    { k: "move", label: "Geser", hint: "Geser titik / area" },
+    { k: "addPoint", label: "+Titik", hint: "Sisip titik di sisi" },
+    { k: "removePoint", label: "−Titik", hint: "Hapus titik" },
+    { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
+  ];
+  return (
+    <div className="flex flex-wrap gap-1.5 rounded-lg border border-border/60 bg-card/40 p-2">
+      {opts.map((o) => (
+        <Button
+          key={o.k}
+          size="sm"
+          variant={sub === o.k ? "default" : "outline"}
+          onClick={() => setSub(o.k)}
+          title={o.hint}
+        >
+          {o.label}
+        </Button>
+      ))}
+      <div className="mx-1 h-6 w-px bg-border/60" />
+      <Button size="sm" variant="outline" onClick={onCopy} disabled={!selectedId} title="Copy area parkir terpilih">
+        <Copy className="mr-1 h-3.5 w-3.5" /> Copy
+      </Button>
+      <Button size="sm" variant="outline" onClick={onPaste} disabled={clipboardSize === 0} title="Paste ke level aktif">
+        <ClipboardPaste className="mr-1 h-3.5 w-3.5" /> Paste{clipboardSize > 0 ? ` (${clipboardSize})` : ""}
+      </Button>
+      <Button size="sm" variant="destructive" onClick={onDelete} disabled={!selectedId} title="Hapus area parkir">
+        <X className="mr-1 h-3.5 w-3.5" /> Hapus
+      </Button>
+    </div>
+  );
+}
+
+function ParkingSubToolbarMobile(props: ParkingSubToolbarProps) {
+  return <ParkingSubToolbar {...props} />;
+}
+
+
+
 
 function SketchPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
