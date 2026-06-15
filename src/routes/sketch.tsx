@@ -5833,6 +5833,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    // Parking drag (vertex / rotate / area)
+    if (parkingDrag) {
+      const rawWp = getWorldPosRaw(e);
+      const lfw = (q: { x: number; y: number }) => ({
+        x: q.x * Math.cos(-mmGridRotRad) - q.y * Math.sin(-mmGridRotRad),
+        y: q.x * Math.sin(-mmGridRotRad) + q.y * Math.cos(-mmGridRotRad),
+      });
+      const areas = sketch.parkingAreas ?? [];
+      if (parkingDrag.kind === "vertex") {
+        const lp = lfw(rawWp);
+        onChange({
+          parkingAreas: areas.map((a) => {
+            if (a.id !== parkingDrag.areaId) return a;
+            const next = [...a.pointsLocal];
+            next[parkingDrag.idx] = lp;
+            return { ...a, pointsLocal: next };
+          }),
+        });
+        return;
+      }
+      if (parkingDrag.kind === "rotate") {
+        const ang = Math.atan2(rawWp.y - parkingDrag.centerWorld.y, rawWp.x - parkingDrag.centerWorld.x);
+        const newRot = parkingDrag.startRot + (ang - parkingDrag.startAngle);
+        onChange({
+          parkingAreas: areas.map((a) =>
+            a.id === parkingDrag.areaId ? { ...a, stallRotation: newRot } : a,
+          ),
+        });
+        return;
+      }
+      if (parkingDrag.kind === "area") {
+        const dxW = rawWp.x - parkingDrag.startWorld.x;
+        const dyW = rawWp.y - parkingDrag.startWorld.y;
+        const dLocal = lfw({ x: dxW, y: dyW });
+        // dLocal sebagai delta lokal: rotasi pure tanpa translasi
+        const dLx = dxW * Math.cos(-mmGridRotRad) - dyW * Math.sin(-mmGridRotRad);
+        const dLy = dxW * Math.sin(-mmGridRotRad) + dyW * Math.cos(-mmGridRotRad);
+        onChange({
+          parkingAreas: areas.map((a) =>
+            a.id === parkingDrag.areaId
+              ? { ...a, pointsLocal: parkingDrag.startPoints.map((q) => ({ x: q.x + dLx, y: q.y + dLy })) }
+              : a,
+          ),
+        });
+        return;
+      }
+    }
+
     if (pointersRef.current.has(e.pointerId)) {
       pointersRef.current.set(e.pointerId, getScreenPos(e));
     }
