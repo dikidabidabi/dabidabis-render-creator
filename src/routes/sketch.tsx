@@ -119,6 +119,7 @@ import {
   normalizeParkingAreas,
   generateStalls,
   genParkingId,
+  isParkingName,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useProjectStore } from "@/store/project-store";
@@ -941,19 +942,26 @@ type ParkingSubToolbarProps = {
   setSub: (s: "draw" | "move" | "addPoint" | "removePoint" | "rotate") => void;
   selectedId: string | null;
   clipboardSize: number;
+  orientation: "auto" | "x" | "y";
+  onOrientation: (o: "auto" | "x" | "y") => void;
   onCopy: () => void;
   onPaste: () => void;
   onDelete: () => void;
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
-  const { sub, setSub, selectedId, clipboardSize, onCopy, onPaste, onDelete } = props;
+  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete } = props;
   const opts: Array<{ k: typeof sub; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
     { k: "move", label: "Geser", hint: "Geser titik / area" },
     { k: "addPoint", label: "+Titik", hint: "Sisip titik di sisi" },
     { k: "removePoint", label: "−Titik", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
+  ];
+  const oriOpts: Array<{ k: "auto" | "x" | "y"; label: string; hint: string }> = [
+    { k: "auto", label: "Auto", hint: "Orientasi otomatis sesuai sisi terpanjang" },
+    { k: "x", label: "X", hint: "Deret lot berjejer searah sumbu X grid" },
+    { k: "y", label: "Y", hint: "Deret lot berjejer searah sumbu Y grid" },
   ];
   return (
     <div className="flex flex-wrap gap-1.5 rounded-lg border border-border/60 bg-card/40 p-2">
@@ -963,6 +971,20 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
           size="sm"
           variant={sub === o.k ? "default" : "outline"}
           onClick={() => setSub(o.k)}
+          title={o.hint}
+        >
+          {o.label}
+        </Button>
+      ))}
+      <div className="mx-1 h-6 w-px bg-border/60" />
+      <span className="self-center text-xs text-muted-foreground">Arah deret:</span>
+      {oriOpts.map((o) => (
+        <Button
+          key={o.k}
+          size="sm"
+          variant={orientation === o.k ? "default" : "outline"}
+          onClick={() => onOrientation(o.k)}
+          disabled={!selectedId}
           title={o.hint}
         >
           {o.label}
@@ -2063,16 +2085,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
 
-  // Recompute layer areas on scale change (preserve relative geometry)
+  // Recompute layer areas on scale change (preserve relative geometry).
+  // Untuk area parkir: pointsLocal disimpan dalam px world, tetapi stall di-
+  // hitung dari STALL_W/STALL_L (meter) × pxPerMeter. Saat Skala berubah,
+  // pxPerMeter berubah → tanpa rescale, ukuran lot/stall vs polygon parkir
+  // jadi tidak konsisten terhadap grid mm-block. Kita rescale pointsLocal
+  // dengan rasio pxPerMeter baru/lama agar dimensi metrik area parkir tetap.
   const prevScaleRef = useRef(scale);
+  const prevPxPerMeterRef = useRef(pxPerMeter);
   useEffect(() => {
     if (prevScaleRef.current !== scale) {
+      const ratio = pxPerMeter / (prevPxPerMeterRef.current || pxPerMeter);
       const next = layers.map((l) => ({
         ...l,
         areaM2: polygonAreaPx(l.points) / (pxPerMeter * pxPerMeter),
       }));
-      onChange({ layers: next });
+      const patch: Partial<Sketch> = { layers: next };
+      if (Number.isFinite(ratio) && Math.abs(ratio - 1) > 1e-6 && (sketch.parkingAreas ?? []).length) {
+        patch.parkingAreas = (sketch.parkingAreas ?? []).map((a) => ({
+          ...a,
+          pointsLocal: a.pointsLocal.map((p) => ({ x: p.x * ratio, y: p.y * ratio })),
+        }));
+      }
+      onChange(patch);
       prevScaleRef.current = scale;
+      prevPxPerMeterRef.current = pxPerMeter;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale]);
@@ -2679,15 +2716,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
       }
     }
-    // Floors (ruang/polygon tertutup) → polygon obstacle.
-    for (const f of (sketch.floors ?? [])) {
-      if (activeLvlId && f.levelId !== activeLvlId) continue;
-      if (Array.isArray(f.outer) && f.outer.length >= 3) {
-        obs.push({ kind: "polygon", poly: f.outer.map((p) => ({ x: p.x, y: p.y })) });
-      }
+    // Layers (ruang) → obstacle, KECUALI yang nama-nya mengandung "parkir"/
+    // "parking". Hanya ruang itu yang boleh dihuni lot parkir.
+    for (const ly of layers) {
+      if (activeLvlId && ly.levelId !== activeLvlId) continue;
+      if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+      if (isParkingName(ly.name)) continue;
+      obs.push({ kind: "polygon", poly: ly.points.map((p) => ({ x: p.x, y: p.y })) });
     }
     return obs;
-  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, sketch.floors]);
+  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers]);
 
   const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
     const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
@@ -7380,6 +7418,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             setSub={setParkingSubTool}
             selectedId={parkingSelectedId}
             clipboardSize={parkingClipboard?.length ?? 0}
+            orientation={
+              ((sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId)?.orientation ?? "auto")
+            }
+            onOrientation={(o) => {
+              if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
+              pushHistory();
+              onChange({
+                parkingAreas: (sketch.parkingAreas ?? []).map((a) =>
+                  a.id === parkingSelectedId ? { ...a, orientation: o } : a,
+                ),
+              });
+            }}
             onCopy={() => {
               if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
               const sel = (sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId);
@@ -8892,6 +8942,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               setSub={setParkingSubTool}
               selectedId={parkingSelectedId}
               clipboardSize={parkingClipboard?.length ?? 0}
+              orientation={
+                ((sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId)?.orientation ?? "auto")
+              }
+              onOrientation={(o) => {
+                if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
+                pushHistory();
+                onChange({
+                  parkingAreas: (sketch.parkingAreas ?? []).map((a) =>
+                    a.id === parkingSelectedId ? { ...a, orientation: o } : a,
+                  ),
+                });
+              }}
               onCopy={() => {
                 if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
                 const sel = (sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId);

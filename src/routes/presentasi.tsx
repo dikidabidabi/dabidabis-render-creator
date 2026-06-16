@@ -48,6 +48,12 @@ import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import {
+  type ParkingArea,
+  type ParkingObstacle,
+  generateStalls,
+  isParkingName,
+} from "@/lib/parking";
+import {
   forceSimulation,
   forceLink,
   forceManyBody,
@@ -94,6 +100,8 @@ type Sketch = {
   edgeAttrs?: Record<string, EdgeMaterial>;
   doors?: Door[];
   floors?: Floor[];
+  parkingAreas?: ParkingArea[];
+  mmGridRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -3678,6 +3686,67 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             pxPerM={pxPerM}
             sw={sw}
           />
+          {/* Lot parkir otomatis (geometris) untuk level ini. */}
+          {(() => {
+            const areas = (sketch.parkingAreas ?? []).filter((p) => p.levelId === level.id);
+            if (!areas.length) return null;
+            const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+            const obs: ParkingObstacle[] = [];
+            const wallBuf = 0.075 * pxPerM;
+            for (const ln of lines) {
+              if ((ln.kind ?? "straight") !== "straight") continue;
+              obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBuf });
+            }
+            for (const ly of layers) {
+              if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+              if (isParkingName(ly.name)) continue;
+              obs.push({ kind: "polygon", poly: ly.points });
+            }
+            return areas.map((area) => {
+              const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
+              const valid = stalls.filter((s) => s.valid);
+              const cs = Math.cos(mmRotRad), sn = Math.sin(mmRotRad);
+              const worldPoly = area.pointsLocal.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs }));
+              const cx = worldPoly.reduce((s, p) => s + p.x, 0) / worldPoly.length;
+              const cy = worldPoly.reduce((s, p) => s + p.y, 0) / worldPoly.length;
+              return (
+                <g key={`pk-${area.id}`} pointerEvents="none">
+                  <polygon
+                    points={worldPoly.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="rgba(14,165,233,0.06)"
+                    stroke="rgba(14,165,233,0.85)"
+                    strokeWidth={sw * 0.0012}
+                    strokeDasharray={`${sw * 0.005} ${sw * 0.003}`}
+                  />
+                  {valid.map((st) => (
+                    <polygon
+                      key={st.id}
+                      points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
+                      fill="rgba(14,165,233,0.10)"
+                      stroke="rgba(14,165,233,0.95)"
+                      strokeWidth={sw * 0.0009}
+                    />
+                  ))}
+                  <g>
+                    <rect
+                      x={cx - sw * 0.045} y={cy - sw * 0.014}
+                      width={sw * 0.09} height={sw * 0.028}
+                      rx={sw * 0.004}
+                      fill="rgba(14,165,233,0.95)"
+                    />
+                    <text
+                      x={cx} y={cy}
+                      textAnchor="middle" dominantBaseline="central"
+                      fontSize={sw * 0.016} fontWeight={700}
+                      fill="#ffffff"
+                    >
+                      {`${valid.length} lot mobil`}
+                    </text>
+                  </g>
+                </g>
+              );
+            });
+          })()}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>

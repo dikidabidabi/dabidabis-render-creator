@@ -50,6 +50,13 @@ export function genParkingId(): string {
   return `PK${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Apakah nama ruang mengizinkan lot parkir? */
+export function isParkingName(name: string | undefined | null): boolean {
+  if (!name) return false;
+  const n = String(name).trim().toLowerCase();
+  return n.includes("parkir") || n.includes("parking");
+}
+
 // ============= Transform helpers (world ↔ local mm-grid) =============
 
 export function worldFromLocal(p: ParkingPoint, mmRot: number): ParkingPoint {
