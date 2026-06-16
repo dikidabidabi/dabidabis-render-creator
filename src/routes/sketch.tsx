@@ -1914,12 +1914,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | { kind: "vertex"; areaId: string; idx: number }
     | { kind: "rotate"; areaId: string; startAngle: number; startRot: number; centerWorld: { x: number; y: number } }
     | { kind: "area"; areaId: string; startWorld: { x: number; y: number }; startPoints: { x: number; y: number }[] }
+    | { kind: "pathVertex"; areaId: string; pathId: string; idx: number }
     | null
   >(null);
   const parkingClipboard = useProjectStore((s) => s.parkingClipboard);
   const setParkingClipboard = useProjectStore((s) => s.setParkingClipboard);
   // Draft area parkir: tersimpan ke sketch hanya setelah tombol "Simpan Area".
   const [parkingDraft, setParkingDraft] = useState<ParkingArea | null>(null);
+  // Draft polyline jalur parkir: tambah titik per-klik, commit lewat tombol.
+  const [parkingPathDraft, setParkingPathDraft] = useState<
+    { areaId: string; points: { x: number; y: number }[] } | null
+  >(null);
+  const [parkingPathHover, setParkingPathHover] = useState<{ x: number; y: number } | null>(null);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
