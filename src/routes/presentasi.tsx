@@ -3760,13 +3760,15 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       x={cx - sw * 0.045} y={cy - sw * 0.014}
                       width={sw * 0.09} height={sw * 0.028}
                       rx={sw * 0.004}
-                      fill="rgba(14,165,233,0.95)"
+                      fill="rgba(255,255,255,0.9)"
+                      stroke="#000000"
+                      strokeWidth={sw * 0.00045}
                     />
                     <text
                       x={cx} y={cy}
                       textAnchor="middle" dominantBaseline="central"
                       fontSize={sw * 0.016} fontWeight={700}
-                      fill="#ffffff"
+                      fill="#000000"
                     >
                       {`${valid.length} lot mobil`}
                     </text>
