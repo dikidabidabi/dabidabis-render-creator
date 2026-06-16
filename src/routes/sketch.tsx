@@ -4288,6 +4288,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
         }));
         ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        ctx.save();
         ctx.strokeStyle = "rgba(14, 165, 233, 0.85)";
         ctx.lineWidth = 1.2 / s;
         ctx.setLineDash([6 / s, 4 / s]);
@@ -4366,6 +4370,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.lineWidth = 1.2 / s;
           ctx.stroke();
         }
+        ctx.restore();
         // label kapasitas
         const validCount = stalls.filter((x) => x.valid).length;
         const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
