@@ -4284,34 +4284,36 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             }
           }
 
-          // handle rotasi: di luar bbox sisi atas
-          const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
-          const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
-          const totalRot = mmGridRotRad + (area.stallRotation ?? 0);
-          // Hitung jarak dari center ke titik terjauh
-          let maxR = 0;
-          for (const p of worldPoly) {
-            const d = Math.hypot(p.x - cx, p.y - cy);
-            if (d > maxR) maxR = d;
+          // handle rotasi: hanya tampil pada mode rotate
+          if (parkingSubTool === "rotate") {
+            const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
+            const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
+            const totalRot = mmGridRotRad + (area.stallRotation ?? 0);
+            let maxR = 0;
+            for (const p of worldPoly) {
+              const d = Math.hypot(p.x - cx, p.y - cy);
+              if (d > maxR) maxR = d;
+            }
+            const hr = maxR + 24 / s;
+            const hx = cx + Math.cos(totalRot - Math.PI / 2) * hr;
+            const hy = cy + Math.sin(totalRot - Math.PI / 2) * hr;
+            ctx.strokeStyle = "rgba(244, 114, 22, 0.7)";
+            ctx.setLineDash([4 / s, 3 / s]);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(hx, hy);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = "#fff";
+            ctx.strokeStyle = "#f47216";
+            ctx.lineWidth = 2 / s;
+            ctx.beginPath();
+            ctx.arc(hx, hy, 7 / s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
           }
-          const hr = maxR + 24 / s;
-          const hx = cx + Math.cos(totalRot - Math.PI / 2) * hr;
-          const hy = cy + Math.sin(totalRot - Math.PI / 2) * hr;
-          ctx.strokeStyle = "rgba(244, 114, 22, 0.7)";
-          ctx.setLineDash([4 / s, 3 / s]);
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(hx, hy);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.fillStyle = "#fff";
-          ctx.strokeStyle = "#f47216";
-          ctx.lineWidth = 2 / s;
-          ctx.beginPath();
-          ctx.arc(hx, hy, 7 / s, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
           ctx.restore();
+
         }
         // stalls
         const stalls = stallsByArea.get(area.id) ?? [];
