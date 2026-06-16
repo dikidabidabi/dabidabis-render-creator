@@ -48,6 +48,12 @@ import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import {
+  type ParkingArea,
+  type ParkingObstacle,
+  generateStalls,
+  isParkingName,
+} from "@/lib/parking";
+import {
   forceSimulation,
   forceLink,
   forceManyBody,
