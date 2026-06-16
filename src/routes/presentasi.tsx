@@ -6653,6 +6653,7 @@ function computeTotalParkingLots(sketch: Sketch): number {
         }
       }
     }
+    obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
     for (const area of areasLv) {
       const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
       total += stalls.filter((s) => s.valid).length;
