@@ -5339,6 +5339,125 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const areas = (sketch.parkingAreas ?? []).filter(
         (pa) => !activeLvlId || pa.levelId === activeLvlId,
       );
+
+      // ----- Path (jalur parkir) sub-modes -----
+      const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+      const localToWorld = (p: { x: number; y: number }) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs });
+      if (parkingSubTool === "pathDraw") {
+        if (!parkingSelectedId && !parkingPathDraft) {
+          toast.error("Pilih area parkir dulu");
+          return;
+        }
+        const targetId = parkingPathDraft?.areaId ?? parkingSelectedId!;
+        const lp = snapWorldToMmLocal(rawWp);
+        if (parkingPathDraft) {
+          setParkingPathDraft({ areaId: targetId, points: [...parkingPathDraft.points, lp] });
+        } else {
+          setParkingPathDraft({ areaId: targetId, points: [lp] });
+        }
+        return;
+      }
+      if (parkingSubTool === "pathMove" || parkingSubTool === "pathRemove" || parkingSubTool === "pathFillet") {
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          for (const path of area.paths ?? []) {
+            const wpts = path.pointsLocal.map(localToWorld);
+            for (let i = 0; i < wpts.length; i++) {
+              if (Math.hypot(rawWp.x - wpts[i].x, rawWp.y - wpts[i].y) <= tol) {
+                setParkingSelectedId(area.id);
+                if (parkingSubTool === "pathMove") {
+                  pushHistory();
+                  setParkingDrag({ kind: "pathVertex", areaId: area.id, pathId: path.id, idx: i });
+                  return;
+                }
+                if (parkingSubTool === "pathRemove") {
+                  pushHistory();
+                  const pts = path.pointsLocal;
+                  let newPaths: ParkingPath[];
+                  if (pts.length <= 2) {
+                    newPaths = (area.paths ?? []).filter((p) => p.id !== path.id);
+                  } else {
+                    newPaths = (area.paths ?? []).map((p) =>
+                      p.id === path.id ? { ...p, pointsLocal: pts.filter((_, k) => k !== i) } : p,
+                    );
+                  }
+                  onChange({
+                    parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                      a2.id === area.id ? { ...a2, paths: newPaths } : a2,
+                    ),
+                  });
+                  return;
+                }
+                if (parkingSubTool === "pathFillet") {
+                  const pts = path.pointsLocal;
+                  if (i === 0 || i === pts.length - 1) {
+                    toast.error("Fillet hanya untuk titik tengah");
+                    return;
+                  }
+                  const prev = pts[i - 1], cur = pts[i], nxt = pts[i + 1];
+                  const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+                  const outLen = Math.hypot(nxt.x - cur.x, nxt.y - cur.y);
+                  const rPx = Math.min(1 * pxPerMeter, inLen * 0.45, outLen * 0.45);
+                  if (rPx < 4) { toast.error("Segmen terlalu pendek utk fillet"); return; }
+                  const ux = (prev.x - cur.x) / inLen, uy = (prev.y - cur.y) / inLen;
+                  const vx = (nxt.x - cur.x) / outLen, vy = (nxt.y - cur.y) / outLen;
+                  const a = snapMmLocal({ x: cur.x + ux * rPx, y: cur.y + uy * rPx });
+                  const b = snapMmLocal({ x: cur.x + vx * rPx, y: cur.y + vy * rPx });
+                  pushHistory();
+                  const newPts = [...pts.slice(0, i), a, b, ...pts.slice(i + 1)];
+                  onChange({
+                    parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                      a2.id === area.id
+                        ? { ...a2, paths: (a2.paths ?? []).map((p) => p.id === path.id ? { ...p, pointsLocal: newPts } : p) }
+                        : a2,
+                    ),
+                  });
+                  return;
+                }
+              }
+            }
+          }
+        }
+        return;
+      }
+      if (parkingSubTool === "pathAdd") {
+        const localP = worldToMmLocal(rawWp);
+        const tolLocal = 12 / view.s;
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          for (const path of area.paths ?? []) {
+            const pts = path.pointsLocal;
+            let bestI = -1, bestD = Infinity, bestProj: { x: number; y: number } | null = null;
+            for (let i = 0; i < pts.length - 1; i++) {
+              const a2 = pts[i], b2 = pts[i + 1];
+              const vx = b2.x - a2.x, vy = b2.y - a2.y;
+              const wx = localP.x - a2.x, wy = localP.y - a2.y;
+              const c2 = vx * vx + vy * vy;
+              if (c2 < 1e-6) continue;
+              const t = Math.max(0, Math.min(1, (vx * wx + vy * wy) / c2));
+              const px = a2.x + t * vx, py = a2.y + t * vy;
+              const d = Math.hypot(localP.x - px, localP.y - py);
+              if (d < bestD) { bestD = d; bestI = i; bestProj = { x: px, y: py }; }
+            }
+            if (bestI >= 0 && bestProj && bestD <= tolLocal) {
+              pushHistory();
+              const newPts = [...pts];
+              newPts.splice(bestI + 1, 0, snapMmLocal(bestProj));
+              onChange({
+                parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                  a2.id === area.id
+                    ? { ...a2, paths: (a2.paths ?? []).map((p) => p.id === path.id ? { ...p, pointsLocal: newPts } : p) }
+                    : a2,
+                ),
+              });
+              setParkingSelectedId(area.id);
+              return;
+            }
+          }
+        }
+        return;
+      }
+
       // 1) Rotation handle hit (jika selected)
       if (parkingSelectedId) {
         const sel = areas.find((aa) => aa.id === parkingSelectedId);
