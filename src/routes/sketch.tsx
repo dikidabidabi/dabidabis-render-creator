@@ -2156,6 +2156,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [snap, mmGridRotRad],
   );
 
+  const worldToMmLocal = useCallback((p: Point): Point => {
+    if (Math.abs(mmGridRotRad) < 1e-9) return { x: p.x, y: p.y };
+    const cs = Math.cos(-mmGridRotRad), sn = Math.sin(-mmGridRotRad);
+    return { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs };
+  }, [mmGridRotRad]);
+  const mmLocalToWorld = useCallback((p: Point): Point => {
+    if (Math.abs(mmGridRotRad) < 1e-9) return { x: p.x, y: p.y };
+    const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+    return { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs };
+  }, [mmGridRotRad]);
+  const snapMmLocal = useCallback((p: Point): Point => ({
+    x: Math.round(p.x / MINOR_PX) * MINOR_PX,
+    y: Math.round(p.y / MINOR_PX) * MINOR_PX,
+  }), []);
+  const snapWorldToMmLocal = useCallback(
+    (p: Point): Point => snapMmLocal(worldToMmLocal(p)),
+    [snapMmLocal, worldToMmLocal],
+  );
+
   const snapPoint = useCallback(
     (p: Point): Point => {
       if (!snap) return p;
@@ -4269,6 +4288,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
         }));
         ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        ctx.save();
         ctx.strokeStyle = "rgba(14, 165, 233, 0.85)";
         ctx.lineWidth = 1.2 / s;
         ctx.setLineDash([6 / s, 4 / s]);
@@ -4347,6 +4370,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.lineWidth = 1.2 / s;
           ctx.stroke();
         }
+        ctx.restore();
         // label kapasitas
         const validCount = stalls.filter((x) => x.valid).length;
         const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
@@ -4365,13 +4389,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const ang = mmGridRotRad || 0;
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -ang);
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -ang);
-        const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
-        const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
+        const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
+        const minX = snapL(Math.min(la.x, lb.x)), maxX = snapL(Math.max(la.x, lb.x));
+        const minY = snapL(Math.min(la.y, lb.y)), maxY = snapL(Math.max(la.y, lb.y));
         const corners = [
           { x: minX, y: minY }, { x: maxX, y: minY },
           { x: maxX, y: maxY }, { x: minX, y: maxY },
         ].map((p) => rotateAround(p, { x: 0, y: 0 }, ang));
         ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
         ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
         ctx.fillStyle = "rgba(14, 165, 233, 0.10)";
         ctx.lineWidth = 2 / s;
@@ -4393,6 +4421,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
         }));
         ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
         ctx.strokeStyle = "#f59e0b";
         ctx.fillStyle = "rgba(245, 158, 11, 0.10)";
         ctx.lineWidth = 2 / s;
@@ -4404,6 +4435,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.stroke();
         ctx.fill();
         ctx.setLineDash([]);
+        ctx.restore();
         const cx = dp.reduce((s2, p) => s2 + p.x, 0) / dp.length;
         const cy = dp.reduce((s2, p) => s2 + p.y, 0) / dp.length;
         const sp = worldToScreen({ x: cx, y: cy });
@@ -4414,7 +4446,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.fillRect(sp.x - w / 2, sp.y - 9, w, 18);
         ctx.fillStyle = "#fff";
         ctx.fillText(label, sp.x - w / 2 + 6, sp.y + 4);
-        ctx.restore();
       }
     }
 
@@ -5147,11 +5178,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const areas = (sketch.parkingAreas ?? []).filter(
         (pa) => !activeLvlId || pa.levelId === activeLvlId,
       );
-      // helper: local-from-world
-      const lfw = (q: { x: number; y: number }) => ({
-        x: q.x * Math.cos(-mmGridRotRad) - q.y * Math.sin(-mmGridRotRad),
-        y: q.x * Math.sin(-mmGridRotRad) + q.y * Math.cos(-mmGridRotRad),
-      });
       // 1) Rotation handle hit (jika selected)
       if (parkingSelectedId) {
         const sel = areas.find((aa) => aa.id === parkingSelectedId);
@@ -5232,7 +5258,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       // 4) Add point: klik edge menyisipkan titik baru
       if (parkingSubTool === "addPoint") {
-        const localP = lfw(rawWp);
+        const localP = worldToMmLocal(rawWp);
         for (let ai = areas.length - 1; ai >= 0; ai--) {
           const area = areas[ai];
           const pts = area.pointsLocal;
@@ -5251,7 +5277,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           if (bestI >= 0 && bestProj && bestD <= tol) {
             pushHistory();
             const newPts = [...area.pointsLocal];
-            newPts.splice(bestI + 1, 0, bestProj);
+            newPts.splice(bestI + 1, 0, snapMmLocal(bestProj));
             onChange({
               parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
                 a2.id === area.id ? { ...a2, pointsLocal: newPts } : a2,
@@ -5992,13 +6018,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Parking drag (vertex / rotate / area)
     if (parkingDrag) {
       const rawWp = getWorldPosRaw(e);
-      const lfw = (q: { x: number; y: number }) => ({
-        x: q.x * Math.cos(-mmGridRotRad) - q.y * Math.sin(-mmGridRotRad),
-        y: q.x * Math.sin(-mmGridRotRad) + q.y * Math.cos(-mmGridRotRad),
-      });
       const areas = sketch.parkingAreas ?? [];
       if (parkingDrag.kind === "vertex") {
-        const lp = lfw(rawWp);
+        const lp = snapWorldToMmLocal(rawWp);
         onChange({
           parkingAreas: areas.map((a) => {
             if (a.id !== parkingDrag.areaId) return a;
@@ -6022,14 +6044,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (parkingDrag.kind === "area") {
         const dxW = rawWp.x - parkingDrag.startWorld.x;
         const dyW = rawWp.y - parkingDrag.startWorld.y;
-        const dLocal = lfw({ x: dxW, y: dyW });
-        // dLocal sebagai delta lokal: rotasi pure tanpa translasi
         const dLx = dxW * Math.cos(-mmGridRotRad) - dyW * Math.sin(-mmGridRotRad);
         const dLy = dxW * Math.sin(-mmGridRotRad) + dyW * Math.cos(-mmGridRotRad);
+        const snapDx = Math.round(dLx / MINOR_PX) * MINOR_PX;
+        const snapDy = Math.round(dLy / MINOR_PX) * MINOR_PX;
         onChange({
           parkingAreas: areas.map((a) =>
             a.id === parkingDrag.areaId
-              ? { ...a, pointsLocal: parkingDrag.startPoints.map((q) => ({ x: q.x + dLx, y: q.y + dLy })) }
+              ? { ...a, pointsLocal: parkingDrag.startPoints.map((q) => ({ x: q.x + snapDx, y: q.y + snapDy })) }
               : a,
           ),
         });
@@ -6626,9 +6648,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (parkingSubTool !== "draw") return;
       // Tarik kotak parkir di KOORDINAT LOKAL mm-grid; saat grid berputar,
       // area otomatis ikut karena disimpan di local-frame.
-      const ang = mmGridRotRad || 0;
-      const la = rotateAround(a, { x: 0, y: 0 }, -ang);
-      const lb = rotateAround(b, { x: 0, y: 0 }, -ang);
+      const la = snapWorldToMmLocal(a);
+      const lb = snapWorldToMmLocal(b);
       const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
       const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
       if ((maxX - minX) < pxPerMeter * 5 || (maxY - minY) < pxPerMeter * 5) {
@@ -7491,12 +7512,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPaste={() => {
               if (!parkingClipboard || parkingClipboard.length === 0) { toast.error("Clipboard kosong"); return; }
               pushHistory();
-              const offset = 30; // px lokal supaya tidak menumpuk
               const pasted: ParkingArea[] = parkingClipboard.map((a) => ({
                 ...a,
                 id: genParkingId(),
                 levelId: activeLvlId ?? undefined,
-                pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + offset, y: q.y + offset })),
+                pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
               }));
               onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
               setParkingSelectedId(pasted[0]?.id ?? null);
@@ -9028,12 +9048,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               onPaste={() => {
                 if (!parkingClipboard || parkingClipboard.length === 0) { toast.error("Clipboard kosong"); return; }
                 pushHistory();
-                const offset = 30;
                 const pasted: ParkingArea[] = parkingClipboard.map((a) => ({
                   ...a,
                   id: genParkingId(),
                   levelId: activeLvlId ?? undefined,
-                  pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + offset, y: q.y + offset })),
+                  pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
                 }));
                 onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
                 setParkingSelectedId(pasted[0]?.id ?? null);

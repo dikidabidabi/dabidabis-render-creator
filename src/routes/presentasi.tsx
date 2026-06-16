@@ -31,6 +31,7 @@ import {
   spansForLevel,
   isNodeActive,
   isColumnClipped,
+  isColumnVisible,
   levelInRange,
   xAxisLabelAt,
   yAxisLabelAt,
@@ -50,8 +51,10 @@ import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency"
 import {
   type ParkingArea,
   type ParkingObstacle,
+  areaPolygonWorld,
   generateStalls,
   isParkingName,
+  normalizeParkingAreas,
 } from "@/lib/parking";
 import {
   forceSimulation,
@@ -203,18 +206,29 @@ function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefin
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
 }
 function bindLahanToMdplZero(sketch: Sketch): Sketch {
-  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) return sketch;
-  const zero = findMdplZeroLevel(sketch.levels ?? []);
+  const rawLevels = sketch.levels ?? [];
+  const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+  let parkingAreas = normalizeParkingAreas(sketch.parkingAreas, mmRotRad);
+  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) {
+    const valid = new Set(rawLevels.map((l) => l.id));
+    const fallback = rawLevels[0]?.id;
+    if (fallback) parkingAreas = parkingAreas.map((p) => (p.levelId && valid.has(p.levelId) ? p : { ...p, levelId: fallback }));
+    return { ...sketch, parkingAreas };
+  }
+  const zero = findMdplZeroLevel(rawLevels);
   const zeroLevel = zero ?? {
     id: `LV_${sketch.id}_MDPL0`,
     name: "Level 1",
     mdpl: 0,
     opacity: 0.5,
   };
-  const levels = zero ? sketch.levels : [...(sketch.levels ?? []), zeroLevel];
+  const levels = zero ? rawLevels : [...rawLevels, zeroLevel];
+  const valid = new Set(levels.map((l) => l.id));
+  parkingAreas = parkingAreas.map((p) => (p.levelId && valid.has(p.levelId) ? p : { ...p, levelId: levels[0]?.id }));
   return {
     ...sketch,
     levels,
+    parkingAreas,
     layers: (sketch.layers ?? []).map((ly) => (isLahan(ly.name) ? { ...ly, levelId: zeroLevel.id } : ly)),
   };
 }
@@ -1031,6 +1045,11 @@ function computeBounds(sk: Sketch): Bounds {
     if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
   }
   for (const ln of sk.lines ?? []) for (const p of [ln.a, ln.b]) {
+    if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
+  }
+  const mmRotRad = ((Number(sk.mmGridRotation) || 0) * Math.PI) / 180;
+  for (const area of sk.parkingAreas ?? []) for (const p of areaPolygonWorld(area, mmRotRad)) {
     if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
     if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
   }
@@ -3702,6 +3721,29 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               if (isParkingName(ly.name)) continue;
               obs.push({ kind: "polygon", poly: ly.points });
             }
+            for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
+              if (grid.lineOnly || !levelInRange(grid, level, sketch.levels ?? [])) continue;
+              const { spansX, spansY } = spansForLevel(grid, level.id);
+              const xsM = axisPositions(spansX);
+              const ysM = axisPositions(spansY);
+              const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
+              const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+              const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
+              for (let j = 0; j < ysM.length; j++) {
+                for (let i = 0; i < xsM.length; i++) {
+                  if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
+                  const lx = xsM[i] * pxPerM;
+                  const ly = ysM[j] * pxPerM;
+                  const cx = grid.origin.x + lx * cs - ly * sn;
+                  const cy = grid.origin.y + lx * sn + ly * cs;
+                  const poly = [
+                    { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
+                    { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
+                  ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
+                  obs.push({ kind: "polygon", poly });
+                }
+              }
+            }
             return areas.map((area) => {
               const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
               const valid = stalls.filter((s) => s.valid);
@@ -3713,18 +3755,18 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 <g key={`pk-${area.id}`} pointerEvents="none">
                   <polygon
                     points={worldPoly.map((p) => `${p.x},${p.y}`).join(" ")}
-                    fill="rgba(14,165,233,0.06)"
-                    stroke="rgba(14,165,233,0.85)"
-                    strokeWidth={sw * 0.0012}
+                    fill="none"
+                    stroke="#000000"
+                    strokeWidth={sw * 0.00055}
                     strokeDasharray={`${sw * 0.005} ${sw * 0.003}`}
                   />
                   {valid.map((st) => (
                     <polygon
                       key={st.id}
                       points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
-                      fill="rgba(14,165,233,0.10)"
-                      stroke="rgba(14,165,233,0.95)"
-                      strokeWidth={sw * 0.0009}
+                      fill="none"
+                      stroke="#000000"
+                      strokeWidth={sw * 0.00045}
                     />
                   ))}
                   <g>
@@ -3732,13 +3774,15 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       x={cx - sw * 0.045} y={cy - sw * 0.014}
                       width={sw * 0.09} height={sw * 0.028}
                       rx={sw * 0.004}
-                      fill="rgba(14,165,233,0.95)"
+                      fill="rgba(255,255,255,0.9)"
+                      stroke="#000000"
+                      strokeWidth={sw * 0.00045}
                     />
                     <text
                       x={cx} y={cy}
                       textAnchor="middle" dominantBaseline="central"
                       fontSize={sw * 0.016} fontWeight={700}
-                      fill="#ffffff"
+                      fill="#000000"
                     >
                       {`${valid.length} lot mobil`}
                     </text>
