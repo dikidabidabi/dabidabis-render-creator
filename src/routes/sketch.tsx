@@ -6337,7 +6337,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         });
         return;
       }
+      if (parkingDrag.kind === "pathVertex") {
+        const lp = snapWorldToMmLocal(rawWp);
+        onChange({
+          parkingAreas: areas.map((a) => {
+            if (a.id !== parkingDrag.areaId) return a;
+            return {
+              ...a,
+              paths: (a.paths ?? []).map((p) =>
+                p.id === parkingDrag.pathId
+                  ? { ...p, pointsLocal: p.pointsLocal.map((q, k) => k === parkingDrag.idx ? lp : q) }
+                  : p,
+              ),
+            };
+          }),
+        });
+        return;
+      }
     }
+
+    // Hover untuk live-preview segment terakhir saat pathDraw
+    if (tool === "parking" && parkingSubTool === "pathDraw" && parkingPathDraft) {
+      setParkingPathHover(snapWorldToMmLocal(getWorldPosRaw(e)));
+    } else if (parkingPathHover) {
+      setParkingPathHover(null);
+    }
+
 
     if (pointersRef.current.has(e.pointerId)) {
       pointersRef.current.set(e.pointerId, getScreenPos(e));
