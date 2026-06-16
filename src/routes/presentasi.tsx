@@ -3759,7 +3759,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const groups = new Map<string, { count: number; cx: number; cy: number }>();
             const ungrouped: typeof areaInfos = [];
             for (const info of areaInfos) {
-              const room = parkingRooms.find((r) => pointInPolyPres({ x: info.cx, y: info.cy }, r.points));
+              let room = parkingRooms.find((r) => pointInPolyPres({ x: info.cx, y: info.cy }, r.points));
+              if (!room) room = parkingRooms.find((r) => info.worldPoly.some((v) => pointInPolyPres(v, r.points)));
+              if (!room) room = parkingRooms.find((r) => {
+                const rcx = r.points.reduce((s, p) => s + p.x, 0) / r.points.length;
+                const rcy = r.points.reduce((s, p) => s + p.y, 0) / r.points.length;
+                return info.worldPoly.length >= 3 && pointInPolyPres({ x: rcx, y: rcy }, info.worldPoly);
+              });
               if (!room) { ungrouped.push(info); continue; }
               const prev = groups.get(room.id);
               if (prev) {
