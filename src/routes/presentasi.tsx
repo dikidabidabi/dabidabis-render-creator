@@ -3744,34 +3744,54 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 }
               }
             }
-            return areas.map((area) => {
+            const cs = Math.cos(mmRotRad), sn = Math.sin(mmRotRad);
+            // Hitung stall + polygon dunia untuk tiap area
+            const areaInfos = areas.map((area) => {
               const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
               const valid = stalls.filter((s) => s.valid);
-              const cs = Math.cos(mmRotRad), sn = Math.sin(mmRotRad);
               const worldPoly = area.pointsLocal.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs }));
               const cx = worldPoly.reduce((s, p) => s + p.x, 0) / worldPoly.length;
               const cy = worldPoly.reduce((s, p) => s + p.y, 0) / worldPoly.length;
-              return (
-                <g key={`pk-${area.id}`} pointerEvents="none">
-                  <polygon
-                    points={worldPoly.map((p) => `${p.x},${p.y}`).join(" ")}
-                    fill="none"
-                    stroke="#000000"
-                    strokeWidth={sw * 0.00055}
-                    strokeDasharray={`${sw * 0.005} ${sw * 0.003}`}
-                  />
-                  {valid.map((st) => (
-                    <polygon
-                      key={st.id}
-                      points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
-                      fill="none"
-                      stroke="#000000"
-                      strokeWidth={sw * 0.00045}
-                    />
-                  ))}
-                  <g>
+              return { area, valid, worldPoly, cx, cy };
+            });
+            // Kelompokkan area berdasar ruang parkir yang membungkusnya
+            const parkingRooms = layers.filter((ly) => isParkingName(ly.name) && Array.isArray(ly.points) && ly.points.length >= 3);
+            const groups = new Map<string, { count: number; cx: number; cy: number }>();
+            const ungrouped: typeof areaInfos = [];
+            for (const info of areaInfos) {
+              const room = parkingRooms.find((r) => pointInPolyPres({ x: info.cx, y: info.cy }, r.points));
+              if (!room) { ungrouped.push(info); continue; }
+              const prev = groups.get(room.id);
+              if (prev) {
+                prev.count += info.valid.length;
+              } else {
+                const rcx = room.points.reduce((s, p) => s + p.x, 0) / room.points.length;
+                const rcy = room.points.reduce((s, p) => s + p.y, 0) / room.points.length;
+                groups.set(room.id, { count: info.valid.length, cx: rcx, cy: rcy });
+              }
+            }
+            return (
+              <g pointerEvents="none">
+                {areaInfos.map((info) => (
+                  <g key={`pk-${info.area.id}`}>
+                    {info.valid.map((st) => (
+                      <polygon
+                        key={st.id}
+                        points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
+                        fill="none"
+                        stroke="#000000"
+                        strokeWidth={sw * 0.00045}
+                      />
+                    ))}
+                  </g>
+                ))}
+                {[
+                  ...Array.from(groups.entries()).map(([id, g]) => ({ key: `room-${id}`, count: g.count, cx: g.cx, cy: g.cy })),
+                  ...ungrouped.map((info) => ({ key: `area-${info.area.id}`, count: info.valid.length, cx: info.cx, cy: info.cy })),
+                ].map((lbl) => (
+                  <g key={lbl.key}>
                     <rect
-                      x={cx - sw * 0.045} y={cy - sw * 0.014}
+                      x={lbl.cx - sw * 0.045} y={lbl.cy - sw * 0.014}
                       width={sw * 0.09} height={sw * 0.028}
                       rx={sw * 0.004}
                       fill="rgba(255,255,255,0.9)"
@@ -3779,17 +3799,18 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       strokeWidth={sw * 0.00045}
                     />
                     <text
-                      x={cx} y={cy}
+                      x={lbl.cx} y={lbl.cy}
                       textAnchor="middle" dominantBaseline="central"
                       fontSize={sw * 0.016} fontWeight={700}
                       fill="#000000"
                     >
-                      {`${valid.length} lot mobil`}
+                      {`${lbl.count} lot mobil`}
                     </text>
                   </g>
-                </g>
-              );
-            });
+                ))}
+              </g>
+            );
+
           })()}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
