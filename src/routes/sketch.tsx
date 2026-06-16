@@ -2156,6 +2156,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [snap, mmGridRotRad],
   );
 
+  const worldToMmLocal = useCallback((p: Point): Point => {
+    if (Math.abs(mmGridRotRad) < 1e-9) return { x: p.x, y: p.y };
+    const cs = Math.cos(-mmGridRotRad), sn = Math.sin(-mmGridRotRad);
+    return { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs };
+  }, [mmGridRotRad]);
+  const mmLocalToWorld = useCallback((p: Point): Point => {
+    if (Math.abs(mmGridRotRad) < 1e-9) return { x: p.x, y: p.y };
+    const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+    return { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs };
+  }, [mmGridRotRad]);
+  const snapMmLocal = useCallback((p: Point): Point => ({
+    x: Math.round(p.x / MINOR_PX) * MINOR_PX,
+    y: Math.round(p.y / MINOR_PX) * MINOR_PX,
+  }), []);
+  const snapWorldToMmLocal = useCallback(
+    (p: Point): Point => snapMmLocal(worldToMmLocal(p)),
+    [snapMmLocal, worldToMmLocal],
+  );
+
   const snapPoint = useCallback(
     (p: Point): Point => {
       if (!snap) return p;
