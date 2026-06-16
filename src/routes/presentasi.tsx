@@ -3805,6 +3805,16 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     ))}
                   </g>
                 ))}
+                {pathWorlds.map((pw) => (
+                  <polyline
+                    key={`pp-${pw.areaId}-${pw.pathId}`}
+                    points={pw.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke="#9ca3af"
+                    strokeWidth={sw * 0.00045}
+                    strokeDasharray={`${sw * 0.003} ${sw * 0.002}`}
+                  />
+                ))}
                 {[
                   ...Array.from(groups.entries()).map(([id, g]) => ({ key: `room-${id}`, count: g.count, cx: g.cx, cy: g.cy })),
                   ...ungrouped.map((info) => ({ key: `area-${info.area.id}`, count: info.valid.length, cx: info.cx, cy: info.cy })),
