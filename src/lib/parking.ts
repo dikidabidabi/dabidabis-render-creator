@@ -13,6 +13,12 @@
 
 export type ParkingPoint = { x: number; y: number };
 
+/** Jalur parkir (polyline) di koordinat lokal mm-grid. */
+export type ParkingPath = {
+  id: string;
+  pointsLocal: ParkingPoint[]; // ≥ 2 titik
+};
+
 export type ParkingArea = {
   id: string;
   levelId?: string;
@@ -25,7 +31,16 @@ export type ParkingArea = {
   stallRotation?: number;
   /** Kunci stall yang dimatikan manual (key = `row,col`). */
   disabled?: string[];
+  /** Jalur parkir (polyline) — obstacle ber-buffer 1.75 m di tiap sisi. */
+  paths?: ParkingPath[];
 };
+
+/** Lebar buffer jalur parkir per sisi (meter). */
+export const PARKING_PATH_BUFFER_M = 1.75;
+
+export function genParkingPathId(): string {
+  return `PP${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
 
 export type ParkingStall = {
   id: string;
