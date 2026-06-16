@@ -4384,8 +4384,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const ang = mmGridRotRad || 0;
         const la = rotateAround(drawing.a, { x: 0, y: 0 }, -ang);
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -ang);
-        const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
-        const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
+        const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
+        const minX = snapL(Math.min(la.x, lb.x)), maxX = snapL(Math.max(la.x, lb.x));
+        const minY = snapL(Math.min(la.y, lb.y)), maxY = snapL(Math.max(la.y, lb.y));
         const corners = [
           { x: minX, y: minY }, { x: maxX, y: minY },
           { x: maxX, y: maxY }, { x: minX, y: maxY },
@@ -6636,9 +6637,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (parkingSubTool !== "draw") return;
       // Tarik kotak parkir di KOORDINAT LOKAL mm-grid; saat grid berputar,
       // area otomatis ikut karena disimpan di local-frame.
-      const ang = mmGridRotRad || 0;
-      const la = rotateAround(a, { x: 0, y: 0 }, -ang);
-      const lb = rotateAround(b, { x: 0, y: 0 }, -ang);
+      const la = snapWorldToMmLocal(a);
+      const lb = snapWorldToMmLocal(b);
       const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
       const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
       if ((maxX - minX) < pxPerMeter * 5 || (maxY - minY) < pxPerMeter * 5) {
