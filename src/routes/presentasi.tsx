@@ -3707,6 +3707,29 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               if (isParkingName(ly.name)) continue;
               obs.push({ kind: "polygon", poly: ly.points });
             }
+            for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
+              if (grid.lineOnly || !levelInRange(grid, level, sketch.levels ?? [])) continue;
+              const { spansX, spansY } = spansForLevel(grid, level.id);
+              const xsM = axisPositions(spansX);
+              const ysM = axisPositions(spansY);
+              const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
+              const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+              const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
+              for (let j = 0; j < ysM.length; j++) {
+                for (let i = 0; i < xsM.length; i++) {
+                  if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
+                  const lx = xsM[i] * pxPerM;
+                  const ly = ysM[j] * pxPerM;
+                  const cx = grid.origin.x + lx * cs - ly * sn;
+                  const cy = grid.origin.y + lx * sn + ly * cs;
+                  const poly = [
+                    { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
+                    { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
+                  ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
+                  obs.push({ kind: "polygon", poly });
+                }
+              }
+            }
             return areas.map((area) => {
               const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
               const valid = stalls.filter((s) => s.valid);
