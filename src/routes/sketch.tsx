@@ -2064,16 +2064,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
 
-  // Recompute layer areas on scale change (preserve relative geometry)
+  // Recompute layer areas on scale change (preserve relative geometry).
+  // Untuk area parkir: pointsLocal disimpan dalam px world, tetapi stall di-
+  // hitung dari STALL_W/STALL_L (meter) × pxPerMeter. Saat Skala berubah,
+  // pxPerMeter berubah → tanpa rescale, ukuran lot/stall vs polygon parkir
+  // jadi tidak konsisten terhadap grid mm-block. Kita rescale pointsLocal
+  // dengan rasio pxPerMeter baru/lama agar dimensi metrik area parkir tetap.
   const prevScaleRef = useRef(scale);
+  const prevPxPerMeterRef = useRef(pxPerMeter);
   useEffect(() => {
     if (prevScaleRef.current !== scale) {
+      const ratio = pxPerMeter / (prevPxPerMeterRef.current || pxPerMeter);
       const next = layers.map((l) => ({
         ...l,
         areaM2: polygonAreaPx(l.points) / (pxPerMeter * pxPerMeter),
       }));
-      onChange({ layers: next });
+      const patch: Partial<Sketch> = { layers: next };
+      if (Number.isFinite(ratio) && Math.abs(ratio - 1) > 1e-6 && (sketch.parkingAreas ?? []).length) {
+        patch.parkingAreas = (sketch.parkingAreas ?? []).map((a) => ({
+          ...a,
+          pointsLocal: a.pointsLocal.map((p) => ({ x: p.x * ratio, y: p.y * ratio })),
+        }));
+      }
+      onChange(patch);
       prevScaleRef.current = scale;
+      prevPxPerMeterRef.current = pxPerMeter;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale]);
