@@ -3745,7 +3745,20 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 }
               }
             }
+            // Tambahkan jalur parkir (polyline) sebagai obstacle ber-buffer 1.75 m.
+            obs.push(...parkingPathsToObstacles(areas, pxPerM, mmRotRad));
             const cs = Math.cos(mmRotRad), sn = Math.sin(mmRotRad);
+            // Polyline jalur parkir di koordinat dunia (untuk rendering).
+            const pathWorlds: Array<{ areaId: string; pathId: string; pts: Array<{ x: number; y: number }> }> = [];
+            for (const area of areas) {
+              for (const path of area.paths ?? []) {
+                pathWorlds.push({
+                  areaId: area.id,
+                  pathId: path.id,
+                  pts: path.pointsLocal.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs })),
+                });
+              }
+            }
             // Hitung stall + polygon dunia untuk tiap area
             const areaInfos = areas.map((area) => {
               const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
