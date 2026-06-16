@@ -4435,6 +4435,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.stroke();
         ctx.fill();
         ctx.setLineDash([]);
+        ctx.restore();
         const cx = dp.reduce((s2, p) => s2 + p.x, 0) / dp.length;
         const cy = dp.reduce((s2, p) => s2 + p.y, 0) / dp.length;
         const sp = worldToScreen({ x: cx, y: cy });
@@ -4445,7 +4446,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.fillRect(sp.x - w / 2, sp.y - 9, w, 18);
         ctx.fillStyle = "#fff";
         ctx.fillText(label, sp.x - w / 2 + 6, sp.y + 4);
-        ctx.restore();
       }
     }
 
