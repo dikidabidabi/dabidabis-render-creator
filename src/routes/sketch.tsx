@@ -4269,14 +4269,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           for (let i = 1; i < worldPoly.length; i++) ctx.lineTo(worldPoly[i].x, worldPoly[i].y);
           ctx.closePath();
           ctx.stroke();
-          // titik vertex
-          const r = 5 / s;
-          ctx.fillStyle = "#f47216";
-          for (const p of worldPoly) {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-            ctx.fill();
+          // titik vertex — hanya tampil pada mode edit titik
+          const inEditTitik =
+            parkingSubTool === "move" ||
+            parkingSubTool === "addPoint" ||
+            parkingSubTool === "removePoint";
+          if (inEditTitik) {
+            const r = 5 / s;
+            ctx.fillStyle = "#f47216";
+            for (const p of worldPoly) {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+              ctx.fill();
+            }
           }
+
           // handle rotasi: di luar bbox sisi atas
           const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
           const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
