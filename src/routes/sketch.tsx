@@ -947,15 +947,18 @@ type ParkingSubToolbarProps = {
   onCopy: () => void;
   onPaste: () => void;
   onDelete: () => void;
+  hasDraft: boolean;
+  onSaveDraft: () => void;
+  onCancelDraft: () => void;
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
-  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete } = props;
+  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft } = props;
   const opts: Array<{ k: typeof sub; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
-    { k: "move", label: "Geser", hint: "Geser titik / area" },
-    { k: "addPoint", label: "+Titik", hint: "Sisip titik di sisi" },
-    { k: "removePoint", label: "−Titik", hint: "Hapus titik" },
+    { k: "move", label: "Edit Titik: Geser", hint: "Geser titik / area" },
+    { k: "addPoint", label: "Edit Titik: +", hint: "Sisip titik di sisi" },
+    { k: "removePoint", label: "Edit Titik: −", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
   ];
   const oriOpts: Array<{ k: "auto" | "x" | "y"; label: string; hint: string }> = [
@@ -976,6 +979,20 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
           {o.label}
         </Button>
       ))}
+      <div className="mx-1 h-6 w-px bg-border/60" />
+      <Button
+        size="sm"
+        variant={hasDraft ? "default" : "outline"}
+        onClick={onSaveDraft}
+        disabled={!hasDraft}
+        className={cn(hasDraft && "bg-amber-500 hover:bg-amber-600 text-white")}
+        title="Simpan draft area parkir ke sketsa"
+      >
+        <Save className="mr-1 h-3.5 w-3.5" /> Simpan Area
+      </Button>
+      <Button size="sm" variant="outline" onClick={onCancelDraft} disabled={!hasDraft} title="Batalkan draft">
+        <X className="mr-1 h-3.5 w-3.5" /> Batal Draft
+      </Button>
       <div className="mx-1 h-6 w-px bg-border/60" />
       <span className="self-center text-xs text-muted-foreground">Arah deret:</span>
       {oriOpts.map((o) => (
@@ -1003,6 +1020,7 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
     </div>
   );
 }
+
 
 function ParkingSubToolbarMobile(props: ParkingSubToolbarProps) {
   return <ParkingSubToolbar {...props} />;
@@ -1842,6 +1860,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   >(null);
   const parkingClipboard = useProjectStore((s) => s.parkingClipboard);
   const setParkingClipboard = useProjectStore((s) => s.setParkingClipboard);
+  // Draft area parkir: tersimpan ke sketch hanya setelah tombol "Simpan Area".
+  const [parkingDraft, setParkingDraft] = useState<ParkingArea | null>(null);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -2086,33 +2106,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
 
   // Recompute layer areas on scale change (preserve relative geometry).
-  // Untuk area parkir: pointsLocal disimpan dalam px world, tetapi stall di-
-  // hitung dari STALL_W/STALL_L (meter) × pxPerMeter. Saat Skala berubah,
-  // pxPerMeter berubah → tanpa rescale, ukuran lot/stall vs polygon parkir
-  // jadi tidak konsisten terhadap grid mm-block. Kita rescale pointsLocal
-  // dengan rasio pxPerMeter baru/lama agar dimensi metrik area parkir tetap.
+  // CATATAN: pointsLocal area parkir TIDAK di-rescale lagi — koordinatnya
+  // tertanam di mm-grid lokal (px), sehingga visualnya tetap menempel pada
+  // titik-titik grid mm yang sama saat skala / zoom berubah. Hanya jumlah
+  // lot dalam area yang berubah (karena STALL_W × pxPerMeter berubah), area
+  // polygonnya sendiri tetap menempel di grid.
   const prevScaleRef = useRef(scale);
-  const prevPxPerMeterRef = useRef(pxPerMeter);
   useEffect(() => {
     if (prevScaleRef.current !== scale) {
-      const ratio = pxPerMeter / (prevPxPerMeterRef.current || pxPerMeter);
       const next = layers.map((l) => ({
         ...l,
         areaM2: polygonAreaPx(l.points) / (pxPerMeter * pxPerMeter),
       }));
-      const patch: Partial<Sketch> = { layers: next };
-      if (Number.isFinite(ratio) && Math.abs(ratio - 1) > 1e-6 && (sketch.parkingAreas ?? []).length) {
-        patch.parkingAreas = (sketch.parkingAreas ?? []).map((a) => ({
-          ...a,
-          pointsLocal: a.pointsLocal.map((p) => ({ x: p.x * ratio, y: p.y * ratio })),
-        }));
-      }
-      onChange(patch);
+      onChange({ layers: next });
       prevScaleRef.current = scale;
-      prevPxPerMeterRef.current = pxPerMeter;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale]);
+
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -4278,42 +4289,51 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           for (let i = 1; i < worldPoly.length; i++) ctx.lineTo(worldPoly[i].x, worldPoly[i].y);
           ctx.closePath();
           ctx.stroke();
-          // titik vertex
-          const r = 5 / s;
-          ctx.fillStyle = "#f47216";
-          for (const p of worldPoly) {
+          // titik vertex — hanya tampil pada mode edit titik
+          const inEditTitik =
+            parkingSubTool === "move" ||
+            parkingSubTool === "addPoint" ||
+            parkingSubTool === "removePoint";
+          if (inEditTitik) {
+            const r = 5 / s;
+            ctx.fillStyle = "#f47216";
+            for (const p of worldPoly) {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          // handle rotasi: hanya tampil pada mode rotate
+          if (parkingSubTool === "rotate") {
+            const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
+            const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
+            const totalRot = mmGridRotRad + (area.stallRotation ?? 0);
+            let maxR = 0;
+            for (const p of worldPoly) {
+              const d = Math.hypot(p.x - cx, p.y - cy);
+              if (d > maxR) maxR = d;
+            }
+            const hr = maxR + 24 / s;
+            const hx = cx + Math.cos(totalRot - Math.PI / 2) * hr;
+            const hy = cy + Math.sin(totalRot - Math.PI / 2) * hr;
+            ctx.strokeStyle = "rgba(244, 114, 22, 0.7)";
+            ctx.setLineDash([4 / s, 3 / s]);
             ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(hx, hy);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = "#fff";
+            ctx.strokeStyle = "#f47216";
+            ctx.lineWidth = 2 / s;
+            ctx.beginPath();
+            ctx.arc(hx, hy, 7 / s, 0, Math.PI * 2);
             ctx.fill();
+            ctx.stroke();
           }
-          // handle rotasi: di luar bbox sisi atas
-          const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
-          const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
-          const totalRot = mmGridRotRad + (area.stallRotation ?? 0);
-          // Hitung jarak dari center ke titik terjauh
-          let maxR = 0;
-          for (const p of worldPoly) {
-            const d = Math.hypot(p.x - cx, p.y - cy);
-            if (d > maxR) maxR = d;
-          }
-          const hr = maxR + 24 / s;
-          const hx = cx + Math.cos(totalRot - Math.PI / 2) * hr;
-          const hy = cy + Math.sin(totalRot - Math.PI / 2) * hr;
-          ctx.strokeStyle = "rgba(244, 114, 22, 0.7)";
-          ctx.setLineDash([4 / s, 3 / s]);
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(hx, hy);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.fillStyle = "#fff";
-          ctx.strokeStyle = "#f47216";
-          ctx.lineWidth = 2 / s;
-          ctx.beginPath();
-          ctx.arc(hx, hy, 7 / s, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
           ctx.restore();
+
         }
         // stalls
         const stalls = stallsByArea.get(area.id) ?? [];
@@ -4365,7 +4385,39 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.setLineDash([]);
         ctx.restore();
       }
+      // Render DRAFT area parkir (belum disimpan): outline emas + label
+      if (parkingDraft && (!activeLvlId || parkingDraft.levelId === activeLvlId)) {
+
+        const dp = parkingDraft.pointsLocal.map((p) => ({
+          x: p.x * Math.cos(mmGridRotRad) - p.y * Math.sin(mmGridRotRad),
+          y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
+        }));
+        ctx.save();
+        ctx.strokeStyle = "#f59e0b";
+        ctx.fillStyle = "rgba(245, 158, 11, 0.10)";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([8 / s, 5 / s]);
+        ctx.beginPath();
+        ctx.moveTo(dp[0].x, dp[0].y);
+        for (let i = 1; i < dp.length; i++) ctx.lineTo(dp[i].x, dp[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+        ctx.setLineDash([]);
+        const cx = dp.reduce((s2, p) => s2 + p.x, 0) / dp.length;
+        const cy = dp.reduce((s2, p) => s2 + p.y, 0) / dp.length;
+        const sp = worldToScreen({ x: cx, y: cy });
+        const label = "DRAFT — tekan Simpan Area";
+        ctx.font = "700 11px Manrope, sans-serif";
+        const w = ctx.measureText(label).width + 12;
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillRect(sp.x - w / 2, sp.y - 9, w, 18);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, sp.x - w / 2 + 6, sp.y + 4);
+        ctx.restore();
+      }
     }
+
 
     // Active line length label, screen-space
     if (drawing) {
@@ -4380,7 +4432,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -6587,20 +6639,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         { x: minX, y: minY }, { x: maxX, y: minY },
         { x: maxX, y: maxY }, { x: minX, y: maxY },
       ];
-      const newArea: ParkingArea = {
+      // Simpan sebagai DRAFT — belum masuk sketch sampai user tekan "Simpan Area".
+      const draft: ParkingArea = {
         id: genParkingId(),
         levelId: activeLvlId ?? undefined,
         pointsLocal,
         orientation: "auto",
         stallRotation: 0,
       };
-      pushHistory();
-      const prev = sketch.parkingAreas ?? [];
-      onChange({ parkingAreas: [...prev, newArea] });
-      setParkingSelectedId(newArea.id);
-      toast.success("Area parkir ditambahkan");
+      setParkingDraft(draft);
+      toast.success("Draft area parkir — tekan Simpan Area untuk mengunci");
       return;
     }
+
 
 
     if (curTool === "section") {
@@ -7460,7 +7511,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               setParkingSelectedId(null);
               toast.success("Area parkir dihapus");
             }}
+            hasDraft={!!parkingDraft}
+            onSaveDraft={() => {
+              if (!parkingDraft) return;
+              pushHistory();
+              const newArea = { ...parkingDraft, levelId: activeLvlId ?? parkingDraft.levelId };
+              onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), newArea] });
+              setParkingSelectedId(newArea.id);
+              setParkingDraft(null);
+              setParkingSubTool("move");
+              toast.success("Area parkir tersimpan");
+            }}
+            onCancelDraft={() => { setParkingDraft(null); toast.message("Draft dibatalkan"); }}
           />
+
         )}
         {tool === "floor" && (
           <FloorToolPanel
@@ -8984,7 +9048,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 setParkingSelectedId(null);
                 toast.success("Dihapus");
               }}
+              hasDraft={!!parkingDraft}
+              onSaveDraft={() => {
+                if (!parkingDraft) return;
+                pushHistory();
+                const newArea = { ...parkingDraft, levelId: activeLvlId ?? parkingDraft.levelId };
+                onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), newArea] });
+                setParkingSelectedId(newArea.id);
+                setParkingDraft(null);
+                setParkingSubTool("move");
+                toast.success("Tersimpan");
+              }}
+              onCancelDraft={() => { setParkingDraft(null); }}
             />
+
           )}
           {tool === "edit" && (
             <>
