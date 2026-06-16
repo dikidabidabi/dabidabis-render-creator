@@ -6006,13 +6006,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Parking drag (vertex / rotate / area)
     if (parkingDrag) {
       const rawWp = getWorldPosRaw(e);
-      const lfw = (q: { x: number; y: number }) => ({
-        x: q.x * Math.cos(-mmGridRotRad) - q.y * Math.sin(-mmGridRotRad),
-        y: q.x * Math.sin(-mmGridRotRad) + q.y * Math.cos(-mmGridRotRad),
-      });
       const areas = sketch.parkingAreas ?? [];
       if (parkingDrag.kind === "vertex") {
-        const lp = lfw(rawWp);
+        const lp = snapWorldToMmLocal(rawWp);
         onChange({
           parkingAreas: areas.map((a) => {
             if (a.id !== parkingDrag.areaId) return a;
@@ -6036,14 +6032,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (parkingDrag.kind === "area") {
         const dxW = rawWp.x - parkingDrag.startWorld.x;
         const dyW = rawWp.y - parkingDrag.startWorld.y;
-        const dLocal = lfw({ x: dxW, y: dyW });
-        // dLocal sebagai delta lokal: rotasi pure tanpa translasi
         const dLx = dxW * Math.cos(-mmGridRotRad) - dyW * Math.sin(-mmGridRotRad);
         const dLy = dxW * Math.sin(-mmGridRotRad) + dyW * Math.cos(-mmGridRotRad);
+        const snapDx = Math.round(dLx / MINOR_PX) * MINOR_PX;
+        const snapDy = Math.round(dLy / MINOR_PX) * MINOR_PX;
         onChange({
           parkingAreas: areas.map((a) =>
             a.id === parkingDrag.areaId
-              ? { ...a, pointsLocal: parkingDrag.startPoints.map((q) => ({ x: q.x + dLx, y: q.y + dLy })) }
+              ? { ...a, pointsLocal: parkingDrag.startPoints.map((q) => ({ x: q.x + snapDx, y: q.y + snapDy })) }
               : a,
           ),
         });
