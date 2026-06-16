@@ -4465,6 +4465,86 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.fillStyle = "#fff";
         ctx.fillText(label, sp.x - w / 2 + 5, sp.y + 4);
       }
+      // ===== Render jalur parkir (polyline obstacle) =====
+      {
+        const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+        const localToWorld = (p: { x: number; y: number }) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs });
+        const areasLv = (sketch.parkingAreas ?? []).filter(
+          (p) => !activeLvlId || p.levelId === activeLvlId,
+        );
+        ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        for (const area of areasLv) {
+          for (const path of area.paths ?? []) {
+            const wpts = path.pointsLocal.map(localToWorld);
+            ctx.save();
+            ctx.strokeStyle = "rgba(115, 115, 115, 0.95)";
+            ctx.lineWidth = 1.2 / s;
+            ctx.setLineDash([6 / s, 4 / s]);
+            ctx.beginPath();
+            ctx.moveTo(wpts[0].x, wpts[0].y);
+            for (let i = 1; i < wpts.length; i++) ctx.lineTo(wpts[i].x, wpts[i].y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+            // vertex handles bila area terpilih + mode edit jalur
+            const inPathEdit =
+              parkingSelectedId === area.id && (
+                parkingSubTool === "pathMove" ||
+                parkingSubTool === "pathAdd" ||
+                parkingSubTool === "pathRemove" ||
+                parkingSubTool === "pathFillet"
+              );
+            if (inPathEdit) {
+              const r = 4.5 / s;
+              ctx.fillStyle =
+                parkingSubTool === "pathRemove" ? "#c62828" :
+                parkingSubTool === "pathFillet" ? "#0ea5e9" :
+                parkingSubTool === "pathAdd" ? "#22c55e" : "#f47216";
+              ctx.strokeStyle = "#1a1a1a";
+              ctx.lineWidth = 1 / s;
+              for (const p of wpts) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+              }
+            }
+          }
+        }
+        // Draft polyline jalur
+        if (parkingPathDraft) {
+          const target = (sketch.parkingAreas ?? []).find((a) => a.id === parkingPathDraft.areaId);
+          if (target && (!activeLvlId || target.levelId === activeLvlId)) {
+            const wpts = parkingPathDraft.points.map(localToWorld);
+            if (wpts.length >= 1) {
+              ctx.save();
+              ctx.strokeStyle = "#f59e0b";
+              ctx.lineWidth = 1.6 / s;
+              ctx.setLineDash([7 / s, 4 / s]);
+              ctx.beginPath();
+              ctx.moveTo(wpts[0].x, wpts[0].y);
+              for (let i = 1; i < wpts.length; i++) ctx.lineTo(wpts[i].x, wpts[i].y);
+              if (parkingPathHover) {
+                const h = localToWorld(parkingPathHover);
+                ctx.lineTo(h.x, h.y);
+              }
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.fillStyle = "#f59e0b";
+              for (const p of wpts) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4 / s, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              ctx.restore();
+            }
+          }
+        }
+        ctx.restore();
+      }
       // preview drag parkir (4-titik rect ter-snap mm-grid)
       if (drawing && tool === "parking" && parkingSubTool === "draw") {
         const ang = mmGridRotRad || 0;
