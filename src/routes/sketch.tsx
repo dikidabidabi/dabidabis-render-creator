@@ -7517,7 +7517,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 ...a,
                 id: genParkingId(),
                 levelId: activeLvlId ?? undefined,
-                pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + offset, y: q.y + offset })),
+              pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
               }));
               onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
               setParkingSelectedId(pasted[0]?.id ?? null);
@@ -9049,12 +9049,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               onPaste={() => {
                 if (!parkingClipboard || parkingClipboard.length === 0) { toast.error("Clipboard kosong"); return; }
                 pushHistory();
-                const offset = 30;
                 const pasted: ParkingArea[] = parkingClipboard.map((a) => ({
                   ...a,
                   id: genParkingId(),
                   levelId: activeLvlId ?? undefined,
-                  pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + offset, y: q.y + offset })),
+                  pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
                 }));
                 onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
                 setParkingSelectedId(pasted[0]?.id ?? null);
