@@ -205,7 +205,9 @@ function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefin
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
 }
 function bindLahanToMdplZero(sketch: Sketch): Sketch {
-  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) return sketch;
+  const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+  const parkingAreas = normalizeParkingAreas(sketch.parkingAreas, mmRotRad);
+  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) return { ...sketch, parkingAreas };
   const zero = findMdplZeroLevel(sketch.levels ?? []);
   const zeroLevel = zero ?? {
     id: `LV_${sketch.id}_MDPL0`,
@@ -217,6 +219,7 @@ function bindLahanToMdplZero(sketch: Sketch): Sketch {
   return {
     ...sketch,
     levels,
+    parkingAreas,
     layers: (sketch.layers ?? []).map((ly) => (isLahan(ly.name) ? { ...ly, levelId: zeroLevel.id } : ly)),
   };
 }
