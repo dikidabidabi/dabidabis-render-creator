@@ -100,6 +100,8 @@ type Sketch = {
   edgeAttrs?: Record<string, EdgeMaterial>;
   doors?: Door[];
   floors?: Floor[];
+  parkingAreas?: ParkingArea[];
+  mmGridRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
