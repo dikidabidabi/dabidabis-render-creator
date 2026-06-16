@@ -7511,7 +7511,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               setParkingSelectedId(null);
               toast.success("Area parkir dihapus");
             }}
+            hasDraft={!!parkingDraft}
+            onSaveDraft={() => {
+              if (!parkingDraft) return;
+              pushHistory();
+              const newArea = { ...parkingDraft, levelId: activeLvlId ?? parkingDraft.levelId };
+              onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), newArea] });
+              setParkingSelectedId(newArea.id);
+              setParkingDraft(null);
+              setParkingSubTool("move");
+              toast.success("Area parkir tersimpan");
+            }}
+            onCancelDraft={() => { setParkingDraft(null); toast.message("Draft dibatalkan"); }}
           />
+
         )}
         {tool === "floor" && (
           <FloorToolPanel
