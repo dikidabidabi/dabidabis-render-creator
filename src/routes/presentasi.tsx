@@ -3759,7 +3759,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const groups = new Map<string, { count: number; cx: number; cy: number }>();
             const ungrouped: typeof areaInfos = [];
             for (const info of areaInfos) {
-              const room = parkingRooms.find((r) => pointInPolyPres({ x: info.cx, y: info.cy }, r.points));
+              let room = parkingRooms.find((r) => pointInPolyPres({ x: info.cx, y: info.cy }, r.points));
+              if (!room) room = parkingRooms.find((r) => info.worldPoly.some((v) => pointInPolyPres(v, r.points)));
+              if (!room) room = parkingRooms.find((r) => {
+                const rcx = r.points.reduce((s, p) => s + p.x, 0) / r.points.length;
+                const rcy = r.points.reduce((s, p) => s + p.y, 0) / r.points.length;
+                return info.worldPoly.length >= 3 && pointInPolyPres({ x: rcx, y: rcy }, info.worldPoly);
+              });
               if (!room) { ungrouped.push(info); continue; }
               const prev = groups.get(room.id);
               if (prev) {
@@ -6577,7 +6583,62 @@ function GridStat({ label, value, hint }: { label: string; value: string; hint?:
 }
 
 // ---- Rekap ----
+function computeTotalParkingLots(sketch: Sketch): number {
+  const areas = sketch.parkingAreas ?? [];
+  if (!areas.length) return 0;
+  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+  const levels = sketch.levels ?? [];
+  let total = 0;
+  for (const level of levels) {
+    const areasLv = areas.filter((p) => p.levelId === level.id);
+    if (!areasLv.length) continue;
+    const layers = (sketch.layers ?? []).filter((l) => l.levelId === level.id);
+    const lines = (sketch.lines ?? []).filter((l) => l.levelId === level.id);
+    const obs: ParkingObstacle[] = [];
+    const wallBuf = 0.075 * pxPerM;
+    for (const ln of lines) {
+      if ((ln.kind ?? "straight") !== "straight") continue;
+      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBuf });
+    }
+    for (const ly of layers) {
+      if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+      if (isParkingName(ly.name)) continue;
+      obs.push({ kind: "polygon", poly: ly.points });
+    }
+    for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
+      if (grid.lineOnly || !levelInRange(grid, level, levels)) continue;
+      const { spansX, spansY } = spansForLevel(grid, level.id);
+      const xsM = axisPositions(spansX);
+      const ysM = axisPositions(spansY);
+      const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
+      const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+      const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
+      for (let j = 0; j < ysM.length; j++) {
+        for (let i = 0; i < xsM.length; i++) {
+          if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
+          const lx = xsM[i] * pxPerM;
+          const lyv = ysM[j] * pxPerM;
+          const cx = grid.origin.x + lx * cs - lyv * sn;
+          const cy = grid.origin.y + lx * sn + lyv * cs;
+          const poly = [
+            { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
+            { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
+          ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
+          obs.push({ kind: "polygon", poly });
+        }
+      }
+    }
+    for (const area of areasLv) {
+      const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
+      total += stalls.filter((s) => s.valid).length;
+    }
+  }
+  return total;
+}
+
 function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
+  const totalParking = computeTotalParkingLots(sketch);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18, width: "100%", alignContent: "start" }}>
       <GridStat label="Luas Lahan" value={`${fmt(data.totalLahanM2)} m²`} />
@@ -6613,6 +6674,9 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       <GridStat label="KLB Rencana" value={`${fmt(data.klbRencanaM2)} m²`} />
       {data.totalKolom > 0 && (
         <GridStat label="Modul Struktur" value={`${data.totalKolom} kolom`} hint={`Volume beton ${fmt(data.volumeBetonM3, 2)} m³`} />
+      )}
+      {totalParking > 0 && (
+        <GridStat label="Total Lot Parkir" value={`${totalParking} lot`} hint="akumulasi seluruh level" />
       )}
     </div>
   );
