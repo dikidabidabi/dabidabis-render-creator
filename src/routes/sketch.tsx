@@ -9144,6 +9144,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   id: genParkingId(),
                   levelId: activeLvlId ?? undefined,
                   pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
+                  paths: (a.paths ?? []).map((p) => ({
+                    id: genParkingPathId(),
+                    pointsLocal: p.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
+                  })),
                 }));
                 onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
                 setParkingSelectedId(pasted[0]?.id ?? null);
@@ -9170,6 +9174,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 toast.success("Tersimpan");
               }}
               onCancelDraft={() => { setParkingDraft(null); }}
+              hasPathDraft={!!parkingPathDraft}
+              pathDraftCount={parkingPathDraft?.points.length ?? 0}
+              onSavePathDraft={() => {
+                if (!parkingPathDraft || parkingPathDraft.points.length < 2) {
+                  toast.error("Butuh ≥ 2 titik");
+                  return;
+                }
+                pushHistory();
+                const newPath: ParkingPath = {
+                  id: genParkingPathId(),
+                  pointsLocal: parkingPathDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                };
+                onChange({
+                  parkingAreas: (sketch.parkingAreas ?? []).map((a) =>
+                    a.id === parkingPathDraft.areaId
+                      ? { ...a, paths: [...(a.paths ?? []), newPath] }
+                      : a,
+                  ),
+                });
+                setParkingPathDraft(null);
+                toast.success("Jalur tersimpan");
+              }}
+              onCancelPathDraft={() => { setParkingPathDraft(null); }}
             />
 
           )}
