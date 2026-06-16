@@ -114,12 +114,16 @@ import {
 import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
 import {
   type ParkingArea,
+  type ParkingPath,
   type ParkingStall,
   type ParkingObstacle,
   normalizeParkingAreas,
   generateStalls,
   genParkingId,
+  genParkingPathId,
   isParkingName,
+  parkingPathsToObstacles,
+  PARKING_PATH_BUFFER_M,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useProjectStore } from "@/store/project-store";
@@ -937,9 +941,21 @@ function SpanRow({
   );
 }
 
+export type ParkingSubToolKind =
+  | "draw"
+  | "move"
+  | "addPoint"
+  | "removePoint"
+  | "rotate"
+  | "pathDraw"
+  | "pathMove"
+  | "pathAdd"
+  | "pathRemove"
+  | "pathFillet";
+
 type ParkingSubToolbarProps = {
-  sub: "draw" | "move" | "addPoint" | "removePoint" | "rotate";
-  setSub: (s: "draw" | "move" | "addPoint" | "removePoint" | "rotate") => void;
+  sub: ParkingSubToolKind;
+  setSub: (s: ParkingSubToolKind) => void;
   selectedId: string | null;
   clipboardSize: number;
   orientation: "auto" | "x" | "y";
@@ -950,16 +966,31 @@ type ParkingSubToolbarProps = {
   hasDraft: boolean;
   onSaveDraft: () => void;
   onCancelDraft: () => void;
+  hasPathDraft: boolean;
+  pathDraftCount: number;
+  onSavePathDraft: () => void;
+  onCancelPathDraft: () => void;
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
-  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft } = props;
-  const opts: Array<{ k: typeof sub; label: string; hint: string }> = [
+  const {
+    sub, setSub, selectedId, clipboardSize, orientation, onOrientation,
+    onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft,
+    hasPathDraft, pathDraftCount, onSavePathDraft, onCancelPathDraft,
+  } = props;
+  const opts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
     { k: "move", label: "Edit Titik: Geser", hint: "Geser titik / area" },
     { k: "addPoint", label: "Edit Titik: +", hint: "Sisip titik di sisi" },
     { k: "removePoint", label: "Edit Titik: −", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
+  ];
+  const pathOpts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
+    { k: "pathDraw", label: "Tarik", hint: "Klik berurutan utk membuat polyline (Enter = simpan)" },
+    { k: "pathMove", label: "Geser", hint: "Geser titik jalur" },
+    { k: "pathAdd", label: "+", hint: "Sisip titik di sisi jalur" },
+    { k: "pathRemove", label: "−", hint: "Hapus titik jalur" },
+    { k: "pathFillet", label: "Fillet", hint: "Chamfer sudut jalur (≈1 m)" },
   ];
   const oriOpts: Array<{ k: "auto" | "x" | "y"; label: string; hint: string }> = [
     { k: "auto", label: "Auto", hint: "Orientasi otomatis sesuai sisi terpanjang" },
@@ -994,6 +1025,33 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
         <X className="mr-1 h-3.5 w-3.5" /> Batal Draft
       </Button>
       <div className="mx-1 h-6 w-px bg-border/60" />
+      <span className="self-center text-xs text-muted-foreground">Jalur Parkir:</span>
+      {pathOpts.map((o) => (
+        <Button
+          key={o.k}
+          size="sm"
+          variant={sub === o.k ? "default" : "outline"}
+          onClick={() => setSub(o.k)}
+          disabled={!selectedId && o.k !== "pathDraw"}
+          title={o.hint}
+        >
+          {o.label}
+        </Button>
+      ))}
+      <Button
+        size="sm"
+        variant={hasPathDraft ? "default" : "outline"}
+        onClick={onSavePathDraft}
+        disabled={!hasPathDraft || pathDraftCount < 2}
+        className={cn(hasPathDraft && pathDraftCount >= 2 && "bg-amber-500 hover:bg-amber-600 text-white")}
+        title="Simpan polyline jalur (perlu ≥ 2 titik)"
+      >
+        <Save className="mr-1 h-3.5 w-3.5" /> Simpan Jalur{pathDraftCount > 0 ? ` (${pathDraftCount})` : ""}
+      </Button>
+      <Button size="sm" variant="outline" onClick={onCancelPathDraft} disabled={!hasPathDraft} title="Batal draft jalur">
+        <X className="mr-1 h-3.5 w-3.5" /> Batal Jalur
+      </Button>
+      <div className="mx-1 h-6 w-px bg-border/60" />
       <span className="self-center text-xs text-muted-foreground">Arah deret:</span>
       {oriOpts.map((o) => (
         <Button
@@ -1008,7 +1066,7 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
         </Button>
       ))}
       <div className="mx-1 h-6 w-px bg-border/60" />
-      <Button size="sm" variant="outline" onClick={onCopy} disabled={!selectedId} title="Copy area parkir terpilih">
+      <Button size="sm" variant="outline" onClick={onCopy} disabled={!selectedId} title="Copy area parkir terpilih (termasuk jalur)">
         <Copy className="mr-1 h-3.5 w-3.5" /> Copy
       </Button>
       <Button size="sm" variant="outline" onClick={onPaste} disabled={clipboardSize === 0} title="Paste ke level aktif">
@@ -1849,19 +1907,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking">("line");
   // Parking sub-tool state
-  type ParkingSubTool = "draw" | "move" | "addPoint" | "removePoint" | "rotate";
+  type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
   const [parkingSelectedId, setParkingSelectedId] = useState<string | null>(null);
   const [parkingDrag, setParkingDrag] = useState<
     | { kind: "vertex"; areaId: string; idx: number }
     | { kind: "rotate"; areaId: string; startAngle: number; startRot: number; centerWorld: { x: number; y: number } }
     | { kind: "area"; areaId: string; startWorld: { x: number; y: number }; startPoints: { x: number; y: number }[] }
+    | { kind: "pathVertex"; areaId: string; pathId: string; idx: number }
     | null
   >(null);
   const parkingClipboard = useProjectStore((s) => s.parkingClipboard);
   const setParkingClipboard = useProjectStore((s) => s.setParkingClipboard);
   // Draft area parkir: tersimpan ke sketch hanya setelah tombol "Simpan Area".
   const [parkingDraft, setParkingDraft] = useState<ParkingArea | null>(null);
+  // Draft polyline jalur parkir: tambah titik per-klik, commit lewat tombol.
+  const [parkingPathDraft, setParkingPathDraft] = useState<
+    { areaId: string; points: { x: number; y: number }[] } | null
+  >(null);
+  const [parkingPathHover, setParkingPathHover] = useState<{ x: number; y: number } | null>(null);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -2754,8 +2818,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (isParkingName(ly.name)) continue;
       obs.push({ kind: "polygon", poly: ly.points.map((p) => ({ x: p.x, y: p.y })) });
     }
+    // Jalur parkir (polyline) → obstacle wall ber-buffer 1.75 m / sisi.
+    const areasForPath = (sketch.parkingAreas ?? []).filter(
+      (p) => !activeLvlId || p.levelId === activeLvlId,
+    );
+    obs.push(...parkingPathsToObstacles(areasForPath, pxPerMeter, mmGridRotRad));
+    // Tambahkan juga draft jalur (live preview) jika area target di level aktif.
+    if (parkingPathDraft && parkingPathDraft.points.length >= 2) {
+      const target = (sketch.parkingAreas ?? []).find((a) => a.id === parkingPathDraft.areaId);
+      if (target && (!activeLvlId || target.levelId === activeLvlId)) {
+        const buf = PARKING_PATH_BUFFER_M * pxPerMeter;
+        const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+        const w = parkingPathDraft.points.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs }));
+        for (let i = 0; i < w.length - 1; i++) {
+          obs.push({ kind: "wall", a: w[i], b: w[i + 1], bufferPx: buf });
+        }
+      }
+    }
     return obs;
-  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers]);
+  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers, sketch.parkingAreas, mmGridRotRad, parkingPathDraft]);
 
   const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
     const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
@@ -4384,6 +4465,86 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.fillStyle = "#fff";
         ctx.fillText(label, sp.x - w / 2 + 5, sp.y + 4);
       }
+      // ===== Render jalur parkir (polyline obstacle) =====
+      {
+        const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+        const localToWorld = (p: { x: number; y: number }) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs });
+        const areasLv = (sketch.parkingAreas ?? []).filter(
+          (p) => !activeLvlId || p.levelId === activeLvlId,
+        );
+        ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        for (const area of areasLv) {
+          for (const path of area.paths ?? []) {
+            const wpts = path.pointsLocal.map(localToWorld);
+            ctx.save();
+            ctx.strokeStyle = "rgba(115, 115, 115, 0.95)";
+            ctx.lineWidth = 1.2 / s;
+            ctx.setLineDash([6 / s, 4 / s]);
+            ctx.beginPath();
+            ctx.moveTo(wpts[0].x, wpts[0].y);
+            for (let i = 1; i < wpts.length; i++) ctx.lineTo(wpts[i].x, wpts[i].y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+            // vertex handles bila area terpilih + mode edit jalur
+            const inPathEdit =
+              parkingSelectedId === area.id && (
+                parkingSubTool === "pathMove" ||
+                parkingSubTool === "pathAdd" ||
+                parkingSubTool === "pathRemove" ||
+                parkingSubTool === "pathFillet"
+              );
+            if (inPathEdit) {
+              const r = 4.5 / s;
+              ctx.fillStyle =
+                parkingSubTool === "pathRemove" ? "#c62828" :
+                parkingSubTool === "pathFillet" ? "#0ea5e9" :
+                parkingSubTool === "pathAdd" ? "#22c55e" : "#f47216";
+              ctx.strokeStyle = "#1a1a1a";
+              ctx.lineWidth = 1 / s;
+              for (const p of wpts) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+              }
+            }
+          }
+        }
+        // Draft polyline jalur
+        if (parkingPathDraft) {
+          const target = (sketch.parkingAreas ?? []).find((a) => a.id === parkingPathDraft.areaId);
+          if (target && (!activeLvlId || target.levelId === activeLvlId)) {
+            const wpts = parkingPathDraft.points.map(localToWorld);
+            if (wpts.length >= 1) {
+              ctx.save();
+              ctx.strokeStyle = "#f59e0b";
+              ctx.lineWidth = 1.6 / s;
+              ctx.setLineDash([7 / s, 4 / s]);
+              ctx.beginPath();
+              ctx.moveTo(wpts[0].x, wpts[0].y);
+              for (let i = 1; i < wpts.length; i++) ctx.lineTo(wpts[i].x, wpts[i].y);
+              if (parkingPathHover) {
+                const h = localToWorld(parkingPathHover);
+                ctx.lineTo(h.x, h.y);
+              }
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.fillStyle = "#f59e0b";
+              for (const p of wpts) {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4 / s, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              ctx.restore();
+            }
+          }
+        }
+        ctx.restore();
+      }
       // preview drag parkir (4-titik rect ter-snap mm-grid)
       if (drawing && tool === "parking" && parkingSubTool === "draw") {
         const ang = mmGridRotRad || 0;
@@ -5178,6 +5339,125 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const areas = (sketch.parkingAreas ?? []).filter(
         (pa) => !activeLvlId || pa.levelId === activeLvlId,
       );
+
+      // ----- Path (jalur parkir) sub-modes -----
+      const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+      const localToWorld = (p: { x: number; y: number }) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs });
+      if (parkingSubTool === "pathDraw") {
+        if (!parkingSelectedId && !parkingPathDraft) {
+          toast.error("Pilih area parkir dulu");
+          return;
+        }
+        const targetId = parkingPathDraft?.areaId ?? parkingSelectedId!;
+        const lp = snapWorldToMmLocal(rawWp);
+        if (parkingPathDraft) {
+          setParkingPathDraft({ areaId: targetId, points: [...parkingPathDraft.points, lp] });
+        } else {
+          setParkingPathDraft({ areaId: targetId, points: [lp] });
+        }
+        return;
+      }
+      if (parkingSubTool === "pathMove" || parkingSubTool === "pathRemove" || parkingSubTool === "pathFillet") {
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          for (const path of area.paths ?? []) {
+            const wpts = path.pointsLocal.map(localToWorld);
+            for (let i = 0; i < wpts.length; i++) {
+              if (Math.hypot(rawWp.x - wpts[i].x, rawWp.y - wpts[i].y) <= tol) {
+                setParkingSelectedId(area.id);
+                if (parkingSubTool === "pathMove") {
+                  pushHistory();
+                  setParkingDrag({ kind: "pathVertex", areaId: area.id, pathId: path.id, idx: i });
+                  return;
+                }
+                if (parkingSubTool === "pathRemove") {
+                  pushHistory();
+                  const pts = path.pointsLocal;
+                  let newPaths: ParkingPath[];
+                  if (pts.length <= 2) {
+                    newPaths = (area.paths ?? []).filter((p) => p.id !== path.id);
+                  } else {
+                    newPaths = (area.paths ?? []).map((p) =>
+                      p.id === path.id ? { ...p, pointsLocal: pts.filter((_, k) => k !== i) } : p,
+                    );
+                  }
+                  onChange({
+                    parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                      a2.id === area.id ? { ...a2, paths: newPaths } : a2,
+                    ),
+                  });
+                  return;
+                }
+                if (parkingSubTool === "pathFillet") {
+                  const pts = path.pointsLocal;
+                  if (i === 0 || i === pts.length - 1) {
+                    toast.error("Fillet hanya untuk titik tengah");
+                    return;
+                  }
+                  const prev = pts[i - 1], cur = pts[i], nxt = pts[i + 1];
+                  const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+                  const outLen = Math.hypot(nxt.x - cur.x, nxt.y - cur.y);
+                  const rPx = Math.min(1 * pxPerMeter, inLen * 0.45, outLen * 0.45);
+                  if (rPx < 4) { toast.error("Segmen terlalu pendek utk fillet"); return; }
+                  const ux = (prev.x - cur.x) / inLen, uy = (prev.y - cur.y) / inLen;
+                  const vx = (nxt.x - cur.x) / outLen, vy = (nxt.y - cur.y) / outLen;
+                  const a = snapMmLocal({ x: cur.x + ux * rPx, y: cur.y + uy * rPx });
+                  const b = snapMmLocal({ x: cur.x + vx * rPx, y: cur.y + vy * rPx });
+                  pushHistory();
+                  const newPts = [...pts.slice(0, i), a, b, ...pts.slice(i + 1)];
+                  onChange({
+                    parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                      a2.id === area.id
+                        ? { ...a2, paths: (a2.paths ?? []).map((p) => p.id === path.id ? { ...p, pointsLocal: newPts } : p) }
+                        : a2,
+                    ),
+                  });
+                  return;
+                }
+              }
+            }
+          }
+        }
+        return;
+      }
+      if (parkingSubTool === "pathAdd") {
+        const localP = worldToMmLocal(rawWp);
+        const tolLocal = 12 / view.s;
+        for (let ai = areas.length - 1; ai >= 0; ai--) {
+          const area = areas[ai];
+          for (const path of area.paths ?? []) {
+            const pts = path.pointsLocal;
+            let bestI = -1, bestD = Infinity, bestProj: { x: number; y: number } | null = null;
+            for (let i = 0; i < pts.length - 1; i++) {
+              const a2 = pts[i], b2 = pts[i + 1];
+              const vx = b2.x - a2.x, vy = b2.y - a2.y;
+              const wx = localP.x - a2.x, wy = localP.y - a2.y;
+              const c2 = vx * vx + vy * vy;
+              if (c2 < 1e-6) continue;
+              const t = Math.max(0, Math.min(1, (vx * wx + vy * wy) / c2));
+              const px = a2.x + t * vx, py = a2.y + t * vy;
+              const d = Math.hypot(localP.x - px, localP.y - py);
+              if (d < bestD) { bestD = d; bestI = i; bestProj = { x: px, y: py }; }
+            }
+            if (bestI >= 0 && bestProj && bestD <= tolLocal) {
+              pushHistory();
+              const newPts = [...pts];
+              newPts.splice(bestI + 1, 0, snapMmLocal(bestProj));
+              onChange({
+                parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
+                  a2.id === area.id
+                    ? { ...a2, paths: (a2.paths ?? []).map((p) => p.id === path.id ? { ...p, pointsLocal: newPts } : p) }
+                    : a2,
+                ),
+              });
+              setParkingSelectedId(area.id);
+              return;
+            }
+          }
+        }
+        return;
+      }
+
       // 1) Rotation handle hit (jika selected)
       if (parkingSelectedId) {
         const sel = areas.find((aa) => aa.id === parkingSelectedId);
@@ -6057,7 +6337,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         });
         return;
       }
+      if (parkingDrag.kind === "pathVertex") {
+        const lp = snapWorldToMmLocal(rawWp);
+        onChange({
+          parkingAreas: areas.map((a) => {
+            if (a.id !== parkingDrag.areaId) return a;
+            return {
+              ...a,
+              paths: (a.paths ?? []).map((p) =>
+                p.id === parkingDrag.pathId
+                  ? { ...p, pointsLocal: p.pointsLocal.map((q, k) => k === parkingDrag.idx ? lp : q) }
+                  : p,
+              ),
+            };
+          }),
+        });
+        return;
+      }
     }
+
+    // Hover untuk live-preview segment terakhir saat pathDraw
+    if (tool === "parking" && parkingSubTool === "pathDraw" && parkingPathDraft) {
+      setParkingPathHover(snapWorldToMmLocal(getWorldPosRaw(e)));
+    } else if (parkingPathHover) {
+      setParkingPathHover(null);
+    }
+
 
     if (pointersRef.current.has(e.pointerId)) {
       pointersRef.current.set(e.pointerId, getScreenPos(e));
@@ -7517,6 +7822,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 id: genParkingId(),
                 levelId: activeLvlId ?? undefined,
                 pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
+                paths: (a.paths ?? []).map((p) => ({
+                  id: genParkingPathId(),
+                  pointsLocal: p.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
+                })),
               }));
               onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
               setParkingSelectedId(pasted[0]?.id ?? null);
@@ -7543,6 +7852,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               toast.success("Area parkir tersimpan");
             }}
             onCancelDraft={() => { setParkingDraft(null); toast.message("Draft dibatalkan"); }}
+            hasPathDraft={!!parkingPathDraft}
+            pathDraftCount={parkingPathDraft?.points.length ?? 0}
+            onSavePathDraft={() => {
+              if (!parkingPathDraft || parkingPathDraft.points.length < 2) {
+                toast.error("Butuh ≥ 2 titik");
+                return;
+              }
+              pushHistory();
+              const newPath: ParkingPath = {
+                id: genParkingPathId(),
+                pointsLocal: parkingPathDraft.points.map((p) => ({ x: p.x, y: p.y })),
+              };
+              onChange({
+                parkingAreas: (sketch.parkingAreas ?? []).map((a) =>
+                  a.id === parkingPathDraft.areaId
+                    ? { ...a, paths: [...(a.paths ?? []), newPath] }
+                    : a,
+                ),
+              });
+              setParkingPathDraft(null);
+              toast.success("Jalur parkir tersimpan");
+            }}
+            onCancelPathDraft={() => { setParkingPathDraft(null); toast.message("Draft jalur dibatalkan"); }}
           />
 
         )}
@@ -9053,6 +9385,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   id: genParkingId(),
                   levelId: activeLvlId ?? undefined,
                   pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
+                  paths: (a.paths ?? []).map((p) => ({
+                    id: genParkingPathId(),
+                    pointsLocal: p.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
+                  })),
                 }));
                 onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
                 setParkingSelectedId(pasted[0]?.id ?? null);
@@ -9079,6 +9415,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 toast.success("Tersimpan");
               }}
               onCancelDraft={() => { setParkingDraft(null); }}
+              hasPathDraft={!!parkingPathDraft}
+              pathDraftCount={parkingPathDraft?.points.length ?? 0}
+              onSavePathDraft={() => {
+                if (!parkingPathDraft || parkingPathDraft.points.length < 2) {
+                  toast.error("Butuh ≥ 2 titik");
+                  return;
+                }
+                pushHistory();
+                const newPath: ParkingPath = {
+                  id: genParkingPathId(),
+                  pointsLocal: parkingPathDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                };
+                onChange({
+                  parkingAreas: (sketch.parkingAreas ?? []).map((a) =>
+                    a.id === parkingPathDraft.areaId
+                      ? { ...a, paths: [...(a.paths ?? []), newPath] }
+                      : a,
+                  ),
+                });
+                setParkingPathDraft(null);
+                toast.success("Jalur tersimpan");
+              }}
+              onCancelPathDraft={() => { setParkingPathDraft(null); }}
             />
 
           )}

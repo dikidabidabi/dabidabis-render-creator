@@ -13,6 +13,12 @@
 
 export type ParkingPoint = { x: number; y: number };
 
+/** Jalur parkir (polyline) di koordinat lokal mm-grid. */
+export type ParkingPath = {
+  id: string;
+  pointsLocal: ParkingPoint[]; // ≥ 2 titik
+};
+
 export type ParkingArea = {
   id: string;
   levelId?: string;
@@ -25,7 +31,16 @@ export type ParkingArea = {
   stallRotation?: number;
   /** Kunci stall yang dimatikan manual (key = `row,col`). */
   disabled?: string[];
+  /** Jalur parkir (polyline) — obstacle ber-buffer 1.75 m di tiap sisi. */
+  paths?: ParkingPath[];
 };
+
+/** Lebar buffer jalur parkir per sisi (meter). */
+export const PARKING_PATH_BUFFER_M = 1.75;
+
+export function genParkingPathId(): string {
+  return `PP${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
 
 export type ParkingStall = {
   id: string;
@@ -125,6 +140,23 @@ export function normalizeParkingArea(raw: any, mmRot = 0): ParkingArea | null {
     disabled: Array.isArray(raw.disabled)
       ? raw.disabled.filter((s: any) => typeof s === "string")
       : undefined,
+    paths: Array.isArray(raw.paths)
+      ? raw.paths
+          .map((p: any): ParkingPath | null => {
+            if (!p || !Array.isArray(p.pointsLocal) || p.pointsLocal.length < 2) return null;
+            const pts: ParkingPoint[] = [];
+            for (const q of p.pointsLocal) {
+              const x = Number(q?.x), y = Number(q?.y);
+              if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+              pts.push({ x, y });
+            }
+            return {
+              id: typeof p.id === "string" && p.id ? p.id : genParkingPathId(),
+              pointsLocal: pts,
+            };
+          })
+          .filter((p: ParkingPath | null): p is ParkingPath => !!p)
+      : undefined,
   };
 }
 
@@ -158,6 +190,26 @@ function pointInPoly(p: ParkingPoint, poly: ParkingPoint[]): boolean {
 export type ParkingObstacle =
   | { kind: "wall"; a: ParkingPoint; b: ParkingPoint; bufferPx: number }
   | { kind: "polygon"; poly: ParkingPoint[] };
+
+/** Konversi jalur (polyline) area parkir → obstacle wall (dunia) dengan buffer
+ *  PARKING_PATH_BUFFER_M di tiap sisi. */
+export function parkingPathsToObstacles(
+  areas: ParkingArea[],
+  pxPerMeter: number,
+  mmRot: number,
+): ParkingObstacle[] {
+  const out: ParkingObstacle[] = [];
+  const buf = PARKING_PATH_BUFFER_M * pxPerMeter;
+  for (const area of areas) {
+    for (const path of area.paths ?? []) {
+      const w = path.pointsLocal.map((p) => worldFromLocal(p, mmRot));
+      for (let i = 0; i < w.length - 1; i++) {
+        out.push({ kind: "wall", a: w[i], b: w[i + 1], bufferPx: buf });
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * Konversi obstacle dunia → polygon di koordinat lokal mm-grid + sumbu stall.

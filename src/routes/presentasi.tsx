@@ -55,6 +55,7 @@ import {
   generateStalls,
   isParkingName,
   normalizeParkingAreas,
+  parkingPathsToObstacles,
 } from "@/lib/parking";
 import {
   forceSimulation,
@@ -3744,7 +3745,20 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 }
               }
             }
+            // Tambahkan jalur parkir (polyline) sebagai obstacle ber-buffer 1.75 m.
+            obs.push(...parkingPathsToObstacles(areas, pxPerM, mmRotRad));
             const cs = Math.cos(mmRotRad), sn = Math.sin(mmRotRad);
+            // Polyline jalur parkir di koordinat dunia (untuk rendering).
+            const pathWorlds: Array<{ areaId: string; pathId: string; pts: Array<{ x: number; y: number }> }> = [];
+            for (const area of areas) {
+              for (const path of area.paths ?? []) {
+                pathWorlds.push({
+                  areaId: area.id,
+                  pathId: path.id,
+                  pts: path.pointsLocal.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs })),
+                });
+              }
+            }
             // Hitung stall + polygon dunia untuk tiap area
             const areaInfos = areas.map((area) => {
               const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
@@ -3790,6 +3804,16 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       />
                     ))}
                   </g>
+                ))}
+                {pathWorlds.map((pw) => (
+                  <polyline
+                    key={`pp-${pw.areaId}-${pw.pathId}`}
+                    points={pw.pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke="#9ca3af"
+                    strokeWidth={sw * 0.00045}
+                    strokeDasharray={`${sw * 0.003} ${sw * 0.002}`}
+                  />
                 ))}
                 {[
                   ...Array.from(groups.entries()).map(([id, g]) => ({ key: `room-${id}`, count: g.count, cx: g.cx, cy: g.cy })),
@@ -6629,6 +6653,7 @@ function computeTotalParkingLots(sketch: Sketch): number {
         }
       }
     }
+    obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
     for (const area of areasLv) {
       const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
       total += stalls.filter((s) => s.valid).length;
