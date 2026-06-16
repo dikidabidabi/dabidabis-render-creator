@@ -5166,11 +5166,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const areas = (sketch.parkingAreas ?? []).filter(
         (pa) => !activeLvlId || pa.levelId === activeLvlId,
       );
-      // helper: local-from-world
-      const lfw = (q: { x: number; y: number }) => ({
-        x: q.x * Math.cos(-mmGridRotRad) - q.y * Math.sin(-mmGridRotRad),
-        y: q.x * Math.sin(-mmGridRotRad) + q.y * Math.cos(-mmGridRotRad),
-      });
       // 1) Rotation handle hit (jika selected)
       if (parkingSelectedId) {
         const sel = areas.find((aa) => aa.id === parkingSelectedId);
@@ -5251,7 +5246,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       // 4) Add point: klik edge menyisipkan titik baru
       if (parkingSubTool === "addPoint") {
-        const localP = lfw(rawWp);
+        const localP = worldToMmLocal(rawWp);
         for (let ai = areas.length - 1; ai >= 0; ai--) {
           const area = areas[ai];
           const pts = area.pointsLocal;
@@ -5270,7 +5265,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           if (bestI >= 0 && bestProj && bestD <= tol) {
             pushHistory();
             const newPts = [...area.pointsLocal];
-            newPts.splice(bestI + 1, 0, bestProj);
+            newPts.splice(bestI + 1, 0, snapMmLocal(bestProj));
             onChange({
               parkingAreas: (sketch.parkingAreas ?? []).map((a2) =>
                 a2.id === area.id ? { ...a2, pointsLocal: newPts } : a2,
