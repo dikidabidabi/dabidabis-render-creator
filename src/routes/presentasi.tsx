@@ -3741,18 +3741,18 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 <g key={`pk-${area.id}`} pointerEvents="none">
                   <polygon
                     points={worldPoly.map((p) => `${p.x},${p.y}`).join(" ")}
-                    fill="rgba(14,165,233,0.06)"
-                    stroke="rgba(14,165,233,0.85)"
-                    strokeWidth={sw * 0.0012}
+                    fill="none"
+                    stroke="#000000"
+                    strokeWidth={sw * 0.00055}
                     strokeDasharray={`${sw * 0.005} ${sw * 0.003}`}
                   />
                   {valid.map((st) => (
                     <polygon
                       key={st.id}
                       points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
-                      fill="rgba(14,165,233,0.10)"
-                      stroke="rgba(14,165,233,0.95)"
-                      strokeWidth={sw * 0.0009}
+                      fill="none"
+                      stroke="#000000"
+                      strokeWidth={sw * 0.00045}
                     />
                   ))}
                   <g>
