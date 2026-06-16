@@ -140,6 +140,23 @@ export function normalizeParkingArea(raw: any, mmRot = 0): ParkingArea | null {
     disabled: Array.isArray(raw.disabled)
       ? raw.disabled.filter((s: any) => typeof s === "string")
       : undefined,
+    paths: Array.isArray(raw.paths)
+      ? raw.paths
+          .map((p: any): ParkingPath | null => {
+            if (!p || !Array.isArray(p.pointsLocal) || p.pointsLocal.length < 2) return null;
+            const pts: ParkingPoint[] = [];
+            for (const q of p.pointsLocal) {
+              const x = Number(q?.x), y = Number(q?.y);
+              if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+              pts.push({ x, y });
+            }
+            return {
+              id: typeof p.id === "string" && p.id ? p.id : genParkingPathId(),
+              pointsLocal: pts,
+            };
+          })
+          .filter((p: ParkingPath | null): p is ParkingPath => !!p)
+      : undefined,
   };
 }
 
