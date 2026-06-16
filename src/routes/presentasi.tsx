@@ -55,6 +55,7 @@ import {
   generateStalls,
   isParkingName,
   normalizeParkingAreas,
+  parkingPathsToObstacles,
 } from "@/lib/parking";
 import {
   forceSimulation,
