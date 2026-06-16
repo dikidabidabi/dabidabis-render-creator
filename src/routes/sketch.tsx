@@ -9048,7 +9048,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 setParkingSelectedId(null);
                 toast.success("Dihapus");
               }}
+              hasDraft={!!parkingDraft}
+              onSaveDraft={() => {
+                if (!parkingDraft) return;
+                pushHistory();
+                const newArea = { ...parkingDraft, levelId: activeLvlId ?? parkingDraft.levelId };
+                onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), newArea] });
+                setParkingSelectedId(newArea.id);
+                setParkingDraft(null);
+                setParkingSubTool("move");
+                toast.success("Tersimpan");
+              }}
+              onCancelDraft={() => { setParkingDraft(null); }}
             />
+
           )}
           {tool === "edit" && (
             <>
