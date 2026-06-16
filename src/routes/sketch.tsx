@@ -114,12 +114,16 @@ import {
 import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
 import {
   type ParkingArea,
+  type ParkingPath,
   type ParkingStall,
   type ParkingObstacle,
   normalizeParkingAreas,
   generateStalls,
   genParkingId,
+  genParkingPathId,
   isParkingName,
+  parkingPathsToObstacles,
+  PARKING_PATH_BUFFER_M,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useProjectStore } from "@/store/project-store";
