@@ -4366,8 +4366,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.fill();
         ctx.setLineDash([]);
         ctx.restore();
+      }
       // Render DRAFT area parkir (belum disimpan): outline emas + label
       if (parkingDraft && (!activeLvlId || parkingDraft.levelId === activeLvlId)) {
+
         const dp = parkingDraft.pointsLocal.map((p) => ({
           x: p.x * Math.cos(mmGridRotRad) - p.y * Math.sin(mmGridRotRad),
           y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
