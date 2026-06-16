@@ -2818,8 +2818,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (isParkingName(ly.name)) continue;
       obs.push({ kind: "polygon", poly: ly.points.map((p) => ({ x: p.x, y: p.y })) });
     }
+    // Jalur parkir (polyline) → obstacle wall ber-buffer 1.75 m / sisi.
+    const areasForPath = (sketch.parkingAreas ?? []).filter(
+      (p) => !activeLvlId || p.levelId === activeLvlId,
+    );
+    obs.push(...parkingPathsToObstacles(areasForPath, pxPerMeter, mmGridRotRad));
+    // Tambahkan juga draft jalur (live preview) jika area target di level aktif.
+    if (parkingPathDraft && parkingPathDraft.points.length >= 2) {
+      const target = (sketch.parkingAreas ?? []).find((a) => a.id === parkingPathDraft.areaId);
+      if (target && (!activeLvlId || target.levelId === activeLvlId)) {
+        const buf = PARKING_PATH_BUFFER_M * pxPerMeter;
+        const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
+        const w = parkingPathDraft.points.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs }));
+        for (let i = 0; i < w.length - 1; i++) {
+          obs.push({ kind: "wall", a: w[i], b: w[i + 1], bufferPx: buf });
+        }
+      }
+    }
     return obs;
-  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers]);
+  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers, sketch.parkingAreas, mmGridRotRad, parkingPathDraft]);
 
   const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
     const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
