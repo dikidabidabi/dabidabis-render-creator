@@ -1842,6 +1842,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   >(null);
   const parkingClipboard = useProjectStore((s) => s.parkingClipboard);
   const setParkingClipboard = useProjectStore((s) => s.setParkingClipboard);
+  // Draft area parkir: tersimpan ke sketch hanya setelah tombol "Simpan Area".
+  const [parkingDraft, setParkingDraft] = useState<ParkingArea | null>(null);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
