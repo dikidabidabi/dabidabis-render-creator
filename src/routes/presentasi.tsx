@@ -205,17 +205,25 @@ function findMdplZeroLevel<T extends { mdpl: number }>(levels: T[]): T | undefin
   return levels.find((lv) => Math.abs(Number(lv.mdpl) || 0) <= MDPL_ZERO_EPS);
 }
 function bindLahanToMdplZero(sketch: Sketch): Sketch {
+  const rawLevels = sketch.levels ?? [];
   const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
-  const parkingAreas = normalizeParkingAreas(sketch.parkingAreas, mmRotRad);
-  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) return { ...sketch, parkingAreas };
-  const zero = findMdplZeroLevel(sketch.levels ?? []);
+  let parkingAreas = normalizeParkingAreas(sketch.parkingAreas, mmRotRad);
+  if (!(sketch.layers ?? []).some((ly) => isLahan(ly.name))) {
+    const valid = new Set(rawLevels.map((l) => l.id));
+    const fallback = rawLevels[0]?.id;
+    if (fallback) parkingAreas = parkingAreas.map((p) => (p.levelId && valid.has(p.levelId) ? p : { ...p, levelId: fallback }));
+    return { ...sketch, parkingAreas };
+  }
+  const zero = findMdplZeroLevel(rawLevels);
   const zeroLevel = zero ?? {
     id: `LV_${sketch.id}_MDPL0`,
     name: "Level 1",
     mdpl: 0,
     opacity: 0.5,
   };
-  const levels = zero ? sketch.levels : [...(sketch.levels ?? []), zeroLevel];
+  const levels = zero ? rawLevels : [...rawLevels, zeroLevel];
+  const valid = new Set(levels.map((l) => l.id));
+  parkingAreas = parkingAreas.map((p) => (p.levelId && valid.has(p.levelId) ? p : { ...p, levelId: levels[0]?.id }));
   return {
     ...sketch,
     levels,
