@@ -947,15 +947,18 @@ type ParkingSubToolbarProps = {
   onCopy: () => void;
   onPaste: () => void;
   onDelete: () => void;
+  hasDraft: boolean;
+  onSaveDraft: () => void;
+  onCancelDraft: () => void;
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
-  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete } = props;
+  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft } = props;
   const opts: Array<{ k: typeof sub; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
-    { k: "move", label: "Geser", hint: "Geser titik / area" },
-    { k: "addPoint", label: "+Titik", hint: "Sisip titik di sisi" },
-    { k: "removePoint", label: "−Titik", hint: "Hapus titik" },
+    { k: "move", label: "Edit Titik: Geser", hint: "Geser titik / area" },
+    { k: "addPoint", label: "Edit Titik: +", hint: "Sisip titik di sisi" },
+    { k: "removePoint", label: "Edit Titik: −", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
   ];
   const oriOpts: Array<{ k: "auto" | "x" | "y"; label: string; hint: string }> = [
@@ -976,6 +979,20 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
           {o.label}
         </Button>
       ))}
+      <div className="mx-1 h-6 w-px bg-border/60" />
+      <Button
+        size="sm"
+        variant={hasDraft ? "default" : "outline"}
+        onClick={onSaveDraft}
+        disabled={!hasDraft}
+        className={cn(hasDraft && "bg-amber-500 hover:bg-amber-600 text-white")}
+        title="Simpan draft area parkir ke sketsa"
+      >
+        <Save className="mr-1 h-3.5 w-3.5" /> Simpan Area
+      </Button>
+      <Button size="sm" variant="outline" onClick={onCancelDraft} disabled={!hasDraft} title="Batalkan draft">
+        <X className="mr-1 h-3.5 w-3.5" /> Batal Draft
+      </Button>
       <div className="mx-1 h-6 w-px bg-border/60" />
       <span className="self-center text-xs text-muted-foreground">Arah deret:</span>
       {oriOpts.map((o) => (
@@ -1003,6 +1020,7 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
     </div>
   );
 }
+
 
 function ParkingSubToolbarMobile(props: ParkingSubToolbarProps) {
   return <ParkingSubToolbar {...props} />;
