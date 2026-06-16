@@ -941,9 +941,21 @@ function SpanRow({
   );
 }
 
+export type ParkingSubToolKind =
+  | "draw"
+  | "move"
+  | "addPoint"
+  | "removePoint"
+  | "rotate"
+  | "pathDraw"
+  | "pathMove"
+  | "pathAdd"
+  | "pathRemove"
+  | "pathFillet";
+
 type ParkingSubToolbarProps = {
-  sub: "draw" | "move" | "addPoint" | "removePoint" | "rotate";
-  setSub: (s: "draw" | "move" | "addPoint" | "removePoint" | "rotate") => void;
+  sub: ParkingSubToolKind;
+  setSub: (s: ParkingSubToolKind) => void;
   selectedId: string | null;
   clipboardSize: number;
   orientation: "auto" | "x" | "y";
@@ -954,16 +966,31 @@ type ParkingSubToolbarProps = {
   hasDraft: boolean;
   onSaveDraft: () => void;
   onCancelDraft: () => void;
+  hasPathDraft: boolean;
+  pathDraftCount: number;
+  onSavePathDraft: () => void;
+  onCancelPathDraft: () => void;
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
-  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft } = props;
-  const opts: Array<{ k: typeof sub; label: string; hint: string }> = [
+  const {
+    sub, setSub, selectedId, clipboardSize, orientation, onOrientation,
+    onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft,
+    hasPathDraft, pathDraftCount, onSavePathDraft, onCancelPathDraft,
+  } = props;
+  const opts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
     { k: "move", label: "Edit Titik: Geser", hint: "Geser titik / area" },
     { k: "addPoint", label: "Edit Titik: +", hint: "Sisip titik di sisi" },
     { k: "removePoint", label: "Edit Titik: −", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
+  ];
+  const pathOpts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
+    { k: "pathDraw", label: "Tarik", hint: "Klik berurutan utk membuat polyline (Enter = simpan)" },
+    { k: "pathMove", label: "Geser", hint: "Geser titik jalur" },
+    { k: "pathAdd", label: "+", hint: "Sisip titik di sisi jalur" },
+    { k: "pathRemove", label: "−", hint: "Hapus titik jalur" },
+    { k: "pathFillet", label: "Fillet", hint: "Chamfer sudut jalur (≈1 m)" },
   ];
   const oriOpts: Array<{ k: "auto" | "x" | "y"; label: string; hint: string }> = [
     { k: "auto", label: "Auto", hint: "Orientasi otomatis sesuai sisi terpanjang" },
@@ -998,6 +1025,33 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
         <X className="mr-1 h-3.5 w-3.5" /> Batal Draft
       </Button>
       <div className="mx-1 h-6 w-px bg-border/60" />
+      <span className="self-center text-xs text-muted-foreground">Jalur Parkir:</span>
+      {pathOpts.map((o) => (
+        <Button
+          key={o.k}
+          size="sm"
+          variant={sub === o.k ? "default" : "outline"}
+          onClick={() => setSub(o.k)}
+          disabled={!selectedId && o.k !== "pathDraw"}
+          title={o.hint}
+        >
+          {o.label}
+        </Button>
+      ))}
+      <Button
+        size="sm"
+        variant={hasPathDraft ? "default" : "outline"}
+        onClick={onSavePathDraft}
+        disabled={!hasPathDraft || pathDraftCount < 2}
+        className={cn(hasPathDraft && pathDraftCount >= 2 && "bg-amber-500 hover:bg-amber-600 text-white")}
+        title="Simpan polyline jalur (perlu ≥ 2 titik)"
+      >
+        <Save className="mr-1 h-3.5 w-3.5" /> Simpan Jalur{pathDraftCount > 0 ? ` (${pathDraftCount})` : ""}
+      </Button>
+      <Button size="sm" variant="outline" onClick={onCancelPathDraft} disabled={!hasPathDraft} title="Batal draft jalur">
+        <X className="mr-1 h-3.5 w-3.5" /> Batal Jalur
+      </Button>
+      <div className="mx-1 h-6 w-px bg-border/60" />
       <span className="self-center text-xs text-muted-foreground">Arah deret:</span>
       {oriOpts.map((o) => (
         <Button
@@ -1012,7 +1066,7 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
         </Button>
       ))}
       <div className="mx-1 h-6 w-px bg-border/60" />
-      <Button size="sm" variant="outline" onClick={onCopy} disabled={!selectedId} title="Copy area parkir terpilih">
+      <Button size="sm" variant="outline" onClick={onCopy} disabled={!selectedId} title="Copy area parkir terpilih (termasuk jalur)">
         <Copy className="mr-1 h-3.5 w-3.5" /> Copy
       </Button>
       <Button size="sm" variant="outline" onClick={onPaste} disabled={clipboardSize === 0} title="Paste ke level aktif">
