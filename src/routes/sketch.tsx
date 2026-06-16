@@ -4397,6 +4397,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           { x: maxX, y: maxY }, { x: minX, y: maxY },
         ].map((p) => rotateAround(p, { x: 0, y: 0 }, ang));
         ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
         ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
         ctx.fillStyle = "rgba(14, 165, 233, 0.10)";
         ctx.lineWidth = 2 / s;
@@ -4418,6 +4421,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
         }));
         ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
         ctx.strokeStyle = "#f59e0b";
         ctx.fillStyle = "rgba(245, 158, 11, 0.10)";
         ctx.lineWidth = 2 / s;
