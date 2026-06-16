@@ -6675,6 +6675,9 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       {data.totalKolom > 0 && (
         <GridStat label="Modul Struktur" value={`${data.totalKolom} kolom`} hint={`Volume beton ${fmt(data.volumeBetonM3, 2)} m³`} />
       )}
+      {totalParking > 0 && (
+        <GridStat label="Total Lot Parkir" value={`${totalParking} lot`} hint="akumulasi seluruh level" />
+      )}
     </div>
   );
 }
