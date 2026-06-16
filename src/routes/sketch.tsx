@@ -6589,20 +6589,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         { x: minX, y: minY }, { x: maxX, y: minY },
         { x: maxX, y: maxY }, { x: minX, y: maxY },
       ];
-      const newArea: ParkingArea = {
+      // Simpan sebagai DRAFT — belum masuk sketch sampai user tekan "Simpan Area".
+      const draft: ParkingArea = {
         id: genParkingId(),
         levelId: activeLvlId ?? undefined,
         pointsLocal,
         orientation: "auto",
         stallRotation: 0,
       };
-      pushHistory();
-      const prev = sketch.parkingAreas ?? [];
-      onChange({ parkingAreas: [...prev, newArea] });
-      setParkingSelectedId(newArea.id);
-      toast.success("Area parkir ditambahkan");
+      setParkingDraft(draft);
+      toast.success("Draft area parkir — tekan Simpan Area untuk mengunci");
       return;
     }
+
 
 
     if (curTool === "section") {
