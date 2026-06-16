@@ -31,6 +31,7 @@ import {
   spansForLevel,
   isNodeActive,
   isColumnClipped,
+  isColumnVisible,
   levelInRange,
   xAxisLabelAt,
   yAxisLabelAt,
@@ -52,6 +53,7 @@ import {
   type ParkingObstacle,
   generateStalls,
   isParkingName,
+  normalizeParkingAreas,
 } from "@/lib/parking";
 import {
   forceSimulation,
