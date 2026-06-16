@@ -51,6 +51,7 @@ import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency"
 import {
   type ParkingArea,
   type ParkingObstacle,
+  areaPolygonWorld,
   generateStalls,
   isParkingName,
   normalizeParkingAreas,
@@ -1044,6 +1045,11 @@ function computeBounds(sk: Sketch): Bounds {
     if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
   }
   for (const ln of sk.lines ?? []) for (const p of [ln.a, ln.b]) {
+    if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
+  }
+  const mmRotRad = ((Number(sk.mmGridRotation) || 0) * Math.PI) / 180;
+  for (const area of sk.parkingAreas ?? []) for (const p of areaPolygonWorld(area, mmRotRad)) {
     if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
     if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
   }
