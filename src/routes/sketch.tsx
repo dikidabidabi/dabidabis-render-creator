@@ -942,19 +942,26 @@ type ParkingSubToolbarProps = {
   setSub: (s: "draw" | "move" | "addPoint" | "removePoint" | "rotate") => void;
   selectedId: string | null;
   clipboardSize: number;
+  orientation: "auto" | "x" | "y";
+  onOrientation: (o: "auto" | "x" | "y") => void;
   onCopy: () => void;
   onPaste: () => void;
   onDelete: () => void;
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
-  const { sub, setSub, selectedId, clipboardSize, onCopy, onPaste, onDelete } = props;
+  const { sub, setSub, selectedId, clipboardSize, orientation, onOrientation, onCopy, onPaste, onDelete } = props;
   const opts: Array<{ k: typeof sub; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
     { k: "move", label: "Geser", hint: "Geser titik / area" },
     { k: "addPoint", label: "+Titik", hint: "Sisip titik di sisi" },
     { k: "removePoint", label: "−Titik", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
+  ];
+  const oriOpts: Array<{ k: "auto" | "x" | "y"; label: string; hint: string }> = [
+    { k: "auto", label: "Auto", hint: "Orientasi otomatis sesuai sisi terpanjang" },
+    { k: "x", label: "X", hint: "Deret lot berjejer searah sumbu X grid" },
+    { k: "y", label: "Y", hint: "Deret lot berjejer searah sumbu Y grid" },
   ];
   return (
     <div className="flex flex-wrap gap-1.5 rounded-lg border border-border/60 bg-card/40 p-2">
@@ -964,6 +971,20 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
           size="sm"
           variant={sub === o.k ? "default" : "outline"}
           onClick={() => setSub(o.k)}
+          title={o.hint}
+        >
+          {o.label}
+        </Button>
+      ))}
+      <div className="mx-1 h-6 w-px bg-border/60" />
+      <span className="self-center text-xs text-muted-foreground">Arah deret:</span>
+      {oriOpts.map((o) => (
+        <Button
+          key={o.k}
+          size="sm"
+          variant={orientation === o.k ? "default" : "outline"}
+          onClick={() => onOrientation(o.k)}
+          disabled={!selectedId}
           title={o.hint}
         >
           {o.label}
