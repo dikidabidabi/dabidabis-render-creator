@@ -2695,15 +2695,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
       }
     }
-    // Floors (ruang/polygon tertutup) → polygon obstacle.
-    for (const f of (sketch.floors ?? [])) {
-      if (activeLvlId && f.levelId !== activeLvlId) continue;
-      if (Array.isArray(f.outer) && f.outer.length >= 3) {
-        obs.push({ kind: "polygon", poly: f.outer.map((p) => ({ x: p.x, y: p.y })) });
-      }
+    // Layers (ruang) → obstacle, KECUALI yang nama-nya mengandung "parkir"/
+    // "parking". Hanya ruang itu yang boleh dihuni lot parkir.
+    for (const ly of layers) {
+      if (activeLvlId && ly.levelId !== activeLvlId) continue;
+      if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+      if (isParkingName(ly.name)) continue;
+      obs.push({ kind: "polygon", poly: ly.points.map((p) => ({ x: p.x, y: p.y })) });
     }
     return obs;
-  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, sketch.floors]);
+  }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers]);
 
   const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
     const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
