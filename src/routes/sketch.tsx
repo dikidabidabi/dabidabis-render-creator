@@ -1907,7 +1907,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking">("line");
   // Parking sub-tool state
-  type ParkingSubTool = "draw" | "move" | "addPoint" | "removePoint" | "rotate";
+  type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
   const [parkingSelectedId, setParkingSelectedId] = useState<string | null>(null);
   const [parkingDrag, setParkingDrag] = useState<
