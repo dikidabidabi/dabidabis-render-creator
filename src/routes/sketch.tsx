@@ -7418,6 +7418,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             setSub={setParkingSubTool}
             selectedId={parkingSelectedId}
             clipboardSize={parkingClipboard?.length ?? 0}
+            orientation={
+              ((sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId)?.orientation ?? "auto")
+            }
+            onOrientation={(o) => {
+              if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
+              pushHistory();
+              onChange({
+                parkingAreas: (sketch.parkingAreas ?? []).map((a) =>
+                  a.id === parkingSelectedId ? { ...a, orientation: o } : a,
+                ),
+              });
+            }}
             onCopy={() => {
               if (!parkingSelectedId) { toast.error("Pilih area parkir dulu"); return; }
               const sel = (sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId);
