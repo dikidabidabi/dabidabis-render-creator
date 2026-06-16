@@ -4366,8 +4366,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.fill();
         ctx.setLineDash([]);
         ctx.restore();
+      // Render DRAFT area parkir (belum disimpan): outline emas + label
+      if (parkingDraft && (!activeLvlId || parkingDraft.levelId === activeLvlId)) {
+        const dp = parkingDraft.pointsLocal.map((p) => ({
+          x: p.x * Math.cos(mmGridRotRad) - p.y * Math.sin(mmGridRotRad),
+          y: p.x * Math.sin(mmGridRotRad) + p.y * Math.cos(mmGridRotRad),
+        }));
+        ctx.save();
+        ctx.strokeStyle = "#f59e0b";
+        ctx.fillStyle = "rgba(245, 158, 11, 0.10)";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([8 / s, 5 / s]);
+        ctx.beginPath();
+        ctx.moveTo(dp[0].x, dp[0].y);
+        for (let i = 1; i < dp.length; i++) ctx.lineTo(dp[i].x, dp[i].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+        ctx.setLineDash([]);
+        const cx = dp.reduce((s2, p) => s2 + p.x, 0) / dp.length;
+        const cy = dp.reduce((s2, p) => s2 + p.y, 0) / dp.length;
+        const sp = worldToScreen({ x: cx, y: cy });
+        const label = "DRAFT — tekan Simpan Area";
+        ctx.font = "700 11px Manrope, sans-serif";
+        const w = ctx.measureText(label).width + 12;
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillRect(sp.x - w / 2, sp.y - 9, w, 18);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, sp.x - w / 2 + 6, sp.y + 4);
+        ctx.restore();
       }
     }
+
 
     // Active line length label, screen-space
     if (drawing) {
