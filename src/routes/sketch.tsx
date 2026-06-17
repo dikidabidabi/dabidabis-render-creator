@@ -7821,11 +7821,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 ...a,
                 id: genParkingId(),
                 levelId: activeLvlId ?? undefined,
-                pointsLocal: a.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
-                paths: (a.paths ?? []).map((p) => ({
-                  id: genParkingPathId(),
-                  pointsLocal: p.pointsLocal.map((q) => ({ x: q.x + 32, y: q.y + 32 })),
-                })),
+                pointsLocal: a.pointsLocal.map((q) => ({ x: q.x, y: q.y })),
+                 paths: (a.paths ?? []).map((p) => ({
+                   id: genParkingPathId(),
+                   pointsLocal: p.pointsLocal.map((q) => ({ x: q.x, y: q.y })),
+                 })),
               }));
               onChange({ parkingAreas: [...(sketch.parkingAreas ?? []), ...pasted] });
               setParkingSelectedId(pasted[0]?.id ?? null);
