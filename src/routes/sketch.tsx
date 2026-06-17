@@ -3479,6 +3479,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.restore();
           }
         }
+      } else if (tool === "separasi" && separasiPath && separasiPath.length >= 2) {
+        ctx.moveTo(separasiPath[0].x, separasiPath[0].y);
+        for (let i = 1; i < separasiPath.length; i++) {
+          ctx.lineTo(separasiPath[i].x, separasiPath[i].y);
+        }
+        ctx.stroke();
       } else {
         ctx.moveTo(drawing.a.x, drawing.a.y);
         if (lineKind === "arc") {
