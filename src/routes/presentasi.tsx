@@ -6479,20 +6479,23 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   if (!Number.isFinite(vx0)) { vx0 = -10; vy0 = -10; vx1 = 10; vy1 = 10; }
   const w = vx1 - vx0, h = vy1 - vy0;
   const pad = Math.max(w, h, 1) * 0.04;
-  const vb = `${vx0 - pad} ${vy0 - pad} ${w + pad * 2} ${h + pad * 2}`;
+  // Tambahan ruang kiri untuk label level agar tidak menumpuk gambar.
+  const leftLabelPad = Math.max(w, h, 1) * 0.28;
+  const vb = `${vx0 - pad - leftLabelPad} ${vy0 - pad} ${w + pad * 2 + leftLabelPad} ${h + pad * 2}`;
   const baseStroke = Math.max(w, h) * 0.0015;
   const fontPx = Math.max(w, h) * 0.014;
 
-  // Label level di kiri tiap lantai
+  // Label level di kiri tiap lantai (digeser keluar dari bounding gambar).
   type FloorLabel = { x: number; y: number; text: string };
   const floorLabels: FloorLabel[] = reps.map((g, idx) => {
     const yMid = idx * (floorH + gap) + floorH / 2;
     return {
-      x: vx0 + w * 0.02,
+      x: vx0 - pad - leftLabelPad * 0.05,
       y: project(0, 0, yMid).y,
       text: `Tipe ${idx + 1} · ${displayNames[g.rep.id] ?? g.rep.name}`,
     };
   });
+
 
   const COLOR_TANGGA = "#2563eb";
   const COLOR_LIFT = "#7f1d1d";
