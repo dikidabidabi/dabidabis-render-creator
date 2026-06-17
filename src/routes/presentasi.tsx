@@ -6369,11 +6369,15 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
         pts: topPts, fill: topFill, stroke: "rgba(0,0,0,0.55)",
         depth: avg + topY * 0.01, sw: 0.7, kind: "top",
       });
-      roomCounter += 1;
-      const cx = pm.reduce((s, p) => s + p.x, 0) / pm.length;
-      const cz = pm.reduce((s, p) => s + p.z, 0) / pm.length;
-      annos.push({ at: project(cx, cz, topY), label: ly.name, floorIdx: idx, num: roomCounter });
-      tipeRooms[idx].push({ name: ly.name, num: roomCounter });
+
+      // Hanya beri nomor untuk ruang dengan luas ≥ 50 m².
+      if ((ly.areaM2 || 0) >= 50) {
+        roomCounter += 1;
+        const cx = pm.reduce((s, p) => s + p.x, 0) / pm.length;
+        const cz = pm.reduce((s, p) => s + p.z, 0) / pm.length;
+        annos.push({ at: project(cx, cz, topY), label: ly.name, floorIdx: idx, num: roomCounter });
+        tipeRooms[idx].push({ name: ly.name, num: roomCounter });
+      }
 
       if (isTangga(ly.name) || isLift(ly.name)) {
         const key = ly.name.toLowerCase().trim();
@@ -6389,6 +6393,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
       }
     }
   });
+
 
   type VLine = { x: number; z: number; yLo: number; yHi: number; kind: "tangga" | "lift" };
   const vlines: VLine[] = [];
