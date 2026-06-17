@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
+  Download,
   Plus,
   Maximize2,
   Minimize2,
