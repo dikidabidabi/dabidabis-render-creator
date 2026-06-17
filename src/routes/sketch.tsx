@@ -42,6 +42,7 @@ import {
   FlipHorizontal,
   Car,
   RotateCw,
+  SplitSquareHorizontal,
 } from "lucide-react";
 import {
   type Floor,
