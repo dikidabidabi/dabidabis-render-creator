@@ -6042,8 +6042,10 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         positions[o] = sx; positions[o + 1] = sy; positions[o + 2] = sz;
       }
       ages[i] = 0;
-      maxAge[i] = 4 + Math.random() * 4;
+      maxAge[i] = 30 + Math.random() * 20;
       tailLen[i] = 12 + Math.floor(Math.random() * (TAIL_MAX - 11));
+      spawnX[i] = sx;
+      spawnZ[i] = sz;
       paintColors(i);
     }
     for (let i = 0; i < N; i++) spawn(i);
