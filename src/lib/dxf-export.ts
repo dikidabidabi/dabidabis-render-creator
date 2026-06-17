@@ -90,17 +90,22 @@ function emitLwPolyline(
   pts: DxfPoint[],
   closed: boolean,
 ) {
+  // R12 (AC1009) tidak mengenal LWPOLYLINE — pakai POLYLINE / VERTEX / SEQEND.
   if (pts.length < 2) return;
-  code(buf, 0, "LWPOLYLINE");
+  code(buf, 0, "POLYLINE");
   code(buf, 8, layer);
-  code(buf, 100, "AcDbEntity");
-  code(buf, 100, "AcDbPolyline");
-  code(buf, 90, pts.length);
+  code(buf, 66, 1); // vertices follow
   code(buf, 70, closed ? 1 : 0);
+  code(buf, 10, 0); code(buf, 20, 0); code(buf, 30, 0);
   for (const p of pts) {
+    code(buf, 0, "VERTEX");
+    code(buf, 8, layer);
     code(buf, 10, p.x);
     code(buf, 20, p.y);
+    code(buf, 30, 0);
   }
+  code(buf, 0, "SEQEND");
+  code(buf, 8, layer);
 }
 
 function normalize(vx: number, vy: number): [number, number] {
