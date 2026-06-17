@@ -920,37 +920,74 @@ function FullscreenSlideshow({
 }) {
   const prev = () => setIdx((i) => (i - 1 + slides.length) % slides.length);
   const next = () => setIdx((i) => (i + 1) % slides.length);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [vp, setVp] = useState({ w: typeof window !== "undefined" ? window.innerWidth : 1920, h: typeof window !== "undefined" ? window.innerHeight : 1080 });
+
+  // Request native fullscreen on the container so it fills the entire screen.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const tryEnter = async () => {
+      try { if (!document.fullscreenElement) await el.requestFullscreen?.(); } catch {}
+    };
+    tryEnter();
+    const onChange = () => {
+      if (!document.fullscreenElement) onClose();
+      setVp({ w: window.innerWidth, h: window.innerHeight });
+    };
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    document.addEventListener("fullscreenchange", onChange);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      window.removeEventListener("resize", onResize);
+      if (document.fullscreenElement) { try { document.exitFullscreen?.(); } catch {} }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fit A3 (1414×1000 ≈ 1.414:1) inside viewport, maintaining aspect — letterbox on sides.
+  const scale = Math.min(vp.w / A3_W, vp.h / A3_H);
+  const slideW = A3_W * scale;
+  const slideH = A3_H * scale;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900">
-      <div className="relative h-full max-h-screen w-full">
-        <div className="flex h-full w-full items-center justify-center p-8">
-          <div className="w-full max-w-[1700px] shadow-2xl">
-            <A3Frame>
-              <SlideContent slide={slides[idx]} />
-            </A3Frame>
-          </div>
+    <div ref={rootRef} className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+      <div
+        className="bg-white overflow-hidden shadow-2xl"
+        style={{ width: slideW, height: slideH, position: "relative" }}
+      >
+        <div
+          style={{
+            width: A3_W,
+            height: A3_H,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          <SlideContent slide={slides[idx]} />
         </div>
-        <div className="absolute right-4 top-4">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-white hover:bg-white/10" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-        <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-3">
-          <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={prev}>
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10"
-            onClick={() => setPlaying((p) => !p)}
-          >
-            {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={next}>
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-          <div className="ml-3 text-xs text-white/70">
-            {idx + 1} / {slides.length} · {slides[idx]?.title}
-          </div>
+      </div>
+      <div className="absolute right-4 top-4">
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-white hover:bg-white/10" onClick={onClose}>
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+      <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-3">
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={prev}>
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <Button
+          variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10"
+          onClick={() => setPlaying((p) => !p)}
+        >
+          {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={next}>
+          <ChevronRight className="h-5 w-5" />
+        </Button>
+        <div className="ml-3 text-xs text-white/70">
+          {idx + 1} / {slides.length} · {slides[idx]?.title}
         </div>
       </div>
     </div>
@@ -1751,46 +1788,12 @@ function SlideCompass({ rotation, size = 92, draggableId }: { rotation: number; 
       }}
     >
       <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
-        <defs>
-          <linearGradient id="compassBg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="100%" stopColor="#f1f1ef" />
-          </linearGradient>
-          <linearGradient id="compassN" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ff7a55" />
-            <stop offset="100%" stopColor="#e85d3a" />
-          </linearGradient>
-        </defs>
-        {/* Outer ring */}
-        <circle cx="50" cy="50" r="47" fill="url(#compassBg)" stroke="#0a0a0a" strokeWidth="0.8" />
-        <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(10,10,10,0.18)" strokeWidth="0.4" />
-        {/* Rotating dial */}
+        {/* Thin circle */}
+        <circle cx="50" cy="50" r="44" fill="rgba(255,255,255,0.92)" stroke="#0a0a0a" strokeWidth="0.8" />
+        {/* Rotating north line */}
         <g transform={`rotate(${r} 50 50)`}>
-          {/* Cardinal & intercardinal tick marks */}
-          {Array.from({ length: 16 }).map((_, i) => {
-            const angle = (i * 22.5) * Math.PI / 180;
-            const isCardinal = i % 4 === 0;
-            const r1 = isCardinal ? 38 : 41;
-            const r2 = 45;
-            const x1 = 50 + Math.sin(angle) * r1;
-            const y1 = 50 - Math.cos(angle) * r1;
-            const x2 = 50 + Math.sin(angle) * r2;
-            const y2 = 50 - Math.cos(angle) * r2;
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#0a0a0a" strokeWidth={isCardinal ? 0.8 : 0.35} strokeLinecap="round" opacity={isCardinal ? 1 : 0.45} />;
-          })}
-          {/* North needle (filled, accent) */}
-          <polygon points="50,10 45,50 50,46 55,50" fill="url(#compassN)" stroke="#7a2a18" strokeWidth="0.35" strokeLinejoin="round" />
-          {/* South needle (outline) */}
-          <polygon points="50,90 46,50 50,54 54,50" fill="#ffffff" stroke="#0a0a0a" strokeWidth="0.5" strokeLinejoin="round" />
-          {/* Cardinal letters (rotate with dial so U follows north) */}
-          <text x="50" y="26" textAnchor="middle" dominantBaseline="central" fontSize="9" fontWeight="800" fill="#0a0a0a" fontFamily="Sora, sans-serif" letterSpacing="0.5">U</text>
-          <text x="50" y="76" textAnchor="middle" dominantBaseline="central" fontSize="6" fontWeight="700" fill="#888" fontFamily="Sora, sans-serif">S</text>
-          <text x="74" y="50" textAnchor="middle" dominantBaseline="central" fontSize="6" fontWeight="700" fill="#888" fontFamily="Sora, sans-serif">T</text>
-          <text x="26" y="50" textAnchor="middle" dominantBaseline="central" fontSize="6" fontWeight="700" fill="#888" fontFamily="Sora, sans-serif">B</text>
+          <line x1="50" y1="50" x2="50" y2="6" stroke="#0a0a0a" strokeWidth="4.5" strokeLinecap="round" />
         </g>
-        {/* Center cap */}
-        <circle cx="50" cy="50" r="3" fill="#0a0a0a" />
-        <circle cx="50" cy="50" r="1.2" fill="#ff7a55" />
       </svg>
     </div>
   );

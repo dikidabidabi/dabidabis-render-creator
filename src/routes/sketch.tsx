@@ -1524,17 +1524,12 @@ function CompassMarker({ rotation, size = 64 }: { rotation: number; size?: numbe
       }}
     >
       <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: "block" }}>
-        <circle cx="50" cy="50" r="46" fill="rgba(255,255,255,0.92)" stroke="#0a0a0a" strokeWidth="2" />
-        <circle cx="50" cy="50" r="2.5" fill="#0a0a0a" />
-        {/* North arrow */}
-        <polygon points="50,8 42,52 50,46 58,52" fill="#e85d3a" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
-        {/* South tail */}
-        <polygon points="50,92 44,54 50,58 56,54" fill="#ffffff" stroke="#0a0a0a" strokeWidth="1.5" strokeLinejoin="round" />
-        {/* Cardinal labels */}
-        <text x="50" y="22" textAnchor="middle" fontSize="14" fontWeight="800" fill="#0a0a0a" fontFamily="Sora, sans-serif">U</text>
-        <text x="50" y="86" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">S</text>
-        <text x="84" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">T</text>
-        <text x="16" y="54" textAnchor="middle" fontSize="9" fontWeight="700" fill="#555" fontFamily="Sora, sans-serif">B</text>
+        {/* Thin circle */}
+        <circle cx="50" cy="50" r="44" fill="rgba(255,255,255,0.85)" stroke="#0a0a0a" strokeWidth="1" />
+        {/* Single thick black line from center to north edge */}
+        <line x1="50" y1="50" x2="50" y2="6" stroke="#0a0a0a" strokeWidth="5" strokeLinecap="round" />
+        {/* North label above */}
+        
       </svg>
     </div>
   );
