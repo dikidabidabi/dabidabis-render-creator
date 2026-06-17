@@ -156,15 +156,27 @@ export function buildDxf(input: DxfExportInput): string {
   code(buf, 0, "SECTION");
   code(buf, 2, "HEADER");
   code(buf, 9, "$ACADVER"); code(buf, 1, "AC1009");
-  // $INSUNITS = 6 (meter)
-  code(buf, 9, "$INSUNITS"); code(buf, 70, 6);
+  code(buf, 9, "$INSUNITS"); code(buf, 70, 6); // 6 = meter
   code(buf, 9, "$MEASUREMENT"); code(buf, 70, 1);
   code(buf, 0, "ENDSEC");
 
-  // ---- TABLES (layers) ----
+  // ---- TABLES ----
   code(buf, 0, "SECTION");
   code(buf, 2, "TABLES");
-  code(buf, 0, "TABLE"); code(buf, 2, "LAYER"); code(buf, 70, 6);
+
+  // LTYPE table — wajib agar AutoCAD menerima referensi linetype pada LAYER.
+  code(buf, 0, "TABLE"); code(buf, 2, "LTYPE"); code(buf, 70, 1);
+  code(buf, 0, "LTYPE");
+  code(buf, 2, "CONTINUOUS");
+  code(buf, 70, 0);
+  code(buf, 3, "Solid line");
+  code(buf, 72, 65);
+  code(buf, 73, 0);
+  code(buf, 40, 0);
+  code(buf, 0, "ENDTAB");
+
+  // LAYER table
+  code(buf, 0, "TABLE"); code(buf, 2, "LAYER"); code(buf, 70, 8);
   const layerDefs: Array<{ name: string; color: number }> = [
     { name: "0", color: 7 },
     { name: "WALL", color: 7 },
@@ -183,6 +195,11 @@ export function buildDxf(input: DxfExportInput): string {
     code(buf, 6, "CONTINUOUS");
   }
   code(buf, 0, "ENDTAB");
+  code(buf, 0, "ENDSEC");
+
+  // ---- BLOCKS (kosong, tetap diperlukan oleh sebagian parser) ----
+  code(buf, 0, "SECTION");
+  code(buf, 2, "BLOCKS");
   code(buf, 0, "ENDSEC");
 
   // ---- ENTITIES ----
