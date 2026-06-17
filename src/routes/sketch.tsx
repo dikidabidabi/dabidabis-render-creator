@@ -3143,8 +3143,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       for (const ln of lvlLines) {
         const locked = isLineLocked(ln);
         const kind = ln.kind ?? "straight";
-        ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
-        ctx.lineWidth = (locked ? 2.6 : 2) / s;
+        ctx.strokeStyle = ln.dashed ? "rgba(232,93,58,0.85)" : (locked ? "#2d2d2d" : "#1a1a1a");
+        ctx.lineWidth = (ln.dashed ? 1.4 : (locked ? 2.6 : 2)) / s;
+        if (ln.dashed) ctx.setLineDash([6 / s, 4 / s]);
         ctx.beginPath();
         ctx.moveTo(ln.a.x, ln.a.y);
         if (kind === "straight") {
@@ -3158,6 +3159,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
         }
         ctx.stroke();
+        if (ln.dashed) ctx.setLineDash([]);
       }
 
       // Endpoints
