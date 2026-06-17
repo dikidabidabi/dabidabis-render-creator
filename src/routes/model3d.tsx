@@ -1685,7 +1685,7 @@ function Model3DPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-ember shadow-ember">
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-primary shadow-primary">
           <Box className="h-4 w-4 text-primary-foreground" />
         </div>
         <div>

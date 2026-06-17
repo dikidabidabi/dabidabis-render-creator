@@ -89,7 +89,7 @@ function Header() {
     <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-ember shadow-ember">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-primary shadow-primary">
             <Layers className="h-4 w-4 text-primary-foreground" />
           </div>
           <span className="font-display text-lg font-semibold tracking-tight">Dabidabi's</span>
@@ -165,7 +165,7 @@ function Header() {
               >
                 Masuk
               </Link>
-              <Button asChild size="sm" className="bg-gradient-ember shadow-ember hover:opacity-90">
+              <Button asChild size="sm" className="bg-gradient-primary shadow-primary hover:opacity-90">
                 <Link to="/login" search={{ mode: "signup" }}>
                   Mulai Render
                 </Link>

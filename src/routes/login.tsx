@@ -58,7 +58,7 @@ function LoginPage() {
         className="w-full max-w-md"
       >
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-ember shadow-ember">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-primary shadow-primary">
             <Layers className="h-6 w-6 text-primary-foreground" />
           </div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
@@ -115,7 +115,7 @@ function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-ember shadow-ember hover:opacity-90"
+              className="w-full bg-gradient-primary shadow-primary hover:opacity-90"
             >
               {loading ? (
                 "Memproses..."
