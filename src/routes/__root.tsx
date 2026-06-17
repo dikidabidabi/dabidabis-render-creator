@@ -2,7 +2,7 @@ import { Link, Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Layers } from "lucide-react";
+import { LogoDabidabi } from "@/components/logo";
 import { ProjectHydrationGate } from "@/components/project-hydration-gate";
 
 import appCss from "../styles.css?url";
@@ -88,9 +88,9 @@ function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ember shadow-lg">
-            <Layers className="h-4 w-4 text-white" />
+        <Link to="/" className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-ember shadow-lg">
+            <LogoDabidabi size={22} className="text-white" />
           </div>
           <span className="font-display text-lg font-semibold tracking-tight text-ember">Dabidabi's</span>
         </Link>

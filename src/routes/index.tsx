@@ -48,8 +48,17 @@ function Landing() {
           <motion.p
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.15 }}
-            className="mx-auto mt-8 max-w-2xl text-base text-muted-foreground sm:text-lg"
+            transition={{ duration: 0.6, delay: 0.12 }}
+            className="mx-auto mt-6 max-w-xl text-sm font-medium uppercase tracking-[0.2em] text-ember sm:text-base"
+          >
+            Mengembalikan konsepsi di tangan arsitek
+          </motion.p>
+
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.18 }}
+            className="mx-auto mt-6 max-w-2xl text-base text-muted-foreground sm:text-lg"
           >
             Studio render arsitektur bertenaga AI. Upload sketsa, lampirkan referensi gaya,
             atur akurasi & konsistensi — dapatkan visualisasi berkualitas portfolio dalam hitungan detik.
