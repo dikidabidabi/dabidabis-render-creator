@@ -426,7 +426,45 @@ function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null 
     return bestPts;
   } catch {
     return subject;
+}
+
+// Belah polygon dengan sebuah garis tak-hingga melalui titik a→b.
+// Mengembalikan dua ring (left/right relatif terhadap arah garis) dan dua
+// titik perpotongan pada perimeter (untuk menggambar garis pemisah).
+function splitPolygonByInfiniteLine(
+  poly: Point[],
+  a: Point,
+  b: Point,
+): { left: Point[]; right: Point[]; iA: Point; iB: Point } | null {
+  if (poly.length < 3) return null;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  if (dx * dx + dy * dy < 1e-6) return null;
+  const side = (p: Point) => (p.x - a.x) * dy - (p.y - a.y) * dx;
+  const left: Point[] = [];
+  const right: Point[] = [];
+  const intersects: Point[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const cur = poly[i];
+    const nxt = poly[(i + 1) % poly.length];
+    const sC = side(cur);
+    const sN = side(nxt);
+    if (sC <= 0) left.push(cur);
+    if (sC >= 0) right.push(cur);
+    if ((sC > 0 && sN < 0) || (sC < 0 && sN > 0)) {
+      const t = sC / (sC - sN);
+      const ix: Point = {
+        x: cur.x + t * (nxt.x - cur.x),
+        y: cur.y + t * (nxt.y - cur.y),
+      };
+      left.push(ix);
+      right.push(ix);
+      intersects.push(ix);
+    }
   }
+  if (intersects.length !== 2) return null;
+  if (left.length < 3 || right.length < 3) return null;
+  return { left, right, iA: intersects[0], iB: intersects[1] };
+}
 }
 
 function isLahanLayerName(n: string) {
