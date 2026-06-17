@@ -2065,6 +2065,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [doorClipboard, setDoorClipboard] = useState<Door[]>([]);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
+  const [separasiPath, setSeparasiPath] = useState<Point[] | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
   // Pending bezier curve (after endpoints set, awaiting tangent adjustment + commit)
   const [pendingCurve, setPendingCurve] = useState<
