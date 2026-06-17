@@ -920,37 +920,74 @@ function FullscreenSlideshow({
 }) {
   const prev = () => setIdx((i) => (i - 1 + slides.length) % slides.length);
   const next = () => setIdx((i) => (i + 1) % slides.length);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [vp, setVp] = useState({ w: typeof window !== "undefined" ? window.innerWidth : 1920, h: typeof window !== "undefined" ? window.innerHeight : 1080 });
+
+  // Request native fullscreen on the container so it fills the entire screen.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const tryEnter = async () => {
+      try { if (!document.fullscreenElement) await el.requestFullscreen?.(); } catch {}
+    };
+    tryEnter();
+    const onChange = () => {
+      if (!document.fullscreenElement) onClose();
+      setVp({ w: window.innerWidth, h: window.innerHeight });
+    };
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    document.addEventListener("fullscreenchange", onChange);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      window.removeEventListener("resize", onResize);
+      if (document.fullscreenElement) { try { document.exitFullscreen?.(); } catch {} }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fit A3 (1414×1000 ≈ 1.414:1) inside viewport, maintaining aspect — letterbox on sides.
+  const scale = Math.min(vp.w / A3_W, vp.h / A3_H);
+  const slideW = A3_W * scale;
+  const slideH = A3_H * scale;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900">
-      <div className="relative h-full max-h-screen w-full">
-        <div className="flex h-full w-full items-center justify-center p-8">
-          <div className="w-full max-w-[1700px] shadow-2xl">
-            <A3Frame>
-              <SlideContent slide={slides[idx]} />
-            </A3Frame>
-          </div>
+    <div ref={rootRef} className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+      <div
+        className="bg-white overflow-hidden shadow-2xl"
+        style={{ width: slideW, height: slideH, position: "relative" }}
+      >
+        <div
+          style={{
+            width: A3_W,
+            height: A3_H,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          <SlideContent slide={slides[idx]} />
         </div>
-        <div className="absolute right-4 top-4">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-white hover:bg-white/10" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-        <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-3">
-          <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={prev}>
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10"
-            onClick={() => setPlaying((p) => !p)}
-          >
-            {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={next}>
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-          <div className="ml-3 text-xs text-white/70">
-            {idx + 1} / {slides.length} · {slides[idx]?.title}
-          </div>
+      </div>
+      <div className="absolute right-4 top-4">
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-white hover:bg-white/10" onClick={onClose}>
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+      <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-3">
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={prev}>
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <Button
+          variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10"
+          onClick={() => setPlaying((p) => !p)}
+        >
+          {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+        </Button>
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={next}>
+          <ChevronRight className="h-5 w-5" />
+        </Button>
+        <div className="ml-3 text-xs text-white/70">
+          {idx + 1} / {slides.length} · {slides[idx]?.title}
         </div>
       </div>
     </div>
