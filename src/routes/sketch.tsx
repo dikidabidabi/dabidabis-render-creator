@@ -1529,7 +1529,7 @@ function CompassMarker({ rotation, size = 64 }: { rotation: number; size?: numbe
         {/* Single thick black line from center to north edge */}
         <line x1="50" y1="50" x2="50" y2="6" stroke="#0a0a0a" strokeWidth="5" strokeLinecap="round" />
         {/* North label above */}
-        <text x="50" y="22" textAnchor="middle" fontSize="11" fontWeight="800" fill="#ffffff" fontFamily="Sora, sans-serif">U</text>
+        
       </svg>
     </div>
   );
