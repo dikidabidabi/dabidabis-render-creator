@@ -9911,6 +9911,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {SidePanel}
       </div>
       {RekapPanel}
+      <ClusterGeneratorDialog
+        open={clusterOpen}
+        onOpenChange={setClusterOpen}
+        levels={[...levels].sort((a, b) => a.mdpl - b.mdpl).map((l) => ({ id: l.id, name: l.name }))}
+        graph={sketch.clusterGraph ?? { nodes: [], links: [] }}
+        onSave={(g: ClusterGraph) => onChange({ clusterGraph: g })}
+        pxPerMeter={pxPerMeter}
+        kdbLimitM2={(kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : undefined}
+        klbLimitM2={(klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : undefined}
+        onGenerate={handleClusterGenerate}
+      />
     </div>
   );
 }
