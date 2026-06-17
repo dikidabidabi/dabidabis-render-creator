@@ -9478,6 +9478,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Scissors className="h-4 w-4" />
           </Button>
           <Button
+            variant={tool === "separasi" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
+            className={cn(tool === "separasi" && "bg-gradient-ember shadow-ember")}
+            title="Separasi Ruang (tarik garis tepi-ke-tepi → ruang terbelah dua)"
+          >
+            <SplitSquareHorizontal className="h-4 w-4" />
+          </Button>
+          <Button
             variant={tool === "circle" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("circle"); }}
