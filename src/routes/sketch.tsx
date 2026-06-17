@@ -6088,6 +6088,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       (tool === "parking" && parkingSubTool === "draw")
     ) {
       setDrawing({ a: p, b: p });
+      if (tool === "separasi") setSeparasiPath([p]);
 
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
