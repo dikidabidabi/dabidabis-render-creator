@@ -7113,9 +7113,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
     if (curTool === "separasi") {
-      // Separasi Ruang: belah salah satu polygon ruang aktif menjadi dua
-      // dengan garis tak-hingga melalui (a, b). Hanya berlaku pada ruang yang
-      // benar-benar terbelah (2 titik perpotongan dengan perimeter).
+      // Separasi Ruang: belah polygon ruang mengikuti jalur stylus (polyline) —
+      // tarikan dapat dibelokkan agar pembagi tidak harus lurus.
+      const rawPath = (separasiPath && separasiPath.length >= 2)
+        ? separasiPath
+        : [a, b];
+      const path: Point[] = [];
+      for (const pt of rawPath) {
+        const last = path[path.length - 1];
+        if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) >= 1.5) path.push(pt);
+      }
+      setSeparasiPath(null);
+      if (path.length < 2) {
+        toast.error("Tarik garis menembus ruang dari satu tepi ke tepi seberang");
+        return;
+      }
       const cand = layers.filter(
         (l) =>
           (l.levelId ?? activeLvlId) === activeLvlId &&
@@ -7124,37 +7136,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           !isLahanLayerName(l.name) &&
           !isVoidLayerName(l.name),
       );
-      let best: { layer: Layer; res: NonNullable<ReturnType<typeof splitPolygonByInfiniteLine>>; la: number; ra: number } | null = null;
+      let best: { layer: Layer; res: NonNullable<ReturnType<typeof splitPolygonByPolyline>>; la: number; ra: number } | null = null;
       let bestScore = -Infinity;
       for (const ly of cand) {
-        // Hanya belah ruang yang benar-benar dilalui stylus:
-        // kedua ujung garis (a, b) harus berada di LUAR polygon ruang,
-        // sehingga garis masuk dari satu tepi dan keluar di tepi seberang.
-        if (pointInPolygon(a, ly.points) || pointInPolygon(b, ly.points)) continue;
-        const r = splitPolygonByInfiniteLine(ly.points, a, b);
+        const p0 = path[0], pN = path[path.length - 1];
+        if (pointInPolygon(p0, ly.points) || pointInPolygon(pN, ly.points)) continue;
+        const r = splitPolygonByPolyline(ly.points, path);
         if (!r) continue;
         const la = polygonAreaPx(r.left);
         const ra = polygonAreaPx(r.right);
         if (la < 25 || ra < 25) continue;
-        // Pastikan kedua titik perpotongan berada di antara a dan b
-        // (stylus benar-benar melewati ruang, bukan hanya garis perpanjangannya).
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const segLen2 = dx * dx + dy * dy;
-        if (segLen2 < 1) continue;
-        const tOf = (p: Point) => ((p.x - a.x) * dx + (p.y - a.y) * dy) / segLen2;
-        const tA = tOf(r.iA), tB = tOf(r.iB);
-        const eps = 1e-3;
-        if (tA < -eps || tA > 1 + eps || tB < -eps || tB > 1 + eps) continue;
-        // Pilih ruang terkecil yang berhasil dibelah (paling spesifik).
-        const totalArea = la + ra;
-        const score = -totalArea;
+        const score = -(la + ra);
         if (score > bestScore) {
           bestScore = score;
           best = { layer: ly, res: r, la, ra };
         }
       }
       if (!best) {
-        toast.error("Tarik garis menembus ruang dari satu tepi ke tepi seberang");
+        toast.error("Tarik jalur menembus ruang dari satu tepi ke tepi seberang");
         return;
       }
       const { layer, res, la, ra } = best;
@@ -7176,16 +7175,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         points: res.right,
         areaM2: rightAreaM2,
       };
-      const dividerLine: Line = {
-        a: res.iA,
-        b: res.iB,
-        kind: "straight",
-        levelId: layer.levelId ?? activeLvlId ?? undefined,
-      };
+      const lvlId = layer.levelId ?? activeLvlId ?? undefined;
+      const dividerLines: Line[] = [];
+      for (let i = 0; i < res.interior.length - 1; i++) {
+        dividerLines.push({
+          a: res.interior[i],
+          b: res.interior[i + 1],
+          kind: "straight",
+          levelId: lvlId,
+        });
+      }
       pushHistory();
       onChange({
         layers: layers.flatMap((l) => (l.id === layer.id ? [lyA, lyB] : [l])),
-        lines: [...lines, dividerLine],
+        lines: [...lines, ...dividerLines],
       });
       toast.success(
         `${baseName} dibelah · ${leftAreaM2.toFixed(2)} m² + ${rightAreaM2.toFixed(2)} m²`,
