@@ -6120,10 +6120,13 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         positions[headOff + 2] = nzp;
 
         ages[i] += dt;
+        const dxSp = nxp - spawnX[i];
+        const dzSp = nzp - spawnZ[i];
+        const traveled = Math.hypot(dxSp, dzSp);
         const dxCx = nxp - domCx;
         const dzCz = nzp - domCz;
-        const outside = Math.hypot(dxCx, dzCz) > domR + 10 || nyp > maxBuildY * 1.4 + 12;
-        if (outside || ages[i] > maxAge[i]) {
+        const farOut = Math.hypot(dxCx, dzCz) > domR + TRAVEL_MAX_M + 20 || nyp > maxBuildY * 1.4 + 12;
+        if (farOut || traveled >= TRAVEL_MAX_M || ages[i] > maxAge[i]) {
           spawn(i);
         }
       }
