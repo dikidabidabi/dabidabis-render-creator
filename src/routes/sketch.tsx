@@ -6688,6 +6688,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
+    if (separasiPath && tool === "separasi") {
+      const last = separasiPath[separasiPath.length - 1];
+      const minSeg = 3 / view.s;
+      if (Math.hypot(p.x - last.x, p.y - last.y) >= minSeg) {
+        setSeparasiPath([...separasiPath, p]);
+      }
+    }
     if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
