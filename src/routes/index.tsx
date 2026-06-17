@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Sparkles, Image as ImageIcon, Sliders, Layers, CircleDot, PenTool, Box, Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-
+import heroBg from "@/assets/sta13.jpeg.asset.json";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -16,9 +16,20 @@ function Landing() {
   return (
     <main className="relative overflow-hidden">
       {/* Hero */}
-      <section className="relative px-4 pt-16 pb-24 sm:px-6 sm:pt-24 sm:pb-32">
+      <section className="relative overflow-hidden px-4 pt-16 pb-24 sm:px-6 sm:pt-24 sm:pb-32">
+        {/* Full-bleed architectural background with Ken Burns animation */}
         <div className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute left-1/2 top-0 h-[600px] w-[800px] -translate-x-1/2 rounded-full bg-ember/10 blur-[120px]" />
+          <motion.img
+            src={heroBg.url}
+            alt=""
+            className="h-full w-full object-cover"
+            initial={{ scale: 1 }}
+            animate={{ scale: 1.08, x: "1%", y: "-1%" }}
+            transition={{ duration: 20, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
+          />
+          {/* Dark gradient overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/40 to-background/90" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background/50 via-transparent to-background/50" />
         </div>
 
         <div className="mx-auto max-w-5xl text-center">
