@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
+  Download,
   Plus,
   Maximize2,
   Minimize2,
@@ -79,6 +80,7 @@ import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
 import polygonClipping from "polygon-clipping";
+import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
 import {
   type StructuralGrid,
@@ -7494,6 +7496,47 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         </div>
       )}
       <div className={cn("space-y-5", fullscreen ? "overflow-y-auto p-4" : "p-5")}>
+
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Ekspor CAD</Label>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => {
+            try {
+              const activeLayers = layers.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+              const activeLines = lines.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+              const activeDoors = (sketch.doors ?? []).filter((d) => !activeLvlId || d.levelId === activeLvlId);
+              const activeAreas = (sketch.parkingAreas ?? []).filter((a) => !activeLvlId || a.levelId === activeLvlId);
+              const dxf = buildDxf({
+                pxPerMeter,
+                wallThicknessM: 0.15,
+                lines: activeLines,
+                layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
+                doors: activeDoors,
+                parkingStallsByArea: parkingStallsActive,
+                parkingAreas: activeAreas,
+                mmGridRotRad,
+              });
+              const safe = (sketch.title || "Konsep_Denah").replace(/[^\w\-]+/g, "_");
+              downloadDxf(`${safe}.dxf`, dxf);
+              toast.success("DXF terunduh — buka di AutoCAD/CAD favoritmu");
+            } catch (err) {
+              console.error(err);
+              toast.error("Gagal mengekspor DXF");
+            }
+          }}
+          title="Unduh denah aktif sebagai file .dxf (skala asli 1:1, satuan meter)"
+        >
+          <Download className="mr-1.5 h-4 w-4" /> Download as CAD (DXF)
+        </Button>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          Skala asli 1:1 dalam meter. Dinding diekspor sebagai 2 garis sejajar (tebal 150 mm), pintu sebagai ARC + LINE, lot parkir sebagai POLYLINE tertutup.
+        </p>
+      </div>
+
+
 
 
       <div className="space-y-2">
