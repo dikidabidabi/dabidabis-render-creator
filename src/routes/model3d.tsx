@@ -541,24 +541,47 @@ function Scene({
   // North rotation rotates the world so we counter-rotate sun azimuth.
   const sunPos = useMemo(() => {
     const geo = sketch.geo;
+    let alt: number;
+    let az: number;
     if (!geo || !geo.locked) {
-      // Fallback static sun
-      return { x: 30, y: 60, z: 20, intensity: 1.05 };
+      // Fallback: posisi matahari berdasar jam (kasar) bila lokasi tak terkunci.
+      const t = (sunHour - 12) / 6; // -2..2 dari pagi ke sore
+      alt = Math.max(0.05, Math.cos((t * Math.PI) / 2) * (Math.PI / 2.2));
+      az = (t * Math.PI) / 2; // timur(-) → barat(+)
+    } else {
+      const d = new Date();
+      d.setHours(Math.floor(sunHour), Math.round((sunHour % 1) * 60), 0, 0);
+      const sc = SunCalc.getPosition(d, geo.lat, geo.lon);
+      const azNorthCW = sc.azimuth + Math.PI;
+      const north = ((Number(sketch.northRotation) || 0) * Math.PI) / 180;
+      az = azNorthCW - north;
+      alt = sc.altitude;
     }
-    const d = new Date();
-    d.setHours(Math.floor(sunHour), Math.round((sunHour % 1) * 60), 0, 0);
-    const sc = SunCalc.getPosition(d, geo.lat, geo.lon);
-    const azNorthCW = sc.azimuth + Math.PI;
-    const north = ((Number(sketch.northRotation) || 0) * Math.PI) / 180;
-    const az = azNorthCW - north;
-    const alt = Math.max(0.01, sc.altitude);
-    const dist = 80;
-    const horiz = Math.cos(alt) * dist;
+    const altClamped = Math.max(0.02, alt);
+    const dist = 120;
+    const horiz = Math.cos(altClamped) * dist;
     const x = Math.sin(az) * horiz;
     const z = -Math.cos(az) * horiz;
-    const y = Math.sin(alt) * dist;
-    const intensity = Math.max(0.05, Math.min(1.3, Math.sin(alt) * 1.4));
-    return { x, y, z, intensity };
+    const y = Math.sin(altClamped) * dist;
+
+    // Intensitas — naik tajam di siang, lebih terang dari sebelumnya.
+    const sAlt = Math.sin(altClamped);
+    const intensity = Math.max(0.15, Math.min(3.2, sAlt * 3.2 + 0.2));
+
+    // Warna matahari: hangat saat altitude rendah (golden hour), netral cerah saat tinggi.
+    const warm = Math.pow(1 - Math.min(1, sAlt / 0.5), 1.4); // 0 saat tinggi, 1 saat horizon
+    const r = 1.0;
+    const g = 1.0 - 0.35 * warm;
+    const b = 1.0 - 0.75 * warm;
+    const color = new THREE.Color(r, g, b).getStyle();
+
+    // Langit & ambient menyesuaikan altitude.
+    const skyAmb = Math.max(0.45, Math.min(0.95, 0.5 + sAlt * 0.5));
+    const hemiI = Math.max(0.4, Math.min(0.9, 0.4 + sAlt * 0.55));
+    const skyTop = warm > 0.5 ? "#ffd9a8" : "#cfe6ff";
+    const skyGround = "#cfcabf";
+
+    return { x, y, z, intensity, color, skyAmb, hemiI, skyTop, skyGround };
   }, [sketch.geo, sketch.northRotation, sunHour]);
 
   return (
@@ -567,21 +590,25 @@ function Scene({
         <ambientLight intensity={1.0} />
       ) : (
         <>
-          <ambientLight intensity={0.35} />
+          <ambientLight intensity={sunPos.skyAmb} color="#ffffff" />
           <directionalLight
             position={[sunPos.x, sunPos.y, sunPos.z]}
             intensity={sunPos.intensity}
+            color={sunPos.color}
             castShadow
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
-            shadow-camera-left={-60}
-            shadow-camera-right={60}
-            shadow-camera-top={60}
-            shadow-camera-bottom={-60}
+            shadow-mapSize-width={4096}
+            shadow-mapSize-height={4096}
+            shadow-camera-left={-80}
+            shadow-camera-right={80}
+            shadow-camera-top={80}
+            shadow-camera-bottom={-80}
             shadow-camera-near={0.5}
-            shadow-camera-far={300}
+            shadow-camera-far={400}
+            shadow-bias={-0.0002}
+            shadow-normalBias={0.02}
+            shadow-radius={2}
           />
-          <hemisphereLight args={["#ffffff", "#9aa0a6", 0.35]} />
+          <hemisphereLight args={[sunPos.skyTop, sunPos.skyGround, sunPos.hemiI]} />
         </>
       )}
 
