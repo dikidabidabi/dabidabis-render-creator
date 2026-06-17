@@ -463,7 +463,7 @@ export function ClusterGeneratorDialog({
           <Button variant="outline" onClick={handleSaveClose}>
             Simpan
           </Button>
-          <Button onClick={handleGenerate} className="bg-gradient-ember text-white">
+          <Button onClick={handleGenerate} className="bg-gradient-primary text-white">
             <Sparkles className="h-4 w-4 mr-1" /> Generate Clustered Polygons
           </Button>
         </div>

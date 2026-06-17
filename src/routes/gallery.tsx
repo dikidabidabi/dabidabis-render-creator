@@ -62,7 +62,7 @@ function GalleryPage() {
             {items.length} render tersimpan
           </p>
         </div>
-        <Button asChild className="bg-gradient-ember shadow-ember hover:opacity-90">
+        <Button asChild className="bg-gradient-primary shadow-primary hover:opacity-90">
           <Link to="/studio">
             <Sparkles className="mr-2 h-4 w-4" />
             Render baru
@@ -77,7 +77,7 @@ function GalleryPage() {
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
             Mulai dengan mengupload sketsa pertama Anda di studio.
           </p>
-          <Button asChild className="mt-6 bg-gradient-ember shadow-ember hover:opacity-90">
+          <Button asChild className="mt-6 bg-gradient-primary shadow-primary hover:opacity-90">
             <Link to="/studio">
               Buka Studio <ArrowRight className="ml-1 h-4 w-4" />
             </Link>

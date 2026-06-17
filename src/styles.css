@@ -46,11 +46,11 @@
 :root {
   --radius: 0.5rem;
 
-  /* Light theme — white & soft gray dominant, ember orange + teal complement */
-  --background: oklch(0.99 0.003 80);
+  /* Light theme — very soft teal + white dominant, teal primary, ember accent */
+  --background: oklch(0.985 0.008 195);
   --foreground: oklch(0.22 0.01 60);
 
-  --surface: oklch(0.97 0.004 80);
+  --surface: oklch(0.975 0.006 195);
   --surface-elevated: oklch(1 0 0);
 
   --card: oklch(1 0 0);
@@ -59,15 +59,14 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.22 0.01 60);
 
-  --primary: oklch(0.68 0.19 38);
+  --primary: oklch(0.58 0.13 195);
   --primary-foreground: oklch(0.99 0.003 80);
 
   --ember: oklch(0.68 0.19 38);
   --ember-glow: oklch(0.78 0.16 50);
 
-  /* Complementary to ember orange — deep teal */
-  --teal: oklch(0.62 0.11 218);
-  --teal-glow: oklch(0.74 0.09 210);
+  --teal: oklch(0.58 0.13 195);
+  --teal-glow: oklch(0.74 0.09 195);
 
   --secondary: oklch(0.94 0.005 80);
   --secondary-foreground: oklch(0.22 0.01 60);
@@ -75,21 +74,21 @@
   --muted: oklch(0.95 0.004 80);
   --muted-foreground: oklch(0.48 0.01 70);
 
-  --accent: oklch(0.93 0.04 218);
-  --accent-foreground: oklch(0.28 0.06 218);
+  --accent: oklch(0.95 0.05 50);
+  --accent-foreground: oklch(0.35 0.08 38);
 
   --destructive: oklch(0.58 0.22 25);
   --destructive-foreground: oklch(0.99 0 0);
 
   --border: oklch(0.88 0.006 80);
   --input: oklch(0.92 0.005 80);
-  --ring: oklch(0.68 0.19 38);
+  --ring: oklch(0.58 0.13 195);
 
-  --gradient-ember: linear-gradient(135deg, oklch(0.68 0.19 38), oklch(0.78 0.16 50));
+  --gradient-primary: linear-gradient(135deg, oklch(0.58 0.13 195), oklch(0.74 0.09 195));
   --gradient-surface: linear-gradient(180deg, oklch(1 0 0), oklch(0.96 0.004 80));
-  --gradient-glow: radial-gradient(circle at 30% 20%, oklch(0.68 0.19 38 / 0.08), transparent 60%);
+  --gradient-glow: radial-gradient(circle at 30% 20%, oklch(0.58 0.13 195 / 0.08), transparent 60%);
 
-  --shadow-ember: 0 20px 50px -20px oklch(0.68 0.19 38 / 0.35);
+  --shadow-primary: 0 20px 50px -20px oklch(0.58 0.13 195 / 0.35);
   --shadow-elevated: 0 24px 50px -28px oklch(0.22 0.01 60 / 0.25);
   --shadow-soft: 0 8px 24px -12px oklch(0.22 0.01 60 / 0.15);
 }
@@ -122,20 +121,20 @@
   .font-display {
     font-family: var(--font-display);
   }
-  .bg-gradient-ember {
-    background-image: var(--gradient-ember);
+  .bg-gradient-primary {
+    background-image: var(--gradient-primary);
   }
   .bg-gradient-surface {
     background-image: var(--gradient-surface);
   }
-  .text-gradient-ember {
-    background-image: var(--gradient-ember);
+  .text-gradient-primary {
+    background-image: var(--gradient-primary);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
-  .shadow-ember {
-    box-shadow: var(--shadow-ember);
+  .shadow-primary {
+    box-shadow: var(--shadow-primary);
   }
   .shadow-elevated {
     box-shadow: var(--shadow-elevated);
@@ -162,7 +161,7 @@
   100% { background-position: 200% 0; }
 }
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent, oklch(0.68 0.19 38 / 0.15), transparent);
+  background: linear-gradient(90deg, transparent, oklch(0.58 0.13 195 / 0.15), transparent);
   background-size: 200% 100%;
   animation: shimmer 2s linear infinite;
 }
@@ -170,7 +169,7 @@
 /* Vertical slider-like scrollbar for sub-layers inside Level */
 .sketch-sub-scroll {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.68 0.19 38 / 0.55) transparent;
+  scrollbar-color: oklch(0.58 0.13 195 / 0.55) transparent;
 }
 .sketch-sub-scroll::-webkit-scrollbar {
   width: 6px;
@@ -180,9 +179,9 @@
   border-radius: 9999px;
 }
 .sketch-sub-scroll::-webkit-scrollbar-thumb {
-  background: oklch(0.68 0.19 38 / 0.55);
+  background: oklch(0.58 0.13 195 / 0.55);
   border-radius: 9999px;
 }
 .sketch-sub-scroll::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.68 0.19 38 / 0.8);
+  background: oklch(0.58 0.13 195 / 0.8);
 }

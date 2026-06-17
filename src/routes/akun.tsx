@@ -225,7 +225,7 @@ function AkunPage() {
           <Button
             onClick={doBackup}
             disabled={busy !== null}
-            className="h-12 bg-gradient-ember shadow-ember hover:opacity-90"
+            className="h-12 bg-gradient-primary shadow-primary hover:opacity-90"
           >
             {busy === "backup" ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

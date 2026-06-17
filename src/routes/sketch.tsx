@@ -1627,7 +1627,7 @@ function GeoPanel({
           <Button
             size="sm"
             variant={g.locked ? "default" : "outline"}
-            className={cn("h-7 flex-1 text-[11px]", g.locked && "bg-gradient-ember shadow-ember")}
+            className={cn("h-7 flex-1 text-[11px]", g.locked && "bg-gradient-primary shadow-primary")}
             onClick={() => setG({ locked: !g.locked })}
           >
             {g.locked ? <><Lock className="mr-1 h-3 w-3" /> Terkunci</> : <><LockOpen className="mr-1 h-3 w-3" /> Kunci koordinat</>}
@@ -7915,7 +7915,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "line" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("line"); }}
-            className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "line" && "bg-gradient-primary shadow-primary")}
           >
             <Pencil className="mr-1.5 h-4 w-4" /> Garis
           </Button>
@@ -7923,7 +7923,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "rect" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("rect"); }}
-            className={cn(tool === "rect" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "rect" && "bg-gradient-primary shadow-primary")}
           >
             <Square className="mr-1.5 h-4 w-4" /> Persegi
           </Button>
@@ -7931,7 +7931,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "polyline" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setPolyDraft(null); setTool("polyline"); }}
-            className={cn(tool === "polyline" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "polyline" && "bg-gradient-primary shadow-primary")}
           >
             <Waypoints className="mr-1.5 h-4 w-4" /> Polyline
           </Button>
@@ -7939,7 +7939,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "edit" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("edit"); }}
-            className={cn(tool === "edit" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "edit" && "bg-gradient-primary shadow-primary")}
           >
             <Move className="mr-1.5 h-4 w-4" /> Edit Titik
           </Button>
@@ -7947,7 +7947,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "move" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("move"); }}
-            className={cn(tool === "move" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "move" && "bg-gradient-primary shadow-primary")}
             title="Move — pilih satu/banyak objek lalu drag (snap mm) atau geser numerik ΔX/ΔY mm."
           >
             <GripHorizontal className="mr-1.5 h-4 w-4" /> Move
@@ -7956,7 +7956,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "mirror" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("mirror"); }}
-            className={cn(tool === "mirror" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "mirror" && "bg-gradient-primary shadow-primary")}
             title="Mirror — pilih objek lewat Move, lalu tarik sumbu (snap 0/45/90/135°) untuk menduplikasi cerminan."
           >
             <FlipHorizontal className="mr-1.5 h-4 w-4" /> Mirror
@@ -7972,7 +7972,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "section" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("section"); }}
-            className={cn(tool === "section" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "section" && "bg-gradient-primary shadow-primary")}
             title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
           >
             <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
@@ -7981,7 +7981,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "separasi" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
-            className={cn(tool === "separasi" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "separasi" && "bg-gradient-primary shadow-primary")}
             title="Separasi Ruang — tarik garis dari satu tepi ruang ke tepi lain; ruang otomatis terbelah dua dengan luas terpisah."
           >
             <SplitSquareHorizontal className="mr-1.5 h-4 w-4" /> Separasi Ruang
@@ -7998,7 +7998,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "grid" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("grid"); if (!grid.enabled) updateGrid({ enabled: true }); }}
-            className={cn(tool === "grid" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "grid" && "bg-gradient-primary shadow-primary")}
             title="Modul Struktur — grid as + kolom parametric"
           >
             <Grid3x3 className="mr-1.5 h-4 w-4" /> Grid Struktur
@@ -8007,7 +8007,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "pick" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("pick"); }}
-            className={cn(tool === "pick" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "pick" && "bg-gradient-primary shadow-primary")}
             title="Pick Material — klik segmen garis untuk menandai jenis selubung (Solid/Curtain/Window). Alt-klik untuk hapus."
           >
             <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
@@ -8016,7 +8016,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "door" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("door"); }}
-            className={cn(tool === "door" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "door" && "bg-gradient-primary shadow-primary")}
             title="Pintu — tap di dinding (engsel A), geser searah dinding (lebar), lalu tegak lurus untuk arah ayun."
           >
             <DoorOpen className="mr-1.5 h-4 w-4" /> Pintu
@@ -8025,7 +8025,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "circle" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("circle"); }}
-            className={cn(tool === "circle" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "circle" && "bg-gradient-primary shadow-primary")}
             title="Lingkaran — tap di pusat, geser untuk menentukan radius."
           >
             <CircleIcon className="mr-1.5 h-4 w-4" /> Lingkaran
@@ -8034,7 +8034,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "trim" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("trim"); }}
-            className={cn(tool === "trim" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "trim" && "bg-gradient-primary shadow-primary")}
             title="Trim / Extend — tap di garis dekat ujung yang ingin disesuaikan, gunakan garis lain sebagai batas."
           >
             <Crop className="mr-1.5 h-4 w-4" /> Trim / Extend
@@ -8043,7 +8043,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "offset" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("offset"); }}
-            className={cn(tool === "offset" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "offset" && "bg-gradient-primary shadow-primary")}
             title="Offset — tap garis pada sisi yang diinginkan; jarak diatur di bawah."
           >
             <MoveHorizontal className="mr-1.5 h-4 w-4" /> Offset
@@ -8052,7 +8052,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "floor" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setFloorDraft(null); setTool("floor"); }}
-            className={cn(tool === "floor" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "floor" && "bg-gradient-primary shadow-primary")}
             title="Alat Lantai — slab 150mm di bawah MDPL level aktif (Persegi / Garis / Polyline / Attach Garis)"
           >
             <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
@@ -8061,7 +8061,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "parking" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingSubTool("draw"); }}
-            className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "parking" && "bg-gradient-primary shadow-primary")}
             title="Lot Parkir — tarik bounding box; deret 2.5×5 m otomatis di-snap ke grid mm, kolom/dinding/ruang dihindari (geser, tidak skip)."
           >
             <Car className="mr-1.5 h-4 w-4" /> Lot Parkir
@@ -8407,7 +8407,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   onClick={() => setDoorEraseMode((v) => !v)}
                   className={cn(
                     "h-7 w-full text-xs",
-                    doorEraseMode && "bg-gradient-ember shadow-ember",
+                    doorEraseMode && "bg-gradient-primary shadow-primary",
                   )}
                 >
                   <Trash2 className="mr-1.5 h-3 w-3" />
@@ -8516,7 +8516,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-gradient-ember shadow-ember"
+                  className="bg-gradient-primary shadow-primary"
                   onClick={() => handlePasteClipboard()}
                   disabled={!moveClipboard}
                   title="Tempel ke level aktif"
@@ -8577,7 +8577,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               </div>
               <Button
                 size="sm"
-                className="w-full bg-gradient-ember shadow-ember"
+                className="w-full bg-gradient-primary shadow-primary"
                 disabled={moveSel.size === 0}
                 onClick={() => {
                   const dxMm = Number(moveDxMm) || 0;
@@ -8692,7 +8692,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <Button
                   size="sm"
                   variant={editGridIdx === 0 ? "default" : "outline"}
-                  className={cn("h-6 px-2 text-[10px]", editGridIdx === 0 && "bg-gradient-ember shadow-ember")}
+                  className={cn("h-6 px-2 text-[10px]", editGridIdx === 0 && "bg-gradient-primary shadow-primary")}
                   onClick={() => { setEditGridIdx(0); setClipDraft(null); }}
                 >
                   Primer
@@ -8702,7 +8702,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                     <Button
                       size="sm"
                       variant={editGridIdx === i + 1 ? "default" : "outline"}
-                      className={cn("h-6 px-2 text-[10px]", editGridIdx === i + 1 && "bg-gradient-ember shadow-ember")}
+                      className={cn("h-6 px-2 text-[10px]", editGridIdx === i + 1 && "bg-gradient-primary shadow-primary")}
                       onClick={() => { setEditGridIdx(i + 1); setClipDraft(null); }}
                     >
                       Extra {i + 1}
@@ -8773,7 +8773,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   <Button
                     size="sm"
                     variant={gridEditMode === "clip" ? "default" : "outline"}
-                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "clip" && "bg-gradient-ember shadow-ember")}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "clip" && "bg-gradient-primary shadow-primary")}
                     onClick={() => setGridEditMode("clip")}
                   >
                     Clip Kolom
@@ -8781,7 +8781,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   <Button
                     size="sm"
                     variant={gridEditMode === "fromLine" ? "default" : "outline"}
-                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "fromLine" && "bg-gradient-ember shadow-ember")}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "fromLine" && "bg-gradient-primary shadow-primary")}
                     onClick={() => { setGridEditMode("fromLine"); setClipDraft(null); }}
                     title="Klik garis lurus / polyline di kanvas — grid extra dibuat mengikuti panjang segmen, dengan buble otomatis menyambung dari grid sebelumnya."
                   >
@@ -9130,7 +9130,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Button
               variant="default"
               size="sm"
-              className="h-7 w-full text-[11px] bg-gradient-ember shadow-ember"
+              className="h-7 w-full text-[11px] bg-gradient-primary shadow-primary"
               onClick={() => { cancelPendingCurve(); setTool("section"); }}
               title="Tarik garis berikutnya di kanvas — label otomatis (B-B, C-C, …)"
             >
@@ -9245,7 +9245,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <div className="flex gap-1.5">
                   <Button
                     size="sm"
-                    className="flex-1 bg-gradient-ember shadow-ember"
+                    className="flex-1 bg-gradient-primary shadow-primary"
                     disabled={selectedEditVertices.length === 0}
                     onClick={() => {
                       if (selectedEditVertices.length === 0) return;
@@ -9384,7 +9384,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         )}
         {pendingCurve && (
           <div className="grid grid-cols-2 gap-2">
-            <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-ember shadow-ember">
+            <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-primary shadow-primary">
               <Check className="mr-1.5 h-4 w-4" /> Selesai
             </Button>
             <Button size="sm" variant="outline" onClick={cancelPendingCurve}>
@@ -9545,7 +9545,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "line" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("line"); }}
-            className={cn(tool === "line" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "line" && "bg-gradient-primary shadow-primary")}
             title="Garis"
           >
             <Pencil className="h-4 w-4" />
@@ -9554,7 +9554,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "rect" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("rect"); }}
-            className={cn(tool === "rect" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "rect" && "bg-gradient-primary shadow-primary")}
             title="Persegi (tarik diagonal)"
           >
             <Square className="h-4 w-4" />
@@ -9563,7 +9563,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "polyline" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setPolyDraft(null); setTool("polyline"); }}
-            className={cn(tool === "polyline" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "polyline" && "bg-gradient-primary shadow-primary")}
             title="Polyline (tarik tanpa jeda, berbelok = titik baru)"
           >
             <Waypoints className="h-4 w-4" />
@@ -9572,7 +9572,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "edit" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("edit"); }}
-            className={cn(tool === "edit" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "edit" && "bg-gradient-primary shadow-primary")}
             title="Edit titik (geser vertex)"
           >
             <Move className="h-4 w-4" />
@@ -9589,7 +9589,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "section" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("section"); }}
-            className={cn(tool === "section" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "section" && "bg-gradient-primary shadow-primary")}
             title="Garis Potong (tarik garis → slide potongan dibuat; label berurutan A-A, B-B, …)"
           >
             <Scissors className="h-4 w-4" />
@@ -9598,7 +9598,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "separasi" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
-            className={cn(tool === "separasi" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "separasi" && "bg-gradient-primary shadow-primary")}
             title="Separasi Ruang (tarik garis tepi-ke-tepi → ruang terbelah dua)"
           >
             <SplitSquareHorizontal className="h-4 w-4" />
@@ -9607,7 +9607,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "circle" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("circle"); }}
-            className={cn(tool === "circle" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "circle" && "bg-gradient-primary shadow-primary")}
             title="Lingkaran (tap pusat, geser radius)"
           >
             <CircleIcon className="h-4 w-4" />
@@ -9616,7 +9616,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "trim" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("trim"); }}
-            className={cn(tool === "trim" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "trim" && "bg-gradient-primary shadow-primary")}
             title="Trim / Extend (tap garis dekat ujung)"
           >
             <Crop className="h-4 w-4" />
@@ -9625,7 +9625,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "offset" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("offset"); }}
-            className={cn(tool === "offset" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "offset" && "bg-gradient-primary shadow-primary")}
             title="Offset (tap garis pada sisi tujuan)"
           >
             <MoveHorizontal className="h-4 w-4" />
@@ -9634,7 +9634,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             variant={tool === "parking" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingSubTool("draw"); }}
-            className={cn(tool === "parking" && "bg-gradient-ember shadow-ember")}
+            className={cn(tool === "parking" && "bg-gradient-primary shadow-primary")}
             title="Lot Parkir (tarik bbox terikat grid mm; deret stall geser dekat kolom/dinding)"
           >
             <Car className="h-4 w-4" />
@@ -9781,7 +9781,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           {pendingCurve && (
             <>
               <div className="h-6 w-px bg-border/60" />
-              <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-ember shadow-ember">
+              <Button size="sm" onClick={commitPendingCurve} className="bg-gradient-primary shadow-primary">
                 <Check className="mr-1 h-4 w-4" /> Selesai
               </Button>
               <Button size="sm" variant="ghost" onClick={cancelPendingCurve}>
@@ -10598,7 +10598,7 @@ function FloorToolPanel({
             key={m.id}
             variant={mode === m.id ? "default" : "outline"}
             size="sm"
-            className={cn("h-8 text-xs", mode === m.id && "bg-gradient-ember shadow-ember")}
+            className={cn("h-8 text-xs", mode === m.id && "bg-gradient-primary shadow-primary")}
             onClick={() => onMode(m.id)}
             title={m.hint}
           >
@@ -10621,7 +10621,7 @@ function FloorToolPanel({
           <Button
             size="sm"
             variant={editSub === "move" ? "default" : "outline"}
-            className={cn("h-8 text-[11px]", editSub === "move" && "bg-gradient-ember shadow-ember")}
+            className={cn("h-8 text-[11px]", editSub === "move" && "bg-gradient-primary shadow-primary")}
             onClick={() => onEditSub("move")}
           >
             Geser
@@ -10629,7 +10629,7 @@ function FloorToolPanel({
           <Button
             size="sm"
             variant={editSub === "add" ? "default" : "outline"}
-            className={cn("h-8 text-[11px]", editSub === "add" && "bg-gradient-ember shadow-ember")}
+            className={cn("h-8 text-[11px]", editSub === "add" && "bg-gradient-primary shadow-primary")}
             onClick={() => onEditSub("add")}
           >
             Tambah
@@ -10684,7 +10684,7 @@ function FloorToolPanel({
           <div className="flex gap-1.5">
             <Button
               size="sm"
-              className="flex-1 bg-gradient-ember shadow-ember"
+              className="flex-1 bg-gradient-primary shadow-primary"
               disabled={selectedFloorVertexCount === 0}
               onClick={onApplyFloorVertexMove}
             >

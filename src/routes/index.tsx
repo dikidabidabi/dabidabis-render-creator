@@ -40,7 +40,7 @@ function Landing() {
           >
             Sketsa hari ini,
             <br />
-            <span className="text-gradient-ember">render esok hari</span>
+            <span className="text-gradient-primary">render esok hari</span>
             <br />
             jadi <span className="italic font-light">sekarang juga.</span>
           </motion.h1>
@@ -63,7 +63,7 @@ function Landing() {
           >
             <Button
               size="lg"
-              className="bg-gradient-ember text-base shadow-ember hover:opacity-90"
+              className="bg-gradient-primary text-base shadow-primary hover:opacity-90"
               onClick={() => navigate({ to: user ? "/studio" : "/login", search: user ? undefined : { mode: "signup" } })}
             >
               {user ? "Buka Studio" : "Mulai Gratis"}

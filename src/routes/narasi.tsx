@@ -269,7 +269,7 @@ function NarasiBox({
   const perspektifCount = perspektifList.filter((p) => p.image).length;
 
   return (
-    <div className={cn("rounded-xl border border-border bg-surface/40", open && "shadow-ember/20 shadow-lg")}>
+    <div className={cn("rounded-xl border border-border bg-surface/40", open && "shadow-primary/20 shadow-lg")}>
       <button
         type="button"
         onClick={onToggle}
@@ -303,7 +303,7 @@ function NarasiBox({
                 />
               ))}
               <div>
-                <Button onClick={add} size="sm" className="bg-gradient-ember shadow-ember hover:opacity-90">
+                <Button onClick={add} size="sm" className="bg-gradient-primary shadow-primary hover:opacity-90">
                   <Plus className="mr-1 h-4 w-4" /> Tambah Narasi
                 </Button>
               </div>
@@ -330,7 +330,7 @@ function NarasiBox({
                 ))}
               </div>
               <div>
-                <Button onClick={addP} size="sm" className="bg-gradient-ember shadow-ember hover:opacity-90">
+                <Button onClick={addP} size="sm" className="bg-gradient-primary shadow-primary hover:opacity-90">
                   <Plus className="mr-1 h-4 w-4" /> Tambah Perspektif
                 </Button>
               </div>

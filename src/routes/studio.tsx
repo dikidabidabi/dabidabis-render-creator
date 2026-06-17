@@ -172,7 +172,7 @@ function StudioPage() {
             onClick={handleGenerate}
             disabled={generating || !sketch || !prompt.trim() || !hasKey}
             size="lg"
-            className="w-full bg-gradient-ember text-base shadow-ember hover:opacity-90"
+            className="w-full bg-gradient-primary text-base shadow-primary hover:opacity-90"
           >
             {generating ? (
               <>
