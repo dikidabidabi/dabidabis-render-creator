@@ -7036,6 +7036,75 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (curTool === "separasi") {
+      // Separasi Ruang: belah salah satu polygon ruang aktif menjadi dua
+      // dengan garis tak-hingga melalui (a, b). Hanya berlaku pada ruang yang
+      // benar-benar terbelah (2 titik perpotongan dengan perimeter).
+      const cand = layers.filter(
+        (l) =>
+          (l.levelId ?? activeLvlId) === activeLvlId &&
+          !l.locked &&
+          l.points.length >= 3 &&
+          !isLahanLayerName(l.name) &&
+          !isVoidLayerName(l.name),
+      );
+      let best: { layer: Layer; res: NonNullable<ReturnType<typeof splitPolygonByInfiniteLine>>; la: number; ra: number } | null = null;
+      let bestScore = -Infinity;
+      for (const ly of cand) {
+        const r = splitPolygonByInfiniteLine(ly.points, a, b);
+        if (!r) continue;
+        const la = polygonAreaPx(r.left);
+        const ra = polygonAreaPx(r.right);
+        if (la < 25 || ra < 25) continue;
+        // Pilih ruang terkecil yang berhasil dibelah (paling spesifik).
+        const totalArea = la + ra;
+        const score = -totalArea;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { layer: ly, res: r, la, ra };
+        }
+      }
+      if (!best) {
+        toast.error("Tarik garis dari tepi ke tepi ruang untuk membelah");
+        return;
+      }
+      const { layer, res, la, ra } = best;
+      const leftAreaM2 = la / (pxPerMeter * pxPerMeter);
+      const rightAreaM2 = ra / (pxPerMeter * pxPerMeter);
+      const now = Date.now();
+      const baseName = layer.name;
+      const lyA: Layer = {
+        ...layer,
+        id: `L${now}_${Math.random().toString(36).slice(2, 6)}a`,
+        name: `${baseName} A`,
+        points: res.left,
+        areaM2: leftAreaM2,
+      };
+      const lyB: Layer = {
+        ...layer,
+        id: `L${now}_${Math.random().toString(36).slice(2, 6)}b`,
+        name: `${baseName} B`,
+        points: res.right,
+        areaM2: rightAreaM2,
+      };
+      const dividerLine: Line = {
+        a: res.iA,
+        b: res.iB,
+        kind: "straight",
+        levelId: layer.levelId ?? activeLvlId ?? undefined,
+      };
+      pushHistory();
+      onChange({
+        layers: layers.flatMap((l) => (l.id === layer.id ? [lyA, lyB] : [l])),
+        lines: [...lines, dividerLine],
+      });
+      toast.success(
+        `${baseName} dibelah · ${leftAreaM2.toFixed(2)} m² + ${rightAreaM2.toFixed(2)} m²`,
+      );
+      return;
+    }
+
+
 
     if (lineKind === "bezier") {
       // Defer commit: open tangent handles for adjustment
