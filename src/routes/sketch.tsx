@@ -2218,6 +2218,92 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
 
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
 
+  // ---------- Cluster Generator (Node Editor) integration ----------
+  const handleClusterGenerate = useCallback(
+    (result: GenerateResult) => {
+      // 1) Ensure every levelId referenced by the result exists in sketch.levels.
+      const existingIds = new Set(levels.map((l) => l.id));
+      const newLevels: Level[] = [];
+      const idMap = new Map<string, string>();
+      const usedLevelIds = Array.from(new Set(result.rooms.map((r) => r.levelId)));
+      usedLevelIds.forEach((lid, i) => {
+        if (existingIds.has(lid)) {
+          idMap.set(lid, lid);
+        } else {
+          const maxMdpl = levels.concat(newLevels).reduce((m, l) => Math.max(m, l.mdpl), 0);
+          const lv: Level = {
+            id: lid,
+            name: `Level ${levels.length + newLevels.length + 1}`,
+            mdpl: maxMdpl + (i === 0 && levels.length === 0 ? 0 : 3),
+            opacity: 0.5,
+          };
+          newLevels.push(lv);
+          idMap.set(lid, lid);
+        }
+      });
+
+      // 2) Compute staging origin: to the right of existing geometry (bbox of layers+lines).
+      let maxX = 0, minY = 0;
+      const allPts: Point[] = [];
+      for (const ly of layers) for (const p of ly.points) allPts.push(p);
+      for (const ln of lines) { allPts.push(ln.a); allPts.push(ln.b); }
+      if (allPts.length) {
+        maxX = Math.max(...allPts.map((p) => p.x));
+        minY = Math.min(...allPts.map((p) => p.y));
+      }
+      const originX = (allPts.length ? maxX + 80 : 0);
+      const originY = (allPts.length ? minY : 0);
+
+      // 3) Build rectangle layers per room and dashed relation lines.
+      const newLayers: Layer[] = [];
+      const centerById = new Map<string, Point>();
+      result.rooms.forEach((r, i) => {
+        const cx = originX + r.cx;
+        const cy = originY + r.cy;
+        const h = r.side / 2;
+        const pts: Point[] = [
+          { x: cx - h, y: cy - h },
+          { x: cx + h, y: cy - h },
+          { x: cx + h, y: cy + h },
+          { x: cx - h, y: cy + h },
+        ];
+        centerById.set(r.nodeId, { x: cx, y: cy });
+        newLayers.push({
+          id: `L${Date.now().toString(36)}_${i}_${Math.random().toString(36).slice(2, 5)}`,
+          name: r.name,
+          points: pts,
+          areaM2: r.areaM2,
+          color: "#cccccc",
+          levelId: r.levelId,
+        });
+      });
+
+      const newLines: Line[] = [];
+      result.links.forEach((l) => {
+        const a = centerById.get(l.source);
+        const b = centerById.get(l.target);
+        if (!a || !b) return;
+        const room = result.rooms.find((r) => r.nodeId === l.source);
+        newLines.push({
+          a: { ...a },
+          b: { ...b },
+          kind: "straight",
+          dashed: true,
+          levelId: room?.levelId,
+        });
+      });
+
+      onChange({
+        levels: newLevels.length ? [...levels, ...newLevels] : levels,
+        layers: [...layers, ...newLayers],
+        lines: [...lines, ...newLines],
+        activeLevelId: activeLvlId ?? usedLevelIds[0] ?? null,
+      });
+      toast.success(`Spawned ${newLayers.length} ruang dari cluster generator.`);
+    },
+    [levels, layers, lines, onChange, activeLvlId],
+  );
+
   // Recompute layer areas on scale change (preserve relative geometry).
   // CATATAN: pointsLocal area parkir TIDAK di-rescale lagi — koordinatnya
   // tertanam di mm-grid lokal (px), sehingga visualnya tetap menempel pada
