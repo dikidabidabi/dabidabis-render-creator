@@ -6585,62 +6585,70 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
         </svg>
       </div>
 
-      <div style={{ width: 270, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0, overflow: "hidden" }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600 }}>
-          Legenda Ruang
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
-          {reps.map((g, idx) => {
-            const repName = displayNames[g.rep.id] ?? g.rep.name;
-            const memberNames = g.members.map((m) => displayNames[m.id] ?? m.name);
-            const color = levelColor(idx, reps.length);
-            const k = Math.max(1, Math.round(g.rep.typicalCount ?? 1));
-            const rooms = tipeRooms[idx] ?? [];
-            return (
-              <div key={g.rep.id} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 10.5, padding: "7px 9px", border: "1px solid #ececec", borderRadius: 3, background: "#fff" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 11, height: 11, background: color, border: "1px solid rgba(0,0,0,0.3)", flexShrink: 0 }} />
-                  <span style={{ fontWeight: 700, letterSpacing: "0.04em" }}>
-                    Tipe {idx + 1} · {repName}
-                  </span>
-                </div>
-                {(g.members.length > 1 || k > 1) && (
-                  <div style={{ fontSize: 9.5, color: "#888", marginLeft: 17, lineHeight: 1.35 }}>
-                    {g.members.length > 1 && <>mewakili {memberNames.join(", ")}</>}
-                    {g.members.length > 1 && k > 1 && " · "}
-                    {k > 1 && <>×{k} tipikal</>}
-                  </div>
-                )}
-                {rooms.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 17, marginTop: 2 }}>
-                    {rooms.map((r) => (
-                      <div key={r.num} style={{ display: "flex", gap: 6, alignItems: "baseline", fontSize: 9.8, lineHeight: 1.3 }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 16, height: 14, padding: "0 4px", background: "#0a0a0a", color: "#fff", borderRadius: 7, fontWeight: 700, fontSize: 8.8 }}>
-                          {r.num}
-                        </span>
-                        <span style={{ color: "#222" }}>{r.name}</span>
+      {(() => {
+        const totalNumbered = tipeRooms.reduce((s, r) => s + r.length, 0);
+        const legendCols = totalNumbered > 24 ? 3 : totalNumbered > 10 ? 2 : 1;
+        const panelWidth = legendCols === 3 ? 460 : legendCols === 2 ? 360 : 270;
+        return (
+          <div style={{ width: panelWidth, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0, overflow: "hidden" }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600 }}>
+              Legenda Ruang
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${legendCols}, minmax(0, 1fr))`, gap: 8, alignContent: "start" }}>
+              {reps.map((g, idx) => {
+                const repName = displayNames[g.rep.id] ?? g.rep.name;
+                const memberNames = g.members.map((m) => displayNames[m.id] ?? m.name);
+                const color = levelColor(idx, reps.length);
+                const k = Math.max(1, Math.round(g.rep.typicalCount ?? 1));
+                const rooms = tipeRooms[idx] ?? [];
+                return (
+                  <div key={g.rep.id} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 10.5, padding: "7px 9px", border: "1px solid #ececec", borderRadius: 3, background: "#fff", breakInside: "avoid" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 11, height: 11, background: color, border: "1px solid rgba(0,0,0,0.3)", flexShrink: 0 }} />
+                      <span style={{ fontWeight: 700, letterSpacing: "0.04em" }}>
+                        Tipe {idx + 1} · {repName}
+                      </span>
+                    </div>
+                    {(g.members.length > 1 || k > 1) && (
+                      <div style={{ fontSize: 9.5, color: "#888", marginLeft: 17, lineHeight: 1.35 }}>
+                        {g.members.length > 1 && <>mewakili {memberNames.join(", ")}</>}
+                        {g.members.length > 1 && k > 1 && " · "}
+                        {k > 1 && <>×{k} tipikal</>}
                       </div>
-                    ))}
+                    )}
+                    {rooms.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 17, marginTop: 2 }}>
+                        {rooms.map((r) => (
+                          <div key={r.num} style={{ display: "flex", gap: 6, alignItems: "baseline", fontSize: 9.8, lineHeight: 1.3 }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 16, height: 14, padding: "0 4px", background: "#0a0a0a", color: "#fff", borderRadius: 7, fontWeight: 700, fontSize: 8.8 }}>
+                              {r.num}
+                            </span>
+                            <span style={{ color: "#222" }}>{r.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 9.5, color: "#444", paddingTop: 6, borderTop: "1px solid #ececec" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ display: "inline-block", width: 22, borderTop: `2px dashed ${COLOR_TANGGA}` }} />
+                <span>Sirkulasi vertikal · Tangga</span>
               </div>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 9.5, color: "#444", paddingTop: 6, borderTop: "1px solid #ececec" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ display: "inline-block", width: 22, borderTop: `2px dashed ${COLOR_TANGGA}` }} />
-            <span>Sirkulasi vertikal · Tangga</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ display: "inline-block", width: 22, borderTop: `2px dashed ${COLOR_LIFT}` }} />
+                <span>Sirkulasi vertikal · Lift</span>
+              </div>
+            </div>
+            <div style={{ fontSize: 9, color: "#999", letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: 1.5 }}>
+              Hanya ruang ≥ 50 m² yang diberi nomor · Level dengan layout berbeda.
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ display: "inline-block", width: 22, borderTop: `2px dashed ${COLOR_LIFT}` }} />
-            <span>Sirkulasi vertikal · Lift</span>
-          </div>
-        </div>
-        <div style={{ fontSize: 9, color: "#999", letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: 1.5 }}>
-          Hanya level dengan layout berbeda. Nomor merujuk ruang pada tipe terkait.
-        </div>
-      </div>
+        );
+      })()}
+
     </div>
   );
 }
