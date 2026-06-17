@@ -6575,11 +6575,13 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
               fontWeight={600}
               letterSpacing="0.04em"
               fill="#0a0a0a"
+              textAnchor="end"
               dominantBaseline="middle"
             >
               {fl.text.toUpperCase()}
             </text>
           ))}
+
         </svg>
       </div>
 
