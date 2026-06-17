@@ -5975,6 +5975,9 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     const ages = new Float32Array(N);
     const maxAge = new Float32Array(N);
     const tailLen = new Uint8Array(N);
+    const spawnX = new Float32Array(N);
+    const spawnZ = new Float32Array(N);
+    const TRAVEL_MAX_M = 200;
 
     const colHead = new THREE.Color("#003366");
     const colTail = new THREE.Color("#7aa8c8");
