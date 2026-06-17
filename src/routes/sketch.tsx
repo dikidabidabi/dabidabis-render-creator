@@ -1755,6 +1755,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
+  const [clusterOpen, setClusterOpen] = useState(false);
 
   const [sideOffset, setSideOffset] = useState({ x: 0, y: 0 });
   const [rekapOffset, setRekapOffset] = useState({ x: 0, y: 0 });
