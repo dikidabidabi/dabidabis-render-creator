@@ -754,6 +754,9 @@ function normalizeSketch(s: any): Sketch {
     kdhPct: Number.isFinite(Number(s?.kdhPct)) ? Math.max(0, Math.min(100, Number(s.kdhPct))) : undefined,
     ktbPct: Number.isFinite(Number(s?.ktbPct)) ? Math.max(0, Math.min(100, Number(s.ktbPct))) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
+    clusterGraph: s?.clusterGraph && Array.isArray(s.clusterGraph.nodes) && Array.isArray(s.clusterGraph.links)
+      ? { nodes: s.clusterGraph.nodes, links: s.clusterGraph.links }
+      : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
