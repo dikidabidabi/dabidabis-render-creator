@@ -121,20 +121,20 @@
   .font-display {
     font-family: var(--font-display);
   }
-  .bg-gradient-ember {
-    background-image: var(--gradient-ember);
+  .bg-gradient-primary {
+    background-image: var(--gradient-primary);
   }
   .bg-gradient-surface {
     background-image: var(--gradient-surface);
   }
-  .text-gradient-ember {
-    background-image: var(--gradient-ember);
+  .text-gradient-primary {
+    background-image: var(--gradient-primary);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
-  .shadow-ember {
-    box-shadow: var(--shadow-ember);
+  .shadow-primary {
+    box-shadow: var(--shadow-primary);
   }
   .shadow-elevated {
     box-shadow: var(--shadow-elevated);
@@ -161,7 +161,7 @@
   100% { background-position: 200% 0; }
 }
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent, oklch(0.68 0.19 38 / 0.15), transparent);
+  background: linear-gradient(90deg, transparent, oklch(0.58 0.13 195 / 0.15), transparent);
   background-size: 200% 100%;
   animation: shimmer 2s linear infinite;
 }
@@ -169,7 +169,7 @@
 /* Vertical slider-like scrollbar for sub-layers inside Level */
 .sketch-sub-scroll {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.68 0.19 38 / 0.55) transparent;
+  scrollbar-color: oklch(0.58 0.13 195 / 0.55) transparent;
 }
 .sketch-sub-scroll::-webkit-scrollbar {
   width: 6px;
@@ -179,9 +179,9 @@
   border-radius: 9999px;
 }
 .sketch-sub-scroll::-webkit-scrollbar-thumb {
-  background: oklch(0.68 0.19 38 / 0.55);
+  background: oklch(0.58 0.13 195 / 0.55);
   border-radius: 9999px;
 }
 .sketch-sub-scroll::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.68 0.19 38 / 0.8);
+  background: oklch(0.58 0.13 195 / 0.8);
 }
