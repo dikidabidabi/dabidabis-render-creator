@@ -467,6 +467,73 @@ function splitPolygonByInfiniteLine(
   return { left, right, iA: intersects[0], iB: intersects[1] };
 }
 
+function segSegIntersect(
+  p1: Point, p2: Point, q1: Point, q2: Point,
+): { p: Point; t: number; u: number } | null {
+  const rx = p2.x - p1.x, ry = p2.y - p1.y;
+  const sx = q2.x - q1.x, sy = q2.y - q1.y;
+  const denom = rx * sy - ry * sx;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((q1.x - p1.x) * sy - (q1.y - p1.y) * sx) / denom;
+  const u = ((q1.x - p1.x) * ry - (q1.y - p1.y) * rx) / denom;
+  const eps = 1e-6;
+  if (t < -eps || t > 1 + eps || u < -eps || u > 1 + eps) return null;
+  return { p: { x: p1.x + t * rx, y: p1.y + t * ry }, t, u };
+}
+
+// Belah polygon dengan polyline terbuka (path). Mengembalikan dua ring tertutup
+// + portion interior path antara entry/exit untuk diserialisasi sebagai divider.
+function splitPolygonByPolyline(
+  poly: Point[],
+  path: Point[],
+): { left: Point[]; right: Point[]; interior: Point[] } | null {
+  if (poly.length < 3 || path.length < 2) return null;
+  type Hit = { pathSeg: number; polyEdge: number; t: number; p: Point };
+  const hits: Hit[] = [];
+  for (let i = 0; i < path.length - 1; i++) {
+    for (let j = 0; j < poly.length; j++) {
+      const q1 = poly[j], q2 = poly[(j + 1) % poly.length];
+      const inter = segSegIntersect(path[i], path[i + 1], q1, q2);
+      if (inter) hits.push({ pathSeg: i, polyEdge: j, t: inter.t, p: inter.p });
+    }
+  }
+  if (hits.length < 2) return null;
+  hits.sort((a, b) => (a.pathSeg - b.pathSeg) || (a.t - b.t));
+  const entry = hits[0];
+  const exit = hits[hits.length - 1];
+  if (entry.polyEdge === exit.polyEdge) return null;
+  const interior: Point[] = [entry.p];
+  for (let k = entry.pathSeg + 1; k <= exit.pathSeg; k++) {
+    const pt = path[k];
+    const last = interior[interior.length - 1];
+    if (Math.hypot(pt.x - last.x, pt.y - last.y) > 1e-3) interior.push(pt);
+  }
+  if (Math.hypot(exit.p.x - interior[interior.length - 1].x, exit.p.y - interior[interior.length - 1].y) > 1e-3) {
+    interior.push(exit.p);
+  }
+  const n = poly.length;
+  const ringA: Point[] = [...interior];
+  let idx = (exit.polyEdge + 1) % n;
+  const stopA = (entry.polyEdge + 1) % n;
+  let guard = 0;
+  while (idx !== stopA && guard++ < n + 2) {
+    ringA.push(poly[idx]);
+    idx = (idx + 1) % n;
+  }
+  const ringB: Point[] = [...interior].reverse();
+  idx = (entry.polyEdge + 1) % n;
+  const stopB = (exit.polyEdge + 1) % n;
+  guard = 0;
+  while (idx !== stopB && guard++ < n + 2) {
+    ringB.push(poly[idx]);
+    idx = (idx + 1) % n;
+  }
+  if (ringA.length < 3 || ringB.length < 3) return null;
+  return { left: ringA, right: ringB, interior };
+}
+
+
+
 
 function isLahanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("lahan");
