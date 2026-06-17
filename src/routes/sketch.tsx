@@ -42,6 +42,7 @@ import {
   FlipHorizontal,
   Car,
   RotateCw,
+  SplitSquareHorizontal,
 } from "lucide-react";
 import {
   type Floor,
@@ -427,6 +428,45 @@ function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null 
     return subject;
   }
 }
+
+// Belah polygon dengan sebuah garis tak-hingga melalui titik a→b.
+// Mengembalikan dua ring (left/right relatif terhadap arah garis) dan dua
+// titik perpotongan pada perimeter (untuk menggambar garis pemisah).
+function splitPolygonByInfiniteLine(
+  poly: Point[],
+  a: Point,
+  b: Point,
+): { left: Point[]; right: Point[]; iA: Point; iB: Point } | null {
+  if (poly.length < 3) return null;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  if (dx * dx + dy * dy < 1e-6) return null;
+  const side = (p: Point) => (p.x - a.x) * dy - (p.y - a.y) * dx;
+  const left: Point[] = [];
+  const right: Point[] = [];
+  const intersects: Point[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const cur = poly[i];
+    const nxt = poly[(i + 1) % poly.length];
+    const sC = side(cur);
+    const sN = side(nxt);
+    if (sC <= 0) left.push(cur);
+    if (sC >= 0) right.push(cur);
+    if ((sC > 0 && sN < 0) || (sC < 0 && sN > 0)) {
+      const t = sC / (sC - sN);
+      const ix: Point = {
+        x: cur.x + t * (nxt.x - cur.x),
+        y: cur.y + t * (nxt.y - cur.y),
+      };
+      left.push(ix);
+      right.push(ix);
+      intersects.push(ix);
+    }
+  }
+  if (intersects.length !== 2) return null;
+  if (left.length < 3 || right.length < 3) return null;
+  return { left, right, iA: intersects[0], iB: intersects[1] };
+}
+
 
 function isLahanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("lahan");
@@ -1907,7 +1947,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking">("line");
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
@@ -5976,7 +6016,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
     if (
-      tool === "line" || tool === "rect" || tool === "section" ||
+      tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw")
     ) {
       setDrawing({ a: p, b: p });
@@ -6996,6 +7036,75 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    if (curTool === "separasi") {
+      // Separasi Ruang: belah salah satu polygon ruang aktif menjadi dua
+      // dengan garis tak-hingga melalui (a, b). Hanya berlaku pada ruang yang
+      // benar-benar terbelah (2 titik perpotongan dengan perimeter).
+      const cand = layers.filter(
+        (l) =>
+          (l.levelId ?? activeLvlId) === activeLvlId &&
+          !l.locked &&
+          l.points.length >= 3 &&
+          !isLahanLayerName(l.name) &&
+          !isVoidLayerName(l.name),
+      );
+      let best: { layer: Layer; res: NonNullable<ReturnType<typeof splitPolygonByInfiniteLine>>; la: number; ra: number } | null = null;
+      let bestScore = -Infinity;
+      for (const ly of cand) {
+        const r = splitPolygonByInfiniteLine(ly.points, a, b);
+        if (!r) continue;
+        const la = polygonAreaPx(r.left);
+        const ra = polygonAreaPx(r.right);
+        if (la < 25 || ra < 25) continue;
+        // Pilih ruang terkecil yang berhasil dibelah (paling spesifik).
+        const totalArea = la + ra;
+        const score = -totalArea;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { layer: ly, res: r, la, ra };
+        }
+      }
+      if (!best) {
+        toast.error("Tarik garis dari tepi ke tepi ruang untuk membelah");
+        return;
+      }
+      const { layer, res, la, ra } = best;
+      const leftAreaM2 = la / (pxPerMeter * pxPerMeter);
+      const rightAreaM2 = ra / (pxPerMeter * pxPerMeter);
+      const now = Date.now();
+      const baseName = layer.name;
+      const lyA: Layer = {
+        ...layer,
+        id: `L${now}_${Math.random().toString(36).slice(2, 6)}a`,
+        name: `${baseName} A`,
+        points: res.left,
+        areaM2: leftAreaM2,
+      };
+      const lyB: Layer = {
+        ...layer,
+        id: `L${now}_${Math.random().toString(36).slice(2, 6)}b`,
+        name: `${baseName} B`,
+        points: res.right,
+        areaM2: rightAreaM2,
+      };
+      const dividerLine: Line = {
+        a: res.iA,
+        b: res.iB,
+        kind: "straight",
+        levelId: layer.levelId ?? activeLvlId ?? undefined,
+      };
+      pushHistory();
+      onChange({
+        layers: layers.flatMap((l) => (l.id === layer.id ? [lyA, lyB] : [l])),
+        lines: [...lines, dividerLine],
+      });
+      toast.success(
+        `${baseName} dibelah · ${leftAreaM2.toFixed(2)} m² + ${rightAreaM2.toFixed(2)} m²`,
+      );
+      return;
+    }
+
+
 
     if (lineKind === "bezier") {
       // Defer commit: open tangent handles for adjustment
@@ -7758,6 +7867,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
           >
             <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
+          </Button>
+          <Button
+            variant={tool === "separasi" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
+            className={cn(tool === "separasi" && "bg-gradient-ember shadow-ember")}
+            title="Separasi Ruang — tarik garis dari satu tepi ruang ke tepi lain; ruang otomatis terbelah dua dengan luas terpisah."
+          >
+            <SplitSquareHorizontal className="mr-1.5 h-4 w-4" /> Separasi Ruang
           </Button>
           <Button
             variant={tool === "grid" ? "default" : "outline"}
@@ -9280,7 +9398,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
@@ -9358,6 +9476,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             title="Garis Potong (tarik garis → slide potongan dibuat; label berurutan A-A, B-B, …)"
           >
             <Scissors className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "separasi" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
+            className={cn(tool === "separasi" && "bg-gradient-ember shadow-ember")}
+            title="Separasi Ruang (tarik garis tepi-ke-tepi → ruang terbelah dua)"
+          >
+            <SplitSquareHorizontal className="h-4 w-4" />
           </Button>
           <Button
             variant={tool === "circle" ? "default" : "ghost"}
@@ -9645,7 +9772,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 shadow-soft backdrop-blur">
