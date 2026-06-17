@@ -6318,10 +6318,17 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     fill: string; stroke: string; depth: number; sw: number;
     kind: "top" | "side";
   };
-  type Anno = { from: { x: number; y: number }; label: string; floorIdx: number };
+  type Anno = { at: { x: number; y: number }; label: string; floorIdx: number; num: number };
 
   const faces: Face[] = [];
   const annos: Anno[] = [];
+  const tipeRooms: { name: string; num: number }[][] = reps.map(() => []);
+
+  type VConnEntry = { floorIdx: number; baseY: number; topY: number; kind: "tangga" | "lift" };
+  const vconnMap = new Map<string, Map<string, VConnEntry[]>>();
+  const isTangga = (n: string) => /tangga/i.test(n);
+  const isLift = (n: string) => /lift/i.test(n);
+  const ptKey = (x: number, z: number) => `${x.toFixed(3)}|${z.toFixed(3)}`;
 
   const ABU_HEX = "#bebebe", ABU_SIDE = "#9a9a9a";
   const HIJAU_HEX = "#22c55e", HIJAU_SIDE = "#16a34a";
@@ -6331,6 +6338,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     const color = levelColor(idx, reps.length);
     const side = shadeHsl(color, -18);
     const layers = buildLayersOf(g.rep.id);
+    let roomCounter = 0;
     for (const ly of layers) {
       const pm = toPm(ly);
       if (pm.length < 3) continue;
@@ -6361,12 +6369,38 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
         pts: topPts, fill: topFill, stroke: "rgba(0,0,0,0.55)",
         depth: avg + topY * 0.01, sw: 0.7, kind: "top",
       });
-      // Anchor titik anak panah: centroid permukaan atas ruang
+      roomCounter += 1;
       const cx = pm.reduce((s, p) => s + p.x, 0) / pm.length;
       const cz = pm.reduce((s, p) => s + p.z, 0) / pm.length;
-      annos.push({ from: project(cx, cz, topY), label: ly.name, floorIdx: idx });
+      annos.push({ at: project(cx, cz, topY), label: ly.name, floorIdx: idx, num: roomCounter });
+      tipeRooms[idx].push({ name: ly.name, num: roomCounter });
+
+      if (isTangga(ly.name) || isLift(ly.name)) {
+        const key = ly.name.toLowerCase().trim();
+        const kind: "tangga" | "lift" = isTangga(ly.name) ? "tangga" : "lift";
+        let perPt = vconnMap.get(key);
+        if (!perPt) { perPt = new Map(); vconnMap.set(key, perPt); }
+        for (const p of pm) {
+          const k = ptKey(p.x, p.z);
+          const arr = perPt.get(k) ?? [];
+          arr.push({ floorIdx: idx, baseY, topY, kind });
+          perPt.set(k, arr);
+        }
+      }
     }
   });
+
+  type VLine = { x: number; z: number; yLo: number; yHi: number; kind: "tangga" | "lift" };
+  const vlines: VLine[] = [];
+  for (const [, perPt] of vconnMap) {
+    for (const [k, entries] of perPt) {
+      if (entries.length < 2) continue;
+      const [xs, zs] = k.split("|").map(Number);
+      const yLo = Math.min(...entries.map((e) => e.baseY));
+      const yHi = Math.max(...entries.map((e) => e.topY));
+      vlines.push({ x: xs, z: zs, yLo, yHi, kind: entries[0].kind });
+    }
+  }
 
   // Slab lantai pada lantai representatif.
   // Pemetaan: levelId di tiap floor → idx grup representatif (atau anggotanya).
@@ -6423,62 +6457,41 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   const faceLayer = (k: Face["kind"]) => (k === "top" ? 1 : 2);
   faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
 
-  // viewBox awal dari faces
+  // viewBox dari faces + vlines
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
   for (const f of faces) for (const p of f.pts) {
     if (p.x < vx0) vx0 = p.x; if (p.y < vy0) vy0 = p.y;
     if (p.x > vx1) vx1 = p.x; if (p.y > vy1) vy1 = p.y;
   }
+  for (const vl of vlines) {
+    const pa = project(vl.x, vl.z, vl.yLo);
+    const pb = project(vl.x, vl.z, vl.yHi);
+    for (const p of [pa, pb]) {
+      if (p.x < vx0) vx0 = p.x; if (p.y < vy0) vy0 = p.y;
+      if (p.x > vx1) vx1 = p.x; if (p.y > vy1) vy1 = p.y;
+    }
+  }
   if (!Number.isFinite(vx0)) { vx0 = -10; vy0 = -10; vx1 = 10; vy1 = 10; }
-  const w0 = vx1 - vx0, h0 = vy1 - vy0;
-  // Sisakan ruang di kanan untuk label keterangan ruang (tiga kolom selang-seling).
-  const labelExtra = Math.max(w0, h0) * 1.05;
-  vx1 += labelExtra;
   const w = vx1 - vx0, h = vy1 - vy0;
   const pad = Math.max(w, h, 1) * 0.04;
   const vb = `${vx0 - pad} ${vy0 - pad} ${w + pad * 2} ${h + pad * 2}`;
   const baseStroke = Math.max(w, h) * 0.0015;
-  const drawingSpan = Math.max(w - labelExtra, h);
-  const fontPx = drawingSpan * 0.014;
-  const lineH = fontPx * 1.35;
-  // Tiga kolom: tengah → kanan dekat → kanan jauh, selang-seling per lantai dari atas ke bawah.
-  const labelColX = [vx1 - labelExtra * 0.94, vx1 - labelExtra * 0.62, vx1 - labelExtra * 0.3];
-
-  // Susun label per lantai supaya tidak tumpang tindih.
-  type Leader = { x1: number; y1: number; x2: number; y2: number; label: string };
-  const leaders: Leader[] = [];
-  const byFloor = new Map<number, Anno[]>();
-  for (const a of annos) {
-    if (!byFloor.has(a.floorIdx)) byFloor.set(a.floorIdx, []);
-    byFloor.get(a.floorIdx)!.push(a);
-  }
-  const topIdx = reps.length - 1;
-  for (const [fi, arr] of byFloor) {
-    const yBot = fi * (floorH + gap);
-    const yTop = yBot + floorH;
-    const center = (project(0, 0, yBot).y + project(0, 0, yTop).y) / 2;
-    const n = arr.length;
-    const totalH = (n - 1) * lineH;
-    // Selang-seling: lantai paling atas → kolom tengah, bawahnya → kanan dekat, lalu kanan jauh, ulang.
-    const colIdx = (topIdx - fi) % 3;
-    const lx = labelColX[colIdx];
-    const sorted = [...arr].sort((a, b) => a.from.y - b.from.y);
-    sorted.forEach((a, i) => {
-      const ly = center - totalH / 2 + i * lineH;
-      leaders.push({ x1: a.from.x, y1: a.from.y, x2: lx, y2: ly, label: a.label });
-    });
-  }
+  const fontPx = Math.max(w, h) * 0.014;
 
   // Label level di kiri tiap lantai
   type FloorLabel = { x: number; y: number; text: string };
   const floorLabels: FloorLabel[] = reps.map((g, idx) => {
     const yMid = idx * (floorH + gap) + floorH / 2;
     return {
-      x: vx0 + (w - labelExtra) * 0.02,
-      y: project(0, 0, yMid).y - (project(0, 0, 0).y - project(0, 0, floorH).y) * 0,
+      x: vx0 + w * 0.02,
+      y: project(0, 0, yMid).y,
       text: `Tipe ${idx + 1} · ${displayNames[g.rep.id] ?? g.rep.name}`,
     };
   });
+
+  const COLOR_TANGGA = "#2563eb";
+  const COLOR_LIFT = "#7f1d1d";
+  const numR = fontPx * 0.9;
 
   return (
     <div style={{ display: "flex", gap: 20, width: "100%", height: "100%", overflow: "hidden" }}>
@@ -6512,24 +6525,35 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
               />
             );
           })}
-          {leaders.map((l, i) => (
-            <g key={`ld-${i}`}>
-              <circle cx={l.x1} cy={l.y1} r={baseStroke * 1.1} fill="#0a0a0a" />
-              <path
-                d={`M ${l.x1} ${l.y1} L ${(l.x1 + l.x2) / 2} ${l.y2} L ${l.x2 - baseStroke * 1.5} ${l.y2}`}
-                stroke="#0a0a0a"
-                strokeWidth={baseStroke * 0.35}
-                fill="none"
+          {vlines.map((vl, i) => {
+            const a = project(vl.x, vl.z, vl.yLo);
+            const b = project(vl.x, vl.z, vl.yHi);
+            const stroke = vl.kind === "tangga" ? COLOR_TANGGA : COLOR_LIFT;
+            return (
+              <line
+                key={`vl-${i}`}
+                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                stroke={stroke}
+                strokeWidth={baseStroke * 0.9}
+                strokeDasharray={`${baseStroke * 2.5} ${baseStroke * 2}`}
+                strokeLinecap="round"
               />
+            );
+          })}
+          {annos.map((a, i) => (
+            <g key={`an-${i}`}>
+              <circle cx={a.at.x} cy={a.at.y} r={numR} fill="#0a0a0a" stroke="#fff" strokeWidth={baseStroke * 0.6} />
               <text
-                x={l.x2 + baseStroke * 2}
-                y={l.y2}
-                fontSize={fontPx}
-                fontFamily="var(--font-sans, Manrope, sans-serif)"
-                dominantBaseline="middle"
-                fill="#0a0a0a"
+                x={a.at.x}
+                y={a.at.y}
+                fontSize={numR * 1.25}
+                fontFamily="var(--font-display, Sora, sans-serif)"
+                fontWeight={700}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="#fff"
               >
-                {l.label}
+                {a.num}
               </text>
             </g>
           ))}
@@ -6551,18 +6575,19 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
         </svg>
       </div>
 
-      <div style={{ width: 250, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0, overflow: "hidden" }}>
+      <div style={{ width: 270, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, minHeight: 0, overflow: "hidden" }}>
         <div style={{ fontSize: 11, letterSpacing: "0.24em", textTransform: "uppercase", color: "#777", fontWeight: 600 }}>
-          Tipe Layout
+          Legenda Ruang
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
           {reps.map((g, idx) => {
             const repName = displayNames[g.rep.id] ?? g.rep.name;
             const memberNames = g.members.map((m) => displayNames[m.id] ?? m.name);
             const color = levelColor(idx, reps.length);
             const k = Math.max(1, Math.round(g.rep.typicalCount ?? 1));
+            const rooms = tipeRooms[idx] ?? [];
             return (
-              <div key={g.rep.id} style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, padding: "7px 9px", border: "1px solid #ececec", borderRadius: 3, background: "#fff" }}>
+              <div key={g.rep.id} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 10.5, padding: "7px 9px", border: "1px solid #ececec", borderRadius: 3, background: "#fff" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 11, height: 11, background: color, border: "1px solid rgba(0,0,0,0.3)", flexShrink: 0 }} />
                   <span style={{ fontWeight: 700, letterSpacing: "0.04em" }}>
@@ -6576,12 +6601,34 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
                     {k > 1 && <>×{k} tipikal</>}
                   </div>
                 )}
+                {rooms.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 17, marginTop: 2 }}>
+                    {rooms.map((r) => (
+                      <div key={r.num} style={{ display: "flex", gap: 6, alignItems: "baseline", fontSize: 9.8, lineHeight: 1.3 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 16, height: 14, padding: "0 4px", background: "#0a0a0a", color: "#fff", borderRadius: 7, fontWeight: 700, fontSize: 8.8 }}>
+                          {r.num}
+                        </span>
+                        <span style={{ color: "#222" }}>{r.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-        <div style={{ fontSize: 9, color: "#999", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: "auto", lineHeight: 1.5 }}>
-          Hanya menampilkan level dengan layout berbeda. Level copy / tipikal diwakili 1 lantai representatif. Anak panah menunjuk ruang.
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 9.5, color: "#444", paddingTop: 6, borderTop: "1px solid #ececec" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ display: "inline-block", width: 22, borderTop: `2px dashed ${COLOR_TANGGA}` }} />
+            <span>Sirkulasi vertikal · Tangga</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ display: "inline-block", width: 22, borderTop: `2px dashed ${COLOR_LIFT}` }} />
+            <span>Sirkulasi vertikal · Lift</span>
+          </div>
+        </div>
+        <div style={{ fontSize: 9, color: "#999", letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: 1.5 }}>
+          Hanya level dengan layout berbeda. Nomor merujuk ruang pada tipe terkait.
         </div>
       </div>
     </div>
