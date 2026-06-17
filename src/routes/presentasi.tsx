@@ -5975,6 +5975,9 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     const ages = new Float32Array(N);
     const maxAge = new Float32Array(N);
     const tailLen = new Uint8Array(N);
+    const spawnX = new Float32Array(N);
+    const spawnZ = new Float32Array(N);
+    const TRAVEL_MAX_M = 200;
 
     const colHead = new THREE.Color("#003366");
     const colTail = new THREE.Color("#7aa8c8");
@@ -6039,8 +6042,10 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         positions[o] = sx; positions[o + 1] = sy; positions[o + 2] = sz;
       }
       ages[i] = 0;
-      maxAge[i] = 4 + Math.random() * 4;
+      maxAge[i] = 30 + Math.random() * 20;
       tailLen[i] = 12 + Math.floor(Math.random() * (TAIL_MAX - 11));
+      spawnX[i] = sx;
+      spawnZ[i] = sz;
       paintColors(i);
     }
     for (let i = 0; i < N; i++) spawn(i);
@@ -6115,10 +6120,13 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         positions[headOff + 2] = nzp;
 
         ages[i] += dt;
+        const dxSp = nxp - spawnX[i];
+        const dzSp = nzp - spawnZ[i];
+        const traveled = Math.hypot(dxSp, dzSp);
         const dxCx = nxp - domCx;
         const dzCz = nzp - domCz;
-        const outside = Math.hypot(dxCx, dzCz) > domR + 10 || nyp > maxBuildY * 1.4 + 12;
-        if (outside || ages[i] > maxAge[i]) {
+        const farOut = Math.hypot(dxCx, dzCz) > domR + TRAVEL_MAX_M + 20 || nyp > maxBuildY * 1.4 + 12;
+        if (farOut || traveled >= TRAVEL_MAX_M || ages[i] > maxAge[i]) {
           spawn(i);
         }
       }
