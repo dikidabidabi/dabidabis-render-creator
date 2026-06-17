@@ -2299,22 +2299,100 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     [levels, layers, lines, onChange, activeLvlId],
   );
 
-  // Recompute layer areas on scale change (preserve relative geometry).
-  // CATATAN: pointsLocal area parkir TIDAK di-rescale lagi — koordinatnya
-  // tertanam di mm-grid lokal (px), sehingga visualnya tetap menempel pada
-  // titik-titik grid mm yang sama saat skala / zoom berubah. Hanya jumlah
-  // lot dalam area yang berubah (karena STALL_W × pxPerMeter berubah), area
-  // polygonnya sendiri tetap menempel di grid.
+  // Saat skala kanvas berubah, SEMUA geometri px-world di-rescale dengan
+  // faktor k = pxPerMeter_baru / pxPerMeter_lama. Tujuannya: ukuran riil
+  // (meter) semua elemen — polygon ruang, luasannya, garis, lantai, pintu,
+  // lingkaran, area parkir, garis potong, grid struktur, dst — TIDAK
+  // berubah saat user mengganti skala. Hanya tampilan grid milimeter block
+  // (rasio px/m) yang berubah.
   const prevScaleRef = useRef(scale);
   useEffect(() => {
-    if (prevScaleRef.current !== scale) {
-      const next = layers.map((l) => ({
-        ...l,
-        areaM2: polygonAreaPx(l.points) / (pxPerMeter * pxPerMeter),
-      }));
-      onChange({ layers: next });
-      prevScaleRef.current = scale;
-    }
+    if (prevScaleRef.current === scale) return;
+    const prevPpm = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[prevScaleRef.current];
+    const newPpm = pxPerMeter;
+    prevScaleRef.current = scale;
+    if (!Number.isFinite(prevPpm) || prevPpm <= 0 || Math.abs(newPpm - prevPpm) < 1e-9) return;
+    const k = newPpm / prevPpm;
+    const sp = (p: Point): Point => ({ x: p.x * k, y: p.y * k });
+    const spArr = (arr?: Point[]) => (arr ? arr.map(sp) : arr);
+
+    const nextLines = lines.map((ln) => ({
+      ...ln,
+      a: sp(ln.a),
+      b: sp(ln.b),
+      ...(ln.c1 ? { c1: sp(ln.c1) } : {}),
+      ...(ln.c2 ? { c2: sp(ln.c2) } : {}),
+      ...(typeof ln.bulge === "number" ? { bulge: ln.bulge * k } : {}),
+    }));
+    const nextLayers = layers.map((l) => ({
+      ...l,
+      points: l.points.map(sp),
+      // areaM2 sengaja dipertahankan apa adanya — luas riil (m²) tidak berubah.
+    }));
+    const nextFloors = (sketch.floors || []).map((f) => ({
+      ...f,
+      outer: f.outer.map(sp),
+      ...(f.holes ? { holes: f.holes.map((h) => h.map(sp)) } : {}),
+    }));
+    const nextDoors = (sketch.doors || []).map((d) => ({
+      ...d,
+      a: sp(d.a),
+      b: sp(d.b),
+    }));
+    const nextCircles = (sketch.circles || []).map((c) => ({
+      ...c,
+      c: sp(c.c),
+      r: c.r * k,
+    }));
+    const nextParking = (sketch.parkingAreas || []).map((pa) => ({
+      ...pa,
+      pointsLocal: pa.pointsLocal.map(sp),
+      ...(pa.paths
+        ? { paths: pa.paths.map((p) => ({ ...p, pointsLocal: p.pointsLocal.map(sp) })) }
+        : {}),
+    }));
+    const nextSectionCuts = (sketch.sectionCuts || []).map((c) => ({
+      ...c,
+      p1: sp(c.p1),
+      p2: sp(c.p2),
+    }));
+    const nextSectionCut = sketch.sectionCut
+      ? { ...sketch.sectionCut, p1: sp(sketch.sectionCut.p1), p2: sp(sketch.sectionCut.p2) }
+      : sketch.sectionCut;
+    const scaleGrid = (g: StructuralGrid | undefined): StructuralGrid | undefined => {
+      if (!g) return g;
+      return {
+        ...g,
+        origin: sp(g.origin),
+        ...(g.extraLines
+          ? {
+              extraLines: g.extraLines.map((el) => ({
+                ...el,
+                origin: sp(el.origin),
+                // lengthM tetap (meter)
+              })),
+            }
+          : {}),
+        // spansX/Y, colSizeCm, rotation, columnClips (meter relatif) tetap.
+      };
+    };
+    const nextGrid = scaleGrid(sketch.structuralGrid);
+    const nextGridExtras = sketch.structuralGridExtras
+      ? sketch.structuralGridExtras.map((g) => scaleGrid(g)!).filter(Boolean)
+      : sketch.structuralGridExtras;
+
+    onChange({
+      lines: nextLines,
+      layers: nextLayers,
+      floors: nextFloors,
+      doors: nextDoors,
+      circles: nextCircles,
+      parkingAreas: nextParking,
+      sectionCuts: nextSectionCuts,
+      sectionCut: nextSectionCut,
+      structuralGrid: nextGrid,
+      structuralGridExtras: nextGridExtras,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale]);
 
