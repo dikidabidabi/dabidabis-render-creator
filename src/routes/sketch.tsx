@@ -7869,6 +7869,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
           </Button>
           <Button
+            variant={tool === "separasi" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
+            className={cn(tool === "separasi" && "bg-gradient-ember shadow-ember")}
+            title="Separasi Ruang — tarik garis dari satu tepi ruang ke tepi lain; ruang otomatis terbelah dua dengan luas terpisah."
+          >
+            <SplitSquareHorizontal className="mr-1.5 h-4 w-4" /> Separasi Ruang
+          </Button>
+          <Button
             variant={tool === "grid" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("grid"); if (!grid.enabled) updateGrid({ enabled: true }); }}
