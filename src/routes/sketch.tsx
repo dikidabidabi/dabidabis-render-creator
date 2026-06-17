@@ -7051,11 +7051,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       let best: { layer: Layer; res: NonNullable<ReturnType<typeof splitPolygonByInfiniteLine>>; la: number; ra: number } | null = null;
       let bestScore = -Infinity;
       for (const ly of cand) {
+        // Hanya belah ruang yang benar-benar dilalui stylus:
+        // kedua ujung garis (a, b) harus berada di LUAR polygon ruang,
+        // sehingga garis masuk dari satu tepi dan keluar di tepi seberang.
+        if (pointInPolygon(a, ly.points) || pointInPolygon(b, ly.points)) continue;
         const r = splitPolygonByInfiniteLine(ly.points, a, b);
         if (!r) continue;
         const la = polygonAreaPx(r.left);
         const ra = polygonAreaPx(r.right);
         if (la < 25 || ra < 25) continue;
+        // Pastikan kedua titik perpotongan berada di antara a dan b
+        // (stylus benar-benar melewati ruang, bukan hanya garis perpanjangannya).
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const segLen2 = dx * dx + dy * dy;
+        if (segLen2 < 1) continue;
+        const tOf = (p: Point) => ((p.x - a.x) * dx + (p.y - a.y) * dy) / segLen2;
+        const tA = tOf(r.iA), tB = tOf(r.iB);
+        const eps = 1e-3;
+        if (tA < -eps || tA > 1 + eps || tB < -eps || tB > 1 + eps) continue;
         // Pilih ruang terkecil yang berhasil dibelah (paling spesifik).
         const totalArea = la + ra;
         const score = -totalArea;
@@ -7065,7 +7078,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
       }
       if (!best) {
-        toast.error("Tarik garis dari tepi ke tepi ruang untuk membelah");
+        toast.error("Tarik garis menembus ruang dari satu tepi ke tepi seberang");
         return;
       }
       const { layer, res, la, ra } = best;
