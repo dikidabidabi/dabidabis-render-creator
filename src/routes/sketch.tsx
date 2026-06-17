@@ -155,6 +155,7 @@ type Line = {
   c1?: Point; // for bezier: tangent control near a
   c2?: Point; // for bezier: tangent control near b
   levelId?: string;
+  dashed?: boolean; // visual-only: render as dashed (used for cluster-generator relation strings)
 };
 type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
 
