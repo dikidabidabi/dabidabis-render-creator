@@ -312,7 +312,7 @@ export function buildDxf(input: DxfExportInput): string {
   code(buf, 0, "ENDSEC");
   code(buf, 0, "EOF");
 
-  return buf.join("\n");
+  return buf.join("\r\n") + "\r\n";
 }
 
 function drawDoorLeaf(
