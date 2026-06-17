@@ -80,6 +80,7 @@ import {
 import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
+import { ClusterGeneratorDialog, type ClusterGraph, type GenerateResult } from "@/components/cluster-generator-dialog";
 import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
@@ -155,6 +156,7 @@ type Line = {
   c1?: Point; // for bezier: tangent control near a
   c2?: Point; // for bezier: tangent control near b
   levelId?: string;
+  dashed?: boolean; // visual-only: render as dashed (used for cluster-generator relation strings)
 };
 type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
 
@@ -314,6 +316,7 @@ type Sketch = {
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
+  clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
 };
 
 type Circle = {
@@ -752,6 +755,9 @@ function normalizeSketch(s: any): Sketch {
     kdhPct: Number.isFinite(Number(s?.kdhPct)) ? Math.max(0, Math.min(100, Number(s.kdhPct))) : undefined,
     ktbPct: Number.isFinite(Number(s?.ktbPct)) ? Math.max(0, Math.min(100, Number(s.ktbPct))) : undefined,
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
+    clusterGraph: s?.clusterGraph && Array.isArray(s.clusterGraph.nodes) && Array.isArray(s.clusterGraph.links)
+      ? { nodes: s.clusterGraph.nodes, links: s.clusterGraph.links }
+      : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
@@ -1749,6 +1755,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
+  const [clusterOpen, setClusterOpen] = useState(false);
 
   const [sideOffset, setSideOffset] = useState({ x: 0, y: 0 });
   const [rekapOffset, setRekapOffset] = useState({ x: 0, y: 0 });
@@ -2210,6 +2217,92 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const resetView = () => setView({ s: 1, r: 0, tx: 0, ty: 0 });
 
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
+
+  // ---------- Cluster Generator (Node Editor) integration ----------
+  const handleClusterGenerate = useCallback(
+    (result: GenerateResult) => {
+      // 1) Ensure every levelId referenced by the result exists in sketch.levels.
+      const existingIds = new Set(levels.map((l) => l.id));
+      const newLevels: Level[] = [];
+      const idMap = new Map<string, string>();
+      const usedLevelIds = Array.from(new Set(result.rooms.map((r) => r.levelId)));
+      usedLevelIds.forEach((lid, i) => {
+        if (existingIds.has(lid)) {
+          idMap.set(lid, lid);
+        } else {
+          const maxMdpl = levels.concat(newLevels).reduce((m, l) => Math.max(m, l.mdpl), 0);
+          const lv: Level = {
+            id: lid,
+            name: `Level ${levels.length + newLevels.length + 1}`,
+            mdpl: maxMdpl + (i === 0 && levels.length === 0 ? 0 : 3),
+            opacity: 0.5,
+          };
+          newLevels.push(lv);
+          idMap.set(lid, lid);
+        }
+      });
+
+      // 2) Compute staging origin: to the right of existing geometry (bbox of layers+lines).
+      let maxX = 0, minY = 0;
+      const allPts: Point[] = [];
+      for (const ly of layers) for (const p of ly.points) allPts.push(p);
+      for (const ln of lines) { allPts.push(ln.a); allPts.push(ln.b); }
+      if (allPts.length) {
+        maxX = Math.max(...allPts.map((p) => p.x));
+        minY = Math.min(...allPts.map((p) => p.y));
+      }
+      const originX = (allPts.length ? maxX + 80 : 0);
+      const originY = (allPts.length ? minY : 0);
+
+      // 3) Build rectangle layers per room and dashed relation lines.
+      const newLayers: Layer[] = [];
+      const centerById = new Map<string, Point>();
+      result.rooms.forEach((r, i) => {
+        const cx = originX + r.cx;
+        const cy = originY + r.cy;
+        const h = r.side / 2;
+        const pts: Point[] = [
+          { x: cx - h, y: cy - h },
+          { x: cx + h, y: cy - h },
+          { x: cx + h, y: cy + h },
+          { x: cx - h, y: cy + h },
+        ];
+        centerById.set(r.nodeId, { x: cx, y: cy });
+        newLayers.push({
+          id: `L${Date.now().toString(36)}_${i}_${Math.random().toString(36).slice(2, 5)}`,
+          name: r.name,
+          points: pts,
+          areaM2: r.areaM2,
+          color: "#cccccc",
+          levelId: r.levelId,
+        });
+      });
+
+      const newLines: Line[] = [];
+      result.links.forEach((l) => {
+        const a = centerById.get(l.source);
+        const b = centerById.get(l.target);
+        if (!a || !b) return;
+        const room = result.rooms.find((r) => r.nodeId === l.source);
+        newLines.push({
+          a: { ...a },
+          b: { ...b },
+          kind: "straight",
+          dashed: true,
+          levelId: room?.levelId,
+        });
+      });
+
+      onChange({
+        levels: newLevels.length ? [...levels, ...newLevels] : levels,
+        layers: [...layers, ...newLayers],
+        lines: [...lines, ...newLines],
+        activeLevelId: activeLvlId ?? usedLevelIds[0] ?? null,
+      });
+      toast.success(`Spawned ${newLayers.length} ruang dari cluster generator.`);
+    },
+    [levels, layers, lines, onChange, activeLvlId],
+  );
 
   // Recompute layer areas on scale change (preserve relative geometry).
   // CATATAN: pointsLocal area parkir TIDAK di-rescale lagi — koordinatnya
@@ -3142,8 +3235,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       for (const ln of lvlLines) {
         const locked = isLineLocked(ln);
         const kind = ln.kind ?? "straight";
-        ctx.strokeStyle = locked ? "#2d2d2d" : "#1a1a1a";
-        ctx.lineWidth = (locked ? 2.6 : 2) / s;
+        ctx.strokeStyle = ln.dashed ? "rgba(232,93,58,0.85)" : (locked ? "#2d2d2d" : "#1a1a1a");
+        ctx.lineWidth = (ln.dashed ? 1.4 : (locked ? 2.6 : 2)) / s;
+        if (ln.dashed) ctx.setLineDash([6 / s, 4 / s]);
         ctx.beginPath();
         ctx.moveTo(ln.a.x, ln.a.y);
         if (kind === "straight") {
@@ -3157,11 +3251,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, ln.b.x, ln.b.y);
         }
         ctx.stroke();
+        if (ln.dashed) ctx.setLineDash([]);
       }
 
       // Endpoints
       ctx.fillStyle = "#1a1a1a";
       for (const ln of lvlLines) {
+        if (ln.dashed) continue;
         for (const p of [ln.a, ln.b]) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, 3 / s, 0, Math.PI * 2);
@@ -7891,6 +7987,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <SplitSquareHorizontal className="mr-1.5 h-4 w-4" /> Separasi Ruang
           </Button>
           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setClusterOpen(true)}
+            title="Buka Node Editor (Grasshopper-style) untuk merancang relasi antar ruang, lalu generate cluster polygon otomatis."
+          >
+            <Waypoints className="mr-1.5 h-4 w-4" /> Cluster Generator
+          </Button>
+          <Button
             variant={tool === "grid" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("grid"); if (!grid.enabled) updateGrid({ enabled: true }); }}
@@ -9807,6 +9911,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {SidePanel}
       </div>
       {RekapPanel}
+      <ClusterGeneratorDialog
+        open={clusterOpen}
+        onOpenChange={setClusterOpen}
+        levels={[...levels].sort((a, b) => a.mdpl - b.mdpl).map((l) => ({ id: l.id, name: l.name }))}
+        graph={sketch.clusterGraph ?? { nodes: [], links: [] }}
+        onSave={(g: ClusterGraph) => onChange({ clusterGraph: g })}
+        pxPerMeter={pxPerMeter}
+        kdbLimitM2={(kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : undefined}
+        klbLimitM2={(klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : undefined}
+        onGenerate={handleClusterGenerate}
+      />
     </div>
   );
 }
