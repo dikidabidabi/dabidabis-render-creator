@@ -974,19 +974,19 @@ function FullscreenSlideshow({
         </Button>
       </div>
       <div className="absolute inset-x-0 bottom-4 flex items-center justify-center gap-3">
-        <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={prev}>
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-ember hover:bg-ember/20" onClick={prev}>
           <ChevronLeft className="h-5 w-5" />
         </Button>
         <Button
-          variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10"
+          variant="ghost" size="icon" className="h-10 w-10 text-ember hover:bg-ember/20"
           onClick={() => setPlaying((p) => !p)}
         >
           {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
         </Button>
-        <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10" onClick={next}>
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-ember hover:bg-ember/20" onClick={next}>
           <ChevronRight className="h-5 w-5" />
         </Button>
-        <div className="ml-3 text-xs text-white/70">
+        <div className="ml-3 text-xs text-ember/90 font-medium">
           {idx + 1} / {slides.length} · {slides[idx]?.title}
         </div>
       </div>
