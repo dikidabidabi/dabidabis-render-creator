@@ -6318,10 +6318,17 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     fill: string; stroke: string; depth: number; sw: number;
     kind: "top" | "side";
   };
-  type Anno = { from: { x: number; y: number }; label: string; floorIdx: number };
+  type Anno = { at: { x: number; y: number }; label: string; floorIdx: number; num: number };
 
   const faces: Face[] = [];
   const annos: Anno[] = [];
+  const tipeRooms: { name: string; num: number }[][] = reps.map(() => []);
+
+  type VConnEntry = { floorIdx: number; baseY: number; topY: number; kind: "tangga" | "lift" };
+  const vconnMap = new Map<string, Map<string, VConnEntry[]>>();
+  const isTangga = (n: string) => /tangga/i.test(n);
+  const isLift = (n: string) => /lift/i.test(n);
+  const ptKey = (x: number, z: number) => `${x.toFixed(3)}|${z.toFixed(3)}`;
 
   const ABU_HEX = "#bebebe", ABU_SIDE = "#9a9a9a";
   const HIJAU_HEX = "#22c55e", HIJAU_SIDE = "#16a34a";
@@ -6331,6 +6338,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
     const color = levelColor(idx, reps.length);
     const side = shadeHsl(color, -18);
     const layers = buildLayersOf(g.rep.id);
+    let roomCounter = 0;
     for (const ly of layers) {
       const pm = toPm(ly);
       if (pm.length < 3) continue;
@@ -6361,12 +6369,38 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
         pts: topPts, fill: topFill, stroke: "rgba(0,0,0,0.55)",
         depth: avg + topY * 0.01, sw: 0.7, kind: "top",
       });
-      // Anchor titik anak panah: centroid permukaan atas ruang
+      roomCounter += 1;
       const cx = pm.reduce((s, p) => s + p.x, 0) / pm.length;
       const cz = pm.reduce((s, p) => s + p.z, 0) / pm.length;
-      annos.push({ from: project(cx, cz, topY), label: ly.name, floorIdx: idx });
+      annos.push({ at: project(cx, cz, topY), label: ly.name, floorIdx: idx, num: roomCounter });
+      tipeRooms[idx].push({ name: ly.name, num: roomCounter });
+
+      if (isTangga(ly.name) || isLift(ly.name)) {
+        const key = ly.name.toLowerCase().trim();
+        const kind: "tangga" | "lift" = isTangga(ly.name) ? "tangga" : "lift";
+        let perPt = vconnMap.get(key);
+        if (!perPt) { perPt = new Map(); vconnMap.set(key, perPt); }
+        for (const p of pm) {
+          const k = ptKey(p.x, p.z);
+          const arr = perPt.get(k) ?? [];
+          arr.push({ floorIdx: idx, baseY, topY, kind });
+          perPt.set(k, arr);
+        }
+      }
     }
   });
+
+  type VLine = { x: number; z: number; yLo: number; yHi: number; kind: "tangga" | "lift" };
+  const vlines: VLine[] = [];
+  for (const [, perPt] of vconnMap) {
+    for (const [k, entries] of perPt) {
+      if (entries.length < 2) continue;
+      const [xs, zs] = k.split("|").map(Number);
+      const yLo = Math.min(...entries.map((e) => e.baseY));
+      const yHi = Math.max(...entries.map((e) => e.topY));
+      vlines.push({ x: xs, z: zs, yLo, yHi, kind: entries[0].kind });
+    }
+  }
 
   // Slab lantai pada lantai representatif.
   // Pemetaan: levelId di tiap floor → idx grup representatif (atau anggotanya).
