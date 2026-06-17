@@ -3165,6 +3165,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       // Endpoints
       ctx.fillStyle = "#1a1a1a";
       for (const ln of lvlLines) {
+        if (ln.dashed) continue;
         for (const p of [ln.a, ln.b]) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, 3 / s, 0, Math.PI * 2);
