@@ -80,6 +80,7 @@ import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
 import polygonClipping from "polygon-clipping";
+import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
 import {
   type StructuralGrid,
