@@ -426,6 +426,7 @@ function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null 
     return bestPts;
   } catch {
     return subject;
+  }
 }
 
 // Belah polygon dengan sebuah garis tak-hingga melalui titik a→b.
@@ -465,7 +466,7 @@ function splitPolygonByInfiniteLine(
   if (left.length < 3 || right.length < 3) return null;
   return { left, right, iA: intersects[0], iB: intersects[1] };
 }
-}
+
 
 function isLahanLayerName(n: string) {
   return n.trim().toLowerCase().startsWith("lahan");
