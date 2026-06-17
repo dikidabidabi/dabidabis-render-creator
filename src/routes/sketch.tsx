@@ -7987,6 +7987,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <SplitSquareHorizontal className="mr-1.5 h-4 w-4" /> Separasi Ruang
           </Button>
           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setClusterOpen(true)}
+            title="Buka Node Editor (Grasshopper-style) untuk merancang relasi antar ruang, lalu generate cluster polygon otomatis."
+          >
+            <Waypoints className="mr-1.5 h-4 w-4" /> Cluster Generator
+          </Button>
+          <Button
             variant={tool === "grid" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("grid"); if (!grid.enabled) updateGrid({ enabled: true }); }}
