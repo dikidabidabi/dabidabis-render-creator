@@ -60,8 +60,8 @@ function Landing() {
             transition={{ duration: 0.6, delay: 0.18 }}
             className="mx-auto mt-6 max-w-2xl text-base text-muted-foreground sm:text-lg"
           >
-            Studio render arsitektur bertenaga AI. Upload sketsa, lampirkan referensi gaya,
-            atur akurasi & konsistensi — dapatkan visualisasi berkualitas portfolio dalam hitungan detik.
+            Lingkungan konsepsi arsitektur berbasis sketsa. Merencanakan desain
+            dalam durasi bincang bersama klien, dan paparkan hasilnya sebelum meeting berakhir.
           </motion.p>
 
           <motion.div
