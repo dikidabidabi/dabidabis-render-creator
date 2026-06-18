@@ -4590,6 +4590,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         (fl.holes ?? []).forEach((h, hi) => h.forEach((p, i) => drawHandle(p, selSet.has(selKey(fl.id, hi, i)))));
       }
       ctx.restore();
+
+      // Preview void-draft (sub-mode "addVoid")
+      if (floorVoidDraft && floorVoidDraft.points.length > 0) {
+        ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        ctx.lineWidth = 2 / view.s;
+        ctx.strokeStyle = "rgba(245,158,11,0.95)";
+        ctx.fillStyle = "rgba(245,158,11,0.18)";
+        ctx.setLineDash([6 / view.s, 4 / view.s]);
+        ctx.beginPath();
+        floorVoidDraft.points.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        if (floorVoidDraft.points.length >= 3) {
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Marker titik awal (lingkaran besar)
+        const first = floorVoidDraft.points[0];
+        ctx.beginPath();
+        ctx.arc(first.x, first.y, 8 / view.s, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(245,158,11,1)";
+        ctx.lineWidth = 2.5 / view.s;
+        ctx.stroke();
+        // Vertex markers
+        ctx.fillStyle = "rgba(245,158,11,1)";
+        for (const p of floorVoidDraft.points) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 4 / view.s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
     }
 
 
