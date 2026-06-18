@@ -2041,7 +2041,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // points = vertex yang sudah ter-commit; lastSample = posisi stylus terbaru sebelum cursor;
   // cursor = posisi stylus saat ini. Selesai saat pointer up atau cursor menyentuh points[0].
   const [polyDraft, setPolyDraft] = useState<
-    | { points: Point[]; lastSample: Point; cursor: Point; closed?: boolean }
+    | { points: Point[]; lastSample: Point; cursor: Point; closed?: boolean; anchors?: Point[] }
     | null
   >(null);
 
@@ -3640,25 +3640,40 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     // Polyline draft preview
     if (polyDraft) {
       const pts = polyDraft.points;
+      const anchors = polyDraft.anchors;
+      const isCurve = !!anchors && anchors.length > 0;
+      const firstRef = isCurve ? anchors![0] : pts[0];
+      const lastAnchor = isCurve ? anchors![anchors!.length - 1] : pts[pts.length - 1];
       const closing =
-        pts.length >= 3 &&
-        dist(polyDraft.cursor, pts[0]) <= 14 / s;
+        (isCurve ? anchors!.length >= 2 : pts.length >= 3) &&
+        dist(polyDraft.cursor, firstRef) <= 14 / s;
       ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
       ctx.lineWidth = 2 / s;
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
       ctx.stroke();
-      // Garis aktif ke cursor (dashed)
+      // Garis aktif ke cursor — lurus untuk line/polyline, lengkung untuk arc/bezier
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath();
-      ctx.moveTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
-      ctx.lineTo(polyDraft.cursor.x, polyDraft.cursor.y);
+      if (isCurve && tool === "floor" && (floorMode === "arc" || floorMode === "bezier")) {
+        const target = closing ? firstRef : polyDraft.cursor;
+        const previewLine: Line = floorMode === "arc"
+          ? { a: lastAnchor, b: target, kind: "arc", bulge: defaultBulgePx(lastAnchor, target) }
+          : { a: lastAnchor, b: target, kind: "bezier", ...defaultBezierHandles(lastAnchor, target) };
+        const pv = sampleLine(previewLine, 24);
+        ctx.moveTo(pv[0].x, pv[0].y);
+        for (let i = 1; i < pv.length; i++) ctx.lineTo(pv[i].x, pv[i].y);
+      } else {
+        ctx.moveTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        ctx.lineTo(polyDraft.cursor.x, polyDraft.cursor.y);
+      }
       ctx.stroke();
       ctx.setLineDash([]);
-      // Vertex markers
+      // Vertex markers — anchors saja bila mode kurva (agar tessellated points tidak penuh dot)
       ctx.fillStyle = "rgba(232, 93, 58, 1)";
-      for (const v of pts) {
+      const markers = isCurve ? anchors! : pts;
+      for (const v of markers) {
         ctx.beginPath();
         ctx.arc(v.x, v.y, 4 / s, 0, Math.PI * 2);
         ctx.fill();
@@ -3668,13 +3683,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.strokeStyle = "rgba(34, 197, 94, 0.95)";
         ctx.lineWidth = 2.5 / s;
         ctx.beginPath();
-        ctx.arc(pts[0].x, pts[0].y, 10 / s, 0, Math.PI * 2);
+        ctx.arc(firstRef.x, firstRef.y, 10 / s, 0, Math.PI * 2);
         ctx.stroke();
       } else {
         ctx.strokeStyle = "rgba(232, 93, 58, 0.7)";
         ctx.lineWidth = 1.5 / s;
         ctx.beginPath();
-        ctx.arc(pts[0].x, pts[0].y, 8 / s, 0, Math.PI * 2);
+        ctx.arc(firstRef.x, firstRef.y, 8 / s, 0, Math.PI * 2);
         ctx.stroke();
       }
     }
@@ -6022,6 +6037,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             toast.success("Area disiapkan — tekan Simpan Area");
           } else {
             setPolyDraft({ ...polyDraft, points: [...polyDraft.points, p], lastSample: p, cursor: p });
+          }
+        }
+      } else if (floorMode === "arc" || floorMode === "bezier") {
+        // Curve-based floor: each click is an anchor. Segment between consecutive
+        // anchors is tessellated as arc (auto-bulge) or cubic bezier (auto-handles).
+        const tolClose = 14 / view.s;
+        if (!polyDraft || !polyDraft.anchors || polyDraft.anchors.length === 0) {
+          setPolyDraft({ points: [p], lastSample: p, cursor: p, anchors: [p] });
+        } else {
+          const anchors = polyDraft.anchors;
+          const first = anchors[0];
+          const prev = anchors[anchors.length - 1];
+          // Close when clicking near first anchor (≥ 2 existing anchors → ≥ 3 after closing curve back)
+          if (anchors.length >= 2 && dist(p, first) <= tolClose) {
+            const closingLine: Line = floorMode === "arc"
+              ? { a: prev, b: first, kind: "arc", bulge: defaultBulgePx(prev, first) }
+              : { a: prev, b: first, kind: "bezier", ...defaultBezierHandles(prev, first) };
+            const tail = sampleLine(closingLine, 28).slice(1, -1);
+            const pts = [...polyDraft.points, ...tail];
+            setPolyDraft(null);
+            if (pts.length >= 3) {
+              setFloorDraft({ outer: pts, holes: [], levelId: activeLvlId });
+              toast.success("Area disiapkan — tekan Simpan Area");
+            }
+          } else {
+            const segLine: Line = floorMode === "arc"
+              ? { a: prev, b: p, kind: "arc", bulge: defaultBulgePx(prev, p) }
+              : { a: prev, b: p, kind: "bezier", ...defaultBezierHandles(prev, p) };
+            const seg = sampleLine(segLine, 28).slice(1); // skip duplicate prev
+            setPolyDraft({
+              points: [...polyDraft.points, ...seg],
+              lastSample: p,
+              cursor: p,
+              anchors: [...anchors, p],
+            });
           }
         }
       } else if (floorMode === "attach") {
@@ -10732,6 +10782,8 @@ function FloorToolPanel({
             { id: "rect", label: "Persegi", hint: "Drag dua sudut diagonal" },
             { id: "line", label: "Garis", hint: "Klik dua titik tiap segmen, dobel-klik tutup" },
             { id: "polyline", label: "Polyline", hint: "Klik banyak titik, dobel-klik tutup" },
+            { id: "arc", label: "Lengkung", hint: "Klik titik-titik; tiap segmen jadi busur. Tutup di titik awal" },
+            { id: "bezier", label: "Tangent", hint: "Klik titik-titik; tiap segmen jadi kurva bezier. Tutup di titik awal" },
             { id: "attach", label: "Attach Garis", hint: "Klik segmen perimeter (outer), lalu segmen lubang (void)" },
             { id: "edit", label: "Edit Titik", hint: "Geser / tambah / hapus titik pada lantai existing" },
           ] as { id: FloorMode; label: string; hint: string }[]
@@ -10755,6 +10807,10 @@ function FloorToolPanel({
           ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus."
           : mode === "rect"
           ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
+          : mode === "arc"
+          ? "Klik titik-titik — tiap segmen dibentuk sebagai busur otomatis. Tutup di titik awal, lalu tekan Simpan Area."
+          : mode === "bezier"
+          ? "Klik titik-titik — tiap segmen dibentuk sebagai kurva bezier dengan tangent otomatis. Tutup di titik awal, lalu tekan Simpan Area."
           : "Klik titik-titik membentuk poligon, tutup di titik awal. Tekan Simpan Area untuk finalisasi."}
       </p>
 
