@@ -2041,7 +2041,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // points = vertex yang sudah ter-commit; lastSample = posisi stylus terbaru sebelum cursor;
   // cursor = posisi stylus saat ini. Selesai saat pointer up atau cursor menyentuh points[0].
   const [polyDraft, setPolyDraft] = useState<
-    | { points: Point[]; lastSample: Point; cursor: Point; closed?: boolean }
+    | { points: Point[]; lastSample: Point; cursor: Point; closed?: boolean; anchors?: Point[] }
     | null
   >(null);
 
