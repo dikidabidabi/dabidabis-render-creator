@@ -4961,10 +4961,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         if (subtractors.length > 0) {
           let diffPolys: ReturnType<typeof polygonClipping.difference> | null = null;
           try {
-            diffPolys = polygonClipping.difference(
-              [[ptsToRing(ly.points)]],
-              ...subtractors.map((s) => [[ptsToRing(s)]] as [[number, number][]]),
+            const subj = [[ptsToRing(ly.points)]] as Parameters<typeof polygonClipping.difference>[0];
+            const others = subtractors.map(
+              (s) => [[ptsToRing(s)]] as Parameters<typeof polygonClipping.difference>[0],
             );
+            diffPolys = polygonClipping.difference(subj, ...others);
           } catch {
             diffPolys = null;
           }
