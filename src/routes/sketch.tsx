@@ -10782,6 +10782,8 @@ function FloorToolPanel({
             { id: "rect", label: "Persegi", hint: "Drag dua sudut diagonal" },
             { id: "line", label: "Garis", hint: "Klik dua titik tiap segmen, dobel-klik tutup" },
             { id: "polyline", label: "Polyline", hint: "Klik banyak titik, dobel-klik tutup" },
+            { id: "arc", label: "Lengkung", hint: "Klik titik-titik; tiap segmen jadi busur. Tutup di titik awal" },
+            { id: "bezier", label: "Tangent", hint: "Klik titik-titik; tiap segmen jadi kurva bezier. Tutup di titik awal" },
             { id: "attach", label: "Attach Garis", hint: "Klik segmen perimeter (outer), lalu segmen lubang (void)" },
             { id: "edit", label: "Edit Titik", hint: "Geser / tambah / hapus titik pada lantai existing" },
           ] as { id: FloorMode; label: string; hint: string }[]
