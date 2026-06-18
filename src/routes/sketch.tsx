@@ -4920,24 +4920,55 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const out: Layer[] = [];
       for (const ly of existing) {
         const sameLevel = (ly.levelId ?? undefined) === (levelId ?? undefined);
-        if (!sameLevel || isLahanLayerName(ly.name) || ly.points.length < 3) {
+        if (!sameLevel || isLahanLayerName(ly.name) || ly.locked || ly.points.length < 3) {
           out.push(ly);
           continue;
         }
         const before = polygonAreaPx(ly.points);
-        const result = subtractPolygon(ly.points, newPoly);
-        if (!result || result.length < 3) {
-          // Fully covered — remove.
+        // Hitung luas hasil boolean penuh (termasuk lubang) — ini menangani
+        // kasus ruang baru berada SEPENUHNYA di dalam ruang lama tanpa
+        // menyentuh sisi: outer ring tidak berubah, tetapi luas berkurang
+        // sebesar luas ruang baru karena terbentuk lubang.
+        let diffAreaPx = before;
+        let diffPolys: ReturnType<typeof polygonClipping.difference> | null = null;
+        try {
+          diffPolys = polygonClipping.difference(
+            [[ptsToRing(ly.points)]],
+            [[ptsToRing(newPoly)]],
+          );
+        } catch {
+          diffPolys = null;
+        }
+        if (diffPolys && diffPolys.length > 0) {
+          diffAreaPx = 0;
+          for (const poly of diffPolys) {
+            for (let i = 0; i < poly.length; i++) {
+              const ring = poly[i];
+              if (!ring || ring.length < 4) continue;
+              const ringPts = ringToPts(ring);
+              const a = polygonAreaPx(ringPts);
+              diffAreaPx += i === 0 ? a : -a;
+            }
+          }
+        } else {
           toast.message(`${ly.name} terhapus karena tertutup ruang baru`);
           continue;
         }
-        const after = polygonAreaPx(result);
-        if (Math.abs(after - before) < 0.5) {
+        if (diffAreaPx < 1) {
+          toast.message(`${ly.name} terhapus karena tertutup ruang baru`);
+          continue;
+        }
+        if (Math.abs(diffAreaPx - before) < 0.5) {
           out.push(ly);
           continue;
         }
-        const newArea = after / (pxPerMeter * pxPerMeter);
-        out.push({ ...ly, points: result, areaM2: newArea });
+        // Outer ring terbesar (untuk update titik jika boundary ikut terpotong).
+        const outerResult = subtractPolygon(ly.points, newPoly);
+        const outerArea = outerResult ? polygonAreaPx(outerResult) : before;
+        const nextPoints =
+          outerResult && Math.abs(outerArea - before) > 0.5 ? outerResult : ly.points;
+        const newAreaM2 = diffAreaPx / (pxPerMeter * pxPerMeter);
+        out.push({ ...ly, points: nextPoints, areaM2: newAreaM2 });
       }
       return out;
     },
