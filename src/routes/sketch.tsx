@@ -1986,7 +1986,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     | null
   >(null);
   // Edit Titik (lantai) — sub-mode + drag state
-  const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete">("move");
+  const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete" | "addVoid">("move");
+  const [floorVoidDraft, setFloorVoidDraft] = useState<{ fid: string; points: Point[] } | null>(null);
   const [floorVertexDrag, setFloorVertexDrag] = useState<
     | { fid: string; ring: "outer" | number; idx: number }
     | null
@@ -4589,6 +4590,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         (fl.holes ?? []).forEach((h, hi) => h.forEach((p, i) => drawHandle(p, selSet.has(selKey(fl.id, hi, i)))));
       }
       ctx.restore();
+
+      // Preview void-draft (sub-mode "addVoid")
+      if (floorVoidDraft && floorVoidDraft.points.length > 0) {
+        ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        ctx.lineWidth = 2 / view.s;
+        ctx.strokeStyle = "rgba(245,158,11,0.95)";
+        ctx.fillStyle = "rgba(245,158,11,0.18)";
+        ctx.setLineDash([6 / view.s, 4 / view.s]);
+        ctx.beginPath();
+        floorVoidDraft.points.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        if (floorVoidDraft.points.length >= 3) {
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Marker titik awal (lingkaran besar)
+        const first = floorVoidDraft.points[0];
+        ctx.beginPath();
+        ctx.arc(first.x, first.y, 8 / view.s, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(245,158,11,1)";
+        ctx.lineWidth = 2.5 / view.s;
+        ctx.stroke();
+        // Vertex markers
+        ctx.fillStyle = "rgba(245,158,11,1)";
+        for (const p of floorVoidDraft.points) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 4 / view.s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
     }
 
 
@@ -4861,7 +4900,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -6137,6 +6176,58 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const flList = (sketch.floors ?? []).filter(
           (f) => !activeLvlId || f.levelId === activeLvlId,
         );
+        if (floorEditSub === "addVoid") {
+          // Klik titik-titik di dalam lantai untuk membentuk void (hole).
+          const snapped = snapPoint(raw);
+          // Tentukan floor target: pakai draft yg sedang aktif, atau cari floor yg memuat klik.
+          let targetFid = floorVoidDraft?.fid ?? null;
+          if (!targetFid) {
+            const inside = flList.find(
+              (fl) =>
+                floorPointInPolygon(snapped, fl.outer) &&
+                !(fl.holes ?? []).some((h) => floorPointInPolygon(snapped, h)),
+            );
+            if (!inside) {
+              toast.error("Klik di dalam area lantai untuk memulai void");
+              return;
+            }
+            targetFid = inside.id;
+          } else {
+            // Pastikan titik berikutnya masih di dalam outer floor target & bukan dalam hole lain.
+            const fl = flList.find((f) => f.id === targetFid);
+            if (!fl) { setFloorVoidDraft(null); return; }
+            if (!floorPointInPolygon(snapped, fl.outer)) {
+              toast.error("Titik harus berada di dalam lantai");
+              return;
+            }
+            if ((fl.holes ?? []).some((h) => floorPointInPolygon(snapped, h))) {
+              toast.error("Titik tidak boleh berada di dalam void yang sudah ada");
+              return;
+            }
+          }
+          const cur = floorVoidDraft && floorVoidDraft.fid === targetFid ? floorVoidDraft.points : [];
+          // Cek close: klik dekat titik awal & sudah ada ≥3 titik → komit void.
+          if (cur.length >= 3) {
+            const first = cur[0];
+            if (Math.hypot(first.x - snapped.x, first.y - snapped.y) < tolPx) {
+              const tgt = (sketch.floors ?? []).find((f) => f.id === targetFid);
+              if (!tgt) { setFloorVoidDraft(null); return; }
+              const newHole = cur.slice();
+              pushHistory();
+              const nextFloors = (sketch.floors ?? []).map((fl) =>
+                fl.id === targetFid
+                  ? { ...fl, holes: [...(fl.holes ?? []), newHole] }
+                  : fl,
+              );
+              onChange({ floors: nextFloors });
+              setFloorVoidDraft(null);
+              toast.success("Void ditambahkan");
+              return;
+            }
+          }
+          setFloorVoidDraft({ fid: targetFid, points: [...cur, snapped] });
+          return;
+        }
         if (floorEditSub === "move" || floorEditSub === "delete") {
           // cari vertex terdekat
           type VHit = { fid: string; ring: "outer" | number; idx: number; d: number };
@@ -8375,13 +8466,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               setDrawing(null);
               setFloorVertexDrag(null);
               setSelectedFloorEditVertices([]);
+              setFloorVoidDraft(null);
             }}
             draft={floorDraft}
             level={levels.find((l) => l.id === activeLvlId) ?? null}
             onCommit={() => commitFloor()}
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
             editSub={floorEditSub}
-            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); }}
+            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); setFloorVoidDraft(null); }}
             selectedFloorVertex={selectedFloorEditVertex}
             selectedFloorVertexCount={selectedFloorEditVertices.length}
             onClearFloorSelection={() => setSelectedFloorEditVertices([])}
@@ -10767,8 +10859,8 @@ function FloorToolPanel({
   level: Level | null;
   onCommit: () => void;
   onCancel: () => void;
-  editSub: "move" | "add" | "delete";
-  onEditSub: (s: "move" | "add" | "delete") => void;
+  editSub: "move" | "add" | "delete" | "addVoid";
+  onEditSub: (s: "move" | "add" | "delete" | "addVoid") => void;
   floorsInLevel: Floor[];
   clipboardCount: number;
   onCopyFloors: () => void;
@@ -10828,7 +10920,7 @@ function FloorToolPanel({
         {mode === "attach"
           ? "Klik segmen pada perimeter terluar untuk men-set outer; klik segmen poligon di dalamnya untuk menambah void."
           : mode === "edit"
-          ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus."
+          ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus. + Void: klik titik-titik di dalam lantai, tutup di titik awal untuk membentuk void."
           : mode === "rect"
           ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
           : mode === "arc"
@@ -10839,7 +10931,7 @@ function FloorToolPanel({
       </p>
 
       {mode === "edit" && (
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-4 gap-1.5">
           <Button
             size="sm"
             variant={editSub === "move" ? "default" : "outline"}
@@ -10863,6 +10955,15 @@ function FloorToolPanel({
             onClick={() => onEditSub("delete")}
           >
             Hapus
+          </Button>
+          <Button
+            size="sm"
+            variant={editSub === "addVoid" ? "default" : "outline"}
+            className={cn("h-8 text-[11px]", editSub === "addVoid" && "bg-amber-500 text-white hover:bg-amber-600")}
+            onClick={() => onEditSub("addVoid")}
+            title="Klik titik-titik di dalam lantai untuk membentuk void. Tutup di titik awal."
+          >
+            + Void
           </Button>
         </div>
       )}
