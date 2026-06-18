@@ -4963,7 +4963,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           try {
             diffPolys = polygonClipping.difference(
               [[ptsToRing(ly.points)]],
-              ...subtractors.map((s) => [[ptsToRing(s)]] as [number, number][][]),
+              ...subtractors.map((s) => [[ptsToRing(s)]] as [[number, number][]]),
             );
           } catch {
             diffPolys = null;
