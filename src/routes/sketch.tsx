@@ -10768,8 +10768,8 @@ function FloorToolPanel({
   level: Level | null;
   onCommit: () => void;
   onCancel: () => void;
-  editSub: "move" | "add" | "delete";
-  onEditSub: (s: "move" | "add" | "delete") => void;
+  editSub: "move" | "add" | "delete" | "addVoid";
+  onEditSub: (s: "move" | "add" | "delete" | "addVoid") => void;
   floorsInLevel: Floor[];
   clipboardCount: number;
   onCopyFloors: () => void;
