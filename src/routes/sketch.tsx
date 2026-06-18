@@ -6024,6 +6024,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             setPolyDraft({ ...polyDraft, points: [...polyDraft.points, p], lastSample: p, cursor: p });
           }
         }
+      } else if (floorMode === "arc" || floorMode === "bezier") {
+        // Curve-based floor: each click is an anchor. Segment between consecutive
+        // anchors is tessellated as arc (auto-bulge) or cubic bezier (auto-handles).
+        const tolClose = 14 / view.s;
+        if (!polyDraft || !polyDraft.anchors || polyDraft.anchors.length === 0) {
+          setPolyDraft({ points: [p], lastSample: p, cursor: p, anchors: [p] });
+        } else {
+          const anchors = polyDraft.anchors;
+          const first = anchors[0];
+          const prev = anchors[anchors.length - 1];
+          // Close when clicking near first anchor (≥ 2 existing anchors → ≥ 3 after closing curve back)
+          if (anchors.length >= 2 && dist(p, first) <= tolClose) {
+            const closingLine: Line = floorMode === "arc"
+              ? { a: prev, b: first, kind: "arc", bulge: defaultBulgePx(prev, first) }
+              : { a: prev, b: first, kind: "bezier", ...defaultBezierHandles(prev, first) };
+            const tail = sampleLine(closingLine, 28).slice(1, -1);
+            const pts = [...polyDraft.points, ...tail];
+            setPolyDraft(null);
+            if (pts.length >= 3) {
+              setFloorDraft({ outer: pts, holes: [], levelId: activeLvlId });
+              toast.success("Area disiapkan — tekan Simpan Area");
+            }
+          } else {
+            const segLine: Line = floorMode === "arc"
+              ? { a: prev, b: p, kind: "arc", bulge: defaultBulgePx(prev, p) }
+              : { a: prev, b: p, kind: "bezier", ...defaultBezierHandles(prev, p) };
+            const seg = sampleLine(segLine, 28).slice(1); // skip duplicate prev
+            setPolyDraft({
+              points: [...polyDraft.points, ...seg],
+              lastSample: p,
+              cursor: p,
+              anchors: [...anchors, p],
+            });
+          }
+        }
       } else if (floorMode === "attach") {
         // Pick segmen terdekat di level aktif, lalu cari cycle terkecil
         // yang melewatinya. Pertama → outer, berikutnya → hole.
