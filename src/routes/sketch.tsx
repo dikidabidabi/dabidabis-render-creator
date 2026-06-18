@@ -6138,6 +6138,58 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const flList = (sketch.floors ?? []).filter(
           (f) => !activeLvlId || f.levelId === activeLvlId,
         );
+        if (floorEditSub === "addVoid") {
+          // Klik titik-titik di dalam lantai untuk membentuk void (hole).
+          const snapped = snapPoint(raw);
+          // Tentukan floor target: pakai draft yg sedang aktif, atau cari floor yg memuat klik.
+          let targetFid = floorVoidDraft?.fid ?? null;
+          if (!targetFid) {
+            const inside = flList.find(
+              (fl) =>
+                floorPointInPolygon(snapped, fl.outer) &&
+                !(fl.holes ?? []).some((h) => floorPointInPolygon(snapped, h)),
+            );
+            if (!inside) {
+              toast.error("Klik di dalam area lantai untuk memulai void");
+              return;
+            }
+            targetFid = inside.id;
+          } else {
+            // Pastikan titik berikutnya masih di dalam outer floor target & bukan dalam hole lain.
+            const fl = flList.find((f) => f.id === targetFid);
+            if (!fl) { setFloorVoidDraft(null); return; }
+            if (!floorPointInPolygon(snapped, fl.outer)) {
+              toast.error("Titik harus berada di dalam lantai");
+              return;
+            }
+            if ((fl.holes ?? []).some((h) => floorPointInPolygon(snapped, h))) {
+              toast.error("Titik tidak boleh berada di dalam void yang sudah ada");
+              return;
+            }
+          }
+          const cur = floorVoidDraft && floorVoidDraft.fid === targetFid ? floorVoidDraft.points : [];
+          // Cek close: klik dekat titik awal & sudah ada ≥3 titik → komit void.
+          if (cur.length >= 3) {
+            const first = cur[0];
+            if (Math.hypot(first.x - snapped.x, first.y - snapped.y) < tolPx) {
+              const tgt = (sketch.floors ?? []).find((f) => f.id === targetFid);
+              if (!tgt) { setFloorVoidDraft(null); return; }
+              const newHole = cur.slice();
+              pushHistory();
+              const nextFloors = (sketch.floors ?? []).map((fl) =>
+                fl.id === targetFid
+                  ? { ...fl, holes: [...(fl.holes ?? []), newHole] }
+                  : fl,
+              );
+              onChange({ floors: nextFloors });
+              setFloorVoidDraft(null);
+              toast.success("Void ditambahkan");
+              return;
+            }
+          }
+          setFloorVoidDraft({ fid: targetFid, points: [...cur, snapped] });
+          return;
+        }
         if (floorEditSub === "move" || floorEditSub === "delete") {
           // cari vertex terdekat
           type VHit = { fid: string; ring: "outer" | number; idx: number; d: number };
