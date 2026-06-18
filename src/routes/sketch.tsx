@@ -10807,6 +10807,10 @@ function FloorToolPanel({
           ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus."
           : mode === "rect"
           ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
+          : mode === "arc"
+          ? "Klik titik-titik — tiap segmen dibentuk sebagai busur otomatis. Tutup di titik awal, lalu tekan Simpan Area."
+          : mode === "bezier"
+          ? "Klik titik-titik — tiap segmen dibentuk sebagai kurva bezier dengan tangent otomatis. Tutup di titik awal, lalu tekan Simpan Area."
           : "Klik titik-titik membentuk poligon, tutup di titik awal. Tekan Simpan Area untuk finalisasi."}
       </p>
 
