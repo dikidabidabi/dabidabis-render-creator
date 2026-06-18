@@ -10840,7 +10840,7 @@ function FloorToolPanel({
       </p>
 
       {mode === "edit" && (
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-4 gap-1.5">
           <Button
             size="sm"
             variant={editSub === "move" ? "default" : "outline"}
@@ -10864,6 +10864,15 @@ function FloorToolPanel({
             onClick={() => onEditSub("delete")}
           >
             Hapus
+          </Button>
+          <Button
+            size="sm"
+            variant={editSub === "addVoid" ? "default" : "outline"}
+            className={cn("h-8 text-[11px]", editSub === "addVoid" && "bg-amber-500 text-white hover:bg-amber-600")}
+            onClick={() => onEditSub("addVoid")}
+            title="Klik titik-titik di dalam lantai untuk membentuk void. Tutup di titik awal."
+          >
+            + Void
           </Button>
         </div>
       )}
