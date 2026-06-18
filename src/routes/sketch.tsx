@@ -6032,7 +6032,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ? polyDraft.anchors
             : polyDraft.points.slice();
           const first = anchors[0];
-          if (anchors.length >= 2 && dist(p, first) <= tolClose) {
+          if (anchors.length >= 3 && dist(p, first) <= tolClose) {
             // Close back to first anchor with a straight segment
             const pts = [...polyDraft.points, first];
             setPolyDraft(null);
