@@ -380,6 +380,15 @@ function pointInPolygon(p: Point, poly: Point[]) {
   return inside;
 }
 
+function polygonCentroid(pts: Point[]): Point {
+  if (pts.length === 0) return { x: 0, y: 0 };
+  let sx = 0, sy = 0;
+  for (const p of pts) { sx += p.x; sy += p.y; }
+  return { x: sx / pts.length, y: sy / pts.length };
+}
+
+
+
 // Convert points -> polygon-clipping ring (closed). Drop near-duplicate consecutive points.
 function ptsToRing(pts: Point[]): [number, number][] {
   const ring: [number, number][] = [];
