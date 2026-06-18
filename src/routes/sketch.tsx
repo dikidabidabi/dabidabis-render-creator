@@ -8351,7 +8351,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {tool === "floor" && (
           <FloorToolPanel
             mode={floorMode}
-            onMode={(m) => { setFloorMode(m); setFloorDraft(null); setPolyDraft(null); setDrawing(null); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); }}
+            onMode={(m) => {
+              const drawModes = new Set(["line", "polyline", "arc", "bezier"]);
+              const preserveDraft = drawModes.has(floorMode) && drawModes.has(m);
+              setFloorMode(m);
+              setFloorDraft(null);
+              if (!preserveDraft) setPolyDraft(null);
+              setDrawing(null);
+              setFloorVertexDrag(null);
+              setSelectedFloorEditVertices([]);
+            }}
             draft={floorDraft}
             level={levels.find((l) => l.id === activeLvlId) ?? null}
             onCommit={() => commitFloor()}
