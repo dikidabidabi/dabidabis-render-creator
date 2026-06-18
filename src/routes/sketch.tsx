@@ -10829,7 +10829,7 @@ function FloorToolPanel({
         {mode === "attach"
           ? "Klik segmen pada perimeter terluar untuk men-set outer; klik segmen poligon di dalamnya untuk menambah void."
           : mode === "edit"
-          ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus."
+          ? "Pilih sub-mode. Geser: tarik titik. Tambah Titik: klik tepi. Hapus Titik: klik titik untuk dihapus. + Void: klik titik-titik di dalam lantai, tutup di titik awal untuk membentuk void."
           : mode === "rect"
           ? "Drag persegi sebagai area. Drag persegi kedua di dalamnya untuk void. Tekan Simpan Area untuk finalisasi."
           : mode === "arc"
