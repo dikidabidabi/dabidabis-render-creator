@@ -380,6 +380,15 @@ function pointInPolygon(p: Point, poly: Point[]) {
   return inside;
 }
 
+function polygonCentroid(pts: Point[]): Point {
+  if (pts.length === 0) return { x: 0, y: 0 };
+  let sx = 0, sy = 0;
+  for (const p of pts) { sx += p.x; sy += p.y; }
+  return { x: sx / pts.length, y: sy / pts.length };
+}
+
+
+
 // Convert points -> polygon-clipping ring (closed). Drop near-duplicate consecutive points.
 function ptsToRing(pts: Point[]): [number, number][] {
   const ring: [number, number][] = [];
@@ -4917,6 +4926,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const applySubtractionToLayers = useCallback(
     (existing: Layer[], newPoly: Point[], levelId: string | undefined): Layer[] => {
       if (newPoly.length < 3) return existing;
+      const newPolyArea = polygonAreaPx(newPoly);
+      const newPolyCentroid = polygonCentroid(newPoly);
       const out: Layer[] = [];
       for (const ly of existing) {
         const sameLevel = (ly.levelId ?? undefined) === (levelId ?? undefined);
@@ -4924,50 +4935,77 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           out.push(ly);
           continue;
         }
-        const before = polygonAreaPx(ly.points);
-        // Hitung luas hasil boolean penuh (termasuk lubang) — ini menangani
-        // kasus ruang baru berada SEPENUHNYA di dalam ruang lama tanpa
-        // menyentuh sisi: outer ring tidak berubah, tetapi luas berkurang
-        // sebesar luas ruang baru karena terbentuk lubang.
-        let diffAreaPx = before;
-        let diffPolys: ReturnType<typeof polygonClipping.difference> | null = null;
-        try {
-          diffPolys = polygonClipping.difference(
-            [[ptsToRing(ly.points)]],
-            [[ptsToRing(newPoly)]],
-          );
-        } catch {
-          diffPolys = null;
+        const outerArea = polygonAreaPx(ly.points);
+        // Kumpulkan SEMUA polygon ruang lain (yang sudah ada + ruang baru)
+        // yang berada di dalam outer ring ly. Ini menjamin presisi ketika
+        // banyak ruang kecil dibuat di dalam satu ruang besar: luas ly =
+        // luas outer − total luas semua child yang ter-kandung.
+        const subtractors: Point[][] = [];
+        for (const other of existing) {
+          if (other.id === ly.id) continue;
+          if ((other.levelId ?? undefined) !== (levelId ?? undefined)) continue;
+          if (isLahanLayerName(other.name)) continue;
+          if (other.points.length < 3) continue;
+          const oa = polygonAreaPx(other.points);
+          if (oa >= outerArea) continue;
+          const c = polygonCentroid(other.points);
+          if (!pointInPolygon(c, ly.points)) continue;
+          subtractors.push(other.points);
         }
-        if (diffPolys && diffPolys.length > 0) {
-          diffAreaPx = 0;
-          for (const poly of diffPolys) {
-            for (let i = 0; i < poly.length; i++) {
-              const ring = poly[i];
-              if (!ring || ring.length < 4) continue;
-              const ringPts = ringToPts(ring);
-              const a = polygonAreaPx(ringPts);
-              diffAreaPx += i === 0 ? a : -a;
-            }
+        const newInside =
+          newPolyArea < outerArea && pointInPolygon(newPolyCentroid, ly.points);
+        if (newInside) subtractors.push(newPoly);
+
+        let netAreaPx = outerArea;
+        let nextPoints = ly.points;
+        if (subtractors.length > 0) {
+          let diffPolys: ReturnType<typeof polygonClipping.difference> | null = null;
+          try {
+            const subj = [[ptsToRing(ly.points)]] as Parameters<typeof polygonClipping.difference>[0];
+            const others = subtractors.map(
+              (s) => [[ptsToRing(s)]] as Parameters<typeof polygonClipping.difference>[0],
+            );
+            diffPolys = polygonClipping.difference(subj, ...others);
+          } catch {
+            diffPolys = null;
           }
-        } else {
+          if (diffPolys && diffPolys.length > 0) {
+            netAreaPx = 0;
+            let bestOuter: Point[] | null = null;
+            let bestOuterArea = -Infinity;
+            for (const poly of diffPolys) {
+              for (let i = 0; i < poly.length; i++) {
+                const ring = poly[i];
+                if (!ring || ring.length < 4) continue;
+                const ringPts = ringToPts(ring);
+                const a = polygonAreaPx(ringPts);
+                if (i === 0) {
+                  netAreaPx += a;
+                  if (a > bestOuterArea) {
+                    bestOuterArea = a;
+                    bestOuter = ringPts;
+                  }
+                } else {
+                  netAreaPx -= a;
+                }
+              }
+            }
+            // Update outer ring HANYA bila boundary ikut terpotong
+            // (luas outer berubah signifikan). Untuk ruang kecil di tengah
+            // tanpa menyentuh sisi, outer asli dipertahankan.
+            if (bestOuter && Math.abs(bestOuterArea - outerArea) > 0.5) {
+              nextPoints = bestOuter;
+            }
+          } else {
+            toast.message(`${ly.name} terhapus karena tertutup ruang baru`);
+            continue;
+          }
+        }
+        if (netAreaPx < 1) {
           toast.message(`${ly.name} terhapus karena tertutup ruang baru`);
           continue;
         }
-        if (diffAreaPx < 1) {
-          toast.message(`${ly.name} terhapus karena tertutup ruang baru`);
-          continue;
-        }
-        if (Math.abs(diffAreaPx - before) < 0.5) {
-          out.push(ly);
-          continue;
-        }
-        // Outer ring terbesar (untuk update titik jika boundary ikut terpotong).
-        const outerResult = subtractPolygon(ly.points, newPoly);
-        const outerArea = outerResult ? polygonAreaPx(outerResult) : before;
-        const nextPoints =
-          outerResult && Math.abs(outerArea - before) > 0.5 ? outerResult : ly.points;
-        const newAreaM2 = diffAreaPx / (pxPerMeter * pxPerMeter);
+        const newAreaM2 = netAreaPx / (pxPerMeter * pxPerMeter);
         out.push({ ...ly, points: nextPoints, areaM2: newAreaM2 });
       }
       return out;
