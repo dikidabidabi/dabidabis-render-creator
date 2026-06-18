@@ -8466,6 +8466,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               setDrawing(null);
               setFloorVertexDrag(null);
               setSelectedFloorEditVertices([]);
+              setFloorVoidDraft(null);
             }}
             draft={floorDraft}
             level={levels.find((l) => l.id === activeLvlId) ?? null}
