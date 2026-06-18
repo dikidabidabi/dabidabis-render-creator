@@ -6024,29 +6024,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         setDrawing({ a: p, b: p });
       } else if (floorMode === "polyline" || floorMode === "line") {
         // Reuse polyDraft; floor commit handled in pointerUp branch via tool guard.
+        const tolClose = 14 / view.s;
         if (!polyDraft) {
-          setPolyDraft({ points: [p], lastSample: p, cursor: p });
+          setPolyDraft({ points: [p], lastSample: p, cursor: p, anchors: [p] });
         } else {
-          // Subsequent click: add a vertex (or close if near first point)
-          const tolClose = 14 / view.s;
-          const first = polyDraft.points[0];
-          if (polyDraft.points.length >= 3 && dist(p, first) <= tolClose) {
-            const pts = polyDraft.points.slice();
+          const anchors = polyDraft.anchors && polyDraft.anchors.length > 0
+            ? polyDraft.anchors
+            : polyDraft.points.slice();
+          const first = anchors[0];
+          if (anchors.length >= 2 && dist(p, first) <= tolClose) {
+            // Close back to first anchor with a straight segment
+            const pts = [...polyDraft.points, first];
             setPolyDraft(null);
-            setFloorDraft({ outer: pts, holes: [], levelId: activeLvlId });
-            toast.success("Area disiapkan — tekan Simpan Area");
+            if (pts.length >= 3) {
+              setFloorDraft({ outer: pts, holes: [], levelId: activeLvlId });
+              toast.success("Area disiapkan — tekan Simpan Area");
+            }
           } else {
-            setPolyDraft({ ...polyDraft, points: [...polyDraft.points, p], lastSample: p, cursor: p });
+            setPolyDraft({
+              points: [...polyDraft.points, p],
+              lastSample: p,
+              cursor: p,
+              anchors: [...anchors, p],
+            });
           }
         }
       } else if (floorMode === "arc" || floorMode === "bezier") {
         // Curve-based floor: each click is an anchor. Segment between consecutive
         // anchors is tessellated as arc (auto-bulge) or cubic bezier (auto-handles).
         const tolClose = 14 / view.s;
-        if (!polyDraft || !polyDraft.anchors || polyDraft.anchors.length === 0) {
+        if (!polyDraft) {
           setPolyDraft({ points: [p], lastSample: p, cursor: p, anchors: [p] });
         } else {
-          const anchors = polyDraft.anchors;
+          // Backfill anchors from existing straight points if needed (mixed-tool draft)
+          const anchors = polyDraft.anchors && polyDraft.anchors.length > 0
+            ? polyDraft.anchors
+            : polyDraft.points.slice();
           const first = anchors[0];
           const prev = anchors[anchors.length - 1];
           // Close when clicking near first anchor (≥ 2 existing anchors → ≥ 3 after closing curve back)
