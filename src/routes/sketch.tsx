@@ -3644,8 +3644,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const isCurve = !!anchors && anchors.length > 0;
       const firstRef = isCurve ? anchors![0] : pts[0];
       const lastAnchor = isCurve ? anchors![anchors!.length - 1] : pts[pts.length - 1];
+      const isFloorCurve = tool === "floor" && (floorMode === "arc" || floorMode === "bezier");
+      const minToClose = isCurve && isFloorCurve ? 2 : 3;
       const closing =
-        (isCurve ? anchors!.length >= 2 : pts.length >= 3) &&
+        (isCurve ? anchors!.length >= minToClose : pts.length >= 3) &&
         dist(polyDraft.cursor, firstRef) <= 14 / s;
       ctx.strokeStyle = "rgba(232, 93, 58, 0.95)";
       ctx.lineWidth = 2 / s;
