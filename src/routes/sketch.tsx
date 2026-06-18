@@ -8382,7 +8382,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             onCommit={() => commitFloor()}
             onCancel={() => { setFloorDraft(null); setPolyDraft(null); setDrawing(null); }}
             editSub={floorEditSub}
-            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); }}
+            onEditSub={(s) => { setFloorEditSub(s); setFloorVertexDrag(null); setSelectedFloorEditVertices([]); setFloorVoidDraft(null); }}
             selectedFloorVertex={selectedFloorEditVertex}
             selectedFloorVertexCount={selectedFloorEditVertices.length}
             onClearFloorSelection={() => setSelectedFloorEditVertices([])}
