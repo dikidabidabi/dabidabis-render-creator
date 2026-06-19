@@ -60,10 +60,13 @@ function Landing() {
           </motion.div>
 
           <motion.h1
+            ref={heroH1Ref}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.05 }}
-            className="font-display text-5xl font-bold leading-[1.05] tracking-tight sm:text-7xl md:text-8xl"
+            onPointerMove={handleHeroPointerMove}
+            onPointerLeave={handleHeroPointerLeave}
+            className={`hero-stroke font-display text-5xl font-bold leading-[1.05] tracking-tight sm:text-7xl md:text-8xl ${stylusActive ? "hero-stroke--pen" : ""}`}
           >
             Sketsa hari ini,
             <br />
