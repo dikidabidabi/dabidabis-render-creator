@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { useRef, useState } from "react";
 import { ArrowRight, Sparkles, Image as ImageIcon, Sliders, Layers, CircleDot, PenTool, Box, Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -12,6 +13,21 @@ export const Route = createFileRoute("/")({
 function Landing() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const heroH1Ref = useRef<HTMLHeadingElement>(null);
+  const [stylusActive, setStylusActive] = useState(false);
+
+  const handleHeroPointerMove = (e: React.PointerEvent<HTMLHeadingElement>) => {
+    const el = heroH1Ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    el.style.setProperty("--mx", `${x}%`);
+    el.style.setProperty("--my", `${y}%`);
+    if (e.pointerType === "pen") setStylusActive(true);
+    else if (e.pointerType === "mouse" || e.pointerType === "touch") setStylusActive(false);
+  };
+  const handleHeroPointerLeave = () => setStylusActive(false);
 
   return (
     <main className="relative overflow-hidden">
@@ -44,10 +60,13 @@ function Landing() {
           </motion.div>
 
           <motion.h1
+            ref={heroH1Ref}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.05 }}
-            className="font-display text-5xl font-bold leading-[1.05] tracking-tight sm:text-7xl md:text-8xl"
+            onPointerMove={handleHeroPointerMove}
+            onPointerLeave={handleHeroPointerLeave}
+            className={`hero-stroke font-display text-5xl font-bold leading-[1.05] tracking-tight sm:text-7xl md:text-8xl ${stylusActive ? "hero-stroke--pen" : ""}`}
           >
             Sketsa hari ini,
             <br />
