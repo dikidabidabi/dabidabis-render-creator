@@ -13,6 +13,21 @@ export const Route = createFileRoute("/")({
 function Landing() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const heroH1Ref = useRef<HTMLHeadingElement>(null);
+  const [stylusActive, setStylusActive] = useState(false);
+
+  const handleHeroPointerMove = (e: React.PointerEvent<HTMLHeadingElement>) => {
+    const el = heroH1Ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    el.style.setProperty("--mx", `${x}%`);
+    el.style.setProperty("--my", `${y}%`);
+    if (e.pointerType === "pen") setStylusActive(true);
+    else if (e.pointerType === "mouse" || e.pointerType === "touch") setStylusActive(false);
+  };
+  const handleHeroPointerLeave = () => setStylusActive(false);
 
   return (
     <main className="relative overflow-hidden">
