@@ -6277,26 +6277,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             setFloorVertexDrag({ fid: bestV.fid, ring: bestV.ring, idx: bestV.idx });
             setSelectedFloorEditVertices((prev) => (prev.some((p) => keyEq(p, sel)) ? prev : [sel]));
           } else {
-            // delete vertex
+            // delete vertex — izinkan hingga habis; <2 titik otomatis hapus area/void
             const target = flList.find((f) => f.id === bestV.fid);
             if (!target) return;
-            if (bestV.ring === "outer") {
-              if (target.outer.length <= 3) {
-                toast.error("Outer minimal 3 titik — tidak bisa dihapus");
-                return;
-              }
-            } else {
-              const h = (target.holes ?? [])[bestV.ring as number];
-              if (!h) return;
-              // jika menjadi <3 titik → hapus seluruh void
-            }
             pushHistory();
-            const nextFloors = (sketch.floors ?? []).map((fl) => {
-              if (fl.id !== bestV.fid) return fl;
+            let removedFloor = false;
+            let removedVoid = false;
+            const nextFloors = (sketch.floors ?? []).flatMap((fl) => {
+              if (fl.id !== bestV.fid) return [fl];
               if (bestV.ring === "outer") {
                 const next = fl.outer.slice();
                 next.splice(bestV.idx, 1);
-                return { ...fl, outer: next };
+                if (next.length < 2) {
+                  removedFloor = true;
+                  return [];
+                }
+                return [{ ...fl, outer: next }];
               }
               const holes = (fl.holes ?? [])
                 .map((h, hi) => {
@@ -6305,11 +6301,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   nh.splice(bestV.idx, 1);
                   return nh;
                 })
-                .filter((h) => h.length >= 3);
-              return { ...fl, holes: holes.length ? holes : undefined };
+                .filter((h) => {
+                  if (h.length < 2) { removedVoid = true; return false; }
+                  return true;
+                });
+              return [{ ...fl, holes: holes.length ? holes : undefined }];
             });
             onChange({ floors: nextFloors });
-            toast.success("Titik dihapus");
+            if (removedFloor) toast.message("Lantai dihapus — titik kurang dari 2");
+            else if (removedVoid) toast.message("Void dihapus — titik kurang dari 2");
+            else toast.success("Titik dihapus");
           }
         } else {
           // tambah titik: cari segmen terdekat, sisipkan vertex baru di proyeksi
