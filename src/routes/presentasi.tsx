@@ -2202,6 +2202,58 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
           })}
 
+          {/* Proyeksi latar tampak — siluet perimeter luar bangunan dari
+              ruang-ruang di belakang garis potongan. Digambar SEBELUM slice
+              ruang yang terpotong agar otomatis tertutup di dalam ruang
+              yang terpotong (slice foreground berisi fill solid). */}
+          {(() => {
+            const ddx = cut.p2.x - cut.p1.x;
+            const ddy = cut.p2.y - cut.p1.y;
+            const L2 = ddx * ddx + ddy * ddy;
+            if (L2 < 1e-6) return null;
+            return boxes.flatMap((b) => {
+              const ranges: Array<[number, number]> = [];
+              for (const layer of sketch.layers ?? []) {
+                if (layer.levelId !== b.id) continue;
+                if (isLahanSec(layer.name) || isVoidSec(layer.name)) continue;
+                if (!layer.points || layer.points.length < 2) continue;
+                let tMin = Infinity, tMax = -Infinity;
+                for (const p of layer.points) {
+                  const t = ((p.x - cut.p1.x) * ddx + (p.y - cut.p1.y) * ddy) / L2;
+                  if (t < tMin) tMin = t;
+                  if (t > tMax) tMax = t;
+                }
+                if (!isFinite(tMin)) continue;
+                const a = Math.max(0, Math.min(1, tMin)) * cutLenM;
+                const c = Math.max(0, Math.min(1, tMax)) * cutLenM;
+                if (c - a > 1e-3) ranges.push([a, c]);
+              }
+              if (!ranges.length) return [];
+              ranges.sort((a, c) => a[0] - c[0]);
+              const merged: Array<[number, number]> = [];
+              for (const r of ranges) {
+                if (merged.length && r[0] <= merged[merged.length - 1][1] + 1e-4) {
+                  merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], r[1]);
+                } else merged.push([r[0], r[1]]);
+              }
+              return Array.from({ length: Math.max(1, b.count) }).flatMap((_, fi) => {
+                const baseM = b.baseM + fi * b.floorH;
+                const topM = baseM + b.floorH;
+                const yT = my(topM);
+                const hPx = b.floorH * scalePxPerM;
+                return merged.map(([a, c], i) => (
+                  <rect
+                    key={`proj-${b.id}-${fi}-${i}`}
+                    x={mx(a)} y={yT}
+                    width={(c - a) * scalePxPerM} height={hPx}
+                    fill="none" stroke="#9a9a9a" strokeWidth={0.6}
+                    strokeDasharray="4 3" pointerEvents="none"
+                  />
+                ));
+              });
+            });
+          })()}
+
           {/* Room slices per level — digambar lebih dulu agar notasi
               dinding / lantai / balok berada DI ATAS layer ruang. */}
           {boxes.map((b) => {
