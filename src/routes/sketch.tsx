@@ -1987,6 +1987,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   >(null);
   // Edit Titik (lantai) — sub-mode + drag state
   const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete" | "addVoid">("move");
+  // Garis Potong — sub-mode edit titik (geser bubble ujung / flip arah pandang)
+  const [sectionSub, setSectionSub] = useState<"add" | "geser" | "flip">("add");
+  const [sectionEndpointDrag, setSectionEndpointDrag] = useState<
+    | { idx: number; which: "p1" | "p2" }
+    | null
+  >(null);
   const [floorVoidDraft, setFloorVoidDraft] = useState<{ fid: string; points: Point[] } | null>(null);
   const [floorVertexDrag, setFloorVertexDrag] = useState<
     | { fid: string; ring: "outer" | number; idx: number }
@@ -3766,9 +3772,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.closePath();
         ctx.fillStyle = color;
         ctx.fill();
+        // Highlight bubble ujung saat sub-mode edit aktif (geser/flip)
+        if (!it.isLive && tool === "section" && sectionSub !== "add") {
+          const hr = labelR + 4 / s;
+          ctx.strokeStyle = sectionSub === "flip" ? "rgba(34,211,238,0.95)" : "rgba(0,212,255,0.95)";
+          ctx.lineWidth = 1.6 / s;
+          ctx.setLineDash([4 / s, 3 / s]);
+          ctx.beginPath();
+          ctx.arc(cutA.x, cutA.y, hr, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(cutB.x, cutB.y, hr, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
         ctx.restore();
       }
     }
+
 
     // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
@@ -4900,7 +4921,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -6410,6 +6431,48 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "section" && sectionSub !== "add") {
+      const raw = getWorldPosRaw(e);
+      const tol = 18 / view.s;
+      const cuts = sketch.sectionCuts ?? [];
+      let bestIdx = -1;
+      let bestWhich: "p1" | "p2" = "p1";
+      let bestD = Infinity;
+      cuts.forEach((c, i) => {
+        const d1 = dist(raw, c.p1);
+        const d2 = dist(raw, c.p2);
+        if (d1 < bestD) { bestD = d1; bestIdx = i; bestWhich = "p1"; }
+        if (d2 < bestD) { bestD = d2; bestIdx = i; bestWhich = "p2"; }
+      });
+      if (sectionSub === "flip") {
+        let segIdx = -1;
+        let segD = Infinity;
+        cuts.forEach((c, i) => {
+          const d = pointToSegmentDist(raw, c.p1, c.p2);
+          if (d < segD) { segD = d; segIdx = i; }
+        });
+        const useIdx = bestD <= tol ? bestIdx : (segD <= tol ? segIdx : -1);
+        if (useIdx >= 0) {
+          pushHistory();
+          const next = cuts.map((c, i) =>
+            i === useIdx ? { ...c, p1: c.p2, p2: c.p1, updatedAt: Date.now() } : c,
+          );
+          onChange({ sectionCuts: next });
+          toast.success(`Arah Potongan ${next[useIdx].label || sectionLabelFor(useIdx)} dibalik`);
+        } else {
+          toast.message("Ketuk garis potong untuk membalik arah pandang");
+        }
+        return;
+      }
+      // geser bubble ujung
+      if (bestIdx >= 0 && bestD <= tol) {
+        pushHistory();
+        setSectionEndpointDrag({ idx: bestIdx, which: bestWhich });
+      } else {
+        toast.message("Ketuk bubble ujung garis potong untuk menggeser");
+      }
+      return;
+    }
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw")
@@ -6732,6 +6795,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    // Garis Potong: geser bubble ujung
+    if (sectionEndpointDrag) {
+      const np = getWorldPos(e);
+      const cuts = sketch.sectionCuts ?? [];
+      const idx = sectionEndpointDrag.idx;
+      if (idx < cuts.length) {
+        const next = cuts.map((c, i) =>
+          i === idx ? { ...c, [sectionEndpointDrag.which]: np, updatedAt: Date.now() } : c,
+        );
+        onChange({ sectionCuts: next });
+      }
+      return;
+    }
     // Parking drag (vertex / rotate / area)
     if (parkingDrag) {
       const rawWp = getWorldPosRaw(e);
@@ -7055,6 +7131,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (sectionEndpointDrag) {
+      setSectionEndpointDrag(null);
+      endPointer(e);
+      return;
+    }
     if (parkingDrag) {
       setParkingDrag(null);
       // pointer release: tidak perlu commit lain — onChange sudah update.
@@ -9405,10 +9486,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         )}
         {tool === "section" && (
           <div className="space-y-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
+              <Button
+                variant={sectionSub === "add" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSectionSub("add")}
+                className={cn("h-8 px-1.5 text-[11px]", sectionSub === "add" && "bg-foreground text-background")}
+                title="Tarik garis baru di kanvas"
+              >
+                <Scissors className="mr-1 h-3.5 w-3.5" /> Tambah
+              </Button>
+              <Button
+                variant={sectionSub === "geser" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSectionSub("geser")}
+                className={cn("h-8 px-1.5 text-[11px]", sectionSub === "geser" && "bg-foreground text-background")}
+                title="Geser bubble ujung garis potong"
+              >
+                <Move className="mr-1 h-3.5 w-3.5" /> Geser
+              </Button>
+              <Button
+                variant={sectionSub === "flip" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSectionSub("flip")}
+                className={cn("h-8 px-1.5 text-[11px]", sectionSub === "flip" && "bg-foreground text-background")}
+                title="Balik arah pandang garis potong"
+              >
+                <FlipHorizontal className="mr-1 h-3.5 w-3.5" /> Flip
+              </Button>
+            </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Tarik garis lurus untuk menentukan bidang irisan. Setiap potongan baru otomatis diberi label berurutan
-              (<span className="font-medium text-foreground">A-A</span>, <span className="font-medium text-foreground">B-B</span>, <span className="font-medium text-foreground">C-C</span>, …) dan menjadi slide tersendiri pada presentasi.
+              {sectionSub === "add" && <>Tarik garis lurus untuk menentukan bidang irisan. Setiap potongan baru otomatis diberi label berurutan (<span className="font-medium text-foreground">A-A</span>, <span className="font-medium text-foreground">B-B</span>, …) dan menjadi slide tersendiri pada presentasi.</>}
+              {sectionSub === "geser" && <>Ketuk &amp; tarik bubble ujung (A / A') untuk menggeser titik garis potong. Label dan slide otomatis ikut menyesuaikan.</>}
+              {sectionSub === "flip" && <>Ketuk garis potong atau salah satu bubble ujungnya untuk membalik arah pandang (tukar A ↔ A').</>}
             </p>
+
             {(sketch.sectionCuts ?? []).length > 0 && (
               <div className="space-y-1">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
