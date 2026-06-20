@@ -2246,8 +2246,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                     key={`proj-${b.id}-${fi}-${i}`}
                     x={mx(a)} y={yT}
                     width={(c - a) * scalePxPerM} height={hPx}
-                    fill="none" stroke="#9a9a9a" strokeWidth={0.6}
-                    strokeDasharray="4 3" pointerEvents="none"
+                    fill="none" stroke="#000000" strokeWidth={0.35}
+                    pointerEvents="none"
                   />
                 ));
               });
