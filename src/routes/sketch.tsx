@@ -3772,9 +3772,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         ctx.closePath();
         ctx.fillStyle = color;
         ctx.fill();
+        // Highlight bubble ujung saat sub-mode edit aktif (geser/flip)
+        if (!it.isLive && tool === "section" && sectionSub !== "add") {
+          const hr = labelR + 4 / s;
+          ctx.strokeStyle = sectionSub === "flip" ? "rgba(34,211,238,0.95)" : "rgba(0,212,255,0.95)";
+          ctx.lineWidth = 1.6 / s;
+          ctx.setLineDash([4 / s, 3 / s]);
+          ctx.beginPath();
+          ctx.arc(cutA.x, cutA.y, hr, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(cutB.x, cutB.y, hr, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
         ctx.restore();
       }
     }
+
 
     // Edit-mode vertex markers — hanya pada level aktif
     if (tool === "edit") {
