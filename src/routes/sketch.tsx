@@ -7116,6 +7116,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (sectionEndpointDrag) {
+      setSectionEndpointDrag(null);
+      endPointer(e);
+      return;
+    }
     if (parkingDrag) {
       setParkingDrag(null);
       // pointer release: tidak perlu commit lain — onChange sudah update.
