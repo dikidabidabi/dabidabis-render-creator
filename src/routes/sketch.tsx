@@ -6416,6 +6416,48 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "section" && sectionSub !== "add") {
+      const raw = getWorldPosRaw(e);
+      const tol = 18 / view.s;
+      const cuts = sketch.sectionCuts ?? [];
+      let bestIdx = -1;
+      let bestWhich: "p1" | "p2" = "p1";
+      let bestD = Infinity;
+      cuts.forEach((c, i) => {
+        const d1 = dist(raw, c.p1);
+        const d2 = dist(raw, c.p2);
+        if (d1 < bestD) { bestD = d1; bestIdx = i; bestWhich = "p1"; }
+        if (d2 < bestD) { bestD = d2; bestIdx = i; bestWhich = "p2"; }
+      });
+      if (sectionSub === "flip") {
+        let segIdx = -1;
+        let segD = Infinity;
+        cuts.forEach((c, i) => {
+          const d = pointToSegmentDist(raw, c.p1, c.p2);
+          if (d < segD) { segD = d; segIdx = i; }
+        });
+        const useIdx = bestD <= tol ? bestIdx : (segD <= tol ? segIdx : -1);
+        if (useIdx >= 0) {
+          pushHistory();
+          const next = cuts.map((c, i) =>
+            i === useIdx ? { ...c, p1: c.p2, p2: c.p1, updatedAt: Date.now() } : c,
+          );
+          onChange({ sectionCuts: next });
+          toast.success(`Arah Potongan ${next[useIdx].label || sectionLabelFor(useIdx)} dibalik`);
+        } else {
+          toast.message("Ketuk garis potong untuk membalik arah pandang");
+        }
+        return;
+      }
+      // geser bubble ujung
+      if (bestIdx >= 0 && bestD <= tol) {
+        pushHistory();
+        setSectionEndpointDrag({ idx: bestIdx, which: bestWhich });
+      } else {
+        toast.message("Ketuk bubble ujung garis potong untuk menggeser");
+      }
+      return;
+    }
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw")
