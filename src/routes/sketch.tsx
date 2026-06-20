@@ -1987,6 +1987,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   >(null);
   // Edit Titik (lantai) — sub-mode + drag state
   const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete" | "addVoid">("move");
+  // Garis Potong — sub-mode edit titik (geser bubble ujung / flip arah pandang)
+  const [sectionSub, setSectionSub] = useState<"add" | "geser" | "flip">("add");
+  const [sectionEndpointDrag, setSectionEndpointDrag] = useState<
+    | { idx: number; which: "p1" | "p2" }
+    | null
+  >(null);
   const [floorVoidDraft, setFloorVoidDraft] = useState<{ fid: string; points: Point[] } | null>(null);
   const [floorVertexDrag, setFloorVertexDrag] = useState<
     | { fid: string; ring: "outer" | number; idx: number }
