@@ -9471,10 +9471,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         )}
         {tool === "section" && (
           <div className="space-y-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
+              <Button
+                variant={sectionSub === "add" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSectionSub("add")}
+                className={cn("h-8 px-1.5 text-[11px]", sectionSub === "add" && "bg-foreground text-background")}
+                title="Tarik garis baru di kanvas"
+              >
+                <Scissors className="mr-1 h-3.5 w-3.5" /> Tambah
+              </Button>
+              <Button
+                variant={sectionSub === "geser" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSectionSub("geser")}
+                className={cn("h-8 px-1.5 text-[11px]", sectionSub === "geser" && "bg-foreground text-background")}
+                title="Geser bubble ujung garis potong"
+              >
+                <Move className="mr-1 h-3.5 w-3.5" /> Geser
+              </Button>
+              <Button
+                variant={sectionSub === "flip" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSectionSub("flip")}
+                className={cn("h-8 px-1.5 text-[11px]", sectionSub === "flip" && "bg-foreground text-background")}
+                title="Balik arah pandang garis potong"
+              >
+                <FlipHorizontal className="mr-1 h-3.5 w-3.5" /> Flip
+              </Button>
+            </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Tarik garis lurus untuk menentukan bidang irisan. Setiap potongan baru otomatis diberi label berurutan
-              (<span className="font-medium text-foreground">A-A</span>, <span className="font-medium text-foreground">B-B</span>, <span className="font-medium text-foreground">C-C</span>, …) dan menjadi slide tersendiri pada presentasi.
+              {sectionSub === "add" && <>Tarik garis lurus untuk menentukan bidang irisan. Setiap potongan baru otomatis diberi label berurutan (<span className="font-medium text-foreground">A-A</span>, <span className="font-medium text-foreground">B-B</span>, …) dan menjadi slide tersendiri pada presentasi.</>}
+              {sectionSub === "geser" && <>Ketuk &amp; tarik bubble ujung (A / A') untuk menggeser titik garis potong. Label dan slide otomatis ikut menyesuaikan.</>}
+              {sectionSub === "flip" && <>Ketuk garis potong atau salah satu bubble ujungnya untuk membalik arah pandang (tukar A ↔ A').</>}
             </p>
+
             {(sketch.sectionCuts ?? []).length > 0 && (
               <div className="space-y-1">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
