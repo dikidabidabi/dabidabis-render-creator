@@ -1989,6 +1989,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete" | "addVoid">("move");
   // Garis Potong — sub-mode edit titik (geser bubble ujung / flip arah pandang)
   const [sectionSub, setSectionSub] = useState<"add" | "geser" | "flip">("add");
+  // Garis — sub-mode: gambar garis vs "jadikan ruang" (klik area tertutup → Layer)
+  const [lineSub, setLineSub] = useState<"draw" | "room">("draw");
   const [sectionEndpointDrag, setSectionEndpointDrag] = useState<
     | { idx: number; which: "p1" | "p2" }
     | null
@@ -6473,11 +6475,61 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "line" && lineSub === "room") {
+      // Jadikan Ruang — klik di dalam area tertutup yang dibentuk garis-garis
+      // (mengabaikan garis potong & grid struktur). Garis dipecah pada tiap
+      // titik potong sehingga garis yang bersilangan tetap membentuk cycle.
+      const raw = getWorldPosRaw(e);
+      const allSegs = computeStraightSegments(lines).filter(
+        (s) => !activeLvlId || s.levelId === activeLvlId,
+      );
+      const segs = allSegs.map((s) => ({ a: s.a, b: s.b }));
+      if (segs.length < 3) {
+        toast.error("Belum cukup garis untuk membentuk ruang");
+        return;
+      }
+      let bestCycle: Point[] | null = null;
+      let bestArea = Infinity;
+      for (let i = 0; i < segs.length; i++) {
+        const cyc = findCycleThroughSegment(segs, i, SNAP_TOL);
+        if (!cyc || cyc.length < 3) continue;
+        if (!floorPointInPolygon(raw, cyc)) continue;
+        const a = floorPolyArea(cyc);
+        if (a > 25 && a < bestArea) {
+          bestArea = a;
+          bestCycle = cyc;
+        }
+      }
+      if (!bestCycle) {
+        toast.error("Klik di dalam area garis tertutup");
+        return;
+      }
+      const { activeId } = ensureLevels();
+      const areaM2 = bestArea / (pxPerMeter * pxPerMeter);
+      const idx = layers.length + 1;
+      const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+      const layer: Layer = {
+        id: `L${Date.now()}`,
+        name: `Ruang ${idx}`,
+        points: bestCycle,
+        areaM2,
+        color,
+        locked: false,
+        levelId: activeId,
+        coefficient: 1,
+      };
+      const carved = applySubtractionToLayers(layers, bestCycle, activeId);
+      pushHistory();
+      onChange({ layers: [...carved, layer] });
+      toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+      return;
+    }
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw")
     ) {
       setDrawing({ a: p, b: p });
+
 
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
@@ -9754,7 +9806,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </div>
         )}
         {tool === "line" && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                variant={lineSub === "draw" ? "default" : "outline"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineSub("draw"); }}
+                className={cn("h-8 px-2 text-[11px]", lineSub === "draw" && "bg-foreground text-background")}
+                title="Gambar garis baru"
+              >
+                <Pencil className="mr-1 h-3.5 w-3.5" /> Gambar
+              </Button>
+              <Button
+                variant={lineSub === "room" ? "default" : "outline"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setDrawing(null); setLineSub("room"); }}
+                className={cn("h-8 px-2 text-[11px]", lineSub === "room" && "bg-foreground text-background")}
+                title="Klik di dalam area yang dikelilingi garis-garis tertutup untuk mengubahnya menjadi ruang. Garis potong & grid struktur diabaikan."
+              >
+                <Square className="mr-1 h-3.5 w-3.5" /> Jadikan Ruang
+              </Button>
+            </div>
+            {lineSub === "room" && (
+              <p className="rounded-md border border-border/60 bg-background/40 p-2 text-[10px] leading-relaxed text-muted-foreground">
+                Ketuk di dalam area yang sudah dikelilingi garis-garis (bertemu atau bersilangan). Sistem akan mencari batas terkecil yang menutup titik klik dan membuatnya menjadi <span className="font-medium text-foreground">Ruang</span>. Garis potong dan grid struktur diabaikan.
+              </p>
+            )}
+          </div>
+        )}
+        {tool === "line" && lineSub === "draw" && (
           <div className="space-y-1.5">
+
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Jenis garis
             </div>
