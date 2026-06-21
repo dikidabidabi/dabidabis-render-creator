@@ -2,11 +2,19 @@
 // Same full name (including digits) → same color across sketch, plan, section, 3D.
 // Different name → different hue (well-distributed via golden-angle).
 //
+// Special cases:
+//   - Name contains "parkir" / "parking" → very light gray (lighter than "Lahan")
+//   - Name is "lahan" → medium light gray (handled in sketch.tsx via ABU_MUDA_FILL_RGBA)
+//
 // Returned format mirrors the legacy LAYER_COLORS template so callers can do
 // `color.replace("ALPHA", "0.32")` exactly as before.
 
 function normalizeName(name: string): string {
   return (name || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function isParkingRoomName(name: string): boolean {
+  return name.includes("parkir") || name.includes("parking");
 }
 
 // FNV-1a 32-bit
@@ -48,6 +56,7 @@ const GOLDEN = 137.508; // golden angle in degrees for good hue separation
 export function colorForRoomName(name: string | undefined | null): string | null {
   const n = normalizeName(name ?? "");
   if (!n) return null;
+  if (isParkingRoomName(n)) return "rgba(220, 220, 220, ALPHA)";
   const h = hashString(n);
   // Distribute hues via golden angle, but seeded by hash so order doesn't matter.
   const hue = (h * GOLDEN) % 360;
