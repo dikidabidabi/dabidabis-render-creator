@@ -3853,7 +3853,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       <polygon
                         key={st.id}
                         points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
-                        fill="none"
+                        fill="rgba(200,200,200,0.35)"
                         stroke="#000000"
                         strokeWidth={sw * 0.00045}
                       />
