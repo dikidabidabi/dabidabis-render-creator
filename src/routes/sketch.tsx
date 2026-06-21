@@ -1989,6 +1989,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete" | "addVoid">("move");
   // Garis Potong — sub-mode edit titik (geser bubble ujung / flip arah pandang)
   const [sectionSub, setSectionSub] = useState<"add" | "geser" | "flip">("add");
+  // Garis — sub-mode: gambar garis vs "jadikan ruang" (klik area tertutup → Layer)
+  const [lineSub, setLineSub] = useState<"draw" | "room">("draw");
   const [sectionEndpointDrag, setSectionEndpointDrag] = useState<
     | { idx: number; which: "p1" | "p2" }
     | null
