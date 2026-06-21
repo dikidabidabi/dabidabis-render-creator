@@ -9806,7 +9806,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </div>
         )}
         {tool === "line" && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button
+                variant={lineSub === "draw" ? "default" : "outline"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setLineSub("draw"); }}
+                className={cn("h-8 px-2 text-[11px]", lineSub === "draw" && "bg-foreground text-background")}
+                title="Gambar garis baru"
+              >
+                <Pencil className="mr-1 h-3.5 w-3.5" /> Gambar
+              </Button>
+              <Button
+                variant={lineSub === "room" ? "default" : "outline"}
+                size="sm"
+                onClick={() => { cancelPendingCurve(); setDrawing(null); setLineSub("room"); }}
+                className={cn("h-8 px-2 text-[11px]", lineSub === "room" && "bg-foreground text-background")}
+                title="Klik di dalam area yang dikelilingi garis-garis tertutup untuk mengubahnya menjadi ruang. Garis potong & grid struktur diabaikan."
+              >
+                <Square className="mr-1 h-3.5 w-3.5" /> Jadikan Ruang
+              </Button>
+            </div>
+            {lineSub === "room" && (
+              <p className="rounded-md border border-border/60 bg-background/40 p-2 text-[10px] leading-relaxed text-muted-foreground">
+                Ketuk di dalam area yang sudah dikelilingi garis-garis (bertemu atau bersilangan). Sistem akan mencari batas terkecil yang menutup titik klik dan membuatnya menjadi <span className="font-medium text-foreground">Ruang</span>. Garis potong dan grid struktur diabaikan.
+              </p>
+            )}
+          </div>
+        )}
+        {tool === "line" && lineSub === "draw" && (
           <div className="space-y-1.5">
+
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Jenis garis
             </div>
