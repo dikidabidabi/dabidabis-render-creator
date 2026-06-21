@@ -6475,11 +6475,61 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       }
       return;
     }
+    if (tool === "line" && lineSub === "room") {
+      // Jadikan Ruang — klik di dalam area tertutup yang dibentuk garis-garis
+      // (mengabaikan garis potong & grid struktur). Garis dipecah pada tiap
+      // titik potong sehingga garis yang bersilangan tetap membentuk cycle.
+      const raw = getWorldPosRaw(e);
+      const allSegs = computeStraightSegments(lines).filter(
+        (s) => !activeLvlId || s.levelId === activeLvlId,
+      );
+      const segs = allSegs.map((s) => ({ a: s.a, b: s.b }));
+      if (segs.length < 3) {
+        toast.error("Belum cukup garis untuk membentuk ruang");
+        return;
+      }
+      let bestCycle: Point[] | null = null;
+      let bestArea = Infinity;
+      for (let i = 0; i < segs.length; i++) {
+        const cyc = findCycleThroughSegment(segs, i, SNAP_TOL);
+        if (!cyc || cyc.length < 3) continue;
+        if (!floorPointInPolygon(raw, cyc)) continue;
+        const a = floorPolyArea(cyc);
+        if (a > 25 && a < bestArea) {
+          bestArea = a;
+          bestCycle = cyc;
+        }
+      }
+      if (!bestCycle) {
+        toast.error("Klik di dalam area garis tertutup");
+        return;
+      }
+      const { activeId } = ensureLevels();
+      const areaM2 = bestArea / (pxPerMeter * pxPerMeter);
+      const idx = layers.length + 1;
+      const color = LAYER_COLORS[layers.length % LAYER_COLORS.length];
+      const layer: Layer = {
+        id: `L${Date.now()}`,
+        name: `Ruang ${idx}`,
+        points: bestCycle,
+        areaM2,
+        color,
+        locked: false,
+        levelId: activeId,
+        coefficient: 1,
+      };
+      const carved = applySubtractionToLayers(layers, bestCycle, activeId);
+      pushHistory();
+      onChange({ layers: [...carved, layer] });
+      toast.success(`${layer.name} terbentuk — ${areaM2.toFixed(2)} m²`);
+      return;
+    }
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw")
     ) {
       setDrawing({ a: p, b: p });
+
 
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
