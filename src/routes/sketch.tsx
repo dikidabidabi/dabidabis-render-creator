@@ -4746,6 +4746,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           ctx.moveTo(st.poly[0].x, st.poly[0].y);
           for (let i = 1; i < st.poly.length; i++) ctx.lineTo(st.poly[i].x, st.poly[i].y);
           ctx.closePath();
+          ctx.fillStyle = "rgba(200, 200, 200, 0.35)";
+          ctx.fill();
           ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
           ctx.lineWidth = 1.2 / s;
           ctx.stroke();
