@@ -17,7 +17,6 @@ import {
   type ParkingArea,
   type ParkingObstacle,
   generateStalls,
-  STALL_AREA_M2,
 } from "@/lib/parking";
 
 export const Route = createFileRoute("/tabulasi")({
