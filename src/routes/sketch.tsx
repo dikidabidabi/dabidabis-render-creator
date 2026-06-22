@@ -1962,6 +1962,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
+  const [parkingKind, setParkingKind] = useState<"mobil" | "motor">("mobil");
   const [parkingSelectedId, setParkingSelectedId] = useState<string | null>(null);
   const [parkingDrag, setParkingDrag] = useState<
     | { kind: "vertex"; areaId: string; idx: number }
