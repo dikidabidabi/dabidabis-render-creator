@@ -1980,6 +1980,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     { areaId: string; points: { x: number; y: number }[] } | null
   >(null);
   const [parkingPathHover, setParkingPathHover] = useState<{ x: number; y: number } | null>(null);
+  // Sinkronkan parkingKind dengan kind area yang terpilih.
+  useEffect(() => {
+    if (!parkingSelectedId) return;
+    const sel = (sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId);
+    if (sel?.kind && sel.kind !== parkingKind) setParkingKind(sel.kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parkingSelectedId, sketch.parkingAreas]);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
