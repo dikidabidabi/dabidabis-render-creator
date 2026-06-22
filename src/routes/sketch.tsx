@@ -8508,13 +8508,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
           </Button>
           <Button
-            variant={tool === "parking" ? "default" : "outline"}
+            variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
             size="sm"
-            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingSubTool("draw"); }}
-            className={cn(tool === "parking" && "bg-gradient-primary shadow-primary")}
-            title="Lot Parkir — tarik bounding box; deret 2.5×5 m otomatis di-snap ke grid mm, kolom/dinding/ruang dihindari (geser, tidak skip)."
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("mobil"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "mobil" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Mobil — 2.4 × 5 m, aisle 5.5 m, buffer jalur 1.75 m."
           >
-            <Car className="mr-1.5 h-4 w-4" /> Lot Parkir
+            <Car className="mr-1.5 h-4 w-4" /> Mobil
+          </Button>
+          <Button
+            variant={tool === "parking" && parkingKind === "motor" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("motor"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "motor" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Motor — 0.75 × 2 m, aisle 1.5 m, buffer jalur 0.5 m."
+          >
+            <Car className="mr-1.5 h-4 w-4" /> Motor
           </Button>
         </div>
         {tool === "parking" && (
