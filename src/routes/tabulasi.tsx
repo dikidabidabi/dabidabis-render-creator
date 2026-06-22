@@ -428,11 +428,14 @@ function computeStats(sk: Sketch): Stats {
   const mmRotRad = (mmRotDeg * Math.PI) / 180;
   let parkingTotal = 0;
   let parkingAreaTotalM2 = 0;
+  let parkingOccupiedM2 = 0;
   const parkingByLevel = new Map<string, number>();
   for (const area of parkingAreas) {
     const stalls = generateStalls(area, pxPerMeter, mmRotRad, obstaclesForLevel(area.levelId));
     const valid = stalls.filter((s) => s.valid).length;
     parkingTotal += valid;
+    const stallAreaM2 = area.kind === "motor" ? 0.75 * 2.0 : 2.4 * 5.0;
+    parkingOccupiedM2 += valid * stallAreaM2;
     // luas polygon area (shoelace)
     const pts = area.pointsLocal ?? [];
     let acc = 0;
@@ -445,7 +448,7 @@ function computeStats(sk: Sketch): Stats {
     if (area.levelId) parkingByLevel.set(area.levelId, (parkingByLevel.get(area.levelId) ?? 0) + valid);
   }
   const parkingEfficiencyPct = parkingAreaTotalM2 > 0
-    ? (parkingTotal * STALL_AREA_M2 * 100) / parkingAreaTotalM2
+    ? (parkingOccupiedM2 * 100) / parkingAreaTotalM2
     : 0;
 
   return {
