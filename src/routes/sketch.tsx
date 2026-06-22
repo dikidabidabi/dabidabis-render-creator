@@ -7531,8 +7531,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
       const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
       if ((maxX - minX) < pxPerMeter * 5 || (maxY - minY) < pxPerMeter * 5) {
-        toast.error("Area parkir terlalu kecil (min 5 m × 5 m)");
-        return;
+        if (parkingKind === "motor") {
+          if ((maxX - minX) < pxPerMeter * 2 || (maxY - minY) < pxPerMeter * 2) {
+            toast.error("Area parkir motor terlalu kecil (min 2 m × 2 m)");
+            return;
+          }
+        } else {
+          toast.error("Area parkir terlalu kecil (min 5 m × 5 m)");
+          return;
+        }
       }
       const pointsLocal = [
         { x: minX, y: minY }, { x: maxX, y: minY },
@@ -7542,12 +7549,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const draft: ParkingArea = {
         id: genParkingId(),
         levelId: activeLvlId ?? undefined,
+        kind: parkingKind,
         pointsLocal,
         orientation: "auto",
         stallRotation: 0,
       };
       setParkingDraft(draft);
-      toast.success("Draft area parkir — tekan Simpan Area untuk mengunci");
+      toast.success(`Draft area parkir ${parkingKind} — tekan Simpan Area untuk mengunci`);
       return;
     }
 
