@@ -239,15 +239,15 @@ export type ParkingObstacle =
   | { kind: "polygon"; poly: ParkingPoint[] };
 
 /** Konversi jalur (polyline) area parkir → obstacle wall (dunia) dengan buffer
- *  PARKING_PATH_BUFFER_M di tiap sisi. */
+ *  sesuai kind area (mobil = 1.75 m, motor = 0.5 m) di tiap sisi. */
 export function parkingPathsToObstacles(
   areas: ParkingArea[],
   pxPerMeter: number,
   mmRot: number,
 ): ParkingObstacle[] {
   const out: ParkingObstacle[] = [];
-  const buf = PARKING_PATH_BUFFER_M * pxPerMeter;
   for (const area of areas) {
+    const buf = specsFor(area.kind).PATH_BUFFER_M * pxPerMeter;
     for (const path of area.paths ?? []) {
       const w = path.pointsLocal.map((p) => worldFromLocal(p, mmRot));
       for (let i = 0; i < w.length - 1; i++) {
