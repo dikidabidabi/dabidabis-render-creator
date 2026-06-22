@@ -14,6 +14,8 @@
 export type ParkingPoint = { x: number; y: number };
 
 /** Jalur parkir (polyline) di koordinat lokal mm-grid. */
+export type ParkingKind = "mobil" | "motor";
+
 export type ParkingPath = {
   id: string;
   pointsLocal: ParkingPoint[]; // ≥ 2 titik
@@ -22,8 +24,9 @@ export type ParkingPath = {
 export type ParkingArea = {
   id: string;
   levelId?: string;
-  /** Polygon area di koordinat lokal mm-grid (px). Default 4 titik rect saat
-   *  digambar; bisa jadi N-gon setelah edit titik. */
+  /** Jenis kendaraan: "mobil" (default) atau "motor". */
+  kind?: ParkingKind;
+  /** Polygon area di koordinat lokal mm-grid (px). */
   pointsLocal: ParkingPoint[];
   /** Sumbu deret di koordinat lokal area-bbox: "x" / "y" / "auto". */
   orientation?: "auto" | "x" | "y";
@@ -31,12 +34,14 @@ export type ParkingArea = {
   stallRotation?: number;
   /** Kunci stall yang dimatikan manual (key = `row,col`). */
   disabled?: string[];
-  /** Jalur parkir (polyline) — obstacle ber-buffer 1.75 m di tiap sisi. */
+  /** Jalur parkir (polyline) — obstacle ber-buffer per sisi (kind-dependent). */
   paths?: ParkingPath[];
 };
 
-/** Lebar buffer jalur parkir per sisi (meter). */
+/** Lebar buffer jalur parkir per sisi untuk mobil (meter). */
 export const PARKING_PATH_BUFFER_M = 1.75;
+/** Lebar buffer jalur parkir per sisi untuk motor (meter). */
+export const PARKING_PATH_BUFFER_M_MOTOR = 0.5;
 
 export function genParkingPathId(): string {
   return `PP${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -53,13 +58,54 @@ export type ParkingStall = {
   valid: boolean;
 };
 
-// Parameter baku (meter)
-export const STALL_W = 2.5;
+// Parameter baku (meter) — MOBIL
+export const STALL_W = 2.4;
 export const STALL_L = 5.0;
 export const AISLE_W = 5.5;
 export const MODULE_DOUBLE = STALL_L + AISLE_W + STALL_L; // 15.5 m
 export const MODULE_SINGLE = STALL_L + AISLE_W;            // 10.5 m
-export const STALL_AREA_M2 = STALL_W * STALL_L;            // 12.5 m²
+export const STALL_AREA_M2 = STALL_W * STALL_L;            // 12.0 m²
+
+// Parameter baku (meter) — MOTOR
+export const STALL_W_MOTOR = 0.75;
+export const STALL_L_MOTOR = 2.0;
+export const AISLE_W_MOTOR = 1.5;
+export const MODULE_DOUBLE_MOTOR = STALL_L_MOTOR + AISLE_W_MOTOR + STALL_L_MOTOR; // 5.5 m
+export const MODULE_SINGLE_MOTOR = STALL_L_MOTOR + AISLE_W_MOTOR;                  // 3.5 m
+export const STALL_AREA_M2_MOTOR = STALL_W_MOTOR * STALL_L_MOTOR;                  // 1.5 m²
+
+export type ParkingSpecs = {
+  STALL_W: number;
+  STALL_L: number;
+  AISLE_W: number;
+  MODULE_DOUBLE: number;
+  MODULE_SINGLE: number;
+  STALL_AREA_M2: number;
+  PATH_BUFFER_M: number;
+};
+
+export function specsFor(kind?: ParkingKind): ParkingSpecs {
+  if (kind === "motor") {
+    return {
+      STALL_W: STALL_W_MOTOR,
+      STALL_L: STALL_L_MOTOR,
+      AISLE_W: AISLE_W_MOTOR,
+      MODULE_DOUBLE: MODULE_DOUBLE_MOTOR,
+      MODULE_SINGLE: MODULE_SINGLE_MOTOR,
+      STALL_AREA_M2: STALL_AREA_M2_MOTOR,
+      PATH_BUFFER_M: PARKING_PATH_BUFFER_M_MOTOR,
+    };
+  }
+  return {
+    STALL_W,
+    STALL_L,
+    AISLE_W,
+    MODULE_DOUBLE,
+    MODULE_SINGLE,
+    STALL_AREA_M2,
+    PATH_BUFFER_M: PARKING_PATH_BUFFER_M,
+  };
+}
 
 export function genParkingId(): string {
   return `PK${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
