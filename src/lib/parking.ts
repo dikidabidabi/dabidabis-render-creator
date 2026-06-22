@@ -180,6 +180,7 @@ export function normalizeParkingArea(raw: any, mmRot = 0): ParkingArea | null {
   return {
     id: typeof raw.id === "string" && raw.id ? raw.id : genParkingId(),
     levelId: typeof raw.levelId === "string" ? raw.levelId : undefined,
+    kind: raw.kind === "motor" ? "motor" : "mobil",
     pointsLocal,
     orientation,
     stallRotation,
