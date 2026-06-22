@@ -14,6 +14,8 @@
 export type ParkingPoint = { x: number; y: number };
 
 /** Jalur parkir (polyline) di koordinat lokal mm-grid. */
+export type ParkingKind = "mobil" | "motor";
+
 export type ParkingPath = {
   id: string;
   pointsLocal: ParkingPoint[]; // ≥ 2 titik
@@ -22,8 +24,9 @@ export type ParkingPath = {
 export type ParkingArea = {
   id: string;
   levelId?: string;
-  /** Polygon area di koordinat lokal mm-grid (px). Default 4 titik rect saat
-   *  digambar; bisa jadi N-gon setelah edit titik. */
+  /** Jenis kendaraan: "mobil" (default) atau "motor". */
+  kind?: ParkingKind;
+  /** Polygon area di koordinat lokal mm-grid (px). */
   pointsLocal: ParkingPoint[];
   /** Sumbu deret di koordinat lokal area-bbox: "x" / "y" / "auto". */
   orientation?: "auto" | "x" | "y";
@@ -31,12 +34,14 @@ export type ParkingArea = {
   stallRotation?: number;
   /** Kunci stall yang dimatikan manual (key = `row,col`). */
   disabled?: string[];
-  /** Jalur parkir (polyline) — obstacle ber-buffer 1.75 m di tiap sisi. */
+  /** Jalur parkir (polyline) — obstacle ber-buffer per sisi (kind-dependent). */
   paths?: ParkingPath[];
 };
 
-/** Lebar buffer jalur parkir per sisi (meter). */
+/** Lebar buffer jalur parkir per sisi untuk mobil (meter). */
 export const PARKING_PATH_BUFFER_M = 1.75;
+/** Lebar buffer jalur parkir per sisi untuk motor (meter). */
+export const PARKING_PATH_BUFFER_M_MOTOR = 0.5;
 
 export function genParkingPathId(): string {
   return `PP${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -53,13 +58,54 @@ export type ParkingStall = {
   valid: boolean;
 };
 
-// Parameter baku (meter)
-export const STALL_W = 2.5;
+// Parameter baku (meter) — MOBIL
+export const STALL_W = 2.4;
 export const STALL_L = 5.0;
 export const AISLE_W = 5.5;
 export const MODULE_DOUBLE = STALL_L + AISLE_W + STALL_L; // 15.5 m
 export const MODULE_SINGLE = STALL_L + AISLE_W;            // 10.5 m
-export const STALL_AREA_M2 = STALL_W * STALL_L;            // 12.5 m²
+export const STALL_AREA_M2 = STALL_W * STALL_L;            // 12.0 m²
+
+// Parameter baku (meter) — MOTOR
+export const STALL_W_MOTOR = 0.75;
+export const STALL_L_MOTOR = 2.0;
+export const AISLE_W_MOTOR = 1.5;
+export const MODULE_DOUBLE_MOTOR = STALL_L_MOTOR + AISLE_W_MOTOR + STALL_L_MOTOR; // 5.5 m
+export const MODULE_SINGLE_MOTOR = STALL_L_MOTOR + AISLE_W_MOTOR;                  // 3.5 m
+export const STALL_AREA_M2_MOTOR = STALL_W_MOTOR * STALL_L_MOTOR;                  // 1.5 m²
+
+export type ParkingSpecs = {
+  STALL_W: number;
+  STALL_L: number;
+  AISLE_W: number;
+  MODULE_DOUBLE: number;
+  MODULE_SINGLE: number;
+  STALL_AREA_M2: number;
+  PATH_BUFFER_M: number;
+};
+
+export function specsFor(kind?: ParkingKind): ParkingSpecs {
+  if (kind === "motor") {
+    return {
+      STALL_W: STALL_W_MOTOR,
+      STALL_L: STALL_L_MOTOR,
+      AISLE_W: AISLE_W_MOTOR,
+      MODULE_DOUBLE: MODULE_DOUBLE_MOTOR,
+      MODULE_SINGLE: MODULE_SINGLE_MOTOR,
+      STALL_AREA_M2: STALL_AREA_M2_MOTOR,
+      PATH_BUFFER_M: PARKING_PATH_BUFFER_M_MOTOR,
+    };
+  }
+  return {
+    STALL_W,
+    STALL_L,
+    AISLE_W,
+    MODULE_DOUBLE,
+    MODULE_SINGLE,
+    STALL_AREA_M2,
+    PATH_BUFFER_M: PARKING_PATH_BUFFER_M,
+  };
+}
 
 export function genParkingId(): string {
   return `PK${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -134,6 +180,7 @@ export function normalizeParkingArea(raw: any, mmRot = 0): ParkingArea | null {
   return {
     id: typeof raw.id === "string" && raw.id ? raw.id : genParkingId(),
     levelId: typeof raw.levelId === "string" ? raw.levelId : undefined,
+    kind: raw.kind === "motor" ? "motor" : "mobil",
     pointsLocal,
     orientation,
     stallRotation,
@@ -192,15 +239,15 @@ export type ParkingObstacle =
   | { kind: "polygon"; poly: ParkingPoint[] };
 
 /** Konversi jalur (polyline) area parkir → obstacle wall (dunia) dengan buffer
- *  PARKING_PATH_BUFFER_M di tiap sisi. */
+ *  sesuai kind area (mobil = 1.75 m, motor = 0.5 m) di tiap sisi. */
 export function parkingPathsToObstacles(
   areas: ParkingArea[],
   pxPerMeter: number,
   mmRot: number,
 ): ParkingObstacle[] {
   const out: ParkingObstacle[] = [];
-  const buf = PARKING_PATH_BUFFER_M * pxPerMeter;
   for (const area of areas) {
+    const buf = specsFor(area.kind).PATH_BUFFER_M * pxPerMeter;
     for (const path of area.paths ?? []) {
       const w = path.pointsLocal.map((p) => worldFromLocal(p, mmRot));
       for (let i = 0; i < w.length - 1; i++) {
@@ -248,8 +295,9 @@ function obstacleToStallSpacePolys(
 
 type Interval = [number, number];
 
-function subtractIntervals(base: Interval, blocks: Interval[]): Interval[] {
-  // Normalisasi & gabung blocks yang overlap
+type IntervalBounded = { a: number; b: number; leftObs: boolean; rightObs: boolean };
+
+function subtractIntervalsBounded(base: Interval, blocks: Interval[]): IntervalBounded[] {
   const norm = blocks
     .map(([a, b]) => (a < b ? [a, b] : [b, a]) as Interval)
     .filter(([a, b]) => b > base[0] && a < base[1])
@@ -261,13 +309,15 @@ function subtractIntervals(base: Interval, blocks: Interval[]): Interval[] {
       merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], iv[1]);
     } else merged.push([iv[0], iv[1]]);
   }
-  const out: Interval[] = [];
+  const out: IntervalBounded[] = [];
   let cur = base[0];
+  let leftObs = false; // base start = tepi area, bukan obstacle
   for (const [a, b] of merged) {
-    if (a > cur) out.push([cur, a]);
+    if (a > cur) out.push({ a: cur, b: a, leftObs, rightObs: true });
     cur = Math.max(cur, b);
+    leftObs = true;
   }
-  if (cur < base[1]) out.push([cur, base[1]]);
+  if (cur < base[1]) out.push({ a: cur, b: base[1], leftObs, rightObs: false });
   return out;
 }
 
@@ -288,9 +338,15 @@ export function generateStalls(
   const stalls: ParkingStall[] = [];
   if (pxPerMeter <= 0 || area.pointsLocal.length < 3) return stalls;
 
+  const specs = specsFor(area.kind);
+  const SW = specs.STALL_W;
+  const SL = specs.STALL_L;
+  const AW = specs.AISLE_W;
+  const MD = specs.MODULE_DOUBLE;
+  const MS = specs.MODULE_SINGLE;
+
   const stallRot = area.stallRotation ?? 0;
 
-  // Pindah pointsLocal ke "stall-frame" (rotasi -stallRot di sekitar origin lokal).
   const toStall = (p: ParkingPoint) => {
     if (!stallRot) return { x: p.x, y: p.y };
     const c = Math.cos(-stallRot), s = Math.sin(-stallRot);
@@ -303,7 +359,6 @@ export function generateStalls(
   };
   const polyStall = area.pointsLocal.map(toStall);
 
-  // BBox di stall-frame
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of polyStall) {
     if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
@@ -311,59 +366,49 @@ export function generateStalls(
   }
   const widthPx = maxX - minX, heightPx = maxY - minY;
   const widthM = widthPx / pxPerMeter, heightM = heightPx / pxPerMeter;
-  // Sumbu deret D vs lebar lajur A
   const alongAxis: "x" | "y" =
     area.orientation === "x" || area.orientation === "y"
       ? area.orientation
       : widthM >= heightM ? "x" : "y";
   const D = (alongAxis === "x" ? widthM : heightM);
   const A = (alongAxis === "x" ? heightM : widthM);
-  if (D < STALL_W || A < STALL_L) return stalls;
+  if (D < SW || A < SL) return stalls;
 
-  // Origin pojok bbox stall-frame: (minX, minY).
-  // Konversi (d, a) meter dalam frame "alongAxis" ke koordinat (sx, sy) stall-frame px.
   const localOf = (d: number, a: number): ParkingPoint => {
     if (alongAxis === "x") return { x: minX + d * pxPerMeter, y: minY + a * pxPerMeter };
     return { x: minX + a * pxPerMeter, y: minY + d * pxPerMeter };
   };
 
-  // Susun baris seperti sebelumnya: modul double 15.5m + sisa single/single-row.
   type Row = { offset: number; faceSign: 1 | -1 };
   const rows: Row[] = [];
   let used = 0;
-  while (A - used >= MODULE_DOUBLE - 1e-6) {
-    rows.push({ offset: used + STALL_L / 2, faceSign: 1 });
-    rows.push({ offset: used + STALL_L + AISLE_W + STALL_L / 2, faceSign: -1 });
-    used += MODULE_DOUBLE;
+  while (A - used >= MD - 1e-6) {
+    rows.push({ offset: used + SL / 2, faceSign: 1 });
+    rows.push({ offset: used + SL + AW + SL / 2, faceSign: -1 });
+    used += MD;
   }
-  if (A - used >= MODULE_SINGLE - 1e-6) {
-    rows.push({ offset: used + STALL_L / 2, faceSign: 1 });
-    used += MODULE_SINGLE;
-  } else if (A - used >= STALL_L - 1e-6) {
-    rows.push({ offset: used + STALL_L / 2, faceSign: -1 });
-    used += STALL_L;
+  if (A - used >= MS - 1e-6) {
+    rows.push({ offset: used + SL / 2, faceSign: 1 });
+    used += MS;
+  } else if (A - used >= SL - 1e-6) {
+    rows.push({ offset: used + SL / 2, faceSign: -1 });
+    used += SL;
   }
   if (rows.length === 0) return stalls;
 
-  // Konversi obstacle ke stall-frame polygon (sekali saja).
   const obsPolys: ParkingPoint[][] = obstacles.map((o) =>
     obstacleToStallSpacePolys(o, mmGridRotRad, stallRot),
   );
 
-  // Untuk tiap row, hitung interval valid sepanjang sumbu D (stall flush).
   const disabled = new Set(area.disabled ?? []);
 
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
-    // Strip stall ini di stall-frame px:
-    //   alongAxis = "x" → strip y ∈ [minY + (row.offset - L/2)*ppm, minY + (row.offset + L/2)*ppm]
-    //   alongAxis = "y" → strip x ∈ [minX + (row.offset - L/2)*ppm, minX + (row.offset + L/2)*ppm]
-    const stripA0 = (row.offset - STALL_L / 2) * pxPerMeter;
-    const stripA1 = (row.offset + STALL_L / 2) * pxPerMeter;
+    const stripA0 = (row.offset - SL / 2) * pxPerMeter;
+    const stripA1 = (row.offset + SL / 2) * pxPerMeter;
     const stripStart = alongAxis === "x" ? minY + stripA0 : minX + stripA0;
     const stripEnd   = alongAxis === "x" ? minY + stripA1 : minX + stripA1;
 
-    // Proyeksi obstacle ke sumbu D, hanya jika strip overlap dengan obstacle.
     const blocks: Interval[] = [];
     for (const poly of obsPolys) {
       let oMinA = Infinity, oMaxA = -Infinity;
@@ -374,45 +419,46 @@ export function generateStalls(
         if (aVal < oMinA) oMinA = aVal; if (aVal > oMaxA) oMaxA = aVal;
         if (dVal < oMinD) oMinD = dVal; if (dVal > oMaxD) oMaxD = dVal;
       }
-      // Overlap strip pada sumbu A?
       if (oMaxA <= stripStart || oMinA >= stripEnd) continue;
-      // Konversi ke koordinat meter sumbu D, asal dari (minD-pojok bbox).
       const dOrig = alongAxis === "x" ? minX : minY;
       const d1m = (oMinD - dOrig) / pxPerMeter;
       const d2m = (oMaxD - dOrig) / pxPerMeter;
-      // Blocked s-interval untuk stall left-edge = [d1m - STALL_W, d2m]
-      blocks.push([d1m - STALL_W, d2m]);
+      // Blocked s-interval untuk stall left-edge = [d1m - SW, d2m]
+      blocks.push([d1m - SW, d2m]);
     }
-    // Tambah constraint area-polygon non-rect: kalau polygon bukan bbox, kita
-    // belum subtract; tapi stall yang keluar polygon akan dibuang via containment.
-    const sRange: Interval = [0, D - STALL_W];
+    const sRange: Interval = [0, D - SW];
     if (sRange[1] <= sRange[0]) continue;
-    const validIntervals = subtractIntervals(sRange, blocks);
+    const validIntervals = subtractIntervalsBounded(sRange, blocks);
 
     let ci = 0;
-    for (const [a, b] of validIntervals) {
-      const span = b - a;
+    for (const iv of validIntervals) {
+      const span = iv.b - iv.a;
       if (span < 0) continue;
-      const n = Math.floor(span / STALL_W) + 1;
+      const n = Math.floor(span / SW) + 1;
+      // Jika kedua sisi interval dibatasi obstacle, center stall di antaranya
+      // (jarak obstacle-kiri ke stall pertama = obstacle-kanan ke stall terakhir).
+      let startOffset = 0;
+      if (iv.leftObs && iv.rightObs) {
+        startOffset = (span - (n - 1) * SW) / 2;
+        if (startOffset < 0) startOffset = 0;
+      }
       for (let k = 0; k < n; k++) {
-        const s = a + k * STALL_W;
-        if (s + STALL_W > D + 1e-6) break;
+        const s = iv.a + startOffset + k * SW;
+        if (s + SW > D + 1e-6) break;
+        if (s < iv.a - 1e-6 || s > iv.b + 1e-6) continue;
         const key = `${ri},${ci}`;
-        const d0 = s, d1 = s + STALL_W;
-        const a0 = row.offset - STALL_L / 2;
-        const a1 = row.offset + STALL_L / 2;
-        // 4 titik di stall-frame
+        const d0 = s, d1 = s + SW;
+        const a0 = row.offset - SL / 2;
+        const a1 = row.offset + SL / 2;
         const p1s = localOf(d0, a0);
         const p2s = localOf(d1, a0);
         const p3s = localOf(d1, a1);
         const p4s = localOf(d0, a1);
-        // Cek containment polygon area (semua corner harus di dalam).
         const allIn =
           pointInPoly(p1s, polyStall) && pointInPoly(p2s, polyStall) &&
           pointInPoly(p3s, polyStall) && pointInPoly(p4s, polyStall);
         if (!allIn) { ci++; continue; }
         const isDisabled = disabled.has(key);
-        // stall-frame → local mm-grid → world
         const cornersLocal = [p1s, p2s, p3s, p4s].map(fromStallToLocal);
         const cornersWorld = cornersLocal.map((p) => worldFromLocal(p, mmGridRotRad));
         const cx = (cornersWorld[0].x + cornersWorld[2].x) / 2;
@@ -446,10 +492,12 @@ export function computeParkingStats(
 ): { totalStalls: number; areaM2: number; efficiencyPct: number } {
   let totalStalls = 0;
   let areaM2 = 0;
+  let occupiedM2 = 0;
   for (const area of areas) {
     const stalls = generateStalls(area, pxPerMeter, mmGridRotRad, obstaclesByLevel(area.levelId));
-    for (const s of stalls) if (s.valid) totalStalls++;
-    // luas polygon (shoelace) di local-px → m²
+    const validCount = stalls.reduce((acc, s) => acc + (s.valid ? 1 : 0), 0);
+    totalStalls += validCount;
+    occupiedM2 += validCount * specsFor(area.kind).STALL_AREA_M2;
     const pts = area.pointsLocal;
     let acc = 0;
     for (let i = 0; i < pts.length; i++) {
@@ -459,6 +507,7 @@ export function computeParkingStats(
     const areaPx = Math.abs(acc) / 2;
     areaM2 += areaPx / (pxPerMeter * pxPerMeter);
   }
-  const efficiencyPct = areaM2 > 0 ? (totalStalls * STALL_AREA_M2 * 100) / areaM2 : 0;
+  const efficiencyPct = areaM2 > 0 ? (occupiedM2 * 100) / areaM2 : 0;
   return { totalStalls, areaM2, efficiencyPct };
+
 }

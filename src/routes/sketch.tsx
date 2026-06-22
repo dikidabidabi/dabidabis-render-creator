@@ -1962,6 +1962,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
+  const [parkingKind, setParkingKind] = useState<"mobil" | "motor">("mobil");
   const [parkingSelectedId, setParkingSelectedId] = useState<string | null>(null);
   const [parkingDrag, setParkingDrag] = useState<
     | { kind: "vertex"; areaId: string; idx: number }
@@ -1979,6 +1980,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     { areaId: string; points: { x: number; y: number }[] } | null
   >(null);
   const [parkingPathHover, setParkingPathHover] = useState<{ x: number; y: number } | null>(null);
+  // Sinkronkan parkingKind dengan kind area yang terpilih.
+  useEffect(() => {
+    if (!parkingSelectedId) return;
+    const sel = (sketch.parkingAreas ?? []).find((a) => a.id === parkingSelectedId);
+    if (sel?.kind && sel.kind !== parkingKind) setParkingKind(sel.kind);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parkingSelectedId, sketch.parkingAreas]);
   // Floor tool — pembuat slab lantai (entitas Floor, 150mm ke bawah dari MDPL level)
   const [floorMode, setFloorMode] = useState<FloorMode>("rect");
   const [floorDraft, setFloorDraft] = useState<
@@ -7530,8 +7538,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const minX = Math.min(la.x, lb.x), maxX = Math.max(la.x, lb.x);
       const minY = Math.min(la.y, lb.y), maxY = Math.max(la.y, lb.y);
       if ((maxX - minX) < pxPerMeter * 5 || (maxY - minY) < pxPerMeter * 5) {
-        toast.error("Area parkir terlalu kecil (min 5 m × 5 m)");
-        return;
+        if (parkingKind === "motor") {
+          if ((maxX - minX) < pxPerMeter * 2 || (maxY - minY) < pxPerMeter * 2) {
+            toast.error("Area parkir motor terlalu kecil (min 2 m × 2 m)");
+            return;
+          }
+        } else {
+          toast.error("Area parkir terlalu kecil (min 5 m × 5 m)");
+          return;
+        }
       }
       const pointsLocal = [
         { x: minX, y: minY }, { x: maxX, y: minY },
@@ -7541,12 +7556,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const draft: ParkingArea = {
         id: genParkingId(),
         levelId: activeLvlId ?? undefined,
+        kind: parkingKind,
         pointsLocal,
         orientation: "auto",
         stallRotation: 0,
       };
       setParkingDraft(draft);
-      toast.success("Draft area parkir — tekan Simpan Area untuk mengunci");
+      toast.success(`Draft area parkir ${parkingKind} — tekan Simpan Area untuk mengunci`);
       return;
     }
 
@@ -8492,13 +8508,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
           </Button>
           <Button
-            variant={tool === "parking" ? "default" : "outline"}
+            variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
             size="sm"
-            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingSubTool("draw"); }}
-            className={cn(tool === "parking" && "bg-gradient-primary shadow-primary")}
-            title="Lot Parkir — tarik bounding box; deret 2.5×5 m otomatis di-snap ke grid mm, kolom/dinding/ruang dihindari (geser, tidak skip)."
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("mobil"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "mobil" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Mobil — 2.4 × 5 m, aisle 5.5 m, buffer jalur 1.75 m."
           >
-            <Car className="mr-1.5 h-4 w-4" /> Lot Parkir
+            <Car className="mr-1.5 h-4 w-4" /> Mobil
+          </Button>
+          <Button
+            variant={tool === "parking" && parkingKind === "motor" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("motor"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "motor" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Motor — 0.75 × 2 m, aisle 1.5 m, buffer jalur 0.5 m."
+          >
+            <Car className="mr-1.5 h-4 w-4" /> Motor
           </Button>
         </div>
         {tool === "parking" && (
@@ -10136,13 +10161,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <MoveHorizontal className="h-4 w-4" />
           </Button>
           <Button
-            variant={tool === "parking" ? "default" : "ghost"}
+            variant={tool === "parking" && parkingKind === "mobil" ? "default" : "ghost"}
             size="sm"
-            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingSubTool("draw"); }}
-            className={cn(tool === "parking" && "bg-gradient-primary shadow-primary")}
-            title="Lot Parkir (tarik bbox terikat grid mm; deret stall geser dekat kolom/dinding)"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("mobil"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "mobil" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Mobil (2.4×5 m)"
           >
             <Car className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "parking" && parkingKind === "motor" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("motor"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "motor" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Motor (0.75×2 m)"
+          >
+            <span className="text-[10px] font-semibold">MTR</span>
           </Button>
           {tool === "parking" && (
             <ParkingSubToolbarMobile
