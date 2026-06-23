@@ -6199,16 +6199,32 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         vz += Math.cos(clock.t * 1.3 + i * 0.21) * turb;
         vy += Math.sin(clock.t * 0.9 + i * 0.07) * 0.4;
 
-        // Geser riwayat: slot 1..TAIL_MAX-1 → 0..TAIL_MAX-2.
-        positions.copyWithin(base * 3, base * 3 + 3, (base + TAIL_MAX) * 3);
+        // Hitung langkah head berikutnya, lalu putuskan shift berdasarkan jarak (bukan dt)
+        // agar total panjang jejak konsisten ~20 m terlepas dari kecepatan angin.
+        const stepX = vx * dt;
+        const stepY = vy * dt;
+        const stepZ = vz * dt;
+        const stepDist = Math.hypot(stepX, stepZ); // jarak horizontal yang ditempuh
+        accDist[i] += stepDist;
 
-        let nxp = positions[headOff] + vx * dt;
-        let nyp = positions[headOff + 1] + vy * dt;
-        let nzp = positions[headOff + 2] + vz * dt;
+        let nxp = positions[headOff] + stepX;
+        let nyp = positions[headOff + 1] + stepY;
+        let nzp = positions[headOff + 2] + stepZ;
         if (nyp < 0.3) nyp = 0.3;
+
+        let didShift = false;
+        while (accDist[i] >= SEG_LEN_M) {
+          positions.copyWithin(base * 3, base * 3 + 3, (base + TAIL_MAX) * 3);
+          accDist[i] -= SEG_LEN_M;
+          if (tailLen[i] < TAIL_MAX) {
+            tailLen[i]++;
+            didShift = true;
+          }
+        }
         positions[headOff] = nxp;
         positions[headOff + 1] = nyp;
         positions[headOff + 2] = nzp;
+        if (didShift) paintColors(i);
 
         ages[i] += dt;
         const dxSp = nxp - spawnX[i];
@@ -6221,6 +6237,8 @@ function WindBody({ sketch }: { sketch: Sketch }) {
           spawn(i);
         }
       }
+
+      (geoLines.attributes.color as THREE.BufferAttribute).needsUpdate = true;
 
       (geoLines.attributes.position as THREE.BufferAttribute).needsUpdate = true;
 
