@@ -569,17 +569,31 @@ function RekapSection({ data }: { data: Stats }) {
           <Row label="Volume Beton Kolom" value={`${fmt(data.volumeBetonM3, 2)} m³`} />
         </>
       )}
-      {data.parkingAreaTotalM2 > 0 && (
+      {data.parkingMobilAreaM2 > 0 && (
         <>
           <div className="my-2 h-px bg-border" />
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <Car className="h-3.5 w-3.5" /> Parkir Mobil
           </div>
-          <Row label="Kapasitas Parkir" value={`${data.parkingTotal} mobil`} />
-          <Row label="Luas Area Parkir" value={`${fmt(data.parkingAreaTotalM2)} m²`} />
-          <Row label="Rasio Efisiensi Parkir" value={`${fmt(data.parkingEfficiencyPct, 1)} %`} />
-          {data.parkingByLevel.length > 1 && data.parkingByLevel.map((pl) => (
+          <Row label="Kapasitas Parkir Mobil" value={`${data.parkingMobilTotal} mobil`} />
+          <Row label="Luas Area Parkir Mobil" value={`${fmt(data.parkingMobilAreaM2)} m²`} />
+          <Row label="Rasio Efisiensi Parkir Mobil" value={`${fmt(data.parkingMobilEfficiencyPct, 1)} %`} />
+          {data.parkingMobilByLevel.length > 1 && data.parkingMobilByLevel.map((pl) => (
             <Row key={pl.levelId} label={`· ${pl.levelName}`} value={`${pl.count} mobil`} />
+          ))}
+        </>
+      )}
+      {data.parkingMotorAreaM2 > 0 && (
+        <>
+          <div className="my-2 h-px bg-border" />
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Car className="h-3.5 w-3.5" /> Parkir Motor
+          </div>
+          <Row label="Kapasitas Parkir Motor" value={`${data.parkingMotorTotal} motor`} />
+          <Row label="Luas Area Parkir Motor" value={`${fmt(data.parkingMotorAreaM2)} m²`} />
+          <Row label="Rasio Efisiensi Parkir Motor" value={`${fmt(data.parkingMotorEfficiencyPct, 1)} %`} />
+          {data.parkingMotorByLevel.length > 1 && data.parkingMotorByLevel.map((pl) => (
+            <Row key={pl.levelId} label={`· ${pl.levelName}`} value={`${pl.count} motor`} />
           ))}
         </>
       )}
