@@ -6757,13 +6757,14 @@ function GridStat({ label, value, hint }: { label: string; value: string; hint?:
 }
 
 // ---- Rekap ----
-function computeTotalParkingLots(sketch: Sketch): number {
+function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number } {
   const areas = sketch.parkingAreas ?? [];
-  if (!areas.length) return 0;
+  if (!areas.length) return { mobil: 0, motor: 0 };
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
   const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
   const levels = sketch.levels ?? [];
-  let total = 0;
+  let mobil = 0;
+  let motor = 0;
   for (const level of levels) {
     const areasLv = areas.filter((p) => p.levelId === level.id);
     if (!areasLv.length) continue;
@@ -6806,10 +6807,12 @@ function computeTotalParkingLots(sketch: Sketch): number {
     obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
     for (const area of areasLv) {
       const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
-      total += stalls.filter((s) => s.valid).length;
+      const valid = stalls.filter((s) => s.valid).length;
+      if (area.kind === "motor") motor += valid;
+      else mobil += valid;
     }
   }
-  return total;
+  return { mobil, motor };
 }
 
 function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
