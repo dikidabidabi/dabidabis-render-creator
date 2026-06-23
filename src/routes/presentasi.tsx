@@ -6033,10 +6033,12 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     camera.position.set(domCx + camDist * 0.65, maxBuildY + domR * 0.9, domCz + camDist * 0.65);
     camera.lookAt(domCx, maxBuildY * 0.35, domCz);
 
-    // -------- Particle TRAIL system: 7000 partikel × tail TAIL_MAX, satu BufferGeometry --------
+    // -------- Particle TRAIL system: 7000 partikel × tail 20 meter, satu BufferGeometry --------
     const N = 7000;
     const TAIL_MAX = 20;
     const SEG_PER = TAIL_MAX - 1;
+    const TRAIL_LENGTH_M = 20; // panjang total jejak partikel dalam meter
+    const SEG_LEN_M = TRAIL_LENGTH_M / SEG_PER; // jarak antar simpul jejak (~1.05 m)
     const VTX_TOTAL = N * TAIL_MAX;
     const positions = new Float32Array(VTX_TOTAL * 3);
     const colors = new Float32Array(VTX_TOTAL * 3);
@@ -6051,13 +6053,15 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     }
     const ages = new Float32Array(N);
     const maxAge = new Float32Array(N);
-    const tailLen = new Uint8Array(N);
+    const tailLen = new Uint8Array(N); // jumlah simpul jejak aktif (tumbuh seiring partikel bergerak)
+    const accDist = new Float32Array(N); // akumulasi jarak head sejak shift terakhir
     const spawnX = new Float32Array(N);
     const spawnZ = new Float32Array(N);
     const TRAVEL_MAX_M = 200;
 
-    const colHead = new THREE.Color("#003366");
-    const colTail = new THREE.Color("#7aa8c8");
+    // Gradasi: ekor (tail) biru gelap pudar → kepala (head) cyan terang
+    const colHead = new THREE.Color("#00d4ff");
+    const colTail = new THREE.Color("#0a2540");
     const colBg = new THREE.Color(BG_HEX);
 
     function paintColors(i: number) {
@@ -6065,10 +6069,19 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       const base = i * TAIL_MAX;
       for (let k = 0; k < TAIL_MAX; k++) {
         const within = k >= (TAIL_MAX - tl);
-        const c = within
-          ? colTail.clone().lerp(colHead, (k - (TAIL_MAX - tl)) / Math.max(1, tl - 1))
-          : colBg;
         const off = (base + k) * 3;
+        if (!within) {
+          colors[off] = colBg.r; colors[off + 1] = colBg.g; colors[off + 2] = colBg.b;
+          continue;
+        }
+        // t = 0 di ekor (paling tua), t = 1 di kepala (paling depan)
+        const t = (k - (TAIL_MAX - tl)) / Math.max(1, tl - 1);
+        // Easing kuadratik supaya transisi head ↔ tail terbaca jelas
+        const e = t * t;
+        const c = colTail.clone().lerp(colHead, e);
+        // Fade ekor ke warna latar agar ujung jejak terasa pudar
+        const fade = 0.25 + 0.75 * t;
+        c.lerp(colBg, 1 - fade);
         colors[off] = c.r;
         colors[off + 1] = c.g;
         colors[off + 2] = c.b;
