@@ -6133,7 +6133,8 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       }
       ages[i] = 0;
       maxAge[i] = 30 + Math.random() * 20;
-      tailLen[i] = 12 + Math.floor(Math.random() * (TAIL_MAX - 11));
+      tailLen[i] = 1; // tumbuh secara bertahap saat partikel bergerak
+      accDist[i] = 0;
       spawnX[i] = sx;
       spawnZ[i] = sz;
       paintColors(i);
