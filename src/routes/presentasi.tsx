@@ -6033,10 +6033,12 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     camera.position.set(domCx + camDist * 0.65, maxBuildY + domR * 0.9, domCz + camDist * 0.65);
     camera.lookAt(domCx, maxBuildY * 0.35, domCz);
 
-    // -------- Particle TRAIL system: 7000 partikel × tail TAIL_MAX, satu BufferGeometry --------
+    // -------- Particle TRAIL system: 7000 partikel × tail 20 meter, satu BufferGeometry --------
     const N = 7000;
     const TAIL_MAX = 20;
     const SEG_PER = TAIL_MAX - 1;
+    const TRAIL_LENGTH_M = 20; // panjang total jejak partikel dalam meter
+    const SEG_LEN_M = TRAIL_LENGTH_M / SEG_PER; // jarak antar simpul jejak (~1.05 m)
     const VTX_TOTAL = N * TAIL_MAX;
     const positions = new Float32Array(VTX_TOTAL * 3);
     const colors = new Float32Array(VTX_TOTAL * 3);
@@ -6051,13 +6053,15 @@ function WindBody({ sketch }: { sketch: Sketch }) {
     }
     const ages = new Float32Array(N);
     const maxAge = new Float32Array(N);
-    const tailLen = new Uint8Array(N);
+    const tailLen = new Uint8Array(N); // jumlah simpul jejak aktif (tumbuh seiring partikel bergerak)
+    const accDist = new Float32Array(N); // akumulasi jarak head sejak shift terakhir
     const spawnX = new Float32Array(N);
     const spawnZ = new Float32Array(N);
     const TRAVEL_MAX_M = 200;
 
-    const colHead = new THREE.Color("#003366");
-    const colTail = new THREE.Color("#7aa8c8");
+    // Gradasi: ekor (tail) biru gelap pudar → kepala (head) cyan terang
+    const colHead = new THREE.Color("#00d4ff");
+    const colTail = new THREE.Color("#0a2540");
     const colBg = new THREE.Color(BG_HEX);
 
     function paintColors(i: number) {
@@ -6065,10 +6069,19 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       const base = i * TAIL_MAX;
       for (let k = 0; k < TAIL_MAX; k++) {
         const within = k >= (TAIL_MAX - tl);
-        const c = within
-          ? colTail.clone().lerp(colHead, (k - (TAIL_MAX - tl)) / Math.max(1, tl - 1))
-          : colBg;
         const off = (base + k) * 3;
+        if (!within) {
+          colors[off] = colBg.r; colors[off + 1] = colBg.g; colors[off + 2] = colBg.b;
+          continue;
+        }
+        // t = 0 di ekor (paling tua), t = 1 di kepala (paling depan)
+        const t = (k - (TAIL_MAX - tl)) / Math.max(1, tl - 1);
+        // Easing kuadratik supaya transisi head ↔ tail terbaca jelas
+        const e = t * t;
+        const c = colTail.clone().lerp(colHead, e);
+        // Fade ekor ke warna latar agar ujung jejak terasa pudar
+        const fade = 0.25 + 0.75 * t;
+        c.lerp(colBg, 1 - fade);
         colors[off] = c.r;
         colors[off + 1] = c.g;
         colors[off + 2] = c.b;
@@ -6120,7 +6133,8 @@ function WindBody({ sketch }: { sketch: Sketch }) {
       }
       ages[i] = 0;
       maxAge[i] = 30 + Math.random() * 20;
-      tailLen[i] = 12 + Math.floor(Math.random() * (TAIL_MAX - 11));
+      tailLen[i] = 1; // tumbuh secara bertahap saat partikel bergerak
+      accDist[i] = 0;
       spawnX[i] = sx;
       spawnZ[i] = sz;
       paintColors(i);
@@ -6185,16 +6199,32 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         vz += Math.cos(clock.t * 1.3 + i * 0.21) * turb;
         vy += Math.sin(clock.t * 0.9 + i * 0.07) * 0.4;
 
-        // Geser riwayat: slot 1..TAIL_MAX-1 → 0..TAIL_MAX-2.
-        positions.copyWithin(base * 3, base * 3 + 3, (base + TAIL_MAX) * 3);
+        // Hitung langkah head berikutnya, lalu putuskan shift berdasarkan jarak (bukan dt)
+        // agar total panjang jejak konsisten ~20 m terlepas dari kecepatan angin.
+        const stepX = vx * dt;
+        const stepY = vy * dt;
+        const stepZ = vz * dt;
+        const stepDist = Math.hypot(stepX, stepZ); // jarak horizontal yang ditempuh
+        accDist[i] += stepDist;
 
-        let nxp = positions[headOff] + vx * dt;
-        let nyp = positions[headOff + 1] + vy * dt;
-        let nzp = positions[headOff + 2] + vz * dt;
+        let nxp = positions[headOff] + stepX;
+        let nyp = positions[headOff + 1] + stepY;
+        let nzp = positions[headOff + 2] + stepZ;
         if (nyp < 0.3) nyp = 0.3;
+
+        let didShift = false;
+        while (accDist[i] >= SEG_LEN_M) {
+          positions.copyWithin(base * 3, base * 3 + 3, (base + TAIL_MAX) * 3);
+          accDist[i] -= SEG_LEN_M;
+          if (tailLen[i] < TAIL_MAX) {
+            tailLen[i]++;
+            didShift = true;
+          }
+        }
         positions[headOff] = nxp;
         positions[headOff + 1] = nyp;
         positions[headOff + 2] = nzp;
+        if (didShift) paintColors(i);
 
         ages[i] += dt;
         const dxSp = nxp - spawnX[i];
@@ -6207,6 +6237,8 @@ function WindBody({ sketch }: { sketch: Sketch }) {
           spawn(i);
         }
       }
+
+      (geoLines.attributes.color as THREE.BufferAttribute).needsUpdate = true;
 
       (geoLines.attributes.position as THREE.BufferAttribute).needsUpdate = true;
 
