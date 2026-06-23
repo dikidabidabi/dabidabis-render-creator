@@ -309,10 +309,14 @@ type Stats = {
   ketinggianM: number;
   totalKolom: number;
   volumeBetonM3: number;
-  parkingTotal: number;
-  parkingAreaTotalM2: number;
-  parkingEfficiencyPct: number;
-  parkingByLevel: Array<{ levelId: string; levelName: string; count: number }>;
+  parkingMobilTotal: number;
+  parkingMotorTotal: number;
+  parkingMobilAreaM2: number;
+  parkingMotorAreaM2: number;
+  parkingMobilEfficiencyPct: number;
+  parkingMotorEfficiencyPct: number;
+  parkingMobilByLevel: Array<{ levelId: string; levelName: string; count: number }>;
+  parkingMotorByLevel: Array<{ levelId: string; levelName: string; count: number }>;
 };
 
 function computeStats(sk: Sketch): Stats {
@@ -425,16 +429,19 @@ function computeStats(sk: Sketch): Stats {
   const parkingAreas: ParkingArea[] = sk.parkingAreas ?? [];
   const mmRotDeg = Number.isFinite(Number(sk.mmGridRotation)) ? Number(sk.mmGridRotation) : 0;
   const mmRotRad = (mmRotDeg * Math.PI) / 180;
-  let parkingTotal = 0;
-  let parkingAreaTotalM2 = 0;
-  let parkingOccupiedM2 = 0;
-  const parkingByLevel = new Map<string, number>();
+  let parkingMobilTotal = 0;
+  let parkingMotorTotal = 0;
+  let parkingMobilAreaM2 = 0;
+  let parkingMotorAreaM2 = 0;
+  let parkingMobilOccupiedM2 = 0;
+  let parkingMotorOccupiedM2 = 0;
+  const parkingMobilByLevel = new Map<string, number>();
+  const parkingMotorByLevel = new Map<string, number>();
   for (const area of parkingAreas) {
     const stalls = generateStalls(area, pxPerMeter, mmRotRad, obstaclesForLevel(area.levelId));
     const valid = stalls.filter((s) => s.valid).length;
-    parkingTotal += valid;
-    const stallAreaM2 = area.kind === "motor" ? 0.75 * 2.0 : 2.4 * 5.0;
-    parkingOccupiedM2 += valid * stallAreaM2;
+    const isMotor = area.kind === "motor";
+    const stallAreaM2 = isMotor ? 0.75 * 2.0 : 2.4 * 5.0;
     // luas polygon area (shoelace)
     const pts = area.pointsLocal ?? [];
     let acc = 0;
@@ -443,11 +450,24 @@ function computeStats(sk: Sketch): Stats {
       acc += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
     }
     const areaPx = Math.abs(acc) / 2;
-    parkingAreaTotalM2 += areaPx / (pxPerMeter * pxPerMeter);
-    if (area.levelId) parkingByLevel.set(area.levelId, (parkingByLevel.get(area.levelId) ?? 0) + valid);
+    const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
+    if (isMotor) {
+      parkingMotorTotal += valid;
+      parkingMotorOccupiedM2 += valid * stallAreaM2;
+      parkingMotorAreaM2 += areaM2;
+      if (area.levelId) parkingMotorByLevel.set(area.levelId, (parkingMotorByLevel.get(area.levelId) ?? 0) + valid);
+    } else {
+      parkingMobilTotal += valid;
+      parkingMobilOccupiedM2 += valid * stallAreaM2;
+      parkingMobilAreaM2 += areaM2;
+      if (area.levelId) parkingMobilByLevel.set(area.levelId, (parkingMobilByLevel.get(area.levelId) ?? 0) + valid);
+    }
   }
-  const parkingEfficiencyPct = parkingAreaTotalM2 > 0
-    ? (parkingOccupiedM2 * 100) / parkingAreaTotalM2
+  const parkingMobilEfficiencyPct = parkingMobilAreaM2 > 0
+    ? (parkingMobilOccupiedM2 * 100) / parkingMobilAreaM2
+    : 0;
+  const parkingMotorEfficiencyPct = parkingMotorAreaM2 > 0
+    ? (parkingMotorOccupiedM2 * 100) / parkingMotorAreaM2
     : 0;
 
   return {
@@ -472,10 +492,18 @@ function computeStats(sk: Sketch): Stats {
     ketinggianM,
     totalKolom: totalColumns,
     volumeBetonM3: concreteVolumeM3,
-    parkingTotal,
-    parkingAreaTotalM2,
-    parkingEfficiencyPct,
-    parkingByLevel: Array.from(parkingByLevel.entries()).map(([levelId, count]) => ({
+    parkingMobilTotal,
+    parkingMotorTotal,
+    parkingMobilAreaM2,
+    parkingMotorAreaM2,
+    parkingMobilEfficiencyPct,
+    parkingMotorEfficiencyPct,
+    parkingMobilByLevel: Array.from(parkingMobilByLevel.entries()).map(([levelId, count]) => ({
+      levelId,
+      levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
+      count,
+    })),
+    parkingMotorByLevel: Array.from(parkingMotorByLevel.entries()).map(([levelId, count]) => ({
       levelId,
       levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
       count,
@@ -541,17 +569,31 @@ function RekapSection({ data }: { data: Stats }) {
           <Row label="Volume Beton Kolom" value={`${fmt(data.volumeBetonM3, 2)} m³`} />
         </>
       )}
-      {data.parkingAreaTotalM2 > 0 && (
+      {data.parkingMobilAreaM2 > 0 && (
         <>
           <div className="my-2 h-px bg-border" />
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <Car className="h-3.5 w-3.5" /> Parkir Mobil
           </div>
-          <Row label="Kapasitas Parkir" value={`${data.parkingTotal} mobil`} />
-          <Row label="Luas Area Parkir" value={`${fmt(data.parkingAreaTotalM2)} m²`} />
-          <Row label="Rasio Efisiensi Parkir" value={`${fmt(data.parkingEfficiencyPct, 1)} %`} />
-          {data.parkingByLevel.length > 1 && data.parkingByLevel.map((pl) => (
+          <Row label="Kapasitas Parkir Mobil" value={`${data.parkingMobilTotal} mobil`} />
+          <Row label="Luas Area Parkir Mobil" value={`${fmt(data.parkingMobilAreaM2)} m²`} />
+          <Row label="Rasio Efisiensi Parkir Mobil" value={`${fmt(data.parkingMobilEfficiencyPct, 1)} %`} />
+          {data.parkingMobilByLevel.length > 1 && data.parkingMobilByLevel.map((pl) => (
             <Row key={pl.levelId} label={`· ${pl.levelName}`} value={`${pl.count} mobil`} />
+          ))}
+        </>
+      )}
+      {data.parkingMotorAreaM2 > 0 && (
+        <>
+          <div className="my-2 h-px bg-border" />
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Car className="h-3.5 w-3.5" /> Parkir Motor
+          </div>
+          <Row label="Kapasitas Parkir Motor" value={`${data.parkingMotorTotal} motor`} />
+          <Row label="Luas Area Parkir Motor" value={`${fmt(data.parkingMotorAreaM2)} m²`} />
+          <Row label="Rasio Efisiensi Parkir Motor" value={`${fmt(data.parkingMotorEfficiencyPct, 1)} %`} />
+          {data.parkingMotorByLevel.length > 1 && data.parkingMotorByLevel.map((pl) => (
+            <Row key={pl.levelId} label={`· ${pl.levelName}`} value={`${pl.count} motor`} />
           ))}
         </>
       )}

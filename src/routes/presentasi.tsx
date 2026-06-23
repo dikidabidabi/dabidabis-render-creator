@@ -3823,11 +3823,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               const cy = worldPoly.reduce((s, p) => s + p.y, 0) / worldPoly.length;
               return { area, valid, worldPoly, cx, cy };
             });
-            // Kelompokkan area berdasar ruang parkir yang membungkusnya
+            // Kelompokkan area berdasar ruang parkir yang membungkusnya + kind
             const parkingRooms = layers.filter((ly) => isParkingName(ly.name) && Array.isArray(ly.points) && ly.points.length >= 3);
-            const groups = new Map<string, { count: number; cx: number; cy: number }>();
-            const ungrouped: typeof areaInfos = [];
+            const groups = new Map<string, { mobil: number; motor: number; cx: number; cy: number }>();
+            const ungrouped: Array<{ info: typeof areaInfos[number]; kind: "mobil" | "motor" }> = [];
             for (const info of areaInfos) {
+              const kind: "mobil" | "motor" = info.area.kind === "motor" ? "motor" : "mobil";
               let room = parkingRooms.find((r) => pointInPolyPres({ x: info.cx, y: info.cy }, r.points));
               if (!room) room = parkingRooms.find((r) => info.worldPoly.some((v) => pointInPolyPres(v, r.points)));
               if (!room) room = parkingRooms.find((r) => {
@@ -3835,16 +3836,36 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 const rcy = r.points.reduce((s, p) => s + p.y, 0) / r.points.length;
                 return info.worldPoly.length >= 3 && pointInPolyPres({ x: rcx, y: rcy }, info.worldPoly);
               });
-              if (!room) { ungrouped.push(info); continue; }
+              if (!room) { ungrouped.push({ info, kind }); continue; }
               const prev = groups.get(room.id);
               if (prev) {
-                prev.count += info.valid.length;
+                prev[kind] += info.valid.length;
               } else {
                 const rcx = room.points.reduce((s, p) => s + p.x, 0) / room.points.length;
                 const rcy = room.points.reduce((s, p) => s + p.y, 0) / room.points.length;
-                groups.set(room.id, { count: info.valid.length, cx: rcx, cy: rcy });
+                groups.set(room.id, {
+                  mobil: kind === "mobil" ? info.valid.length : 0,
+                  motor: kind === "motor" ? info.valid.length : 0,
+                  cx: rcx, cy: rcy,
+                });
               }
             }
+            const formatLabel = (mobil: number, motor: number): string => {
+              const parts: string[] = [];
+              if (mobil > 0) parts.push(`${mobil} lot mobil`);
+              if (motor > 0) parts.push(`${motor} lot motor`);
+              return parts.join(" · ") || "0 lot";
+            };
+            const labels = [
+              ...Array.from(groups.entries()).map(([id, g]) => ({
+                key: `room-${id}`, text: formatLabel(g.mobil, g.motor), cx: g.cx, cy: g.cy,
+              })),
+              ...ungrouped.map(({ info, kind }) => ({
+                key: `area-${info.area.id}`,
+                text: formatLabel(kind === "mobil" ? info.valid.length : 0, kind === "motor" ? info.valid.length : 0),
+                cx: info.cx, cy: info.cy,
+              })),
+            ];
             return (
               <g pointerEvents="none">
                 {areaInfos.map((info) => (
@@ -3870,29 +3891,30 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     strokeDasharray={`${sw * 0.003} ${sw * 0.002}`}
                   />
                 ))}
-                {[
-                  ...Array.from(groups.entries()).map(([id, g]) => ({ key: `room-${id}`, count: g.count, cx: g.cx, cy: g.cy })),
-                  ...ungrouped.map((info) => ({ key: `area-${info.area.id}`, count: info.valid.length, cx: info.cx, cy: info.cy })),
-                ].map((lbl) => (
-                  <g key={lbl.key}>
-                    <rect
-                      x={lbl.cx - sw * 0.045} y={lbl.cy - sw * 0.014}
-                      width={sw * 0.09} height={sw * 0.028}
-                      rx={sw * 0.004}
-                      fill="rgba(255,255,255,0.9)"
-                      stroke="#000000"
-                      strokeWidth={sw * 0.00045}
-                    />
-                    <text
-                      x={lbl.cx} y={lbl.cy}
-                      textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.016} fontWeight={700}
-                      fill="#000000"
-                    >
-                      {`${lbl.count} lot mobil`}
-                    </text>
-                  </g>
-                ))}
+                {labels.map((lbl) => {
+                  const w = sw * 0.018 * Math.max(6, lbl.text.length) * 0.55;
+                  const halfW = Math.max(sw * 0.045, w / 2 + sw * 0.008);
+                  return (
+                    <g key={lbl.key}>
+                      <rect
+                        x={lbl.cx - halfW} y={lbl.cy - sw * 0.014}
+                        width={halfW * 2} height={sw * 0.028}
+                        rx={sw * 0.004}
+                        fill="rgba(255,255,255,0.9)"
+                        stroke="#000000"
+                        strokeWidth={sw * 0.00045}
+                      />
+                      <text
+                        x={lbl.cx} y={lbl.cy}
+                        textAnchor="middle" dominantBaseline="central"
+                        fontSize={sw * 0.016} fontWeight={700}
+                        fill="#000000"
+                      >
+                        {lbl.text}
+                      </text>
+                    </g>
+                  );
+                })}
               </g>
             );
 
@@ -6735,13 +6757,14 @@ function GridStat({ label, value, hint }: { label: string; value: string; hint?:
 }
 
 // ---- Rekap ----
-function computeTotalParkingLots(sketch: Sketch): number {
+function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number } {
   const areas = sketch.parkingAreas ?? [];
-  if (!areas.length) return 0;
+  if (!areas.length) return { mobil: 0, motor: 0 };
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
   const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
   const levels = sketch.levels ?? [];
-  let total = 0;
+  let mobil = 0;
+  let motor = 0;
   for (const level of levels) {
     const areasLv = areas.filter((p) => p.levelId === level.id);
     if (!areasLv.length) continue;
@@ -6784,10 +6807,12 @@ function computeTotalParkingLots(sketch: Sketch): number {
     obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
     for (const area of areasLv) {
       const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
-      total += stalls.filter((s) => s.valid).length;
+      const valid = stalls.filter((s) => s.valid).length;
+      if (area.kind === "motor") motor += valid;
+      else mobil += valid;
     }
   }
-  return total;
+  return { mobil, motor };
 }
 
 function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
@@ -6828,8 +6853,11 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       {data.totalKolom > 0 && (
         <GridStat label="Modul Struktur" value={`${data.totalKolom} kolom`} hint={`Volume beton ${fmt(data.volumeBetonM3, 2)} m³`} />
       )}
-      {totalParking > 0 && (
-        <GridStat label="Total Lot Parkir" value={`${totalParking} lot`} hint="akumulasi seluruh level" />
+      {totalParking.mobil > 0 && (
+        <GridStat label="Total Lot Parkir Mobil" value={`${totalParking.mobil} mobil`} hint="akumulasi seluruh level" />
+      )}
+      {totalParking.motor > 0 && (
+        <GridStat label="Total Lot Parkir Motor" value={`${totalParking.motor} motor`} hint="akumulasi seluruh level" />
       )}
     </div>
   );
