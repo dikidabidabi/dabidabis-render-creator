@@ -4766,7 +4766,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
         const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
         const sp = worldToScreen({ x: cx, y: cy });
-        const label = `${validCount} mobil`;
+        const label = `${validCount} ${area.kind === "motor" ? "motor" : "mobil"}`;
         ctx.font = "600 11px Manrope, sans-serif";
         const w = ctx.measureText(label).width + 10;
         ctx.fillStyle = "rgba(14,165,233,0.95)";
