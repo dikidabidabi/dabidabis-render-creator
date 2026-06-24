@@ -3091,6 +3091,159 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return out;
   }, [sketch.parkingAreas, activeLvlId, pxPerMeter, mmGridRotRad, parkingObstacles]);
 
+  // Generator obstacle untuk level mana saja (dipakai untuk akumulasi global
+  // diffable). Pola identik dengan `parkingObstacles` tetapi filter level
+  // disetel ke `targetLvlId`.
+  const buildObstaclesForLevel = useCallback((targetLvlId: string | undefined): ParkingObstacle[] => {
+    const obs: ParkingObstacle[] = [];
+    const wallBufferPx = 0.075 * pxPerMeter;
+    for (const ln of lines) {
+      if (targetLvlId && ln.levelId !== targetLvlId) continue;
+      if ((ln.kind ?? "straight") !== "straight") continue;
+      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBufferPx });
+    }
+    const grids = collectGrids(primaryGrid, gridExtras);
+    const lv = levels.find((l) => l.id === targetLvlId);
+    if (lv) {
+      for (const g of grids) {
+        if (g.lineOnly) continue;
+        if (!levelInRange(g, lv, levels)) continue;
+        const { spansX, spansY } = spansForLevel(g, lv.id);
+        const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
+        const ang = ((g.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        const posX = axisPositions(spansX);
+        const posY = axisPositions(spansY);
+        for (let j = 0; j < posY.length; j++) {
+          for (let i = 0; i < posX.length; i++) {
+            if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
+            const lx = posX[i] * pxPerMeter;
+            const ly = posY[j] * pxPerMeter;
+            const wx = g.origin.x + lx * cos - ly * sin;
+            const wy = g.origin.y + lx * sin + ly * cos;
+            const corners = [
+              { x: -halfCol, y: -halfCol }, { x:  halfCol, y: -halfCol },
+              { x:  halfCol, y:  halfCol }, { x: -halfCol, y:  halfCol },
+            ].map((c) => ({ x: wx + c.x * cos - c.y * sin, y: wy + c.x * sin + c.y * cos }));
+            obs.push({ kind: "polygon", poly: corners });
+          }
+        }
+      }
+    }
+    for (const ly of layers) {
+      if (targetLvlId && ly.levelId !== targetLvlId) continue;
+      if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+      if (isParkingName(ly.name)) continue;
+      obs.push({ kind: "polygon", poly: ly.points.map((p) => ({ x: p.x, y: p.y })) });
+    }
+    const areasForPath = (sketch.parkingAreas ?? []).filter(
+      (p) => !targetLvlId || p.levelId === targetLvlId,
+    );
+    obs.push(...parkingPathsToObstacles(areasForPath, pxPerMeter, mmGridRotRad));
+    return obs;
+  }, [lines, pxPerMeter, primaryGrid, gridExtras, levels, layers, sketch.parkingAreas, mmGridRotRad]);
+
+  // ===== Diffable global ====================================================
+  // 1) Hitung total lot mobil per level (level-aktif memakai parkingStallsActive,
+  //    level lain dihitung ulang dengan obstacle level itu).
+  // 2) Target diffable global dari formula → distribusi merata per level
+  //    (sisa diberikan dari level paling bawah; level paling ATAS dapat paling
+  //    sedikit).
+  // 3) Pilih stall efektif diffable per area: pakai `area.diffable` (yang masih
+  //    valid) lebih dulu; jika kurang, isi dengan stall pertama (deterministik).
+  const parkingDiffableInfo = useMemo(() => {
+    const allAreas = sketch.parkingAreas ?? [];
+    const mobilAreas = allAreas.filter((a) => (a.kind ?? "mobil") === "mobil");
+    const areasByLvl = new Map<string, ParkingArea[]>();
+    for (const a of mobilAreas) {
+      const lid = a.levelId ?? "";
+      if (!lid) continue;
+      const arr = areasByLvl.get(lid) ?? [];
+      arr.push(a);
+      areasByLvl.set(lid, arr);
+    }
+    const stallsByArea = new Map<string, ParkingStall[]>();
+    for (const [lid, areas] of areasByLvl) {
+      for (const area of areas) {
+        if (lid === activeLvlId) {
+          const found = parkingStallsActive.find((x) => x.areaId === area.id);
+          stallsByArea.set(area.id, found ? found.stalls
+            : generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles));
+        } else {
+          const obs = buildObstaclesForLevel(lid);
+          stallsByArea.set(area.id, generateStalls(area, pxPerMeter, mmGridRotRad, obs));
+        }
+      }
+    }
+    const baseByLevel = new Map<string, number>();
+    let baseTotal = 0;
+    for (const [lid, areas] of areasByLvl) {
+      let n = 0;
+      for (const a of areas) {
+        const ss = stallsByArea.get(a.id) ?? [];
+        for (const s of ss) if (s.valid) n++;
+      }
+      baseByLevel.set(lid, n);
+      baseTotal += n;
+    }
+    const diffableTotal = computeDiffableTotal(baseTotal);
+    const lvlsAsc = [...areasByLvl.keys()]
+      .map((id) => levels.find((l) => l.id === id))
+      .filter((x): x is Level => !!x && (baseByLevel.get(x.id) ?? 0) > 0)
+      .sort((a, b) => a.mdpl - b.mdpl)
+      .map((l) => l.id);
+    const targetByLevel = distributeDiffableAcrossLevels(lvlsAsc, diffableTotal);
+    const effectiveByArea = new Map<string, Set<string>>();
+    for (const [lid, areas] of areasByLvl) {
+      let need = Math.min(targetByLevel.get(lid) ?? 0, baseByLevel.get(lid) ?? 0);
+      const pickedByArea = new Map<string, Set<string>>();
+      for (const a of areas) pickedByArea.set(a.id, new Set());
+      if (need <= 0) {
+        for (const [aid, set] of pickedByArea) effectiveByArea.set(aid, set);
+        continue;
+      }
+      const validKeysByArea = new Map<string, Set<string>>();
+      const orderSlots: Array<{ areaId: string; key: string }> = [];
+      for (const a of areas) {
+        const set = new Set<string>();
+        const ss = stallsByArea.get(a.id) ?? [];
+        for (const s of ss) {
+          if (!s.valid) continue;
+          const k = `${s.row},${s.col}`;
+          set.add(k);
+          orderSlots.push({ areaId: a.id, key: k });
+        }
+        validKeysByArea.set(a.id, set);
+      }
+      const seen = new Set<string>();
+      for (const a of areas) {
+        const validSet = validKeysByArea.get(a.id) ?? new Set<string>();
+        for (const k of a.diffable ?? []) {
+          if (!validSet.has(k)) continue;
+          const tag = `${a.id}|${k}`;
+          if (seen.has(tag)) continue;
+          seen.add(tag);
+          if (need <= 0) break;
+          pickedByArea.get(a.id)!.add(k);
+          need--;
+        }
+        if (need <= 0) break;
+      }
+      for (const s of orderSlots) {
+        if (need <= 0) break;
+        const tag = `${s.areaId}|${s.key}`;
+        if (seen.has(tag)) continue;
+        seen.add(tag);
+        pickedByArea.get(s.areaId)!.add(s.key);
+        need--;
+      }
+      for (const [aid, set] of pickedByArea) effectiveByArea.set(aid, set);
+    }
+    return { effectiveByArea, baseByLevel, targetByLevel, diffableTotal, baseTotal };
+  }, [sketch.parkingAreas, levels, activeLvlId, parkingStallsActive, parkingObstacles, buildObstaclesForLevel, pxPerMeter, mmGridRotRad]);
+
+
+
   // Redraw
   useEffect(() => {
     const canvas = canvasRef.current;
