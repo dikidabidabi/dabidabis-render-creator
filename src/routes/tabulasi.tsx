@@ -17,6 +17,8 @@ import {
   type ParkingArea,
   type ParkingObstacle,
   generateStalls,
+  computeDiffableTotal,
+  distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 
 export const Route = createFileRoute("/tabulasi")({
@@ -317,6 +319,8 @@ type Stats = {
   parkingMotorEfficiencyPct: number;
   parkingMobilByLevel: Array<{ levelId: string; levelName: string; count: number }>;
   parkingMotorByLevel: Array<{ levelId: string; levelName: string; count: number }>;
+  parkingDiffableTotal: number;
+  parkingDiffableByLevel: Array<{ levelId: string; levelName: string; count: number }>;
 };
 
 function computeStats(sk: Sketch): Stats {
@@ -508,6 +512,23 @@ function computeStats(sk: Sketch): Stats {
       levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
       count,
     })),
+    ...(() => {
+      const diffTotal = computeDiffableTotal(parkingMobilTotal);
+      const lvlsAsc = Array.from(parkingMobilByLevel.entries())
+        .filter(([, c]) => c > 0)
+        .map(([lid]) => ({ lid, mdpl: levels.find((l) => l.id === lid)?.mdpl ?? 0 }))
+        .sort((a, b) => a.mdpl - b.mdpl)
+        .map((x) => x.lid);
+      const dist = distributeDiffableAcrossLevels(lvlsAsc, diffTotal);
+      return {
+        parkingDiffableTotal: diffTotal,
+        parkingDiffableByLevel: Array.from(dist.entries()).map(([levelId, count]) => ({
+          levelId,
+          levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
+          count,
+        })),
+      };
+    })(),
   };
 }
 
@@ -581,6 +602,14 @@ function RekapSection({ data }: { data: Stats }) {
           {data.parkingMobilByLevel.length > 1 && data.parkingMobilByLevel.map((pl) => (
             <Row key={pl.levelId} label={`· ${pl.levelName}`} value={`${pl.count} mobil`} />
           ))}
+          {data.parkingDiffableTotal > 0 && (
+            <>
+              <Row label="Lot Diffable (Mobil)" value={`${data.parkingDiffableTotal} lot`} />
+              {data.parkingDiffableByLevel.length > 1 && data.parkingDiffableByLevel.map((pl) => (
+                <Row key={`d-${pl.levelId}`} label={`· ${pl.levelName}`} value={`${pl.count} diffable`} />
+              ))}
+            </>
+          )}
         </>
       )}
       {data.parkingMotorAreaM2 > 0 && (

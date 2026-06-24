@@ -128,6 +128,10 @@ import {
   isParkingName,
   parkingPathsToObstacles,
   PARKING_PATH_BUFFER_M,
+  DIFFABLE_STALL_W,
+  DIFFABLE_STALL_L,
+  computeDiffableTotal,
+  distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useProjectStore } from "@/store/project-store";
@@ -1004,6 +1008,7 @@ export type ParkingSubToolKind =
   | "addPoint"
   | "removePoint"
   | "rotate"
+  | "diffable"
   | "pathDraw"
   | "pathMove"
   | "pathAdd"
@@ -1027,6 +1032,7 @@ type ParkingSubToolbarProps = {
   pathDraftCount: number;
   onSavePathDraft: () => void;
   onCancelPathDraft: () => void;
+  parkingKind: "mobil" | "motor";
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
@@ -1034,6 +1040,7 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
     sub, setSub, selectedId, clipboardSize, orientation, onOrientation,
     onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft,
     hasPathDraft, pathDraftCount, onSavePathDraft, onCancelPathDraft,
+    parkingKind,
   } = props;
   const opts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
@@ -1042,6 +1049,9 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
     { k: "removePoint", label: "Edit Titik: −", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
   ];
+  if (parkingKind === "mobil") {
+    opts.push({ k: "diffable", label: "Diffable", hint: "Pilih lot mobil untuk ditandai sebagai lot diffable (swap dengan diffable terdekat di level)" });
+  }
   const pathOpts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
     { k: "pathDraw", label: "Tarik", hint: "Klik berurutan utk membuat polyline (Enter = simpan)" },
     { k: "pathMove", label: "Geser", hint: "Geser titik jalur" },
@@ -3081,6 +3091,159 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return out;
   }, [sketch.parkingAreas, activeLvlId, pxPerMeter, mmGridRotRad, parkingObstacles]);
 
+  // Generator obstacle untuk level mana saja (dipakai untuk akumulasi global
+  // diffable). Pola identik dengan `parkingObstacles` tetapi filter level
+  // disetel ke `targetLvlId`.
+  const buildObstaclesForLevel = useCallback((targetLvlId: string | undefined): ParkingObstacle[] => {
+    const obs: ParkingObstacle[] = [];
+    const wallBufferPx = 0.075 * pxPerMeter;
+    for (const ln of lines) {
+      if (targetLvlId && ln.levelId !== targetLvlId) continue;
+      if ((ln.kind ?? "straight") !== "straight") continue;
+      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBufferPx });
+    }
+    const grids = collectGrids(primaryGrid, gridExtras);
+    const lv = levels.find((l) => l.id === targetLvlId);
+    if (lv) {
+      for (const g of grids) {
+        if (g.lineOnly) continue;
+        if (!levelInRange(g, lv, levels)) continue;
+        const { spansX, spansY } = spansForLevel(g, lv.id);
+        const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
+        const ang = ((g.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(ang), sin = Math.sin(ang);
+        const posX = axisPositions(spansX);
+        const posY = axisPositions(spansY);
+        for (let j = 0; j < posY.length; j++) {
+          for (let i = 0; i < posX.length; i++) {
+            if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
+            const lx = posX[i] * pxPerMeter;
+            const ly = posY[j] * pxPerMeter;
+            const wx = g.origin.x + lx * cos - ly * sin;
+            const wy = g.origin.y + lx * sin + ly * cos;
+            const corners = [
+              { x: -halfCol, y: -halfCol }, { x:  halfCol, y: -halfCol },
+              { x:  halfCol, y:  halfCol }, { x: -halfCol, y:  halfCol },
+            ].map((c) => ({ x: wx + c.x * cos - c.y * sin, y: wy + c.x * sin + c.y * cos }));
+            obs.push({ kind: "polygon", poly: corners });
+          }
+        }
+      }
+    }
+    for (const ly of layers) {
+      if (targetLvlId && ly.levelId !== targetLvlId) continue;
+      if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+      if (isParkingName(ly.name)) continue;
+      obs.push({ kind: "polygon", poly: ly.points.map((p) => ({ x: p.x, y: p.y })) });
+    }
+    const areasForPath = (sketch.parkingAreas ?? []).filter(
+      (p) => !targetLvlId || p.levelId === targetLvlId,
+    );
+    obs.push(...parkingPathsToObstacles(areasForPath, pxPerMeter, mmGridRotRad));
+    return obs;
+  }, [lines, pxPerMeter, primaryGrid, gridExtras, levels, layers, sketch.parkingAreas, mmGridRotRad]);
+
+  // ===== Diffable global ====================================================
+  // 1) Hitung total lot mobil per level (level-aktif memakai parkingStallsActive,
+  //    level lain dihitung ulang dengan obstacle level itu).
+  // 2) Target diffable global dari formula → distribusi merata per level
+  //    (sisa diberikan dari level paling bawah; level paling ATAS dapat paling
+  //    sedikit).
+  // 3) Pilih stall efektif diffable per area: pakai `area.diffable` (yang masih
+  //    valid) lebih dulu; jika kurang, isi dengan stall pertama (deterministik).
+  const parkingDiffableInfo = useMemo(() => {
+    const allAreas = sketch.parkingAreas ?? [];
+    const mobilAreas = allAreas.filter((a) => (a.kind ?? "mobil") === "mobil");
+    const areasByLvl = new Map<string, ParkingArea[]>();
+    for (const a of mobilAreas) {
+      const lid = a.levelId ?? "";
+      if (!lid) continue;
+      const arr = areasByLvl.get(lid) ?? [];
+      arr.push(a);
+      areasByLvl.set(lid, arr);
+    }
+    const stallsByArea = new Map<string, ParkingStall[]>();
+    for (const [lid, areas] of areasByLvl) {
+      for (const area of areas) {
+        if (lid === activeLvlId) {
+          const found = parkingStallsActive.find((x) => x.areaId === area.id);
+          stallsByArea.set(area.id, found ? found.stalls
+            : generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles));
+        } else {
+          const obs = buildObstaclesForLevel(lid);
+          stallsByArea.set(area.id, generateStalls(area, pxPerMeter, mmGridRotRad, obs));
+        }
+      }
+    }
+    const baseByLevel = new Map<string, number>();
+    let baseTotal = 0;
+    for (const [lid, areas] of areasByLvl) {
+      let n = 0;
+      for (const a of areas) {
+        const ss = stallsByArea.get(a.id) ?? [];
+        for (const s of ss) if (s.valid) n++;
+      }
+      baseByLevel.set(lid, n);
+      baseTotal += n;
+    }
+    const diffableTotal = computeDiffableTotal(baseTotal);
+    const lvlsAsc = [...areasByLvl.keys()]
+      .map((id) => levels.find((l) => l.id === id))
+      .filter((x): x is Level => !!x && (baseByLevel.get(x.id) ?? 0) > 0)
+      .sort((a, b) => a.mdpl - b.mdpl)
+      .map((l) => l.id);
+    const targetByLevel = distributeDiffableAcrossLevels(lvlsAsc, diffableTotal);
+    const effectiveByArea = new Map<string, Set<string>>();
+    for (const [lid, areas] of areasByLvl) {
+      let need = Math.min(targetByLevel.get(lid) ?? 0, baseByLevel.get(lid) ?? 0);
+      const pickedByArea = new Map<string, Set<string>>();
+      for (const a of areas) pickedByArea.set(a.id, new Set());
+      if (need <= 0) {
+        for (const [aid, set] of pickedByArea) effectiveByArea.set(aid, set);
+        continue;
+      }
+      const validKeysByArea = new Map<string, Set<string>>();
+      const orderSlots: Array<{ areaId: string; key: string }> = [];
+      for (const a of areas) {
+        const set = new Set<string>();
+        const ss = stallsByArea.get(a.id) ?? [];
+        for (const s of ss) {
+          if (!s.valid) continue;
+          const k = `${s.row},${s.col}`;
+          set.add(k);
+          orderSlots.push({ areaId: a.id, key: k });
+        }
+        validKeysByArea.set(a.id, set);
+      }
+      const seen = new Set<string>();
+      for (const a of areas) {
+        const validSet = validKeysByArea.get(a.id) ?? new Set<string>();
+        for (const k of a.diffable ?? []) {
+          if (!validSet.has(k)) continue;
+          const tag = `${a.id}|${k}`;
+          if (seen.has(tag)) continue;
+          seen.add(tag);
+          if (need <= 0) break;
+          pickedByArea.get(a.id)!.add(k);
+          need--;
+        }
+        if (need <= 0) break;
+      }
+      for (const s of orderSlots) {
+        if (need <= 0) break;
+        const tag = `${s.areaId}|${s.key}`;
+        if (seen.has(tag)) continue;
+        seen.add(tag);
+        pickedByArea.get(s.areaId)!.add(s.key);
+        need--;
+      }
+      for (const [aid, set] of pickedByArea) effectiveByArea.set(aid, set);
+    }
+    return { effectiveByArea, baseByLevel, targetByLevel, diffableTotal, baseTotal };
+  }, [sketch.parkingAreas, levels, activeLvlId, parkingStallsActive, parkingObstacles, buildObstaclesForLevel, pxPerMeter, mmGridRotRad]);
+
+
+
   // Redraw
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -4748,17 +4911,60 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         // stalls
         const stalls = stallsByArea.get(area.id) ?? [];
+        const diffSet = (area.kind ?? "mobil") === "mobil"
+          ? (parkingDiffableInfo.effectiveByArea.get(area.id) ?? new Set<string>())
+          : new Set<string>();
+        let diffCountArea = 0;
         for (const st of stalls) {
           if (!st.valid) continue;
-          ctx.beginPath();
-          ctx.moveTo(st.poly[0].x, st.poly[0].y);
-          for (let i = 1; i < st.poly.length; i++) ctx.lineTo(st.poly[i].x, st.poly[i].y);
-          ctx.closePath();
-          ctx.fillStyle = "rgba(200, 200, 200, 0.35)";
-          ctx.fill();
-          ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
-          ctx.lineWidth = 1.2 / s;
-          ctx.stroke();
+          const isDiff = diffSet.has(`${st.row},${st.col}`);
+          if (isDiff) {
+            diffCountArea++;
+            // Lot diffable: gambar persegi 3.7m × 5m di posisi stall, abu kemerahan + simbol ♿.
+            const wPx = DIFFABLE_STALL_W * pxPerMeter;
+            const lPx = DIFFABLE_STALL_L * pxPerMeter;
+            const ang = st.angle; // facing direction (length axis)
+            const ux = Math.cos(ang), uy = Math.sin(ang);             // along length
+            const vx = -Math.sin(ang), vy = Math.cos(ang);            // along width
+            const hl = lPx / 2, hw = wPx / 2;
+            const c = st.center;
+            const c1 = { x: c.x - ux * hl - vx * hw, y: c.y - uy * hl - vy * hw };
+            const c2 = { x: c.x - ux * hl + vx * hw, y: c.y - uy * hl + vy * hw };
+            const c3 = { x: c.x + ux * hl + vx * hw, y: c.y + uy * hl + vy * hw };
+            const c4 = { x: c.x + ux * hl - vx * hw, y: c.y + uy * hl - vy * hw };
+            ctx.beginPath();
+            ctx.moveTo(c1.x, c1.y);
+            ctx.lineTo(c2.x, c2.y);
+            ctx.lineTo(c3.x, c3.y);
+            ctx.lineTo(c4.x, c4.y);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(168, 96, 96, 0.55)";   // abu kemerahan
+            ctx.fill();
+            ctx.strokeStyle = "rgba(190, 70, 70, 0.95)";
+            ctx.lineWidth = 1.4 / s;
+            ctx.stroke();
+            // Simbol ♿ di tengah lot
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(ang + Math.PI / 2);
+            const symPx = 1.6 * pxPerMeter;
+            ctx.font = `${symPx}px "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2", system-ui, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = "#fff";
+            ctx.fillText("♿", 0, 0);
+            ctx.restore();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(st.poly[0].x, st.poly[0].y);
+            for (let i = 1; i < st.poly.length; i++) ctx.lineTo(st.poly[i].x, st.poly[i].y);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(200, 200, 200, 0.35)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
+            ctx.lineWidth = 1.2 / s;
+            ctx.stroke();
+          }
         }
         ctx.restore();
         // label kapasitas
@@ -4766,7 +4972,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
         const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
         const sp = worldToScreen({ x: cx, y: cy });
-        const label = `${validCount} ${area.kind === "motor" ? "motor" : "mobil"}`;
+        let label: string;
+        if ((area.kind ?? "mobil") === "motor") {
+          label = `${validCount} motor`;
+        } else {
+          const reg = Math.max(0, validCount - diffCountArea);
+          label = diffCountArea > 0 ? `${reg} mobil + ${diffCountArea} diffable` : `${validCount} mobil`;
+        }
         ctx.font = "600 11px Manrope, sans-serif";
         const w = ctx.measureText(label).width + 10;
         ctx.fillStyle = "rgba(14,165,233,0.95)";
@@ -4933,7 +5145,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -5824,6 +6036,81 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             }
           }
         }
+        return;
+      }
+
+
+      // ----- Diffable: swap lot mobil terdekat di level yg sama -----
+      if (parkingSubTool === "diffable") {
+        // Cari stall (mobil) yg di-tap di level aktif.
+        const mobilAreas = areas.filter((a) => (a.kind ?? "mobil") === "mobil");
+        let hitArea: ParkingArea | null = null;
+        let hitStall: ParkingStall | null = null;
+        for (const area of mobilAreas) {
+          const found = parkingStallsActive.find((x) => x.areaId === area.id);
+          const stalls = found?.stalls ?? [];
+          for (const st of stalls) {
+            if (!st.valid) continue;
+            // hit-test poligon stall (atau poligon diffable jika sudah diffable)
+            const poly = st.poly;
+            let inside = false;
+            for (let k = 0, j = poly.length - 1; k < poly.length; j = k++) {
+              const xi = poly[k].x, yi = poly[k].y, xj = poly[j].x, yj = poly[j].y;
+              if ((yi > rawWp.y) !== (yj > rawWp.y) &&
+                  rawWp.x < ((xj - xi) * (rawWp.y - yi)) / (yj - yi + 1e-12) + xi) {
+                inside = !inside;
+              }
+            }
+            if (inside) { hitArea = area; hitStall = st; break; }
+          }
+          if (hitStall) break;
+        }
+        if (!hitArea || !hitStall) {
+          toast.message("Tap lot mobil yang ingin dijadikan diffable");
+          return;
+        }
+        const tappedKey = `${hitStall.row},${hitStall.col}`;
+        const tappedSet = parkingDiffableInfo.effectiveByArea.get(hitArea.id) ?? new Set<string>();
+        if (tappedSet.has(tappedKey)) {
+          toast.message("Lot ini sudah diffable");
+          return;
+        }
+        // Materialisasi diffable saat ini per area di level aktif.
+        const lvlAreas = mobilAreas;
+        const currentByArea = new Map<string, Set<string>>();
+        for (const a of lvlAreas) {
+          currentByArea.set(a.id, new Set(parkingDiffableInfo.effectiveByArea.get(a.id) ?? []));
+        }
+        // Cari diffable terdekat di level (jarak antar center stall).
+        let bestAreaId: string | null = null;
+        let bestKey: string | null = null;
+        let bestD = Infinity;
+        for (const a of lvlAreas) {
+          const found = parkingStallsActive.find((x) => x.areaId === a.id);
+          const stalls = found?.stalls ?? [];
+          const set = currentByArea.get(a.id) ?? new Set<string>();
+          for (const st of stalls) {
+            const k = `${st.row},${st.col}`;
+            if (!set.has(k)) continue;
+            const d = Math.hypot(st.center.x - hitStall.center.x, st.center.y - hitStall.center.y);
+            if (d < bestD) { bestD = d; bestAreaId = a.id; bestKey = k; }
+          }
+        }
+        if (!bestAreaId || !bestKey) {
+          toast.error("Tidak ada lot diffable di level ini untuk ditukar");
+          return;
+        }
+        // Lakukan swap: hapus bestKey dari bestArea, tambahkan tappedKey ke hitArea.
+        pushHistory();
+        currentByArea.get(bestAreaId)!.delete(bestKey);
+        currentByArea.get(hitArea.id)!.add(tappedKey);
+        const nextAreas = (sketch.parkingAreas ?? []).map((a) => {
+          if (!currentByArea.has(a.id)) return a;
+          const set = currentByArea.get(a.id)!;
+          return { ...a, diffable: [...set] };
+        });
+        onChange({ parkingAreas: nextAreas });
+        toast.success("Lot diffable dipindahkan");
         return;
       }
 
@@ -8528,6 +8815,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         </div>
         {tool === "parking" && (
           <ParkingSubToolbar
+            parkingKind={parkingKind}
             sub={parkingSubTool}
             setSub={setParkingSubTool}
             selectedId={parkingSelectedId}
@@ -10180,6 +10468,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </Button>
           {tool === "parking" && (
             <ParkingSubToolbarMobile
+              parkingKind={parkingKind}
               sub={parkingSubTool}
               setSub={setParkingSubTool}
               selectedId={parkingSelectedId}
