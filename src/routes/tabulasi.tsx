@@ -17,6 +17,8 @@ import {
   type ParkingArea,
   type ParkingObstacle,
   generateStalls,
+  computeDiffableTotal,
+  distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 
 export const Route = createFileRoute("/tabulasi")({
