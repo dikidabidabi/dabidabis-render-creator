@@ -36,6 +36,10 @@ export type ParkingArea = {
   disabled?: string[];
   /** Jalur parkir (polyline) — obstacle ber-buffer per sisi (kind-dependent). */
   paths?: ParkingPath[];
+  /** Kunci stall yang ditandai sebagai lot diffable (key = `row,col`).
+   *  Hanya berlaku untuk kind "mobil". Diisi otomatis saat user pertama kali
+   *  melakukan swap di level ini. */
+  diffable?: string[];
 };
 
 /** Lebar buffer jalur parkir per sisi untuk mobil (meter). */
