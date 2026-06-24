@@ -602,6 +602,14 @@ function RekapSection({ data }: { data: Stats }) {
           {data.parkingMobilByLevel.length > 1 && data.parkingMobilByLevel.map((pl) => (
             <Row key={pl.levelId} label={`· ${pl.levelName}`} value={`${pl.count} mobil`} />
           ))}
+          {data.parkingDiffableTotal > 0 && (
+            <>
+              <Row label="Lot Diffable (Mobil)" value={`${data.parkingDiffableTotal} lot`} />
+              {data.parkingDiffableByLevel.length > 1 && data.parkingDiffableByLevel.map((pl) => (
+                <Row key={`d-${pl.levelId}`} label={`· ${pl.levelName}`} value={`${pl.count} diffable`} />
+              ))}
+            </>
+          )}
         </>
       )}
       {data.parkingMotorAreaM2 > 0 && (
