@@ -269,6 +269,9 @@ export function normalizeParkingArea(raw: any, mmRot = 0): ParkingArea | null {
           })
           .filter((p: ParkingPath | null): p is ParkingPath => !!p)
       : undefined,
+    diffable: Array.isArray(raw.diffable)
+      ? raw.diffable.filter((s: any) => typeof s === "string")
+      : undefined,
   };
 }
 
