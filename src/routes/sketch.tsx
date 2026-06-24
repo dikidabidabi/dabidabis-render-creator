@@ -1004,6 +1004,7 @@ export type ParkingSubToolKind =
   | "addPoint"
   | "removePoint"
   | "rotate"
+  | "diffable"
   | "pathDraw"
   | "pathMove"
   | "pathAdd"
@@ -1027,6 +1028,7 @@ type ParkingSubToolbarProps = {
   pathDraftCount: number;
   onSavePathDraft: () => void;
   onCancelPathDraft: () => void;
+  parkingKind: "mobil" | "motor";
 };
 
 function ParkingSubToolbar(props: ParkingSubToolbarProps) {
@@ -1034,6 +1036,7 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
     sub, setSub, selectedId, clipboardSize, orientation, onOrientation,
     onCopy, onPaste, onDelete, hasDraft, onSaveDraft, onCancelDraft,
     hasPathDraft, pathDraftCount, onSavePathDraft, onCancelPathDraft,
+    parkingKind,
   } = props;
   const opts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
     { k: "draw", label: "Tarik", hint: "Tarik kotak baru" },
@@ -1042,6 +1045,9 @@ function ParkingSubToolbar(props: ParkingSubToolbarProps) {
     { k: "removePoint", label: "Edit Titik: −", hint: "Hapus titik" },
     { k: "rotate", label: "Rotasi", hint: "Putar kotak parkir" },
   ];
+  if (parkingKind === "mobil") {
+    opts.push({ k: "diffable", label: "Diffable", hint: "Pilih lot mobil untuk ditandai sebagai lot diffable (swap dengan diffable terdekat di level)" });
+  }
   const pathOpts: Array<{ k: ParkingSubToolKind; label: string; hint: string }> = [
     { k: "pathDraw", label: "Tarik", hint: "Klik berurutan utk membuat polyline (Enter = simpan)" },
     { k: "pathMove", label: "Geser", hint: "Geser titik jalur" },
