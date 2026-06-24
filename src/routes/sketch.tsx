@@ -8534,6 +8534,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         </div>
         {tool === "parking" && (
           <ParkingSubToolbar
+            parkingKind={parkingKind}
             sub={parkingSubTool}
             setSub={setParkingSubTool}
             selectedId={parkingSelectedId}
