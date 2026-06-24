@@ -10187,6 +10187,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           </Button>
           {tool === "parking" && (
             <ParkingSubToolbarMobile
+              parkingKind={parkingKind}
               sub={parkingSubTool}
               setSub={setParkingSubTool}
               selectedId={parkingSelectedId}
