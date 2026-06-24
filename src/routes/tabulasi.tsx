@@ -319,6 +319,8 @@ type Stats = {
   parkingMotorEfficiencyPct: number;
   parkingMobilByLevel: Array<{ levelId: string; levelName: string; count: number }>;
   parkingMotorByLevel: Array<{ levelId: string; levelName: string; count: number }>;
+  parkingDiffableTotal: number;
+  parkingDiffableByLevel: Array<{ levelId: string; levelName: string; count: number }>;
 };
 
 function computeStats(sk: Sketch): Stats {
