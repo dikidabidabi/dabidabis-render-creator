@@ -4911,17 +4911,60 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         }
         // stalls
         const stalls = stallsByArea.get(area.id) ?? [];
+        const diffSet = (area.kind ?? "mobil") === "mobil"
+          ? (parkingDiffableInfo.effectiveByArea.get(area.id) ?? new Set<string>())
+          : new Set<string>();
+        let diffCountArea = 0;
         for (const st of stalls) {
           if (!st.valid) continue;
-          ctx.beginPath();
-          ctx.moveTo(st.poly[0].x, st.poly[0].y);
-          for (let i = 1; i < st.poly.length; i++) ctx.lineTo(st.poly[i].x, st.poly[i].y);
-          ctx.closePath();
-          ctx.fillStyle = "rgba(200, 200, 200, 0.35)";
-          ctx.fill();
-          ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
-          ctx.lineWidth = 1.2 / s;
-          ctx.stroke();
+          const isDiff = diffSet.has(`${st.row},${st.col}`);
+          if (isDiff) {
+            diffCountArea++;
+            // Lot diffable: gambar persegi 3.7m × 5m di posisi stall, abu kemerahan + simbol ♿.
+            const wPx = DIFFABLE_STALL_W * pxPerMeter;
+            const lPx = DIFFABLE_STALL_L * pxPerMeter;
+            const ang = st.angle; // facing direction (length axis)
+            const ux = Math.cos(ang), uy = Math.sin(ang);             // along length
+            const vx = -Math.sin(ang), vy = Math.cos(ang);            // along width
+            const hl = lPx / 2, hw = wPx / 2;
+            const c = st.center;
+            const c1 = { x: c.x - ux * hl - vx * hw, y: c.y - uy * hl - vy * hw };
+            const c2 = { x: c.x - ux * hl + vx * hw, y: c.y - uy * hl + vy * hw };
+            const c3 = { x: c.x + ux * hl + vx * hw, y: c.y + uy * hl + vy * hw };
+            const c4 = { x: c.x + ux * hl - vx * hw, y: c.y + uy * hl - vy * hw };
+            ctx.beginPath();
+            ctx.moveTo(c1.x, c1.y);
+            ctx.lineTo(c2.x, c2.y);
+            ctx.lineTo(c3.x, c3.y);
+            ctx.lineTo(c4.x, c4.y);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(168, 96, 96, 0.55)";   // abu kemerahan
+            ctx.fill();
+            ctx.strokeStyle = "rgba(190, 70, 70, 0.95)";
+            ctx.lineWidth = 1.4 / s;
+            ctx.stroke();
+            // Simbol ♿ di tengah lot
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(ang + Math.PI / 2);
+            const symPx = 1.6 * pxPerMeter;
+            ctx.font = `${symPx}px "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols2", system-ui, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = "#fff";
+            ctx.fillText("♿", 0, 0);
+            ctx.restore();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(st.poly[0].x, st.poly[0].y);
+            for (let i = 1; i < st.poly.length; i++) ctx.lineTo(st.poly[i].x, st.poly[i].y);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(200, 200, 200, 0.35)";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(14, 165, 233, 0.95)";
+            ctx.lineWidth = 1.2 / s;
+            ctx.stroke();
+          }
         }
         ctx.restore();
         // label kapasitas
@@ -4929,7 +4972,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         const cx = worldPoly.reduce((s2, p) => s2 + p.x, 0) / worldPoly.length;
         const cy = worldPoly.reduce((s2, p) => s2 + p.y, 0) / worldPoly.length;
         const sp = worldToScreen({ x: cx, y: cy });
-        const label = `${validCount} ${area.kind === "motor" ? "motor" : "mobil"}`;
+        let label: string;
+        if ((area.kind ?? "mobil") === "motor") {
+          label = `${validCount} motor`;
+        } else {
+          const reg = Math.max(0, validCount - diffCountArea);
+          label = diffCountArea > 0 ? `${reg} mobil + ${diffCountArea} diffable` : `${validCount} mobil`;
+        }
         ctx.font = "600 11px Manrope, sans-serif";
         const w = ctx.measureText(label).width + 10;
         ctx.fillStyle = "rgba(14,165,233,0.95)";
