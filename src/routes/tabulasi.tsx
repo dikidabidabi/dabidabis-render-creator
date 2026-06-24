@@ -512,6 +512,23 @@ function computeStats(sk: Sketch): Stats {
       levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
       count,
     })),
+    ...(() => {
+      const diffTotal = computeDiffableTotal(parkingMobilTotal);
+      const lvlsAsc = Array.from(parkingMobilByLevel.entries())
+        .filter(([, c]) => c > 0)
+        .map(([lid]) => ({ lid, mdpl: levels.find((l) => l.id === lid)?.mdpl ?? 0 }))
+        .sort((a, b) => a.mdpl - b.mdpl)
+        .map((x) => x.lid);
+      const dist = distributeDiffableAcrossLevels(lvlsAsc, diffTotal);
+      return {
+        parkingDiffableTotal: diffTotal,
+        parkingDiffableByLevel: Array.from(dist.entries()).map(([levelId, count]) => ({
+          levelId,
+          levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
+          count,
+        })),
+      };
+    })(),
   };
 }
 
