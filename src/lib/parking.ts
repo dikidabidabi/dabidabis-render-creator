@@ -74,6 +74,67 @@ export const MODULE_DOUBLE_MOTOR = STALL_L_MOTOR + AISLE_W_MOTOR + STALL_L_MOTOR
 export const MODULE_SINGLE_MOTOR = STALL_L_MOTOR + AISLE_W_MOTOR;                  // 3.5 m
 export const STALL_AREA_M2_MOTOR = STALL_W_MOTOR * STALL_L_MOTOR;                  // 1.5 m²
 
+// Parameter baku lot diffable (meter) — hanya untuk MOBIL
+export const DIFFABLE_STALL_W = 3.7;
+export const DIFFABLE_STALL_L = 5.0;
+export const DIFFABLE_STALL_AREA_M2 = DIFFABLE_STALL_W * DIFFABLE_STALL_L; // 18.5 m²
+
+/**
+ * Hitung jumlah lot diffable yang wajib disediakan berdasarkan total lot
+ * mobil di seluruh bangunan (akumulasi semua level).
+ *
+ * Aturan (bertingkat):
+ *   1..25 → 1 ; 26..50 → 2 ; 51..75 → 3 ; 76..100 → 4 ;
+ *   101..150 → 5 ; 151..200 → 6 ; 201..300 → 7 ; 301..400 → 8 ;
+ *   401..500 → 9 ; 501..1000 → ceil(n*2%) ;
+ *   ≥1001 → 20 + ceil((n-1000)/100)  (penambahan per kelipatan 100 penuh)
+ */
+export function computeDiffableTotal(totalMobil: number): number {
+  const n = Math.max(0, Math.floor(totalMobil));
+  if (n <= 0) return 0;
+  if (n <= 25) return 1;
+  if (n <= 50) return 2;
+  if (n <= 75) return 3;
+  if (n <= 100) return 4;
+  if (n <= 150) return 5;
+  if (n <= 200) return 6;
+  if (n <= 300) return 7;
+  if (n <= 400) return 8;
+  if (n <= 500) return 9;
+  if (n <= 1000) return Math.ceil(n * 0.02);
+  return 20 + Math.ceil((n - 1000) / 100);
+}
+
+/**
+ * Bagi total diffable secara merata pada `levels` yang berisi lot mobil.
+ * Jika tidak habis dibagi, sisanya didistribusikan dari level paling BAWAH
+ * (mdpl terkecil) — sehingga level paling atas mendapat jumlah PALING SEDIKIT.
+ *
+ * @param levelsAsc daftar levelId terurut dari mdpl terkecil → terbesar
+ *                  (hanya level yang punya lot mobil)
+ * @param total     total lot diffable
+ */
+export function distributeDiffableAcrossLevels(
+  levelsAsc: string[],
+  total: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const N = levelsAsc.length;
+  if (N === 0 || total <= 0) {
+    for (const id of levelsAsc) out.set(id, 0);
+    return out;
+  }
+  const base = Math.floor(total / N);
+  let rem = total - base * N;
+  for (let i = 0; i < N; i++) {
+    // sisa dialokasikan dari bawah (i kecil) → atas (i besar) mendapat lebih sedikit
+    const extra = rem > 0 ? 1 : 0;
+    if (rem > 0) rem--;
+    out.set(levelsAsc[i], base + extra);
+  }
+  return out;
+}
+
 export type ParkingSpecs = {
   STALL_W: number;
   STALL_L: number;
