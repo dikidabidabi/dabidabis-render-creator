@@ -6039,6 +6039,81 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         return;
       }
 
+
+      // ----- Diffable: swap lot mobil terdekat di level yg sama -----
+      if (parkingSubTool === "diffable") {
+        // Cari stall (mobil) yg di-tap di level aktif.
+        const mobilAreas = areas.filter((a) => (a.kind ?? "mobil") === "mobil");
+        let hitArea: ParkingArea | null = null;
+        let hitStall: ParkingStall | null = null;
+        for (const area of mobilAreas) {
+          const found = parkingStallsActive.find((x) => x.areaId === area.id);
+          const stalls = found?.stalls ?? [];
+          for (const st of stalls) {
+            if (!st.valid) continue;
+            // hit-test poligon stall (atau poligon diffable jika sudah diffable)
+            const poly = st.poly;
+            let inside = false;
+            for (let k = 0, j = poly.length - 1; k < poly.length; j = k++) {
+              const xi = poly[k].x, yi = poly[k].y, xj = poly[j].x, yj = poly[j].y;
+              if ((yi > rawWp.y) !== (yj > rawWp.y) &&
+                  rawWp.x < ((xj - xi) * (rawWp.y - yi)) / (yj - yi + 1e-12) + xi) {
+                inside = !inside;
+              }
+            }
+            if (inside) { hitArea = area; hitStall = st; break; }
+          }
+          if (hitStall) break;
+        }
+        if (!hitArea || !hitStall) {
+          toast.message("Tap lot mobil yang ingin dijadikan diffable");
+          return;
+        }
+        const tappedKey = `${hitStall.row},${hitStall.col}`;
+        const tappedSet = parkingDiffableInfo.effectiveByArea.get(hitArea.id) ?? new Set<string>();
+        if (tappedSet.has(tappedKey)) {
+          toast.message("Lot ini sudah diffable");
+          return;
+        }
+        // Materialisasi diffable saat ini per area di level aktif.
+        const lvlAreas = mobilAreas;
+        const currentByArea = new Map<string, Set<string>>();
+        for (const a of lvlAreas) {
+          currentByArea.set(a.id, new Set(parkingDiffableInfo.effectiveByArea.get(a.id) ?? []));
+        }
+        // Cari diffable terdekat di level (jarak antar center stall).
+        let bestAreaId: string | null = null;
+        let bestKey: string | null = null;
+        let bestD = Infinity;
+        for (const a of lvlAreas) {
+          const found = parkingStallsActive.find((x) => x.areaId === a.id);
+          const stalls = found?.stalls ?? [];
+          const set = currentByArea.get(a.id) ?? new Set<string>();
+          for (const st of stalls) {
+            const k = `${st.row},${st.col}`;
+            if (!set.has(k)) continue;
+            const d = Math.hypot(st.center.x - hitStall.center.x, st.center.y - hitStall.center.y);
+            if (d < bestD) { bestD = d; bestAreaId = a.id; bestKey = k; }
+          }
+        }
+        if (!bestAreaId || !bestKey) {
+          toast.error("Tidak ada lot diffable di level ini untuk ditukar");
+          return;
+        }
+        // Lakukan swap: hapus bestKey dari bestArea, tambahkan tappedKey ke hitArea.
+        pushHistory();
+        currentByArea.get(bestAreaId)!.delete(bestKey);
+        currentByArea.get(hitArea.id)!.add(tappedKey);
+        const nextAreas = (sketch.parkingAreas ?? []).map((a) => {
+          if (!currentByArea.has(a.id)) return a;
+          const set = currentByArea.get(a.id)!;
+          return { ...a, diffable: [...set] };
+        });
+        onChange({ parkingAreas: nextAreas });
+        toast.success("Lot diffable dipindahkan");
+        return;
+      }
+
       // 1) Rotation handle hit (jika selected)
       if (parkingSelectedId) {
         const sel = areas.find((aa) => aa.id === parkingSelectedId);
