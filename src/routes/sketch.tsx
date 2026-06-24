@@ -128,6 +128,10 @@ import {
   isParkingName,
   parkingPathsToObstacles,
   PARKING_PATH_BUFFER_M,
+  DIFFABLE_STALL_W,
+  DIFFABLE_STALL_L,
+  computeDiffableTotal,
+  distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useProjectStore } from "@/store/project-store";
