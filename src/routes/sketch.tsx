@@ -3082,14 +3082,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return obs;
   }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers, sketch.parkingAreas, mmGridRotRad, parkingPathDraft]);
 
-  const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
-    const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
-    const areas = (sketch.parkingAreas ?? []).filter((p) => !activeLvlId || p.levelId === activeLvlId);
-    for (const area of areas) {
-      out.push({ areaId: area.id, stalls: generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles) });
-    }
-    return out;
-  }, [sketch.parkingAreas, activeLvlId, pxPerMeter, mmGridRotRad, parkingObstacles]);
+  // parkingStallsActive di-deklarasi setelah parkingDiffableInfo (lihat di
+  // bawah) — pass-2 generation memakai effective diffable keys.
 
   // Generator obstacle untuk level mana saja (dipakai untuk akumulasi global
   // diffable). Pola identik dengan `parkingObstacles` tetapi filter level
@@ -3164,15 +3158,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     const stallsByArea = new Map<string, ParkingStall[]>();
     for (const [lid, areas] of areasByLvl) {
+      const obs = lid === activeLvlId ? parkingObstacles : buildObstaclesForLevel(lid);
       for (const area of areas) {
-        if (lid === activeLvlId) {
-          const found = parkingStallsActive.find((x) => x.areaId === area.id);
-          stallsByArea.set(area.id, found ? found.stalls
-            : generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles));
-        } else {
-          const obs = buildObstaclesForLevel(lid);
-          stallsByArea.set(area.id, generateStalls(area, pxPerMeter, mmGridRotRad, obs));
-        }
+        // Pass-1: pakai hanya manual `area.diffable` agar baseline stabil.
+        const manualSet = new Set(area.diffable ?? []);
+        stallsByArea.set(area.id, generateStalls(area, pxPerMeter, mmGridRotRad, obs, manualSet));
       }
     }
     const baseByLevel = new Map<string, number>();
@@ -3240,7 +3230,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       for (const [aid, set] of pickedByArea) effectiveByArea.set(aid, set);
     }
     return { effectiveByArea, baseByLevel, targetByLevel, diffableTotal, baseTotal };
-  }, [sketch.parkingAreas, levels, activeLvlId, parkingStallsActive, parkingObstacles, buildObstaclesForLevel, pxPerMeter, mmGridRotRad]);
+  }, [sketch.parkingAreas, levels, activeLvlId, parkingObstacles, buildObstaclesForLevel, pxPerMeter, mmGridRotRad]);
+
+  // Pass-2: generate stalls untuk level aktif dengan effective diffable keys
+  // (manual + auto). Diffable lebih lebar (3.7 m) → mendorong stall sekitar.
+  const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
+    const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
+    const areas = (sketch.parkingAreas ?? []).filter((p) => !activeLvlId || p.levelId === activeLvlId);
+    for (const area of areas) {
+      const diffKeys = parkingDiffableInfo.effectiveByArea.get(area.id);
+      out.push({
+        areaId: area.id,
+        stalls: generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles, diffKeys),
+      });
+    }
+    return out;
+  }, [sketch.parkingAreas, activeLvlId, pxPerMeter, mmGridRotRad, parkingObstacles, parkingDiffableInfo]);
+
+
 
 
 

@@ -60,6 +60,8 @@ export type ParkingStall = {
   center: ParkingPoint;
   angle: number;
   valid: boolean;
+  /** True jika slot ini bertipe diffable (lebar 3.7 m). */
+  diffable?: boolean;
 };
 
 // Parameter baku (meter) — MOBIL
@@ -402,6 +404,7 @@ export function generateStalls(
   pxPerMeter: number,
   mmGridRotRad: number,
   obstacles: ParkingObstacle[],
+  diffableKeys?: Set<string>,
 ): ParkingStall[] {
   const stalls: ParkingStall[] = [];
   if (pxPerMeter <= 0 || area.pointsLocal.length < 3) return stalls;
@@ -498,24 +501,44 @@ export function generateStalls(
     if (sRange[1] <= sRange[0]) continue;
     const validIntervals = subtractIntervalsBounded(sRange, blocks);
 
+    // Hanya area mobil yang bisa menampung lot diffable.
+    const allowDiffable = (area.kind ?? "mobil") === "mobil" && !!diffableKeys && diffableKeys.size > 0;
+    const SW_DIFF = DIFFABLE_STALL_W;
+    const widthAt = (col: number): number => {
+      if (!allowDiffable) return SW;
+      return diffableKeys!.has(`${ri},${col}`) ? SW_DIFF : SW;
+    };
+
     let ci = 0;
     for (const iv of validIntervals) {
       const span = iv.b - iv.a;
       if (span < 0) continue;
-      const n = Math.floor(span / SW) + 1;
+      // Pre-walk: hitung jumlah & total lebar stall yang muat dalam interval.
+      // Maks panjang pack = span + SW (iv.b adalah max-left-edge untuk stall SW).
+      const maxPack = span + SW;
+      let sumW = 0;
+      let n = 0;
+      while (true) {
+        const w = widthAt(ci + n);
+        if (sumW + w > maxPack + 1e-6) break;
+        sumW += w;
+        n++;
+      }
+      if (n === 0) continue;
       // Jika kedua sisi interval dibatasi obstacle, center stall di antaranya
       // (jarak obstacle-kiri ke stall pertama = obstacle-kanan ke stall terakhir).
       let startOffset = 0;
       if (iv.leftObs && iv.rightObs) {
-        startOffset = (span - (n - 1) * SW) / 2;
+        startOffset = (maxPack - sumW) / 2;
         if (startOffset < 0) startOffset = 0;
       }
+      let s = iv.a + startOffset;
       for (let k = 0; k < n; k++) {
-        const s = iv.a + startOffset + k * SW;
-        if (s + SW > D + 1e-6) break;
-        if (s < iv.a - 1e-6 || s > iv.b + 1e-6) continue;
+        const w = widthAt(ci);
+        if (s + w > D + 1e-6) break;
+        if (s < iv.a - 1e-6 || s > iv.b + (SW - w) + 1e-6) { s += w; ci++; continue; }
         const key = `${ri},${ci}`;
-        const d0 = s, d1 = s + SW;
+        const d0 = s, d1 = s + w;
         const a0 = row.offset - SL / 2;
         const a1 = row.offset + SL / 2;
         const p1s = localOf(d0, a0);
@@ -525,8 +548,9 @@ export function generateStalls(
         const allIn =
           pointInPoly(p1s, polyStall) && pointInPoly(p2s, polyStall) &&
           pointInPoly(p3s, polyStall) && pointInPoly(p4s, polyStall);
-        if (!allIn) { ci++; continue; }
+        if (!allIn) { s += w; ci++; continue; }
         const isDisabled = disabled.has(key);
+        const isDiff = allowDiffable && diffableKeys!.has(key);
         const cornersLocal = [p1s, p2s, p3s, p4s].map(fromStallToLocal);
         const cornersWorld = cornersLocal.map((p) => worldFromLocal(p, mmGridRotRad));
         const cx = (cornersWorld[0].x + cornersWorld[2].x) / 2;
@@ -543,7 +567,9 @@ export function generateStalls(
           center: { x: cx, y: cy },
           angle: faceAngle,
           valid: !isDisabled,
+          diffable: isDiff,
         });
+        s += w;
         ci++;
       }
     }

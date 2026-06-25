@@ -56,6 +56,10 @@ import {
   isParkingName,
   normalizeParkingAreas,
   parkingPathsToObstacles,
+  computeDiffableTotal,
+  distributeDiffableAcrossLevels,
+  DIFFABLE_STALL_W,
+  DIFFABLE_STALL_L,
 } from "@/lib/parking";
 import {
   forceSimulation,
@@ -3814,18 +3818,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 });
               }
             }
+            // Diffable efektif (manual + auto) untuk seluruh sketch.
+            const diffEff = computeDiffableEffective(sketch);
             // Hitung stall + polygon dunia untuk tiap area
             const areaInfos = areas.map((area) => {
-              const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
+              const diffKeys = diffEff.get(area.id);
+              const stalls = generateStalls(area, pxPerM, mmRotRad, obs, diffKeys);
               const valid = stalls.filter((s) => s.valid);
+              const regular = valid.filter((s) => !s.diffable);
+              const diffable = valid.filter((s) => !!s.diffable);
               const worldPoly = area.pointsLocal.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs }));
               const cx = worldPoly.reduce((s, p) => s + p.x, 0) / worldPoly.length;
               const cy = worldPoly.reduce((s, p) => s + p.y, 0) / worldPoly.length;
-              return { area, valid, worldPoly, cx, cy };
+              return { area, valid, regular, diffable, worldPoly, cx, cy };
             });
             // Kelompokkan area berdasar ruang parkir yang membungkusnya + kind
             const parkingRooms = layers.filter((ly) => isParkingName(ly.name) && Array.isArray(ly.points) && ly.points.length >= 3);
-            const groups = new Map<string, { mobil: number; motor: number; cx: number; cy: number }>();
+            const groups = new Map<string, { mobil: number; motor: number; diffable: number; cx: number; cy: number }>();
             const ungrouped: Array<{ info: typeof areaInfos[number]; kind: "mobil" | "motor" }> = [];
             for (const info of areaInfos) {
               const kind: "mobil" | "motor" = info.area.kind === "motor" ? "motor" : "mobil";
@@ -3836,41 +3845,54 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 const rcy = r.points.reduce((s, p) => s + p.y, 0) / r.points.length;
                 return info.worldPoly.length >= 3 && pointInPolyPres({ x: rcx, y: rcy }, info.worldPoly);
               });
+              const mobilCount = kind === "mobil" ? info.regular.length : 0;
+              const motorCount = kind === "motor" ? info.valid.length : 0;
+              const diffCount = kind === "mobil" ? info.diffable.length : 0;
               if (!room) { ungrouped.push({ info, kind }); continue; }
               const prev = groups.get(room.id);
               if (prev) {
-                prev[kind] += info.valid.length;
+                prev.mobil += mobilCount;
+                prev.motor += motorCount;
+                prev.diffable += diffCount;
               } else {
                 const rcx = room.points.reduce((s, p) => s + p.x, 0) / room.points.length;
                 const rcy = room.points.reduce((s, p) => s + p.y, 0) / room.points.length;
                 groups.set(room.id, {
-                  mobil: kind === "mobil" ? info.valid.length : 0,
-                  motor: kind === "motor" ? info.valid.length : 0,
+                  mobil: mobilCount,
+                  motor: motorCount,
+                  diffable: diffCount,
                   cx: rcx, cy: rcy,
                 });
               }
             }
-            const formatLabel = (mobil: number, motor: number): string => {
+            const formatLabel = (mobil: number, motor: number, diffable: number): string => {
               const parts: string[] = [];
-              if (mobil > 0) parts.push(`${mobil} lot mobil`);
+              if (mobil > 0 || diffable > 0) {
+                parts.push(diffable > 0 ? `${mobil} mobil + ${diffable} diffable` : `${mobil} lot mobil`);
+              }
               if (motor > 0) parts.push(`${motor} lot motor`);
               return parts.join(" · ") || "0 lot";
             };
             const labels = [
               ...Array.from(groups.entries()).map(([id, g]) => ({
-                key: `room-${id}`, text: formatLabel(g.mobil, g.motor), cx: g.cx, cy: g.cy,
+                key: `room-${id}`, text: formatLabel(g.mobil, g.motor, g.diffable), cx: g.cx, cy: g.cy,
               })),
               ...ungrouped.map(({ info, kind }) => ({
                 key: `area-${info.area.id}`,
-                text: formatLabel(kind === "mobil" ? info.valid.length : 0, kind === "motor" ? info.valid.length : 0),
+                text: formatLabel(
+                  kind === "mobil" ? info.regular.length : 0,
+                  kind === "motor" ? info.valid.length : 0,
+                  kind === "mobil" ? info.diffable.length : 0,
+                ),
                 cx: info.cx, cy: info.cy,
               })),
             ];
+            const diffSymPx = Math.min(DIFFABLE_STALL_W, DIFFABLE_STALL_L) * pxPerM * 0.55;
             return (
               <g pointerEvents="none">
                 {areaInfos.map((info) => (
                   <g key={`pk-${info.area.id}`}>
-                    {info.valid.map((st) => (
+                    {info.regular.map((st) => (
                       <polygon
                         key={st.id}
                         points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
@@ -3878,6 +3900,27 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                         stroke="#000000"
                         strokeWidth={sw * 0.00045}
                       />
+                    ))}
+                    {info.diffable.map((st) => (
+                      <g key={`d-${st.id}`}>
+                        <polygon
+                          points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
+                          fill="rgba(168,96,96,0.55)"
+                          stroke="rgba(190,70,70,0.95)"
+                          strokeWidth={sw * 0.00055}
+                        />
+                        <text
+                          x={st.center.x}
+                          y={st.center.y}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={diffSymPx}
+                          fill="#ffffff"
+                          transform={`rotate(${((st.angle + Math.PI / 2) * 180) / Math.PI} ${st.center.x} ${st.center.y})`}
+                        >
+                          ♿
+                        </text>
+                      </g>
                     ))}
                   </g>
                 ))}
@@ -6788,6 +6831,146 @@ function GridStat({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
+// ---- Diffable global ----
+// Bangun obstacle untuk satu level (mobil/parking aware).
+function buildLevelObstacles(sketch: Sketch, levelId: string): ParkingObstacle[] {
+  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+  const levels = sketch.levels ?? [];
+  const level = levels.find((l) => l.id === levelId);
+  if (!level) return [];
+  const layers = (sketch.layers ?? []).filter((l) => l.levelId === levelId);
+  const lines = (sketch.lines ?? []).filter((l) => l.levelId === levelId);
+  const obs: ParkingObstacle[] = [];
+  const wallBuf = 0.075 * pxPerM;
+  for (const ln of lines) {
+    if ((ln.kind ?? "straight") !== "straight") continue;
+    obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBuf });
+  }
+  for (const ly of layers) {
+    if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+    if (isParkingName(ly.name)) continue;
+    obs.push({ kind: "polygon", poly: ly.points });
+  }
+  for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
+    if (grid.lineOnly || !levelInRange(grid, level, levels)) continue;
+    const { spansX, spansY } = spansForLevel(grid, level.id);
+    const xsM = axisPositions(spansX);
+    const ysM = axisPositions(spansY);
+    const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
+    const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+    const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
+    for (let j = 0; j < ysM.length; j++) {
+      for (let i = 0; i < xsM.length; i++) {
+        if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
+        const lx = xsM[i] * pxPerM;
+        const lyv = ysM[j] * pxPerM;
+        const cx = grid.origin.x + lx * cs - lyv * sn;
+        const cy = grid.origin.y + lx * sn + lyv * cs;
+        const poly = [
+          { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
+          { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
+        ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
+        obs.push({ kind: "polygon", poly });
+      }
+    }
+  }
+  const areasLv = (sketch.parkingAreas ?? []).filter((p) => p.levelId === levelId);
+  obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
+  return obs;
+}
+
+// Hitung set lot diffable efektif per area (manual + auto), identik dengan
+// logika di sketch.tsx. Output: Map<areaId, Set<"row,col">>.
+function computeDiffableEffective(sketch: Sketch): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const areas = (sketch.parkingAreas ?? []).filter((a) => (a.kind ?? "mobil") === "mobil");
+  if (!areas.length) return out;
+  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+  const levels = sketch.levels ?? [];
+  // Group per level
+  const areasByLvl = new Map<string, ParkingArea[]>();
+  for (const a of areas) {
+    const lid = a.levelId ?? "";
+    if (!lid) continue;
+    const arr = areasByLvl.get(lid) ?? [];
+    arr.push(a);
+    areasByLvl.set(lid, arr);
+  }
+  // Pass-1 stalls (manual diffable only)
+  const stallsByArea = new Map<string, ReturnType<typeof generateStalls>>();
+  for (const [lid, lvAreas] of areasByLvl) {
+    const obs = buildLevelObstacles(sketch, lid);
+    for (const a of lvAreas) {
+      const manual = new Set(a.diffable ?? []);
+      stallsByArea.set(a.id, generateStalls(a, pxPerM, mmRotRad, obs, manual));
+    }
+  }
+  const baseByLevel = new Map<string, number>();
+  let baseTotal = 0;
+  for (const [lid, lvAreas] of areasByLvl) {
+    let n = 0;
+    for (const a of lvAreas) {
+      const ss = stallsByArea.get(a.id) ?? [];
+      for (const s of ss) if (s.valid) n++;
+    }
+    baseByLevel.set(lid, n);
+    baseTotal += n;
+  }
+  const diffableTotal = computeDiffableTotal(baseTotal);
+  const lvlsAsc = [...areasByLvl.keys()]
+    .map((id) => levels.find((l) => l.id === id))
+    .filter((x): x is NonNullable<typeof x> => !!x && (baseByLevel.get(x.id) ?? 0) > 0)
+    .sort((a, b) => a.mdpl - b.mdpl)
+    .map((l) => l.id);
+  const targetByLevel = distributeDiffableAcrossLevels(lvlsAsc, diffableTotal);
+  for (const [lid, lvAreas] of areasByLvl) {
+    let need = Math.min(targetByLevel.get(lid) ?? 0, baseByLevel.get(lid) ?? 0);
+    const pickedByArea = new Map<string, Set<string>>();
+    for (const a of lvAreas) pickedByArea.set(a.id, new Set());
+    if (need > 0) {
+      const validKeysByArea = new Map<string, Set<string>>();
+      const orderSlots: Array<{ areaId: string; key: string }> = [];
+      for (const a of lvAreas) {
+        const set = new Set<string>();
+        const ss = stallsByArea.get(a.id) ?? [];
+        for (const s of ss) {
+          if (!s.valid) continue;
+          const k = `${s.row},${s.col}`;
+          set.add(k);
+          orderSlots.push({ areaId: a.id, key: k });
+        }
+        validKeysByArea.set(a.id, set);
+      }
+      const seen = new Set<string>();
+      for (const a of lvAreas) {
+        const validSet = validKeysByArea.get(a.id) ?? new Set<string>();
+        for (const k of a.diffable ?? []) {
+          if (!validSet.has(k)) continue;
+          const tag = `${a.id}|${k}`;
+          if (seen.has(tag)) continue;
+          seen.add(tag);
+          if (need <= 0) break;
+          pickedByArea.get(a.id)!.add(k);
+          need--;
+        }
+        if (need <= 0) break;
+      }
+      for (const s of orderSlots) {
+        if (need <= 0) break;
+        const tag = `${s.areaId}|${s.key}`;
+        if (seen.has(tag)) continue;
+        seen.add(tag);
+        pickedByArea.get(s.areaId)!.add(s.key);
+        need--;
+      }
+    }
+    for (const [aid, set] of pickedByArea) out.set(aid, set);
+  }
+  return out;
+}
+
 // ---- Rekap ----
 function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number } {
   const areas = sketch.parkingAreas ?? [];
@@ -6797,48 +6980,14 @@ function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number
   const levels = sketch.levels ?? [];
   let mobil = 0;
   let motor = 0;
+  const diffEff = computeDiffableEffective(sketch);
   for (const level of levels) {
     const areasLv = areas.filter((p) => p.levelId === level.id);
     if (!areasLv.length) continue;
-    const layers = (sketch.layers ?? []).filter((l) => l.levelId === level.id);
-    const lines = (sketch.lines ?? []).filter((l) => l.levelId === level.id);
-    const obs: ParkingObstacle[] = [];
-    const wallBuf = 0.075 * pxPerM;
-    for (const ln of lines) {
-      if ((ln.kind ?? "straight") !== "straight") continue;
-      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBuf });
-    }
-    for (const ly of layers) {
-      if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
-      if (isParkingName(ly.name)) continue;
-      obs.push({ kind: "polygon", poly: ly.points });
-    }
-    for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
-      if (grid.lineOnly || !levelInRange(grid, level, levels)) continue;
-      const { spansX, spansY } = spansForLevel(grid, level.id);
-      const xsM = axisPositions(spansX);
-      const ysM = axisPositions(spansY);
-      const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
-      const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
-      const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
-      for (let j = 0; j < ysM.length; j++) {
-        for (let i = 0; i < xsM.length; i++) {
-          if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
-          const lx = xsM[i] * pxPerM;
-          const lyv = ysM[j] * pxPerM;
-          const cx = grid.origin.x + lx * cs - lyv * sn;
-          const cy = grid.origin.y + lx * sn + lyv * cs;
-          const poly = [
-            { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
-            { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
-          ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
-          obs.push({ kind: "polygon", poly });
-        }
-      }
-    }
-    obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
+    const obs = buildLevelObstacles(sketch, level.id);
     for (const area of areasLv) {
-      const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
+      const diffKeys = diffEff.get(area.id);
+      const stalls = generateStalls(area, pxPerM, mmRotRad, obs, diffKeys);
       const valid = stalls.filter((s) => s.valid).length;
       if (area.kind === "motor") motor += valid;
       else mobil += valid;
