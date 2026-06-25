@@ -6792,6 +6792,146 @@ function GridStat({ label, value, hint }: { label: string; value: string; hint?:
   );
 }
 
+// ---- Diffable global ----
+// Bangun obstacle untuk satu level (mobil/parking aware).
+function buildLevelObstacles(sketch: Sketch, levelId: string): ParkingObstacle[] {
+  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+  const levels = sketch.levels ?? [];
+  const level = levels.find((l) => l.id === levelId);
+  if (!level) return [];
+  const layers = (sketch.layers ?? []).filter((l) => l.levelId === levelId);
+  const lines = (sketch.lines ?? []).filter((l) => l.levelId === levelId);
+  const obs: ParkingObstacle[] = [];
+  const wallBuf = 0.075 * pxPerM;
+  for (const ln of lines) {
+    if ((ln.kind ?? "straight") !== "straight") continue;
+    obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBuf });
+  }
+  for (const ly of layers) {
+    if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
+    if (isParkingName(ly.name)) continue;
+    obs.push({ kind: "polygon", poly: ly.points });
+  }
+  for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
+    if (grid.lineOnly || !levelInRange(grid, level, levels)) continue;
+    const { spansX, spansY } = spansForLevel(grid, level.id);
+    const xsM = axisPositions(spansX);
+    const ysM = axisPositions(spansY);
+    const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
+    const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+    const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
+    for (let j = 0; j < ysM.length; j++) {
+      for (let i = 0; i < xsM.length; i++) {
+        if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
+        const lx = xsM[i] * pxPerM;
+        const lyv = ysM[j] * pxPerM;
+        const cx = grid.origin.x + lx * cs - lyv * sn;
+        const cy = grid.origin.y + lx * sn + lyv * cs;
+        const poly = [
+          { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
+          { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
+        ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
+        obs.push({ kind: "polygon", poly });
+      }
+    }
+  }
+  const areasLv = (sketch.parkingAreas ?? []).filter((p) => p.levelId === levelId);
+  obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
+  return obs;
+}
+
+// Hitung set lot diffable efektif per area (manual + auto), identik dengan
+// logika di sketch.tsx. Output: Map<areaId, Set<"row,col">>.
+function computeDiffableEffective(sketch: Sketch): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const areas = (sketch.parkingAreas ?? []).filter((a) => (a.kind ?? "mobil") === "mobil");
+  if (!areas.length) return out;
+  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
+  const levels = sketch.levels ?? [];
+  // Group per level
+  const areasByLvl = new Map<string, ParkingArea[]>();
+  for (const a of areas) {
+    const lid = a.levelId ?? "";
+    if (!lid) continue;
+    const arr = areasByLvl.get(lid) ?? [];
+    arr.push(a);
+    areasByLvl.set(lid, arr);
+  }
+  // Pass-1 stalls (manual diffable only)
+  const stallsByArea = new Map<string, ReturnType<typeof generateStalls>>();
+  for (const [lid, lvAreas] of areasByLvl) {
+    const obs = buildLevelObstacles(sketch, lid);
+    for (const a of lvAreas) {
+      const manual = new Set(a.diffable ?? []);
+      stallsByArea.set(a.id, generateStalls(a, pxPerM, mmRotRad, obs, manual));
+    }
+  }
+  const baseByLevel = new Map<string, number>();
+  let baseTotal = 0;
+  for (const [lid, lvAreas] of areasByLvl) {
+    let n = 0;
+    for (const a of lvAreas) {
+      const ss = stallsByArea.get(a.id) ?? [];
+      for (const s of ss) if (s.valid) n++;
+    }
+    baseByLevel.set(lid, n);
+    baseTotal += n;
+  }
+  const diffableTotal = computeDiffableTotal(baseTotal);
+  const lvlsAsc = [...areasByLvl.keys()]
+    .map((id) => levels.find((l) => l.id === id))
+    .filter((x): x is NonNullable<typeof x> => !!x && (baseByLevel.get(x.id) ?? 0) > 0)
+    .sort((a, b) => a.mdpl - b.mdpl)
+    .map((l) => l.id);
+  const targetByLevel = distributeDiffableAcrossLevels(lvlsAsc, diffableTotal);
+  for (const [lid, lvAreas] of areasByLvl) {
+    let need = Math.min(targetByLevel.get(lid) ?? 0, baseByLevel.get(lid) ?? 0);
+    const pickedByArea = new Map<string, Set<string>>();
+    for (const a of lvAreas) pickedByArea.set(a.id, new Set());
+    if (need > 0) {
+      const validKeysByArea = new Map<string, Set<string>>();
+      const orderSlots: Array<{ areaId: string; key: string }> = [];
+      for (const a of lvAreas) {
+        const set = new Set<string>();
+        const ss = stallsByArea.get(a.id) ?? [];
+        for (const s of ss) {
+          if (!s.valid) continue;
+          const k = `${s.row},${s.col}`;
+          set.add(k);
+          orderSlots.push({ areaId: a.id, key: k });
+        }
+        validKeysByArea.set(a.id, set);
+      }
+      const seen = new Set<string>();
+      for (const a of lvAreas) {
+        const validSet = validKeysByArea.get(a.id) ?? new Set<string>();
+        for (const k of a.diffable ?? []) {
+          if (!validSet.has(k)) continue;
+          const tag = `${a.id}|${k}`;
+          if (seen.has(tag)) continue;
+          seen.add(tag);
+          if (need <= 0) break;
+          pickedByArea.get(a.id)!.add(k);
+          need--;
+        }
+        if (need <= 0) break;
+      }
+      for (const s of orderSlots) {
+        if (need <= 0) break;
+        const tag = `${s.areaId}|${s.key}`;
+        if (seen.has(tag)) continue;
+        seen.add(tag);
+        pickedByArea.get(s.areaId)!.add(s.key);
+        need--;
+      }
+    }
+    for (const [aid, set] of pickedByArea) out.set(aid, set);
+  }
+  return out;
+}
+
 // ---- Rekap ----
 function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number } {
   const areas = sketch.parkingAreas ?? [];
