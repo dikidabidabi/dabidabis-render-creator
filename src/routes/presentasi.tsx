@@ -3818,18 +3818,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 });
               }
             }
+            // Diffable efektif (manual + auto) untuk seluruh sketch.
+            const diffEff = computeDiffableEffective(sketch);
             // Hitung stall + polygon dunia untuk tiap area
             const areaInfos = areas.map((area) => {
-              const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
+              const diffKeys = diffEff.get(area.id);
+              const stalls = generateStalls(area, pxPerM, mmRotRad, obs, diffKeys);
               const valid = stalls.filter((s) => s.valid);
+              const regular = valid.filter((s) => !s.diffable);
+              const diffable = valid.filter((s) => !!s.diffable);
               const worldPoly = area.pointsLocal.map((p) => ({ x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs }));
               const cx = worldPoly.reduce((s, p) => s + p.x, 0) / worldPoly.length;
               const cy = worldPoly.reduce((s, p) => s + p.y, 0) / worldPoly.length;
-              return { area, valid, worldPoly, cx, cy };
+              return { area, valid, regular, diffable, worldPoly, cx, cy };
             });
             // Kelompokkan area berdasar ruang parkir yang membungkusnya + kind
             const parkingRooms = layers.filter((ly) => isParkingName(ly.name) && Array.isArray(ly.points) && ly.points.length >= 3);
-            const groups = new Map<string, { mobil: number; motor: number; cx: number; cy: number }>();
+            const groups = new Map<string, { mobil: number; motor: number; diffable: number; cx: number; cy: number }>();
             const ungrouped: Array<{ info: typeof areaInfos[number]; kind: "mobil" | "motor" }> = [];
             for (const info of areaInfos) {
               const kind: "mobil" | "motor" = info.area.kind === "motor" ? "motor" : "mobil";
@@ -3840,41 +3845,54 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 const rcy = r.points.reduce((s, p) => s + p.y, 0) / r.points.length;
                 return info.worldPoly.length >= 3 && pointInPolyPres({ x: rcx, y: rcy }, info.worldPoly);
               });
+              const mobilCount = kind === "mobil" ? info.regular.length : 0;
+              const motorCount = kind === "motor" ? info.valid.length : 0;
+              const diffCount = kind === "mobil" ? info.diffable.length : 0;
               if (!room) { ungrouped.push({ info, kind }); continue; }
               const prev = groups.get(room.id);
               if (prev) {
-                prev[kind] += info.valid.length;
+                prev.mobil += mobilCount;
+                prev.motor += motorCount;
+                prev.diffable += diffCount;
               } else {
                 const rcx = room.points.reduce((s, p) => s + p.x, 0) / room.points.length;
                 const rcy = room.points.reduce((s, p) => s + p.y, 0) / room.points.length;
                 groups.set(room.id, {
-                  mobil: kind === "mobil" ? info.valid.length : 0,
-                  motor: kind === "motor" ? info.valid.length : 0,
+                  mobil: mobilCount,
+                  motor: motorCount,
+                  diffable: diffCount,
                   cx: rcx, cy: rcy,
                 });
               }
             }
-            const formatLabel = (mobil: number, motor: number): string => {
+            const formatLabel = (mobil: number, motor: number, diffable: number): string => {
               const parts: string[] = [];
-              if (mobil > 0) parts.push(`${mobil} lot mobil`);
+              if (mobil > 0 || diffable > 0) {
+                parts.push(diffable > 0 ? `${mobil} mobil + ${diffable} diffable` : `${mobil} lot mobil`);
+              }
               if (motor > 0) parts.push(`${motor} lot motor`);
               return parts.join(" · ") || "0 lot";
             };
             const labels = [
               ...Array.from(groups.entries()).map(([id, g]) => ({
-                key: `room-${id}`, text: formatLabel(g.mobil, g.motor), cx: g.cx, cy: g.cy,
+                key: `room-${id}`, text: formatLabel(g.mobil, g.motor, g.diffable), cx: g.cx, cy: g.cy,
               })),
               ...ungrouped.map(({ info, kind }) => ({
                 key: `area-${info.area.id}`,
-                text: formatLabel(kind === "mobil" ? info.valid.length : 0, kind === "motor" ? info.valid.length : 0),
+                text: formatLabel(
+                  kind === "mobil" ? info.regular.length : 0,
+                  kind === "motor" ? info.valid.length : 0,
+                  kind === "mobil" ? info.diffable.length : 0,
+                ),
                 cx: info.cx, cy: info.cy,
               })),
             ];
+            const diffSymPx = Math.min(DIFFABLE_STALL_W, DIFFABLE_STALL_L) * pxPerM * 0.55;
             return (
               <g pointerEvents="none">
                 {areaInfos.map((info) => (
                   <g key={`pk-${info.area.id}`}>
-                    {info.valid.map((st) => (
+                    {info.regular.map((st) => (
                       <polygon
                         key={st.id}
                         points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
@@ -3882,6 +3900,27 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                         stroke="#000000"
                         strokeWidth={sw * 0.00045}
                       />
+                    ))}
+                    {info.diffable.map((st) => (
+                      <g key={`d-${st.id}`}>
+                        <polygon
+                          points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
+                          fill="rgba(168,96,96,0.55)"
+                          stroke="rgba(190,70,70,0.95)"
+                          strokeWidth={sw * 0.00055}
+                        />
+                        <text
+                          x={st.center.x}
+                          y={st.center.y}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fontSize={diffSymPx}
+                          fill="#ffffff"
+                          transform={`rotate(${((st.angle + Math.PI / 2) * 180) / Math.PI} ${st.center.x} ${st.center.y})`}
+                        >
+                          ♿
+                        </text>
+                      </g>
                     ))}
                   </g>
                 ))}
