@@ -3082,14 +3082,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     return obs;
   }, [lines, activeLvlId, pxPerMeter, primaryGrid, gridExtras, levels, layers, sketch.parkingAreas, mmGridRotRad, parkingPathDraft]);
 
-  const parkingStallsActive = useMemo<Array<{ areaId: string; stalls: ParkingStall[] }>>(() => {
-    const out: Array<{ areaId: string; stalls: ParkingStall[] }> = [];
-    const areas = (sketch.parkingAreas ?? []).filter((p) => !activeLvlId || p.levelId === activeLvlId);
-    for (const area of areas) {
-      out.push({ areaId: area.id, stalls: generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles) });
-    }
-    return out;
-  }, [sketch.parkingAreas, activeLvlId, pxPerMeter, mmGridRotRad, parkingObstacles]);
+  // parkingStallsActive di-deklarasi setelah parkingDiffableInfo (lihat di
+  // bawah) — pass-2 generation memakai effective diffable keys.
 
   // Generator obstacle untuk level mana saja (dipakai untuk akumulasi global
   // diffable). Pola identik dengan `parkingObstacles` tetapi filter level
