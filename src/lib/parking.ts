@@ -404,6 +404,7 @@ export function generateStalls(
   pxPerMeter: number,
   mmGridRotRad: number,
   obstacles: ParkingObstacle[],
+  diffableKeys?: Set<string>,
 ): ParkingStall[] {
   const stalls: ParkingStall[] = [];
   if (pxPerMeter <= 0 || area.pointsLocal.length < 3) return stalls;
