@@ -56,6 +56,10 @@ import {
   isParkingName,
   normalizeParkingAreas,
   parkingPathsToObstacles,
+  computeDiffableTotal,
+  distributeDiffableAcrossLevels,
+  DIFFABLE_STALL_W,
+  DIFFABLE_STALL_L,
 } from "@/lib/parking";
 import {
   forceSimulation,
