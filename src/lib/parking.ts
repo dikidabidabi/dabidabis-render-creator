@@ -60,6 +60,8 @@ export type ParkingStall = {
   center: ParkingPoint;
   angle: number;
   valid: boolean;
+  /** True jika slot ini bertipe diffable (lebar 3.7 m). */
+  diffable?: boolean;
 };
 
 // Parameter baku (meter) — MOBIL
