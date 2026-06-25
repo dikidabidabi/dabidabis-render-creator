@@ -6941,48 +6941,14 @@ function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number
   const levels = sketch.levels ?? [];
   let mobil = 0;
   let motor = 0;
+  const diffEff = computeDiffableEffective(sketch);
   for (const level of levels) {
     const areasLv = areas.filter((p) => p.levelId === level.id);
     if (!areasLv.length) continue;
-    const layers = (sketch.layers ?? []).filter((l) => l.levelId === level.id);
-    const lines = (sketch.lines ?? []).filter((l) => l.levelId === level.id);
-    const obs: ParkingObstacle[] = [];
-    const wallBuf = 0.075 * pxPerM;
-    for (const ln of lines) {
-      if ((ln.kind ?? "straight") !== "straight") continue;
-      obs.push({ kind: "wall", a: ln.a, b: ln.b, bufferPx: wallBuf });
-    }
-    for (const ly of layers) {
-      if (!Array.isArray(ly.points) || ly.points.length < 3) continue;
-      if (isParkingName(ly.name)) continue;
-      obs.push({ kind: "polygon", poly: ly.points });
-    }
-    for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
-      if (grid.lineOnly || !levelInRange(grid, level, levels)) continue;
-      const { spansX, spansY } = spansForLevel(grid, level.id);
-      const xsM = axisPositions(spansX);
-      const ysM = axisPositions(spansY);
-      const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
-      const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
-      const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
-      for (let j = 0; j < ysM.length; j++) {
-        for (let i = 0; i < xsM.length; i++) {
-          if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
-          const lx = xsM[i] * pxPerM;
-          const lyv = ysM[j] * pxPerM;
-          const cx = grid.origin.x + lx * cs - lyv * sn;
-          const cy = grid.origin.y + lx * sn + lyv * cs;
-          const poly = [
-            { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
-            { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
-          ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
-          obs.push({ kind: "polygon", poly });
-        }
-      }
-    }
-    obs.push(...parkingPathsToObstacles(areasLv, pxPerM, mmRotRad));
+    const obs = buildLevelObstacles(sketch, level.id);
     for (const area of areasLv) {
-      const stalls = generateStalls(area, pxPerM, mmRotRad, obs);
+      const diffKeys = diffEff.get(area.id);
+      const stalls = generateStalls(area, pxPerM, mmRotRad, obs, diffKeys);
       const valid = stalls.filter((s) => s.valid).length;
       if (area.kind === "motor") motor += valid;
       else mobil += valid;
