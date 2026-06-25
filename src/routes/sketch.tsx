@@ -3158,15 +3158,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
     const stallsByArea = new Map<string, ParkingStall[]>();
     for (const [lid, areas] of areasByLvl) {
+      const obs = lid === activeLvlId ? parkingObstacles : buildObstaclesForLevel(lid);
       for (const area of areas) {
-        if (lid === activeLvlId) {
-          const found = parkingStallsActive.find((x) => x.areaId === area.id);
-          stallsByArea.set(area.id, found ? found.stalls
-            : generateStalls(area, pxPerMeter, mmGridRotRad, parkingObstacles));
-        } else {
-          const obs = buildObstaclesForLevel(lid);
-          stallsByArea.set(area.id, generateStalls(area, pxPerMeter, mmGridRotRad, obs));
-        }
+        // Pass-1: pakai hanya manual `area.diffable` agar baseline stabil.
+        const manualSet = new Set(area.diffable ?? []);
+        stallsByArea.set(area.id, generateStalls(area, pxPerMeter, mmGridRotRad, obs, manualSet));
       }
     }
     const baseByLevel = new Map<string, number>();
