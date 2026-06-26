@@ -7640,6 +7640,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       endPointer(e);
       return;
     }
+    if (rampVertexDrag) {
+      setRampVertexDrag(null);
+      endPointer(e);
+      return;
+    }
     if (parkingDrag) {
       setParkingDrag(null);
       // pointer release: tidak perlu commit lain — onChange sudah update.
