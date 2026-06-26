@@ -13,8 +13,13 @@ export type Ramp = {
   widthM: number;             // lebar ramp (m), default 1
   nM: number;                 // panjang acuan kemiringan (m), default 7
   lockedLenM?: number;        // panjang polyline acuan yang dikunci setelah penerapan kemiringan (m)
+  bordes?: boolean;           // jika true, sisipkan bordes setiap `bordesSpacingM` di sepanjang slope
+  bordesLenM?: number;        // panjang tiap bordes (m), default 1.2
+  bordesSpacingM?: number;    // jarak slope antar bordes (m), default 9
+  bordesBelokan?: boolean;    // jika true, tambahkan bordes persegi di tiap sudut belokan
   createdAt: number;
 };
+
 
 export function genRampId(): string {
   return `ramp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -151,4 +156,33 @@ export function offsetPolyline(pts: Point[], wPx: number, side: "left" | "right"
 // Build closed boundary polygon (anchor side -> offset side reversed)
 export function rampBoundary(refDense: Point[], offDense: Point[]): Point[] {
   return [...refDense, ...offDense.slice().reverse()];
+}
+
+// ---------- bordes helpers ----------
+
+// Hitung posisi bordes (sebagai range arc-length dalam METER pada centerline)
+// `centerlineLenM` adalah total panjang centerline (slope + bordes) dalam meter.
+// `slopeLenM` adalah komponen miring saja (= t * n).
+export function computeBordesArcs(
+  centerlineLenM: number,
+  slopeLenM: number,
+  spacingM: number,
+  bordesLenM: number,
+  hasBordes: boolean,
+): Array<{ s0: number; s1: number }> {
+  if (!hasBordes || spacingM <= 0 || bordesLenM <= 0 || slopeLenM <= 0) return [];
+  const out: Array<{ s0: number; s1: number }> = [];
+  const numBordes = Math.max(0, Math.floor((slopeLenM - 1e-3) / spacingM));
+  for (let k = 1; k <= numBordes; k++) {
+    const s0 = k * spacingM + (k - 1) * bordesLenM;
+    const s1 = s0 + bordesLenM;
+    if (s0 >= centerlineLenM - 1e-3) break;
+    out.push({ s0, s1: Math.min(s1, centerlineLenM) });
+  }
+  return out;
+}
+
+export function numBordesForSlope(slopeLenM: number, spacingM: number): number {
+  if (slopeLenM <= 0 || spacingM <= 0) return 0;
+  return Math.max(0, Math.floor((slopeLenM - 1e-3) / spacingM));
 }

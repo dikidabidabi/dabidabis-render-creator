@@ -47,7 +47,7 @@ import {
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
-import { type Ramp, tessellateReference, offsetPolyline, polylineLength } from "@/lib/ramps";
+import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import {
   type ParkingArea,
@@ -3521,6 +3521,65 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     strokeWidth={sLine * 1.1}
                     strokeDasharray={isBase ? undefined : dashArr} />
                   <polygon points={arrowPts} fill={arrowColor} stroke="none" />
+                  {/* bordes overlays */}
+                  {(() => {
+                    if (!r.bordes) return null;
+                    const sortedLv2 = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+                    const li = sortedLv2.findIndex((l) => l.id === r.levelId);
+                    const ab = li >= 0 && li < sortedLv2.length - 1 ? sortedLv2[li + 1] : null;
+                    const tH = ab ? Math.max(0, ab.mdpl - sortedLv2[li].mdpl) : 0;
+                    const spacingM = r.bordesSpacingM ?? 9;
+                    const bLenM = r.bordesLenM ?? 1.2;
+                    const slopeLenM = tH * r.nM;
+                    const centerLenM = polylineLength(center) / pxPerM;
+                    const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true);
+                    const halfW = (r.widthM * pxPerM) / 2;
+                    const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerM);
+                    const quads: string[] = [];
+                    for (const a of arcs) {
+                      const p0 = pointAt(a.s0);
+                      const p1 = pointAt(a.s1);
+                      const n0 = { x: -p0.t.y, y: p0.t.x };
+                      const n1 = { x: -p1.t.y, y: p1.t.x };
+                      const q00 = { x: p0.p.x + n0.x * halfW, y: p0.p.y + n0.y * halfW };
+                      const q01 = { x: p0.p.x - n0.x * halfW, y: p0.p.y - n0.y * halfW };
+                      const q11 = { x: p1.p.x - n1.x * halfW, y: p1.p.y - n1.y * halfW };
+                      const q10 = { x: p1.p.x + n1.x * halfW, y: p1.p.y + n1.y * halfW };
+                      quads.push(`${q00.x},${q00.y} ${q01.x},${q01.y} ${q11.x},${q11.y} ${q10.x},${q10.y}`);
+                    }
+                    const corners: string[] = [];
+                    if (r.bordesBelokan && r.anchors.length >= 3) {
+                      for (let ai = 1; ai < r.anchors.length - 1; ai++) {
+                        const A = r.anchors[ai - 1], B = r.anchors[ai], C = r.anchors[ai + 1];
+                        const dAB = { x: B.x - A.x, y: B.y - A.y };
+                        const dBC = { x: C.x - B.x, y: C.y - B.y };
+                        const lAB = Math.max(1e-6, Math.hypot(dAB.x, dAB.y));
+                        const lBC = Math.max(1e-6, Math.hypot(dBC.x, dBC.y));
+                        const u1 = { x: dAB.x / lAB, y: dAB.y / lAB };
+                        const u2 = { x: dBC.x / lBC, y: dBC.y / lBC };
+                        const sign = r.offsetSide === "right" ? 1 : -1;
+                        const n1c = { x: u1.y * sign, y: -u1.x * sign };
+                        const c0 = { x: B.x + n1c.x * halfW, y: B.y + n1c.y * halfW };
+                        const c1 = { x: c0.x - u1.x * halfW + n1c.x * halfW, y: c0.y - u1.y * halfW + n1c.y * halfW };
+                        const c2 = { x: c0.x - u1.x * halfW - n1c.x * halfW, y: c0.y - u1.y * halfW - n1c.y * halfW };
+                        const c3 = { x: c0.x + u2.x * halfW - n1c.x * halfW, y: c0.y + u2.y * halfW - n1c.y * halfW };
+                        const c4 = { x: c0.x + u2.x * halfW + n1c.x * halfW, y: c0.y + u2.y * halfW + n1c.y * halfW };
+                        corners.push(`${c1.x},${c1.y} ${c2.x},${c2.y} ${c3.x},${c3.y} ${c4.x},${c4.y}`);
+                      }
+                    }
+                    return (
+                      <>
+                        {quads.map((pts, qi) => (
+                          <polygon key={`b-${qi}`} points={pts}
+                            fill="rgba(20,184,166,0.32)" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine} />
+                        ))}
+                        {corners.map((pts, ci) => (
+                          <polygon key={`bc-${ci}`} points={pts}
+                            fill="rgba(20,184,166,0.32)" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine} />
+                        ))}
+                      </>
+                    );
+                  })()}
                 </g>
               );
             });

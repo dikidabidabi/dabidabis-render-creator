@@ -144,6 +144,8 @@ import {
   offsetPolyline,
   polylineLength,
   pointAtArcLength,
+  computeBordesArcs,
+  numBordesForSlope,
 } from "@/lib/ramps";
 
 export const Route = createFileRoute("/sketch")({
@@ -932,6 +934,10 @@ function normalizeSketch(s: any): Sketch {
           widthM: Number.isFinite(Number(r.widthM)) && Number(r.widthM) > 0 ? Number(r.widthM) : 1,
           nM: Number.isFinite(Number(r.nM)) && Number(r.nM) > 0 ? Number(r.nM) : 7,
           lockedLenM: Number.isFinite(Number(r.lockedLenM)) && Number(r.lockedLenM) > 0 ? Number(r.lockedLenM) : undefined,
+          bordes: r.bordes === true,
+          bordesLenM: Number.isFinite(Number(r.bordesLenM)) && Number(r.bordesLenM) > 0 ? Number(r.bordesLenM) : (r.bordes === true ? 1.2 : undefined),
+          bordesSpacingM: Number.isFinite(Number(r.bordesSpacingM)) && Number(r.bordesSpacingM) > 0 ? Number(r.bordesSpacingM) : (r.bordes === true ? 9 : undefined),
+          bordesBelokan: r.bordesBelokan === true,
           createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
         });
       }
@@ -2023,6 +2029,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const rampFilletM = Math.max(0, Number(rampFilletInput) || 0);
   const [rampVertexDrag, setRampVertexDrag] = useState<{ rampId: string; idx: number } | null>(null);
   const [rampClipboard, setRampClipboard] = useState<Ramp | null>(null);
+  const [rampBordesOn, setRampBordesOn] = useState<boolean>(false);
+  const [rampBordesLenInput, setRampBordesLenInput] = useState<string>("1.2");
+  const [rampBordesBelokan, setRampBordesBelokan] = useState<boolean>(false);
+  const rampBordesLenM = Math.max(0.1, Number(rampBordesLenInput) || 1.2);
+  const rampBordesSpacingM = 9;
   // Auto-sync: ketika nilai radius fillet di input diubah, perbarui semua titik
   // yang sudah difillet pada ramp terpilih (atau semua ramp pada level aktif jika
   // tidak ada yang dipilih) agar mengikuti radius baru secara live.
@@ -5401,6 +5412,88 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
         }
 
+        // Bordes overlays
+        if (r.bordes) {
+          const N = Math.min(refDense.length, offDense.length);
+          if (N >= 2) {
+            const center: Point[] = [];
+            for (let i = 0; i < N; i++) {
+              center.push({ x: (refDense[i].x + offDense[i].x) / 2, y: (refDense[i].y + offDense[i].y) / 2 });
+            }
+            const centerLenPx = polylineLength(center);
+            const centerLenM = centerLenPx / pxPerMeter;
+            const spacingM = r.bordesSpacingM ?? 9;
+            const bLenM = r.bordesLenM ?? 1.2;
+            // derive slope length: total - n*bLen ; n = floor(...)
+            // we know total = slopeLen + nB*bLen; solve nB by iterating
+            const nB = numBordesForSlope(centerLenM - 0 /* unknown */, spacingM); // placeholder
+            void nB;
+            // We instead use saved nM × t to find slope; fall back to derive
+            let slopeLenM = 0;
+            const cur2 = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            const li = cur2.findIndex((l) => l.id === r.levelId);
+            const ab = li >= 0 && li < cur2.length - 1 ? cur2[li + 1] : null;
+            const tHeight = ab ? Math.max(0, ab.mdpl - cur2[li].mdpl) : 0;
+            slopeLenM = tHeight * r.nM;
+            const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true);
+            const wPxLocal = r.widthM * pxPerMeter;
+            const halfW = wPxLocal / 2;
+            const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerMeter);
+            ctx.save();
+            ctx.fillStyle = "rgba(20,184,166,0.32)";
+            ctx.strokeStyle = "rgba(15,23,42,0.85)";
+            ctx.lineWidth = 1.4;
+            for (const a of arcs) {
+              const p0 = pointAt(a.s0);
+              const p1 = pointAt(a.s1);
+              // perpendicular at each
+              const n0 = { x: -p0.t.y, y: p0.t.x };
+              const n1 = { x: -p1.t.y, y: p1.t.x };
+              const q00 = { x: p0.p.x + n0.x * halfW, y: p0.p.y + n0.y * halfW };
+              const q01 = { x: p0.p.x - n0.x * halfW, y: p0.p.y - n0.y * halfW };
+              const q11 = { x: p1.p.x - n1.x * halfW, y: p1.p.y - n1.y * halfW };
+              const q10 = { x: p1.p.x + n1.x * halfW, y: p1.p.y + n1.y * halfW };
+              const s00 = worldToScreen(q00), s01 = worldToScreen(q01), s11 = worldToScreen(q11), s10 = worldToScreen(q10);
+              ctx.beginPath();
+              ctx.moveTo(s00.x, s00.y); ctx.lineTo(s01.x, s01.y);
+              ctx.lineTo(s11.x, s11.y); ctx.lineTo(s10.x, s10.y);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+            }
+            // corner bordes
+            if (r.bordesBelokan && r.anchors.length >= 3) {
+              for (let ai = 1; ai < r.anchors.length - 1; ai++) {
+                const A = r.anchors[ai - 1], B = r.anchors[ai], C = r.anchors[ai + 1];
+                const dAB = { x: B.x - A.x, y: B.y - A.y };
+                const dBC = { x: C.x - B.x, y: C.y - B.y };
+                const lAB = Math.max(1e-6, Math.hypot(dAB.x, dAB.y));
+                const lBC = Math.max(1e-6, Math.hypot(dBC.x, dBC.y));
+                const u1 = { x: dAB.x / lAB, y: dAB.y / lAB };
+                const u2 = { x: dBC.x / lBC, y: dBC.y / lBC };
+                const sign = r.offsetSide === "right" ? 1 : -1;
+                const n1c = { x: u1.y * sign, y: -u1.x * sign };
+                const center0 = { x: B.x + n1c.x * halfW, y: B.y + n1c.y * halfW };
+                // square corners along (u1) and (u2) directions, size wPx
+                const c1 = { x: center0.x - u1.x * halfW + n1c.x * halfW, y: center0.y - u1.y * halfW + n1c.y * halfW };
+                const c2 = { x: center0.x - u1.x * halfW - n1c.x * halfW, y: center0.y - u1.y * halfW - n1c.y * halfW };
+                const c3 = { x: center0.x + u2.x * halfW - n1c.x * halfW, y: center0.y + u2.y * halfW - n1c.y * halfW };
+                const c4 = { x: center0.x + u2.x * halfW + n1c.x * halfW, y: center0.y + u2.y * halfW + n1c.y * halfW };
+                const s1c = worldToScreen(c1), s2c = worldToScreen(c2), s3c = worldToScreen(c3), s4c = worldToScreen(c4);
+                ctx.beginPath();
+                ctx.moveTo(s1c.x, s1c.y); ctx.lineTo(s2c.x, s2c.y);
+                ctx.lineTo(s3c.x, s3c.y); ctx.lineTo(s4c.x, s4c.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+              }
+            }
+            ctx.restore();
+          }
+        }
+
+
+
         // Anchor handles in edit modes
         if (!isDraft && tool === "ramp" && (rampSub === "geser" || rampSub === "addpt" || rampSub === "fillet")) {
           ctx.save();
@@ -6663,7 +6756,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (pickId) {
         setRampSelectedId(pickId);
         const r = (sketch.ramps ?? []).find((x) => x.id === pickId);
-        if (r) { setRampWidthInput(String(r.widthM)); setRampNInput(String(r.nM)); }
+        if (r) {
+          setRampWidthInput(String(r.widthM));
+          setRampNInput(String(r.nM));
+          setRampBordesOn(r.bordes === true);
+          if (r.bordesLenM) setRampBordesLenInput(String(r.bordesLenM));
+          setRampBordesBelokan(r.bordesBelokan === true);
+        }
       }
       return;
     }
@@ -9425,15 +9524,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   const curLenM = polylineLength(centerDense) / pxPerMeter;
                   pushHistory();
                   let nextAnchors = r.anchors;
-                  if (t > 0 && curLenM > 1e-3) {
-                    const targetLenM = t * rampNVal;
+                  const slopeLenM = t * rampNVal;
+                  const nBordes = rampBordesOn ? numBordesForSlope(slopeLenM, rampBordesSpacingM) : 0;
+                  const addLenM = nBordes * rampBordesLenM;
+                  const targetLenM = slopeLenM + addLenM;
+                  if (t > 0 && curLenM > 1e-3 && targetLenM > 0) {
                     const factor = targetLenM / curLenM;
                     const p0 = r.anchors[0];
                     nextAnchors = r.anchors.map((p, idx) => idx === 0 ? p : { ...p, x: p0.x + (p.x - p0.x) * factor, y: p0.y + (p.y - p0.y) * factor });
                   }
                   const lockedAnchorLenM = polylineLength(nextAnchors) / pxPerMeter;
-                  onChange({ ramps: (sketch.ramps ?? []).map((rr) => rr.id === rampSelectedId ? { ...rr, nM: rampNVal, anchors: nextAnchors, lockedLenM: t > 0 ? lockedAnchorLenM : undefined } : rr) });
-                  if (t > 0) toast.success(`Kemiringan 1:${rampNVal} → panjang ${(t * rampNVal).toFixed(2)} m (panjang dikunci)`);
+                  onChange({ ramps: (sketch.ramps ?? []).map((rr) => rr.id === rampSelectedId ? {
+                    ...rr,
+                    nM: rampNVal,
+                    anchors: nextAnchors,
+                    lockedLenM: t > 0 ? lockedAnchorLenM : undefined,
+                    bordes: rampBordesOn,
+                    bordesLenM: rampBordesOn ? rampBordesLenM : undefined,
+                    bordesSpacingM: rampBordesOn ? rampBordesSpacingM : undefined,
+                    bordesBelokan: rampBordesOn && rampBordesBelokan,
+                  } : rr) });
+                  if (t > 0) toast.success(`Kemiringan 1:${rampNVal} → slope ${slopeLenM.toFixed(2)} m${nBordes > 0 ? ` + ${nBordes} bordes (${addLenM.toFixed(2)} m) = ${targetLenM.toFixed(2)} m` : ""}`);
                   else toast.success("Kemiringan ramp diperbarui");
                 }}>Terapkan</Button>
                 {(() => {
@@ -9443,8 +9554,43 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   const i = cur.findIndex((l) => l.id === r.levelId);
                   const above = i >= 0 && i < cur.length - 1 ? cur[i + 1] : null;
                   const t = above ? Math.max(0, above.mdpl - cur[i].mdpl) : 0;
-                  return <span className="text-[11px] text-muted-foreground">t = {t.toFixed(2)} m · L = {(t * rampNVal).toFixed(2)} m</span>;
+                  const slopeLenM = t * rampNVal;
+                  const nBordes = rampBordesOn ? numBordesForSlope(slopeLenM, rampBordesSpacingM) : 0;
+                  const total = slopeLenM + nBordes * rampBordesLenM;
+                  return <span className="text-[11px] text-muted-foreground">t = {t.toFixed(2)} m · slope = {slopeLenM.toFixed(2)} m{nBordes > 0 ? ` + ${nBordes}×${rampBordesLenM}m bordes = ${total.toFixed(2)} m` : ""}</span>;
                 })()}
+              </div>
+            )}
+            {rampSub === "kemiringan" && (
+              <div className="flex items-center gap-2 rounded-md border border-border/40 bg-background/40 px-2 py-1">
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={rampBordesOn}
+                    onChange={(e) => setRampBordesOn(e.target.checked)}
+                  />
+                  Bordes
+                </label>
+                {rampBordesOn && (
+                  <>
+                    <Label className="text-xs">Panjang (m)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      className="h-8 w-20"
+                      value={rampBordesLenInput}
+                      onChange={(e) => setRampBordesLenInput(e.target.value)}
+                    />
+                    <label className="flex items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={rampBordesBelokan}
+                        onChange={(e) => setRampBordesBelokan(e.target.checked)}
+                      />
+                      Bordes Belokan
+                    </label>
+                  </>
+                )}
               </div>
             )}
             {rampSub === "fillet" && (
