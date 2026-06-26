@@ -1,82 +1,76 @@
-# Rombak Fitur Parkir
+# Fitur Ramp di Sketsa
 
-Saat ini area parkir disimpan sebagai bounding box dunia (`center` + `halfW/halfH` + `rotation`) dan packing meninggalkan sel kosong setiap kali ketemu kolom/dinding. Permintaan baru menuntut: anchoring ke mm-grid, packing yang menggeser bukan melewatkan, edit titik polygon, rotasi, dan copy/paste antar-level.
+Sebelum saya implementasi, mohon konfirmasi rencana berikut karena ini fitur cukup besar dan menyentuh banyak bagian aplikasi sketsa.
 
-## 1. Anchor ke mm-grid (skala & rotasi terkunci)
+## Model data
 
-Ubah model `ParkingArea` di `src/lib/parking.ts`:
+File baru `src/lib/ramps.ts`:
 
 ```ts
-type ParkingArea = {
+type RampAnchor = { x: number; y: number; filletR?: number; };
+type Ramp = {
   id: string;
-  levelId?: string;
-  // Polygon di KOORDINAT LOKAL mm-grid (px-equivalent, sebelum rotasi/translasi grid).
-  // Default saat menggambar drag = 4 titik rect; bisa jadi N-gon setelah edit titik.
-  pointsLocal: { x: number; y: number }[];
-  orientation?: "auto" | "x" | "y";
-  // Rotasi tambahan stall relatif sumbu lokal grid (radian, default 0).
-  stallRotation?: number;
-  disabled?: string[];
+  levelId: string;            // level penggambaran (kaki ramp)
+  upperLevelId?: string;      // dihitung dari levels sortir (level di atas)
+  anchors: RampAnchor[];      // polyline acuan sisi 1 (≥2 titik)
+  offsetSide: "left" | "right"; // sisi 1 m offset
+  widthM: number;             // default 1
+  nM: number;                 // panjang acuan kemiringan, default 7
+  // tM (tinggi) otomatis = mdpl(upper) − mdpl(level)
 };
 ```
 
-Konversi local→world memakai `grid.origin` + `grid.rotation` mm-grid aktif (sama seperti sketsa lain). Karena disimpan dalam local-grid, saat grid digeser/diputar, area parkir ikut otomatis tanpa simpan ulang.
+Disimpan di `Sketch.ramps?: Ramp[]`. Rescale skala mengikuti pola elemen lain (px = m × pxPerMeter).
 
-Saat menggambar (drag) dengan tool parking: titik pointer dikonversi ke local-grid lalu disimpan sebagai 4-titik rect lokal. Tidak ada lagi `center`/`halfW`/`halfH`/`rotation` dunia.
+## Toolbar
 
-## 2. Packing "slide past obstacle" (tanpa skip 1 lot)
+Tombol baru "Ramp" di toolbar utama. Sub-toolbar muncul saat aktif:
 
-`generateStalls` di `src/lib/parking.ts` ditulis ulang:
+- **Tarik** — klik berurutan untuk titik acuan; Enter / double-click selesai. Sisi offset otomatis menghadap sisi yang berlawanan dengan arah klik pertama→kedua (default kanan terhadap arah jalan; bisa di-flip dengan tombol).
+- **Edit**:
+  - **Lebar** — input numerik meter (mengubah `widthM`).
+  - **Kemiringan** — tampil "1:" + input untuk `n` (m). `t` ditampilkan read-only = beda MDPL ke level atas.
+  - **Fillet** — input radius (m); klik titik internal polyline acuan untuk menerapkan radius (`filletR`).
+  - **Geser** — drag titik awal/akhir polyline acuan.
+  - **Tambah titik** — klik di sepanjang polyline acuan untuk menyisipkan vertex baru (untuk belokan).
 
-1. Hitung polygon area di world (transform local→world).
-2. Untuk tiap row (modul double/single, sama seperti sekarang), bentuk **strip** sepanjang sumbu deret dengan lebar `STALL_L`.
-3. **Hitung interval valid sepanjang sumbu deret**: mulai dari rentang penuh `[0, D]`, kurangi dengan proyeksi setiap obstacle (kolom/dinding + buffer) ke sumbu deret, plus klip ke polygon area (untuk polygon non-rect, irisan strip × area).
-4. Untuk tiap interval `[s, e]` hasil substraksi: pack stall berturut-turut dari `s` (offset 0, bukan center-buffer), `nStalls = floor((e-s)/STALL_W)`, sisa jadi buffer di ujung. Hasilnya stall menempel persis ke sisi obstacle berikutnya — tidak skip selot pun.
-5. Stall yang dihasilkan otomatis valid (sudah dipotong di langkah 3), jadi tidak perlu cek `valid` per-stall lagi kecuali untuk area polygon non-konveks.
+## Geometri & rendering
 
-Ini juga otomatis benar untuk obstacle baru "ruang/polygon tertutup" — daftarkan polygon ruang (`sketch.floors`) sebagai obstacle, proyeksi ke sumbu deret = bayangan polygon.
+Diturunkan saat render dari `anchors`:
 
-## 3. Subtool "edit titik" dalam fitur parking
+1. Polyline acuan (sisi 1) → di-fillet pada vertex internal yang punya `filletR` (sudut difillet menjadi busur tangensial).
+2. Polyline offset = offset paralel `widthM` ke `offsetSide`. Jika acuan difillet (sudut dalam), busur sisi luar membesar sebesar `r + widthM`; jika sudut luar, busur sisi luar mengecil → konsisten dengan permintaan.
+3. Total panjang ramp = panjang polyline acuan; titik tengah (di panjang/2) menjadi lokasi garis pembatas. Pembatas 45° terhadap sumbu acuan lokal pada titik tengah, menghubungkan kedua tepi (acuan & offset).
+4. Pada `levelId` (level penggambaran): separuh dari kaki sampai pembatas = garis solid; separuh dari pembatas sampai puncak = garis putus-putus.
+5. Pada `upperLevelId` (level di atas): kebalikannya — separuh atas solid, separuh bawah putus-putus.
+6. Pada level lain: tidak digambar.
 
-Di dalam toolbar parking munculkan sub-mode (state lokal `parkingSubTool`):
+## Notasi arah ramp
 
-- **geser** — drag titik polygon area; klik & drag pada edge = drag seluruh area.
-- **tambah titik** — klik pada edge menyisipkan titik baru di posisi terdekat.
-- **hapus titik** — klik titik menghapusnya (min 3 titik).
-- **rotasi kotak** — handle bulat di luar bbox; drag memutar `stallRotation` (rotasi stall di dalam area; area sendiri tetap mengikuti grid).
+Dua garis dari kedua sudut sisi acuan awal (titik 0 acuan dan titik 0 offset) bertemu di "puncak ramp" — titik di tengah jalur pada akhir polyline (rata-rata titik akhir acuan & offset). Digambar di atas tubuh ramp di kedua level (mengikuti polanya: solid di kaki, dashed di atas).
 
-Semua interaksi di local-grid: titik pointer di-unproject ke local-grid sebelum diubah.
+## Edit yang interaktif
 
-## 4. Copy / Paste / Hapus area parkir (antar-level)
+- **Geser**: handle bulat di titik awal & akhir; drag dengan snap aktif.
+- **Tambah titik**: klik pada segmen polyline acuan → vertex baru tepat di proyeksi titik klik di segmen.
+- **Fillet**: klik vertex internal → prompt / pakai nilai input aktif untuk `filletR`.
 
-State global di `src/store/project-store.ts`:
+## File yang diubah
 
-```ts
-parkingClipboard: ParkingArea[] | null;  // tanpa levelId
-copyParking(areas) / pasteParking(targetLevelId) / clearClipboard()
-```
-
-Toolbar parking sub-mode menambah tombol **Copy** (area terpilih), **Paste** (re-id + set `levelId` = level aktif, offset kecil agar tidak menumpuk), **Hapus**. Karena clipboard di store global, paste bisa di level berbeda.
-
-Pemilihan area memakai klik biasa pada sub-tool "geser" (single-select untuk versi pertama; multi-select via Shift-klik).
-
-## 5. UI & integrasi
-
+- **Baru**: `src/lib/ramps.ts` (tipe + helper offset/fillet/length/midpoint).
 - `src/routes/sketch.tsx`:
-  - Sub-toolbar baru muncul saat `tool === "parking"` (mobile + desktop) berisi: Geser, +Titik, −Titik, Rotasi, Copy, Paste, Hapus.
-  - Render handle titik & handle rotasi saat ada area terpilih.
-  - Migrasi normalisasi: kalau load data lama yang punya `center/halfW/halfH`, konversi ke `pointsLocal` rect di local-grid aktif.
-- `src/lib/parking.ts`: tambah `polygonToWorld(area, grid)`, `worldToLocal(p, grid)`, `localToWorld`. Tambah obstacle baru `floors` (polygon).
-- `src/routes/tabulasi.tsx`: tidak berubah — tetap konsumsi `computeParkingStats`.
+  - Tambah `ramps?: Ramp[]` ke `Sketch`.
+  - Tambah union "ramp" ke state `tool`, plus state `rampSub`, `rampDraft`, `rampSelectedId`, `rampWidthInput`, `rampNInput`, `rampFilletInput`.
+  - Tombol toolbar + sub-toolbar.
+  - Click/move/up handler untuk Tarik & sub-Edit.
+  - Render pass baru `drawRamps(ctx, sketch, activeLevel, levels)`.
+  - Rescale ramps saat skala berubah.
+- Halaman lain (presentasi, model3d) **tidak diubah** dalam plan ini (cakupan terbatas ke sketsa).
 
-## Detail teknis
+## Hal yang **tidak** termasuk
 
-- Interval subtraction di sumbu deret memakai algoritma standar (sort intervals, sweep, kurangi). Obstacle yang miring diproyeksikan via min/max dot product titik-titiknya dengan vektor sumbu deret (plus padding setengah-`STALL_L` dari samping strip + buffer).
-- `stallRotation ≠ 0` ditambahkan ke rotasi grid saat menghitung sumbu deret; obstacle juga ikut ditransform.
-- Migrasi data lama dijalankan saat normalisasi `parkingAreas` jika `pointsLocal` tidak ada — pakai grid aktif level saat load.
+- Tidak mengubah model 3D / extrude ramp di `model3d.tsx`.
+- Tidak menampilkan ramp di slide denah `presentasi.tsx`.
+- Tidak ada perhitungan tabulasi luas ramp.
 
-## File yang berubah
-
-- `src/lib/parking.ts` — rewrite model + packing.
-- `src/routes/sketch.tsx` — sub-tool, handle UI, copy/paste, gambar polygon.
-- `src/store/project-store.ts` — clipboard parkir.
+Mohon konfirmasi atau beri tahu apa yang perlu diubah/ditambah sebelum saya implementasi.
