@@ -8944,6 +8944,108 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           />
 
         )}
+        {tool === "ramp" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border/60 bg-card/60 p-2">
+            {(["tarik", "geser", "addpt", "lebar", "kemiringan", "fillet"] as const).map((m) => (
+              <Button
+                key={m}
+                size="sm"
+                variant={rampSub === m ? "default" : "outline"}
+                className={cn(rampSub === m && "bg-gradient-primary shadow-primary")}
+                onClick={() => {
+                  setRampSub(m);
+                  if (m !== "tarik") setRampDraft(null);
+                }}
+              >
+                {m === "tarik" ? "Tarik" : m === "geser" ? "Geser Titik" : m === "addpt" ? "Tambah Titik" : m === "lebar" ? "Lebar" : m === "kemiringan" ? "Kemiringan" : "Fillet"}
+              </Button>
+            ))}
+            {rampSub === "lebar" && (
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs">Lebar (m)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  className="h-8 w-20"
+                  value={rampWidthInput}
+                  onChange={(e) => setRampWidthInput(Math.max(0.3, Number(e.target.value) || 1))}
+                />
+                <Button size="sm" variant="outline" onClick={() => {
+                  if (!rampSelectedId) { toast.error("Pilih ramp dulu"); return; }
+                  pushHistory();
+                  onChange({ ramps: (sketch.ramps ?? []).map((r) => r.id === rampSelectedId ? { ...r, widthM: rampWidthInput } : r) });
+                  toast.success("Lebar ramp diperbarui");
+                }}>Terapkan</Button>
+              </div>
+            )}
+            {rampSub === "kemiringan" && (
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs">1 : n (n meter)</Label>
+                <Input
+                  type="number"
+                  step="0.5"
+                  className="h-8 w-20"
+                  value={rampNInput}
+                  onChange={(e) => setRampNInput(Math.max(1, Number(e.target.value) || 7))}
+                />
+                <Button size="sm" variant="outline" onClick={() => {
+                  if (!rampSelectedId) { toast.error("Pilih ramp dulu"); return; }
+                  pushHistory();
+                  onChange({ ramps: (sketch.ramps ?? []).map((r) => r.id === rampSelectedId ? { ...r, nM: rampNInput } : r) });
+                  toast.success("Kemiringan ramp diperbarui");
+                }}>Terapkan</Button>
+                {(() => {
+                  const r = (sketch.ramps ?? []).find((x) => x.id === rampSelectedId);
+                  if (!r) return null;
+                  const cur = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+                  const i = cur.findIndex((l) => l.id === r.levelId);
+                  const above = i >= 0 && i < cur.length - 1 ? cur[i + 1] : null;
+                  const t = above ? Math.max(0, above.mdpl - cur[i].mdpl) : 0;
+                  return <span className="text-[11px] text-muted-foreground">t = {t.toFixed(2)} m</span>;
+                })()}
+              </div>
+            )}
+            {rampSub === "fillet" && (
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs">Radius (m)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  className="h-8 w-20"
+                  value={rampFilletInput}
+                  onChange={(e) => setRampFilletInput(Math.max(0, Number(e.target.value) || 0))}
+                />
+                <span className="text-[11px] text-muted-foreground">Tap titik tengah polyline acuan</span>
+              </div>
+            )}
+            {rampSub === "tarik" && rampDraft && (
+              <>
+                <span className="text-[11px] text-muted-foreground">Titik: {rampDraft.anchors.length}</span>
+                <Button size="sm" variant="outline" onClick={() => {
+                  setRampDraft({ ...rampDraft, offsetSide: rampDraft.offsetSide === "right" ? "left" : "right" });
+                }}>Flip Sisi ({rampDraft.offsetSide})</Button>
+                <Button size="sm" onClick={() => {
+                  if (!rampDraft || rampDraft.anchors.length < 2) { toast.error("Butuh ≥ 2 titik"); return; }
+                  pushHistory();
+                  const ramp = makeRamp(rampDraft.levelId, rampDraft.anchors, { offsetSide: rampDraft.offsetSide, widthM: rampWidthInput, nM: rampNInput });
+                  onChange({ ramps: [...(sketch.ramps ?? []), ramp] });
+                  setRampSelectedId(ramp.id);
+                  setRampDraft(null);
+                  toast.success("Ramp tersimpan");
+                }} className="bg-gradient-primary shadow-primary">Simpan</Button>
+                <Button size="sm" variant="outline" onClick={() => { setRampDraft(null); toast.message("Dibatalkan"); }}>Batal</Button>
+              </>
+            )}
+            {rampSelectedId && rampSub !== "tarik" && (
+              <Button size="sm" variant="destructive" onClick={() => {
+                pushHistory();
+                onChange({ ramps: (sketch.ramps ?? []).filter((r) => r.id !== rampSelectedId) });
+                setRampSelectedId(null);
+                toast.success("Ramp dihapus");
+              }}>Hapus</Button>
+            )}
+          </div>
+        )}
         {tool === "floor" && (
           <FloorToolPanel
             mode={floorMode}
