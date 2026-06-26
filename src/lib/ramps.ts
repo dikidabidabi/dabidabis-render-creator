@@ -13,8 +13,13 @@ export type Ramp = {
   widthM: number;             // lebar ramp (m), default 1
   nM: number;                 // panjang acuan kemiringan (m), default 7
   lockedLenM?: number;        // panjang polyline acuan yang dikunci setelah penerapan kemiringan (m)
+  bordes?: boolean;           // jika true, sisipkan bordes setiap `bordesSpacingM` di sepanjang slope
+  bordesLenM?: number;        // panjang tiap bordes (m), default 1.2
+  bordesSpacingM?: number;    // jarak slope antar bordes (m), default 9
+  bordesBelokan?: boolean;    // jika true, tambahkan bordes persegi di tiap sudut belokan
   createdAt: number;
 };
+
 
 export function genRampId(): string {
   return `ramp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
