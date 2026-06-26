@@ -3422,6 +3422,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
+              </g>
+            );
+          })}
           {/* Ramps — render pada level kaki ramp (solid setengah pertama, dashed setengah kedua)
               dan pada level di atasnya (dashed setengah pertama, solid setengah kedua). */}
           {(() => {
@@ -3468,39 +3471,27 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               const halfPoly = (refPts: { x: number; y: number }[], offPts: { x: number; y: number }[]) => {
                 if (refPts.length < 2 || offPts.length < 2) return "";
                 const pts = [...refPts, ...offPts.slice().reverse()];
-                return pts.map((p, i) => `${p.x},${p.y}`).join(" ");
+                return pts.map((p) => `${p.x},${p.y}`).join(" ");
               };
-              // direction arrow: from start corners to end midpoint
-              const endRef = refDense[refDense.length - 1];
-              const endOff = offDense[offDense.length - 1];
-              const top = { x: (endRef.x + endOff.x) / 2, y: (endRef.y + endOff.y) / 2 };
-              const startRef = refDense[0], startOff = offDense[0];
-              // 45° divider
-              const midRefPt = refSplit.a[refSplit.a.length - 1];
-              const midOffPt = offSplit.a[offSplit.a.length - 1];
-              // tangent at mid
-              const ref = refDense;
-              let tx = 1, ty = 0;
-              {
-                let acc = 0; const target = refLen / 2;
-                for (let i = 1; i < ref.length; i++) {
-                  const d = Math.hypot(ref[i].x - ref[i - 1].x, ref[i].y - ref[i - 1].y);
-                  if (acc + d >= target) {
-                    tx = (ref[i].x - ref[i - 1].x) / Math.max(1e-9, d);
-                    ty = (ref[i].y - ref[i - 1].y) / Math.max(1e-9, d);
-                    break;
-                  }
-                  acc += d;
-                }
+              // Centerline (mengikuti belokan, tetap di dalam perimeter)
+              const N = Math.min(refDense.length, offDense.length);
+              const center: { x: number; y: number }[] = [];
+              for (let i = 0; i < N; i++) {
+                center.push({ x: (refDense[i].x + offDense[i].x) / 2, y: (refDense[i].y + offDense[i].y) / 2 });
               }
-              const ang = Math.PI / 4;
-              const dx = tx * Math.cos(ang) - ty * Math.sin(ang);
-              const dy = tx * Math.sin(ang) + ty * Math.cos(ang);
-              const cx = (midRefPt.x + midOffPt.x) / 2;
-              const cy = (midRefPt.y + midOffPt.y) / 2;
-              const L = wPx * 0.9 * (r.offsetSide === "right" ? 1 : -1);
+              const tip = center[center.length - 1];
+              const prev = center[center.length - 2] ?? center[0];
+              const adx = tip.x - prev.x, ady = tip.y - prev.y;
+              const aL = Math.max(1e-9, Math.hypot(adx, ady));
+              const aux = adx / aL, auy = ady / aL;
+              const headLen = Math.min(wPx * 0.4, sw * 0.02);
+              const baseX = tip.x - aux * headLen, baseY = tip.y - auy * headLen;
+              const pnx = -auy, pny = aux;
+              const wHead = headLen * 0.55;
+              const arrowPts = `${tip.x},${tip.y} ${baseX + pnx * wHead},${baseY + pny * wHead} ${baseX - pnx * wHead},${baseY - pny * wHead}`;
               const fillA = "rgba(20,184,166,0.14)";
               const fillB = "rgba(148,163,184,0.10)";
+              const arrowColor = isBase ? "rgba(234,88,12,0.9)" : "rgba(100,116,139,0.75)";
               return (
                 <g key={`ramp-${r.id}`} pointerEvents="none">
                   {/* first half */}
@@ -3511,7 +3502,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   <polygon points={halfPoly(refSplit.b, offSplit.b)}
                     fill={isBase ? fillB : fillA} stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
                     strokeDasharray={isBase ? dashArr : undefined} />
-                  {/* explicit edge paths for clarity */}
+                  {/* explicit edge paths */}
                   <path d={toPath(refSplit.a)} fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
                     strokeDasharray={isBase ? undefined : dashArr} />
                   <path d={toPath(offSplit.a)} fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
@@ -3520,26 +3511,15 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     strokeDasharray={isBase ? dashArr : undefined} />
                   <path d={toPath(offSplit.b)} fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
                     strokeDasharray={isBase ? dashArr : undefined} />
-                  {/* 45° divider */}
-                  <line x1={cx - dx * L * 0.5} y1={cy - dy * L * 0.5}
-                    x2={cx + dx * L * 0.5} y2={cy + dy * L * 0.5}
-                    stroke="rgba(15,23,42,0.9)" strokeWidth={sLine} />
-                  {/* direction arrow: from start corners to top */}
-                  <line x1={startRef.x} y1={startRef.y} x2={top.x} y2={top.y}
-                    stroke={isBase ? "rgba(234,88,12,0.85)" : "rgba(100,116,139,0.7)"}
-                    strokeWidth={sLine * 0.9}
+                  {/* arah ramp: centerline polyline mengikuti belokan + kepala panah */}
+                  <path d={toPath(center)} fill="none" stroke={arrowColor}
+                    strokeWidth={sLine * 1.1}
                     strokeDasharray={isBase ? undefined : dashArr} />
-                  <line x1={startOff.x} y1={startOff.y} x2={top.x} y2={top.y}
-                    stroke={isBase ? "rgba(234,88,12,0.85)" : "rgba(100,116,139,0.7)"}
-                    strokeWidth={sLine * 0.9}
-                    strokeDasharray={isBase ? undefined : dashArr} />
+                  <polygon points={arrowPts} fill={arrowColor} stroke="none" />
                 </g>
               );
             });
           })()}
-              </g>
-            );
-          })}
           <MaterialEdges
             lines={lines}
             edgeAttrs={sketch.edgeAttrs ?? {}}
@@ -3547,6 +3527,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             sw={sw}
             mode="base"
           />
+
 
 
           {/* Pohon pada permukaan Taman — lingkaran hijau solid opacity 50%,

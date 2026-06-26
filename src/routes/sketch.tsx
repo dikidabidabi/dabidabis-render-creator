@@ -5324,51 +5324,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           drawHalf(refA.b, offA.b, false);
         }
 
-        // 45° divider line at midpoint (separates lower/upper)
+        // Centerline arrow (mengikuti belokan ramp, tetap di dalam perimeter)
         {
-          const tNorm = midRef.t;
-          const nx = -tNorm.y, ny = tNorm.x;
-          const sgn = r.offsetSide === "right" ? 1 : -1;
-          const half = wPx; // span across width
-          // 45° relative to local axis: rotate tangent by 45deg
-          const ang = Math.PI / 4;
-          const dx = tNorm.x * Math.cos(ang) - tNorm.y * Math.sin(ang);
-          const dy = tNorm.x * Math.sin(ang) + tNorm.y * Math.cos(ang);
-          void nx; void ny;
-          const cx = (midRef.p.x + midOff.p.x) / 2;
-          const cy = (midRef.p.y + midOff.p.y) / 2;
-          const L = wPx * 0.9 * sgn;
-          const a = worldToScreen({ x: cx - dx * L * 0.5, y: cy - dy * L * 0.5 });
-          const b = worldToScreen({ x: cx + dx * L * 0.5, y: cy + dy * L * 0.5 });
-          ctx.save();
-          ctx.lineWidth = 1.2;
-          ctx.strokeStyle = "rgba(15,23,42,0.9)";
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        // Arrow direction notation: two lines from start corners converging to top-center
-        {
-          const startRef = refDense[0];
-          const startOff = offDense[0];
-          // top = puncak ramp = end point center
-          const endRef = refDense[refDense.length - 1];
-          const endOff = offDense[offDense.length - 1];
-          const top = { x: (endRef.x + endOff.x) / 2, y: (endRef.y + endOff.y) / 2 };
-          ctx.save();
-          ctx.strokeStyle = isBase || isDraft ? "rgba(234,88,12,0.85)" : "rgba(100,116,139,0.7)";
-          ctx.setLineDash(isAbove && !isBase ? [4, 4] : []);
-          ctx.lineWidth = 1.1;
-          ctx.beginPath();
-          const a1 = worldToScreen(startRef), a2 = worldToScreen(top);
-          ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y);
-          const b1 = worldToScreen(startOff);
-          ctx.moveTo(b1.x, b1.y); ctx.lineTo(a2.x, a2.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.restore();
+          const N = Math.min(refDense.length, offDense.length);
+          if (N >= 2) {
+            const center: Point[] = [];
+            for (let i = 0; i < N; i++) {
+              center.push({ x: (refDense[i].x + offDense[i].x) / 2, y: (refDense[i].y + offDense[i].y) / 2 });
+            }
+            ctx.save();
+            ctx.strokeStyle = isBase || isDraft ? "rgba(234,88,12,0.9)" : "rgba(100,116,139,0.75)";
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.setLineDash(isAbove && !isBase ? [4, 4] : []);
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            const s0 = worldToScreen(center[0]);
+            ctx.moveTo(s0.x, s0.y);
+            for (let i = 1; i < center.length; i++) {
+              const s = worldToScreen(center[i]);
+              ctx.lineTo(s.x, s.y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // arrowhead at top (puncak ramp)
+            const pTop = center[center.length - 1];
+            const pPrev = center[center.length - 2];
+            const dxw = pTop.x - pPrev.x, dyw = pTop.y - pPrev.y;
+            const Lw = Math.max(1e-6, Math.hypot(dxw, dyw));
+            const ux = dxw / Lw, uy = dyw / Lw;
+            const headLenPx = Math.min(wPx * 0.4, 18);
+            const tip = worldToScreen(pTop);
+            const baseW = worldToScreen({ x: pTop.x - ux * headLenPx, y: pTop.y - uy * headLenPx });
+            // compute in screen space directly
+            const sxTip = tip.x, syTip = tip.y;
+            const sxBase = baseW.x, syBase = baseW.y;
+            const sdx = sxTip - sxBase, sdy = syTip - syBase;
+            const sL = Math.max(1e-6, Math.hypot(sdx, sdy));
+            const sux = sdx / sL, suy = sdy / sL;
+            const px = -suy, py = sux;
+            const wHead = sL * 0.55;
+            ctx.beginPath();
+            ctx.moveTo(sxTip, syTip);
+            ctx.lineTo(sxBase + px * wHead, syBase + py * wHead);
+            ctx.lineTo(sxBase - px * wHead, syBase - py * wHead);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
         }
 
         // Anchor handles in edit modes
