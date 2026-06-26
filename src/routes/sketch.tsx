@@ -8844,6 +8844,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           >
             <Car className="mr-1.5 h-4 w-4" /> Motor
           </Button>
+          <Button
+            variant={tool === "ramp" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("ramp"); setRampSub("tarik"); setRampDraft(null); setRampSelectedId(null); }}
+            className={cn(tool === "ramp" && "bg-gradient-primary shadow-primary")}
+            title="Ramp — polyline acuan + offset; berakhir di level di atas (puncak ramp)."
+          >
+            <BoxIcon className="mr-1.5 h-4 w-4" /> Ramp
+          </Button>
         </div>
         {tool === "parking" && (
           <ParkingSubToolbar
