@@ -691,7 +691,7 @@ function RekapSection({ data }: { data: Stats }) {
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <Car className="h-3.5 w-3.5" /> Parkir Mobil
           </div>
-          <Row label="Kapasitas Parkir Mobil" value={`${data.parkingMobilTotal} mobil`} />
+          <Row label="Kapasitas Parkir Mobil (reguler)" value={`${data.parkingMobilTotal} mobil`} />
           <Row label="Luas Area Parkir Mobil" value={`${fmt(data.parkingMobilAreaM2)} m²`} />
           <Row label="Rasio Efisiensi Parkir Mobil" value={`${fmt(data.parkingMobilEfficiencyPct, 1)} %`} />
           {data.parkingMobilByLevel.length > 1 && data.parkingMobilByLevel.map((pl) => (
@@ -699,7 +699,7 @@ function RekapSection({ data }: { data: Stats }) {
           ))}
           {data.parkingDiffableTotal > 0 && (
             <>
-              <Row label="Lot Diffable (Mobil)" value={`${data.parkingDiffableTotal} lot`} />
+              <Row label="Kapasitas Lot Diffable" value={`${data.parkingDiffableTotal} lot`} />
               {data.parkingDiffableByLevel.length > 1 && data.parkingDiffableByLevel.map((pl) => (
                 <Row key={`d-${pl.levelId}`} label={`· ${pl.levelName}`} value={`${pl.count} diffable`} />
               ))}
