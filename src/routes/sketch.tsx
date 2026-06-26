@@ -1979,7 +1979,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp">("line");
+  // Ramp tool state
+  const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
+  const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
+  const [rampSelectedId, setRampSelectedId] = useState<string | null>(null);
+  const [rampWidthInput, setRampWidthInput] = useState<number>(1);
+  const [rampNInput, setRampNInput] = useState<number>(7);
+  const [rampFilletInput, setRampFilletInput] = useState<number>(1);
+  const [rampVertexDrag, setRampVertexDrag] = useState<{ rampId: string; idx: number } | null>(null);
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
