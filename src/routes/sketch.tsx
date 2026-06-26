@@ -9442,15 +9442,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   const curLenM = polylineLength(centerDense) / pxPerMeter;
                   pushHistory();
                   let nextAnchors = r.anchors;
-                  if (t > 0 && curLenM > 1e-3) {
-                    const targetLenM = t * rampNVal;
+                  const slopeLenM = t * rampNVal;
+                  const nBordes = rampBordesOn ? numBordesForSlope(slopeLenM, rampBordesSpacingM) : 0;
+                  const addLenM = nBordes * rampBordesLenM;
+                  const targetLenM = slopeLenM + addLenM;
+                  if (t > 0 && curLenM > 1e-3 && targetLenM > 0) {
                     const factor = targetLenM / curLenM;
                     const p0 = r.anchors[0];
                     nextAnchors = r.anchors.map((p, idx) => idx === 0 ? p : { ...p, x: p0.x + (p.x - p0.x) * factor, y: p0.y + (p.y - p0.y) * factor });
                   }
                   const lockedAnchorLenM = polylineLength(nextAnchors) / pxPerMeter;
-                  onChange({ ramps: (sketch.ramps ?? []).map((rr) => rr.id === rampSelectedId ? { ...rr, nM: rampNVal, anchors: nextAnchors, lockedLenM: t > 0 ? lockedAnchorLenM : undefined } : rr) });
-                  if (t > 0) toast.success(`Kemiringan 1:${rampNVal} → panjang ${(t * rampNVal).toFixed(2)} m (panjang dikunci)`);
+                  onChange({ ramps: (sketch.ramps ?? []).map((rr) => rr.id === rampSelectedId ? {
+                    ...rr,
+                    nM: rampNVal,
+                    anchors: nextAnchors,
+                    lockedLenM: t > 0 ? lockedAnchorLenM : undefined,
+                    bordes: rampBordesOn,
+                    bordesLenM: rampBordesOn ? rampBordesLenM : undefined,
+                    bordesSpacingM: rampBordesOn ? rampBordesSpacingM : undefined,
+                    bordesBelokan: rampBordesOn && rampBordesBelokan,
+                  } : rr) });
+                  if (t > 0) toast.success(`Kemiringan 1:${rampNVal} → slope ${slopeLenM.toFixed(2)} m${nBordes > 0 ? ` + ${nBordes} bordes (${addLenM.toFixed(2)} m) = ${targetLenM.toFixed(2)} m` : ""}`);
                   else toast.success("Kemiringan ramp diperbarui");
                 }}>Terapkan</Button>
                 {(() => {
@@ -9460,8 +9472,43 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   const i = cur.findIndex((l) => l.id === r.levelId);
                   const above = i >= 0 && i < cur.length - 1 ? cur[i + 1] : null;
                   const t = above ? Math.max(0, above.mdpl - cur[i].mdpl) : 0;
-                  return <span className="text-[11px] text-muted-foreground">t = {t.toFixed(2)} m · L = {(t * rampNVal).toFixed(2)} m</span>;
+                  const slopeLenM = t * rampNVal;
+                  const nBordes = rampBordesOn ? numBordesForSlope(slopeLenM, rampBordesSpacingM) : 0;
+                  const total = slopeLenM + nBordes * rampBordesLenM;
+                  return <span className="text-[11px] text-muted-foreground">t = {t.toFixed(2)} m · slope = {slopeLenM.toFixed(2)} m{nBordes > 0 ? ` + ${nBordes}×${rampBordesLenM}m bordes = ${total.toFixed(2)} m` : ""}</span>;
                 })()}
+              </div>
+            )}
+            {rampSub === "kemiringan" && (
+              <div className="flex items-center gap-2 rounded-md border border-border/40 bg-background/40 px-2 py-1">
+                <label className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={rampBordesOn}
+                    onChange={(e) => setRampBordesOn(e.target.checked)}
+                  />
+                  Bordes
+                </label>
+                {rampBordesOn && (
+                  <>
+                    <Label className="text-xs">Panjang (m)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      className="h-8 w-20"
+                      value={rampBordesLenInput}
+                      onChange={(e) => setRampBordesLenInput(e.target.value)}
+                    />
+                    <label className="flex items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={rampBordesBelokan}
+                        onChange={(e) => setRampBordesBelokan(e.target.checked)}
+                      />
+                      Bordes Belokan
+                    </label>
+                  </>
+                )}
               </div>
             )}
             {rampSub === "fillet" && (
