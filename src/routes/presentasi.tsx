@@ -1072,6 +1072,7 @@ type Slide =
   | { kind: "shadow-seasonal"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "wind"; id: string; title: string; sketch: Sketch }
+  | { kind: "thermal"; id: string; title: string; sketch: Sketch }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
   | { kind: "explode-axo"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
@@ -1171,6 +1172,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "matahari", id: "matahari", title: "Analisa Matahari & Bukaan", sketch: sk, bounds });
   out.push({ kind: "shadow-seasonal", id: "shadow-seasonal", title: "Studi Bayangan Tahunan · 15.00 WIB", sketch: sk, bounds });
   out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
+  out.push({ kind: "thermal", id: "thermal", title: "Analisa Thermal Heatmap", sketch: sk });
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "explode-axo", id: "explode-axo", title: "Diagram Aksonometri Eksplode · Tipe Layout", sketch: sk });
   // Slide Perspektif — ditempatkan setelah Aksonometri Eksplode.
@@ -1258,6 +1260,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "shadow-seasonal":
       case "facade-zoning": return "Analisa Matahari & Fasad";
       case "wind": return "Analisa Iklim · Angin";
+      case "thermal": return "Analisa Thermal Heatmap";
       case "stacking": return "Stacking Diagram";
       case "explode-axo": return "Aksonometri Eksplode";
       case "rekap": return "Rekapitulasi";
@@ -1613,6 +1616,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "shadow-seasonal" && <ShadowSeasonalBody slide={slide} />}
       {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
       {slide.kind === "wind" && <WindBody sketch={slide.sketch} />}
+      {slide.kind === "thermal" && <ThermalBody sketch={slide.sketch} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
       {slide.kind === "explode-axo" && <ExplodedAxoBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
@@ -1669,6 +1673,7 @@ function SlideHeader({ slide }: { slide: Slide }) {
     : slide.kind === "konsep" ? "Konsep · Narasi"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "wind" ? "Analisa · Iklim Angin"
+    : slide.kind === "thermal" ? "Analisa · Thermal Heatmap"
     : slide.kind === "explode-axo" ? "Sketsa · Aksonometri Eksplode"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
@@ -6492,6 +6497,494 @@ function dirToCardinal(deg: number): string {
   const dirs = ["U", "TL", "T", "TG", "S", "BD", "B", "BL"];
   const i = Math.round(((deg % 360) / 45)) % 8;
   return dirs[i];
+}
+
+// ============================================================
+// Analisa Thermal Heatmap — lokal, tanpa AI
+// Per-face N·L exposure + AABB shadow occlusion (CPU raycast).
+// ============================================================
+function ThermalBody({ sketch }: { sketch: Sketch }) {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const [hour, setHour] = useState<number>(12);
+  const [month, setMonth] = useState<number>(6); // 1..12
+  const [peak, setPeak] = useState<{ side: string; hour: number; value: number } | null>(null);
+
+  const lat = sketch.geo?.lat ?? -6.2;
+  const lon = sketch.geo?.lon ?? 106.816666;
+  const northRot = Number(sketch.northRotation) || 0;
+
+  // Scene state held via refs so slider changes don't rebuild geometry.
+  const sceneRef = useRef<{
+    update: (h: number, m: number) => void;
+    bestSidePerHour: () => { side: string; hour: number; value: number } | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const host = mountRef.current;
+    if (!host) return;
+    let stopped = false;
+
+    const W0 = Math.max(320, host.clientWidth);
+    const H0 = Math.max(240, host.clientHeight);
+
+    const BG_HEX = "#f4f5f7";
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(BG_HEX);
+
+    const camera = new THREE.PerspectiveCamera(38, W0 / H0, 0.5, 2000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(W0, H0);
+    host.appendChild(renderer.domElement);
+    (renderer.domElement.style as any).display = "block";
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+    // ---- Build massing (mirror WindBody) ----
+    const mPerPx = stackMetersPerPx(sketch.scale);
+    const ascLevels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+    const expanded = expandLevelsForView(ascLevels);
+    const lahan = (sketch.layers ?? []).filter((l) => isLahan(l.name));
+    const build = (sketch.layers ?? []).filter(
+      (l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name),
+    );
+
+    let minPx = Infinity, minPy = Infinity, maxPx = -Infinity, maxPy = -Infinity;
+    for (const l of sketch.layers ?? []) for (const p of l.points) {
+      if (p.x < minPx) minPx = p.x; if (p.y < minPy) minPy = p.y;
+      if (p.x > maxPx) maxPx = p.x; if (p.y > maxPy) maxPy = p.y;
+    }
+    if (!Number.isFinite(minPx)) { minPx = 0; minPy = 0; maxPx = 100; maxPy = 100; }
+    const ox = (minPx + maxPx) / 2;
+    const oy = (minPy + maxPy) / 2;
+    const toXZ = (p: { x: number; y: number }) => ({ x: (p.x - ox) * mPerPx, z: (p.y - oy) * mPerPx });
+
+    // Ground site.
+    let siteMinX = Infinity, siteMinZ = Infinity, siteMaxX = -Infinity, siteMaxZ = -Infinity;
+    if (lahan.length > 0) {
+      for (const ly of lahan) {
+        const pts = ly.points.map(toXZ);
+        if (pts.length < 3) continue;
+        const shape = new THREE.Shape();
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        const geo = new THREE.ShapeGeometry(shape);
+        geo.rotateX(-Math.PI / 2);
+        const mat = new THREE.MeshBasicMaterial({ color: "#dfe3e8" });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.y = -0.01;
+        scene.add(mesh);
+        for (const p of pts) {
+          if (p.x < siteMinX) siteMinX = p.x;
+          if (p.z < siteMinZ) siteMinZ = p.z;
+          if (p.x > siteMaxX) siteMaxX = p.x;
+          if (p.z > siteMaxZ) siteMaxZ = p.z;
+        }
+      }
+    }
+
+    type Box = { minX: number; maxX: number; minZ: number; maxZ: number; minY: number; maxY: number };
+    type FaceData = {
+      mesh: THREE.Mesh;
+      centroids: Float32Array; // length triCount * 3 (world)
+      normals: Float32Array;   // length triCount * 3 (world, normalized)
+      triCount: number;
+      ownerBoxIdx: number;
+    };
+    const boxes: Box[] = [];
+    const faceList: FaceData[] = [];
+
+    for (const lv of expanded) {
+      const layers = build.filter((l) => l.levelId === lv.sourceId);
+      for (const ly of layers) {
+        const pts = ly.points.map(toXZ);
+        if (pts.length < 3) continue;
+        const ov = roomExtrudeOverride(ly.name);
+        const yBot = lv.mdpl + (ov?.baseDelta ?? 0);
+        const height = ov?.height ?? lv.height;
+        if (height <= 0.001) continue;
+        const yTop = yBot + height;
+
+        const shape = new THREE.Shape();
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(0, yTop, 0);
+        geo.computeVertexNormals();
+
+        const posAttr = geo.attributes.position as THREE.BufferAttribute;
+        const vCount = posAttr.count;
+        const colorArr = new Float32Array(vCount * 3);
+        for (let i = 0; i < vCount * 3; i++) colorArr[i] = 0.5;
+        geo.setAttribute("color", new THREE.BufferAttribute(colorArr, 3));
+
+        const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+        const mesh = new THREE.Mesh(geo, mat);
+        scene.add(mesh);
+
+        const edges = new THREE.EdgesGeometry(geo, 25);
+        const elines = new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.35 }),
+        );
+        scene.add(elines);
+
+        let bMinX = Infinity, bMaxX = -Infinity, bMinZ = Infinity, bMaxZ = -Infinity;
+        for (const p of pts) {
+          if (p.x < bMinX) bMinX = p.x; if (p.x > bMaxX) bMaxX = p.x;
+          if (p.z < bMinZ) bMinZ = p.z; if (p.z > bMaxZ) bMaxZ = p.z;
+        }
+        const boxIdx = boxes.length;
+        boxes.push({ minX: bMinX, maxX: bMaxX, minZ: bMinZ, maxZ: bMaxZ, minY: yBot, maxY: yTop });
+
+        // Build per-triangle centroid & normal (world-space; geometry already in world coords since no transform).
+        const triCount = Math.floor(vCount / 3);
+        const centroids = new Float32Array(triCount * 3);
+        const normals = new Float32Array(triCount * 3);
+        const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3();
+        const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
+        for (let t = 0; t < triCount; t++) {
+          pa.fromBufferAttribute(posAttr, t * 3 + 0);
+          pb.fromBufferAttribute(posAttr, t * 3 + 1);
+          pc.fromBufferAttribute(posAttr, t * 3 + 2);
+          centroids[t * 3] = (pa.x + pb.x + pc.x) / 3;
+          centroids[t * 3 + 1] = (pa.y + pb.y + pc.y) / 3;
+          centroids[t * 3 + 2] = (pa.z + pb.z + pc.z) / 3;
+          ab.subVectors(pb, pa);
+          ac.subVectors(pc, pa);
+          n.crossVectors(ab, ac).normalize();
+          normals[t * 3] = n.x;
+          normals[t * 3 + 1] = n.y;
+          normals[t * 3 + 2] = n.z;
+        }
+        faceList.push({ mesh, centroids, normals, triCount, ownerBoxIdx: boxIdx });
+      }
+    }
+
+    if (!Number.isFinite(siteMinX)) {
+      siteMinX = Infinity; siteMinZ = Infinity; siteMaxX = -Infinity; siteMaxZ = -Infinity;
+      for (const b of boxes) {
+        siteMinX = Math.min(siteMinX, b.minX); siteMaxX = Math.max(siteMaxX, b.maxX);
+        siteMinZ = Math.min(siteMinZ, b.minZ); siteMaxZ = Math.max(siteMaxZ, b.maxZ);
+      }
+      if (!Number.isFinite(siteMinX)) { siteMinX = -20; siteMaxX = 20; siteMinZ = -20; siteMaxZ = 20; }
+      const padX = Math.max(8, (siteMaxX - siteMinX) * 0.25);
+      const padZ = Math.max(8, (siteMaxZ - siteMinZ) * 0.25);
+      siteMinX -= padX; siteMaxX += padX; siteMinZ -= padZ; siteMaxZ += padZ;
+    }
+    const domCx = (siteMinX + siteMaxX) / 2;
+    const domCz = (siteMinZ + siteMaxZ) / 2;
+    const domR = Math.hypot(siteMaxX - siteMinX, siteMaxZ - siteMinZ) / 2;
+    const maxBuildY = boxes.reduce((m, b) => Math.max(m, b.maxY), 6);
+    const sceneRadius = Math.max(40, domR * 2 + maxBuildY);
+
+    const camDist = Math.max(50, domR * 2.6);
+    camera.position.set(domCx + camDist * 0.7, maxBuildY + domR * 1.0, domCz + camDist * 0.7);
+    camera.lookAt(domCx, maxBuildY * 0.35, domCz);
+
+    // ---- Sun direction from local time (WIB ≈ UTC+7) ----
+    function sunDir(h: number, m: number): { x: number; y: number; z: number; altDeg: number; azDeg: number } {
+      const year = new Date().getUTCFullYear();
+      const day = 15;
+      const hourInt = Math.floor(h);
+      const minute = Math.round((h - hourInt) * 60);
+      // WIB → UTC: subtract 7h
+      const utcHour = hourInt - 7;
+      const d = new Date(Date.UTC(year, m - 1, day, utcHour, minute, 0));
+      const p = SunCalc.getPosition(d, lat, lon);
+      // SunCalc azimuth: 0 = south, +CW (south = 0, west = +π/2). Convert to north-CW.
+      const azNorthCW = (p.azimuth + Math.PI) * (180 / Math.PI);
+      const azSketch = ((azNorthCW + northRot) % 360 + 360) % 360;
+      const altDeg = (p.altitude * 180) / Math.PI;
+      // Vector from surface TOWARD sun. Sketch frame: north = -Z, east = +X, up = +Y.
+      const altRad = (altDeg * Math.PI) / 180;
+      const azRad = (azSketch * Math.PI) / 180;
+      const horiz = Math.cos(altRad);
+      // azimuth 0 = north (-Z); 90 = east (+X)
+      const x = horiz * Math.sin(azRad);
+      const z = -horiz * Math.cos(azRad);
+      const y = Math.sin(altRad);
+      return { x, y, z, altDeg, azDeg: azSketch };
+    }
+
+    // Ray-AABB (slab method). Returns t of first hit > tMin within [tMin, tMax], or -1.
+    function rayHitsBox(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, b: Box, tMin: number, tMax: number): boolean {
+      let tmin = tMin, tmax = tMax;
+      const inv = (v: number) => v !== 0 ? 1 / v : 1e30;
+      let t1 = (b.minX - ox) * inv(dx);
+      let t2 = (b.maxX - ox) * inv(dx);
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+      if (tmax < tmin) return false;
+      t1 = (b.minY - oy) * inv(dy);
+      t2 = (b.maxY - oy) * inv(dy);
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+      if (tmax < tmin) return false;
+      t1 = (b.minZ - oz) * inv(dz);
+      t2 = (b.maxZ - oz) * inv(dz);
+      if (t1 > t2) { const tmp = t1; t1 = t2; t2 = tmp; }
+      tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+      if (tmax < tmin) return false;
+      return true;
+    }
+
+    // Color ramp: 0 → biru, 0.5 → kuning, 1 → merah.
+    const cBlue = new THREE.Color("#1e6cff");
+    const cCool = new THREE.Color("#56b4ff");
+    const cYellow = new THREE.Color("#ffd23f");
+    const cOrange = new THREE.Color("#ff8c1a");
+    const cRed = new THREE.Color("#e63226");
+    const tmpCol = new THREE.Color();
+    function ramp(v: number): THREE.Color {
+      const x = Math.max(0, Math.min(1, v));
+      if (x < 0.25) return tmpCol.copy(cBlue).lerp(cCool, x / 0.25);
+      if (x < 0.55) return tmpCol.copy(cCool).lerp(cYellow, (x - 0.25) / 0.30);
+      if (x < 0.80) return tmpCol.copy(cYellow).lerp(cOrange, (x - 0.55) / 0.25);
+      return tmpCol.copy(cOrange).lerp(cRed, (x - 0.80) / 0.20);
+    }
+
+    function applyHeatmap(h: number, m: number) {
+      const s = sunDir(h, m);
+      const isNight = s.altDeg <= 0;
+      const Lx = s.x, Ly = s.y, Lz = s.z;
+      const tMax = sceneRadius * 2;
+      for (const fd of faceList) {
+        const colAttr = fd.mesh.geometry.attributes.color as THREE.BufferAttribute;
+        const arr = colAttr.array as Float32Array;
+        for (let t = 0; t < fd.triCount; t++) {
+          let exposure: number;
+          if (isNight) {
+            exposure = 0;
+          } else {
+            const nx = fd.normals[t * 3];
+            const ny = fd.normals[t * 3 + 1];
+            const nz = fd.normals[t * 3 + 2];
+            const ndotl = nx * Lx + ny * Ly + nz * Lz;
+            if (ndotl <= 0) {
+              exposure = 0; // self-back-face: shaded
+            } else {
+              // Shadow occlusion: ray from centroid toward sun against other boxes.
+              const cx = fd.centroids[t * 3];
+              const cy = fd.centroids[t * 3 + 1];
+              const cz = fd.centroids[t * 3 + 2];
+              let occluded = false;
+              for (let bi = 0; bi < boxes.length; bi++) {
+                if (bi === fd.ownerBoxIdx) continue;
+                if (rayHitsBox(cx, cy, cz, Lx, Ly, Lz, boxes[bi], 0.1, tMax)) {
+                  occluded = true; break;
+                }
+              }
+              const altFactor = Math.max(0.1, Math.min(1, s.altDeg / 60));
+              exposure = occluded ? 0.05 : ndotl * altFactor;
+            }
+          }
+          const c = ramp(exposure);
+          const off = t * 9; // 3 verts * 3 channels
+          for (let v = 0; v < 3; v++) {
+            arr[off + v * 3 + 0] = c.r;
+            arr[off + v * 3 + 1] = c.g;
+            arr[off + v * 3 + 2] = c.b;
+          }
+        }
+        colAttr.needsUpdate = true;
+      }
+    }
+
+    // Precompute peak side across the day for current month.
+    function computePeakSide(m: number): { side: string; hour: number; value: number } | null {
+      // For each test hour, accumulate exposure per cardinal sector based on face normals (XZ).
+      const sectors = ["U", "TL", "T", "TG", "S", "BD", "B", "BL"];
+      let best = { side: "", hour: 12, value: -1 };
+      for (let h = 6; h <= 18; h += 1) {
+        const s = sunDir(h, m);
+        if (s.altDeg <= 0) continue;
+        const Lx = s.x, Ly = s.y, Lz = s.z;
+        const acc = new Array(8).fill(0);
+        for (const fd of faceList) {
+          for (let t = 0; t < fd.triCount; t++) {
+            const nx = fd.normals[t * 3];
+            const ny = fd.normals[t * 3 + 1];
+            const nz = fd.normals[t * 3 + 2];
+            // ignore near-horizontal (roof/floor): only count vertical-ish faces
+            if (Math.abs(ny) > 0.8) continue;
+            const ndotl = nx * Lx + ny * Ly + nz * Lz;
+            if (ndotl <= 0) continue;
+            // facing direction in sketch frame: nx=east, -nz=north.
+            const azFace = (Math.atan2(nx, -nz) * 180) / Math.PI;
+            const azPos = (azFace + 360) % 360;
+            const idx = Math.round(azPos / 45) % 8;
+            acc[idx] += ndotl;
+          }
+        }
+        for (let i = 0; i < 8; i++) {
+          if (acc[i] > best.value) best = { side: sectors[i], hour: h, value: acc[i] };
+        }
+      }
+      return best.value >= 0 ? best : null;
+    }
+
+    sceneRef.current = {
+      update: (h, m) => { applyHeatmap(h, m); },
+      bestSidePerHour: () => computePeakSide(month),
+    };
+
+    applyHeatmap(hour, month);
+    setPeak(computePeakSide(month));
+
+    // Simple slow orbit so model reads as 3D.
+    let lastT = performance.now();
+    let ang = 0;
+    function tick() {
+      if (stopped) return;
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - lastT) / 1000);
+      lastT = now;
+      ang += dt * 0.08;
+      const r = camDist;
+      camera.position.x = domCx + Math.cos(ang) * r * 0.7;
+      camera.position.z = domCz + Math.sin(ang) * r * 0.7;
+      camera.position.y = maxBuildY + domR * 0.95;
+      camera.lookAt(domCx, maxBuildY * 0.35, domCz);
+      renderer.render(scene, camera);
+      rafId = requestAnimationFrame(tick);
+    }
+    let rafId = requestAnimationFrame(tick);
+
+    const ro = new ResizeObserver(() => {
+      const w = host.clientWidth, h = host.clientHeight;
+      if (w > 0 && h > 0) {
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+    });
+    ro.observe(host);
+
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(rafId);
+      ro.disconnect();
+      sceneRef.current = null;
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh & { geometry?: THREE.BufferGeometry; material?: any };
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) {
+          if (Array.isArray(mesh.material)) mesh.material.forEach((m: any) => m?.dispose?.());
+          else mesh.material.dispose?.();
+        }
+      });
+      renderer.dispose();
+      if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sketch.id, sketch.updatedAt]);
+
+  // Slider changes → re-paint, no rebuild.
+  useEffect(() => {
+    sceneRef.current?.update(hour, month);
+  }, [hour, month]);
+
+  useEffect(() => {
+    const p = sceneRef.current?.bestSidePerHour();
+    if (p) setPeak(p);
+  }, [month]);
+
+  const sideName = (s: string) => ({
+    U: "Utara", TL: "Timur Laut", T: "Timur", TG: "Tenggara",
+    S: "Selatan", BD: "Barat Daya", B: "Barat", BL: "Barat Laut",
+  } as Record<string, string>)[s] ?? s;
+
+  const monthName = (m: number) => [
+    "Januari","Februari","Maret","April","Mei","Juni",
+    "Juli","Agustus","September","Oktober","November","Desember",
+  ][m - 1];
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", background: "#f4f5f7", overflow: "hidden" }}>
+      <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
+
+      {/* Color ramp legend */}
+      <div style={{
+        position: "absolute", top: 16, left: 16,
+        background: "rgba(255,255,255,0.92)", border: "1px solid rgba(0,0,0,0.12)",
+        padding: "10px 12px", borderRadius: 8, fontSize: 12, color: "#1a2230",
+        minWidth: 180,
+      }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Intensitas Radiasi</div>
+        <div style={{
+          height: 10, borderRadius: 999,
+          background: "linear-gradient(to right, #1e6cff, #56b4ff, #ffd23f, #ff8c1a, #e63226)",
+          marginBottom: 4,
+        }} />
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#56607a" }}>
+          <span>Teduh</span><span>Miring</span><span>Tegak Lurus</span>
+        </div>
+      </div>
+
+      {/* Metric chip */}
+      <div style={{
+        position: "absolute", top: 16, right: 16,
+        background: "rgba(255,255,255,0.92)", border: "1px solid rgba(0,0,0,0.12)",
+        padding: "10px 12px", borderRadius: 8, fontSize: 12, color: "#1a2230",
+        maxWidth: 320,
+      }}>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>Ringkasan Paparan</div>
+        {peak ? (
+          <div>
+            Sisi <b>{sideName(peak.side)}</b> menerima paparan tertinggi pada jam {String(peak.hour).padStart(2,"0")}.00 ({monthName(month)}).
+          </div>
+        ) : (
+          <div>Tidak ada paparan signifikan pada bulan ini.</div>
+        )}
+        <div style={{ marginTop: 6, fontSize: 11, color: "#56607a" }}>
+          {lat.toFixed(3)}°, {lon.toFixed(3)}° · Utara {northRot.toFixed(0)}°
+        </div>
+      </div>
+
+      {/* Slider controls */}
+      <div style={{
+        position: "absolute", left: 16, right: 16, bottom: 16,
+        display: "flex", gap: 16, alignItems: "stretch", justifyContent: "center",
+      }}>
+        <div style={{
+          flex: 1, maxWidth: 480,
+          background: "rgba(255,255,255,0.94)", border: "1px solid rgba(0,0,0,0.12)",
+          padding: "10px 14px", borderRadius: 10,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+            <span style={{ fontWeight: 700, color: "#1a2230" }}>Jam (WIB)</span>
+            <span style={{ color: "#1a2230" }}>{hour.toFixed(1).padStart(4, "0")}.00</span>
+          </div>
+          <input
+            type="range" min={6} max={18} step={0.5} value={hour}
+            onChange={(e) => setHour(parseFloat(e.target.value))}
+            style={{ width: "100%" }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#56607a" }}>
+            <span>06.00</span><span>12.00</span><span>18.00</span>
+          </div>
+        </div>
+        <div style={{
+          flex: 1, maxWidth: 480,
+          background: "rgba(255,255,255,0.94)", border: "1px solid rgba(0,0,0,0.12)",
+          padding: "10px 14px", borderRadius: 10,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+            <span style={{ fontWeight: 700, color: "#1a2230" }}>Bulan</span>
+            <span style={{ color: "#1a2230" }}>{monthName(month)}</span>
+          </div>
+          <input
+            type="range" min={1} max={12} step={1} value={month}
+            onChange={(e) => setMonth(parseInt(e.target.value, 10))}
+            style={{ width: "100%" }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#56607a" }}>
+            <span>Jan</span><span>Jun</span><span>Des</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 
