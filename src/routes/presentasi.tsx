@@ -109,6 +109,7 @@ type Sketch = {
   doors?: Door[];
   floors?: Floor[];
   parkingAreas?: ParkingArea[];
+  ramps?: Ramp[];
   mmGridRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
