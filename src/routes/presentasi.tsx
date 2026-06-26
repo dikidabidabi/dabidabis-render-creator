@@ -47,6 +47,7 @@ import {
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
+import { type Ramp, tessellateReference, offsetPolyline, polylineLength } from "@/lib/ramps";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import {
   type ParkingArea,
@@ -109,6 +110,7 @@ type Sketch = {
   doors?: Door[];
   floors?: Floor[];
   parkingAreas?: ParkingArea[];
+  ramps?: Ramp[];
   mmGridRotation?: number;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
@@ -3417,9 +3419,124 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                         <line x1={mxx} y1={mny} x2={mnx} y2={mxy}
                           stroke="rgba(120,40,20,0.85)" strokeWidth={sw * 0.001} />
                       </g>
-                    </g>
-                  );
-                })}
+              </g>
+            );
+          })}
+          {/* Ramps — render pada level kaki ramp (solid setengah pertama, dashed setengah kedua)
+              dan pada level di atasnya (dashed setengah pertama, solid setengah kedua). */}
+          {(() => {
+            const ramps = sketch.ramps ?? [];
+            if (!ramps.length) return null;
+            const sortedLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            const visible = ramps.filter((r) => {
+              const i = sortedLv.findIndex((l) => l.id === r.levelId);
+              if (i < 0) return false;
+              if (r.levelId === level.id) return true;
+              if (i < sortedLv.length - 1 && sortedLv[i + 1].id === level.id) return true;
+              return false;
+            });
+            const splitPolyline = (pts: { x: number; y: number }[], s: number) => {
+              const a: { x: number; y: number }[] = []; const b: { x: number; y: number }[] = [];
+              let acc = 0; if (pts.length === 0) return { a, b };
+              a.push(pts[0]);
+              for (let i = 1; i < pts.length; i++) {
+                const p0 = pts[i - 1], p1 = pts[i];
+                const d = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+                if (acc + d < s) { a.push(p1); acc += d; continue; }
+                const u = (s - acc) / Math.max(1e-9, d);
+                const mid = { x: p0.x + (p1.x - p0.x) * u, y: p0.y + (p1.y - p0.y) * u };
+                a.push(mid); b.push(mid);
+                for (let k = i; k < pts.length; k++) b.push(pts[k]);
+                return { a, b };
+              }
+              return { a, b };
+            };
+            const toPath = (pts: { x: number; y: number }[]) =>
+              pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+            const sLine = sw * 0.0014;
+            const dashArr = `${sw * 0.006} ${sw * 0.004}`;
+            return visible.map((r) => {
+              const isBase = r.levelId === level.id;
+              const refDense = tessellateReference(r.anchors, pxPerM, 18);
+              const wPx = r.widthM * pxPerM;
+              const offDense = offsetPolyline(refDense, wPx, r.offsetSide);
+              if (refDense.length < 2 || offDense.length < 2) return null;
+              const refLen = polylineLength(refDense);
+              const offLen = polylineLength(offDense);
+              const refSplit = splitPolyline(refDense, refLen / 2);
+              const offSplit = splitPolyline(offDense, offLen / 2);
+              const halfPoly = (refPts: { x: number; y: number }[], offPts: { x: number; y: number }[]) => {
+                if (refPts.length < 2 || offPts.length < 2) return "";
+                const pts = [...refPts, ...offPts.slice().reverse()];
+                return pts.map((p, i) => `${p.x},${p.y}`).join(" ");
+              };
+              // direction arrow: from start corners to end midpoint
+              const endRef = refDense[refDense.length - 1];
+              const endOff = offDense[offDense.length - 1];
+              const top = { x: (endRef.x + endOff.x) / 2, y: (endRef.y + endOff.y) / 2 };
+              const startRef = refDense[0], startOff = offDense[0];
+              // 45° divider
+              const midRefPt = refSplit.a[refSplit.a.length - 1];
+              const midOffPt = offSplit.a[offSplit.a.length - 1];
+              // tangent at mid
+              const ref = refDense;
+              let tx = 1, ty = 0;
+              {
+                let acc = 0; const target = refLen / 2;
+                for (let i = 1; i < ref.length; i++) {
+                  const d = Math.hypot(ref[i].x - ref[i - 1].x, ref[i].y - ref[i - 1].y);
+                  if (acc + d >= target) {
+                    tx = (ref[i].x - ref[i - 1].x) / Math.max(1e-9, d);
+                    ty = (ref[i].y - ref[i - 1].y) / Math.max(1e-9, d);
+                    break;
+                  }
+                  acc += d;
+                }
+              }
+              const ang = Math.PI / 4;
+              const dx = tx * Math.cos(ang) - ty * Math.sin(ang);
+              const dy = tx * Math.sin(ang) + ty * Math.cos(ang);
+              const cx = (midRefPt.x + midOffPt.x) / 2;
+              const cy = (midRefPt.y + midOffPt.y) / 2;
+              const L = wPx * 0.9 * (r.offsetSide === "right" ? 1 : -1);
+              const fillA = "rgba(20,184,166,0.14)";
+              const fillB = "rgba(148,163,184,0.10)";
+              return (
+                <g key={`ramp-${r.id}`} pointerEvents="none">
+                  {/* first half */}
+                  <polygon points={halfPoly(refSplit.a, offSplit.a)}
+                    fill={isBase ? fillA : fillB} stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                    strokeDasharray={isBase ? undefined : dashArr} />
+                  {/* second half */}
+                  <polygon points={halfPoly(refSplit.b, offSplit.b)}
+                    fill={isBase ? fillB : fillA} stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                    strokeDasharray={isBase ? dashArr : undefined} />
+                  {/* explicit edge paths for clarity */}
+                  <path d={toPath(refSplit.a)} fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                    strokeDasharray={isBase ? undefined : dashArr} />
+                  <path d={toPath(offSplit.a)} fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                    strokeDasharray={isBase ? undefined : dashArr} />
+                  <path d={toPath(refSplit.b)} fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                    strokeDasharray={isBase ? dashArr : undefined} />
+                  <path d={toPath(offSplit.b)} fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                    strokeDasharray={isBase ? dashArr : undefined} />
+                  {/* 45° divider */}
+                  <line x1={cx - dx * L * 0.5} y1={cy - dy * L * 0.5}
+                    x2={cx + dx * L * 0.5} y2={cy + dy * L * 0.5}
+                    stroke="rgba(15,23,42,0.9)" strokeWidth={sLine} />
+                  {/* direction arrow: from start corners to top */}
+                  <line x1={startRef.x} y1={startRef.y} x2={top.x} y2={top.y}
+                    stroke={isBase ? "rgba(234,88,12,0.85)" : "rgba(100,116,139,0.7)"}
+                    strokeWidth={sLine * 0.9}
+                    strokeDasharray={isBase ? undefined : dashArr} />
+                  <line x1={startOff.x} y1={startOff.y} x2={top.x} y2={top.y}
+                    stroke={isBase ? "rgba(234,88,12,0.85)" : "rgba(100,116,139,0.7)"}
+                    strokeWidth={sLine * 0.9}
+                    strokeDasharray={isBase ? undefined : dashArr} />
+                </g>
+              );
+            });
+          })()}
               </g>
             );
           })}

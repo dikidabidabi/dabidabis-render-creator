@@ -906,6 +906,36 @@ function normalizeSketch(s: any): Sketch {
       const validLvl = new Set(levels.map((l) => l.id));
       return arr.map((p) => (p.levelId && validLvl.has(p.levelId) ? p : { ...p, levelId: fallback }));
     })(),
+    ramps: (() => {
+      const raw = s?.ramps;
+      if (!Array.isArray(raw)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const out: Ramp[] = [];
+      for (const r of raw) {
+        if (!r || typeof r !== "object") continue;
+        if (!Array.isArray(r.anchors) || r.anchors.length < 2) continue;
+        const anchors: RampAnchor[] = [];
+        let ok = true;
+        for (const p of r.anchors) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) { ok = false; break; }
+          const fr = Number(p?.filletR);
+          anchors.push(Number.isFinite(fr) && fr > 0 ? { x, y, filletR: fr } : { x, y });
+        }
+        if (!ok) continue;
+        const lid = typeof r.levelId === "string" && validLvl.has(r.levelId) ? r.levelId : fallback;
+        out.push({
+          id: typeof r.id === "string" && r.id ? r.id : `ramp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: lid,
+          anchors,
+          offsetSide: r.offsetSide === "left" ? "left" : "right",
+          widthM: Number.isFinite(Number(r.widthM)) && Number(r.widthM) > 0 ? Number(r.widthM) : 1,
+          nM: Number.isFinite(Number(r.nM)) && Number(r.nM) > 0 ? Number(r.nM) : 7,
+          createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
   };
 }
 
@@ -1984,9 +2014,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
   const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
   const [rampSelectedId, setRampSelectedId] = useState<string | null>(null);
-  const [rampWidthInput, setRampWidthInput] = useState<number>(1);
-  const [rampNInput, setRampNInput] = useState<number>(7);
-  const [rampFilletInput, setRampFilletInput] = useState<number>(1);
+  const [rampWidthInput, setRampWidthInput] = useState<string>("1");
+  const [rampNInput, setRampNInput] = useState<string>("7");
+  const [rampFilletInput, setRampFilletInput] = useState<string>("1");
+  const rampWidthM = Math.max(0.3, Number(rampWidthInput) || 1);
+  const rampNVal = Math.max(1, Number(rampNInput) || 7);
+  const rampFilletM = Math.max(0, Number(rampFilletInput) || 0);
   const [rampVertexDrag, setRampVertexDrag] = useState<{ rampId: string; idx: number } | null>(null);
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
@@ -5174,8 +5207,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           levelId: rampDraft.levelId,
           anchors: rampDraft.anchors,
           offsetSide: rampDraft.offsetSide,
-          widthM: rampWidthInput,
-          nM: rampNInput,
+          widthM: rampWidthM,
+          nM: rampNVal,
           createdAt: 0,
           __isDraft: true,
         });
@@ -6573,12 +6606,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         onChange({
           ramps: (sketch.ramps ?? []).map((r) => {
             if (r.id !== best!.rampId) return r;
-            const a = r.anchors.map((p, i) => i === best!.idx ? { ...p, filletR: rampFilletInput } : p);
+            const a = r.anchors.map((p, i) => i === best!.idx ? { ...p, filletR: rampFilletM } : p);
             return { ...r, anchors: a };
           }),
         });
         setRampSelectedId(best.rampId);
-        toast.success(`Fillet R=${rampFilletInput}m diterapkan`);
+        toast.success(`Fillet R=${rampFilletM}m diterapkan`);
         return;
       }
       // lebar / kemiringan: tap to select a ramp
@@ -6600,7 +6633,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (pickId) {
         setRampSelectedId(pickId);
         const r = (sketch.ramps ?? []).find((x) => x.id === pickId);
-        if (r) { setRampWidthInput(r.widthM); setRampNInput(r.nM); }
+        if (r) { setRampWidthInput(String(r.widthM)); setRampNInput(String(r.nM)); }
       }
       return;
     }
@@ -9298,12 +9331,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   step="0.1"
                   className="h-8 w-20"
                   value={rampWidthInput}
-                  onChange={(e) => setRampWidthInput(Math.max(0.3, Number(e.target.value) || 1))}
+                  onChange={(e) => setRampWidthInput(e.target.value)}
                 />
                 <Button size="sm" variant="outline" onClick={() => {
                   if (!rampSelectedId) { toast.error("Pilih ramp dulu"); return; }
                   pushHistory();
-                  onChange({ ramps: (sketch.ramps ?? []).map((r) => r.id === rampSelectedId ? { ...r, widthM: rampWidthInput } : r) });
+                  onChange({ ramps: (sketch.ramps ?? []).map((r) => r.id === rampSelectedId ? { ...r, widthM: rampWidthM } : r) });
                   toast.success("Lebar ramp diperbarui");
                 }}>Terapkan</Button>
               </div>
@@ -9316,13 +9349,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   step="0.5"
                   className="h-8 w-20"
                   value={rampNInput}
-                  onChange={(e) => setRampNInput(Math.max(1, Number(e.target.value) || 7))}
+                  onChange={(e) => setRampNInput(e.target.value)}
                 />
                 <Button size="sm" variant="outline" onClick={() => {
                   if (!rampSelectedId) { toast.error("Pilih ramp dulu"); return; }
+                  const r = (sketch.ramps ?? []).find((x) => x.id === rampSelectedId);
+                  if (!r) { toast.error("Ramp tidak ditemukan"); return; }
+                  const cur = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+                  const i = cur.findIndex((l) => l.id === r.levelId);
+                  const above = i >= 0 && i < cur.length - 1 ? cur[i + 1] : null;
+                  const t = above ? Math.max(0, above.mdpl - cur[i].mdpl) : 0;
+                  const dense = tessellateReference(r.anchors, pxPerMeter, 18);
+                  const curLenM = polylineLength(dense) / pxPerMeter;
                   pushHistory();
-                  onChange({ ramps: (sketch.ramps ?? []).map((r) => r.id === rampSelectedId ? { ...r, nM: rampNInput } : r) });
-                  toast.success("Kemiringan ramp diperbarui");
+                  let nextAnchors = r.anchors;
+                  if (t > 0 && curLenM > 1e-3) {
+                    const targetLenM = t * rampNVal;
+                    const factor = targetLenM / curLenM;
+                    const p0 = r.anchors[0];
+                    nextAnchors = r.anchors.map((p, idx) => idx === 0 ? p : { ...p, x: p0.x + (p.x - p0.x) * factor, y: p0.y + (p.y - p0.y) * factor });
+                  }
+                  onChange({ ramps: (sketch.ramps ?? []).map((rr) => rr.id === rampSelectedId ? { ...rr, nM: rampNVal, anchors: nextAnchors } : rr) });
+                  if (t > 0) toast.success(`Kemiringan 1:${rampNVal} → panjang ${(t * rampNVal).toFixed(2)} m`);
+                  else toast.success("Kemiringan ramp diperbarui");
                 }}>Terapkan</Button>
                 {(() => {
                   const r = (sketch.ramps ?? []).find((x) => x.id === rampSelectedId);
@@ -9331,7 +9380,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   const i = cur.findIndex((l) => l.id === r.levelId);
                   const above = i >= 0 && i < cur.length - 1 ? cur[i + 1] : null;
                   const t = above ? Math.max(0, above.mdpl - cur[i].mdpl) : 0;
-                  return <span className="text-[11px] text-muted-foreground">t = {t.toFixed(2)} m</span>;
+                  return <span className="text-[11px] text-muted-foreground">t = {t.toFixed(2)} m · L = {(t * rampNVal).toFixed(2)} m</span>;
                 })()}
               </div>
             )}
@@ -9343,7 +9392,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   step="0.1"
                   className="h-8 w-20"
                   value={rampFilletInput}
-                  onChange={(e) => setRampFilletInput(Math.max(0, Number(e.target.value) || 0))}
+                  onChange={(e) => setRampFilletInput(e.target.value)}
                 />
                 <span className="text-[11px] text-muted-foreground">Tap titik tengah polyline acuan</span>
               </div>
@@ -9357,7 +9406,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <Button size="sm" onClick={() => {
                   if (!rampDraft || rampDraft.anchors.length < 2) { toast.error("Butuh ≥ 2 titik"); return; }
                   pushHistory();
-                  const ramp = makeRamp(rampDraft.levelId, rampDraft.anchors, { offsetSide: rampDraft.offsetSide, widthM: rampWidthInput, nM: rampNInput });
+                  const ramp = makeRamp(rampDraft.levelId, rampDraft.anchors, { offsetSide: rampDraft.offsetSide, widthM: rampWidthM, nM: rampNVal });
                   onChange({ ramps: [...(sketch.ramps ?? []), ramp] });
                   setRampSelectedId(ramp.id);
                   setRampDraft(null);
