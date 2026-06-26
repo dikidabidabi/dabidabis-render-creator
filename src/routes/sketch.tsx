@@ -2029,6 +2029,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const rampFilletM = Math.max(0, Number(rampFilletInput) || 0);
   const [rampVertexDrag, setRampVertexDrag] = useState<{ rampId: string; idx: number } | null>(null);
   const [rampClipboard, setRampClipboard] = useState<Ramp | null>(null);
+  const [rampBordesOn, setRampBordesOn] = useState<boolean>(false);
+  const [rampBordesLenInput, setRampBordesLenInput] = useState<string>("1.2");
+  const [rampBordesBelokan, setRampBordesBelokan] = useState<boolean>(false);
+  const rampBordesLenM = Math.max(0.1, Number(rampBordesLenInput) || 1.2);
+  const rampBordesSpacingM = 9;
   // Auto-sync: ketika nilai radius fillet di input diubah, perbarui semua titik
   // yang sudah difillet pada ramp terpilih (atau semua ramp pada level aktif jika
   // tidak ada yang dipilih) agar mengikuti radius baru secara live.
