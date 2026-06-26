@@ -5412,6 +5412,88 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           }
         }
 
+        // Bordes overlays
+        if (r.bordes) {
+          const N = Math.min(refDense.length, offDense.length);
+          if (N >= 2) {
+            const center: Point[] = [];
+            for (let i = 0; i < N; i++) {
+              center.push({ x: (refDense[i].x + offDense[i].x) / 2, y: (refDense[i].y + offDense[i].y) / 2 });
+            }
+            const centerLenPx = polylineLength(center);
+            const centerLenM = centerLenPx / pxPerMeter;
+            const spacingM = r.bordesSpacingM ?? 9;
+            const bLenM = r.bordesLenM ?? 1.2;
+            // derive slope length: total - n*bLen ; n = floor(...)
+            // we know total = slopeLen + nB*bLen; solve nB by iterating
+            const nB = numBordesForSlope(centerLenM - 0 /* unknown */, spacingM); // placeholder
+            void nB;
+            // We instead use saved nM × t to find slope; fall back to derive
+            let slopeLenM = 0;
+            const cur2 = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            const li = cur2.findIndex((l) => l.id === r.levelId);
+            const ab = li >= 0 && li < cur2.length - 1 ? cur2[li + 1] : null;
+            const tHeight = ab ? Math.max(0, ab.mdpl - cur2[li].mdpl) : 0;
+            slopeLenM = tHeight * r.nM;
+            const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true);
+            const wPxLocal = r.widthM * pxPerMeter;
+            const halfW = wPxLocal / 2;
+            const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerMeter);
+            ctx.save();
+            ctx.fillStyle = "rgba(20,184,166,0.32)";
+            ctx.strokeStyle = "rgba(15,23,42,0.85)";
+            ctx.lineWidth = 1.4;
+            for (const a of arcs) {
+              const p0 = pointAt(a.s0);
+              const p1 = pointAt(a.s1);
+              // perpendicular at each
+              const n0 = { x: -p0.t.y, y: p0.t.x };
+              const n1 = { x: -p1.t.y, y: p1.t.x };
+              const q00 = { x: p0.p.x + n0.x * halfW, y: p0.p.y + n0.y * halfW };
+              const q01 = { x: p0.p.x - n0.x * halfW, y: p0.p.y - n0.y * halfW };
+              const q11 = { x: p1.p.x - n1.x * halfW, y: p1.p.y - n1.y * halfW };
+              const q10 = { x: p1.p.x + n1.x * halfW, y: p1.p.y + n1.y * halfW };
+              const s00 = worldToScreen(q00), s01 = worldToScreen(q01), s11 = worldToScreen(q11), s10 = worldToScreen(q10);
+              ctx.beginPath();
+              ctx.moveTo(s00.x, s00.y); ctx.lineTo(s01.x, s01.y);
+              ctx.lineTo(s11.x, s11.y); ctx.lineTo(s10.x, s10.y);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+            }
+            // corner bordes
+            if (r.bordesBelokan && r.anchors.length >= 3) {
+              for (let ai = 1; ai < r.anchors.length - 1; ai++) {
+                const A = r.anchors[ai - 1], B = r.anchors[ai], C = r.anchors[ai + 1];
+                const dAB = { x: B.x - A.x, y: B.y - A.y };
+                const dBC = { x: C.x - B.x, y: C.y - B.y };
+                const lAB = Math.max(1e-6, Math.hypot(dAB.x, dAB.y));
+                const lBC = Math.max(1e-6, Math.hypot(dBC.x, dBC.y));
+                const u1 = { x: dAB.x / lAB, y: dAB.y / lAB };
+                const u2 = { x: dBC.x / lBC, y: dBC.y / lBC };
+                const sign = r.offsetSide === "right" ? 1 : -1;
+                const n1c = { x: u1.y * sign, y: -u1.x * sign };
+                const center0 = { x: B.x + n1c.x * halfW, y: B.y + n1c.y * halfW };
+                // square corners along (u1) and (u2) directions, size wPx
+                const c1 = { x: center0.x - u1.x * halfW + n1c.x * halfW, y: center0.y - u1.y * halfW + n1c.y * halfW };
+                const c2 = { x: center0.x - u1.x * halfW - n1c.x * halfW, y: center0.y - u1.y * halfW - n1c.y * halfW };
+                const c3 = { x: center0.x + u2.x * halfW - n1c.x * halfW, y: center0.y + u2.y * halfW - n1c.y * halfW };
+                const c4 = { x: center0.x + u2.x * halfW + n1c.x * halfW, y: center0.y + u2.y * halfW + n1c.y * halfW };
+                const s1c = worldToScreen(c1), s2c = worldToScreen(c2), s3c = worldToScreen(c3), s4c = worldToScreen(c4);
+                ctx.beginPath();
+                ctx.moveTo(s1c.x, s1c.y); ctx.lineTo(s2c.x, s2c.y);
+                ctx.lineTo(s3c.x, s3c.y); ctx.lineTo(s4c.x, s4c.y);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+              }
+            }
+            ctx.restore();
+          }
+        }
+
+
+
         // Anchor handles in edit modes
         if (!isDraft && tool === "ramp" && (rampSub === "geser" || rampSub === "addpt" || rampSub === "fillet")) {
           ctx.save();
