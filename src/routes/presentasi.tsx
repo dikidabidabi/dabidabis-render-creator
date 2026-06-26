@@ -3553,7 +3553,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true, cornerArcsM);
                     const halfW = (r.widthM * pxPerM) / 2;
                     const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerM);
-                    const quads: string[] = [];
+                    const midM = centerLenM / 2;
+                    const isDashedAtM = (sM: number) => isBase ? sM > midM : sM < midM;
+                    const quads: Array<{ pts: string; dashed: boolean }> = [];
                     for (const a of arcs) {
                       const p0 = pointAt(a.s0);
                       const p1 = pointAt(a.s1);
@@ -3563,10 +3565,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       const q01 = { x: p0.p.x - n0.x * halfW, y: p0.p.y - n0.y * halfW };
                       const q11 = { x: p1.p.x - n1.x * halfW, y: p1.p.y - n1.y * halfW };
                       const q10 = { x: p1.p.x + n1.x * halfW, y: p1.p.y + n1.y * halfW };
-                      quads.push(`${q00.x},${q00.y} ${q01.x},${q01.y} ${q11.x},${q11.y} ${q10.x},${q10.y}`);
+                      quads.push({
+                        pts: `${q00.x},${q00.y} ${q01.x},${q01.y} ${q11.x},${q11.y} ${q10.x},${q10.y}`,
+                        dashed: isDashedAtM((a.s0 + a.s1) / 2),
+                      });
                     }
                     // Corner landings: persegi dengan diagonal B↔B'.
-                    const corners: string[] = [];
+                    const corners: Array<{ pts: string; dashed: boolean }> = [];
                     if (r.bordesBelokan && r.anchors.length >= 3) {
                       for (let ai = 1; ai < r.anchors.length - 1; ai++) {
                         const B = r.anchors[ai];
@@ -3583,18 +3588,24 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                         const halfDiag = dlen * 0.5;
                         const v3 = { x: mx + px * halfDiag, y: my + py * halfDiag };
                         const v4 = { x: mx - px * halfDiag, y: my - py * halfDiag };
-                        corners.push(`${B.x},${B.y} ${v3.x},${v3.y} ${Bp.x},${Bp.y} ${v4.x},${v4.y}`);
+                        const cornerArc = cornerArcsM[ai - 1] ?? 0;
+                        corners.push({
+                          pts: `${B.x},${B.y} ${v3.x},${v3.y} ${Bp.x},${Bp.y} ${v4.x},${v4.y}`,
+                          dashed: isDashedAtM(cornerArc),
+                        });
                       }
                     }
                     return (
                       <>
-                        {quads.map((pts, qi) => (
-                          <polygon key={`b-${qi}`} points={pts}
-                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine} />
+                        {quads.map((q, qi) => (
+                          <polygon key={`b-${qi}`} points={q.pts}
+                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                            strokeDasharray={q.dashed ? dashArr : undefined} />
                         ))}
-                        {corners.map((pts, ci) => (
-                          <polygon key={`bc-${ci}`} points={pts}
-                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine} />
+                        {corners.map((c, ci) => (
+                          <polygon key={`bc-${ci}`} points={c.pts}
+                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                            strokeDasharray={c.dashed ? dashArr : undefined} />
                         ))}
                       </>
                     );
