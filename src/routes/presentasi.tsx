@@ -1172,6 +1172,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "matahari", id: "matahari", title: "Analisa Matahari & Bukaan", sketch: sk, bounds });
   out.push({ kind: "shadow-seasonal", id: "shadow-seasonal", title: "Studi Bayangan Tahunan · 15.00 WIB", sketch: sk, bounds });
   out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
+  out.push({ kind: "thermal", id: "thermal", title: "Analisa Thermal Heatmap", sketch: sk });
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
   out.push({ kind: "explode-axo", id: "explode-axo", title: "Diagram Aksonometri Eksplode · Tipe Layout", sketch: sk });
   // Slide Perspektif — ditempatkan setelah Aksonometri Eksplode.
