@@ -2070,6 +2070,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     if (!rampSelectedId) return;
     const list = sketch.ramps ?? [];
     if (list.length === 0) return;
+    const cur = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
     let dirty = false;
     const next = list.map((r) => {
       if (r.id !== rampSelectedId) return r;
@@ -2077,15 +2078,47 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const wantLen = wantBordes ? rampBordesLenM : undefined;
       const wantSpacing = wantBordes ? rampBordesSpacingM : undefined;
       const wantBelokan = wantBordes && rampBordesBelokan;
-      const same =
+
+      // Hitung panjang slope tetap berdasarkan nM × tinggi antar level,
+      // lalu rescale anchors sehingga centerline = slope + nBordes × bordesLen.
+      const li = cur.findIndex((l) => l.id === r.levelId);
+      const above = li >= 0 && li < cur.length - 1 ? cur[li + 1] : null;
+      const t = above ? Math.max(0, above.mdpl - cur[li].mdpl) : 0;
+      const slopeLenM = t * r.nM;
+      const nBordesNew = wantBordes ? numBordesForSlope(slopeLenM, rampBordesSpacingM) : 0;
+      const targetLenM = slopeLenM + nBordesNew * (wantLen ?? 0);
+
+      let nextAnchors = r.anchors;
+      let nextLocked = r.lockedLenM;
+      if (t > 0 && slopeLenM > 1e-3 && targetLenM > 0 && r.anchors.length >= 2) {
+        const dense = tessellateReference(r.anchors, pxPerMeter, 18);
+        const wPx = Math.max(0.01, r.widthM) * pxPerMeter;
+        const offDense = offsetPolyline(dense, wPx, r.offsetSide);
+        const N = Math.min(dense.length, offDense.length);
+        const centerDense: Point[] = [];
+        for (let i = 0; i < N; i++) {
+          centerDense.push({ x: (dense[i].x + offDense[i].x) / 2, y: (dense[i].y + offDense[i].y) / 2 });
+        }
+        const curLenM = polylineLength(centerDense) / pxPerMeter;
+        if (curLenM > 1e-3 && Math.abs(curLenM - targetLenM) > 1e-3) {
+          const factor = targetLenM / curLenM;
+          const p0 = r.anchors[0];
+          nextAnchors = r.anchors.map((p, idx) => idx === 0 ? p : { ...p, x: p0.x + (p.x - p0.x) * factor, y: p0.y + (p.y - p0.y) * factor });
+          nextLocked = polylineLength(nextAnchors) / pxPerMeter;
+        }
+      }
+
+      const sameCfg =
         (r.bordes === true) === wantBordes &&
         (r.bordesLenM ?? undefined) === wantLen &&
         (r.bordesSpacingM ?? undefined) === wantSpacing &&
         (r.bordesBelokan === true) === wantBelokan;
-      if (same) return r;
+      if (sameCfg && nextAnchors === r.anchors) return r;
       dirty = true;
       return {
         ...r,
+        anchors: nextAnchors,
+        lockedLenM: nextLocked,
         bordes: wantBordes,
         bordesLenM: wantLen,
         bordesSpacingM: wantSpacing,
@@ -5493,6 +5526,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             const wPxLocal = r.widthM * pxPerMeter;
             const halfW = wPxLocal / 2;
             const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerMeter);
+            // Determine dashed half boundary along centerline (meter)
+            const midM = centerLenM / 2;
+            const isDashedAtM = (sM: number) => {
+              if (isBase || isDraft) return sM > midM;
+              if (isAbove) return sM < midM;
+              return false;
+            };
             ctx.save();
             // Bidang bordes transparan — hanya outline.
             ctx.strokeStyle = "rgba(15,23,42,0.85)";
@@ -5508,12 +5548,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               const q11 = { x: p1.p.x - n1.x * halfW, y: p1.p.y - n1.y * halfW };
               const q10 = { x: p1.p.x + n1.x * halfW, y: p1.p.y + n1.y * halfW };
               const s00 = worldToScreen(q00), s01 = worldToScreen(q01), s11 = worldToScreen(q11), s10 = worldToScreen(q10);
+              const dashed = isDashedAtM((a.s0 + a.s1) / 2);
+              if (dashed) ctx.setLineDash([6, 5]); else ctx.setLineDash([]);
               ctx.beginPath();
               ctx.moveTo(s00.x, s00.y); ctx.lineTo(s01.x, s01.y);
               ctx.lineTo(s11.x, s11.y); ctx.lineTo(s10.x, s10.y);
               ctx.closePath();
               ctx.stroke();
             }
+            ctx.setLineDash([]);
             // corner bordes — persegi dengan diagonal menghubungkan B (sisi acuan)
             // dan B' (sisi offset) pada anchor belokan.
             if (r.bordesBelokan && r.anchors.length >= 3) {
@@ -5538,12 +5581,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 const v4 = { x: mx - px * halfDiag, y: my - py * halfDiag };
                 const s1c = worldToScreen(B), s2c = worldToScreen(v3),
                       s3c = worldToScreen(Bp), s4c = worldToScreen(v4);
+                const cornerArc = cornerArcsM[ai - 1] ?? 0;
+                const dashedC = isDashedAtM(cornerArc);
+                if (dashedC) ctx.setLineDash([6, 5]); else ctx.setLineDash([]);
                 ctx.beginPath();
                 ctx.moveTo(s1c.x, s1c.y); ctx.lineTo(s2c.x, s2c.y);
                 ctx.lineTo(s3c.x, s3c.y); ctx.lineTo(s4c.x, s4c.y);
                 ctx.closePath();
                 ctx.stroke();
               }
+              ctx.setLineDash([]);
             }
             ctx.restore();
           }
