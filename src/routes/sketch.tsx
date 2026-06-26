@@ -2436,6 +2436,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       ? sketch.structuralGridExtras.map((g) => scaleGrid(g)!).filter(Boolean)
       : sketch.structuralGridExtras;
 
+    const nextRamps = (sketch.ramps || []).map((r) => ({
+      ...r,
+      anchors: r.anchors.map((a) => ({ ...sp(a), filletR: a.filletR })),
+    }));
+
     onChange({
       lines: nextLines,
       layers: nextLayers,
@@ -2443,6 +2448,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       doors: nextDoors,
       circles: nextCircles,
       parkingAreas: nextParking,
+      ramps: nextRamps,
       sectionCuts: nextSectionCuts,
       sectionCut: nextSectionCut,
       structuralGrid: nextGrid,
