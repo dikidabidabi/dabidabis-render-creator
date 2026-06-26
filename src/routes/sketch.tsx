@@ -5353,11 +5353,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             const Lw = Math.max(1e-6, Math.hypot(dxw, dyw));
             const ux = dxw / Lw, uy = dyw / Lw;
             const headLenPx = Math.min(wPx * 0.4, 18);
-            const headW = headLenPx * 0.55;
             const tip = worldToScreen(pTop);
             const baseW = worldToScreen({ x: pTop.x - ux * headLenPx, y: pTop.y - uy * headLenPx });
-            const leftW = { x: baseW.x + (-uy) * headW * (view.zoom || 1) * 0, y: baseW.y };
-            void leftW;
             // compute in screen space directly
             const sxTip = tip.x, syTip = tip.y;
             const sxBase = baseW.x, syBase = baseW.y;
