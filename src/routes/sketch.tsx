@@ -2022,6 +2022,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const rampNVal = Math.max(1, Number(rampNInput) || 7);
   const rampFilletM = Math.max(0, Number(rampFilletInput) || 0);
   const [rampVertexDrag, setRampVertexDrag] = useState<{ rampId: string; idx: number } | null>(null);
+  const [rampClipboard, setRampClipboard] = useState<Ramp | null>(null);
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
