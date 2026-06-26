@@ -9452,6 +9452,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 <Button size="sm" variant="outline" onClick={() => { setRampDraft(null); toast.message("Dibatalkan"); }}>Batal</Button>
               </>
             )}
+            <div className="flex items-center gap-1.5 ml-auto">
+              <Button size="sm" variant="outline" onClick={() => {
+                if (!rampSelectedId) { toast.error("Pilih ramp dulu"); return; }
+                const r = (sketch.ramps ?? []).find((x) => x.id === rampSelectedId);
+                if (!r) { toast.error("Ramp tidak ditemukan"); return; }
+                setRampClipboard(JSON.parse(JSON.stringify(r)) as Ramp);
+                toast.success("Ramp disalin");
+              }} title="Salin ramp terpilih">Copy</Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                if (!rampClipboard) { toast.error("Clipboard kosong"); return; }
+                pushHistory();
+                const targetLevel = activeLvlId || rampClipboard.levelId;
+                const newRamp: Ramp = {
+                  ...JSON.parse(JSON.stringify(rampClipboard)),
+                  id: genRampId(),
+                  levelId: targetLevel,
+                  createdAt: Date.now(),
+                };
+                onChange({ ramps: [...(sketch.ramps ?? []), newRamp] });
+                setRampSelectedId(newRamp.id);
+                toast.success("Ramp ditempel pada koordinat sama");
+              }} title="Tempel ramp (koordinat x,y tetap)">Paste</Button>
+            </div>
             {rampSelectedId && rampSub !== "tarik" && (
               <Button size="sm" variant="destructive" onClick={() => {
                 pushHistory();
