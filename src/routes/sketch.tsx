@@ -932,6 +932,10 @@ function normalizeSketch(s: any): Sketch {
           widthM: Number.isFinite(Number(r.widthM)) && Number(r.widthM) > 0 ? Number(r.widthM) : 1,
           nM: Number.isFinite(Number(r.nM)) && Number(r.nM) > 0 ? Number(r.nM) : 7,
           lockedLenM: Number.isFinite(Number(r.lockedLenM)) && Number(r.lockedLenM) > 0 ? Number(r.lockedLenM) : undefined,
+          bordes: r.bordes === true,
+          bordesLenM: Number.isFinite(Number(r.bordesLenM)) && Number(r.bordesLenM) > 0 ? Number(r.bordesLenM) : (r.bordes === true ? 1.2 : undefined),
+          bordesSpacingM: Number.isFinite(Number(r.bordesSpacingM)) && Number(r.bordesSpacingM) > 0 ? Number(r.bordesSpacingM) : (r.bordes === true ? 9 : undefined),
+          bordesBelokan: r.bordesBelokan === true,
           createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
         });
       }
