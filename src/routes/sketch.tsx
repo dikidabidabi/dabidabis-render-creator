@@ -330,6 +330,7 @@ type Sketch = {
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
+  ramps?: Ramp[]; // Ramp antar level
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
 };
 
