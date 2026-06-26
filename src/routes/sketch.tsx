@@ -2023,6 +2023,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const rampFilletM = Math.max(0, Number(rampFilletInput) || 0);
   const [rampVertexDrag, setRampVertexDrag] = useState<{ rampId: string; idx: number } | null>(null);
   const [rampClipboard, setRampClipboard] = useState<Ramp | null>(null);
+  // Auto-sync: ketika nilai radius fillet di input diubah, perbarui semua titik
+  // yang sudah difillet pada ramp terpilih agar mengikuti radius baru secara live.
+  useEffect(() => {
+    if (!rampSelectedId) return;
+    const list = sketch.ramps ?? [];
+    const target = list.find((r) => r.id === rampSelectedId);
+    if (!target) return;
+    const hasAny = target.anchors.some((a) => (a.filletR ?? 0) > 0);
+    if (!hasAny) return;
+    const allEqual = target.anchors.every(
+      (a) => !((a.filletR ?? 0) > 0) || Math.abs((a.filletR ?? 0) - rampFilletM) < 1e-6,
+    );
+    if (allEqual) return;
+    onChange({
+      ramps: list.map((r) =>
+        r.id !== rampSelectedId
+          ? r
+          : { ...r, anchors: r.anchors.map((a) => ((a.filletR ?? 0) > 0 ? { ...a, filletR: rampFilletM } : a)) },
+      ),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rampFilletM]);
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
