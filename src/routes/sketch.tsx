@@ -931,6 +931,7 @@ function normalizeSketch(s: any): Sketch {
           offsetSide: r.offsetSide === "left" ? "left" : "right",
           widthM: Number.isFinite(Number(r.widthM)) && Number(r.widthM) > 0 ? Number(r.widthM) : 1,
           nM: Number.isFinite(Number(r.nM)) && Number(r.nM) > 0 ? Number(r.nM) : 7,
+          lockedLenM: Number.isFinite(Number(r.lockedLenM)) && Number(r.lockedLenM) > 0 ? Number(r.lockedLenM) : undefined,
           createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
         });
       }
