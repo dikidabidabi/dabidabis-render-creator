@@ -2070,6 +2070,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     if (!rampSelectedId) return;
     const list = sketch.ramps ?? [];
     if (list.length === 0) return;
+    const cur = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
     let dirty = false;
     const next = list.map((r) => {
       if (r.id !== rampSelectedId) return r;
@@ -2077,15 +2078,47 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       const wantLen = wantBordes ? rampBordesLenM : undefined;
       const wantSpacing = wantBordes ? rampBordesSpacingM : undefined;
       const wantBelokan = wantBordes && rampBordesBelokan;
-      const same =
+
+      // Hitung panjang slope tetap berdasarkan nM × tinggi antar level,
+      // lalu rescale anchors sehingga centerline = slope + nBordes × bordesLen.
+      const li = cur.findIndex((l) => l.id === r.levelId);
+      const above = li >= 0 && li < cur.length - 1 ? cur[li + 1] : null;
+      const t = above ? Math.max(0, above.mdpl - cur[li].mdpl) : 0;
+      const slopeLenM = t * r.nM;
+      const nBordesNew = wantBordes ? numBordesForSlope(slopeLenM, rampBordesSpacingM) : 0;
+      const targetLenM = slopeLenM + nBordesNew * (wantLen ?? 0);
+
+      let nextAnchors = r.anchors;
+      let nextLocked = r.lockedLenM;
+      if (t > 0 && slopeLenM > 1e-3 && targetLenM > 0 && r.anchors.length >= 2) {
+        const dense = tessellateReference(r.anchors, pxPerMeter, 18);
+        const wPx = Math.max(0.01, r.widthM) * pxPerMeter;
+        const offDense = offsetPolyline(dense, wPx, r.offsetSide);
+        const N = Math.min(dense.length, offDense.length);
+        const centerDense: Point[] = [];
+        for (let i = 0; i < N; i++) {
+          centerDense.push({ x: (dense[i].x + offDense[i].x) / 2, y: (dense[i].y + offDense[i].y) / 2 });
+        }
+        const curLenM = polylineLength(centerDense) / pxPerMeter;
+        if (curLenM > 1e-3 && Math.abs(curLenM - targetLenM) > 1e-3) {
+          const factor = targetLenM / curLenM;
+          const p0 = r.anchors[0];
+          nextAnchors = r.anchors.map((p, idx) => idx === 0 ? p : { ...p, x: p0.x + (p.x - p0.x) * factor, y: p0.y + (p.y - p0.y) * factor });
+          nextLocked = polylineLength(nextAnchors) / pxPerMeter;
+        }
+      }
+
+      const sameCfg =
         (r.bordes === true) === wantBordes &&
         (r.bordesLenM ?? undefined) === wantLen &&
         (r.bordesSpacingM ?? undefined) === wantSpacing &&
         (r.bordesBelokan === true) === wantBelokan;
-      if (same) return r;
+      if (sameCfg && nextAnchors === r.anchors) return r;
       dirty = true;
       return {
         ...r,
+        anchors: nextAnchors,
+        lockedLenM: nextLocked,
         bordes: wantBordes,
         bordesLenM: wantLen,
         bordesSpacingM: wantSpacing,
