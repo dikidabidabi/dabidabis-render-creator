@@ -9378,8 +9378,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                     const p0 = r.anchors[0];
                     nextAnchors = r.anchors.map((p, idx) => idx === 0 ? p : { ...p, x: p0.x + (p.x - p0.x) * factor, y: p0.y + (p.y - p0.y) * factor });
                   }
-                  onChange({ ramps: (sketch.ramps ?? []).map((rr) => rr.id === rampSelectedId ? { ...rr, nM: rampNVal, anchors: nextAnchors } : rr) });
-                  if (t > 0) toast.success(`Kemiringan 1:${rampNVal} → panjang ${(t * rampNVal).toFixed(2)} m`);
+                  const lockedAnchorLenM = polylineLength(nextAnchors) / pxPerMeter;
+                  onChange({ ramps: (sketch.ramps ?? []).map((rr) => rr.id === rampSelectedId ? { ...rr, nM: rampNVal, anchors: nextAnchors, lockedLenM: t > 0 ? lockedAnchorLenM : undefined } : rr) });
+                  if (t > 0) toast.success(`Kemiringan 1:${rampNVal} → panjang ${(t * rampNVal).toFixed(2)} m (panjang dikunci)`);
                   else toast.success("Kemiringan ramp diperbarui");
                 }}>Terapkan</Button>
                 {(() => {
