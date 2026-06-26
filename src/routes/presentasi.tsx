@@ -1673,6 +1673,7 @@ function SlideHeader({ slide }: { slide: Slide }) {
     : slide.kind === "konsep" ? "Konsep · Narasi"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
     : slide.kind === "wind" ? "Analisa · Iklim Angin"
+    : slide.kind === "thermal" ? "Analisa · Thermal Heatmap"
     : slide.kind === "explode-axo" ? "Sketsa · Aksonometri Eksplode"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
