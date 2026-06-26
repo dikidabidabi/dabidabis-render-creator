@@ -9362,7 +9362,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                   const above = i >= 0 && i < cur.length - 1 ? cur[i + 1] : null;
                   const t = above ? Math.max(0, above.mdpl - cur[i].mdpl) : 0;
                   const dense = tessellateReference(r.anchors, pxPerMeter, 18);
-                  const curLenM = polylineLength(dense) / pxPerMeter;
+                  const wPx = Math.max(0.01, r.widthM) * pxPerMeter;
+                  const offDense = offsetPolyline(dense, wPx, r.offsetSide);
+                  const centerDense = dense.map((p, idx) => {
+                    const q = offDense[Math.min(idx, offDense.length - 1)];
+                    return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+                  });
+                  const curLenM = polylineLength(centerDense) / pxPerMeter;
                   pushHistory();
                   let nextAnchors = r.anchors;
                   if (t > 0 && curLenM > 1e-3) {
