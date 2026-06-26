@@ -182,20 +182,23 @@ export function computeBordesArcs(
   let cursor = 0;
   let nextS = spacingM;
   let guard = 0;
+  const eps = 1e-6;
   while (nextS < centerlineLenM - 1e-3 && guard++ < 10000) {
-    // Jika ada bordes belokan sebelum slot bordes lurus berikutnya → reset.
-    if (ci < corners.length && corners[ci] <= nextS + 1e-6) {
+    const sEnd = nextS + bordesLenM;
+    // Jika bordes regular berikutnya menimpa (atau dilewati oleh) bordes belokan
+    // → bordes regular ditiadakan; cursor di-reset ke posisi corner sehingga
+    // bordes regular berikutnya muncul `spacingM` setelah bordes belokan.
+    if (ci < corners.length && corners[ci] <= sEnd + eps) {
       cursor = corners[ci];
       nextS = cursor + spacingM;
       ci++;
       continue;
     }
-    const s1 = Math.min(nextS + bordesLenM, centerlineLenM);
-    out.push({ s0: nextS, s1 });
-    cursor = s1;
+    if (sEnd > centerlineLenM) break;
+    out.push({ s0: nextS, s1: sEnd });
+    cursor = sEnd;
     nextS = cursor + spacingM;
   }
-  // Jika belum ada corners atau corners belum mempengaruhi, batasi juga oleh slope tersedia.
   if (corners.length === 0) {
     const numBordes = Math.max(0, Math.floor((slopeLenM - 1e-3) / spacingM));
     return out.slice(0, numBordes);
