@@ -7287,6 +7287,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    // Ramp vertex drag
+    if (rampVertexDrag) {
+      const wp = getWorldPos(e);
+      onChange({
+        ramps: (sketch.ramps ?? []).map((r) => {
+          if (r.id !== rampVertexDrag.rampId) return r;
+          const a = r.anchors.map((p, i) => i === rampVertexDrag.idx ? { ...p, x: wp.x, y: wp.y } : p);
+          return { ...r, anchors: a };
+        }),
+      });
+      return;
+    }
     // Garis Potong: geser bubble ujung
     if (sectionEndpointDrag) {
       const np = getWorldPos(e);
