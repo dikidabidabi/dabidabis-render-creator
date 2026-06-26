@@ -2060,6 +2060,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     onChange({ ramps: next });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rampFilletM, rampSelectedId]);
+  // Live-sync bordes pada ramp terpilih (atau semua ramp di level aktif jika tidak ada pilihan)
+  // agar garis bordes langsung muncul/menghilang di sketsa dan slide tanpa menunggu "Terapkan".
+  useEffect(() => {
+    const list = sketch.ramps ?? [];
+    if (list.length === 0) return;
+    const shouldUpdate = (r: Ramp) => {
+      if (rampSelectedId) return r.id === rampSelectedId;
+      return r.levelId === activeLvlId;
+    };
+    let dirty = false;
+    const next = list.map((r) => {
+      if (!shouldUpdate(r)) return r;
+      const wantBordes = rampBordesOn;
+      const wantLen = wantBordes ? rampBordesLenM : undefined;
+      const wantSpacing = wantBordes ? rampBordesSpacingM : undefined;
+      const wantBelokan = wantBordes && rampBordesBelokan;
+      const same =
+        (r.bordes === true) === wantBordes &&
+        (r.bordesLenM ?? undefined) === wantLen &&
+        (r.bordesSpacingM ?? undefined) === wantSpacing &&
+        (r.bordesBelokan === true) === wantBelokan;
+      if (same) return r;
+      dirty = true;
+      return {
+        ...r,
+        bordes: wantBordes,
+        bordesLenM: wantLen,
+        bordesSpacingM: wantSpacing,
+        bordesBelokan: wantBelokan,
+      };
+    });
+    if (!dirty) return;
+    onChange({ ramps: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rampBordesOn, rampBordesLenM, rampBordesBelokan, rampBordesSpacingM, rampSelectedId]);
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
   const [parkingSubTool, setParkingSubTool] = useState<ParkingSubTool>("draw");
