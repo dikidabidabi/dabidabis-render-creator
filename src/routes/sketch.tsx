@@ -6576,12 +6576,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         onChange({
           ramps: (sketch.ramps ?? []).map((r) => {
             if (r.id !== best!.rampId) return r;
-            const a = r.anchors.map((p, i) => i === best!.idx ? { ...p, filletR: rampFilletInput } : p);
+            const a = r.anchors.map((p, i) => i === best!.idx ? { ...p, filletR: rampFilletM } : p);
             return { ...r, anchors: a };
           }),
         });
         setRampSelectedId(best.rampId);
-        toast.success(`Fillet R=${rampFilletInput}m diterapkan`);
+        toast.success(`Fillet R=${rampFilletM}m diterapkan`);
         return;
       }
       // lebar / kemiringan: tap to select a ramp
