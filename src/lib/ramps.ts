@@ -12,6 +12,7 @@ export type Ramp = {
   offsetSide: "left" | "right"; // sisi offset 1m relatif arah polyline
   widthM: number;             // lebar ramp (m), default 1
   nM: number;                 // panjang acuan kemiringan (m), default 7
+  lockedLenM?: number;        // panjang polyline acuan yang dikunci setelah penerapan kemiringan (m)
   createdAt: number;
 };
 
