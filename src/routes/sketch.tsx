@@ -6674,7 +6674,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (pickId) {
         setRampSelectedId(pickId);
         const r = (sketch.ramps ?? []).find((x) => x.id === pickId);
-        if (r) { setRampWidthInput(String(r.widthM)); setRampNInput(String(r.nM)); }
+        if (r) {
+          setRampWidthInput(String(r.widthM));
+          setRampNInput(String(r.nM));
+          setRampBordesOn(r.bordes === true);
+          if (r.bordesLenM) setRampBordesLenInput(String(r.bordesLenM));
+          setRampBordesBelokan(r.bordesBelokan === true);
+        }
       }
       return;
     }
