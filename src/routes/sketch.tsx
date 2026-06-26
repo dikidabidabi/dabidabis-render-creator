@@ -7531,7 +7531,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       onChange({
         ramps: (sketch.ramps ?? []).map((r) => {
           if (r.id !== rampVertexDrag.rampId) return r;
-          const a = r.anchors.map((p, i) => i === rampVertexDrag.idx ? { ...p, x: wp.x, y: wp.y } : p);
+          const idx = rampVertexDrag.idx;
+          let a = r.anchors.map((p, i) => i === idx ? { ...p, x: wp.x, y: wp.y } : p);
+          const lockedPx = (r.lockedLenM ?? 0) * pxPerMeter;
+          if (lockedPx > 0 && a.length >= 2) {
+            const lastIdx = a.length - 1;
+            if (idx === lastIdx) {
+              // Dragging the last anchor: user sets direction, length is locked
+              let used = 0;
+              for (let i = 1; i < lastIdx; i++) used += Math.hypot(a[i].x - a[i - 1].x, a[i].y - a[i - 1].y);
+              const remain = Math.max(1, lockedPx - used);
+              const prev = a[lastIdx - 1];
+              const dx = wp.x - prev.x, dy = wp.y - prev.y;
+              const L = Math.hypot(dx, dy) || 1;
+              a = a.map((p, i) => i === lastIdx ? { ...p, x: prev.x + (dx / L) * remain, y: prev.y + (dy / L) * remain } : p);
+            } else {
+              // Dragging an interior/start anchor: slide the last anchor along its current direction
+              let cur = 0;
+              for (let i = 1; i < a.length; i++) cur += Math.hypot(a[i].x - a[i - 1].x, a[i].y - a[i - 1].y);
+              const diff = lockedPx - cur;
+              const last = a[lastIdx], prev = a[lastIdx - 1];
+              const dx = last.x - prev.x, dy = last.y - prev.y;
+              const L = Math.hypot(dx, dy) || 1;
+              const segLen = L;
+              const newSeg = Math.max(1, segLen + diff);
+              a = a.map((p, i) => i === lastIdx ? { ...p, x: prev.x + (dx / L) * newSeg, y: prev.y + (dy / L) * newSeg } : p);
+            }
+          }
           return { ...r, anchors: a };
         }),
       });
