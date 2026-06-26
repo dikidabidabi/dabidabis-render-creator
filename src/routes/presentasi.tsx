@@ -47,6 +47,7 @@ import {
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
+import { type Ramp, tessellateReference, offsetPolyline, polylineLength } from "@/lib/ramps";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import {
   type ParkingArea,
