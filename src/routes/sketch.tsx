@@ -135,6 +135,16 @@ import {
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useProjectStore } from "@/store/project-store";
+import {
+  type Ramp,
+  type RampAnchor,
+  genRampId,
+  makeRamp,
+  tessellateReference,
+  offsetPolyline,
+  polylineLength,
+  pointAtArcLength,
+} from "@/lib/ramps";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
