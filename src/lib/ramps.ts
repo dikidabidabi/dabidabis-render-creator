@@ -141,11 +141,12 @@ export function offsetPolyline(pts: Point[], wPx: number, side: "left" | "right"
       const L = Math.hypot(bx, by);
       if (L < 1e-6) { n = a; }
       else {
-        // miter scale: 1/cos(theta/2) = 2/(|a+b|)  since |a|=|b|=1.
-        // Tidak diklamp agar lebar ramp tetap konsisten di belokan
-        // (diagonal pada titik belokan boleh lebih panjang dari lebar).
-        const scale = 2 / Math.max(1e-6, L);
-        n = { x: ((a.x + b.x) / 2) * scale, y: ((a.y + b.y) / 2) * scale };
+        // Diagonal sudut ramp dibuat tetap = w * sqrt(2) (sisi miring segitiga
+        // siku-siku dengan kedua sisi = lebar ramp), tidak bergantung sudut belokan.
+        // Caranya: arahkan offset sepanjang bisector unit, lalu skala = sqrt(2).
+        const ux = bx / L, uy = by / L; // unit bisector
+        const scale = Math.SQRT2;
+        n = { x: ux * scale, y: uy * scale };
       }
     }
     out.push({ x: pts[i].x + n.x * wPx, y: pts[i].y + n.y * wPx });
