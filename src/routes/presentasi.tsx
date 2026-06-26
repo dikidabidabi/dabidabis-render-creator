@@ -3532,7 +3532,25 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                     const bLenM = r.bordesLenM ?? 1.2;
                     const slopeLenM = tH * r.nM;
                     const centerLenM = polylineLength(center) / pxPerM;
-                    const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true);
+                    // Corner arc-lengths on centerline (meter) — reset spasi setelah bordes belokan.
+                    const cornerArcsM: number[] = [];
+                    const Nrc = Math.min(refDense.length, offDense.length);
+                    if (r.bordesBelokan && r.anchors.length >= 3) {
+                      const cumPx: number[] = [0];
+                      for (let i = 1; i < Nrc; i++) {
+                        cumPx.push(cumPx[i - 1] + Math.hypot(center[i].x - center[i - 1].x, center[i].y - center[i - 1].y));
+                      }
+                      for (let ai = 1; ai < r.anchors.length - 1; ai++) {
+                        const B = r.anchors[ai];
+                        let bestI = 0, bestD = Infinity;
+                        for (let i = 0; i < Nrc; i++) {
+                          const d = Math.hypot(refDense[i].x - B.x, refDense[i].y - B.y);
+                          if (d < bestD) { bestD = d; bestI = i; }
+                        }
+                        cornerArcsM.push(cumPx[bestI] / pxPerM);
+                      }
+                    }
+                    const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true, cornerArcsM);
                     const halfW = (r.widthM * pxPerM) / 2;
                     const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerM);
                     const quads: string[] = [];
@@ -3547,24 +3565,25 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       const q10 = { x: p1.p.x + n1.x * halfW, y: p1.p.y + n1.y * halfW };
                       quads.push(`${q00.x},${q00.y} ${q01.x},${q01.y} ${q11.x},${q11.y} ${q10.x},${q10.y}`);
                     }
+                    // Corner landings: persegi dengan diagonal B↔B'.
                     const corners: string[] = [];
                     if (r.bordesBelokan && r.anchors.length >= 3) {
                       for (let ai = 1; ai < r.anchors.length - 1; ai++) {
-                        const A = r.anchors[ai - 1], B = r.anchors[ai], C = r.anchors[ai + 1];
-                        const dAB = { x: B.x - A.x, y: B.y - A.y };
-                        const dBC = { x: C.x - B.x, y: C.y - B.y };
-                        const lAB = Math.max(1e-6, Math.hypot(dAB.x, dAB.y));
-                        const lBC = Math.max(1e-6, Math.hypot(dBC.x, dBC.y));
-                        const u1 = { x: dAB.x / lAB, y: dAB.y / lAB };
-                        const u2 = { x: dBC.x / lBC, y: dBC.y / lBC };
-                        const sign = r.offsetSide === "right" ? 1 : -1;
-                        const n1c = { x: u1.y * sign, y: -u1.x * sign };
-                        const c0 = { x: B.x + n1c.x * halfW, y: B.y + n1c.y * halfW };
-                        const c1 = { x: c0.x - u1.x * halfW + n1c.x * halfW, y: c0.y - u1.y * halfW + n1c.y * halfW };
-                        const c2 = { x: c0.x - u1.x * halfW - n1c.x * halfW, y: c0.y - u1.y * halfW - n1c.y * halfW };
-                        const c3 = { x: c0.x + u2.x * halfW - n1c.x * halfW, y: c0.y + u2.y * halfW - n1c.y * halfW };
-                        const c4 = { x: c0.x + u2.x * halfW + n1c.x * halfW, y: c0.y + u2.y * halfW + n1c.y * halfW };
-                        corners.push(`${c1.x},${c1.y} ${c2.x},${c2.y} ${c3.x},${c3.y} ${c4.x},${c4.y}`);
+                        const B = r.anchors[ai];
+                        let bestI = 0, bestD = Infinity;
+                        for (let i = 0; i < Nrc; i++) {
+                          const d = Math.hypot(refDense[i].x - B.x, refDense[i].y - B.y);
+                          if (d < bestD) { bestD = d; bestI = i; }
+                        }
+                        const Bp = offDense[bestI];
+                        const mx = (B.x + Bp.x) / 2, my = (B.y + Bp.y) / 2;
+                        const dx = Bp.x - B.x, dy = Bp.y - B.y;
+                        const dlen = Math.max(1e-6, Math.hypot(dx, dy));
+                        const px = -dy / dlen, py = dx / dlen;
+                        const halfDiag = dlen * 0.5;
+                        const v3 = { x: mx + px * halfDiag, y: my + py * halfDiag };
+                        const v4 = { x: mx - px * halfDiag, y: my - py * halfDiag };
+                        corners.push(`${B.x},${B.y} ${v3.x},${v3.y} ${Bp.x},${Bp.y} ${v4.x},${v4.y}`);
                       }
                     }
                     return (
