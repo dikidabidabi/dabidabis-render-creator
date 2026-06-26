@@ -157,3 +157,32 @@ export function offsetPolyline(pts: Point[], wPx: number, side: "left" | "right"
 export function rampBoundary(refDense: Point[], offDense: Point[]): Point[] {
   return [...refDense, ...offDense.slice().reverse()];
 }
+
+// ---------- bordes helpers ----------
+
+// Hitung posisi bordes (sebagai range arc-length dalam METER pada centerline)
+// `centerlineLenM` adalah total panjang centerline (slope + bordes) dalam meter.
+// `slopeLenM` adalah komponen miring saja (= t * n).
+export function computeBordesArcs(
+  centerlineLenM: number,
+  slopeLenM: number,
+  spacingM: number,
+  bordesLenM: number,
+  hasBordes: boolean,
+): Array<{ s0: number; s1: number }> {
+  if (!hasBordes || spacingM <= 0 || bordesLenM <= 0 || slopeLenM <= 0) return [];
+  const out: Array<{ s0: number; s1: number }> = [];
+  const numBordes = Math.max(0, Math.floor((slopeLenM - 1e-3) / spacingM));
+  for (let k = 1; k <= numBordes; k++) {
+    const s0 = k * spacingM + (k - 1) * bordesLenM;
+    const s1 = s0 + bordesLenM;
+    if (s0 >= centerlineLenM - 1e-3) break;
+    out.push({ s0, s1: Math.min(s1, centerlineLenM) });
+  }
+  return out;
+}
+
+export function numBordesForSlope(slopeLenM: number, spacingM: number): number {
+  if (slopeLenM <= 0 || spacingM <= 0) return 0;
+  return Math.max(0, Math.floor((slopeLenM - 1e-3) / spacingM));
+}
