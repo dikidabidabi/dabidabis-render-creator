@@ -2063,15 +2063,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   // Live-sync bordes pada ramp terpilih (atau semua ramp di level aktif jika tidak ada pilihan)
   // agar garis bordes langsung muncul/menghilang di sketsa dan slide tanpa menunggu "Terapkan".
   useEffect(() => {
+    // Hanya sinkronkan ke ramp yang sedang dipilih, supaya konfigurasi bordes
+    // yang sudah tersimpan pada ramp lain tidak ikut ter-reset saat halaman
+    // sketsa dibuka kembali (state UI default = false, sedangkan ramp tersimpan
+    // mungkin sudah punya bordes aktif).
+    if (!rampSelectedId) return;
     const list = sketch.ramps ?? [];
     if (list.length === 0) return;
-    const shouldUpdate = (r: Ramp) => {
-      if (rampSelectedId) return r.id === rampSelectedId;
-      return r.levelId === activeLvlId;
-    };
     let dirty = false;
     const next = list.map((r) => {
-      if (!shouldUpdate(r)) return r;
+      if (r.id !== rampSelectedId) return r;
       const wantBordes = rampBordesOn;
       const wantLen = wantBordes ? rampBordesLenM : undefined;
       const wantSpacing = wantBordes ? rampBordesSpacingM : undefined;
@@ -5493,7 +5494,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             const halfW = wPxLocal / 2;
             const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerMeter);
             ctx.save();
-            ctx.fillStyle = "rgba(20,184,166,0.32)";
+            // Bidang bordes transparan — hanya outline.
             ctx.strokeStyle = "rgba(15,23,42,0.85)";
             ctx.lineWidth = 1.4;
             for (const a of arcs) {
@@ -5511,7 +5512,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               ctx.moveTo(s00.x, s00.y); ctx.lineTo(s01.x, s01.y);
               ctx.lineTo(s11.x, s11.y); ctx.lineTo(s10.x, s10.y);
               ctx.closePath();
-              ctx.fill();
               ctx.stroke();
             }
             // corner bordes — persegi dengan diagonal menghubungkan B (sisi acuan)
@@ -5542,7 +5542,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 ctx.moveTo(s1c.x, s1c.y); ctx.lineTo(s2c.x, s2c.y);
                 ctx.lineTo(s3c.x, s3c.y); ctx.lineTo(s4c.x, s4c.y);
                 ctx.closePath();
-                ctx.fill();
                 ctx.stroke();
               }
             }
