@@ -6972,14 +6972,15 @@ function computeDiffableEffective(sketch: Sketch): Map<string, Set<string>> {
 }
 
 // ---- Rekap ----
-function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number } {
+function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number; diffable: number } {
   const areas = sketch.parkingAreas ?? [];
-  if (!areas.length) return { mobil: 0, motor: 0 };
+  if (!areas.length) return { mobil: 0, motor: 0, diffable: 0 };
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
   const mmRotRad = ((Number(sketch.mmGridRotation) || 0) * Math.PI) / 180;
   const levels = sketch.levels ?? [];
   let mobil = 0;
   let motor = 0;
+  let diffable = 0;
   const diffEff = computeDiffableEffective(sketch);
   for (const level of levels) {
     const areasLv = areas.filter((p) => p.levelId === level.id);
@@ -6988,12 +6989,18 @@ function computeTotalParkingLots(sketch: Sketch): { mobil: number; motor: number
     for (const area of areasLv) {
       const diffKeys = diffEff.get(area.id);
       const stalls = generateStalls(area, pxPerM, mmRotRad, obs, diffKeys);
-      const valid = stalls.filter((s) => s.valid).length;
-      if (area.kind === "motor") motor += valid;
-      else mobil += valid;
+      const validStalls = stalls.filter((s) => s.valid);
+      if (area.kind === "motor") {
+        motor += validStalls.length;
+      } else {
+        for (const s of validStalls) {
+          if (diffKeys && diffKeys.has(`${s.row},${s.col}`)) diffable++;
+          else mobil++;
+        }
+      }
     }
   }
-  return { mobil, motor };
+  return { mobil, motor, diffable };
 }
 
 function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
