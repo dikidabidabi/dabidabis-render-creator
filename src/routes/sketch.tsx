@@ -5526,6 +5526,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             const wPxLocal = r.widthM * pxPerMeter;
             const halfW = wPxLocal / 2;
             const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerMeter);
+            // Determine dashed half boundary along centerline (meter)
+            const midM = centerLenM / 2;
+            const isDashedAtM = (sM: number) => {
+              if (isBase || isDraft) return sM > midM;
+              if (isAbove) return sM < midM;
+              return false;
+            };
             ctx.save();
             // Bidang bordes transparan — hanya outline.
             ctx.strokeStyle = "rgba(15,23,42,0.85)";
@@ -5541,12 +5548,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               const q11 = { x: p1.p.x - n1.x * halfW, y: p1.p.y - n1.y * halfW };
               const q10 = { x: p1.p.x + n1.x * halfW, y: p1.p.y + n1.y * halfW };
               const s00 = worldToScreen(q00), s01 = worldToScreen(q01), s11 = worldToScreen(q11), s10 = worldToScreen(q10);
+              const dashed = isDashedAtM((a.s0 + a.s1) / 2);
+              if (dashed) ctx.setLineDash([6, 5]); else ctx.setLineDash([]);
               ctx.beginPath();
               ctx.moveTo(s00.x, s00.y); ctx.lineTo(s01.x, s01.y);
               ctx.lineTo(s11.x, s11.y); ctx.lineTo(s10.x, s10.y);
               ctx.closePath();
               ctx.stroke();
             }
+            ctx.setLineDash([]);
             // corner bordes — persegi dengan diagonal menghubungkan B (sisi acuan)
             // dan B' (sisi offset) pada anchor belokan.
             if (r.bordesBelokan && r.anchors.length >= 3) {
@@ -5571,12 +5581,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
                 const v4 = { x: mx - px * halfDiag, y: my - py * halfDiag };
                 const s1c = worldToScreen(B), s2c = worldToScreen(v3),
                       s3c = worldToScreen(Bp), s4c = worldToScreen(v4);
+                const cornerArc = cornerArcsM[ai - 1] ?? 0;
+                const dashedC = isDashedAtM(cornerArc);
+                if (dashedC) ctx.setLineDash([6, 5]); else ctx.setLineDash([]);
                 ctx.beginPath();
                 ctx.moveTo(s1c.x, s1c.y); ctx.lineTo(s2c.x, s2c.y);
                 ctx.lineTo(s3c.x, s3c.y); ctx.lineTo(s4c.x, s4c.y);
                 ctx.closePath();
                 ctx.stroke();
               }
+              ctx.setLineDash([]);
             }
             ctx.restore();
           }
