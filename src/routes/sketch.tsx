@@ -6603,7 +6603,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       if (pickId) {
         setRampSelectedId(pickId);
         const r = (sketch.ramps ?? []).find((x) => x.id === pickId);
-        if (r) { setRampWidthInput(r.widthM); setRampNInput(r.nM); }
+        if (r) { setRampWidthInput(String(r.widthM)); setRampNInput(String(r.nM)); }
       }
       return;
     }
