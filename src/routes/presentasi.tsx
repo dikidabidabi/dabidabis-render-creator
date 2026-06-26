@@ -3905,9 +3905,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       <g key={`d-${st.id}`}>
                         <polygon
                           points={st.poly.map((p) => `${p.x},${p.y}`).join(" ")}
-                          fill="rgba(168,96,96,0.55)"
-                          stroke="rgba(190,70,70,0.95)"
-                          strokeWidth={sw * 0.00055}
+                          fill="rgba(170,140,140,0.5)"
+                          stroke="#000000"
+                          strokeWidth={sw * 0.00045}
                         />
                         <text
                           x={st.center.x}
