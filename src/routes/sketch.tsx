@@ -2047,14 +2047,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     let dirty = false;
     const next = list.map((r) => {
       if (!shouldUpdate(r)) return r;
-      const hasAny = r.anchors.some((a) => (a.filletR ?? 0) > 0);
-      if (!hasAny) return r;
-      const allEqual = r.anchors.every(
-        (a) => !((a.filletR ?? 0) > 0) || Math.abs((a.filletR ?? 0) - rampFilletM) < 1e-6,
-      );
-      if (allEqual) return r;
+      // Auto-apply: jika radius > 0 dan ramp ini terpilih, terapkan fillet
+      // ke SEMUA titik interior agar tersimpan otomatis tanpa klik per titik.
+      const autoAll = rampSelectedId === r.id && rampFilletM > 0 && r.anchors.length >= 3;
+      const targetR = rampFilletM;
+      const anchors2 = r.anchors.map((a, i) => {
+        const isInterior = i > 0 && i < r.anchors.length - 1;
+        const had = (a.filletR ?? 0) > 0;
+        if (autoAll && isInterior) {
+          if (Math.abs((a.filletR ?? 0) - targetR) < 1e-6) return a;
+          return { ...a, filletR: targetR };
+        }
+        if (had && Math.abs((a.filletR ?? 0) - targetR) > 1e-6) {
+          return { ...a, filletR: targetR };
+        }
+        return a;
+      });
+      const changed = anchors2.some((a, i) => (a.filletR ?? 0) !== (r.anchors[i].filletR ?? 0));
+      if (!changed) return r;
       dirty = true;
-      return { ...r, anchors: r.anchors.map((a) => ((a.filletR ?? 0) > 0 ? { ...a, filletR: rampFilletM } : a)) };
+      return { ...r, anchors: anchors2 };
     });
     if (!dirty) return;
     onChange({ ramps: next });
