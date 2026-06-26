@@ -164,21 +164,41 @@ export function rampBoundary(refDense: Point[], offDense: Point[]): Point[] {
 // Hitung posisi bordes (sebagai range arc-length dalam METER pada centerline)
 // `centerlineLenM` adalah total panjang centerline (slope + bordes) dalam meter.
 // `slopeLenM` adalah komponen miring saja (= t * n).
+// `cornerArcsM` (opsional) — posisi arc-length bordes belokan pada centerline.
+// Jika diberikan, penghitung spasi di-reset ke nol setelah tiap bordes belokan,
+// sehingga bordes lurus berikutnya muncul `spacingM` meter setelah bordes belokan.
 export function computeBordesArcs(
   centerlineLenM: number,
   slopeLenM: number,
   spacingM: number,
   bordesLenM: number,
   hasBordes: boolean,
+  cornerArcsM?: number[],
 ): Array<{ s0: number; s1: number }> {
   if (!hasBordes || spacingM <= 0 || bordesLenM <= 0 || slopeLenM <= 0) return [];
   const out: Array<{ s0: number; s1: number }> = [];
-  const numBordes = Math.max(0, Math.floor((slopeLenM - 1e-3) / spacingM));
-  for (let k = 1; k <= numBordes; k++) {
-    const s0 = k * spacingM + (k - 1) * bordesLenM;
-    const s1 = s0 + bordesLenM;
-    if (s0 >= centerlineLenM - 1e-3) break;
-    out.push({ s0, s1: Math.min(s1, centerlineLenM) });
+  const corners = (cornerArcsM ?? []).filter((c) => c > 0 && c < centerlineLenM).sort((a, b) => a - b);
+  let ci = 0;
+  let cursor = 0;
+  let nextS = spacingM;
+  let guard = 0;
+  while (nextS < centerlineLenM - 1e-3 && guard++ < 10000) {
+    // Jika ada bordes belokan sebelum slot bordes lurus berikutnya → reset.
+    if (ci < corners.length && corners[ci] <= nextS + 1e-6) {
+      cursor = corners[ci];
+      nextS = cursor + spacingM;
+      ci++;
+      continue;
+    }
+    const s1 = Math.min(nextS + bordesLenM, centerlineLenM);
+    out.push({ s0: nextS, s1 });
+    cursor = s1;
+    nextS = cursor + spacingM;
+  }
+  // Jika belum ada corners atau corners belum mempengaruhi, batasi juga oleh slope tersedia.
+  if (corners.length === 0) {
+    const numBordes = Math.max(0, Math.floor((slopeLenM - 1e-3) / spacingM));
+    return out.slice(0, numBordes);
   }
   return out;
 }

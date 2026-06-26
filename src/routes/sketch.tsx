@@ -5470,7 +5470,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             const ab = li >= 0 && li < cur2.length - 1 ? cur2[li + 1] : null;
             const tHeight = ab ? Math.max(0, ab.mdpl - cur2[li].mdpl) : 0;
             slopeLenM = tHeight * r.nM;
-            const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true);
+            // Corner arc-lengths on centerline (meter) — untuk reset spasi setelah bordes belokan.
+            const cornerArcsM: number[] = [];
+            if (r.bordesBelokan && r.anchors.length >= 3) {
+              // cumulative arc length along center
+              const cumPx: number[] = [0];
+              for (let i = 1; i < N; i++) {
+                cumPx.push(cumPx[i - 1] + Math.hypot(center[i].x - center[i - 1].x, center[i].y - center[i - 1].y));
+              }
+              for (let ai = 1; ai < r.anchors.length - 1; ai++) {
+                const B = r.anchors[ai];
+                let bestI = 0, bestD = Infinity;
+                for (let i = 0; i < refDense.length && i < N; i++) {
+                  const d = Math.hypot(refDense[i].x - B.x, refDense[i].y - B.y);
+                  if (d < bestD) { bestD = d; bestI = i; }
+                }
+                cornerArcsM.push(cumPx[bestI] / pxPerMeter);
+              }
+            }
+            const arcs = computeBordesArcs(centerLenM, slopeLenM, spacingM, bLenM, true, cornerArcsM);
             const wPxLocal = r.widthM * pxPerMeter;
             const halfW = wPxLocal / 2;
             const pointAt = (sM: number) => pointAtArcLength(center, sM * pxPerMeter);
@@ -5496,25 +5514,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               ctx.fill();
               ctx.stroke();
             }
-            // corner bordes
+            // corner bordes — persegi dengan diagonal menghubungkan B (sisi acuan)
+            // dan B' (sisi offset) pada anchor belokan.
             if (r.bordesBelokan && r.anchors.length >= 3) {
               for (let ai = 1; ai < r.anchors.length - 1; ai++) {
-                const A = r.anchors[ai - 1], B = r.anchors[ai], C = r.anchors[ai + 1];
-                const dAB = { x: B.x - A.x, y: B.y - A.y };
-                const dBC = { x: C.x - B.x, y: C.y - B.y };
-                const lAB = Math.max(1e-6, Math.hypot(dAB.x, dAB.y));
-                const lBC = Math.max(1e-6, Math.hypot(dBC.x, dBC.y));
-                const u1 = { x: dAB.x / lAB, y: dAB.y / lAB };
-                const u2 = { x: dBC.x / lBC, y: dBC.y / lBC };
-                const sign = r.offsetSide === "right" ? 1 : -1;
-                const n1c = { x: u1.y * sign, y: -u1.x * sign };
-                const center0 = { x: B.x + n1c.x * halfW, y: B.y + n1c.y * halfW };
-                // square corners along (u1) and (u2) directions, size wPx
-                const c1 = { x: center0.x - u1.x * halfW + n1c.x * halfW, y: center0.y - u1.y * halfW + n1c.y * halfW };
-                const c2 = { x: center0.x - u1.x * halfW - n1c.x * halfW, y: center0.y - u1.y * halfW - n1c.y * halfW };
-                const c3 = { x: center0.x + u2.x * halfW - n1c.x * halfW, y: center0.y + u2.y * halfW - n1c.y * halfW };
-                const c4 = { x: center0.x + u2.x * halfW + n1c.x * halfW, y: center0.y + u2.y * halfW + n1c.y * halfW };
-                const s1c = worldToScreen(c1), s2c = worldToScreen(c2), s3c = worldToScreen(c3), s4c = worldToScreen(c4);
+                const B = r.anchors[ai];
+                // Cari B' = titik offset pada index yang sama (anchor tanpa fillet → ada di refDense)
+                let bestI = 0, bestD = Infinity;
+                for (let i = 0; i < refDense.length && i < N; i++) {
+                  const d = Math.hypot(refDense[i].x - B.x, refDense[i].y - B.y);
+                  if (d < bestD) { bestD = d; bestI = i; }
+                }
+                const Bp = offDense[bestI];
+                // Persegi: B & B' = sudut diagonal. Dua titik lain = midpoint ± perp(B'-B)*half_diag.
+                const mx = (B.x + Bp.x) / 2, my = (B.y + Bp.y) / 2;
+                const dx = Bp.x - B.x, dy = Bp.y - B.y;
+                const half = 0.5; // setengah panjang diagonal kedua = setengah panjang diagonal pertama
+                // perp unit
+                const dlen = Math.max(1e-6, Math.hypot(dx, dy));
+                const px = -dy / dlen, py = dx / dlen;
+                const halfDiag = dlen * half;
+                const v3 = { x: mx + px * halfDiag, y: my + py * halfDiag };
+                const v4 = { x: mx - px * halfDiag, y: my - py * halfDiag };
+                const s1c = worldToScreen(B), s2c = worldToScreen(v3),
+                      s3c = worldToScreen(Bp), s4c = worldToScreen(v4);
                 ctx.beginPath();
                 ctx.moveTo(s1c.x, s1c.y); ctx.lineTo(s2c.x, s2c.y);
                 ctx.lineTo(s3c.x, s3c.y); ctx.lineTo(s4c.x, s4c.y);
