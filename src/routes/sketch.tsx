@@ -5177,8 +5177,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
           levelId: rampDraft.levelId,
           anchors: rampDraft.anchors,
           offsetSide: rampDraft.offsetSide,
-          widthM: rampWidthInput,
-          nM: rampNInput,
+          widthM: rampWidthM,
+          nM: rampNVal,
           createdAt: 0,
           __isDraft: true,
         });
