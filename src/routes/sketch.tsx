@@ -1984,9 +1984,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
   const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
   const [rampSelectedId, setRampSelectedId] = useState<string | null>(null);
-  const [rampWidthInput, setRampWidthInput] = useState<number>(1);
-  const [rampNInput, setRampNInput] = useState<number>(7);
-  const [rampFilletInput, setRampFilletInput] = useState<number>(1);
+  const [rampWidthInput, setRampWidthInput] = useState<string>("1");
+  const [rampNInput, setRampNInput] = useState<string>("7");
+  const [rampFilletInput, setRampFilletInput] = useState<string>("1");
+  const rampWidthM = Math.max(0.3, Number(rampWidthInput) || 1);
+  const rampNVal = Math.max(1, Number(rampNInput) || 7);
+  const rampFilletM = Math.max(0, Number(rampFilletInput) || 0);
   const [rampVertexDrag, setRampVertexDrag] = useState<{ rampId: string; idx: number } | null>(null);
   // Parking sub-tool state
   type ParkingSubTool = ParkingSubToolKind;
