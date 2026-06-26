@@ -144,6 +144,8 @@ import {
   offsetPolyline,
   polylineLength,
   pointAtArcLength,
+  computeBordesArcs,
+  numBordesForSlope,
 } from "@/lib/ramps";
 
 export const Route = createFileRoute("/sketch")({
