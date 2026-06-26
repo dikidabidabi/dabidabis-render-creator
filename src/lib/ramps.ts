@@ -119,7 +119,11 @@ export function tessellateReference(anchors: RampAnchor[], pxPerMeter: number, a
   return out;
 }
 
-// Offset a dense polyline by w (px) to the given side. Uses miter-limited joints.
+// Offset a dense polyline by w (px) to the given side using the standard miter
+// formula: displacement = w / cos(halfTurn). Pada segmen lurus halfTurn≈0 →
+// jarak tegak lurus = w (lebar konsisten). Pada sudut tajam 90° halfTurn=45°
+// → jarak = w·√2. Pada tessellation lengkung fillet, turn per vertex kecil →
+// jarak ≈ w sehingga lebar ramp tetap konsisten di sepanjang lengkungan.
 export function offsetPolyline(pts: Point[], wPx: number, side: "left" | "right"): Point[] {
   if (pts.length < 2) return pts.slice();
   const sgn = side === "right" ? 1 : -1;
@@ -127,29 +131,27 @@ export function offsetPolyline(pts: Point[], wPx: number, side: "left" | "right"
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i - 1].x, dy = pts[i].y - pts[i - 1].y;
     const L = Math.max(1e-9, Math.hypot(dx, dy));
-    // right normal: (dy/L, -dx/L)
     segNormals.push({ x: (dy / L) * sgn, y: (-dx / L) * sgn });
   }
   const out: Point[] = [];
   for (let i = 0; i < pts.length; i++) {
-    let n: Point;
-    if (i === 0) n = segNormals[0];
-    else if (i === pts.length - 1) n = segNormals[segNormals.length - 1];
+    let nx: number, ny: number, scale = 1;
+    if (i === 0) { nx = segNormals[0].x; ny = segNormals[0].y; }
+    else if (i === pts.length - 1) { nx = segNormals[segNormals.length - 1].x; ny = segNormals[segNormals.length - 1].y; }
     else {
       const a = segNormals[i - 1], b = segNormals[i];
       const bx = a.x + b.x, by = a.y + b.y;
       const L = Math.hypot(bx, by);
-      if (L < 1e-6) { n = a; }
+      if (L < 1e-6) { nx = a.x; ny = a.y; }
       else {
-        // Diagonal sudut ramp dibuat tetap = w * sqrt(2) (sisi miring segitiga
-        // siku-siku dengan kedua sisi = lebar ramp), tidak bergantung sudut belokan.
-        // Caranya: arahkan offset sepanjang bisector unit, lalu skala = sqrt(2).
         const ux = bx / L, uy = by / L; // unit bisector
-        const scale = Math.SQRT2;
-        n = { x: ux * scale, y: uy * scale };
+        // cos(halfTurn) = (a · u)
+        const cosHalf = Math.max(0.15, Math.abs(a.x * ux + a.y * uy));
+        scale = 1 / cosHalf; // standard miter; ≈1 on smooth arcs, √2 at 90°
+        nx = ux; ny = uy;
       }
     }
-    out.push({ x: pts[i].x + n.x * wPx, y: pts[i].y + n.y * wPx });
+    out.push({ x: pts[i].x + nx * wPx * scale, y: pts[i].y + ny * wPx * scale });
   }
   return out;
 }
