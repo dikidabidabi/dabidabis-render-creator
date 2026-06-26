@@ -141,11 +141,11 @@ export function offsetPolyline(pts: Point[], wPx: number, side: "left" | "right"
       const L = Math.hypot(bx, by);
       if (L < 1e-6) { n = a; }
       else {
-        // miter scale: 1/cos(theta/2) = 2/(|a+b|)  since |a|=|b|=1
+        // miter scale: 1/cos(theta/2) = 2/(|a+b|)  since |a|=|b|=1.
+        // Tidak diklamp agar lebar ramp tetap konsisten di belokan
+        // (diagonal pada titik belokan boleh lebih panjang dari lebar).
         const scale = 2 / Math.max(1e-6, L);
-        const lim = 4;
-        const s = Math.min(scale, lim);
-        n = { x: ((a.x + b.x) / 2) * s, y: ((a.y + b.y) / 2) * s };
+        n = { x: ((a.x + b.x) / 2) * scale, y: ((a.y + b.y) / 2) * scale };
       }
     }
     out.push({ x: pts[i].x + n.x * wPx, y: pts[i].y + n.y * wPx });
