@@ -906,6 +906,36 @@ function normalizeSketch(s: any): Sketch {
       const validLvl = new Set(levels.map((l) => l.id));
       return arr.map((p) => (p.levelId && validLvl.has(p.levelId) ? p : { ...p, levelId: fallback }));
     })(),
+    ramps: (() => {
+      const raw = s?.ramps;
+      if (!Array.isArray(raw)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const out: Ramp[] = [];
+      for (const r of raw) {
+        if (!r || typeof r !== "object") continue;
+        if (!Array.isArray(r.anchors) || r.anchors.length < 2) continue;
+        const anchors: RampAnchor[] = [];
+        let ok = true;
+        for (const p of r.anchors) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) { ok = false; break; }
+          const fr = Number(p?.filletR);
+          anchors.push(Number.isFinite(fr) && fr > 0 ? { x, y, filletR: fr } : { x, y });
+        }
+        if (!ok) continue;
+        const lid = typeof r.levelId === "string" && validLvl.has(r.levelId) ? r.levelId : fallback;
+        out.push({
+          id: typeof r.id === "string" && r.id ? r.id : `ramp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: lid,
+          anchors,
+          offsetSide: r.offsetSide === "left" ? "left" : "right",
+          widthM: Number.isFinite(Number(r.widthM)) && Number(r.widthM) > 0 ? Number(r.widthM) : 1,
+          nM: Number.isFinite(Number(r.nM)) && Number(r.nM) > 0 ? Number(r.nM) : 7,
+          createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
   };
 }
 
