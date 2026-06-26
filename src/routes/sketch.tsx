@@ -5164,6 +5164,208 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     }
 
 
+    // ===== Render Ramps =====
+    {
+      const sortedLv = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+      const allRamps: Array<Ramp & { __isDraft?: boolean }> = [...(sketch.ramps ?? [])];
+      if (rampDraft && rampDraft.anchors.length >= 1) {
+        allRamps.push({
+          id: "__draft__",
+          levelId: rampDraft.levelId,
+          anchors: rampDraft.anchors,
+          offsetSide: rampDraft.offsetSide,
+          widthM: rampWidthInput,
+          nM: rampNInput,
+          createdAt: 0,
+          __isDraft: true,
+        });
+      }
+      for (const r of allRamps) {
+        const baseIdx = sortedLv.findIndex((l) => l.id === r.levelId);
+        const aboveId = baseIdx >= 0 && baseIdx < sortedLv.length - 1 ? sortedLv[baseIdx + 1].id : null;
+        const isBase = activeLvlId === r.levelId;
+        const isAbove = aboveId && activeLvlId === aboveId;
+        const isDraft = (r as { __isDraft?: boolean }).__isDraft;
+        if (!isBase && !isAbove && !isDraft) continue;
+
+        const refDense = tessellateReference(r.anchors, pxPerMeter, 18);
+        const wPx = r.widthM * pxPerMeter;
+        const offDense = offsetPolyline(refDense, wPx, r.offsetSide);
+        if (refDense.length < 2 || offDense.length < 2) continue;
+
+        const totalLen = polylineLength(refDense);
+        const midS = totalLen / 2;
+        const midRef = pointAtArcLength(refDense, midS);
+        const midOff = pointAtArcLength(offDense, polylineLength(offDense) / 2);
+        const isSelected = rampSelectedId === r.id;
+
+        // Build first-half (base level) and second-half (above level) ribbon polygons
+        const splitRef = (s: number): { a: Point[]; b: Point[] } => {
+          const a: Point[] = []; const b: Point[] = [];
+          let acc = 0;
+          a.push(refDense[0]);
+          for (let i = 1; i < refDense.length; i++) {
+            const p0 = refDense[i - 1], p1 = refDense[i];
+            const d = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            if (acc + d < s) {
+              a.push(p1); acc += d; continue;
+            }
+            const u = (s - acc) / Math.max(1e-9, d);
+            const mid = { x: p0.x + (p1.x - p0.x) * u, y: p0.y + (p1.y - p0.y) * u };
+            a.push(mid);
+            b.push(mid);
+            for (let k = i; k < refDense.length; k++) b.push(refDense[k]);
+            return { a, b };
+          }
+          return { a, b };
+        };
+        const refSplit = splitRef(midS);
+        const offSplit = splitRef.call(null, polylineLength(offDense) / 2);
+        // for offset polyline split, redo on offDense
+        const splitGeneric = (pts: Point[], s: number): { a: Point[]; b: Point[] } => {
+          const a: Point[] = []; const b: Point[] = [];
+          let acc = 0; a.push(pts[0]);
+          for (let i = 1; i < pts.length; i++) {
+            const p0 = pts[i - 1], p1 = pts[i];
+            const d = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            if (acc + d < s) { a.push(p1); acc += d; continue; }
+            const u = (s - acc) / Math.max(1e-9, d);
+            const mid = { x: p0.x + (p1.x - p0.x) * u, y: p0.y + (p1.y - p0.y) * u };
+            a.push(mid); b.push(mid);
+            for (let k = i; k < pts.length; k++) b.push(pts[k]);
+            return { a, b };
+          }
+          return { a, b };
+        };
+        const refA = splitGeneric(refDense, midS);
+        const offA = splitGeneric(offDense, polylineLength(offDense) / 2);
+        void refSplit; void offSplit;
+
+        const drawHalf = (refPts: Point[], offPts: Point[], dashed: boolean) => {
+          if (refPts.length < 2 || offPts.length < 2) return;
+          // boundary polygon: refPts forward then offPts reverse
+          ctx.save();
+          ctx.beginPath();
+          const m0 = worldToScreen(refPts[0]);
+          ctx.moveTo(m0.x, m0.y);
+          for (let i = 1; i < refPts.length; i++) {
+            const s = worldToScreen(refPts[i]); ctx.lineTo(s.x, s.y);
+          }
+          for (let i = offPts.length - 1; i >= 0; i--) {
+            const s = worldToScreen(offPts[i]); ctx.lineTo(s.x, s.y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = dashed ? "rgba(148,163,184,0.10)" : "rgba(20,184,166,0.14)";
+          ctx.fill();
+          ctx.lineWidth = isSelected ? 2.5 : 1.6;
+          ctx.strokeStyle = isSelected ? "rgba(234,88,12,0.95)" : "rgba(15,23,42,0.85)";
+          if (dashed) ctx.setLineDash([6, 5]); else ctx.setLineDash([]);
+          // reference side stroke
+          ctx.beginPath();
+          const r0 = worldToScreen(refPts[0]); ctx.moveTo(r0.x, r0.y);
+          for (let i = 1; i < refPts.length; i++) { const s = worldToScreen(refPts[i]); ctx.lineTo(s.x, s.y); }
+          ctx.stroke();
+          // offset side stroke
+          ctx.beginPath();
+          const o0 = worldToScreen(offPts[0]); ctx.moveTo(o0.x, o0.y);
+          for (let i = 1; i < offPts.length; i++) { const s = worldToScreen(offPts[i]); ctx.lineTo(s.x, s.y); }
+          ctx.stroke();
+          // end caps
+          ctx.beginPath();
+          const cap1a = worldToScreen(refPts[0]); const cap1b = worldToScreen(offPts[0]);
+          ctx.moveTo(cap1a.x, cap1a.y); ctx.lineTo(cap1b.x, cap1b.y);
+          const cap2a = worldToScreen(refPts[refPts.length - 1]); const cap2b = worldToScreen(offPts[offPts.length - 1]);
+          ctx.moveTo(cap2a.x, cap2a.y); ctx.lineTo(cap2b.x, cap2b.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        };
+
+        // base level shows first half solid, second half dashed (since upper);
+        // above level shows first half dashed, second half solid.
+        if (isBase || isDraft) {
+          drawHalf(refA.a, offA.a, false);
+          drawHalf(refA.b, offA.b, true);
+        } else if (isAbove) {
+          drawHalf(refA.a, offA.a, true);
+          drawHalf(refA.b, offA.b, false);
+        }
+
+        // 45° divider line at midpoint (separates lower/upper)
+        {
+          const tNorm = midRef.t;
+          const nx = -tNorm.y, ny = tNorm.x;
+          const sgn = r.offsetSide === "right" ? 1 : -1;
+          const half = wPx; // span across width
+          // 45° relative to local axis: rotate tangent by 45deg
+          const ang = Math.PI / 4;
+          const dx = tNorm.x * Math.cos(ang) - tNorm.y * Math.sin(ang);
+          const dy = tNorm.x * Math.sin(ang) + tNorm.y * Math.cos(ang);
+          void nx; void ny;
+          const cx = (midRef.p.x + midOff.p.x) / 2;
+          const cy = (midRef.p.y + midOff.p.y) / 2;
+          const L = wPx * 0.9 * sgn;
+          const a = worldToScreen({ x: cx - dx * L * 0.5, y: cy - dy * L * 0.5 });
+          const b = worldToScreen({ x: cx + dx * L * 0.5, y: cy + dy * L * 0.5 });
+          ctx.save();
+          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = "rgba(15,23,42,0.9)";
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Arrow direction notation: two lines from start corners converging to top-center
+        {
+          const startRef = refDense[0];
+          const startOff = offDense[0];
+          // top = puncak ramp = end point center
+          const endRef = refDense[refDense.length - 1];
+          const endOff = offDense[offDense.length - 1];
+          const top = { x: (endRef.x + endOff.x) / 2, y: (endRef.y + endOff.y) / 2 };
+          ctx.save();
+          ctx.strokeStyle = isBase || isDraft ? "rgba(234,88,12,0.85)" : "rgba(100,116,139,0.7)";
+          ctx.setLineDash(isAbove && !isBase ? [4, 4] : []);
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          const a1 = worldToScreen(startRef), a2 = worldToScreen(top);
+          ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y);
+          const b1 = worldToScreen(startOff);
+          ctx.moveTo(b1.x, b1.y); ctx.lineTo(a2.x, a2.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // Anchor handles in edit modes
+        if (!isDraft && tool === "ramp" && (rampSub === "geser" || rampSub === "addpt" || rampSub === "fillet")) {
+          ctx.save();
+          for (let i = 0; i < r.anchors.length; i++) {
+            const sp = worldToScreen(r.anchors[i]);
+            ctx.fillStyle = rampSelectedId === r.id ? "rgba(234,88,12,0.95)" : "rgba(15,23,42,0.85)";
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // Draft preview points
+        if (isDraft) {
+          ctx.save();
+          for (const p of r.anchors) {
+            const sp = worldToScreen(p);
+            ctx.fillStyle = "rgba(234,88,12,0.95)";
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+    }
+
     // Active line length label, screen-space
     if (drawing) {
       const meters = dist(drawing.a, drawing.b) / pxPerMeter;
