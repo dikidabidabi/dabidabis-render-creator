@@ -433,20 +433,9 @@ function computeStats(sk: Sketch): Stats {
   const parkingAreas: ParkingArea[] = sk.parkingAreas ?? [];
   const mmRotDeg = Number.isFinite(Number(sk.mmGridRotation)) ? Number(sk.mmGridRotation) : 0;
   const mmRotRad = (mmRotDeg * Math.PI) / 180;
-  let parkingMobilTotal = 0;
-  let parkingMotorTotal = 0;
-  let parkingMobilAreaM2 = 0;
-  let parkingMotorAreaM2 = 0;
-  let parkingMobilOccupiedM2 = 0;
-  let parkingMotorOccupiedM2 = 0;
-  const parkingMobilByLevel = new Map<string, number>();
-  const parkingMotorByLevel = new Map<string, number>();
+  // Per-area metadata
+  const areaInfo = new Map<string, { areaM2: number; isMotor: boolean }>();
   for (const area of parkingAreas) {
-    const stalls = generateStalls(area, pxPerMeter, mmRotRad, obstaclesForLevel(area.levelId));
-    const valid = stalls.filter((s) => s.valid).length;
-    const isMotor = area.kind === "motor";
-    const stallAreaM2 = isMotor ? 0.75 * 2.0 : 2.4 * 5.0;
-    // luas polygon area (shoelace)
     const pts = area.pointsLocal ?? [];
     let acc = 0;
     for (let i = 0; i < pts.length; i++) {
@@ -454,17 +443,134 @@ function computeStats(sk: Sketch): Stats {
       acc += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
     }
     const areaPx = Math.abs(acc) / 2;
-    const areaM2 = areaPx / (pxPerMeter * pxPerMeter);
-    if (isMotor) {
-      parkingMotorTotal += valid;
-      parkingMotorOccupiedM2 += valid * stallAreaM2;
-      parkingMotorAreaM2 += areaM2;
-      if (area.levelId) parkingMotorByLevel.set(area.levelId, (parkingMotorByLevel.get(area.levelId) ?? 0) + valid);
+    areaInfo.set(area.id, {
+      areaM2: areaPx / (pxPerMeter * pxPerMeter),
+      isMotor: area.kind === "motor",
+    });
+  }
+  const obsByLevel = new Map<string, ParkingObstacle[]>();
+  const getObs = (lid: string | undefined) => {
+    const key = lid ?? "";
+    if (!obsByLevel.has(key)) obsByLevel.set(key, obstaclesForLevel(lid));
+    return obsByLevel.get(key)!;
+  };
+  // ===== Diffable two-pass =====
+  // Group mobil areas by level
+  const mobilAreasByLvl = new Map<string, ParkingArea[]>();
+  for (const a of parkingAreas) {
+    if ((a.kind ?? "mobil") !== "mobil") continue;
+    const lid = a.levelId ?? "";
+    if (!lid) continue;
+    const arr = mobilAreasByLvl.get(lid) ?? [];
+    arr.push(a);
+    mobilAreasByLvl.set(lid, arr);
+  }
+  // Pass-1: baseline with only manual diffable
+  const stallsPass1 = new Map<string, ReturnType<typeof generateStalls>>();
+  for (const [lid, areas] of mobilAreasByLvl) {
+    for (const a of areas) {
+      const manual = new Set(a.diffable ?? []);
+      stallsPass1.set(a.id, generateStalls(a, pxPerMeter, mmRotRad, getObs(lid), manual));
+    }
+  }
+  const baseByLevel = new Map<string, number>();
+  let baseTotal = 0;
+  for (const [lid, areas] of mobilAreasByLvl) {
+    let n = 0;
+    for (const a of areas) for (const s of stallsPass1.get(a.id) ?? []) if (s.valid) n++;
+    baseByLevel.set(lid, n);
+    baseTotal += n;
+  }
+  const diffTargetTotal = computeDiffableTotal(baseTotal);
+  const lvlsAsc = [...mobilAreasByLvl.keys()]
+    .map((id) => levels.find((l) => l.id === id))
+    .filter((x): x is Level => !!x && (baseByLevel.get(x.id) ?? 0) > 0)
+    .sort((a, b) => a.mdpl - b.mdpl)
+    .map((l) => l.id);
+  const targetByLevel = distributeDiffableAcrossLevels(lvlsAsc, diffTargetTotal);
+  // Effective diffable keys per area (manual first, then sequential)
+  const effDiffKeys = new Map<string, Set<string>>();
+  for (const [lid, areas] of mobilAreasByLvl) {
+    let need = Math.min(targetByLevel.get(lid) ?? 0, baseByLevel.get(lid) ?? 0);
+    const picked = new Map<string, Set<string>>();
+    for (const a of areas) picked.set(a.id, new Set());
+    if (need > 0) {
+      const validKeysByArea = new Map<string, Set<string>>();
+      const orderSlots: Array<{ areaId: string; key: string }> = [];
+      for (const a of areas) {
+        const set = new Set<string>();
+        for (const s of stallsPass1.get(a.id) ?? []) {
+          if (!s.valid) continue;
+          const k = `${s.row},${s.col}`;
+          set.add(k);
+          orderSlots.push({ areaId: a.id, key: k });
+        }
+        validKeysByArea.set(a.id, set);
+      }
+      const seen = new Set<string>();
+      for (const a of areas) {
+        const validSet = validKeysByArea.get(a.id) ?? new Set<string>();
+        for (const k of a.diffable ?? []) {
+          if (!validSet.has(k)) continue;
+          const tag = `${a.id}|${k}`;
+          if (seen.has(tag)) continue;
+          seen.add(tag);
+          if (need <= 0) break;
+          picked.get(a.id)!.add(k);
+          need--;
+        }
+        if (need <= 0) break;
+      }
+      for (const s of orderSlots) {
+        if (need <= 0) break;
+        const tag = `${s.areaId}|${s.key}`;
+        if (seen.has(tag)) continue;
+        seen.add(tag);
+        picked.get(s.areaId)!.add(s.key);
+        need--;
+      }
+    }
+    for (const [aid, set] of picked) effDiffKeys.set(aid, set);
+  }
+  // Pass-2: regenerate stalls with effective diffable keys
+  let parkingMobilTotal = 0; // regular only
+  let parkingMotorTotal = 0;
+  let parkingDiffableTotal = 0;
+  let parkingMobilAreaM2 = 0;
+  let parkingMotorAreaM2 = 0;
+  let parkingMobilOccupiedM2 = 0;
+  let parkingMotorOccupiedM2 = 0;
+  const parkingMobilByLevel = new Map<string, number>(); // regular only
+  const parkingMotorByLevel = new Map<string, number>();
+  const parkingDiffableByLevel = new Map<string, number>();
+  for (const area of parkingAreas) {
+    const meta = areaInfo.get(area.id);
+    if (!meta) continue;
+    const diffKeys = effDiffKeys.get(area.id);
+    const stalls = generateStalls(area, pxPerMeter, mmRotRad, getObs(area.levelId), diffKeys);
+    const validStalls = stalls.filter((s) => s.valid);
+    if (meta.isMotor) {
+      const n = validStalls.length;
+      const stallAreaM2 = 0.75 * 2.0;
+      parkingMotorTotal += n;
+      parkingMotorOccupiedM2 += n * stallAreaM2;
+      parkingMotorAreaM2 += meta.areaM2;
+      if (area.levelId) parkingMotorByLevel.set(area.levelId, (parkingMotorByLevel.get(area.levelId) ?? 0) + n);
     } else {
-      parkingMobilTotal += valid;
-      parkingMobilOccupiedM2 += valid * stallAreaM2;
-      parkingMobilAreaM2 += areaM2;
-      if (area.levelId) parkingMobilByLevel.set(area.levelId, (parkingMobilByLevel.get(area.levelId) ?? 0) + valid);
+      let regCount = 0;
+      let diffCount = 0;
+      for (const s of validStalls) {
+        if (diffKeys && diffKeys.has(`${s.row},${s.col}`)) diffCount++;
+        else regCount++;
+      }
+      parkingMobilTotal += regCount;
+      parkingDiffableTotal += diffCount;
+      parkingMobilOccupiedM2 += regCount * (2.4 * 5.0) + diffCount * (3.7 * 5.0);
+      parkingMobilAreaM2 += meta.areaM2;
+      if (area.levelId) {
+        parkingMobilByLevel.set(area.levelId, (parkingMobilByLevel.get(area.levelId) ?? 0) + regCount);
+        if (diffCount > 0) parkingDiffableByLevel.set(area.levelId, (parkingDiffableByLevel.get(area.levelId) ?? 0) + diffCount);
+      }
     }
   }
   const parkingMobilEfficiencyPct = parkingMobilAreaM2 > 0
@@ -512,23 +618,12 @@ function computeStats(sk: Sketch): Stats {
       levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
       count,
     })),
-    ...(() => {
-      const diffTotal = computeDiffableTotal(parkingMobilTotal);
-      const lvlsAsc = Array.from(parkingMobilByLevel.entries())
-        .filter(([, c]) => c > 0)
-        .map(([lid]) => ({ lid, mdpl: levels.find((l) => l.id === lid)?.mdpl ?? 0 }))
-        .sort((a, b) => a.mdpl - b.mdpl)
-        .map((x) => x.lid);
-      const dist = distributeDiffableAcrossLevels(lvlsAsc, diffTotal);
-      return {
-        parkingDiffableTotal: diffTotal,
-        parkingDiffableByLevel: Array.from(dist.entries()).map(([levelId, count]) => ({
-          levelId,
-          levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
-          count,
-        })),
-      };
-    })(),
+    parkingDiffableTotal,
+    parkingDiffableByLevel: Array.from(parkingDiffableByLevel.entries()).map(([levelId, count]) => ({
+      levelId,
+      levelName: levels.find((l) => l.id === levelId)?.name ?? levelId,
+      count,
+    })),
   };
 }
 
