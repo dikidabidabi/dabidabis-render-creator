@@ -4945,10 +4945,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.lineTo(c3.x, c3.y);
             ctx.lineTo(c4.x, c4.y);
             ctx.closePath();
-            ctx.fillStyle = "rgba(168, 96, 96, 0.55)";   // abu kemerahan
+            ctx.fillStyle = "rgba(170, 140, 140, 0.5)";   // abu dengan sedikit kemerahan
             ctx.fill();
-            ctx.strokeStyle = "rgba(190, 70, 70, 0.95)";
-            ctx.lineWidth = 1.4 / s;
+            ctx.strokeStyle = "rgba(14, 165, 233, 0.95)"; // sama dengan perimeter lot mobil biasa
+            ctx.lineWidth = 1.2 / s;
             ctx.stroke();
             // Simbol ♿ di tengah lot
             ctx.save();
