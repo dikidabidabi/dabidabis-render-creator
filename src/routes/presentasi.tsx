@@ -7042,7 +7042,10 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
         <GridStat label="Modul Struktur" value={`${data.totalKolom} kolom`} hint={`Volume beton ${fmt(data.volumeBetonM3, 2)} m³`} />
       )}
       {totalParking.mobil > 0 && (
-        <GridStat label="Total Lot Parkir Mobil" value={`${totalParking.mobil} mobil`} hint="akumulasi seluruh level" />
+        <GridStat label="Total Lot Parkir Mobil" value={`${totalParking.mobil} mobil`} hint="lot reguler, akumulasi seluruh level" />
+      )}
+      {totalParking.diffable > 0 && (
+        <GridStat label="Total Lot Diffable" value={`${totalParking.diffable} lot`} hint="akumulasi seluruh level" />
       )}
       {totalParking.motor > 0 && (
         <GridStat label="Total Lot Parkir Motor" value={`${totalParking.motor} motor`} hint="akumulasi seluruh level" />
