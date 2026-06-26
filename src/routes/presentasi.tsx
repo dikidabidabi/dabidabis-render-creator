@@ -3599,12 +3599,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       <>
                         {quads.map((q, qi) => (
                           <polygon key={`b-${qi}`} points={q.pts}
-                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine * 0.5}
                             strokeDasharray={q.dashed ? dashArr : undefined} />
                         ))}
                         {corners.map((c, ci) => (
                           <polygon key={`bc-${ci}`} points={c.pts}
-                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine}
+                            fill="none" stroke="rgba(15,23,42,0.85)" strokeWidth={sLine * 0.5}
                             strokeDasharray={c.dashed ? dashArr : undefined} />
                         ))}
                       </>

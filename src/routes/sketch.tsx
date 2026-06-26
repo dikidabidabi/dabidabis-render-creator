@@ -5536,7 +5536,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             ctx.save();
             // Bidang bordes transparan — hanya outline.
             ctx.strokeStyle = "rgba(15,23,42,0.85)";
-            ctx.lineWidth = 1.4;
+            ctx.lineWidth = 0.8;
             for (const a of arcs) {
               const p0 = pointAt(a.s0);
               const p1 = pointAt(a.s1);
