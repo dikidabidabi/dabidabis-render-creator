@@ -6292,6 +6292,117 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
       return;
     }
 
+    // ===== Ramp tool interactions =====
+    if (tool === "ramp") {
+      const wp = getWorldPos(e);
+      const raw = getWorldPosRaw(e);
+      const tol = 14 / view.s;
+      if (rampSub === "tarik") {
+        if (!activeLvlId) { toast.error("Pilih level dulu"); return; }
+        const cur = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+        const i = cur.findIndex((l) => l.id === activeLvlId);
+        if (i < 0 || i >= cur.length - 1) { toast.error("Ramp butuh level di atasnya sebagai puncak"); return; }
+        if (!rampDraft) {
+          setRampDraft({ levelId: activeLvlId, anchors: [{ x: wp.x, y: wp.y }], offsetSide: "right" });
+        } else {
+          setRampDraft({ ...rampDraft, anchors: [...rampDraft.anchors, { x: wp.x, y: wp.y }] });
+        }
+        return;
+      }
+      // Edit subs on existing ramps
+      const ramps = (sketch.ramps ?? []).filter((r) => !activeLvlId || r.levelId === activeLvlId);
+      if (rampSub === "geser") {
+        for (let ri = ramps.length - 1; ri >= 0; ri--) {
+          const r = ramps[ri];
+          for (let i = 0; i < r.anchors.length; i++) {
+            if (Math.hypot(raw.x - r.anchors[i].x, raw.y - r.anchors[i].y) <= tol) {
+              setRampSelectedId(r.id);
+              pushHistory();
+              setRampVertexDrag({ rampId: r.id, idx: i });
+              return;
+            }
+          }
+        }
+        return;
+      }
+      if (rampSub === "addpt") {
+        // insert a new point at nearest segment midpoint of nearest ramp polyline
+        let best: { rampId: string; segIdx: number; d: number; proj: Point } | null = null;
+        for (const r of ramps) {
+          for (let i = 1; i < r.anchors.length; i++) {
+            const a = r.anchors[i - 1], b = r.anchors[i];
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const L2 = dx * dx + dy * dy;
+            if (L2 < 1e-6) continue;
+            let u = ((raw.x - a.x) * dx + (raw.y - a.y) * dy) / L2;
+            u = Math.max(0, Math.min(1, u));
+            const px = a.x + dx * u, py = a.y + dy * u;
+            const d = Math.hypot(raw.x - px, raw.y - py);
+            if (d <= tol && (!best || d < best.d)) {
+              best = { rampId: r.id, segIdx: i, d, proj: { x: px, y: py } };
+            }
+          }
+        }
+        if (!best) { toast.error("Tidak ada segmen ramp di sekitar tap"); return; }
+        pushHistory();
+        onChange({
+          ramps: (sketch.ramps ?? []).map((r) => {
+            if (r.id !== best!.rampId) return r;
+            const a = [...r.anchors];
+            a.splice(best!.segIdx, 0, { x: best!.proj.x, y: best!.proj.y });
+            return { ...r, anchors: a };
+          }),
+        });
+        setRampSelectedId(best.rampId);
+        toast.success("Titik ditambahkan");
+        return;
+      }
+      if (rampSub === "fillet") {
+        // pick nearest internal anchor
+        let best: { rampId: string; idx: number; d: number } | null = null;
+        for (const r of ramps) {
+          for (let i = 1; i < r.anchors.length - 1; i++) {
+            const d = Math.hypot(raw.x - r.anchors[i].x, raw.y - r.anchors[i].y);
+            if (d <= tol && (!best || d < best.d)) best = { rampId: r.id, idx: i, d };
+          }
+        }
+        if (!best) { toast.error("Tap titik tengah polyline acuan"); return; }
+        pushHistory();
+        onChange({
+          ramps: (sketch.ramps ?? []).map((r) => {
+            if (r.id !== best!.rampId) return r;
+            const a = r.anchors.map((p, i) => i === best!.idx ? { ...p, filletR: rampFilletInput } : p);
+            return { ...r, anchors: a };
+          }),
+        });
+        setRampSelectedId(best.rampId);
+        toast.success(`Fillet R=${rampFilletInput}m diterapkan`);
+        return;
+      }
+      // lebar / kemiringan: tap to select a ramp
+      let pickId: string | null = null;
+      for (let ri = ramps.length - 1; ri >= 0; ri--) {
+        const r = ramps[ri];
+        for (let i = 1; i < r.anchors.length; i++) {
+          const a = r.anchors[i - 1], b = r.anchors[i];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const L2 = dx * dx + dy * dy;
+          if (L2 < 1e-6) continue;
+          let u = ((raw.x - a.x) * dx + (raw.y - a.y) * dy) / L2;
+          u = Math.max(0, Math.min(1, u));
+          const px = a.x + dx * u, py = a.y + dy * u;
+          if (Math.hypot(raw.x - px, raw.y - py) <= tol) { pickId = r.id; break; }
+        }
+        if (pickId) break;
+      }
+      if (pickId) {
+        setRampSelectedId(pickId);
+        const r = (sketch.ramps ?? []).find((x) => x.id === pickId);
+        if (r) { setRampWidthInput(r.widthM); setRampNInput(r.nM); }
+      }
+      return;
+    }
+
     const p = getWorldPos(e);
     if (tool === "grid") {
       const rawWorld = getWorldPosRaw(e);
