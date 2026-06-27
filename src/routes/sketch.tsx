@@ -2082,6 +2082,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
     onChange({ ramps: next });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rampFilletM, rampSelectedId]);
+  // Saat memilih ramp, isi input radius dari nilai fillet yang sudah tersimpan
+  // pada salah satu titik interior ramp tsb (jika ada), agar tampilan input
+  // mencerminkan nilai aktual dan tidak menimpa dengan default.
+  useEffect(() => {
+    if (!rampSelectedId) return;
+    const r = (sketch.ramps ?? []).find((x) => x.id === rampSelectedId);
+    if (!r) return;
+    const stored = r.anchors.slice(1, -1).map((a) => a.filletR ?? 0).find((v) => v > 0);
+    if (stored && stored > 0) {
+      const s = String(stored);
+      setRampFilletInput(s);
+      lastFilletSyncRef.current = { id: rampSelectedId, val: stored };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rampSelectedId]);
   // Live-sync bordes pada ramp terpilih (atau semua ramp di level aktif jika tidak ada pilihan)
   // agar garis bordes langsung muncul/menghilang di sketsa dan slide tanpa menunggu "Terapkan".
   useEffect(() => {
