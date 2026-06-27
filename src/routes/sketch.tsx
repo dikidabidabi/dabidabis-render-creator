@@ -2034,32 +2034,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
   const [rampBordesBelokan, setRampBordesBelokan] = useState<boolean>(false);
   const rampBordesLenM = Math.max(0.1, Number(rampBordesLenInput) || 1.2);
   const rampBordesSpacingM = 9;
-  // Auto-sync: ketika nilai radius fillet di input diubah, perbarui semua titik
-  // yang sudah difillet pada ramp terpilih (atau semua ramp pada level aktif jika
-  // tidak ada yang dipilih) agar mengikuti radius baru secara live.
+  // Auto-sync: ketika nilai radius fillet di input diubah secara MANUAL oleh user
+  // pada ramp yang sedang terpilih, perbarui semua titik interior ramp tsb agar
+  // mengikuti radius baru. Tidak pernah berjalan pada mount/halaman pindah,
+  // dan tidak pernah menyentuh ramp lain — sehingga radius yg sudah tersimpan
+  // tidak ikut ter-reset oleh nilai default input.
+  const lastFilletSyncRef = useRef<{ id: string | null; val: number }>({ id: null, val: rampFilletM });
   useEffect(() => {
+    const prev = lastFilletSyncRef.current;
+    if (prev.id !== rampSelectedId) {
+      // Pindah seleksi → jangan apply, hanya catat baseline.
+      lastFilletSyncRef.current = { id: rampSelectedId, val: rampFilletM };
+      return;
+    }
+    if (!rampSelectedId) {
+      lastFilletSyncRef.current = { id: rampSelectedId, val: rampFilletM };
+      return;
+    }
+    if (Math.abs(prev.val - rampFilletM) < 1e-6) return;
+    lastFilletSyncRef.current = { id: rampSelectedId, val: rampFilletM };
     const list = sketch.ramps ?? [];
-    if (list.length === 0) return;
-    const shouldUpdate = (r: Ramp) => {
-      if (rampSelectedId) return r.id === rampSelectedId;
-      return r.levelId === activeLevelId;
-    };
+    const targetR = rampFilletM;
     let dirty = false;
     const next = list.map((r) => {
-      if (!shouldUpdate(r)) return r;
-      // Auto-apply: jika radius > 0 dan ramp ini terpilih, terapkan fillet
-      // ke SEMUA titik interior agar tersimpan otomatis tanpa klik per titik.
-      const autoAll = rampSelectedId === r.id && rampFilletM > 0 && r.anchors.length >= 3;
-      const targetR = rampFilletM;
+      if (r.id !== rampSelectedId) return r;
+      if (r.anchors.length < 3) return r;
       const anchors2 = r.anchors.map((a, i) => {
         const isInterior = i > 0 && i < r.anchors.length - 1;
+        if (!isInterior) return a;
         const had = (a.filletR ?? 0) > 0;
-        if (autoAll && isInterior) {
+        if (targetR > 0) {
           if (Math.abs((a.filletR ?? 0) - targetR) < 1e-6) return a;
           return { ...a, filletR: targetR };
         }
-        if (had && Math.abs((a.filletR ?? 0) - targetR) > 1e-6) {
-          return { ...a, filletR: targetR };
+        if (had) {
+          const { filletR: _drop, ...rest } = a;
+          return rest as RampAnchor;
         }
         return a;
       });
