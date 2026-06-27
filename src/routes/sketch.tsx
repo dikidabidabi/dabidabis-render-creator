@@ -174,7 +174,7 @@ type Line = {
   levelId?: string;
   dashed?: boolean; // visual-only: render as dashed (used for cluster-generator relation strings)
 };
-type Scale = "1:100" | "1:200" | "1:500" | "1:1000";
+type Scale = "1:100" | "1:200" | "1:500" | "1:1000" | "1:1200" | "1:1500" | "1:2000";
 
 type Layer = {
   id: string;
@@ -356,6 +356,9 @@ const METERS_PER_MAJOR: Record<Scale, number> = {
   "1:200": 2,
   "1:500": 5,
   "1:1000": 10,
+  "1:1200": 12,
+  "1:1500": 15,
+  "1:2000": 20,
 };
 const MINOR_PX = 8;
 const MAJOR_EVERY = 10;
@@ -9196,6 +9199,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             <SelectItem value="1:200">1 : 200 (1 kotak besar = 2 m)</SelectItem>
             <SelectItem value="1:500">1 : 500 (1 kotak besar = 5 m)</SelectItem>
             <SelectItem value="1:1000">1 : 1000 (1 kotak besar = 10 m)</SelectItem>
+            <SelectItem value="1:1200">1 : 1200 (1 kotak besar = 12 m)</SelectItem>
+            <SelectItem value="1:1500">1 : 1500 (1 kotak besar = 15 m)</SelectItem>
+            <SelectItem value="1:2000">1 : 2000 (1 kotak besar = 20 m)</SelectItem>
           </SelectContent>
         </Select>
       </div>
