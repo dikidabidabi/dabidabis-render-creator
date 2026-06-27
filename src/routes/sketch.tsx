@@ -10297,49 +10297,68 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
             </div>
             {/* ===== Pilih grid (primer + extras) + Paste Grid ===== */}
             <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   Grid Aktif untuk Edit
                 </Label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-6 px-2 text-[10px]"
-                  title="Paste salinan grid primer di sini — bisa digeser & di-clip terpisah"
-                  onClick={() => {
-                    const src = primaryGrid;
-                    const offsetPx = pxPerMeter * 1.5; // beda posisi agar terlihat & bisa didrag
-                    const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-                    const fromIdx = activeLvlId
-                      ? sortedLv.findIndex((l) => l.id === activeLvlId)
-                      : -1;
-                    const fromLevelId = fromIdx >= 0 ? sortedLv[fromIdx].id : src.fromLevelId;
-                    // default: berlaku sampai dua lantai di atas level aktif (atau paling atas)
-                    const toIdx = fromIdx >= 0
-                      ? Math.min(sortedLv.length - 1, fromIdx + 2)
-                      : -1;
-                    const toLevelId = toIdx >= 0 ? sortedLv[toIdx].id : src.toLevelId;
-                    const pasted: StructuralGrid = {
-                      enabled: true,
-                      origin: { x: src.origin.x + offsetPx, y: src.origin.y + offsetPx },
-                      spansX: [...src.spansX],
-                      spansY: [...src.spansY],
-                      colSizeCm: src.colSizeCm,
-                      fromLevelId,
-                      toLevelId,
-                      perLevel: undefined,
-                      columnClips: undefined,
-                    };
-                    const nextExtras = [...gridExtras, pasted];
-                    onChange({ structuralGridExtras: nextExtras });
-                    setEditGridIdx(nextExtras.length); // langsung jadi grid aktif
-                    setClipDraft(null);
-                    toast.success("Grid dipaste — geser ke posisi yang diinginkan");
-                  }}
-                >
-                  <Copy className="mr-1 h-3 w-3" /> Paste Grid
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[10px]"
+                    title="Tambah grid struktur baru (bangunan terpisah) — bisa berada di level yang sama dengan grid primer"
+                    onClick={() => {
+                      const src = primaryGrid;
+                      const offsetPx = pxPerMeter * 1.5;
+                      const fresh: StructuralGrid = {
+                        ...DEFAULT_GRID,
+                        enabled: true,
+                        origin: { x: src.origin.x + offsetPx, y: src.origin.y + offsetPx },
+                        colSizeCm: src.colSizeCm,
+                        fromLevelId: src.fromLevelId,
+                        toLevelId: src.toLevelId,
+                      };
+                      const nextExtras = [...gridExtras, fresh];
+                      onChange({ structuralGridExtras: nextExtras });
+                      setEditGridIdx(nextExtras.length);
+                      setClipDraft(null);
+                      toast.success("Grid baru ditambah — atur bentang & geser posisinya");
+                    }}
+                  >
+                    + Grid
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[10px]"
+                    title="Paste salinan grid primer di sini — bisa digeser & di-clip terpisah"
+                    onClick={() => {
+                      const src = primaryGrid;
+                      const offsetPx = pxPerMeter * 1.5;
+                      const pasted: StructuralGrid = {
+                        enabled: true,
+                        origin: { x: src.origin.x + offsetPx, y: src.origin.y + offsetPx },
+                        rotation: src.rotation,
+                        spansX: [...src.spansX],
+                        spansY: [...src.spansY],
+                        colSizeCm: src.colSizeCm,
+                        fromLevelId: src.fromLevelId,
+                        toLevelId: src.toLevelId,
+                        perLevel: undefined,
+                        columnClips: undefined,
+                      };
+                      const nextExtras = [...gridExtras, pasted];
+                      onChange({ structuralGridExtras: nextExtras });
+                      setEditGridIdx(nextExtras.length);
+                      setClipDraft(null);
+                      toast.success("Grid dipaste — geser ke posisi yang diinginkan");
+                    }}
+                  >
+                    <Copy className="mr-1 h-3 w-3" /> Paste Grid
+                  </Button>
+                </div>
               </div>
+
               <div className="flex flex-wrap gap-1">
                 <Button
                   size="sm"
@@ -10380,9 +10399,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               {editGridIdx > 0 && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
                   Mengedit <span className="font-medium text-foreground">Extra {editGridIdx}</span>.
-                  Bentang, kolom, clip, dan range level di bawah ini hanya berlaku pada grid ini — tidak mempengaruhi grid primer.
+                  Bentang, kolom, clip, dan range level di bawah ini hanya berlaku pada grid ini — tidak mempengaruhi grid primer. Beberapa grid boleh berada pada level yang sama (mis. bangunan terpisah).
                 </p>
               )}
+
             </div>
 
             <SpanAxisEditor label="Bentang Sumbu X (m)" spans={grid.spansX}
