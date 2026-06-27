@@ -10399,9 +10399,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
               {editGridIdx > 0 && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
                   Mengedit <span className="font-medium text-foreground">Extra {editGridIdx}</span>.
-                  Bentang, kolom, clip, dan range level di bawah ini hanya berlaku pada grid ini — tidak mempengaruhi grid primer.
+                  Bentang, kolom, clip, dan range level di bawah ini hanya berlaku pada grid ini — tidak mempengaruhi grid primer. Beberapa grid boleh berada pada level yang sama (mis. bangunan terpisah).
                 </p>
               )}
+
             </div>
 
             <SpanAxisEditor label="Bentang Sumbu X (m)" spans={grid.spansX}
