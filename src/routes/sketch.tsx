@@ -8838,6 +8838,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (curTool === "jalan" && jalanSub === "garis") {
+      const rd: RoadSegment = {
+        id: newRoadId(), kind: "garis",
+        points: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }],
+        widthM: jalanWidthM, filletM: jalanFilletM, createdAt: Date.now(),
+      };
+      onChange({ roads: [...(sketch.roads ?? []), rd] });
+      toast.success(`Jalan tersimpan (${jalanWidthM.toFixed(1)} m)`);
+      return;
+    }
+
 
     if (curTool === "separasi") {
       // Separasi Ruang: belah salah satu polygon ruang aktif menjadi dua
