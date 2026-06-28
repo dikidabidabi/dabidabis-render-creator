@@ -1,56 +1,54 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Edges, PerspectiveCamera, Grid } from "@react-three/drei";
-import { Plus, Trash2, Sparkles, Shuffle, Compass } from "lucide-react";
+import { Plus, Trash2, Sparkles, Shuffle, Cable, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   FUNCTION_META,
   type MasterFunction,
   type MassingBlock,
-  nextBlockId,
   type MasterPlan,
+  type Vec2,
+  polyBounds,
+  polyCentroid,
+  polyArea,
 } from "@/lib/masterplan";
 
-// ---- Types ----
-export type CGAccess = "near" | "far" | "neutral";
-export type CGHierarchy = "focal" | "secondary" | "support";
-export type CGSkyline = "centerHigh" | "taperEdge";
-export type CGGate = "N" | "S" | "E" | "W";
+// ============================================================
+// Master Plan — Cluster Generator (Grasshopper-style cables)
+// ============================================================
+// • Tiap node = bangunan (luas alas, jumlah lapis → tinggi & luas total
+//   otomatis).
+// • Klik 2 node dalam Mode Tautan → siklus hubungan:
+//   none → langsung → tidak langsung → none.
+// • Solver: force-directed dengan jarak ditentukan oleh hubungan; hasil
+//   dijepit dalam bounding box layer "Lahan" (bila diberikan).
+// ============================================================
+
+export type CGRelation = "direct" | "indirect" | "none";
+const FLOOR_HEIGHT_M = 4;
 
 export type CGBuilding = {
   id: string;
   name: string;
   fn: MasterFunction;
-  footprint: number;
-  volume: number;
-  access: CGAccess;
-  hierarchy: CGHierarchy;
-  skyline: CGSkyline;
+  footprint: number; // m² alas
+  floors: number;    // jumlah lapis
 };
-
-export type CGRelation = "direct" | "indirect" | "none";
 
 type CGPos = { id: string; x: number; z: number; w: number; d: number; h: number };
-type CGLayout = { seed: number; positions: CGPos[]; gate: CGGate };
+type CGLayout = { seed: number; positions: CGPos[]; siteCenter: Vec2; siteExtent: number };
 
-const REL_META: Record<CGRelation, { label: string; color: string }> = {
-  direct: { label: "Hubungan Langsung", color: "#16a34a" },
-  indirect: { label: "Hubungan Tidak Langsung", color: "#f59e0b" },
-  none: { label: "Tidak Ada Hubungan", color: "#e5e7eb" },
+const REL_META: Record<CGRelation, { label: string; color: string; dash: string }> = {
+  direct:   { label: "Langsung",        color: "#16a34a", dash: "0" },
+  indirect: { label: "Tidak Langsung",  color: "#f59e0b", dash: "6 4" },
+  none:     { label: "Tidak Ada",       color: "#cbd5e1", dash: "0" },
 };
 
-const GATE_LABEL: Record<CGGate, string> = { N: "Utara", S: "Selatan", E: "Timur", W: "Barat" };
-// World convention: +Z = Selatan, -Z = Utara, +X = Timur, -X = Barat.
-const GATE_VEC: Record<CGGate, { x: number; z: number }> = {
-  N: { x: 0, z: -1 },
-  S: { x: 0, z: 1 },
-  E: { x: 1, z: 0 },
-  W: { x: -1, z: 0 },
-};
-
-// ---- RNG ----
+// ---------- RNG ----------
 function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
@@ -65,57 +63,59 @@ function mulberry32(seed: number) {
 
 function dimsFromFootprint(A: number): { w: number; d: number } {
   const a = Math.max(4, A);
+  // ratio 4:3
   const w = Math.sqrt((a * 4) / 3);
   const d = a / w;
   return { w, d };
 }
 
-// ---- Force-directed solver with site context ----
+function pointInPolygon(p: Vec2, poly: Vec2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const hit = yi > p.y !== yj > p.y &&
+      p.x < ((xj - xi) * (p.y - yi)) / (yj - yi + 1e-12) + xi;
+    if (hit) inside = !inside;
+  }
+  return inside;
+}
+
+// ---------- Solver ----------
 function solveLayout(
   buildings: CGBuilding[],
   rel: Record<string, CGRelation>,
   seed: number,
-  gate: CGGate,
-): CGPos[] {
+  sitePoly?: Vec2[],
+): CGLayout {
   const rnd = mulberry32(seed);
-  // Detect focal-and-tallest: focal hierarchy with the maximum height among focals.
-  let maxFocalH = -Infinity;
-  for (const b of buildings) {
-    const h = b.volume > 0 && b.footprint > 0 ? b.volume / b.footprint : 0;
-    if (b.hierarchy === "focal" && h > maxFocalH) maxFocalH = h;
-  }
-
   const items = buildings.map((b) => {
     const { w, d } = dimsFromFootprint(b.footprint);
-    const h = b.volume > 0 && b.footprint > 0 ? b.volume / b.footprint : 6;
+    const h = Math.max(0.5, b.floors * FLOOR_HEIGHT_M);
     const r = Math.hypot(w, d) / 2;
-    const isCentral = b.hierarchy === "focal" && h >= maxFocalH - 0.01;
-    // initial position biased by hierarchy
     const ang = rnd() * Math.PI * 2;
-    const initR =
-      b.hierarchy === "focal" ? 5 + rnd() * 10 : b.hierarchy === "secondary" ? 25 + rnd() * 20 : 45 + rnd() * 25;
+    const init = 6 + rnd() * 18;
     return {
       id: b.id,
-      x: Math.cos(ang) * initR,
-      z: Math.sin(ang) * initR,
+      x: Math.cos(ang) * init,
+      z: Math.sin(ang) * init,
       vx: 0,
       vz: 0,
-      w,
-      d,
-      h,
-      r,
-      access: b.access,
-      hierarchy: b.hierarchy,
-      skyline: b.skyline,
-      isCentral,
+      w, d, h, r,
     };
   });
 
-  // Rough site radius: scales with number / size of buildings
+  // Site geometry (meters). If absent, infer from total footprint.
   const totalR = items.reduce((s, it) => s + it.r, 0);
-  const siteR = Math.max(40, totalR * 1.4);
-  const gateVec = GATE_VEC[gate];
-  const gateAnchor = { x: gateVec.x * siteR, z: gateVec.z * siteR };
+  let center: Vec2 = { x: 0, y: 0 };
+  let halfX = Math.max(40, totalR * 1.6);
+  let halfZ = halfX;
+  if (sitePoly && sitePoly.length >= 3) {
+    const bb = polyBounds(sitePoly);
+    center = polyCentroid(sitePoly);
+    halfX = Math.max(20, (bb.maxX - bb.minX) / 2 - 2);
+    halfZ = Math.max(20, (bb.maxY - bb.minY) / 2 - 2);
+  }
 
   const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   const relOf = (a: string, b: string): CGRelation => rel[key(a, b)] ?? "none";
@@ -124,113 +124,63 @@ function solveLayout(
   for (let it = 0; it < ITER; it++) {
     const cooling = 1 - it / ITER;
     for (let i = 0; i < items.length; i++) {
+      const A = items[i];
       for (let j = i + 1; j < items.length; j++) {
-        const a = items[i];
-        const b = items[j];
-        const dx = b.x - a.x;
-        const dz = b.z - a.z;
+        const B = items[j];
+        const dx = B.x - A.x;
+        const dz = B.z - A.z;
         const dist = Math.max(0.001, Math.hypot(dx, dz));
         const nx = dx / dist;
         const nz = dz / dist;
-        const minDist = a.r + b.r + 2;
-        const r = relOf(a.id, b.id);
-
+        const minDist = A.r + B.r + 2;
+        const r = relOf(A.id, B.id);
         let force = 0;
         if (r === "direct") {
           const desired = minDist + 1;
-          force = (dist - desired) * 0.08;
+          force = (dist - desired) * 0.09;
         } else if (r === "indirect") {
-          const desired = minDist + 12;
-          force = (dist - desired) * 0.04;
+          const desired = minDist + 14;
+          force = (dist - desired) * 0.045;
         } else {
-          if (dist < minDist + 20) {
-            force = -((minDist + 20 - dist) * 0.03);
-          }
+          if (dist < minDist + 22) force = -((minDist + 22 - dist) * 0.035);
         }
-        if (dist < minDist) {
-          force -= (minDist - dist) * 0.5;
-        }
-        const fx = nx * force;
-        const fz = nz * force;
-        a.vx += fx;
-        a.vz += fz;
-        b.vx -= fx;
-        b.vz -= fz;
+        if (dist < minDist) force -= (minDist - dist) * 0.5;
+        A.vx += nx * force; A.vz += nz * force;
+        B.vx -= nx * force; B.vz -= nz * force;
       }
-
-      const it1 = items[i];
-      // --- Gate access force ---
-      const toGateX = gateAnchor.x - it1.x;
-      const toGateZ = gateAnchor.z - it1.z;
-      const gDist = Math.max(1, Math.hypot(toGateX, toGateZ));
-      const gnx = toGateX / gDist;
-      const gnz = toGateZ / gDist;
-      if (it1.access === "near") {
-        // pull toward gate anchor
-        it1.vx += gnx * 0.18;
-        it1.vz += gnz * 0.18;
-      } else if (it1.access === "far") {
-        it1.vx -= gnx * 0.14;
-        it1.vz -= gnz * 0.14;
-      }
-
-      // --- Central gravity (hierarchy / skyline) ---
-      const rad = Math.max(0.001, Math.hypot(it1.x, it1.z));
-      const cnx = -it1.x / rad;
-      const cnz = -it1.z / rad;
-      let centerPull = 0;
-      if (it1.isCentral) centerPull = 0.35;
-      else if (it1.hierarchy === "focal") centerPull = 0.18;
-      else if (it1.hierarchy === "secondary") centerPull = 0.04;
-      else centerPull = -0.06; // support is pushed outward
-      // skyline shaping
-      if (it1.skyline === "centerHigh") {
-        // taller -> stronger center pull
-        centerPull += (it1.h / 60) * 0.12;
-      } else {
-        // taperEdge: taller drifts to edge
-        centerPull -= (it1.h / 60) * 0.08;
-      }
-      it1.vx += cnx * centerPull;
-      it1.vz += cnz * centerPull;
-
-      // soft site boundary
-      if (rad > siteR) {
-        it1.vx += cnx * (rad - siteR) * 0.05;
-        it1.vz += cnz * (rad - siteR) * 0.05;
-      }
+      // gentle centering
+      A.vx += -A.x * 0.005;
+      A.vz += -A.z * 0.005;
     }
-
     for (const it2 of items) {
       it2.x += it2.vx * cooling;
       it2.z += it2.vz * cooling;
       it2.vx *= 0.6;
       it2.vz *= 0.6;
+      // clamp inside local box (centered at 0,0)
+      const lx = halfX - it2.w / 2;
+      const lz = halfZ - it2.d / 2;
+      if (it2.x > lx) it2.x = lx;
+      if (it2.x < -lx) it2.x = -lx;
+      if (it2.z > lz) it2.z = lz;
+      if (it2.z < -lz) it2.z = -lz;
     }
   }
 
-  // final overlap resolution
-  for (let pass = 0; pass < 40; pass++) {
+  // Final overlap resolution
+  for (let pass = 0; pass < 60; pass++) {
     let moved = false;
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
-        const a = items[i],
-          b = items[j];
-        const dx = b.x - a.x,
-          dz = b.z - a.z;
+        const A = items[i], B = items[j];
+        const dx = B.x - A.x, dz = B.z - A.z;
         const dist = Math.max(0.001, Math.hypot(dx, dz));
-        const minDist = a.r + b.r + 1;
+        const minDist = A.r + B.r + 1;
         if (dist < minDist) {
           const push = (minDist - dist) / 2;
-          const nx = dx / dist,
-            nz = dz / dist;
-          // central items resist displacement
-          const aLock = a.isCentral ? 0.2 : 1;
-          const bLock = b.isCentral ? 0.2 : 1;
-          a.x -= nx * push * aLock;
-          a.z -= nz * push * aLock;
-          b.x += nx * push * bLock;
-          b.z += nz * push * bLock;
+          const nx = dx / dist, nz = dz / dist;
+          A.x -= nx * push; A.z -= nz * push;
+          B.x += nx * push; B.z += nz * push;
           moved = true;
         }
       }
@@ -238,45 +188,67 @@ function solveLayout(
     if (!moved) break;
   }
 
-  // Variation: rotate whole formation by seed-driven angle (keeps gate logic intact
-  // because it was applied during the simulation, then we rotate the result for
-  // visual variety relative to other alternatives). To preserve gate semantics
-  // visually, use a small jitter only.
-  const jitter = (mulberry32(seed ^ 0x9e3779b9)() - 0.5) * (Math.PI / 6); // ±15°
-  const cos = Math.cos(jitter);
-  const sin = Math.sin(jitter);
-  return items.map((it) => ({
+  // Shift items to site center; if polygon defined, also nudge centroids inside.
+  const positions: CGPos[] = items.map((it) => ({
     id: it.id,
-    x: it.x * cos - it.z * sin,
-    z: it.x * sin + it.z * cos,
-    w: it.w,
-    d: it.d,
-    h: it.h,
+    x: it.x + center.x,
+    z: it.z + center.y,
+    w: it.w, d: it.d, h: it.h,
   }));
+  if (sitePoly && sitePoly.length >= 3) {
+    for (const p of positions) {
+      // crude pull-back if centroid outside polygon
+      if (!pointInPolygon({ x: p.x, y: p.z }, sitePoly)) {
+        const dx = center.x - p.x;
+        const dz = center.y - p.z;
+        const dl = Math.hypot(dx, dz) || 1;
+        const step = Math.min(dl, 8);
+        p.x += (dx / dl) * step;
+        p.z += (dz / dl) * step;
+      }
+    }
+  }
+  return {
+    seed,
+    positions,
+    siteCenter: center,
+    siteExtent: Math.max(halfX, halfZ) * 2,
+  };
 }
 
-// ---- Mini 3D preview ----
+// ---------- Mini 3D preview ----------
 function MiniBlocks({
   buildings,
   layout,
+  sitePoly,
 }: {
   buildings: CGBuilding[];
   layout: CGLayout;
+  sitePoly?: Vec2[];
 }) {
   const byId = useMemo(() => new Map(buildings.map((b) => [b.id, b])), [buildings]);
+  const c = layout.siteCenter;
+  // shape for site outline (relative to center)
+  const sitePts = useMemo(() => {
+    if (sitePoly && sitePoly.length >= 3) {
+      return sitePoly.map((p) => [p.x - c.x, p.y - c.y] as [number, number]);
+    }
+    const e = layout.siteExtent / 2;
+    return [
+      [-e, -e], [e, -e], [e, e], [-e, e],
+    ] as [number, number][];
+  }, [sitePoly, c.x, c.y, layout.siteExtent]);
+
   const extent = useMemo(() => {
     let r = 30;
-    for (const p of layout.positions) {
-      r = Math.max(r, Math.abs(p.x) + p.w / 2, Math.abs(p.z) + p.d / 2);
-    }
+    for (const [x, z] of sitePts) r = Math.max(r, Math.abs(x), Math.abs(z));
     return r;
-  }, [layout]);
-  const camDist = extent * 2.4;
-  const gateVec = GATE_VEC[layout.gate];
-  const gateMarker: [number, number, number] = [gateVec.x * extent * 1.05, 0.2, gateVec.z * extent * 1.05];
+  }, [sitePts]);
+  const camDist = extent * 2.6;
+
   return (
     <Canvas dpr={[1, 2]}>
-      <PerspectiveCamera makeDefault position={[camDist, camDist * 0.8, camDist]} fov={40} />
+      <PerspectiveCamera makeDefault position={[camDist, camDist * 0.9, camDist]} fov={40} />
       <OrbitControls enableDamping target={[0, 0, 0]} />
       <ambientLight intensity={0.55} />
       <directionalLight position={[camDist, camDist, camDist * 0.5]} intensity={1.0} />
@@ -291,21 +263,22 @@ function MiniBlocks({
         position={[0, 0.01, 0]}
         fadeDistance={extent * 5}
       />
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[extent * 3, extent * 3]} />
-        <meshStandardMaterial color="#f8fafc" />
+      {/* site plane (Lahan) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <shapeGeometry args={[buildShape(sitePts)]} />
+        <meshStandardMaterial color="#e8f5e9" />
       </mesh>
-      {/* gate marker */}
-      <mesh position={gateMarker}>
-        <cylinderGeometry args={[extent * 0.06, extent * 0.06, 0.4, 24]} />
-        <meshStandardMaterial color="#ea580c" />
-      </mesh>
+      <lineSegments position={[0, 0.04, 0]}>
+        <bufferGeometry attach="geometry" {...sitePolyLineGeom(sitePts)} />
+        <lineBasicMaterial color="#16a34a" />
+      </lineSegments>
+      {/* blocks (translated relative to site center) */}
       {layout.positions.map((p) => {
         const b = byId.get(p.id);
         if (!b) return null;
         const meta = FUNCTION_META[b.fn];
         return (
-          <mesh key={p.id} position={[p.x, p.h / 2, p.z]}>
+          <mesh key={p.id} position={[p.x - c.x, p.h / 2, p.z - c.y]}>
             <boxGeometry args={[p.w, p.h, p.d]} />
             <meshStandardMaterial color={meta.color} roughness={0.85} />
             <Edges color="#0f172a" threshold={15} />
@@ -316,40 +289,91 @@ function MiniBlocks({
   );
 }
 
-// ---- Main dialog ----
+// Build a THREE.Shape from list of [x,z] (already centered) for the site plane.
+function buildShape(pts: [number, number][]) {
+  // lazy import to avoid pulling THREE typedef at module scope
+  const THREE = require("three"); // eslint-disable-line @typescript-eslint/no-var-requires
+  const s = new THREE.Shape();
+  if (pts.length === 0) return s;
+  s.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  s.closePath();
+  return s;
+}
+function sitePolyLineGeom(pts: [number, number][]) {
+  const THREE = require("three"); // eslint-disable-line @typescript-eslint/no-var-requires
+  const arr: number[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    arr.push(a[0], 0, a[1], b[0], 0, b[1]);
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+  return { attach: "geometry" as const, args: [] as never, ...{}, ref: undefined };
+}
+
+// ---------- Main dialog ----------
 export function MasterplanClusterDialog({
   open,
   onOpenChange,
   onCommit,
   existingPlan,
+  sitePolygon,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCommit: (blocks: MassingBlock[]) => void;
   existingPlan: MasterPlan;
+  /** Polygon layer "Lahan" dalam koordinat meter (world). */
+  sitePolygon?: Vec2[];
 }) {
   const [buildings, setBuildings] = useState<CGBuilding[]>([]);
   const [rel, setRel] = useState<Record<string, CGRelation>>({});
   const [layouts, setLayouts] = useState<CGLayout[]>([]);
   const [generating, setGenerating] = useState(false);
-  const [gate, setGate] = useState<CGGate>("S");
+
+  // Node-editor (Grasshopper style)
+  const [linkMode, setLinkMode] = useState(false);
+  const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  const posRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const [, forceRender] = useState(0);
+  const dragRef = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    if (buildings.length > 0) return;
-    setBuildings([
-      mkB("Ballroom", "komersial", 600, 4800, { hierarchy: "focal", skyline: "centerHigh", access: "near" }),
-      mkB("Galeri", "fasum", 400, 2400, { hierarchy: "secondary", skyline: "centerHigh", access: "neutral" }),
-      mkB("Plaza", "rth", 300, 150, { hierarchy: "support", skyline: "taperEdge", access: "near" }),
-    ]);
+    if (buildings.length === 0) {
+      setBuildings([
+        mkB("Tower A", "komersial", 600, 8),
+        mkB("Galeri",  "fasum",     400, 2),
+        mkB("Plaza",   "rth",       300, 1),
+      ]);
+    }
+    // initialize positions for any node missing one
+    buildings.forEach((b, i) => {
+      if (!posRef.current.has(b.id)) {
+        const col = i % 4;
+        const row = Math.floor(i / 4);
+        posRef.current.set(b.id, { x: 90 + col * 150, y: 80 + row * 120 });
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // ensure positions exist for any added building
+  useEffect(() => {
+    buildings.forEach((b, i) => {
+      if (!posRef.current.has(b.id)) {
+        posRef.current.set(b.id, {
+          x: 120 + (i % 4) * 150,
+          y: 100 + Math.floor(i / 4) * 120,
+        });
+      }
+    });
+  }, [buildings]);
+
   const addBuilding = useCallback(() => {
-    setBuildings((bs) => [
-      ...bs,
-      mkB(`Bangunan ${bs.length + 1}`, "komersial", 300, 1800),
-    ]);
+    setBuildings((bs) => [...bs, mkB(`Bangunan ${bs.length + 1}`, "komersial", 300, 3)]);
   }, []);
   const updateBuilding = useCallback((id: string, patch: Partial<CGBuilding>) => {
     setBuildings((bs) => bs.map((b) => (b.id === id ? { ...b, ...patch } : b)));
@@ -361,14 +385,42 @@ export function MasterplanClusterDialog({
       for (const k of Object.keys(r)) if (!k.includes(id)) n[k] = r[k];
       return n;
     });
+    posRef.current.delete(id);
   }, []);
 
   const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
-  const setRelFor = (a: string, b: string, v: CGRelation) =>
-    setRel((r) => ({ ...r, [pairKey(a, b)]: v }));
+  const cycleRel = (a: string, b: string) => {
+    if (a === b) return;
+    const k = pairKey(a, b);
+    setRel((r) => {
+      const cur = r[k] ?? "none";
+      const next: CGRelation = cur === "none" ? "direct" : cur === "direct" ? "indirect" : "none";
+      const out = { ...r };
+      if (next === "none") delete out[k]; else out[k] = next;
+      return out;
+    });
+  };
+
+  const onNodeClick = (id: string) => {
+    if (!linkMode) return;
+    if (linkFrom === null) { setLinkFrom(id); return; }
+    cycleRel(linkFrom, id);
+    setLinkFrom(null);
+  };
+
+  // Drag handlers
+  const onSvgPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left - dragRef.current.dx;
+    const y = e.clientY - rect.top - dragRef.current.dy;
+    posRef.current.set(dragRef.current.id, { x, y });
+    forceRender((n) => n + 1);
+  };
+  const onSvgPointerUp = () => { dragRef.current = null; };
 
   const generate = useCallback(() => {
-    if (buildings.length < 2) return;
+    if (buildings.length < 1) return;
     setGenerating(true);
     setTimeout(() => {
       const seeds = [
@@ -376,48 +428,31 @@ export function MasterplanClusterDialog({
         Math.floor(Math.random() * 1e9),
         Math.floor(Math.random() * 1e9),
       ];
-      const next: CGLayout[] = seeds.map((s) => ({
-        seed: s,
-        gate,
-        positions: solveLayout(buildings, rel, s, gate),
-      }));
+      const next = seeds.map((s) => solveLayout(buildings, rel, s, sitePolygon));
       setLayouts(next);
       setGenerating(false);
     }, 20);
-  }, [buildings, rel, gate]);
+  }, [buildings, rel, sitePolygon]);
 
   const pickLayout = useCallback(
     (layout: CGLayout) => {
-      let offsetX = 0;
-      const offsetZ = 0;
-      if (existingPlan.blocks.length > 0) {
-        let maxX = -Infinity;
-        for (const b of existingPlan.blocks) maxX = Math.max(maxX, b.x + b.w / 2);
-        offsetX = maxX + 30;
-      }
       const used = new Set(existingPlan.blocks.map((b) => b.id));
       const blocks: MassingBlock[] = layout.positions.map((p, i) => {
         const src = buildings.find((b) => b.id === p.id)!;
         let n = existingPlan.blocks.length + i + 1;
         let id = `block-${String(n).padStart(2, "0")}`;
-        while (used.has(id)) {
-          n++;
-          id = `block-${String(n).padStart(2, "0")}`;
-        }
+        while (used.has(id)) { n++; id = `block-${String(n).padStart(2, "0")}`; }
         used.add(id);
-        const floors = Math.max(1, Math.round(p.h / 4));
-        const cx = Math.round(p.x + offsetX);
-        const cz = Math.round(p.z + offsetZ);
         const w = Math.round(p.w * 10) / 10;
         const d = Math.round(p.d * 10) / 10;
+        const cx = Math.round(p.x * 10) / 10;
+        const cz = Math.round(p.z * 10) / 10;
         const hx = w / 2, hz = d / 2;
         return {
-          id,
-          name: src.name,
-          fn: src.fn,
+          id, name: src.name, fn: src.fn,
           x: cx, z: cz, w, d,
           height: Math.round(p.h * 10) / 10,
-          floors,
+          floors: src.floors,
           rotation: 0,
           polygon: [
             { x: cx - hx, y: cz - hz },
@@ -434,283 +469,286 @@ export function MasterplanClusterDialog({
     [buildings, existingPlan, onCommit, onOpenChange],
   );
 
+  const siteAreaM2 = useMemo(
+    () => (sitePolygon && sitePolygon.length >= 3 ? polyArea(sitePolygon) : 0),
+    [sitePolygon],
+  );
+
+  const totalFootprint = buildings.reduce((s, b) => s + (b.footprint || 0), 0);
+  const totalGFA = buildings.reduce((s, b) => s + (b.footprint || 0) * Math.max(1, b.floors || 1), 0);
+
+  // Cable list (rendered SVG paths)
+  const cables = useMemo(() => {
+    const arr: { a: string; b: string; r: CGRelation }[] = [];
+    for (const k of Object.keys(rel)) {
+      const [a, b] = k.split("|");
+      arr.push({ a, b, r: rel[k] });
+    }
+    return arr;
+  }, [rel]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] w-[95vw] max-w-6xl overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex h-[92vh] w-[96vw] max-w-7xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b px-5 py-3">
           <DialogTitle className="flex items-center gap-2 font-display">
             <Sparkles className="h-5 w-5 text-amber-500" />
             Cluster Generator — Tata Massa Kawasan
+            {sitePolygon && sitePolygon.length >= 3 ? (
+              <span className="ml-3 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                Lahan terdeteksi · {siteAreaM2.toFixed(0)} m²
+              </span>
+            ) : (
+              <span className="ml-3 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                Belum ada layer “Lahan” — hasil dibatasi bounding box otomatis.
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Site context */}
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 p-3 text-xs">
-          <div className="flex items-center gap-2">
-            <Compass className="h-4 w-4 text-primary" />
-            <span className="font-semibold">Konteks Tapak</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-muted-foreground">Gerbang Utama:</label>
-            <select
-              value={gate}
-              onChange={(e) => setGate(e.target.value as CGGate)}
-              className="h-7 rounded border border-border bg-background px-2 text-xs"
-            >
-              {(Object.keys(GATE_LABEL) as CGGate[]).map((g) => (
-                <option key={g} value={g}>
-                  {GATE_LABEL[g]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <span className="text-[11px] text-muted-foreground">
-            Anchor magnet diletakkan pada sisi {GATE_LABEL[gate].toLowerCase()} tapak.
-          </span>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Buildings table */}
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">1. Data Bangunan</h3>
+        <div className="flex min-h-0 flex-1">
+          {/* LEFT — Grasshopper canvas */}
+          <div className="flex min-w-0 flex-1 flex-col border-r">
+            <div className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2">
               <Button size="sm" variant="outline" onClick={addBuilding}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah
+                <Plus className="mr-1 h-3.5 w-3.5" /> Tambah Bangunan
               </Button>
-            </div>
-            <div className="overflow-x-auto rounded border border-border">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="p-2">Nama</th>
-                    <th className="p-2">Fungsi</th>
-                    <th className="p-2">Luas</th>
-                    <th className="p-2">Volume</th>
-                    <th className="p-2">Tinggi</th>
-                    <th className="p-2">Akses</th>
-                    <th className="p-2">Hierarki</th>
-                    <th className="p-2">Skyline</th>
-                    <th className="p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {buildings.map((b) => {
-                    const h =
-                      b.volume > 0 && b.footprint > 0 ? b.volume / b.footprint : 0;
-                    return (
-                      <tr key={b.id} className="border-t border-border align-top">
-                        <td className="p-1">
-                          <Input
-                            value={b.name}
-                            onChange={(e) => updateBuilding(b.id, { name: e.target.value })}
-                            className="h-7 w-28 text-xs"
-                          />
-                        </td>
-                        <td className="p-1">
-                          <select
-                            value={b.fn}
-                            onChange={(e) =>
-                              updateBuilding(b.id, { fn: e.target.value as MasterFunction })
-                            }
-                            className="h-7 rounded border border-border bg-background px-1 text-xs"
-                          >
-                            {(Object.keys(FUNCTION_META) as MasterFunction[]).map((f) => (
-                              <option key={f} value={f}>
-                                {FUNCTION_META[f].label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="p-1">
-                          <Input
-                            type="number"
-                            value={b.footprint}
-                            onChange={(e) =>
-                              updateBuilding(b.id, { footprint: Number(e.target.value) || 0 })
-                            }
-                            className="h-7 w-16 text-xs"
-                          />
-                        </td>
-                        <td className="p-1">
-                          <Input
-                            type="number"
-                            value={b.volume}
-                            onChange={(e) =>
-                              updateBuilding(b.id, { volume: Number(e.target.value) || 0 })
-                            }
-                            className="h-7 w-20 text-xs"
-                          />
-                        </td>
-                        <td className="p-1 font-mono tabular-nums text-muted-foreground">
-                          {h ? `${h.toFixed(1)}m` : "—"}
-                        </td>
-                        <td className="p-1">
-                          <select
-                            value={b.access}
-                            onChange={(e) =>
-                              updateBuilding(b.id, { access: e.target.value as CGAccess })
-                            }
-                            className="h-7 rounded border border-border bg-background px-1 text-xs"
-                          >
-                            <option value="near">Dekat Akses</option>
-                            <option value="far">Jauh / Privat</option>
-                            <option value="neutral">Netral</option>
-                          </select>
-                        </td>
-                        <td className="p-1">
-                          <select
-                            value={b.hierarchy}
-                            onChange={(e) =>
-                              updateBuilding(b.id, { hierarchy: e.target.value as CGHierarchy })
-                            }
-                            className="h-7 rounded border border-border bg-background px-1 text-xs"
-                          >
-                            <option value="focal">Terpenting</option>
-                            <option value="secondary">Sekunder</option>
-                            <option value="support">Penunjang</option>
-                          </select>
-                        </td>
-                        <td className="p-1">
-                          <select
-                            value={b.skyline}
-                            onChange={(e) =>
-                              updateBuilding(b.id, { skyline: e.target.value as CGSkyline })
-                            }
-                            className="h-7 rounded border border-border bg-background px-1 text-xs"
-                          >
-                            <option value="centerHigh">Tertinggi di Pusat</option>
-                            <option value="taperEdge">Melandai ke Tepi</option>
-                          </select>
-                        </td>
-                        <td className="p-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive"
-                            onClick={() => removeBuilding(b.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {buildings.length === 0 && (
-                    <tr>
-                      <td colSpan={9} className="p-4 text-center text-muted-foreground">
-                        Belum ada bangunan.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Tinggi otomatis = Volume / Luas. Alas box memakai rasio 4:3. Bangunan
-              "Terpenting" dengan tinggi terbesar mendapat gaya gravitasi pusat maksimum.
-            </p>
-          </section>
-
-          {/* Adjacency matrix */}
-          <section>
-            <h3 className="mb-2 text-sm font-semibold">2. Matriks Hubungan Ruang</h3>
-            {buildings.length < 2 ? (
-              <div className="rounded border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
-                Tambah minimal 2 bangunan untuk menentukan hubungan.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded border border-border">
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr>
-                      <th className="bg-muted/40 p-2 text-left"></th>
-                      {buildings.map((b) => (
-                        <th
-                          key={b.id}
-                          className="bg-muted/40 p-2 text-left font-medium"
-                          style={{ minWidth: 90 }}
-                        >
-                          {b.name}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {buildings.map((a, i) => (
-                      <tr key={a.id} className="border-t border-border">
-                        <td className="bg-muted/30 p-2 font-medium">{a.name}</td>
-                        {buildings.map((b, j) => {
-                          if (i === j)
-                            return (
-                              <td key={b.id} className="bg-muted/10 p-1 text-center text-muted-foreground">
-                                —
-                              </td>
-                            );
-                          if (j < i)
-                            return (
-                              <td key={b.id} className="bg-muted/5 p-1 text-center text-muted-foreground">
-                                ·
-                              </td>
-                            );
-                          const v = rel[pairKey(a.id, b.id)] ?? "none";
-                          return (
-                            <td key={b.id} className="p-1">
-                              <select
-                                value={v}
-                                onChange={(e) =>
-                                  setRelFor(a.id, b.id, e.target.value as CGRelation)
-                                }
-                                className="h-7 w-full rounded border border-border bg-background px-1 text-[10px]"
-                                style={{ borderLeft: `4px solid ${REL_META[v].color}` }}
-                              >
-                                <option value="direct">Langsung</option>
-                                <option value="indirect">Tidak Langsung</option>
-                                <option value="none">Tidak Ada</option>
-                              </select>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
-              {(Object.keys(REL_META) as CGRelation[]).map((k) => (
-                <span key={k} className="flex items-center gap-1">
-                  <span
-                    className="inline-block h-2 w-2 rounded-sm"
-                    style={{ background: REL_META[k].color }}
-                  />
-                  {REL_META[k].label}
+              <Button
+                size="sm"
+                variant={linkMode ? "default" : "outline"}
+                onClick={() => { setLinkMode((v) => !v); setLinkFrom(null); }}
+                title="Aktifkan Mode Tautan lalu klik 2 node. Klik ulang pasangan sama untuk berpindah jenis hubungan."
+              >
+                <Cable className="mr-1 h-3.5 w-3.5" />
+                {linkMode ? "Mode Tautan ON" : "Tautan"}
+              </Button>
+              <div className="ml-auto flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span>{buildings.length} node · {cables.length} kabel</span>
+                <span className="flex items-center gap-1.5">
+                  {(["direct", "indirect", "none"] as CGRelation[]).map((k) => (
+                    <span key={k} className="flex items-center gap-1">
+                      <span
+                        className="inline-block h-1.5 w-5 rounded"
+                        style={{
+                          background: REL_META[k].color,
+                          backgroundImage: k === "indirect"
+                            ? "repeating-linear-gradient(90deg,#f59e0b 0 4px,transparent 4px 8px)"
+                            : undefined,
+                        }}
+                      />
+                      {REL_META[k].label}
+                    </span>
+                  ))}
                 </span>
-              ))}
-              <span className="ml-auto flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: "#ea580c" }} />
-                Anchor Gerbang
-              </span>
+              </div>
             </div>
-          </section>
+
+            <div className="flex-1 overflow-auto bg-[radial-gradient(circle,#e5e5e5_1px,transparent_1px)] [background-size:16px_16px]">
+              <svg
+                ref={svgRef}
+                width="100%"
+                height="100%"
+                className="min-h-[420px]"
+                onPointerMove={onSvgPointerMove}
+                onPointerUp={onSvgPointerUp}
+                onPointerLeave={onSvgPointerUp}
+              >
+                {/* cables */}
+                {cables.map((c, i) => {
+                  if (c.r === "none") return null;
+                  const A = posRef.current.get(c.a);
+                  const B = posRef.current.get(c.b);
+                  if (!A || !B) return null;
+                  const meta = REL_META[c.r];
+                  const mx = (A.x + B.x) / 2;
+                  const my = (A.y + B.y) / 2 + Math.hypot(B.x - A.x, B.y - A.y) * 0.18;
+                  return (
+                    <g key={i}>
+                      <path
+                        d={`M${A.x},${A.y} Q${mx},${my} ${B.x},${B.y}`}
+                        fill="none"
+                        stroke={meta.color}
+                        strokeWidth={2.4}
+                        strokeDasharray={meta.dash}
+                        opacity={0.9}
+                      />
+                    </g>
+                  );
+                })}
+                {/* nodes */}
+                {buildings.map((b) => {
+                  const p = posRef.current.get(b.id) ?? { x: 120, y: 100 };
+                  const meta = FUNCTION_META[b.fn];
+                  const selected = linkFrom === b.id;
+                  const h = b.floors * FLOOR_HEIGHT_M;
+                  const gfa = b.footprint * Math.max(1, b.floors);
+                  return (
+                    <g
+                      key={b.id}
+                      transform={`translate(${p.x},${p.y})`}
+                      style={{ cursor: linkMode ? "pointer" : "grab" }}
+                      onPointerDown={(e) => {
+                        if (linkMode) return;
+                        (e.target as Element).setPointerCapture?.(e.pointerId);
+                        const rect = svgRef.current!.getBoundingClientRect();
+                        dragRef.current = {
+                          id: b.id,
+                          dx: e.clientX - rect.left - p.x,
+                          dy: e.clientY - rect.top - p.y,
+                        };
+                      }}
+                      onClick={() => onNodeClick(b.id)}
+                    >
+                      <rect
+                        x={-72} y={-30}
+                        width={144} height={60}
+                        rx={8}
+                        fill="#ffffff"
+                        stroke={selected ? "#ea580c" : meta.color}
+                        strokeWidth={selected ? 3 : 2}
+                      />
+                      <rect x={-72} y={-30} width={6} height={60} fill={meta.color} />
+                      <text x={-60} y={-12} fontSize={11} fontWeight={700} fill="#0f172a">
+                        {b.name.length > 16 ? b.name.slice(0, 15) + "…" : b.name}
+                      </text>
+                      <text x={-60} y={4} fontSize={10} fill="#475569">
+                        {b.footprint} m² · {b.floors} lt
+                      </text>
+                      <text x={-60} y={20} fontSize={10} fill="#0f172a" fontWeight={600}>
+                        GFA {gfa.toLocaleString("id-ID")} m² · ±{h} m
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            <div className="border-t bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+              {linkMode
+                ? linkFrom
+                  ? "Pilih node kedua untuk siklus hubungan: none → langsung → tidak langsung → none."
+                  : "Pilih node pertama, lalu node kedua."
+                : "Seret node untuk mengatur posisi. Aktifkan Mode Tautan untuk menggambar kabel."}
+            </div>
+          </div>
+
+          {/* RIGHT — properties table */}
+          <div className="flex w-[420px] flex-col">
+            <div className="border-b bg-muted/30 px-3 py-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+              Properti Bangunan
+            </div>
+            <div className="flex-1 space-y-2 overflow-auto p-2">
+              {buildings.map((b) => {
+                const h = b.floors * FLOOR_HEIGHT_M;
+                const gfa = b.footprint * Math.max(1, b.floors);
+                const meta = FUNCTION_META[b.fn];
+                return (
+                  <div key={b.id} className="space-y-1.5 rounded border border-border/60 bg-background p-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-sm" style={{ background: meta.color }} />
+                      <Input
+                        value={b.name}
+                        onChange={(e) => updateBuilding(b.id, { name: e.target.value })}
+                        className="h-7 flex-1 text-xs"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive"
+                        onClick={() => removeBuilding(b.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <select
+                        value={b.fn}
+                        onChange={(e) => updateBuilding(b.id, { fn: e.target.value as MasterFunction })}
+                        className="h-7 rounded border border-input bg-background px-1.5 text-xs"
+                      >
+                        {(Object.keys(FUNCTION_META) as MasterFunction[]).map((f) => (
+                          <option key={f} value={f}>{FUNCTION_META[f].label}</option>
+                        ))}
+                      </select>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          value={b.footprint}
+                          onChange={(e) =>
+                            updateBuilding(b.id, { footprint: Math.max(0, Number(e.target.value) || 0) })
+                          }
+                          className="h-7 text-xs"
+                        />
+                        <span className="text-[10px] text-muted-foreground">m²</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          value={b.floors}
+                          onChange={(e) =>
+                            updateBuilding(b.id, { floors: Math.max(1, Math.round(Number(e.target.value) || 1)) })
+                          }
+                          className="h-7 text-xs"
+                        />
+                        <span className="text-[10px] text-muted-foreground">lt</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>Tinggi otomatis: <b className="text-foreground">{h} m</b></span>
+                      <span>Luas total: <b className="text-foreground">{gfa.toLocaleString("id-ID")} m²</b></span>
+                    </div>
+                  </div>
+                );
+              })}
+              {buildings.length === 0 && (
+                <div className="p-4 text-center text-xs text-muted-foreground">
+                  Belum ada bangunan. Klik “Tambah Bangunan”.
+                </div>
+              )}
+            </div>
+            <div className="space-y-1 border-t bg-muted/20 p-3 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total alas (footprint)</span>
+                <span className={cn("tabular-nums font-semibold", siteAreaM2 > 0 && totalFootprint > siteAreaM2 && "text-red-500")}>
+                  {totalFootprint.toLocaleString("id-ID")} m²
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total luas bangunan (GFA)</span>
+                <span className="tabular-nums font-semibold">{totalGFA.toLocaleString("id-ID")} m²</span>
+              </div>
+              {siteAreaM2 > 0 && (
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Luas Lahan</span>
+                  <span>{siteAreaM2.toLocaleString("id-ID")} m²</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Generate */}
-        <div className="mt-4 flex items-center justify-between rounded-md border border-border bg-muted/30 p-3">
-          <div className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Force-Directed</span> menggabungkan
-            adjacency + tarik gerbang ({GATE_LABEL[gate]}) + gravitasi pusat untuk bangunan tertinggi.
+        <div className="flex items-center justify-between border-t bg-muted/20 px-4 py-3">
+          <div className="text-[11px] text-muted-foreground">
+            Solver force-directed: <b>langsung</b> menarik dekat,
+            <b> tidak langsung</b> jaga jarak menengah, <b>tidak terhubung</b> saling tolak.
           </div>
-          <Button onClick={generate} disabled={buildings.length < 2 || generating}>
-            <Shuffle className="mr-2 h-4 w-4" />
-            {generating ? "Menghitung…" : "Generate Alternatif Layout"}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              <X className="mr-1 h-4 w-4" /> Tutup
+            </Button>
+            <Button onClick={generate} disabled={buildings.length < 1 || generating}>
+              <Shuffle className="mr-2 h-4 w-4" />
+              {generating ? "Menghitung…" : "Generate 3 Alternatif"}
+            </Button>
+          </div>
         </div>
 
         {/* Alternatives */}
         {layouts.length > 0 && (
-          <section className="mt-5">
-            <h3 className="mb-2 text-sm font-semibold">3. Alternatif Tata Massa</h3>
-            <div className="grid gap-4 md:grid-cols-3">
+          <div className="border-t bg-background px-4 py-3">
+            <h3 className="mb-2 text-sm font-semibold">Alternatif Tata Massa (di area Lahan)</h3>
+            <div className="grid gap-3 md:grid-cols-3">
               {layouts.map((L, idx) => (
                 <div
                   key={L.seed}
@@ -719,48 +757,30 @@ export function MasterplanClusterDialog({
                   <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-1.5 text-xs">
                     <span className="font-medium">Alternatif {idx + 1}</span>
                     <span className="font-mono text-[10px] text-muted-foreground">
-                      gerbang {GATE_LABEL[L.gate]} · seed {L.seed.toString(36).slice(0, 5)}
+                      seed {L.seed.toString(36).slice(0, 5)}
                     </span>
                   </div>
                   <div className="h-56 w-full bg-slate-50">
-                    <MiniBlocks buildings={buildings} layout={L} />
+                    <MiniBlocks buildings={buildings} layout={L} sitePoly={sitePolygon} />
                   </div>
                   <div className="p-2">
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      onClick={() => pickLayout(L)}
-                    >
+                    <Button size="sm" className="w-full" onClick={() => pickLayout(L)}>
                       Pilih Alternatif Ini
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
+          </div>
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function mkB(
-  name: string,
-  fn: MasterFunction,
-  footprint: number,
-  volume: number,
-  opts?: Partial<Pick<CGBuilding, "access" | "hierarchy" | "skyline">>,
-): CGBuilding {
+function mkB(name: string, fn: MasterFunction, footprint: number, floors: number): CGBuilding {
   return {
     id: `cg-${Math.random().toString(36).slice(2, 8)}`,
-    name,
-    fn,
-    footprint,
-    volume,
-    access: opts?.access ?? "neutral",
-    hierarchy: opts?.hierarchy ?? "secondary",
-    skyline: opts?.skyline ?? "centerHigh",
+    name, fn, footprint, floors,
   };
 }
-
-void nextBlockId;
