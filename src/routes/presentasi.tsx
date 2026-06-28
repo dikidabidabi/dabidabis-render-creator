@@ -5658,7 +5658,7 @@ function shadeHsl(hsl: string, deltaL: number) {
 }
 
 const STACK_MAJOR_M: Record<string, number> = {
-  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10,
+  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20,
 };
 function stackMetersPerPx(scale: string) {
   // matches sketch grid: 8px minor × 10 minors per major
