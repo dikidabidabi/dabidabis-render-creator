@@ -12106,6 +12106,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               bufferM: ax.bufferM,
             }));
           })()}
+          roads={(() => {
+            const rds = sketch.roads ?? [];
+            if (rds.length === 0) return undefined;
+            return rds.map((rd) => ({
+              center: roadCenterline(rd).map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter })),
+              widthM: rd.widthM,
+            }));
+          })()}
           onCommit={(blocks) => {
             // Convert MassingBlock polygons into sketch layers in the active sketch.
             const lvId = activeLvlId ?? levels[0]?.id;
