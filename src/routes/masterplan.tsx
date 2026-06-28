@@ -863,7 +863,7 @@ function MasterPlanPage() {
             </div>
             <div className="mt-2">Atau klik di kanvas — arah utara menunjuk dari pusat ke titik klik.</div>
             <Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => { pushHistory(); setPlanPatch({ northRot: 0 }); }}>Reset Utara</Button>
-            <div className="mt-2 hidden">{cursorWorld && onNorthClick}</div>
+            
           </div>
         )}
 
