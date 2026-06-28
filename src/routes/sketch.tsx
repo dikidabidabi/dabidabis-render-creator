@@ -136,6 +136,7 @@ import {
   distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
+import { MasterplanSketch3DPreview } from "@/components/masterplan-sketch-3d-preview";
 import { useProjectStore } from "@/store/project-store";
 import {
   type Ramp,
@@ -1553,6 +1554,7 @@ function SketchCard(props: SketchCardProps) {
       </div>
 
       {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} mode={mode} />}
+      {isOpen && mode === "masterplan" && <MasterplanSketch3DPreview sketch={sketch as any} />}
     </section>
   );
 }
