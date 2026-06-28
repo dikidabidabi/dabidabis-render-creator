@@ -385,7 +385,7 @@ function computeStats(sk: Sketch): Stats {
 
   // ===== Parkir =====
   const MINOR_PX = 8, MAJOR_EVERY = 10;
-  const SCALE_M: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10 };
+  const SCALE_M: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 };
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / (SCALE_M[sk.scale] ?? 1);
   const allLines: Line[] = sk.lines ?? [];
   const grids = collectGrids(sk.structuralGrid, sk.structuralGridExtras);
