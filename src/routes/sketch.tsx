@@ -155,6 +155,7 @@ import {
   newRoadId,
   roadCenterline,
   roadCorridorPolygon as buildRoadCorridor,
+  offsetPolyline as offsetRoadPolyline,
   type RoadSegment,
 } from "@/lib/roads";
 
