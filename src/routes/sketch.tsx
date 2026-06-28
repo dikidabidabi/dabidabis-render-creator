@@ -11864,6 +11864,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             if (!lah) return undefined;
             return lah.points.map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter }));
           })()}
+          avoidAxes={(() => {
+            const axs = sketch.axes ?? [];
+            if (axs.length === 0) return undefined;
+            return axs.map((ax) => ({
+              points: sampleAxisPolyline(ax).map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter })),
+              bufferM: ax.bufferM,
+            }));
+          })()}
           onCommit={(blocks) => {
             // Convert MassingBlock polygons into sketch layers in the active sketch.
             const lvId = activeLvlId ?? levels[0]?.id;
