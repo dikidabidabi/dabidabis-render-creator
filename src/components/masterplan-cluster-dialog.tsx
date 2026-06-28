@@ -487,11 +487,11 @@ export function MasterplanClusterDialog({
         Math.floor(Math.random() * 1e9),
         Math.floor(Math.random() * 1e9),
       ];
-      const next = seeds.map((s) => solveLayout(buildings, rel, s, sitePolygon, avoidAxes));
+      const next = seeds.map((s) => solveLayout(buildings, rel, s, sitePolygon, avoidAxes, roads));
       setLayouts(next);
       setGenerating(false);
     }, 20);
-  }, [buildings, rel, sitePolygon, avoidAxes]);
+  }, [buildings, rel, sitePolygon, avoidAxes, roads]);
 
   const pickLayout = useCallback(
     (layout: CGLayout) => {
