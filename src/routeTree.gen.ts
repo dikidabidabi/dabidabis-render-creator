@@ -15,6 +15,7 @@ import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as PresentasiRouteImport } from './routes/presentasi'
 import { Route as NarasiRouteImport } from './routes/narasi'
 import { Route as Model3dRouteImport } from './routes/model3d'
+import { Route as MasterplanRouteImport } from './routes/masterplan'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as AkunRouteImport } from './routes/akun'
@@ -50,6 +51,11 @@ const Model3dRoute = Model3dRouteImport.update({
   path: '/model3d',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MasterplanRoute = MasterplanRouteImport.update({
+  id: '/masterplan',
+  path: '/masterplan',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/akun': typeof AkunRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/akun': typeof AkunRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/akun': typeof AkunRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
+  '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/akun'
     | '/gallery'
     | '/login'
+    | '/masterplan'
     | '/model3d'
     | '/narasi'
     | '/presentasi'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/akun'
     | '/gallery'
     | '/login'
+    | '/masterplan'
     | '/model3d'
     | '/narasi'
     | '/presentasi'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/akun'
     | '/gallery'
     | '/login'
+    | '/masterplan'
     | '/model3d'
     | '/narasi'
     | '/presentasi'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   AkunRoute: typeof AkunRoute
   GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
+  MasterplanRoute: typeof MasterplanRoute
   Model3dRoute: typeof Model3dRoute
   NarasiRoute: typeof NarasiRoute
   PresentasiRoute: typeof PresentasiRoute
@@ -204,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Model3dRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/masterplan': {
+      id: '/masterplan'
+      path: '/masterplan'
+      fullPath: '/masterplan'
+      preLoaderRoute: typeof MasterplanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   AkunRoute: AkunRoute,
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,
+  MasterplanRoute: MasterplanRoute,
   Model3dRoute: Model3dRoute,
   NarasiRoute: NarasiRoute,
   PresentasiRoute: PresentasiRoute,

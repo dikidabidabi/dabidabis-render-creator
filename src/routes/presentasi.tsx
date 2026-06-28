@@ -49,6 +49,7 @@ import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
+import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
 import {
   type ParkingArea,
   type ParkingObstacle,
@@ -535,7 +536,23 @@ function PrintStyles() {
 function PresentasiBox({
   sketch, narasi, perspektif, open, onToggle,
 }: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
-  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif), [sketch, narasi, perspektif]);
+  const [masterPlan, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    import("@/lib/masterplan").then((m) => {
+      if (!mounted) return;
+      const refresh = () => setMasterPlan(m.loadPlan());
+      refresh();
+      window.addEventListener("masterplan:update", refresh);
+      window.addEventListener("storage", refresh);
+      (window as any).__mpCleanup = () => {
+        window.removeEventListener("masterplan:update", refresh);
+        window.removeEventListener("storage", refresh);
+      };
+    });
+    return () => { mounted = false; (window as any).__mpCleanup?.(); };
+  }, []);
+  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif, masterPlan), [sketch, narasi, perspektif, masterPlan]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
@@ -1079,7 +1096,8 @@ type Slide =
   | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
-  | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats };
+  | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -1104,7 +1122,7 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = []): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -1112,6 +1130,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   const out: Slide[] = [];
   // Slide judul (paling awal)
   out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
+  // Slide Master Plan — analisis kawasan makro (skyline + GFA per fungsi).
+  if (plan && plan.blocks.length > 0) {
+    out.push({ kind: "masterplan", id: "masterplan", title: "Analisis Master Plan Kawasan", sketch: sk, plan });
+  }
   // 4 slide analisa site — selalu ada (pakai koordinat default jika belum dikunci).
   out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
   out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
@@ -1269,6 +1291,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "komposisi": return "Komposisi Ruang";
       case "biaya": return "Estimasi Biaya";
       case "closing": return "Penutup";
+      case "masterplan": return "Master Plan";
       default: return null;
     }
   };
@@ -1624,6 +1647,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "komposisi" && <KomposisiBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "masterplan" && <MasterPlanBody plan={slide.plan} />}
     </>
   );
   // All non-special slides default to centered fit; users can pan and pinch-to-zoom.
@@ -8950,4 +8974,188 @@ function WwrPanel({ sketch }: { sketch: Sketch }) {
     </div>
   );
 }
+
+// ---------- Master Plan Slide ----------
+function MasterPlanBody({ plan }: { plan: import("@/lib/masterplan").MasterPlan }) {
+  const { FUNCTION_META, totalsByFunction, blockGFA } = { FUNCTION_META: MP_FUNCTION_META, totalsByFunction: mpTotalsByFunction, blockGFA: mpBlockGFA };
+  const totals = totalsByFunction(plan);
+  const totalGFA = totals.komersial.gfa + totals.fasum.gfa + totals.rth.gfa;
+  const totalFootprint = totals.komersial.footprint + totals.fasum.footprint + totals.rth.footprint;
+
+  // Skyline projection (front elevation along Z axis) — orthographic-like.
+  const skyW = 1300;
+  const skyH = 380;
+  const half = plan.siteSize / 2;
+  const sx = skyW / plan.siteSize;
+  const maxH = Math.max(20, ...plan.blocks.map((b) => b.height));
+  const sy = (skyH - 30) / Math.max(maxH, 1);
+  // sort by Z so far blocks render first (background)
+  const ordered = [...plan.blocks].sort((a, b) => b.z - a.z);
+
+  // Plan diagram (top view).
+  const planSize = 580;
+  const ps = planSize / plan.siteSize;
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* KPI Strip */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <KpiCard label="Total Blok" value={String(plan.blocks.length)} sub="massing" />
+        <KpiCard label="Luas Tapak" value={`${(plan.siteSize * plan.siteSize / 10000).toFixed(2)} ha`} sub={`${plan.siteSize}×${plan.siteSize} m`} />
+        <KpiCard label="Total Footprint" value={`${Math.round(totalFootprint).toLocaleString("id-ID")} m²`} sub={`${((totalFootprint / (plan.siteSize * plan.siteSize)) * 100).toFixed(1)}% KDB makro`} />
+        <KpiCard label="Total GFA" value={`${Math.round(totalGFA).toLocaleString("id-ID")} m²`} sub="seluruh fungsi" />
+      </div>
+
+      {/* Main grid: Plan + Skyline */}
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 20, flex: 1, minHeight: 0 }}>
+        {/* Top view plan */}
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Tata Letak Kawasan (Top View)</div>
+          <svg width={planSize} height={planSize} style={{ background: "#fff", border: "1px solid #e2e8f0" }}>
+            {/* grid lines */}
+            {Array.from({ length: 9 }, (_, i) => (
+              <g key={i}>
+                <line x1={(i / 8) * planSize} y1={0} x2={(i / 8) * planSize} y2={planSize} stroke="#e2e8f0" strokeWidth={0.5} />
+                <line x1={0} y1={(i / 8) * planSize} x2={planSize} y2={(i / 8) * planSize} stroke="#e2e8f0" strokeWidth={0.5} />
+              </g>
+            ))}
+            {plan.blocks.map((b) => {
+              const m = FUNCTION_META[b.fn];
+              const x = (b.x + half - b.w / 2) * ps;
+              const y = (b.z + half - b.d / 2) * ps;
+              return (
+                <g key={b.id}>
+                  <rect x={x} y={y} width={b.w * ps} height={b.d * ps} fill={m.color} fillOpacity={b.fn === "rth" ? 0.4 : 0.85} stroke="#0f172a" strokeWidth={0.7} />
+                  <text x={x + (b.w * ps) / 2} y={y + (b.d * ps) / 2 + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight={600} style={{ textShadow: "0 0 2px rgba(0,0,0,0.5)" }}>
+                    {b.id.replace("block-", "")}
+                  </text>
+                </g>
+              );
+            })}
+            {/* compass */}
+            <g transform={`translate(${planSize - 38},28)`}>
+              <circle r={18} fill="#fff" stroke="#0f172a" />
+              <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="#0f172a">U</text>
+            </g>
+          </svg>
+        </div>
+
+        {/* Right column: Skyline + Function breakdown */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+          {/* Skyline */}
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Skyline Kawasan (Tampak Selatan)</div>
+            <svg width={skyW} height={skyH} style={{ background: "linear-gradient(to bottom, #fef9c3 0%, #ffedd5 50%, #fef3c7 100%)", border: "1px solid #e2e8f0", display: "block" }}>
+              {/* ground */}
+              <rect x={0} y={skyH - 20} width={skyW} height={20} fill="#475569" />
+              {/* sun */}
+              <circle cx={skyW - 80} cy={50} r={22} fill="#fbbf24" opacity={0.85} />
+              {ordered.map((b) => {
+                const m = FUNCTION_META[b.fn];
+                const x = (b.x + half - b.w / 2) * sx;
+                const w = b.w * sx;
+                const h = b.height * sy;
+                const y = skyH - 20 - h;
+                // depth attenuation
+                const depth = (b.z + half) / plan.siteSize; // 0..1
+                const fade = 0.45 + 0.55 * depth;
+                return (
+                  <g key={b.id}>
+                    <rect x={x} y={y} width={w} height={h} fill={m.color} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
+                    {h > 30 && (
+                      <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#0f172a">
+                        {b.height.toFixed(0)}m
+                      </text>
+                    )}
+                    {/* macro shadow projection */}
+                    <polygon
+                      points={`${x},${skyH - 20} ${x + h * 0.6},${skyH - 20} ${x + w + h * 0.6},${skyH - 20} ${x + w},${skyH - 20}`}
+                      fill="#0f172a"
+                      opacity={0}
+                    />
+                    <rect x={x + w} y={skyH - 21} width={h * 0.55} height={2} fill="#0f172a" opacity={0.35} />
+                  </g>
+                );
+              })}
+            </svg>
+            <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>
+              Studi bayangan makro pukul 15:00 · proyeksi azimut barat
+            </div>
+          </div>
+
+          {/* Function breakdown */}
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, flex: 1, minHeight: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Komposisi GFA per Fungsi</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {(Object.keys(FUNCTION_META) as Array<"komersial" | "fasum" | "rth">).map((fn) => {
+                const m = FUNCTION_META[fn];
+                const t = totals[fn];
+                const pct = totalGFA > 0 ? (t.gfa / totalGFA) * 100 : 0;
+                return (
+                  <div key={fn}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ display: "inline-block", width: 10, height: 10, background: m.color, borderRadius: 2 }} />
+                        <span style={{ fontWeight: 500 }}>{m.label}</span>
+                        <span style={{ color: "#64748b" }}>· {t.count} blok</span>
+                      </span>
+                      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
+                        {Math.round(t.gfa).toLocaleString("id-ID")} m² ({pct.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <div style={{ height: 10, background: "#e2e8f0", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: m.color, transition: "width 200ms" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Block table */}
+            <div style={{ marginTop: 14, maxHeight: 130, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 4 }}>
+              <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+                <thead style={{ background: "#f1f5f9", position: "sticky", top: 0 }}>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "4px 6px" }}>ID</th>
+                    <th style={{ textAlign: "left", padding: "4px 6px" }}>Nama</th>
+                    <th style={{ textAlign: "left", padding: "4px 6px" }}>Fungsi</th>
+                    <th style={{ textAlign: "right", padding: "4px 6px" }}>Lt</th>
+                    <th style={{ textAlign: "right", padding: "4px 6px" }}>T (m)</th>
+                    <th style={{ textAlign: "right", padding: "4px 6px" }}>GFA (m²)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plan.blocks.map((b) => (
+                    <tr key={b.id} style={{ borderTop: "1px solid #e2e8f0" }}>
+                      <td style={{ padding: "3px 6px", fontFamily: "monospace" }}>{b.id}</td>
+                      <td style={{ padding: "3px 6px" }}>{b.name}</td>
+                      <td style={{ padding: "3px 6px", color: FUNCTION_META[b.fn].color, fontWeight: 600 }}>
+                        {FUNCTION_META[b.fn].label}
+                      </td>
+                      <td style={{ padding: "3px 6px", textAlign: "right", fontFamily: "monospace" }}>{b.floors}</td>
+                      <td style={{ padding: "3px 6px", textAlign: "right", fontFamily: "monospace" }}>{b.height}</td>
+                      <td style={{ padding: "3px 6px", textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>
+                        {Math.round(blockGFA(b)).toLocaleString("id-ID")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
+      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#64748b", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>{sub}</div>}
+    </div>
+  );
+}
+
 
