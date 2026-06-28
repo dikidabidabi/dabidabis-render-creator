@@ -7741,6 +7741,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         onChange({ roads: nextR });
         toast.success(`Fillet jalan = ${jalanFilletM.toFixed(2)} m`);
       }
+    } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
       const raw = getWorldPosRaw(e);
