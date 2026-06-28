@@ -1563,10 +1563,12 @@ function FullscreenSketch({
   sketch,
   onChange,
   onExit,
+  mode,
 }: {
   sketch: Sketch;
   onChange: (patch: Partial<Sketch>) => void;
   onExit: () => void;
+  mode?: "sketch" | "masterplan";
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1578,7 +1580,7 @@ function FullscreenSketch({
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
-      <SketchEditor sketch={sketch} onChange={onChange} fullscreen onExitFullscreen={onExit} />
+      <SketchEditor sketch={sketch} onChange={onChange} fullscreen onExitFullscreen={onExit} mode={mode} />
     </div>
   );
 }
