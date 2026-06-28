@@ -11664,17 +11664,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {SidePanel}
       </div>
       {RekapPanel}
-      <ClusterGeneratorDialog
-        open={clusterOpen}
-        onOpenChange={setClusterOpen}
-        levels={[...levels].sort((a, b) => a.mdpl - b.mdpl).map((l) => ({ id: l.id, name: l.name }))}
-        graph={sketch.clusterGraph ?? { nodes: [], links: [] }}
-        onSave={(g: ClusterGraph) => onChange({ clusterGraph: g })}
-        pxPerMeter={pxPerMeter}
-        kdbLimitM2={(kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : undefined}
-        klbLimitM2={(klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : undefined}
-        onGenerate={handleClusterGenerate}
-      />
+      {mode === "masterplan" ? (
+        <MasterplanClusterDialog
+          open={clusterOpen}
+          onOpenChange={setClusterOpen}
+          existingPlan={loadMpPlan()}
+          onCommit={(blocks) => {
+            // Convert MassingBlock polygons into sketch layers in the active sketch.
+            const lvId = activeLvlId ?? levels[0]?.id;
+            if (!lvId) {
+              toast.error("Tidak ada level aktif untuk menampung hasil cluster.");
+              return;
+            }
+            const ppm = pxPerMeter;
+            const newLayers: Layer[] = blocks.map((b, i) => {
+              const poly = mpBlockPolygon(b);
+              const pts: Point[] = poly.map((p) => ({ x: p.x * ppm, y: p.y * ppm }));
+              return {
+                id: `L${Date.now().toString(36)}_mp${i}_${Math.random().toString(36).slice(2, 5)}`,
+                name: b.name,
+                points: pts,
+                areaM2: undefined,
+                color: MP_FN_META[b.fn].color,
+                levelId: lvId,
+              } as Layer;
+            });
+            onChange({ layers: [...layers, ...newLayers] });
+            try {
+              const plan = loadMpPlan();
+              saveMpPlan({ ...plan, blocks: [...plan.blocks, ...blocks] });
+            } catch {}
+            toast.success(`Menambahkan ${newLayers.length} massa dari Cluster Generator.`);
+          }}
+        />
+      ) : (
+        <ClusterGeneratorDialog
+          open={clusterOpen}
+          onOpenChange={setClusterOpen}
+          levels={[...levels].sort((a, b) => a.mdpl - b.mdpl).map((l) => ({ id: l.id, name: l.name }))}
+          graph={sketch.clusterGraph ?? { nodes: [], links: [] }}
+          onSave={(g: ClusterGraph) => onChange({ clusterGraph: g })}
+          pxPerMeter={pxPerMeter}
+          kdbLimitM2={(kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : undefined}
+          klbLimitM2={(klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : undefined}
+          onGenerate={handleClusterGenerate}
+        />
+      )}
     </div>
   );
 }
