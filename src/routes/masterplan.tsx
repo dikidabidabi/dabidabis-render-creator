@@ -16,7 +16,9 @@ import {
   Building2,
   Trees,
   Landmark,
+  Sparkles,
 } from "lucide-react";
+import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog";
 import {
   FUNCTION_META,
   type MassingBlock,
@@ -133,6 +135,7 @@ function MasterPlanPage() {
   const [activeFn, setActiveFn] = useState<MasterFunction>("komersial");
   const [preset, setPreset] = useState<CameraPreset>("iso");
   const [hydrated, setHydrated] = useState(false);
+  const [clusterOpen, setClusterOpen] = useState(false);
 
   // Hydrate from localStorage on mount + listen for cross-tab updates.
   useEffect(() => {
@@ -261,6 +264,15 @@ function MasterPlanPage() {
           >
             <Plus className="mr-2 h-4 w-4" />
             Tambah Blok di Tengah
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="mt-1.5 w-full justify-start"
+            onClick={() => setClusterOpen(true)}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Cluster Generator
           </Button>
         </div>
 
@@ -496,6 +508,16 @@ function MasterPlanPage() {
           Lihat di Slide Presentasi <ArrowRight className="h-3 w-3" />
         </Link>
       </aside>
+
+      <MasterplanClusterDialog
+        open={clusterOpen}
+        onOpenChange={setClusterOpen}
+        existingPlan={plan}
+        onCommit={(blocks) => {
+          setPlan((p) => ({ ...p, blocks: [...p.blocks, ...blocks] }));
+          if (blocks.length > 0) setSelectedId(blocks[0].id);
+        }}
+      />
     </main>
   );
 }
