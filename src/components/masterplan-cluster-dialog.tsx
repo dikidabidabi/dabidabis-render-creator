@@ -318,10 +318,14 @@ function MiniBlocks({
   buildings,
   layout,
   sitePoly,
+  avoidAxes,
+  roads,
 }: {
   buildings: CGBuilding[];
   layout: CGLayout;
   sitePoly?: Vec2[];
+  avoidAxes?: { points: Vec2[]; bufferM: number }[];
+  roads?: RoadRef[];
 }) {
   const byId = useMemo(() => new Map(buildings.map((b) => [b.id, b])), [buildings]);
   const c = layout.siteCenter;
@@ -342,6 +346,56 @@ function MiniBlocks({
     return r;
   }, [sitePts]);
   const camDist = extent * 2.6;
+
+  // Axes (dashed indigo) and Roads (gray corridor + dark edges) relative to site center.
+  const axisLines = useMemo(() => {
+    if (!avoidAxes) return [] as [number, number, number][][];
+    return avoidAxes
+      .filter((a) => a.points.length >= 2)
+      .map((a) => a.points.map((p) => [p.x - c.x, 0.05, p.y - c.y] as [number, number, number]));
+  }, [avoidAxes, c.x, c.y]);
+
+  const roadCorridors = useMemo(() => {
+    if (!roads) return [] as { fill: [number, number, number][]; left: [number, number, number][]; right: [number, number, number][] }[];
+    const out: { fill: [number, number, number][]; left: [number, number, number][]; right: [number, number, number][] }[] = [];
+    for (const r of roads) {
+      if (r.center.length < 2) continue;
+      const half = r.widthM / 2;
+      // local offset using same algorithm as roads.ts (inline minimal version)
+      const offset = (poly: Vec2[], d: number): Vec2[] => {
+        const segN: Vec2[] = [];
+        for (let i = 0; i < poly.length - 1; i++) {
+          const dx = poly[i + 1].x - poly[i].x;
+          const dy = poly[i + 1].y - poly[i].y;
+          const l = Math.hypot(dx, dy) || 1;
+          segN.push({ x: -dy / l, y: dx / l });
+        }
+        const res: Vec2[] = [];
+        res.push({ x: poly[0].x + segN[0].x * d, y: poly[0].y + segN[0].y * d });
+        for (let i = 1; i < poly.length - 1; i++) {
+          const n1 = segN[i - 1], n2 = segN[i];
+          const bx = n1.x + n2.x, by = n1.y + n2.y;
+          const bl = Math.hypot(bx, by) || 1;
+          const dot = n1.x * n2.x + n1.y * n2.y;
+          const m = Math.min(4, 1 / Math.max(0.25, (1 + dot) / 2));
+          res.push({ x: poly[i].x + (bx / bl) * d * m, y: poly[i].y + (by / bl) * d * m });
+        }
+        const last = segN[segN.length - 1];
+        const lp = poly[poly.length - 1];
+        res.push({ x: lp.x + last.x * d, y: lp.y + last.y * d });
+        return res;
+      };
+      const left = offset(r.center, half);
+      const right = offset(r.center, -half);
+      const fill = [...left, ...right.slice().reverse()];
+      out.push({
+        fill: fill.map((p) => [p.x - c.x, 0.03, p.y - c.y]),
+        left: left.map((p) => [p.x - c.x, 0.04, p.y - c.y]),
+        right: right.map((p) => [p.x - c.x, 0.04, p.y - c.y]),
+      });
+    }
+    return out;
+  }, [roads, c.x, c.y]);
 
   return (
     <Canvas dpr={[1, 2]}>
@@ -367,13 +421,29 @@ function MiniBlocks({
         color="#16a34a"
         lineWidth={1.6}
       />
-      {/* blocks (translated relative to site center) */}
+      {/* roads: corridor fill + edges */}
+      {roadCorridors.map((rc, i) => (
+        <group key={`rd-${i}`}>
+          <Line points={[...rc.fill, rc.fill[0]]} color="#52525b" lineWidth={1} opacity={0.55} transparent />
+          <Line points={rc.left} color="#27272a" lineWidth={1.4} />
+          <Line points={rc.right} color="#27272a" lineWidth={1.4} />
+        </group>
+      ))}
+      {/* axes: dashed indigo */}
+      {axisLines.map((pts, i) => (
+        <Line key={`ax-${i}`} points={pts} color="#4f46e5" lineWidth={1.4} dashed dashSize={1.2} gapSize={0.8} />
+      ))}
+      {/* blocks (translated relative to site center, rotated to face road/axis) */}
       {layout.positions.map((p) => {
         const b = byId.get(p.id);
         if (!b) return null;
         const meta = FUNCTION_META[b.fn];
         return (
-          <mesh key={p.id} position={[p.x - c.x, p.h / 2, p.z - c.y]}>
+          <mesh
+            key={p.id}
+            position={[p.x - c.x, p.h / 2, p.z - c.y]}
+            rotation={[0, -(p.rot || 0), 0]}
+          >
             <boxGeometry args={[p.w, p.h, p.d]} />
             <meshStandardMaterial color={meta.color} roughness={0.85} />
             <Edges color="#0f172a" threshold={15} />
