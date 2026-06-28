@@ -8615,6 +8615,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (curTool === "aksis" && aksisSub === "garis") {
+      const ax: AxisSegment = {
+        id: newAxisId(), kind: "garis",
+        points: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }],
+        bufferM: aksisBufferM, createdAt: Date.now(),
+      };
+      onChange({ axes: [...(sketch.axes ?? []), ax] });
+      toast.success("Aksis tersimpan");
+      return;
+    }
+
+
     if (curTool === "separasi") {
       // Separasi Ruang: belah salah satu polygon ruang aktif menjadi dua
       // dengan garis tak-hingga melalui (a, b). Hanya berlaku pada ruang yang
