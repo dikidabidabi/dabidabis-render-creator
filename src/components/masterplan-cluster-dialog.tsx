@@ -40,8 +40,9 @@ export type CGBuilding = {
   floors: number;    // jumlah lapis
 };
 
-type CGPos = { id: string; x: number; z: number; w: number; d: number; h: number };
+type CGPos = { id: string; x: number; z: number; w: number; d: number; h: number; rot: number };
 type CGLayout = { seed: number; positions: CGPos[]; siteCenter: Vec2; siteExtent: number };
+type RoadRef = { center: Vec2[]; widthM: number };
 
 const REL_META: Record<CGRelation, { label: string; color: string; dash: string }> = {
   direct:   { label: "Langsung",        color: "#16a34a", dash: "0" },
