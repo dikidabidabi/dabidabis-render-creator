@@ -5724,7 +5724,73 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+
+    // === AKSIS rancangan (Master Plan) ===
+    // Garis sumbu yang dihindari oleh Cluster Generator. Render dgn warna
+    // indigo bertekstur garis putus-putus + buffer halo tipis di kedua sisi.
+    const axesAll: AxisSegment[] = sketch.axes ?? [];
+    const drawAxisPath = (poly: Point[], strokeStyle: string, dash: number[], lineWidth: number) => {
+      if (poly.length < 2) return;
+      ctx.save();
+      ctx.setLineDash(dash);
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      const s0 = worldToScreen(poly[0]);
+      ctx.moveTo(s0.x, s0.y);
+      for (let i = 1; i < poly.length; i++) {
+        const si = worldToScreen(poly[i]);
+        ctx.lineTo(si.x, si.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    };
+    for (const ax of axesAll) {
+      const poly = sampleAxisPolyline(ax) as Point[];
+      // Buffer halo (tipis, transparan) menandakan zona hindar.
+      const bufPx = ax.bufferM * pxPerMeter * view.s;
+      if (bufPx > 1) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(99,102,241,0.18)";
+        ctx.lineWidth = bufPx * 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        const s0 = worldToScreen(poly[0]);
+        ctx.moveTo(s0.x, s0.y);
+        for (let i = 1; i < poly.length; i++) {
+          const si = worldToScreen(poly[i]);
+          ctx.lineTo(si.x, si.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      drawAxisPath(poly, "#4f46e5", [8, 6], 1.6);
+      // Endpoint kecil
+      ctx.fillStyle = "#4f46e5";
+      const sA = worldToScreen(poly[0]);
+      const sB = worldToScreen(poly[poly.length - 1]);
+      ctx.beginPath(); ctx.arc(sA.x, sA.y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sB.x, sB.y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    // Draft aksis tangent (multi-klik)
+    if (aksisDraft && aksisDraft.kind === "tangent" && tool === "aksis") {
+      const ctrl = [...aksisDraft.points, aksisDraft.cursor];
+      const preview = (ctrl.length >= 3
+        ? sampleAxisPolyline({ id: "_", kind: "tangent", points: ctrl, bufferM: 0, createdAt: 0 })
+        : ctrl) as Point[];
+      drawAxisPath(preview, "rgba(79,70,229,0.7)", [4, 4], 1.4);
+      ctx.fillStyle = "#4f46e5";
+      for (const p of aksisDraft.points) {
+        const sp = worldToScreen(p);
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // Draft aksis garis (drag)
+    if (drawing && tool === "aksis" && aksisSub === "garis") {
+      drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
+    }
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, aksisDraft, aksisSub, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
