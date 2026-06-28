@@ -150,6 +150,7 @@ import {
   computeBordesArcs,
   numBordesForSlope,
 } from "@/lib/ramps";
+import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
