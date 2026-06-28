@@ -87,6 +87,7 @@ function solveLayout(
   rel: Record<string, CGRelation>,
   seed: number,
   sitePoly?: Vec2[],
+  avoidAxes?: { points: Vec2[]; bufferM: number }[],
 ): CGLayout {
   const rnd = mulberry32(seed);
   const items = buildings.map((b) => {
