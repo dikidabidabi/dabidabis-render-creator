@@ -11675,6 +11675,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           open={clusterOpen}
           onOpenChange={setClusterOpen}
           existingPlan={loadMpPlan()}
+          sitePolygon={(() => {
+            const lah = layers.find((l) => isLahanLayerName(l.name) && l.points.length >= 3);
+            if (!lah) return undefined;
+            return lah.points.map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter }));
+          })()}
           onCommit={(blocks) => {
             // Convert MassingBlock polygons into sketch layers in the active sketch.
             const lvId = activeLvlId ?? levels[0]?.id;
