@@ -135,6 +135,7 @@ function MasterPlanPage() {
   const [activeFn, setActiveFn] = useState<MasterFunction>("komersial");
   const [preset, setPreset] = useState<CameraPreset>("iso");
   const [hydrated, setHydrated] = useState(false);
+  const [clusterOpen, setClusterOpen] = useState(false);
 
   // Hydrate from localStorage on mount + listen for cross-tab updates.
   useEffect(() => {
