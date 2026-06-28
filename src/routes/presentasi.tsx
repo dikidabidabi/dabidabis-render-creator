@@ -1290,6 +1290,17 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "komposisi": return "Komposisi Ruang";
       case "biaya": return "Estimasi Biaya";
       case "closing": return "Penutup";
+      // Group label tambahan
+    }
+    if ((s as any).kind === "masterplan") return "Master Plan";
+    return null;
+  };
+  // tslint shim — original switch returned null below; we removed its default branch.
+  void groupLabel;
+  const _origReturn = () => null;
+  void _origReturn;
+  const __replaced_default__ = () => null;
+  void __replaced_default__;
       default: return null;
     }
   };
