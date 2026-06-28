@@ -5831,7 +5831,83 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, aksisDraft, aksisSub, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+    // Jalan — koridor + centerline + tepi kiri/kanan
+    const roadsAll: RoadSegment[] = sketch.roads ?? [];
+    for (const rd of roadsAll) {
+      const corridor = buildRoadCorridor(rd, pxPerMeter);
+      if (corridor.length >= 3) {
+        ctx.save();
+        ctx.fillStyle = "rgba(63,63,70,0.22)";
+        ctx.beginPath();
+        const c0 = worldToScreen(corridor[0]);
+        ctx.moveTo(c0.x, c0.y);
+        for (let i = 1; i < corridor.length; i++) {
+          const ci = worldToScreen(corridor[i]);
+          ctx.lineTo(ci.x, ci.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // outline tepi kiri/kanan
+        ctx.strokeStyle = "#27272a";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        const halfN = Math.floor(corridor.length / 2);
+        // left = first half (in order), right = second half (in order)
+        ctx.moveTo(c0.x, c0.y);
+        for (let i = 1; i < halfN; i++) {
+          const ci = worldToScreen(corridor[i]);
+          ctx.lineTo(ci.x, ci.y);
+        }
+        ctx.stroke();
+        ctx.beginPath();
+        const r0 = worldToScreen(corridor[halfN]);
+        ctx.moveTo(r0.x, r0.y);
+        for (let i = halfN + 1; i < corridor.length; i++) {
+          const ci = worldToScreen(corridor[i]);
+          ctx.lineTo(ci.x, ci.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      // centerline putus-putus
+      const center = roadCenterline(rd) as Point[];
+      drawAxisPath(center, "rgba(250,250,250,0.85)", [6, 6], 1.0);
+      // fillet indicator: lingkaran kecil di tiap vertex internal
+      if (rd.filletM > 0 && rd.points.length >= 3) {
+        ctx.save();
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 1;
+        const rPx = rd.filletM * pxPerMeter * view.s;
+        for (let i = 1; i < rd.points.length - 1; i++) {
+          const sp = worldToScreen(rd.points[i]);
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, Math.max(3, rPx * 0.4), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+    // Draft jalan tangent
+    if (jalanDraft && jalanDraft.kind === "tangent" && tool === "jalan") {
+      const ctrl = [...jalanDraft.points, jalanDraft.cursor];
+      const preview = (ctrl.length >= 3
+        ? sampleAxisPolyline({ id: "_", kind: "tangent", points: ctrl, bufferM: 0, createdAt: 0 })
+        : ctrl) as Point[];
+      drawAxisPath(preview, "rgba(63,63,70,0.6)", [6, 6], (jalanWidthM * pxPerMeter * view.s) || 6);
+      drawAxisPath(preview, "rgba(250,250,250,0.9)", [4, 4], 1.0);
+      ctx.fillStyle = "#27272a";
+      for (const p of jalanDraft.points) {
+        const sp = worldToScreen(p);
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // Draft jalan garis (drag)
+    if (drawing && tool === "jalan" && jalanSub === "garis") {
+      const wpx = jalanWidthM * pxPerMeter * view.s;
+      drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
+      drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
+    }
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
