@@ -8977,7 +8977,7 @@ function WwrPanel({ sketch }: { sketch: Sketch }) {
 
 // ---------- Master Plan Slide ----------
 function MasterPlanBody({ plan }: { plan: import("@/lib/masterplan").MasterPlan }) {
-  const { FUNCTION_META, totalsByFunction, blockGFA } = require("@/lib/masterplan") as typeof import("@/lib/masterplan");
+  const { FUNCTION_META, totalsByFunction, blockGFA } = { FUNCTION_META: MP_FUNCTION_META, totalsByFunction: mpTotalsByFunction, blockGFA: mpBlockGFA };
   const totals = totalsByFunction(plan);
   const totalGFA = totals.komersial.gfa + totals.fasum.gfa + totals.rth.gfa;
   const totalFootprint = totals.komersial.footprint + totals.fasum.footprint + totals.rth.footprint;
