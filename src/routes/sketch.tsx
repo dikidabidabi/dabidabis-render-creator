@@ -151,6 +151,12 @@ import {
   numBordesForSlope,
 } from "@/lib/ramps";
 import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
+import {
+  newRoadId,
+  roadCenterline,
+  roadCorridorPolygon as buildRoadCorridor,
+  type RoadSegment,
+} from "@/lib/roads";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -338,6 +344,7 @@ type Sketch = {
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
   ramps?: Ramp[]; // Ramp antar level
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
+  roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
 };
 
@@ -973,6 +980,33 @@ function normalizeSketch(s: any): Sketch {
           points: pts,
           bufferM: Number.isFinite(Number(a.bufferM)) && Number(a.bufferM) >= 0 ? Number(a.bufferM) : 8,
           createdAt: Number.isFinite(Number(a.createdAt)) ? Number(a.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
+    roads: (() => {
+      const raw = (s as any)?.roads;
+      if (!Array.isArray(raw)) return [];
+      const out: import("@/lib/roads").RoadSegment[] = [];
+      for (const r of raw) {
+        if (!r || typeof r !== "object") continue;
+        if (!Array.isArray(r.points) || r.points.length < 2) continue;
+        const pts: { x: number; y: number }[] = [];
+        let ok = true;
+        for (const p of r.points) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) { ok = false; break; }
+          pts.push({ x, y });
+        }
+        if (!ok) continue;
+        const kind = r.kind === "tangent" ? "tangent" : "garis";
+        out.push({
+          id: typeof r.id === "string" && r.id ? r.id : `rd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          kind,
+          points: pts,
+          widthM: Number.isFinite(Number(r.widthM)) && Number(r.widthM) > 0 ? Number(r.widthM) : 6,
+          filletM: Number.isFinite(Number(r.filletM)) && Number(r.filletM) >= 0 ? Number(r.filletM) : 0,
+          createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
         });
       }
       return out;
@@ -2059,12 +2093,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan">("line");
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
   const aksisBufferM = Math.max(0, Number(aksisBufferInput) || 8);
   const [aksisDraft, setAksisDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
+  // Jalan tool — koridor jalan (lebar + fillet) untuk Master Plan
+  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet">("garis");
+  const [jalanWidthInput, setJalanWidthInput] = useState<string>("6");
+  const [jalanFilletInput, setJalanFilletInput] = useState<string>("4");
+  const jalanWidthM = Math.max(0.5, Number(jalanWidthInput) || 6);
+  const jalanFilletM = Math.max(0, Number(jalanFilletInput) || 0);
+  const [jalanDraft, setJalanDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
   // Ramp tool state
   const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
   const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
@@ -5790,7 +5831,83 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, aksisDraft, aksisSub, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+    // Jalan — koridor + centerline + tepi kiri/kanan
+    const roadsAll: RoadSegment[] = sketch.roads ?? [];
+    for (const rd of roadsAll) {
+      const corridor = buildRoadCorridor(rd, pxPerMeter);
+      if (corridor.length >= 3) {
+        ctx.save();
+        ctx.fillStyle = "rgba(63,63,70,0.22)";
+        ctx.beginPath();
+        const c0 = worldToScreen(corridor[0]);
+        ctx.moveTo(c0.x, c0.y);
+        for (let i = 1; i < corridor.length; i++) {
+          const ci = worldToScreen(corridor[i]);
+          ctx.lineTo(ci.x, ci.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // outline tepi kiri/kanan
+        ctx.strokeStyle = "#27272a";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        const halfN = Math.floor(corridor.length / 2);
+        // left = first half (in order), right = second half (in order)
+        ctx.moveTo(c0.x, c0.y);
+        for (let i = 1; i < halfN; i++) {
+          const ci = worldToScreen(corridor[i]);
+          ctx.lineTo(ci.x, ci.y);
+        }
+        ctx.stroke();
+        ctx.beginPath();
+        const r0 = worldToScreen(corridor[halfN]);
+        ctx.moveTo(r0.x, r0.y);
+        for (let i = halfN + 1; i < corridor.length; i++) {
+          const ci = worldToScreen(corridor[i]);
+          ctx.lineTo(ci.x, ci.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      // centerline putus-putus
+      const center = roadCenterline(rd) as Point[];
+      drawAxisPath(center, "rgba(250,250,250,0.85)", [6, 6], 1.0);
+      // fillet indicator: lingkaran kecil di tiap vertex internal
+      if (rd.filletM > 0 && rd.points.length >= 3) {
+        ctx.save();
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 1;
+        const rPx = rd.filletM * pxPerMeter * view.s;
+        for (let i = 1; i < rd.points.length - 1; i++) {
+          const sp = worldToScreen(rd.points[i]);
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, Math.max(3, rPx * 0.4), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+    // Draft jalan tangent
+    if (jalanDraft && jalanDraft.kind === "tangent" && tool === "jalan") {
+      const ctrl = [...jalanDraft.points, jalanDraft.cursor];
+      const preview = (ctrl.length >= 3
+        ? sampleAxisPolyline({ id: "_", kind: "tangent", points: ctrl, bufferM: 0, createdAt: 0 })
+        : ctrl) as Point[];
+      drawAxisPath(preview, "rgba(63,63,70,0.6)", [6, 6], (jalanWidthM * pxPerMeter * view.s) || 6);
+      drawAxisPath(preview, "rgba(250,250,250,0.9)", [4, 4], 1.0);
+      ctx.fillStyle = "#27272a";
+      for (const p of jalanDraft.points) {
+        const sp = worldToScreen(p);
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // Draft jalan garis (drag)
+    if (drawing && tool === "jalan" && jalanSub === "garis") {
+      const wpx = jalanWidthM * pxPerMeter * view.s;
+      drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
+      drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
+    }
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -7586,7 +7703,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw") ||
-      (tool === "aksis" && aksisSub === "garis")
+      (tool === "aksis" && aksisSub === "garis") ||
+      (tool === "jalan" && jalanSub === "garis")
     ) {
       setDrawing({ a: p, b: p });
 
@@ -7596,6 +7714,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         setAksisDraft({ kind: "tangent", points: [p], cursor: p });
       } else {
         setAksisDraft({ ...aksisDraft, points: [...aksisDraft.points, p], cursor: p });
+      }
+    } else if (tool === "jalan" && jalanSub === "tangent") {
+      if (!jalanDraft) {
+        setJalanDraft({ kind: "tangent", points: [p], cursor: p });
+      } else {
+        setJalanDraft({ ...jalanDraft, points: [...jalanDraft.points, p], cursor: p });
+      }
+    } else if (tool === "jalan" && jalanSub === "fillet") {
+      // Klik dekat vertex internal jalan → set radius fillet jalan tsb.
+      const tolPx = 12 / view.s;
+      const roads = sketch.roads ?? [];
+      let bestIdx = -1, bestD = Infinity;
+      for (let i = 0; i < roads.length; i++) {
+        const rd = roads[i];
+        for (let v = 1; v < rd.points.length - 1; v++) {
+          const d = Math.hypot(rd.points[v].x - p.x, rd.points[v].y - p.y);
+          if (d < bestD) { bestD = d; bestIdx = i; }
+        }
+        // tangent multi-segmen — boleh klik tengah-tengah sebagai update global
+        const d2 = Math.hypot(rd.points[0].x - p.x, rd.points[0].y - p.y);
+        if (d2 < bestD) { bestD = d2; bestIdx = i; }
+      }
+      if (bestIdx >= 0 && bestD <= Math.max(tolPx, jalanWidthM * pxPerMeter)) {
+        const nextR = roads.map((rd, i) => i === bestIdx ? { ...rd, filletM: jalanFilletM } : rd);
+        onChange({ roads: nextR });
+        toast.success(`Fillet jalan = ${jalanFilletM.toFixed(2)} m`);
       }
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
@@ -8248,6 +8392,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing) setDrawing({ a: drawing.a, b: p });
     if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
     if (aksisDraft && tool === "aksis" && aksisSub === "tangent") setAksisDraft({ ...aksisDraft, cursor: p });
+    if (jalanDraft && tool === "jalan" && jalanSub === "tangent") setJalanDraft({ ...jalanDraft, cursor: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
       const pts = polyDraft.points;
@@ -8690,6 +8835,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       };
       onChange({ axes: [...(sketch.axes ?? []), ax] });
       toast.success("Aksis tersimpan");
+      return;
+    }
+
+    if (curTool === "jalan" && jalanSub === "garis") {
+      const rd: RoadSegment = {
+        id: newRoadId(), kind: "garis",
+        points: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }],
+        widthM: jalanWidthM, filletM: jalanFilletM, createdAt: Date.now(),
+      };
+      onChange({ roads: [...(sketch.roads ?? []), rd] });
+      toast.success(`Jalan tersimpan (${jalanWidthM.toFixed(1)} m)`);
       return;
     }
 
@@ -9660,6 +9816,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <Waypoints className="mr-1.5 h-4 w-4" /> Aksis
             </Button>
           )}
+          {mode === "masterplan" && (
+            <Button
+              variant={tool === "jalan" ? "default" : "outline"}
+              size="sm"
+              onClick={() => { cancelPendingCurve(); setTool("jalan"); setJalanDraft(null); }}
+              className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")}
+              title="Jalan — koridor dengan lebar & fillet; memandu Cluster Generator."
+            >
+              <Spline className="mr-1.5 h-4 w-4" /> Jalan
+            </Button>
+          )}
         </div>
         {tool === "aksis" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
@@ -9710,6 +9877,73 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 className="ml-auto h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
                 onClick={() => { onChange({ axes: [] }); toast.success("Semua aksis dihapus"); }}
               >Hapus semua ({(sketch.axes ?? []).length})</Button>
+            )}
+          </div>
+        )}
+        {tool === "jalan" && mode === "masterplan" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-500/40 bg-zinc-500/5 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-700">Jalan</span>
+            <Button
+              size="sm"
+              variant={jalanSub === "garis" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("garis"); setJalanDraft(null); }}
+            >Garis</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "tangent" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("tangent"); setJalanDraft(null); }}
+            >Tangent</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "fillet" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("fillet"); setJalanDraft(null); }}
+            >Fillet</Button>
+            <div className="ml-2 flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground">Lebar</span>
+              <Input
+                value={jalanWidthInput}
+                onChange={(e) => setJalanWidthInput(e.target.value)}
+                className="h-7 w-14 text-[11px]"
+              />
+              <span className="text-[10px] text-muted-foreground">m</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground">Fillet</span>
+              <Input
+                value={jalanFilletInput}
+                onChange={(e) => setJalanFilletInput(e.target.value)}
+                className="h-7 w-14 text-[11px]"
+              />
+              <span className="text-[10px] text-muted-foreground">m</span>
+            </div>
+            {jalanSub === "tangent" && jalanDraft && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  if (!jalanDraft || jalanDraft.points.length < 2) { setJalanDraft(null); return; }
+                  const rd: RoadSegment = {
+                    id: newRoadId(), kind: "tangent",
+                    points: jalanDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                    widthM: jalanWidthM, filletM: jalanFilletM, createdAt: Date.now(),
+                  };
+                  onChange({ roads: [...(sketch.roads ?? []), rd] });
+                  setJalanDraft(null);
+                  toast.success("Jalan tangent tersimpan");
+                }}
+              >Selesai ({jalanDraft.points.length} titik)</Button>
+            )}
+            {(sketch.roads ?? []).length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => { onChange({ roads: [] }); toast.success("Semua jalan dihapus"); }}
+              >Hapus semua ({(sketch.roads ?? []).length})</Button>
             )}
           </div>
         )}
@@ -11870,6 +12104,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             return axs.map((ax) => ({
               points: sampleAxisPolyline(ax).map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter })),
               bufferM: ax.bufferM,
+            }));
+          })()}
+          roads={(() => {
+            const rds = sketch.roads ?? [];
+            if (rds.length === 0) return undefined;
+            return rds.map((rd) => ({
+              center: roadCenterline(rd).map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter })),
+              widthM: rd.widthM,
             }));
           })()}
           onCommit={(blocks) => {
