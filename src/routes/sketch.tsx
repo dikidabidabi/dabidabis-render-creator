@@ -1436,10 +1436,11 @@ type SketchCardProps = {
   onDuplicate: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
+  mode?: "sketch" | "masterplan";
 };
 
 function SketchCard(props: SketchCardProps) {
-  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onEnterFullscreen } = props;
+  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onEnterFullscreen, mode } = props;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(sketch.title);
 
