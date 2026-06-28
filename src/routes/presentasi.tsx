@@ -1965,8 +1965,9 @@ function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) 
 
 // ---- Section body (Potongan Prinsip A-A, dinamis dari sketch.sectionCut) ----
 const SECTION_METERS_PER_MAJOR: Record<string, number> = {
-  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10,
+  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20,
 };
+
 function sectionPointInPolygon(p: Point, poly: Point[]) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -4337,8 +4338,9 @@ function SiteMapCanvas({
 // We assume sketch world units are CANVAS pixels under sketch scale. Use `scale` mapping.
 function sketchMetersPerSketchPx(scale: string): number {
   // mirror stackMetersPerPx logic.
-  const major: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10 };
+  const major: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 };
   return (major[scale] ?? 1) / 80;
+
 }
 
 // Project a (lat,lon) to local meters offset from a center.
@@ -8349,8 +8351,9 @@ function Ring({ value, label }: { value: number; label: string }) {
 
 // pxPerMeter — mirror dari sketch.tsx
 const METERS_PER_MAJOR_SCALE: Record<string, number> = {
-  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10,
+  "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20,
 };
+
 function pxPerMeterFor(scale: string): number {
   return 80 / (METERS_PER_MAJOR_SCALE[scale] ?? 1);
 }
