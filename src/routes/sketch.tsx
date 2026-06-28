@@ -151,6 +151,12 @@ import {
   numBordesForSlope,
 } from "@/lib/ramps";
 import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
+import {
+  newRoadId,
+  roadCenterline,
+  roadCorridorPolygon as buildRoadCorridor,
+  type RoadSegment,
+} from "@/lib/roads";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
