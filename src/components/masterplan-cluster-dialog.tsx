@@ -507,17 +507,23 @@ export function MasterplanClusterDialog({
         const cx = Math.round(p.x * 10) / 10;
         const cz = Math.round(p.z * 10) / 10;
         const hx = w / 2, hz = d / 2;
+        const rot = p.rot || 0;
+        const cs = Math.cos(rot), sn = Math.sin(rot);
+        const rotPt = (lx: number, ly: number) => ({
+          x: Math.round((cx + lx * cs - ly * sn) * 10) / 10,
+          y: Math.round((cz + lx * sn + ly * cs) * 10) / 10,
+        });
         return {
           id, name: src.name, fn: src.fn,
           x: cx, z: cz, w, d,
           height: Math.round(p.h * 10) / 10,
           floors: src.floors,
-          rotation: 0,
+          rotation: rot,
           polygon: [
-            { x: cx - hx, y: cz - hz },
-            { x: cx + hx, y: cz - hz },
-            { x: cx + hx, y: cz + hz },
-            { x: cx - hx, y: cz + hz },
+            rotPt(-hx, -hz),
+            rotPt( hx, -hz),
+            rotPt( hx,  hz),
+            rotPt(-hx,  hz),
           ],
         };
       });
