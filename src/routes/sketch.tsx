@@ -11685,7 +11685,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 id: `L${Date.now().toString(36)}_mp${i}_${Math.random().toString(36).slice(2, 5)}`,
                 name: b.name,
                 points: pts,
-                areaM2: undefined,
+                areaM2: 0,
                 color: MP_FN_META[b.fn].color,
                 levelId: lvId,
               } as Layer;
