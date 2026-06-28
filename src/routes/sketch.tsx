@@ -8247,6 +8247,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
     if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
+    if (aksisDraft && tool === "aksis" && aksisSub === "tangent") setAksisDraft({ ...aksisDraft, cursor: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
       const pts = polyDraft.points;
