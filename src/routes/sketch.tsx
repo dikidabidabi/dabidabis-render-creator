@@ -9880,6 +9880,73 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
+        {tool === "jalan" && mode === "masterplan" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-500/40 bg-zinc-500/5 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-700">Jalan</span>
+            <Button
+              size="sm"
+              variant={jalanSub === "garis" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("garis"); setJalanDraft(null); }}
+            >Garis</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "tangent" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("tangent"); setJalanDraft(null); }}
+            >Tangent</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "fillet" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("fillet"); setJalanDraft(null); }}
+            >Fillet</Button>
+            <div className="ml-2 flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground">Lebar</span>
+              <Input
+                value={jalanWidthInput}
+                onChange={(e) => setJalanWidthInput(e.target.value)}
+                className="h-7 w-14 text-[11px]"
+              />
+              <span className="text-[10px] text-muted-foreground">m</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground">Fillet</span>
+              <Input
+                value={jalanFilletInput}
+                onChange={(e) => setJalanFilletInput(e.target.value)}
+                className="h-7 w-14 text-[11px]"
+              />
+              <span className="text-[10px] text-muted-foreground">m</span>
+            </div>
+            {jalanSub === "tangent" && jalanDraft && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  if (!jalanDraft || jalanDraft.points.length < 2) { setJalanDraft(null); return; }
+                  const rd: RoadSegment = {
+                    id: newRoadId(), kind: "tangent",
+                    points: jalanDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                    widthM: jalanWidthM, filletM: jalanFilletM, createdAt: Date.now(),
+                  };
+                  onChange({ roads: [...(sketch.roads ?? []), rd] });
+                  setJalanDraft(null);
+                  toast.success("Jalan tangent tersimpan");
+                }}
+              >Selesai ({jalanDraft.points.length} titik)</Button>
+            )}
+            {(sketch.roads ?? []).length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => { onChange({ roads: [] }); toast.success("Semua jalan dihapus"); }}
+              >Hapus semua ({(sketch.roads ?? []).length})</Button>
+            )}
+          </div>
+        )}
         {tool === "parking" && (
           <ParkingSubToolbar
             parkingKind={parkingKind}
