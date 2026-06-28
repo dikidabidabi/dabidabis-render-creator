@@ -437,7 +437,7 @@ export function MasterplanClusterDialog({
       setLayouts(next);
       setGenerating(false);
     }, 20);
-  }, [buildings, rel, sitePolygon]);
+  }, [buildings, rel, sitePolygon, avoidAxes]);
 
   const pickLayout = useCallback(
     (layout: CGLayout) => {
