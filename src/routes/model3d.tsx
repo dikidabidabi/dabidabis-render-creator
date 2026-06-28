@@ -111,6 +111,9 @@ const METERS_PER_MAJOR: Record<string, number> = {
   "1:200": 2,
   "1:500": 5,
   "1:1000": 10,
+  "1:1200": 12,
+  "1:1500": 15,
+  "1:2000": 20,
 };
 
 function metersPerPx(scale: string) {
