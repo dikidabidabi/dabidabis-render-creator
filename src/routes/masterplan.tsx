@@ -16,7 +16,9 @@ import {
   Building2,
   Trees,
   Landmark,
+  Sparkles,
 } from "lucide-react";
+import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog";
 import {
   FUNCTION_META,
   type MassingBlock,
