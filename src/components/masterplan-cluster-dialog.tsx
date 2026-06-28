@@ -373,6 +373,7 @@ export function MasterplanClusterDialog({
   existingPlan,
   sitePolygon,
   avoidAxes,
+  roads,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -382,6 +383,8 @@ export function MasterplanClusterDialog({
   sitePolygon?: Vec2[];
   /** Polyline aksis dalam koordinat meter (world) yang harus dihindari massa. */
   avoidAxes?: { points: Vec2[]; bufferM: number }[];
+  /** Jalan: centerline (meter) + lebar (m). Membentuk koridor & memandu cluster. */
+  roads?: RoadRef[];
 }) {
   const [buildings, setBuildings] = useState<CGBuilding[]>([]);
   const [rel, setRel] = useState<Record<string, CGRelation>>({});
