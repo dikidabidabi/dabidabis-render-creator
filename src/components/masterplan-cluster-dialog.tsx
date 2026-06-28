@@ -287,28 +287,6 @@ function MiniBlocks({
   );
 }
 
-// Build a THREE.Shape from list of [x,z] (already centered) for the site plane.
-function buildShape(pts: [number, number][]) {
-  // lazy import to avoid pulling THREE typedef at module scope
-  const THREE = require("three"); // eslint-disable-line @typescript-eslint/no-var-requires
-  const s = new THREE.Shape();
-  if (pts.length === 0) return s;
-  s.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
-  s.closePath();
-  return s;
-}
-function sitePolyLineGeom(pts: [number, number][]) {
-  const THREE = require("three"); // eslint-disable-line @typescript-eslint/no-var-requires
-  const arr: number[] = [];
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i], b = pts[(i + 1) % pts.length];
-    arr.push(a[0], 0, a[1], b[0], 0, b[1]);
-  }
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
-  return { attach: "geometry" as const, args: [] as never, ...{}, ref: undefined };
-}
 
 // ---------- Main dialog ----------
 export function MasterplanClusterDialog({
