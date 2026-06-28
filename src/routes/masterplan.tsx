@@ -265,6 +265,15 @@ function MasterPlanPage() {
             <Plus className="mr-2 h-4 w-4" />
             Tambah Blok di Tengah
           </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="mt-1.5 w-full justify-start"
+            onClick={() => setClusterOpen(true)}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Cluster Generator
+          </Button>
         </div>
 
         <div className="mt-2">
