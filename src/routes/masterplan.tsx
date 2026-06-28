@@ -508,6 +508,16 @@ function MasterPlanPage() {
           Lihat di Slide Presentasi <ArrowRight className="h-3 w-3" />
         </Link>
       </aside>
+
+      <MasterplanClusterDialog
+        open={clusterOpen}
+        onOpenChange={setClusterOpen}
+        existingPlan={plan}
+        onCommit={(blocks) => {
+          setPlan((p) => ({ ...p, blocks: [...p.blocks, ...blocks] }));
+          if (blocks.length > 0) setSelectedId(blocks[0].id);
+        }}
+      />
     </main>
   );
 }
