@@ -7703,7 +7703,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw") ||
-      (tool === "aksis" && aksisSub === "garis")
+      (tool === "aksis" && aksisSub === "garis") ||
+      (tool === "jalan" && jalanSub === "garis")
     ) {
       setDrawing({ a: p, b: p });
 
@@ -7714,7 +7715,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       } else {
         setAksisDraft({ ...aksisDraft, points: [...aksisDraft.points, p], cursor: p });
       }
-    } else if (tool === "polyline") {
+    } else if (tool === "jalan" && jalanSub === "tangent") {
+      if (!jalanDraft) {
+        setJalanDraft({ kind: "tangent", points: [p], cursor: p });
+      } else {
+        setJalanDraft({ ...jalanDraft, points: [...jalanDraft.points, p], cursor: p });
+      }
+    } else if (tool === "jalan" && jalanSub === "fillet") {
+      // Klik dekat vertex internal jalan → set radius fillet jalan tsb.
+      const tolPx = 12 / view.s;
+      const roads = sketch.roads ?? [];
+      let bestIdx = -1, bestD = Infinity;
+      for (let i = 0; i < roads.length; i++) {
+        const rd = roads[i];
+        for (let v = 1; v < rd.points.length - 1; v++) {
+          const d = Math.hypot(rd.points[v].x - p.x, rd.points[v].y - p.y);
+          if (d < bestD) { bestD = d; bestIdx = i; }
+        }
+        // tangent multi-segmen — boleh klik tengah-tengah sebagai update global
+        const d2 = Math.hypot(rd.points[0].x - p.x, rd.points[0].y - p.y);
+        if (d2 < bestD) { bestD = d2; bestIdx = i; }
+      }
+      if (bestIdx >= 0 && bestD <= Math.max(tolPx, jalanWidthM * pxPerMeter)) {
+        const nextR = roads.map((rd, i) => i === bestIdx ? { ...rd, filletM: jalanFilletM } : rd);
+        onChange({ roads: nextR });
+        toast.success(`Fillet jalan = ${jalanFilletM.toFixed(2)} m`);
+      }
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
       const raw = getWorldPosRaw(e);
