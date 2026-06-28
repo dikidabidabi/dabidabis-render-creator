@@ -1378,6 +1378,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
               setFullscreenId(s.id);
             }}
             onExitFullscreen={() => setFullscreenId(null)}
+            mode={mode}
           />
         ))}
 
