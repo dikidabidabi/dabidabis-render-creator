@@ -535,7 +535,26 @@ function PrintStyles() {
 function PresentasiBox({
   sketch, narasi, perspektif, open, onToggle,
 }: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
-  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif), [sketch, narasi, perspektif]);
+  const [masterPlan, setMasterPlan] = useState(() => {
+    if (typeof window === "undefined") return null as import("@/lib/masterplan").MasterPlan | null;
+    try { return require("@/lib/masterplan").loadPlan(); } catch { return null; }
+  });
+  useEffect(() => {
+    let mounted = true;
+    import("@/lib/masterplan").then((m) => {
+      if (!mounted) return;
+      setMasterPlan(m.loadPlan());
+      const onUpd = () => setMasterPlan(m.loadPlan());
+      window.addEventListener("masterplan:update", onUpd);
+      window.addEventListener("storage", onUpd);
+      (window as any).__mpCleanup = () => {
+        window.removeEventListener("masterplan:update", onUpd);
+        window.removeEventListener("storage", onUpd);
+      };
+    });
+    return () => { mounted = false; (window as any).__mpCleanup?.(); };
+  }, []);
+  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif, masterPlan), [sketch, narasi, perspektif, masterPlan]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
