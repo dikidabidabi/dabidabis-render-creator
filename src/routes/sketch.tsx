@@ -950,6 +950,32 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    axes: (() => {
+      const raw = s?.axes;
+      if (!Array.isArray(raw)) return [];
+      const out: import("@/lib/axes").AxisSegment[] = [];
+      for (const a of raw) {
+        if (!a || typeof a !== "object") continue;
+        if (!Array.isArray(a.points) || a.points.length < 2) continue;
+        const pts: { x: number; y: number }[] = [];
+        let ok = true;
+        for (const p of a.points) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) { ok = false; break; }
+          pts.push({ x, y });
+        }
+        if (!ok) continue;
+        const kind = a.kind === "tangent" ? "tangent" : "garis";
+        out.push({
+          id: typeof a.id === "string" && a.id ? a.id : `ax_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          kind,
+          points: pts,
+          bufferM: Number.isFinite(Number(a.bufferM)) && Number(a.bufferM) >= 0 ? Number(a.bufferM) : 8,
+          createdAt: Number.isFinite(Number(a.createdAt)) ? Number(a.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
   };
 }
 
