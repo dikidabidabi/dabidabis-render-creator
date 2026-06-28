@@ -90,35 +90,57 @@ function solveLayout(
   seed: number,
   sitePoly?: Vec2[],
   avoidAxes?: { points: Vec2[]; bufferM: number }[],
+  roads?: RoadRef[],
 ): CGLayout {
   const rnd = mulberry32(seed);
-  const items = buildings.map((b) => {
-    const { w, d } = dimsFromFootprint(b.footprint);
-    const h = Math.max(0.5, b.floors * FLOOR_HEIGHT_M);
-    const r = Math.hypot(w, d) / 2;
-    const ang = rnd() * Math.PI * 2;
-    const init = 6 + rnd() * 18;
-    return {
-      id: b.id,
-      x: Math.cos(ang) * init,
-      z: Math.sin(ang) * init,
-      vx: 0,
-      vz: 0,
-      w, d, h, r,
-    };
-  });
 
-  // Site geometry (meters). If absent, infer from total footprint.
-  const totalR = items.reduce((s, it) => s + it.r, 0);
+  // Site geometry
   let center: Vec2 = { x: 0, y: 0 };
-  let halfX = Math.max(40, totalR * 1.6);
-  let halfZ = halfX;
+  let halfX = 80, halfZ = 80;
   if (sitePoly && sitePoly.length >= 3) {
     const bb = polyBounds(sitePoly);
     center = polyCentroid(sitePoly);
     halfX = Math.max(20, (bb.maxX - bb.minX) / 2 - 2);
     halfZ = Math.max(20, (bb.maxY - bb.minY) / 2 - 2);
   }
+
+  // --- Region partitioning by roads ---
+  // Region polygon dalam koordinat dunia (meter).
+  const regions = (() => {
+    if (!roads || roads.length === 0 || !sitePoly || sitePoly.length < 3) {
+      return [{ polygon: sitePoly ?? [], centroid: center, area: 1 }];
+    }
+    const rs = roadNetworkRegions(sitePoly, roads, 60);
+    return rs.length > 0 ? rs : [{ polygon: sitePoly, centroid: center, area: 1 }];
+  })();
+
+  // Assign buildings → region (round-robin by hierarchy: larger first).
+  const order = buildings.map((b, i) => ({ b, i, w: b.footprint * Math.max(1, b.floors) }))
+    .sort((a, c) => c.w - a.w);
+  const regionOf = new Map<string, number>();
+  for (let k = 0; k < order.length; k++) {
+    regionOf.set(order[k].b.id, k % regions.length);
+  }
+
+  const items = buildings.map((b) => {
+    const { w, d } = dimsFromFootprint(b.footprint);
+    const h = Math.max(0.5, b.floors * FLOOR_HEIGHT_M);
+    const r = Math.hypot(w, d) / 2;
+    const ri = regionOf.get(b.id) ?? 0;
+    const reg = regions[ri];
+    const ang = rnd() * Math.PI * 2;
+    const init = 3 + rnd() * 6;
+    return {
+      id: b.id,
+      // Spawn relatif terhadap pusat region-nya, lalu kita track posisi absolut (m world).
+      x: reg.centroid.x + Math.cos(ang) * init,
+      z: reg.centroid.y + Math.sin(ang) * init,
+      vx: 0, vz: 0,
+      w, d, h, r,
+      rot: 0,
+      regionIdx: ri,
+    };
+  });
 
   const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   const relOf = (a: string, b: string): CGRelation => rel[key(a, b)] ?? "none";
@@ -151,16 +173,16 @@ function solveLayout(
         A.vx += nx * force; A.vz += nz * force;
         B.vx -= nx * force; B.vz -= nz * force;
       }
-      // gentle centering
-      A.vx += -A.x * 0.005;
-      A.vz += -A.z * 0.005;
-      // Aksis: repulsion dari polyline aksis (dlm koordinat dunia → konversi
-      // ke koordinat lokal yg ber-pusat di centroid lahan).
+      // Gentle pull ke pusat region (bukan pusat tapak).
+      const reg = regions[A.regionIdx];
+      A.vx += (reg.centroid.x - A.x) * 0.012;
+      A.vz += (reg.centroid.y - A.z) * 0.012;
+
+      // Aksis: repulsion dari polyline aksis (koordinat dunia meter).
       if (avoidAxes && avoidAxes.length) {
-        const pw = { x: A.x + center.x, y: A.z + center.y };
+        const pw = { x: A.x, y: A.z };
         for (const ax of avoidAxes) {
           const buf = Math.max(0, ax.bufferM) + Math.max(A.w, A.d) / 2;
-          // jarak ke polyline
           let best = Infinity; let bnx = 0; let bnz = 0;
           for (let k = 0; k < ax.points.length - 1; k++) {
             const p1 = ax.points[k], p2 = ax.points[k + 1];
@@ -179,19 +201,50 @@ function solveLayout(
           }
         }
       }
+
+      // Jalan: tarik ringan ke tepi jalan terdekat (akses depan); usir dari dalam koridor.
+      if (roads && roads.length) {
+        const pw = { x: A.x, y: A.z };
+        const inCorridor = pointInRoadCorridor(pw, roads);
+        const near = nearestRoadEdge(pw, roads);
+        if (inCorridor && near) {
+          // dorong keluar
+          A.vx += near.nor.x * 1.2;
+          A.vz += near.nor.y * 1.2;
+        } else if (near) {
+          const setback = Math.max(A.w, A.d) / 2 + 2;
+          const desired = setback;
+          const delta = near.d - desired;
+          // Gravitasi ringan ke tepi jalan
+          const k = -Math.tanh(delta / 12) * 0.08;
+          A.vx += -near.nor.x * k * 6;
+          A.vz += -near.nor.y * k * 6;
+        }
+      }
     }
     for (const it2 of items) {
       it2.x += it2.vx * cooling;
       it2.z += it2.vz * cooling;
       it2.vx *= 0.6;
       it2.vz *= 0.6;
-      // clamp inside local box (centered at 0,0)
-      const lx = halfX - it2.w / 2;
-      const lz = halfZ - it2.d / 2;
-      if (it2.x > lx) it2.x = lx;
-      if (it2.x < -lx) it2.x = -lx;
-      if (it2.z > lz) it2.z = lz;
-      if (it2.z < -lz) it2.z = -lz;
+      // Clamp ke bounding box region (axis-aligned bb).
+      const reg = regions[it2.regionIdx];
+      if (reg.polygon && reg.polygon.length >= 3) {
+        const bb = polyBounds(reg.polygon);
+        const lx0 = bb.minX + it2.w / 2 + 0.5;
+        const lx1 = bb.maxX - it2.w / 2 - 0.5;
+        const lz0 = bb.minY + it2.d / 2 + 0.5;
+        const lz1 = bb.maxY - it2.d / 2 - 0.5;
+        if (lx1 > lx0) { if (it2.x > lx1) it2.x = lx1; if (it2.x < lx0) it2.x = lx0; }
+        if (lz1 > lz0) { if (it2.z > lz1) it2.z = lz1; if (it2.z < lz0) it2.z = lz0; }
+      } else {
+        const lx = halfX - it2.w / 2;
+        const lz = halfZ - it2.d / 2;
+        if (it2.x > center.x + lx) it2.x = center.x + lx;
+        if (it2.x < center.x - lx) it2.x = center.x - lx;
+        if (it2.z > center.y + lz) it2.z = center.y + lz;
+        if (it2.z < center.y - lz) it2.z = center.y - lz;
+      }
     }
   }
 
@@ -216,26 +269,22 @@ function solveLayout(
     if (!moved) break;
   }
 
-  // Shift items to site center; if polygon defined, also nudge centroids inside.
-  const positions: CGPos[] = items.map((it) => ({
-    id: it.id,
-    x: it.x + center.x,
-    z: it.z + center.y,
-    w: it.w, d: it.d, h: it.h,
-  }));
-  if (sitePoly && sitePoly.length >= 3) {
-    for (const p of positions) {
-      // crude pull-back if centroid outside polygon
-      if (!pointInPolygon({ x: p.x, y: p.z }, sitePoly)) {
-        const dx = center.x - p.x;
-        const dz = center.y - p.z;
-        const dl = Math.hypot(dx, dz) || 1;
-        const step = Math.min(dl, 8);
-        p.x += (dx / dl) * step;
-        p.z += (dz / dl) * step;
+  // Orient buildings to nearest road tangent (snap to ±90°).
+  if (roads && roads.length) {
+    for (const it of items) {
+      const near = nearestRoadEdge({ x: it.x, y: it.z }, roads);
+      if (near) {
+        // Sudut tangent (atan2 dy,dx). Snap orientasi ke kelipatan 90°.
+        const ang = Math.atan2(near.tan.y, near.tan.x);
+        const snapped = Math.round(ang / (Math.PI / 2)) * (Math.PI / 2);
+        it.rot = snapped;
       }
     }
   }
+
+  const positions: CGPos[] = items.map((it) => ({
+    id: it.id, x: it.x, z: it.z, w: it.w, d: it.d, h: it.h, rot: it.rot,
+  }));
   return {
     seed,
     positions,
