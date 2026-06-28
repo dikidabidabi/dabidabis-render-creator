@@ -1207,7 +1207,9 @@ function ParkingSubToolbarMobile(props: ParkingSubToolbarProps) {
 
 
 
-function SketchPage() {
+export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan" } = {}) {
+  const STORAGE_KEY_ACTIVE = mode === "masterplan" ? "dabidabis_masterplan_canvas_v1" : STORAGE_KEY;
+  const LEGACY_KEY_ACTIVE = mode === "masterplan" ? "dabidabis_masterplan_canvas_v0" : LEGACY_KEY;
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
