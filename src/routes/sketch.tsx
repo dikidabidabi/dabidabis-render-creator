@@ -7519,11 +7519,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
-      (tool === "parking" && parkingSubTool === "draw")
+      (tool === "parking" && parkingSubTool === "draw") ||
+      (tool === "aksis" && aksisSub === "garis")
     ) {
       setDrawing({ a: p, b: p });
 
 
+    } else if (tool === "aksis" && aksisSub === "tangent") {
+      if (!aksisDraft) {
+        setAksisDraft({ kind: "tangent", points: [p], cursor: p });
+      } else {
+        setAksisDraft({ ...aksisDraft, points: [...aksisDraft.points, p], cursor: p });
+      }
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
