@@ -406,16 +406,25 @@ export function MasterplanClusterDialog({
         }
         used.add(id);
         const floors = Math.max(1, Math.round(p.h / 4));
+        const cx = Math.round(p.x + offsetX);
+        const cz = Math.round(p.z + offsetZ);
+        const w = Math.round(p.w * 10) / 10;
+        const d = Math.round(p.d * 10) / 10;
+        const hx = w / 2, hz = d / 2;
         return {
           id,
           name: src.name,
           fn: src.fn,
-          x: Math.round(p.x + offsetX),
-          z: Math.round(p.z + offsetZ),
-          w: Math.round(p.w * 10) / 10,
-          d: Math.round(p.d * 10) / 10,
+          x: cx, z: cz, w, d,
           height: Math.round(p.h * 10) / 10,
           floors,
+          rotation: 0,
+          polygon: [
+            { x: cx - hx, y: cz - hz },
+            { x: cx + hx, y: cz - hz },
+            { x: cx + hx, y: cz + hz },
+            { x: cx - hx, y: cz + hz },
+          ],
         };
       });
       onCommit(blocks);
