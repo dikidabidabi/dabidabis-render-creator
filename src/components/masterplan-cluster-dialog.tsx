@@ -152,6 +152,31 @@ function solveLayout(
       // gentle centering
       A.vx += -A.x * 0.005;
       A.vz += -A.z * 0.005;
+      // Aksis: repulsion dari polyline aksis (dlm koordinat dunia → konversi
+      // ke koordinat lokal yg ber-pusat di centroid lahan).
+      if (avoidAxes && avoidAxes.length) {
+        const pw = { x: A.x + center.x, y: A.z + center.y };
+        for (const ax of avoidAxes) {
+          const buf = Math.max(0, ax.bufferM) + Math.max(A.w, A.d) / 2;
+          // jarak ke polyline
+          let best = Infinity; let bnx = 0; let bnz = 0;
+          for (let k = 0; k < ax.points.length - 1; k++) {
+            const p1 = ax.points[k], p2 = ax.points[k + 1];
+            const dx = p2.x - p1.x, dy = p2.y - p1.y;
+            const l2 = dx * dx + dy * dy;
+            let t = l2 > 1e-9 ? ((pw.x - p1.x) * dx + (pw.y - p1.y) * dy) / l2 : 0;
+            if (t < 0) t = 0; else if (t > 1) t = 1;
+            const cx = p1.x + t * dx, cy = p1.y + t * dy;
+            const ex = pw.x - cx, ey = pw.y - cy;
+            const d = Math.hypot(ex, ey);
+            if (d < best) { best = d; bnx = d > 1e-6 ? ex / d : 0; bnz = d > 1e-6 ? ey / d : 0; }
+          }
+          if (best < buf) {
+            const k = (buf - best) * 0.35;
+            A.vx += bnx * k; A.vz += bnz * k;
+          }
+        }
+      }
     }
     for (const it2 of items) {
       it2.x += it2.vx * cooling;
