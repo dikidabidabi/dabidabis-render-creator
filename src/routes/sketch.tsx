@@ -9563,7 +9563,70 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <BoxIcon className="mr-1.5 h-4 w-4" /> Ramp
           </Button>
+          {mode === "masterplan" && (
+            <Button
+              variant={tool === "aksis" ? "default" : "outline"}
+              size="sm"
+              onClick={() => { cancelPendingCurve(); setTool("aksis"); setAksisDraft(null); }}
+              className={cn(tool === "aksis" && "bg-gradient-primary shadow-primary")}
+              title="Aksis — sumbu rancangan yang dihindari oleh Cluster Generator."
+            >
+              <Waypoints className="mr-1.5 h-4 w-4" /> Aksis
+            </Button>
+          )}
         </div>
+        {tool === "aksis" && mode === "masterplan" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Aksis</span>
+            <Button
+              size="sm"
+              variant={aksisSub === "garis" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setAksisSub("garis"); setAksisDraft(null); }}
+            >Garis</Button>
+            <Button
+              size="sm"
+              variant={aksisSub === "tangent" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setAksisSub("tangent"); setAksisDraft(null); }}
+            >Tangent</Button>
+            <div className="ml-2 flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground">Buffer</span>
+              <Input
+                value={aksisBufferInput}
+                onChange={(e) => setAksisBufferInput(e.target.value)}
+                className="h-7 w-14 text-[11px]"
+              />
+              <span className="text-[10px] text-muted-foreground">m</span>
+            </div>
+            {aksisSub === "tangent" && aksisDraft && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  if (!aksisDraft || aksisDraft.points.length < 2) { setAksisDraft(null); return; }
+                  const ax: AxisSegment = {
+                    id: newAxisId(), kind: "tangent",
+                    points: aksisDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                    bufferM: aksisBufferM, createdAt: Date.now(),
+                  };
+                  onChange({ axes: [...(sketch.axes ?? []), ax] });
+                  setAksisDraft(null);
+                  toast.success("Aksis tangent tersimpan");
+                }}
+              >Selesai ({aksisDraft.points.length} titik)</Button>
+            )}
+            {(sketch.axes ?? []).length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => { onChange({ axes: [] }); toast.success("Semua aksis dihapus"); }}
+              >Hapus semua ({(sketch.axes ?? []).length})</Button>
+            )}
+          </div>
+        )}
         {tool === "parking" && (
           <ParkingSubToolbar
             parkingKind={parkingKind}
