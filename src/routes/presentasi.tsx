@@ -1129,6 +1129,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   const out: Slide[] = [];
   // Slide judul (paling awal)
   out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
+  // Slide Master Plan — analisis kawasan makro (skyline + GFA per fungsi).
+  if (plan && plan.blocks.length > 0) {
+    out.push({ kind: "masterplan", id: "masterplan", title: "Analisis Master Plan Kawasan", sketch: sk, plan });
+  }
   // 4 slide analisa site — selalu ada (pakai koordinat default jika belum dikunci).
   out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
   out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
