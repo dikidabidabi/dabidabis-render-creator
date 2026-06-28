@@ -535,21 +535,18 @@ function PrintStyles() {
 function PresentasiBox({
   sketch, narasi, perspektif, open, onToggle,
 }: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
-  const [masterPlan, setMasterPlan] = useState(() => {
-    if (typeof window === "undefined") return null as import("@/lib/masterplan").MasterPlan | null;
-    try { return require("@/lib/masterplan").loadPlan(); } catch { return null; }
-  });
+  const [masterPlan, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
   useEffect(() => {
     let mounted = true;
     import("@/lib/masterplan").then((m) => {
       if (!mounted) return;
-      setMasterPlan(m.loadPlan());
-      const onUpd = () => setMasterPlan(m.loadPlan());
-      window.addEventListener("masterplan:update", onUpd);
-      window.addEventListener("storage", onUpd);
+      const refresh = () => setMasterPlan(m.loadPlan());
+      refresh();
+      window.addEventListener("masterplan:update", refresh);
+      window.addEventListener("storage", refresh);
       (window as any).__mpCleanup = () => {
-        window.removeEventListener("masterplan:update", onUpd);
-        window.removeEventListener("storage", onUpd);
+        window.removeEventListener("masterplan:update", refresh);
+        window.removeEventListener("storage", refresh);
       };
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
