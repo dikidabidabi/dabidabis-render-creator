@@ -1762,9 +1762,10 @@ type EditorProps = {
   onChange: (patch: Partial<Sketch>) => void;
   fullscreen: boolean;
   onExitFullscreen?: () => void;
+  mode?: "sketch" | "masterplan";
 };
 
-function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
+function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "sketch" }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
   const snapVertex = sketch.snapVertex ?? true;
   const snapMidpoint = sketch.snapMidpoint ?? true;
