@@ -1550,7 +1550,7 @@ function SketchCard(props: SketchCardProps) {
         </div>
       </div>
 
-      {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} />}
+      {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} mode={mode} />}
     </section>
   );
 }
