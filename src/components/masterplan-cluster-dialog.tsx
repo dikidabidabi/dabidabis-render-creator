@@ -263,15 +263,13 @@ function MiniBlocks({
         position={[0, 0.01, 0]}
         fadeDistance={extent * 5}
       />
-      {/* site plane (Lahan) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <shapeGeometry args={[buildShape(sitePts)]} />
-        <meshStandardMaterial color="#e8f5e9" />
-      </mesh>
-      <lineSegments position={[0, 0.04, 0]}>
-        <bufferGeometry attach="geometry" {...sitePolyLineGeom(sitePts)} />
-        <lineBasicMaterial color="#16a34a" />
-      </lineSegments>
+      {/* site outline (Lahan) */}
+      <Line
+        points={[...sitePts.map(([x, z]) => [x, 0.04, z] as [number, number, number]),
+                 [sitePts[0][0], 0.04, sitePts[0][1]] as [number, number, number]]}
+        color="#16a34a"
+        lineWidth={1.6}
+      />
       {/* blocks (translated relative to site center) */}
       {layout.positions.map((p) => {
         const b = byId.get(p.id);
