@@ -81,6 +81,8 @@ import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
 import { ClusterGeneratorDialog, type ClusterGraph, type GenerateResult } from "@/components/cluster-generator-dialog";
+import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog";
+import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlockPolygon, FUNCTION_META as MP_FN_META } from "@/lib/masterplan";
 import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
@@ -1205,7 +1207,9 @@ function ParkingSubToolbarMobile(props: ParkingSubToolbarProps) {
 
 
 
-function SketchPage() {
+export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan" } = {}) {
+  const STORAGE_KEY_ACTIVE = mode === "masterplan" ? "dabidabis_masterplan_canvas_v1" : STORAGE_KEY;
+  const LEGACY_KEY_ACTIVE = mode === "masterplan" ? "dabidabis_masterplan_canvas_v0" : LEGACY_KEY;
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
@@ -1221,7 +1225,7 @@ function SketchPage() {
   // Load
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY_ACTIVE);
       if (raw) {
         const s = JSON.parse(raw) as StoreShape;
         if (s && Array.isArray(s.sketches)) {
@@ -1233,7 +1237,7 @@ function SketchPage() {
         }
       }
       // Migrate legacy single-sketch
-      const legacy = localStorage.getItem(LEGACY_KEY);
+      const legacy = localStorage.getItem(LEGACY_KEY_ACTIVE);
       if (legacy) {
         const ls = JSON.parse(legacy);
         const migrated = normalizeSketch({
@@ -1259,28 +1263,28 @@ function SketchPage() {
       setOpenId(first.id);
     }
     setLoaded(true);
-  }, []);
+  }, [STORAGE_KEY_ACTIVE, LEGACY_KEY_ACTIVE]);
 
   // Save
   useEffect(() => {
     if (!loaded) return;
     const payload = JSON.stringify({ sketches, openId } as StoreShape);
     const handle = setTimeout(() => {
-      void setProjectItem(STORAGE_KEY, payload);
+      void setProjectItem(STORAGE_KEY_ACTIVE, payload);
     }, 400);
     return () => clearTimeout(handle);
-  }, [sketches, openId, loaded]);
+  }, [sketches, openId, loaded, STORAGE_KEY_ACTIVE]);
 
   useEffect(() => {
     return () => {
       const latest = latestStoreRef.current;
       if (!latest.loaded) return;
       void setProjectItem(
-        STORAGE_KEY,
+        STORAGE_KEY_ACTIVE,
         JSON.stringify({ sketches: latest.sketches, openId: latest.openId } as StoreShape),
       );
     };
-  }, []);
+  }, [STORAGE_KEY_ACTIVE]);
 
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) =>
@@ -1374,6 +1378,7 @@ function SketchPage() {
               setFullscreenId(s.id);
             }}
             onExitFullscreen={() => setFullscreenId(null)}
+            mode={mode}
           />
         ))}
 
@@ -1390,6 +1395,7 @@ function SketchPage() {
           sketch={fullscreenSketch}
           onChange={(patch) => updateSketch(fullscreenSketch.id, patch)}
           onExit={() => setFullscreenId(null)}
+          mode={mode}
         />
       )}
 
@@ -1432,10 +1438,11 @@ type SketchCardProps = {
   onDuplicate: () => void;
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
+  mode?: "sketch" | "masterplan";
 };
 
 function SketchCard(props: SketchCardProps) {
-  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onEnterFullscreen } = props;
+  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onEnterFullscreen, mode } = props;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(sketch.title);
 
@@ -1545,7 +1552,7 @@ function SketchCard(props: SketchCardProps) {
         </div>
       </div>
 
-      {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} />}
+      {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} mode={mode} />}
     </section>
   );
 }
@@ -1558,10 +1565,12 @@ function FullscreenSketch({
   sketch,
   onChange,
   onExit,
+  mode,
 }: {
   sketch: Sketch;
   onChange: (patch: Partial<Sketch>) => void;
   onExit: () => void;
+  mode?: "sketch" | "masterplan";
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1573,7 +1582,7 @@ function FullscreenSketch({
 
   return (
     <div className="fixed inset-0 z-50 bg-background">
-      <SketchEditor sketch={sketch} onChange={onChange} fullscreen onExitFullscreen={onExit} />
+      <SketchEditor sketch={sketch} onChange={onChange} fullscreen onExitFullscreen={onExit} mode={mode} />
     </div>
   );
 }
@@ -1758,9 +1767,10 @@ type EditorProps = {
   onChange: (patch: Partial<Sketch>) => void;
   fullscreen: boolean;
   onExitFullscreen?: () => void;
+  mode?: "sketch" | "masterplan";
 };
 
-function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: EditorProps) {
+function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "sketch" }: EditorProps) {
   const { id, scale, snap, lines, layers, levels, activeLevelId, kdbPct, klbCoef, kdhPct, ktbPct, fungsi } = sketch;
   const snapVertex = sketch.snapVertex ?? true;
   const snapMidpoint = sketch.snapMidpoint ?? true;
@@ -11660,17 +11670,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen }: Editor
         {SidePanel}
       </div>
       {RekapPanel}
-      <ClusterGeneratorDialog
-        open={clusterOpen}
-        onOpenChange={setClusterOpen}
-        levels={[...levels].sort((a, b) => a.mdpl - b.mdpl).map((l) => ({ id: l.id, name: l.name }))}
-        graph={sketch.clusterGraph ?? { nodes: [], links: [] }}
-        onSave={(g: ClusterGraph) => onChange({ clusterGraph: g })}
-        pxPerMeter={pxPerMeter}
-        kdbLimitM2={(kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : undefined}
-        klbLimitM2={(klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : undefined}
-        onGenerate={handleClusterGenerate}
-      />
+      {mode === "masterplan" ? (
+        <MasterplanClusterDialog
+          open={clusterOpen}
+          onOpenChange={setClusterOpen}
+          existingPlan={loadMpPlan()}
+          onCommit={(blocks) => {
+            // Convert MassingBlock polygons into sketch layers in the active sketch.
+            const lvId = activeLvlId ?? levels[0]?.id;
+            if (!lvId) {
+              toast.error("Tidak ada level aktif untuk menampung hasil cluster.");
+              return;
+            }
+            const ppm = pxPerMeter;
+            const newLayers: Layer[] = blocks.map((b, i) => {
+              const poly = mpBlockPolygon(b);
+              const pts: Point[] = poly.map((p) => ({ x: p.x * ppm, y: p.y * ppm }));
+              return {
+                id: `L${Date.now().toString(36)}_mp${i}_${Math.random().toString(36).slice(2, 5)}`,
+                name: b.name,
+                points: pts,
+                areaM2: 0,
+                color: MP_FN_META[b.fn].color,
+                levelId: lvId,
+              } as Layer;
+            });
+            onChange({ layers: [...layers, ...newLayers] });
+            try {
+              const plan = loadMpPlan();
+              saveMpPlan({ ...plan, blocks: [...plan.blocks, ...blocks] });
+            } catch {}
+            toast.success(`Menambahkan ${newLayers.length} massa dari Cluster Generator.`);
+          }}
+        />
+      ) : (
+        <ClusterGeneratorDialog
+          open={clusterOpen}
+          onOpenChange={setClusterOpen}
+          levels={[...levels].sort((a, b) => a.mdpl - b.mdpl).map((l) => ({ id: l.id, name: l.name }))}
+          graph={sketch.clusterGraph ?? { nodes: [], links: [] }}
+          onSave={(g: ClusterGraph) => onChange({ clusterGraph: g })}
+          pxPerMeter={pxPerMeter}
+          kdbLimitM2={(kdbPct ?? 0) > 0 && totalLahanM2 > 0 ? (kdbPct! / 100) * totalLahanM2 : undefined}
+          klbLimitM2={(klbCoef ?? 0) > 0 && totalLahanM2 > 0 ? klbCoef! * totalLahanM2 : undefined}
+          onGenerate={handleClusterGenerate}
+        />
+      )}
     </div>
   );
 }
