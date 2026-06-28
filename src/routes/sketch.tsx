@@ -336,6 +336,7 @@ type Sketch = {
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
   ramps?: Ramp[]; // Ramp antar level
+  axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
 };
 
