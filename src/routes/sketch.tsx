@@ -5832,13 +5832,74 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
-    // Jalan — koridor + centerline + tepi kiri/kanan
+    // Jalan — koridor menyatu di persimpangan dengan fillet 4m
     const roadsAll: RoadSegment[] = sketch.roads ?? [];
-    for (const rd of roadsAll) {
-      const corridor = buildRoadCorridor(rd, pxPerMeter);
-      if (corridor.length >= 3) {
-        ctx.save();
-        ctx.fillStyle = "rgba(63,63,70,0.22)";
+    if (roadsAll.length > 0) {
+      const centers: Point[][] = roadsAll.map((rd) => roadCenterline(rd) as Point[]);
+      const corridors: Point[][] = roadsAll.map((rd) => buildRoadCorridor(rd, pxPerMeter) as Point[]);
+      const halfPx: number[] = roadsAll.map((rd) => (rd.widthM * pxPerMeter) / 2);
+      const FILLET_M = 4;
+      const filletPx = FILLET_M * pxPerMeter;
+
+      const ptInPoly = (p: Point, poly: Point[]): boolean => {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const xi = poly[i].x, yi = poly[i].y;
+          const xj = poly[j].x, yj = poly[j].y;
+          const hit = ((yi > p.y) !== (yj > p.y)) && (p.x < ((xj - xi) * (p.y - yi)) / (yj - yi + 1e-12) + xi);
+          if (hit) inside = !inside;
+        }
+        return inside;
+      };
+      const distPS = (p: Point, a: Point, b: Point): number => {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const l2 = dx * dx + dy * dy;
+        let t = l2 > 1e-9 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+        if (t < 0) t = 0; else if (t > 1) t = 1;
+        return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+      };
+      const segInter = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
+        const den = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+        if (Math.abs(den) < 1e-9) return null;
+        const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / den;
+        const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / den;
+        if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+        return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };
+      };
+
+      // Junctions: crossings + endpoint T-touches between distinct roads
+      const junctions: { p: Point; rPx: number }[] = [];
+      for (let i = 0; i < centers.length; i++) {
+        for (let j = i + 1; j < centers.length; j++) {
+          const rj = Math.max(halfPx[i], halfPx[j]) + filletPx;
+          for (let a = 0; a < centers[i].length - 1; a++) {
+            for (let b = 0; b < centers[j].length - 1; b++) {
+              const ip = segInter(centers[i][a], centers[i][a + 1], centers[j][b], centers[j][b + 1]);
+              if (ip) junctions.push({ p: ip, rPx: rj });
+            }
+          }
+        }
+      }
+      for (let i = 0; i < centers.length; i++) {
+        const ends = [centers[i][0], centers[i][centers[i].length - 1]];
+        for (let j = 0; j < centers.length; j++) {
+          if (i === j) continue;
+          for (const ep of ends) {
+            for (let b = 0; b < centers[j].length - 1; b++) {
+              if (distPS(ep, centers[j][b], centers[j][b + 1]) <= halfPx[j] + 2) {
+                junctions.push({ p: ep, rPx: Math.max(halfPx[i], halfPx[j]) + filletPx });
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // FILL: corridor polygons + junction discs (semi-transparent, overlap fuses)
+      ctx.save();
+      ctx.fillStyle = "rgba(63,63,70,0.22)";
+      for (const corridor of corridors) {
+        if (corridor.length < 3) continue;
         ctx.beginPath();
         const c0 = worldToScreen(corridor[0]);
         ctx.moveTo(c0.x, c0.y);
@@ -5848,44 +5909,110 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
         ctx.closePath();
         ctx.fill();
-        // outline tepi kiri/kanan
-        ctx.strokeStyle = "#27272a";
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        const halfN = Math.floor(corridor.length / 2);
-        // left = first half (in order), right = second half (in order)
-        ctx.moveTo(c0.x, c0.y);
-        for (let i = 1; i < halfN; i++) {
-          const ci = worldToScreen(corridor[i]);
-          ctx.lineTo(ci.x, ci.y);
-        }
-        ctx.stroke();
-        ctx.beginPath();
-        const r0 = worldToScreen(corridor[halfN]);
-        ctx.moveTo(r0.x, r0.y);
-        for (let i = halfN + 1; i < corridor.length; i++) {
-          const ci = worldToScreen(corridor[i]);
-          ctx.lineTo(ci.x, ci.y);
-        }
-        ctx.stroke();
-        ctx.restore();
       }
-      // centerline putus-putus
-      const center = roadCenterline(rd) as Point[];
-      drawAxisPath(center, "rgba(250,250,250,0.85)", [6, 6], 1.0);
-      // fillet indicator: lingkaran kecil di tiap vertex internal
-      if (rd.filletM > 0 && rd.points.length >= 3) {
-        ctx.save();
-        ctx.strokeStyle = "#f59e0b";
-        ctx.lineWidth = 1;
-        const rPx = rd.filletM * pxPerMeter * view.s;
-        for (let i = 1; i < rd.points.length - 1; i++) {
-          const sp = worldToScreen(rd.points[i]);
-          ctx.beginPath();
-          ctx.arc(sp.x, sp.y, Math.max(3, rPx * 0.4), 0, Math.PI * 2);
-          ctx.stroke();
+      for (const jc of junctions) {
+        const sc = worldToScreen(jc.p);
+        ctx.beginPath();
+        ctx.arc(sc.x, sc.y, jc.rPx * view.s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // OUTLINE edges — broken at points inside any other corridor / junction disc
+      const insideOther = (p: Point, excludeIdx: number): boolean => {
+        for (let k = 0; k < corridors.length; k++) {
+          if (k === excludeIdx) continue;
+          if (corridors[k].length >= 3 && ptInPoly(p, corridors[k])) return true;
         }
-        ctx.restore();
+        for (const jc of junctions) {
+          const dx = p.x - jc.p.x, dy = p.y - jc.p.y;
+          if (dx * dx + dy * dy < jc.rPx * jc.rPx) return true;
+        }
+        return false;
+      };
+
+      ctx.save();
+      ctx.strokeStyle = "#27272a";
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      for (let i = 0; i < roadsAll.length; i++) {
+        const center = centers[i];
+        if (center.length < 2) continue;
+        const left = offsetRoadPolyline(center, halfPx[i]) as Point[];
+        const right = offsetRoadPolyline(center, -halfPx[i]) as Point[];
+        for (const edge of [left, right]) {
+          let run: Point[] = [];
+          const flush = () => {
+            if (run.length >= 2) {
+              ctx.beginPath();
+              const s = worldToScreen(run[0]);
+              ctx.moveTo(s.x, s.y);
+              for (let k = 1; k < run.length; k++) {
+                const sk = worldToScreen(run[k]);
+                ctx.lineTo(sk.x, sk.y);
+              }
+              ctx.stroke();
+            }
+            run = [];
+          };
+          for (const p of edge) {
+            if (insideOther(p, i)) flush();
+            else run.push(p);
+          }
+          flush();
+        }
+      }
+      // Fillet arc outlines
+      for (const jc of junctions) {
+        const sc = worldToScreen(jc.p);
+        const rPxScr = jc.rPx * view.s;
+        const STEPS = 72;
+        let drawing = false;
+        ctx.beginPath();
+        for (let k = 0; k <= STEPS; k++) {
+          const a = (k / STEPS) * Math.PI * 2;
+          const wp: Point = { x: jc.p.x + Math.cos(a) * jc.rPx, y: jc.p.y + Math.sin(a) * jc.rPx };
+          let inside = false;
+          for (let q = 0; q < corridors.length; q++) {
+            if (corridors[q].length >= 3 && ptInPoly(wp, corridors[q])) { inside = true; break; }
+          }
+          if (!inside) {
+            for (const o of junctions) {
+              if (o === jc) continue;
+              const dx = wp.x - o.p.x, dy = wp.y - o.p.y;
+              if (dx * dx + dy * dy < o.rPx * o.rPx) { inside = true; break; }
+            }
+          }
+          if (!inside) {
+            const sp = { x: sc.x + Math.cos(a) * rPxScr, y: sc.y + Math.sin(a) * rPxScr };
+            if (!drawing) { ctx.moveTo(sp.x, sp.y); drawing = true; }
+            else ctx.lineTo(sp.x, sp.y);
+          } else {
+            drawing = false;
+          }
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Centerline putus-putus + fillet indicator
+      for (const rd of roadsAll) {
+        const center = roadCenterline(rd) as Point[];
+        drawAxisPath(center, "rgba(250,250,250,0.85)", [6, 6], 1.0);
+        if (rd.filletM > 0 && rd.points.length >= 3) {
+          ctx.save();
+          ctx.strokeStyle = "#f59e0b";
+          ctx.lineWidth = 1;
+          const rPx = rd.filletM * pxPerMeter * view.s;
+          for (let i = 1; i < rd.points.length - 1; i++) {
+            const sp = worldToScreen(rd.points[i]);
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, Math.max(3, rPx * 0.4), 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
       }
     }
     // Draft jalan tangent
