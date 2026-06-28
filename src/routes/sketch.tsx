@@ -1553,6 +1553,7 @@ function SketchCard(props: SketchCardProps) {
       </div>
 
       {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} mode={mode} />}
+      {isOpen && mode === "masterplan" && <MasterplanSketch3DPreview sketch={sketch as any} />}
     </section>
   );
 }
