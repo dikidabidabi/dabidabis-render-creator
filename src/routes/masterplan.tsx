@@ -549,12 +549,7 @@ function MasterPlanPage() {
     navigate({ to: "/sketch", search: { blockId: b.id, blockName: b.name } as any });
   };
 
-  // North arrow handle drag
-  const onNorthClick = (worldP: Vec2) => {
-    const ang = Math.atan2(worldP.x, -worldP.y); // arah +Y ke selatan, jadi -Y = utara baseline
-    pushHistory();
-    setPlanPatch({ northRot: ang });
-  };
+  // (north arrow click pick is handled by <NorthClickListener/>)
 
   // ──── UI ────
   return (
