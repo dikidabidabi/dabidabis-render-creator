@@ -984,6 +984,33 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    roads: (() => {
+      const raw = (s as any)?.roads;
+      if (!Array.isArray(raw)) return [];
+      const out: import("@/lib/roads").RoadSegment[] = [];
+      for (const r of raw) {
+        if (!r || typeof r !== "object") continue;
+        if (!Array.isArray(r.points) || r.points.length < 2) continue;
+        const pts: { x: number; y: number }[] = [];
+        let ok = true;
+        for (const p of r.points) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) { ok = false; break; }
+          pts.push({ x, y });
+        }
+        if (!ok) continue;
+        const kind = r.kind === "tangent" ? "tangent" : "garis";
+        out.push({
+          id: typeof r.id === "string" && r.id ? r.id : `rd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          kind,
+          points: pts,
+          widthM: Number.isFinite(Number(r.widthM)) && Number(r.widthM) > 0 ? Number(r.widthM) : 6,
+          filletM: Number.isFinite(Number(r.filletM)) && Number(r.filletM) >= 0 ? Number(r.filletM) : 0,
+          createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
   };
 }
 
