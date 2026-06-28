@@ -321,6 +321,7 @@ export function MasterplanClusterDialog({
   onCommit,
   existingPlan,
   sitePolygon,
+  avoidAxes,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -328,6 +329,8 @@ export function MasterplanClusterDialog({
   existingPlan: MasterPlan;
   /** Polygon layer "Lahan" dalam koordinat meter (world). */
   sitePolygon?: Vec2[];
+  /** Polyline aksis dalam koordinat meter (world) yang harus dihindari massa. */
+  avoidAxes?: { points: Vec2[]; bufferM: number }[];
 }) {
   const [buildings, setBuildings] = useState<CGBuilding[]>([]);
   const [rel, setRel] = useState<Record<string, CGRelation>>({});
