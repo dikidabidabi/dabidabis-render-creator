@@ -2093,12 +2093,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan">("line");
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
   const aksisBufferM = Math.max(0, Number(aksisBufferInput) || 8);
   const [aksisDraft, setAksisDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
+  // Jalan tool — koridor jalan (lebar + fillet) untuk Master Plan
+  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet">("garis");
+  const [jalanWidthInput, setJalanWidthInput] = useState<string>("6");
+  const [jalanFilletInput, setJalanFilletInput] = useState<string>("4");
+  const jalanWidthM = Math.max(0.5, Number(jalanWidthInput) || 6);
+  const jalanFilletM = Math.max(0, Number(jalanFilletInput) || 0);
+  const [jalanDraft, setJalanDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
   // Ramp tool state
   const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
   const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
