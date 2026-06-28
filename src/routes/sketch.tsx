@@ -1225,7 +1225,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
   // Load
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY_ACTIVE);
       if (raw) {
         const s = JSON.parse(raw) as StoreShape;
         if (s && Array.isArray(s.sketches)) {
@@ -1237,7 +1237,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         }
       }
       // Migrate legacy single-sketch
-      const legacy = localStorage.getItem(LEGACY_KEY);
+      const legacy = localStorage.getItem(LEGACY_KEY_ACTIVE);
       if (legacy) {
         const ls = JSON.parse(legacy);
         const migrated = normalizeSketch({
@@ -1263,28 +1263,28 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
       setOpenId(first.id);
     }
     setLoaded(true);
-  }, []);
+  }, [STORAGE_KEY_ACTIVE, LEGACY_KEY_ACTIVE]);
 
   // Save
   useEffect(() => {
     if (!loaded) return;
     const payload = JSON.stringify({ sketches, openId } as StoreShape);
     const handle = setTimeout(() => {
-      void setProjectItem(STORAGE_KEY, payload);
+      void setProjectItem(STORAGE_KEY_ACTIVE, payload);
     }, 400);
     return () => clearTimeout(handle);
-  }, [sketches, openId, loaded]);
+  }, [sketches, openId, loaded, STORAGE_KEY_ACTIVE]);
 
   useEffect(() => {
     return () => {
       const latest = latestStoreRef.current;
       if (!latest.loaded) return;
       void setProjectItem(
-        STORAGE_KEY,
+        STORAGE_KEY_ACTIVE,
         JSON.stringify({ sketches: latest.sketches, openId: latest.openId } as StoreShape),
       );
     };
-  }, []);
+  }, [STORAGE_KEY_ACTIVE]);
 
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) =>
