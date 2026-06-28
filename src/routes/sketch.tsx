@@ -1395,6 +1395,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
           sketch={fullscreenSketch}
           onChange={(patch) => updateSketch(fullscreenSketch.id, patch)}
           onExit={() => setFullscreenId(null)}
+          mode={mode}
         />
       )}
 
