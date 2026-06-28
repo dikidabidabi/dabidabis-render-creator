@@ -150,6 +150,7 @@ import {
   computeBordesArcs,
   numBordesForSlope,
 } from "@/lib/ramps";
+import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -336,6 +337,7 @@ type Sketch = {
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
   ramps?: Ramp[]; // Ramp antar level
+  axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
 };
 
@@ -945,6 +947,32 @@ function normalizeSketch(s: any): Sketch {
           bordesSpacingM: Number.isFinite(Number(r.bordesSpacingM)) && Number(r.bordesSpacingM) > 0 ? Number(r.bordesSpacingM) : (r.bordes === true ? 9 : undefined),
           bordesBelokan: r.bordesBelokan === true,
           createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
+    axes: (() => {
+      const raw = s?.axes;
+      if (!Array.isArray(raw)) return [];
+      const out: import("@/lib/axes").AxisSegment[] = [];
+      for (const a of raw) {
+        if (!a || typeof a !== "object") continue;
+        if (!Array.isArray(a.points) || a.points.length < 2) continue;
+        const pts: { x: number; y: number }[] = [];
+        let ok = true;
+        for (const p of a.points) {
+          const x = Number(p?.x), y = Number(p?.y);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) { ok = false; break; }
+          pts.push({ x, y });
+        }
+        if (!ok) continue;
+        const kind = a.kind === "tangent" ? "tangent" : "garis";
+        out.push({
+          id: typeof a.id === "string" && a.id ? a.id : `ax_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+          kind,
+          points: pts,
+          bufferM: Number.isFinite(Number(a.bufferM)) && Number(a.bufferM) >= 0 ? Number(a.bufferM) : 8,
+          createdAt: Number.isFinite(Number(a.createdAt)) ? Number(a.createdAt) : Date.now(),
         });
       }
       return out;
@@ -2031,7 +2059,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis">("line");
+  // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
+  const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
+  const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
+  const aksisBufferM = Math.max(0, Number(aksisBufferInput) || 8);
+  const [aksisDraft, setAksisDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
   // Ramp tool state
   const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
   const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
@@ -5691,7 +5724,73 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.fillStyle = "#fff";
       ctx.fillText(label, sp.x + 14, sp.y - 8);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+
+    // === AKSIS rancangan (Master Plan) ===
+    // Garis sumbu yang dihindari oleh Cluster Generator. Render dgn warna
+    // indigo bertekstur garis putus-putus + buffer halo tipis di kedua sisi.
+    const axesAll: AxisSegment[] = sketch.axes ?? [];
+    const drawAxisPath = (poly: Point[], strokeStyle: string, dash: number[], lineWidth: number) => {
+      if (poly.length < 2) return;
+      ctx.save();
+      ctx.setLineDash(dash);
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      const s0 = worldToScreen(poly[0]);
+      ctx.moveTo(s0.x, s0.y);
+      for (let i = 1; i < poly.length; i++) {
+        const si = worldToScreen(poly[i]);
+        ctx.lineTo(si.x, si.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    };
+    for (const ax of axesAll) {
+      const poly = sampleAxisPolyline(ax) as Point[];
+      // Buffer halo (tipis, transparan) menandakan zona hindar.
+      const bufPx = ax.bufferM * pxPerMeter * view.s;
+      if (bufPx > 1) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(99,102,241,0.18)";
+        ctx.lineWidth = bufPx * 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        const s0 = worldToScreen(poly[0]);
+        ctx.moveTo(s0.x, s0.y);
+        for (let i = 1; i < poly.length; i++) {
+          const si = worldToScreen(poly[i]);
+          ctx.lineTo(si.x, si.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      drawAxisPath(poly, "#4f46e5", [8, 6], 1.6);
+      // Endpoint kecil
+      ctx.fillStyle = "#4f46e5";
+      const sA = worldToScreen(poly[0]);
+      const sB = worldToScreen(poly[poly.length - 1]);
+      ctx.beginPath(); ctx.arc(sA.x, sA.y, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sB.x, sB.y, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    // Draft aksis tangent (multi-klik)
+    if (aksisDraft && aksisDraft.kind === "tangent" && tool === "aksis") {
+      const ctrl = [...aksisDraft.points, aksisDraft.cursor];
+      const preview = (ctrl.length >= 3
+        ? sampleAxisPolyline({ id: "_", kind: "tangent", points: ctrl, bufferM: 0, createdAt: 0 })
+        : ctrl) as Point[];
+      drawAxisPath(preview, "rgba(79,70,229,0.7)", [4, 4], 1.4);
+      ctx.fillStyle = "#4f46e5";
+      for (const p of aksisDraft.points) {
+        const sp = worldToScreen(p);
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // Draft aksis garis (drag)
+    if (drawing && tool === "aksis" && aksisSub === "garis") {
+      drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
+    }
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, aksisDraft, aksisSub, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -7486,11 +7585,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     if (
       tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
-      (tool === "parking" && parkingSubTool === "draw")
+      (tool === "parking" && parkingSubTool === "draw") ||
+      (tool === "aksis" && aksisSub === "garis")
     ) {
       setDrawing({ a: p, b: p });
 
 
+    } else if (tool === "aksis" && aksisSub === "tangent") {
+      if (!aksisDraft) {
+        setAksisDraft({ kind: "tangent", points: [p], cursor: p });
+      } else {
+        setAksisDraft({ ...aksisDraft, points: [...aksisDraft.points, p], cursor: p });
+      }
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
@@ -8141,6 +8247,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     if (drawing) setDrawing({ a: drawing.a, b: p });
     if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
+    if (aksisDraft && tool === "aksis" && aksisSub === "tangent") setAksisDraft({ ...aksisDraft, cursor: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
       const pts = polyDraft.points;
@@ -8574,6 +8681,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       toast.success(`Garis Potong ${label} tersimpan · slide potongan otomatis dibuat`, { duration: 2500 });
       return;
     }
+
+    if (curTool === "aksis" && aksisSub === "garis") {
+      const ax: AxisSegment = {
+        id: newAxisId(), kind: "garis",
+        points: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }],
+        bufferM: aksisBufferM, createdAt: Date.now(),
+      };
+      onChange({ axes: [...(sketch.axes ?? []), ax] });
+      toast.success("Aksis tersimpan");
+      return;
+    }
+
 
     if (curTool === "separasi") {
       // Separasi Ruang: belah salah satu polygon ruang aktif menjadi dua
@@ -9530,7 +9649,70 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <BoxIcon className="mr-1.5 h-4 w-4" /> Ramp
           </Button>
+          {mode === "masterplan" && (
+            <Button
+              variant={tool === "aksis" ? "default" : "outline"}
+              size="sm"
+              onClick={() => { cancelPendingCurve(); setTool("aksis"); setAksisDraft(null); }}
+              className={cn(tool === "aksis" && "bg-gradient-primary shadow-primary")}
+              title="Aksis — sumbu rancangan yang dihindari oleh Cluster Generator."
+            >
+              <Waypoints className="mr-1.5 h-4 w-4" /> Aksis
+            </Button>
+          )}
         </div>
+        {tool === "aksis" && mode === "masterplan" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Aksis</span>
+            <Button
+              size="sm"
+              variant={aksisSub === "garis" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setAksisSub("garis"); setAksisDraft(null); }}
+            >Garis</Button>
+            <Button
+              size="sm"
+              variant={aksisSub === "tangent" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setAksisSub("tangent"); setAksisDraft(null); }}
+            >Tangent</Button>
+            <div className="ml-2 flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground">Buffer</span>
+              <Input
+                value={aksisBufferInput}
+                onChange={(e) => setAksisBufferInput(e.target.value)}
+                className="h-7 w-14 text-[11px]"
+              />
+              <span className="text-[10px] text-muted-foreground">m</span>
+            </div>
+            {aksisSub === "tangent" && aksisDraft && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  if (!aksisDraft || aksisDraft.points.length < 2) { setAksisDraft(null); return; }
+                  const ax: AxisSegment = {
+                    id: newAxisId(), kind: "tangent",
+                    points: aksisDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                    bufferM: aksisBufferM, createdAt: Date.now(),
+                  };
+                  onChange({ axes: [...(sketch.axes ?? []), ax] });
+                  setAksisDraft(null);
+                  toast.success("Aksis tangent tersimpan");
+                }}
+              >Selesai ({aksisDraft.points.length} titik)</Button>
+            )}
+            {(sketch.axes ?? []).length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => { onChange({ axes: [] }); toast.success("Semua aksis dihapus"); }}
+              >Hapus semua ({(sketch.axes ?? []).length})</Button>
+            )}
+          </div>
+        )}
         {tool === "parking" && (
           <ParkingSubToolbar
             parkingKind={parkingKind}
@@ -11681,6 +11863,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const lah = layers.find((l) => isLahanLayerName(l.name) && l.points.length >= 3);
             if (!lah) return undefined;
             return lah.points.map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter }));
+          })()}
+          avoidAxes={(() => {
+            const axs = sketch.axes ?? [];
+            if (axs.length === 0) return undefined;
+            return axs.map((ax) => ({
+              points: sampleAxisPolyline(ax).map((p) => ({ x: p.x / pxPerMeter, y: p.y / pxPerMeter })),
+              bufferM: ax.bufferM,
+            }));
           })()}
           onCommit={(blocks) => {
             // Convert MassingBlock polygons into sketch layers in the active sketch.
