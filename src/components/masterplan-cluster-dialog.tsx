@@ -916,7 +916,7 @@ export function MasterplanClusterDialog({
                     </span>
                   </div>
                   <div className="h-56 w-full bg-slate-50">
-                    <MiniBlocks buildings={buildings} layout={L} sitePoly={sitePolygon} />
+                    <MiniBlocks buildings={buildings} layout={L} sitePoly={sitePolygon} avoidAxes={avoidAxes} roads={roads} />
                   </div>
                   <div className="p-2">
                     <Button size="sm" className="w-full" onClick={() => pickLayout(L)}>
