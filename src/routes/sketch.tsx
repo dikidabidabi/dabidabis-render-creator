@@ -5890,11 +5890,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       type Ring = Point[];
       let unionRings: { outer: Ring; holes: Ring[] }[] = [];
       try {
-        // Dynamic import to avoid SSR issues if any
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const pc = require("polygon-clipping") as typeof import("polygon-clipping");
-        const polys = corridors.map((c) => [c.map((p) => [p.x, p.y] as [number, number])] as [number, number][][]);
-        const u = pc.union(polys[0] as any, ...(polys.slice(1) as any[]));
+        const polys = corridors.map((c) => [c.map((p) => [p.x, p.y] as [number, number])]);
+        const u = polygonClipping.union(polys[0] as any, ...(polys.slice(1) as any[]));
         unionRings = u.map((poly) => ({
           outer: poly[0].map(([x, y]) => ({ x, y })),
           holes: poly.slice(1).map((h) => h.map(([x, y]) => ({ x, y }))),
