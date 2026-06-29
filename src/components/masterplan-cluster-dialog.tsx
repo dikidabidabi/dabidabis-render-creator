@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Canvas } from "@react-three/fiber";
+import * as THREE from "three";
+
 import { OrbitControls, Edges, PerspectiveCamera, Grid, Line } from "@react-three/drei";
 import { Plus, Trash2, Sparkles, Shuffle, Cable, X } from "lucide-react";
 import { cn } from "@/lib/utils";
