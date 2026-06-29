@@ -5854,7 +5854,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.save();
       ctx.fillStyle = "rgba(63,63,70,0.22)";
       for (const { outer, holes } of unionRings) {
-        const o = filletRing(dedup(outer), filletPx);
+        const o = outer;
+        if (o.length < 3) continue;
         ctx.beginPath();
         const s0 = worldToScreen(o[0]);
         ctx.moveTo(s0.x, s0.y);
@@ -5864,12 +5865,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
         ctx.closePath();
         for (const h of holes) {
-          const fh = filletRing(dedup(h), filletPx);
-          if (fh.length < 3) continue;
-          const h0 = worldToScreen(fh[0]);
+          if (h.length < 3) continue;
+          const h0 = worldToScreen(h[0]);
           ctx.moveTo(h0.x, h0.y);
-          for (let i = fh.length - 1; i >= 1; i--) {
-            const sh = worldToScreen(fh[i]);
+          for (let i = h.length - 1; i >= 1; i--) {
+            const sh = worldToScreen(h[i]);
             ctx.lineTo(sh.x, sh.y);
           }
           ctx.closePath();
@@ -5886,13 +5886,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.lineJoin = "round";
       for (const { outer, holes } of unionRings) {
         for (const ring of [outer, ...holes]) {
-          const fr = filletRing(dedup(ring), filletPx);
-          if (fr.length < 2) continue;
+          if (ring.length < 2) continue;
           ctx.beginPath();
-          const s0 = worldToScreen(fr[0]);
+          const s0 = worldToScreen(ring[0]);
           ctx.moveTo(s0.x, s0.y);
-          for (let i = 1; i < fr.length; i++) {
-            const s = worldToScreen(fr[i]);
+          for (let i = 1; i < ring.length; i++) {
+            const s = worldToScreen(ring[i]);
             ctx.lineTo(s.x, s.y);
           }
           ctx.closePath();
@@ -5900,6 +5899,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
       }
       ctx.restore();
+
 
       // Centerline putus-putus + fillet indicator per ruas
       for (const rd of roadsAll) {
