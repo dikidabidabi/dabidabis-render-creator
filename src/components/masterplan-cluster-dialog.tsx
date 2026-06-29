@@ -430,14 +430,37 @@ function MiniBlocks({
         color="#16a34a"
         lineWidth={1.6}
       />
-      {/* roads: corridor fill + edges */}
-      {roadCorridors.map((rc, i) => (
-        <group key={`rd-${i}`}>
-          <Line points={[...rc.fill, rc.fill[0]]} color="#52525b" lineWidth={1} opacity={0.55} transparent />
-          <Line points={rc.left} color="#27272a" lineWidth={1.4} />
-          <Line points={rc.right} color="#27272a" lineWidth={1.4} />
-        </group>
-      ))}
+      {/* roads: extruded 0.15 m with filleted edges (same shape as sketch) */}
+      {roadRings.map((rr, i) => {
+        const shape = new THREE.Shape();
+        rr.outer.forEach((p, k) => {
+          const x = p.x - c.x, y = p.y - c.y;
+          if (k === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+        });
+        shape.closePath();
+        for (const h of rr.holes) {
+          if (h.length < 3) continue;
+          const hole = new THREE.Path();
+          h.forEach((p, k) => {
+            const x = p.x - c.x, y = p.y - c.y;
+            if (k === 0) hole.moveTo(x, y); else hole.lineTo(x, y);
+          });
+          hole.closePath();
+          shape.holes.push(hole);
+        }
+        return (
+          <mesh
+            key={`rd-${i}`}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, 0.15, 0]}
+          >
+            <extrudeGeometry args={[shape, { depth: 0.15, bevelEnabled: false }]} />
+            <meshStandardMaterial color="#3f3f46" roughness={0.95} />
+            <Edges color="#18181b" threshold={20} />
+          </mesh>
+        );
+      })}
+
       {/* axes: dashed indigo */}
       {axisLines.map((pts, i) => (
         <Line key={`ax-${i}`} points={pts} color="#4f46e5" lineWidth={1.4} dashed dashSize={1.2} gapSize={0.8} />
