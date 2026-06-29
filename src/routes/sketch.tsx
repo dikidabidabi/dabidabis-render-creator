@@ -5844,10 +5844,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         .filter((c) => c.length >= 3);
 
       // Union semua koridor → MultiPolygon (rings with holes) yang sudut-sudutnya sudah di-fillet.
-      type Ring = Point[];
-      const unionRings: { outer: Ring; holes: Ring[] }[] = unionFilletedCorridors(corridors, filletPx);
+      const unionRings = unionFilletedCorridors(corridors, filletPx);
 
-      const dedup = (r: Ring): Ring => r;
+
 
 
       // FILL semi-transparan
