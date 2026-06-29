@@ -12,6 +12,12 @@ import * as THREE from "three";
 import { RefreshCw, Box as BoxIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { solidColorForRoomName } from "@/lib/room-color";
+import {
+  roadCorridorPolygon as buildRoadCorridor,
+  unionFilletedCorridors,
+  type RoadSegment,
+} from "@/lib/roads";
+
 
 type Point = { x: number; y: number };
 type Layer = {
@@ -35,7 +41,9 @@ type Sketch = {
   scale: string;
   layers: Layer[];
   levels: Level[];
+  roads?: RoadSegment[];
 };
+
 
 const MINOR_PX = 8;
 const MAJOR_EVERY = 10;
@@ -116,6 +124,49 @@ function ExtrudedMesh({
   );
 }
 
+function RoadExtruded({
+  outer, holes, origin, mPerPx, baseY, height,
+}: {
+  outer: Point[]; holes: Point[][]; origin: Point; mPerPx: number;
+  baseY: number; height: number;
+}) {
+  const geo = useMemo(() => {
+    if (outer.length < 3 || height <= 0) return null;
+    const shape = new THREE.Shape();
+    outer.forEach((p, i) => {
+      const x = (p.x - origin.x) * mPerPx;
+      const y = (p.y - origin.y) * mPerPx;
+      if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+    });
+    shape.closePath();
+    for (const h of holes) {
+      if (h.length < 3) continue;
+      const hole = new THREE.Path();
+      h.forEach((p, i) => {
+        const x = (p.x - origin.x) * mPerPx;
+        const y = (p.y - origin.y) * mPerPx;
+        if (i === 0) hole.moveTo(x, y); else hole.lineTo(x, y);
+      });
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+    const g = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+    g.rotateX(Math.PI / 2);
+    g.scale(1, -1, 1);
+    return g;
+  }, [outer, holes, origin.x, origin.y, mPerPx, height]);
+  if (!geo) return null;
+  return (
+    <group position={[0, baseY, 0]}>
+      <mesh geometry={geo} castShadow receiveShadow>
+        <meshStandardMaterial color="#3f3f46" roughness={0.95} metalness={0.0} side={THREE.DoubleSide} />
+        <Edges threshold={20} color="#18181b" />
+      </mesh>
+    </group>
+  );
+}
+
+
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
   const mPerPx = metersPerPx(sketch.scale);
@@ -169,7 +220,19 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
     return out;
   }, [sketch.layers, levelMap]);
 
+  const roadRings = useMemo(() => {
+    const roads = sketch.roads ?? [];
+    if (!roads.length) return [] as { outer: Point[]; holes: Point[][] }[];
+    const pxPerMeter = 1 / mPerPx;
+    const FILLET_M = 4;
+    const corridors = roads
+      .map((r) => buildRoadCorridor(r, pxPerMeter) as Point[])
+      .filter((c) => c.length >= 3);
+    return unionFilletedCorridors(corridors, FILLET_M * pxPerMeter);
+  }, [sketch.roads, mPerPx]);
+
   const camDist = bound * 2.2 + 30;
+
 
   return (
     <div className="relative border-t border-border/40 bg-gradient-to-b from-slate-100 to-slate-200">
@@ -220,6 +283,18 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               color={m.color}
             />
           ))}
+          {roadRings.map((rr, i) => (
+            <RoadExtruded
+              key={`road-${i}`}
+              outer={rr.outer}
+              holes={rr.holes}
+              origin={origin}
+              mPerPx={mPerPx}
+              baseY={0}
+              height={0.15}
+            />
+          ))}
+
           <OrbitControls
             makeDefault
             enableDamping

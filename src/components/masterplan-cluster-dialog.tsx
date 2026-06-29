@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Canvas } from "@react-three/fiber";
+import * as THREE from "three";
+
 import { OrbitControls, Edges, PerspectiveCamera, Grid, Line } from "@react-three/drei";
 import { Plus, Trash2, Sparkles, Shuffle, Cable, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,7 +18,7 @@ import {
   polyCentroid,
   polyArea,
 } from "@/lib/masterplan";
-import { nearestRoadEdge, pointInRoadCorridor, roadNetworkRegions } from "@/lib/roads";
+import { nearestRoadEdge, pointInRoadCorridor, roadNetworkRegions, unionFilletedCorridors } from "@/lib/roads";
 
 // ============================================================
 // Master Plan — Cluster Generator (Grasshopper-style cables)
@@ -364,47 +366,45 @@ function MiniBlocks({
       .map((a) => a.points.map((p) => [p.x - c.x, 0.05, p.y - c.y] as [number, number, number]));
   }, [avoidAxes, c.x, c.y]);
 
-  const roadCorridors = useMemo(() => {
-    if (!roads) return [] as { fill: [number, number, number][]; left: [number, number, number][]; right: [number, number, number][] }[];
-    const out: { fill: [number, number, number][]; left: [number, number, number][]; right: [number, number, number][] }[] = [];
+  // Filleted union road rings in METER space, relative to site center.
+  const roadRings = useMemo(() => {
+    if (!roads || roads.length === 0) return [] as { outer: Vec2[]; holes: Vec2[][] }[];
+    // Local offset of centerline → closed corridor polygon (in meters).
+    const offset = (poly: Vec2[], d: number): Vec2[] => {
+      const segN: Vec2[] = [];
+      for (let i = 0; i < poly.length - 1; i++) {
+        const dx = poly[i + 1].x - poly[i].x;
+        const dy = poly[i + 1].y - poly[i].y;
+        const l = Math.hypot(dx, dy) || 1;
+        segN.push({ x: -dy / l, y: dx / l });
+      }
+      const res: Vec2[] = [];
+      res.push({ x: poly[0].x + segN[0].x * d, y: poly[0].y + segN[0].y * d });
+      for (let i = 1; i < poly.length - 1; i++) {
+        const n1 = segN[i - 1], n2 = segN[i];
+        const bx = n1.x + n2.x, by = n1.y + n2.y;
+        const bl = Math.hypot(bx, by) || 1;
+        const dot = n1.x * n2.x + n1.y * n2.y;
+        const m = Math.min(4, 1 / Math.max(0.25, (1 + dot) / 2));
+        res.push({ x: poly[i].x + (bx / bl) * d * m, y: poly[i].y + (by / bl) * d * m });
+      }
+      const last = segN[segN.length - 1];
+      const lp = poly[poly.length - 1];
+      res.push({ x: lp.x + last.x * d, y: lp.y + last.y * d });
+      return res;
+    };
+    const corridors: Vec2[][] = [];
     for (const r of roads) {
       if (r.center.length < 2) continue;
       const half = r.widthM / 2;
-      // local offset using same algorithm as roads.ts (inline minimal version)
-      const offset = (poly: Vec2[], d: number): Vec2[] => {
-        const segN: Vec2[] = [];
-        for (let i = 0; i < poly.length - 1; i++) {
-          const dx = poly[i + 1].x - poly[i].x;
-          const dy = poly[i + 1].y - poly[i].y;
-          const l = Math.hypot(dx, dy) || 1;
-          segN.push({ x: -dy / l, y: dx / l });
-        }
-        const res: Vec2[] = [];
-        res.push({ x: poly[0].x + segN[0].x * d, y: poly[0].y + segN[0].y * d });
-        for (let i = 1; i < poly.length - 1; i++) {
-          const n1 = segN[i - 1], n2 = segN[i];
-          const bx = n1.x + n2.x, by = n1.y + n2.y;
-          const bl = Math.hypot(bx, by) || 1;
-          const dot = n1.x * n2.x + n1.y * n2.y;
-          const m = Math.min(4, 1 / Math.max(0.25, (1 + dot) / 2));
-          res.push({ x: poly[i].x + (bx / bl) * d * m, y: poly[i].y + (by / bl) * d * m });
-        }
-        const last = segN[segN.length - 1];
-        const lp = poly[poly.length - 1];
-        res.push({ x: lp.x + last.x * d, y: lp.y + last.y * d });
-        return res;
-      };
       const left = offset(r.center, half);
       const right = offset(r.center, -half);
-      const fill = [...left, ...right.slice().reverse()];
-      out.push({
-        fill: fill.map((p) => [p.x - c.x, 0.03, p.y - c.y]),
-        left: left.map((p) => [p.x - c.x, 0.04, p.y - c.y]),
-        right: right.map((p) => [p.x - c.x, 0.04, p.y - c.y]),
-      });
+      corridors.push([...left, ...right.slice().reverse()]);
     }
-    return out;
-  }, [roads, c.x, c.y]);
+    const FILLET_M = 4;
+    return unionFilletedCorridors(corridors, FILLET_M);
+  }, [roads]);
+
 
   return (
     <Canvas dpr={[1, 2]}>
@@ -430,14 +430,37 @@ function MiniBlocks({
         color="#16a34a"
         lineWidth={1.6}
       />
-      {/* roads: corridor fill + edges */}
-      {roadCorridors.map((rc, i) => (
-        <group key={`rd-${i}`}>
-          <Line points={[...rc.fill, rc.fill[0]]} color="#52525b" lineWidth={1} opacity={0.55} transparent />
-          <Line points={rc.left} color="#27272a" lineWidth={1.4} />
-          <Line points={rc.right} color="#27272a" lineWidth={1.4} />
-        </group>
-      ))}
+      {/* roads: extruded 0.15 m with filleted edges (same shape as sketch) */}
+      {roadRings.map((rr, i) => {
+        const shape = new THREE.Shape();
+        rr.outer.forEach((p, k) => {
+          const x = p.x - c.x, y = p.y - c.y;
+          if (k === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+        });
+        shape.closePath();
+        for (const h of rr.holes) {
+          if (h.length < 3) continue;
+          const hole = new THREE.Path();
+          h.forEach((p, k) => {
+            const x = p.x - c.x, y = p.y - c.y;
+            if (k === 0) hole.moveTo(x, y); else hole.lineTo(x, y);
+          });
+          hole.closePath();
+          shape.holes.push(hole);
+        }
+        return (
+          <mesh
+            key={`rd-${i}`}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, 0.15, 0]}
+          >
+            <extrudeGeometry args={[shape, { depth: 0.15, bevelEnabled: false }]} />
+            <meshStandardMaterial color="#3f3f46" roughness={0.95} />
+            <Edges color="#18181b" threshold={20} />
+          </mesh>
+        );
+      })}
+
       {/* axes: dashed indigo */}
       {axisLines.map((pts, i) => (
         <Line key={`ax-${i}`} points={pts} color="#4f46e5" lineWidth={1.4} dashed dashSize={1.2} gapSize={0.8} />

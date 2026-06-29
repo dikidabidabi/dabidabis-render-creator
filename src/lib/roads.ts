@@ -9,6 +9,86 @@
 // - roadNetworkRegions(site, roads) → membagi Lahan menjadi kluster
 
 import { sampleTangent, type Vec2 } from "@/lib/axes";
+import polygonClipping from "polygon-clipping";
+
+/** Union sekumpulan polygon koridor dan fillet semua sudut ring hasil.
+ *  Input `corridors` adalah polygon tertutup (CCW/CW bebas) dalam unit yang sama
+ *  dengan `filletRadius`. Keluaran berupa rings (outer + holes) dalam unit
+ *  yang sama dengan input — caller bebas mengonversinya ke meter/pixel/dst.
+ */
+export function unionFilletedCorridors(
+  corridors: Vec2[][],
+  filletRadius: number,
+): { outer: Vec2[]; holes: Vec2[][] }[] {
+  const valid = corridors.filter((c) => c.length >= 3);
+  if (valid.length === 0) return [];
+  type Ring = Vec2[];
+  let unionRings: { outer: Ring; holes: Ring[] }[] = [];
+  try {
+    const polys = valid.map((c) => [c.map((p) => [p.x, p.y] as [number, number])]);
+    const u = polygonClipping.union(polys[0] as any, ...(polys.slice(1) as any[]));
+    unionRings = u.map((poly) => ({
+      outer: poly[0].map(([x, y]) => ({ x, y })),
+      holes: poly.slice(1).map((h) => h.map(([x, y]) => ({ x, y }))),
+    }));
+  } catch {
+    unionRings = valid.map((c) => ({ outer: c.slice(), holes: [] }));
+  }
+  const dedup = (r: Ring): Ring => {
+    if (r.length < 2) return r;
+    const last = r[r.length - 1], first = r[0];
+    if (Math.hypot(last.x - first.x, last.y - first.y) < 1e-6) return r.slice(0, -1);
+    return r;
+  };
+  const ARC_STEPS = 10;
+  const filletRing = (ring: Ring): Ring => {
+    const n = ring.length;
+    if (n < 3 || filletRadius <= 0) return ring.slice();
+    const out: Ring = [];
+    for (let i = 0; i < n; i++) {
+      const prev = ring[(i + n - 1) % n];
+      const cur = ring[i];
+      const next = ring[(i + 1) % n];
+      const v1x = prev.x - cur.x, v1y = prev.y - cur.y;
+      const v2x = next.x - cur.x, v2y = next.y - cur.y;
+      const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
+      if (l1 < 1e-4 || l2 < 1e-4) { out.push(cur); continue; }
+      const u1x = v1x / l1, u1y = v1y / l1;
+      const u2x = v2x / l2, u2y = v2y / l2;
+      const dot = Math.max(-1, Math.min(1, u1x * u2x + u1y * u2y));
+      const theta = Math.acos(dot);
+      if (theta > Math.PI - 0.06 || theta < 0.06) { out.push(cur); continue; }
+      const half = theta / 2;
+      const tanH = Math.tan(half);
+      let d = filletRadius / tanH;
+      d = Math.min(d, l1 * 0.5, l2 * 0.5);
+      const r = d * tanH;
+      const t1 = { x: cur.x + u1x * d, y: cur.y + u1y * d };
+      const t2 = { x: cur.x + u2x * d, y: cur.y + u2y * d };
+      const bx = u1x + u2x, by = u1y + u2y;
+      const bl = Math.hypot(bx, by) || 1;
+      const cdist = r / Math.sin(half);
+      const cc = { x: cur.x + (bx / bl) * cdist, y: cur.y + (by / bl) * cdist };
+      let a1 = Math.atan2(t1.y - cc.y, t1.x - cc.x);
+      const a2 = Math.atan2(t2.y - cc.y, t2.x - cc.x);
+      let da = a2 - a1;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      out.push(t1);
+      for (let k = 1; k < ARC_STEPS; k++) {
+        const a = a1 + (da * k) / ARC_STEPS;
+        out.push({ x: cc.x + Math.cos(a) * r, y: cc.y + Math.sin(a) * r });
+      }
+      out.push(t2);
+    }
+    return out;
+  };
+  return unionRings.map(({ outer, holes }) => ({
+    outer: filletRing(dedup(outer)),
+    holes: holes.map((h) => filletRing(dedup(h))),
+  }));
+}
+
 
 export type RoadKind = "garis" | "tangent";
 

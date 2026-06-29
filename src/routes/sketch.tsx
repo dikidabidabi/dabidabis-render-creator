@@ -156,8 +156,10 @@ import {
   roadCenterline,
   roadCorridorPolygon as buildRoadCorridor,
   offsetPolyline as offsetRoadPolyline,
+  unionFilletedCorridors,
   type RoadSegment,
 } from "@/lib/roads";
+
 
 export const Route = createFileRoute("/sketch")({
   head: () => ({
@@ -5841,78 +5843,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         .map((rd) => buildRoadCorridor(rd, pxPerMeter) as Point[])
         .filter((c) => c.length >= 3);
 
-      // Fillet semua sudut sebuah ring polygon dengan radius tetap (px).
-      const filletRing = (ring: Point[], rPx: number): Point[] => {
-        const n = ring.length;
-        if (n < 3) return ring.slice();
-        const out: Point[] = [];
-        const ARC_STEPS = 10;
-        for (let i = 0; i < n; i++) {
-          const prev = ring[(i + n - 1) % n];
-          const cur = ring[i];
-          const next = ring[(i + 1) % n];
-          const v1x = prev.x - cur.x, v1y = prev.y - cur.y;
-          const v2x = next.x - cur.x, v2y = next.y - cur.y;
-          const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
-          if (l1 < 1e-4 || l2 < 1e-4) { out.push(cur); continue; }
-          const u1x = v1x / l1, u1y = v1y / l1;
-          const u2x = v2x / l2, u2y = v2y / l2;
-          const dot = Math.max(-1, Math.min(1, u1x * u2x + u1y * u2y));
-          const theta = Math.acos(dot); // sudut interior
-          if (theta > Math.PI - 0.06 || theta < 0.06) { out.push(cur); continue; }
-          const half = theta / 2;
-          const tanH = Math.tan(half);
-          let d = rPx / tanH;
-          d = Math.min(d, l1 * 0.5, l2 * 0.5);
-          const r = d * tanH;
-          const t1 = { x: cur.x + u1x * d, y: cur.y + u1y * d };
-          const t2 = { x: cur.x + u2x * d, y: cur.y + u2y * d };
-          const bx = u1x + u2x, by = u1y + u2y;
-          const bl = Math.hypot(bx, by) || 1;
-          const cdist = r / Math.sin(half);
-          const cc = { x: cur.x + (bx / bl) * cdist, y: cur.y + (by / bl) * cdist };
-          let a1 = Math.atan2(t1.y - cc.y, t1.x - cc.x);
-          const a2 = Math.atan2(t2.y - cc.y, t2.x - cc.x);
-          let da = a2 - a1;
-          while (da > Math.PI) da -= Math.PI * 2;
-          while (da < -Math.PI) da += Math.PI * 2;
-          out.push(t1);
-          for (let k = 1; k < ARC_STEPS; k++) {
-            const a = a1 + (da * k) / ARC_STEPS;
-            out.push({ x: cc.x + Math.cos(a) * r, y: cc.y + Math.sin(a) * r });
-          }
-          out.push(t2);
-        }
-        return out;
-      };
+      // Union semua koridor → MultiPolygon (rings with holes) yang sudut-sudutnya sudah di-fillet.
+      const unionRings = unionFilletedCorridors(corridors, filletPx);
 
-      // Union semua koridor → MultiPolygon (rings with holes), lalu fillet tiap ring.
-      type Ring = Point[];
-      let unionRings: { outer: Ring; holes: Ring[] }[] = [];
-      try {
-        const polys = corridors.map((c) => [c.map((p) => [p.x, p.y] as [number, number])]);
-        const u = polygonClipping.union(polys[0] as any, ...(polys.slice(1) as any[]));
-        unionRings = u.map((poly) => ({
-          outer: poly[0].map(([x, y]) => ({ x, y })),
-          holes: poly.slice(1).map((h) => h.map(([x, y]) => ({ x, y }))),
-        }));
-      } catch {
-        unionRings = corridors.map((c) => ({ outer: c, holes: [] }));
-      }
 
-      // Bersihkan vertex penutup duplikat (polygon-clipping menutup ring).
-      const dedup = (r: Ring): Ring => {
-        if (r.length < 2) return r;
-        const last = r[r.length - 1], first = r[0];
-        if (Math.hypot(last.x - first.x, last.y - first.y) < 1e-6) return r.slice(0, -1);
-        return r;
-      };
+
 
       // FILL semi-transparan
       ctx.save();
       ctx.fillStyle = "rgba(63,63,70,0.22)";
       for (const { outer, holes } of unionRings) {
-        const o = filletRing(dedup(outer), filletPx);
+        const o = outer;
+        if (o.length < 3) continue;
         ctx.beginPath();
         const s0 = worldToScreen(o[0]);
         ctx.moveTo(s0.x, s0.y);
@@ -5922,12 +5864,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
         ctx.closePath();
         for (const h of holes) {
-          const fh = filletRing(dedup(h), filletPx);
-          if (fh.length < 3) continue;
-          const h0 = worldToScreen(fh[0]);
+          if (h.length < 3) continue;
+          const h0 = worldToScreen(h[0]);
           ctx.moveTo(h0.x, h0.y);
-          for (let i = fh.length - 1; i >= 1; i--) {
-            const sh = worldToScreen(fh[i]);
+          for (let i = h.length - 1; i >= 1; i--) {
+            const sh = worldToScreen(h[i]);
             ctx.lineTo(sh.x, sh.y);
           }
           ctx.closePath();
@@ -5944,13 +5885,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.lineJoin = "round";
       for (const { outer, holes } of unionRings) {
         for (const ring of [outer, ...holes]) {
-          const fr = filletRing(dedup(ring), filletPx);
-          if (fr.length < 2) continue;
+          if (ring.length < 2) continue;
           ctx.beginPath();
-          const s0 = worldToScreen(fr[0]);
+          const s0 = worldToScreen(ring[0]);
           ctx.moveTo(s0.x, s0.y);
-          for (let i = 1; i < fr.length; i++) {
-            const s = worldToScreen(fr[i]);
+          for (let i = 1; i < ring.length; i++) {
+            const s = worldToScreen(ring[i]);
             ctx.lineTo(s.x, s.y);
           }
           ctx.closePath();
@@ -5958,6 +5898,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
       }
       ctx.restore();
+
 
       // Centerline putus-putus + fillet indicator per ruas
       for (const rd of roadsAll) {
