@@ -220,7 +220,19 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
     return out;
   }, [sketch.layers, levelMap]);
 
+  const roadRings = useMemo(() => {
+    const roads = sketch.roads ?? [];
+    if (!roads.length) return [] as { outer: Point[]; holes: Point[][] }[];
+    const pxPerMeter = 1 / mPerPx;
+    const FILLET_M = 4;
+    const corridors = roads
+      .map((r) => buildRoadCorridor(r, pxPerMeter) as Point[])
+      .filter((c) => c.length >= 3);
+    return unionFilletedCorridors(corridors, FILLET_M * pxPerMeter);
+  }, [sketch.roads, mPerPx]);
+
   const camDist = bound * 2.2 + 30;
+
 
   return (
     <div className="relative border-t border-border/40 bg-gradient-to-b from-slate-100 to-slate-200">
