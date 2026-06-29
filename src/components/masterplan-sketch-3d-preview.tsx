@@ -124,6 +124,49 @@ function ExtrudedMesh({
   );
 }
 
+function RoadExtruded({
+  outer, holes, origin, mPerPx, baseY, height,
+}: {
+  outer: Point[]; holes: Point[][]; origin: Point; mPerPx: number;
+  baseY: number; height: number;
+}) {
+  const geo = useMemo(() => {
+    if (outer.length < 3 || height <= 0) return null;
+    const shape = new THREE.Shape();
+    outer.forEach((p, i) => {
+      const x = (p.x - origin.x) * mPerPx;
+      const y = (p.y - origin.y) * mPerPx;
+      if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+    });
+    shape.closePath();
+    for (const h of holes) {
+      if (h.length < 3) continue;
+      const hole = new THREE.Path();
+      h.forEach((p, i) => {
+        const x = (p.x - origin.x) * mPerPx;
+        const y = (p.y - origin.y) * mPerPx;
+        if (i === 0) hole.moveTo(x, y); else hole.lineTo(x, y);
+      });
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+    const g = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+    g.rotateX(Math.PI / 2);
+    g.scale(1, -1, 1);
+    return g;
+  }, [outer, holes, origin.x, origin.y, mPerPx, height]);
+  if (!geo) return null;
+  return (
+    <group position={[0, baseY, 0]}>
+      <mesh geometry={geo} castShadow receiveShadow>
+        <meshStandardMaterial color="#3f3f46" roughness={0.95} metalness={0.0} side={THREE.DoubleSide} />
+        <Edges threshold={20} color="#18181b" />
+      </mesh>
+    </group>
+  );
+}
+
+
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
   const mPerPx = metersPerPx(sketch.scale);
