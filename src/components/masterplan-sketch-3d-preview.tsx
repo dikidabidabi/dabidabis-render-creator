@@ -283,6 +283,18 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               color={m.color}
             />
           ))}
+          {roadRings.map((rr, i) => (
+            <RoadExtruded
+              key={`road-${i}`}
+              outer={rr.outer}
+              holes={rr.holes}
+              origin={origin}
+              mPerPx={mPerPx}
+              baseY={0}
+              height={0.15}
+            />
+          ))}
+
           <OrbitControls
             makeDefault
             enableDamping
