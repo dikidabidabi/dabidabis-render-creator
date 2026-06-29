@@ -16,7 +16,7 @@ import {
   polyCentroid,
   polyArea,
 } from "@/lib/masterplan";
-import { nearestRoadEdge, pointInRoadCorridor, roadNetworkRegions } from "@/lib/roads";
+import { nearestRoadEdge, pointInRoadCorridor, roadNetworkRegions, unionFilletedCorridors } from "@/lib/roads";
 
 // ============================================================
 // Master Plan — Cluster Generator (Grasshopper-style cables)
