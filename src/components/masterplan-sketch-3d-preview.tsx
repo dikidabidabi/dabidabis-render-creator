@@ -12,6 +12,12 @@ import * as THREE from "three";
 import { RefreshCw, Box as BoxIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { solidColorForRoomName } from "@/lib/room-color";
+import {
+  roadCorridorPolygon as buildRoadCorridor,
+  unionFilletedCorridors,
+  type RoadSegment,
+} from "@/lib/roads";
+
 
 type Point = { x: number; y: number };
 type Layer = {
