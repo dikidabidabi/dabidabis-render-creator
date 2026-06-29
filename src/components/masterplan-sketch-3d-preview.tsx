@@ -41,7 +41,9 @@ type Sketch = {
   scale: string;
   layers: Layer[];
   levels: Level[];
+  roads?: RoadSegment[];
 };
+
 
 const MINOR_PX = 8;
 const MAJOR_EVERY = 10;
