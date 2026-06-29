@@ -203,22 +203,53 @@ function solveLayout(
       }
 
       // Jalan: tarik ringan ke tepi jalan terdekat (akses depan); usir dari dalam koridor.
+      // Setback minimal 4 m dari tepi jalan.
       if (roads && roads.length) {
         const pw = { x: A.x, y: A.z };
         const inCorridor = pointInRoadCorridor(pw, roads);
         const near = nearestRoadEdge(pw, roads);
         if (inCorridor && near) {
-          // dorong keluar
-          A.vx += near.nor.x * 1.2;
-          A.vz += near.nor.y * 1.2;
+          A.vx += near.nor.x * 1.4;
+          A.vz += near.nor.y * 1.4;
         } else if (near) {
-          const setback = Math.max(A.w, A.d) / 2 + 2;
-          const desired = setback;
-          const delta = near.d - desired;
-          // Gravitasi ringan ke tepi jalan
-          const k = -Math.tanh(delta / 12) * 0.08;
-          A.vx += -near.nor.x * k * 6;
-          A.vz += -near.nor.y * k * 6;
+          const setback = Math.max(A.w, A.d) / 2 + 4; // GSB jalan ≥ 4 m
+          const delta = near.d - setback;
+          if (delta < 0) {
+            // di dalam GSB → dorong keluar koridor
+            A.vx += near.nor.x * (-delta) * 0.5;
+            A.vz += near.nor.y * (-delta) * 0.5;
+          } else {
+            // tarik halus ke arah jalan untuk fasad menghadap jalan
+            const k = -Math.tanh(delta / 14) * 0.06;
+            A.vx += -near.nor.x * k * 6;
+            A.vz += -near.nor.y * k * 6;
+          }
+        }
+      }
+
+      // GSB Lahan: dorong menjauh dari batas tapak ≥ 4 m.
+      if (sitePoly && sitePoly.length >= 3) {
+        const gsb = 4 + Math.max(A.w, A.d) / 2;
+        let bestD = Infinity, bnx = 0, bnz = 0;
+        for (let k = 0; k < sitePoly.length; k++) {
+          const p1 = sitePoly[k], p2 = sitePoly[(k + 1) % sitePoly.length];
+          const dx = p2.x - p1.x, dy = p2.y - p1.y;
+          const l2 = dx * dx + dy * dy;
+          let t = l2 > 1e-9 ? ((A.x - p1.x) * dx + (A.z - p1.y) * dy) / l2 : 0;
+          if (t < 0) t = 0; else if (t > 1) t = 1;
+          const cx = p1.x + t * dx, cy = p1.y + t * dy;
+          const ex = A.x - cx, ey = A.z - cy;
+          const d = Math.hypot(ex, ey);
+          if (d < bestD) {
+            bestD = d;
+            bnx = d > 1e-6 ? ex / d : 0;
+            bnz = d > 1e-6 ? ey / d : 0;
+          }
+        }
+        if (bestD < gsb) {
+          const push = (gsb - bestD) * 0.45;
+          A.vx += bnx * push;
+          A.vz += bnz * push;
         }
       }
     }
