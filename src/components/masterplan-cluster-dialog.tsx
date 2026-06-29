@@ -300,36 +300,14 @@ function solveLayout(
     if (!moved) break;
   }
 
-  // Orient buildings perpendicular to nearest road OR axis tangent in front of them.
-  // "Tegak lurus" = sisi panjang bangunan sejajar tangent → fasad menghadap fitur.
-  for (const it of items) {
-    let bestTan: Vec2 | null = null;
-    let bestD = Infinity;
-    if (roads && roads.length) {
+  // Orient buildings perpendicular to nearest ROAD tangent (fasad menghadap jalan).
+  // Tidak di-snap ke 90° — orientasi mengikuti arah jalan apa adanya.
+  if (roads && roads.length) {
+    for (const it of items) {
       const near = nearestRoadEdge({ x: it.x, y: it.z }, roads);
-      if (near && near.d < bestD) { bestD = near.d; bestTan = near.tan; }
-    }
-    if (avoidAxes && avoidAxes.length) {
-      for (const ax of avoidAxes) {
-        for (let k = 0; k < ax.points.length - 1; k++) {
-          const p1 = ax.points[k], p2 = ax.points[k + 1];
-          const dx = p2.x - p1.x, dy = p2.y - p1.y;
-          const l2 = dx * dx + dy * dy;
-          let t = l2 > 1e-9 ? ((it.x - p1.x) * dx + (it.z - p1.y) * dy) / l2 : 0;
-          if (t < 0) t = 0; else if (t > 1) t = 1;
-          const cx = p1.x + t * dx, cy = p1.y + t * dy;
-          const d = Math.hypot(it.x - cx, it.z - cy);
-          if (d < bestD) {
-            const l = Math.hypot(dx, dy) || 1;
-            bestD = d; bestTan = { x: dx / l, y: dy / l };
-          }
-        }
+      if (near) {
+        it.rot = Math.atan2(near.tan.y, near.tan.x);
       }
-    }
-    if (bestTan) {
-      const ang = Math.atan2(bestTan.y, bestTan.x);
-      // Snap to nearest 90° so fasad clean-perpendicular.
-      it.rot = Math.round(ang / (Math.PI / 2)) * (Math.PI / 2);
     }
   }
 
