@@ -216,7 +216,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
       const baseMdpl = lv?.baseMdpl ?? 0;
       let h = lv?.height ?? TYPICAL_FLOOR_H;
       let color = solidColorForRoomName(ly.name) || ly.color || "#cbd5e1";
-      if (isLahan(ly.name)) { h = 0.2; color = "#d6d3d1"; }
+      if (isLahan(ly.name)) { h = 0.05; color = "#d6d3d1"; }
       else if (isTaman(ly.name)) { h = 0.3; color = "#22c55e"; }
       out.push({ key: ly.id, pts: ly.points, base: baseMdpl, h, color });
     }
