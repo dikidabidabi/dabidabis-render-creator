@@ -6006,7 +6006,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               }
               const areaM2 = areaPx / pxPm2;
               if (areaM2 < 1) continue;
-              const c = polygonCentroid(outerPts);
+              const c = diagonalCenter(outerPts);
               const sp = worldToScreen(c);
               const label = `Persil ${pi + 1}`;
               const areaTxt = `${areaM2.toFixed(2)} m²`;
