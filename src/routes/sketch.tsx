@@ -5976,6 +5976,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.restore();
         }
       }
+
+      // Vertex handles untuk mode edit titik jalan
+      if (tool === "jalan" && (jalanSub === "geser" || jalanSub === "tambahTitik" || jalanSub === "hapusTitik")) {
+        ctx.save();
+        for (const rd of roadsAll) {
+          for (let i = 0; i < rd.points.length; i++) {
+            const sp = worldToScreen(rd.points[i]);
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = jalanSub === "hapusTitik" ? "#dc2626" : jalanSub === "tambahTitik" ? "#16a34a" : "#2563eb";
+            ctx.fill();
+            ctx.lineWidth = 1.25;
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
     }
     // Draft jalan tangent
     if (jalanDraft && jalanDraft.kind === "tangent" && tool === "jalan") {
