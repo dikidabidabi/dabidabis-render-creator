@@ -8650,6 +8650,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       endPointer(e);
       return;
     }
+    if (roadVertexDrag) {
+      setRoadVertexDrag(null);
+      endPointer(e);
+      return;
+    }
     if (rampVertexDrag) {
       setRampVertexDrag(null);
       endPointer(e);
