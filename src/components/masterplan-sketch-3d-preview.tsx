@@ -15,6 +15,7 @@ import { solidColorForRoomName } from "@/lib/room-color";
 import {
   roadCorridorPolygon as buildRoadCorridor,
   unionFilletedCorridors,
+  clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
 
