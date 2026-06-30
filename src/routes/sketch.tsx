@@ -13217,7 +13217,7 @@ function LevelsPanel({
                                   : `Luas asli ${sl.areaM2.toFixed(2)} m² · efektif ${(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)} m²`
                               }
                             >
-                              {(lahan || sl.isReferenceRoom ? sl.areaM2 : sl.areaM2 * (sl.coefficient ?? 1)).toFixed(1)}
+                              {(lahan || sl.isReferenceRoom ? sl.areaM2 : sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)}
                               <span className="ml-0.5 text-[9px] font-normal">m²</span>
                             </span>
                             <button
