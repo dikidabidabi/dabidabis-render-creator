@@ -885,6 +885,9 @@ function normalizeSketch(s: any): Sketch {
     clusterGraph: s?.clusterGraph && Array.isArray(s.clusterGraph.nodes) && Array.isArray(s.clusterGraph.links)
       ? { nodes: s.clusterGraph.nodes, links: s.clusterGraph.links }
       : undefined,
+    linkedMasterplan: s?.linkedMasterplan && typeof s.linkedMasterplan.rootLayerId === "string"
+      ? { rootLayerId: s.linkedMasterplan.rootLayerId }
+      : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
