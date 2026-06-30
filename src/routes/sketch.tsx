@@ -200,6 +200,8 @@ type Layer = {
   levelId?: string;
   coefficient?: number; // 1 | 0.5 | 0 — pengali luas efektif
   gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
+  /** Jumlah lapis bangunan (masterplan). Default 1. Setiap lapis = 4 m tinggi di 3D. */
+  floors?: number;
 };
 
 type Level = {
