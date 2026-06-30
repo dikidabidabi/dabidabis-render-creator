@@ -12144,7 +12144,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   return (
     <div className="space-y-4 p-4 lg:p-5">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_400px]">
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <div
             ref={wrapRef}
             className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"

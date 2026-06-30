@@ -9,7 +9,7 @@ import { useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Edges, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
-import { RefreshCw, Box as BoxIcon } from "lucide-react";
+import { RefreshCw, Box as BoxIcon, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { solidColorForRoomName } from "@/lib/room-color";
 import {
@@ -169,6 +169,8 @@ function RoadExtruded({
 
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const mPerPx = metersPerPx(sketch.scale);
 
   const origin = useMemo<Point>(() => {
@@ -235,7 +237,14 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
 
 
   return (
-    <div className="relative border-t border-border/40 bg-gradient-to-b from-slate-100 to-slate-200">
+    <div
+      ref={wrapRef}
+      className={
+        fullscreen
+          ? "fixed inset-0 z-50 bg-gradient-to-b from-slate-100 to-slate-200"
+          : "relative border-t border-border/40 bg-gradient-to-b from-slate-100 to-slate-200"
+      }
+    >
       <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
         <div className="rounded-md border border-border/40 bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
           <BoxIcon className="mr-1 inline h-3 w-3" /> Pratinjau 3D
@@ -249,8 +258,18 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
         >
           <RefreshCw className="mr-1 h-3 w-3" /> Update
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => { setFullscreen((v) => !v); setTick((t) => t + 1); }}
+          title={fullscreen ? "Keluar layar penuh" : "Layar penuh"}
+          className="h-7 bg-background/80 backdrop-blur"
+        >
+          {fullscreen ? <Minimize2 className="mr-1 h-3 w-3" /> : <Maximize2 className="mr-1 h-3 w-3" />}
+          {fullscreen ? "Tutup" : "Full"}
+        </Button>
       </div>
-      <div style={{ height: 360 }} className="w-full">
+      <div style={{ height: fullscreen ? "100vh" : 360 }} className="w-full">
         <Canvas key={tick} shadows dpr={[1, 1.5]}>
           <PerspectiveCamera
             makeDefault
