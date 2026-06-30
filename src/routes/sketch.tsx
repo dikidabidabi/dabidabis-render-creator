@@ -157,6 +157,7 @@ import {
   roadCorridorPolygon as buildRoadCorridor,
   offsetPolyline as offsetRoadPolyline,
   unionFilletedCorridors,
+  clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
 
@@ -2102,7 +2103,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const aksisBufferM = Math.max(0, Number(aksisBufferInput) || 8);
   const [aksisDraft, setAksisDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
   // Jalan tool — koridor jalan (lebar + fillet) untuk Master Plan
-  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet">("garis");
+  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet" | "hapus">("garis");
   const [jalanWidthInput, setJalanWidthInput] = useState<string>("6");
   const [jalanFilletInput, setJalanFilletInput] = useState<string>("4");
   const jalanWidthM = Math.max(0.5, Number(jalanWidthInput) || 6);
@@ -5851,7 +5852,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         .filter((c) => c.length >= 3);
 
       // Union semua koridor → MultiPolygon (rings with holes) yang sudut-sudutnya sudah di-fillet.
-      const unionRings = unionFilletedCorridors(corridors, filletPx);
+      let unionRings = unionFilletedCorridors(corridors, filletPx);
+      // Trim ke perimeter "Lahan" agar tidak ada kelebihan garis jalan di luar tapak.
+      const lahanForClip = layers.find((l) => isLahanLayerName(l.name) && l.points.length >= 3);
+      if (lahanForClip) {
+        unionRings = clipRingsByPolygon(unionRings, lahanForClip.points);
+      }
 
 
 
@@ -5923,7 +5929,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           // Radius fillet di pertemuan offset = fillet jalan + ½ lebar rata-rata.
           const avgHalfPx = roadsAll.reduce((s, r) => s + (r.widthM * pxPerMeter) / 2, 0) / roadsAll.length;
           const offsetFilletPx = filletPx + avgHalfPx;
-          const offsetRings = unionFilletedCorridors(expandedCorridors, offsetFilletPx);
+          let offsetRings = unionFilletedCorridors(expandedCorridors, offsetFilletPx);
+          if (lahanForClip) offsetRings = clipRingsByPolygon(offsetRings, lahanForClip.points);
           ctx.save();
           ctx.strokeStyle = "#dc2626";
           ctx.lineWidth = 1.1;
@@ -7822,6 +7829,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const nextR = roads.map((rd, i) => i === bestIdx ? { ...rd, filletM: jalanFilletM } : rd);
         onChange({ roads: nextR });
         toast.success(`Fillet jalan = ${jalanFilletM.toFixed(2)} m`);
+      }
+    } else if (tool === "jalan" && jalanSub === "hapus") {
+      const roads = sketch.roads ?? [];
+      let bestIdx = -1, bestD = Infinity;
+      for (let i = 0; i < roads.length; i++) {
+        const rd = roads[i];
+        const center = roadCenterline(rd);
+        const halfPx = (rd.widthM * pxPerMeter) / 2;
+        for (let s = 0; s < center.length - 1; s++) {
+          const a2 = center[s], b2 = center[s + 1];
+          const dx = b2.x - a2.x, dy = b2.y - a2.y;
+          const l2 = dx * dx + dy * dy;
+          let t = l2 > 1e-9 ? ((p.x - a2.x) * dx + (p.y - a2.y) * dy) / l2 : 0;
+          t = Math.max(0, Math.min(1, t));
+          const cx = a2.x + t * dx, cy = a2.y + t * dy;
+          const d = Math.hypot(p.x - cx, p.y - cy);
+          if (d < bestD && d <= halfPx + 8 / view.s) { bestD = d; bestIdx = i; }
+        }
+      }
+      if (bestIdx >= 0) {
+        pushHistory();
+        onChange({ roads: roads.filter((_, i) => i !== bestIdx) });
+        toast.success("Jalan dihapus");
+      } else {
+        toast.error("Klik di atas jalan untuk menghapus");
       }
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
@@ -9983,6 +10015,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               className="h-7 px-2 text-[11px]"
               onClick={() => { setJalanSub("fillet"); setJalanDraft(null); }}
             >Fillet</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "hapus" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("hapus"); setJalanDraft(null); }}
+              title="Klik di atas sebuah jalan untuk menghapus jalan tersebut"
+            >Hapus</Button>
             <div className="ml-2 flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">Lebar</span>
               <Input

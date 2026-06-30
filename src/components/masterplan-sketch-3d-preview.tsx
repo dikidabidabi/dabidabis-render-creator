@@ -15,6 +15,7 @@ import { solidColorForRoomName } from "@/lib/room-color";
 import {
   roadCorridorPolygon as buildRoadCorridor,
   unionFilletedCorridors,
+  clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
 
@@ -215,7 +216,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
       const baseMdpl = lv?.baseMdpl ?? 0;
       let h = lv?.height ?? TYPICAL_FLOOR_H;
       let color = solidColorForRoomName(ly.name) || ly.color || "#cbd5e1";
-      if (isLahan(ly.name)) { h = 0.2; color = "#d6d3d1"; }
+      if (isLahan(ly.name)) { h = 0.05; color = "#d6d3d1"; }
       else if (isTaman(ly.name)) { h = 0.3; color = "#22c55e"; }
       out.push({ key: ly.id, pts: ly.points, base: baseMdpl, h, color });
     }
@@ -230,8 +231,11 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
     const corridors = roads
       .map((r) => buildRoadCorridor(r, pxPerMeter) as Point[])
       .filter((c) => c.length >= 3);
-    return unionFilletedCorridors(corridors, FILLET_M * pxPerMeter);
-  }, [sketch.roads, mPerPx]);
+    let rings = unionFilletedCorridors(corridors, FILLET_M * pxPerMeter);
+    const lah = sketch.layers.find((l) => isLahan(l.name) && l.points.length >= 3);
+    if (lah) rings = clipRingsByPolygon(rings, lah.points);
+    return rings;
+  }, [sketch.roads, sketch.layers, mPerPx]);
 
   const camDist = bound * 2.2 + 30;
 
