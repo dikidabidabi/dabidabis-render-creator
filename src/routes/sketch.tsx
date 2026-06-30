@@ -7830,6 +7830,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         onChange({ roads: nextR });
         toast.success(`Fillet jalan = ${jalanFilletM.toFixed(2)} m`);
       }
+    } else if (tool === "jalan" && jalanSub === "hapus") {
+      const roads = sketch.roads ?? [];
+      let bestIdx = -1, bestD = Infinity;
+      for (let i = 0; i < roads.length; i++) {
+        const rd = roads[i];
+        const center = roadCenterline(rd);
+        const halfPx = (rd.widthM * pxPerMeter) / 2;
+        for (let s = 0; s < center.length - 1; s++) {
+          const a2 = center[s], b2 = center[s + 1];
+          const dx = b2.x - a2.x, dy = b2.y - a2.y;
+          const l2 = dx * dx + dy * dy;
+          let t = l2 > 1e-9 ? ((p.x - a2.x) * dx + (p.y - a2.y) * dy) / l2 : 0;
+          t = Math.max(0, Math.min(1, t));
+          const cx = a2.x + t * dx, cy = a2.y + t * dy;
+          const d = Math.hypot(p.x - cx, p.y - cy);
+          if (d < bestD && d <= halfPx + 8 / view.s) { bestD = d; bestIdx = i; }
+        }
+      }
+      if (bestIdx >= 0) {
+        pushHistory();
+        onChange({ roads: roads.filter((_, i) => i !== bestIdx) });
+        toast.success("Jalan dihapus");
+      } else {
+        toast.error("Klik di atas jalan untuk menghapus");
+      }
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
