@@ -238,7 +238,9 @@ function bindLahanToMdplZero(sketch: Sketch): Sketch {
     ...sketch,
     levels,
     parkingAreas,
-    layers: (sketch.layers ?? []).map((ly) => (isLahan(ly.name) ? { ...ly, levelId: zeroLevel.id } : ly)),
+    layers: (sketch.layers ?? [])
+      .filter((ly) => !ly.hidden)
+      .map((ly) => (isLahan(ly.name) ? { ...ly, levelId: zeroLevel.id } : ly)),
   };
 }
 
