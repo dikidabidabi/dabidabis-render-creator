@@ -335,18 +335,24 @@ export function syncSketchReferenceToMasterplan(sketchId: string): void {
   if (!sk || !sk.linkedMasterplan) return;
   const mpStore = readStore(MASTERPLAN_KEY);
   let dirty = false;
+  const skPxm = pxPerMeterOf(sk.scale);
   for (const mp of mpStore.sketches) {
+    const mpPxm = pxPerMeterOf(mp.scale);
     for (const refLayer of sk.layers) {
       if (!refLayer.isReferenceRoom || !refLayer.refSourceLayerId) continue;
       const target = mp.layers.find((l) => l.id === refLayer.refSourceLayerId);
       if (!target) continue;
-      // Bandingkan checksum sederhana untuk hindari loop
+      // Konversi px-sketsa → meter → px-masterplan agar skala beda tidak menggeser.
+      const converted = refLayer.points.map((p) => ({
+        x: (p.x / skPxm) * mpPxm,
+        y: (p.y / skPxm) * mpPxm,
+      }));
       const same =
-        target.points.length === refLayer.points.length &&
-        target.points.every((p, i) => Math.abs(p.x - refLayer.points[i].x) < 0.01 && Math.abs(p.y - refLayer.points[i].y) < 0.01);
+        target.points.length === converted.length &&
+        target.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
       if (same) continue;
-      target.points = refLayer.points.map((p) => ({ x: p.x, y: p.y }));
-      target.areaM2 = polyAreaM2(target.points, pxPerMeterOf(mp.scale));
+      target.points = converted;
+      target.areaM2 = polyAreaM2(target.points, mpPxm);
       mp.updatedAt = Date.now();
       dirty = true;
     }
