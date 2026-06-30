@@ -5058,6 +5058,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     // Layer labels (vertical: name on top, area below) drawn upright
     layers.forEach((layer) => {
+      if (layer.hidden) return;
       if (layer.points.length < 3) return;
       const lvl = levels.find((l) => l.id === layer.levelId);
       const labelAlpha = !lvl || activeLvlId == null || lvl.id === activeLvlId ? 1 : lvl.opacity;
