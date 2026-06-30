@@ -10125,6 +10125,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               onClick={() => { setJalanSub("hapus"); setJalanDraft(null); }}
               title="Klik di atas sebuah jalan untuk menghapus jalan tersebut"
             >Hapus</Button>
+            <div className="mx-1 h-5 w-px bg-zinc-300" />
+            <span className="text-[10px] text-muted-foreground">Edit Titik:</span>
+            <Button
+              size="sm"
+              variant={jalanSub === "geser" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("geser"); setJalanDraft(null); }}
+              title="Tarik titik jalan untuk menggesernya"
+            >Geser</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "tambahTitik" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("tambahTitik"); setJalanDraft(null); }}
+              title="Klik pada centerline jalan untuk menambah titik kontrol"
+            >+ Titik</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "hapusTitik" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("hapusTitik"); setJalanDraft(null); }}
+              title="Klik pada titik jalan untuk menghapus titik tersebut"
+            >− Titik</Button>
             <div className="ml-2 flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">Lebar</span>
               <Input
