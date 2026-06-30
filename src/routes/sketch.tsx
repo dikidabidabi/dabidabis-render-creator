@@ -13248,6 +13248,23 @@ function LevelsPanel({
                               <Copy className="h-3 w-3" />
                             </button>
                             <button
+                              onClick={() => onToggleHiddenLayer(sl.id)}
+                              className={cn(
+                                "shrink-0 rounded p-0.5 transition",
+                                sl.hidden
+                                  ? "text-muted-foreground/60 hover:text-muted-foreground"
+                                  : "text-amber-400 hover:text-amber-500",
+                              )}
+                              aria-label={sl.hidden ? "Tampilkan layer" : "Sembunyikan layer"}
+                              title={sl.hidden ? "Layer disembunyikan — klik untuk tampilkan" : "Layer terlihat — klik untuk sembunyikan"}
+                            >
+                              {sl.hidden ? (
+                                <LightbulbOff className="h-3 w-3" />
+                              ) : (
+                                <Lightbulb className="h-3 w-3 fill-amber-300" />
+                              )}
+                            </button>
+                            <button
                               onClick={() => onToggleLockLayer(sl.id)}
                               className={cn(
                                 "shrink-0 rounded p-0.5 transition",
