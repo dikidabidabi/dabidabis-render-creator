@@ -9,7 +9,7 @@ import { useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Edges, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
-import { RefreshCw, Box as BoxIcon } from "lucide-react";
+import { RefreshCw, Box as BoxIcon, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { solidColorForRoomName } from "@/lib/room-color";
 import {
