@@ -314,7 +314,6 @@ export function exportBuildingToSketch(opts: {
   // Cari sketsa target di SKETCH_KEY
   const skStore = readStore(SKETCH_KEY);
   let target = skStore.sketches.find((s) => s.linkedMasterplan?.rootLayerId === opts.rootLayerId);
-  const isNew = !target;
 
   const now = Date.now();
   const buildingName = rootLayer.name || "Bangunan";
