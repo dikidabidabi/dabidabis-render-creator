@@ -512,6 +512,7 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
     );
     const currentLT = sk.levels.filter((lv) => /^LT\s*\d+/i.test(lv.name)).length;
     if (chain.length > 0 && expectedLT !== currentLT) {
+      if (dirty) writeStore(SKETCH_KEY, skStore);
       exportBuildingToSketch({
         masterplanSketchId: mp.id,
         rootLayerId: sk.linkedMasterplan.rootLayerId,
