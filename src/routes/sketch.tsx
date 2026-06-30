@@ -12630,7 +12630,9 @@ function LevelsPanel({
   onRemoveLayer,
   onDuplicateLayer,
   onSetLayerCoefficient,
+  onSetLayerFloors,
   onSetLayerGsb,
+  mode = "sketch",
   lines,
   layers,
 }: {
@@ -12651,7 +12653,9 @@ function LevelsPanel({
   onRemoveLayer: (id: string) => void;
   onDuplicateLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
+  onSetLayerFloors: (id: string, floors: number) => void;
   onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
+  mode?: "sketch" | "masterplan";
   lines: Line[];
   layers: Layer[];
 }) {
