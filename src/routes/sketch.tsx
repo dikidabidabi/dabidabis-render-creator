@@ -13221,16 +13221,28 @@ function LevelsPanel({
                               </button>
                             )}
                             </div>
-                            {mode === "masterplan" && !lahan && onAddSubBuilding && (
+                            {mode === "masterplan" && !lahan && !lvl.parentLayerId && (onAddSubBuilding || onExportToSketch) && (
                               <div className="mt-0.5 flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => onAddSubBuilding(sl.id)}
-                                  className="flex h-5 items-center gap-1 rounded border border-dashed border-ember/50 bg-background/50 px-1.5 text-[10px] font-medium text-ember/80 transition hover:border-ember hover:bg-ember/10 hover:text-ember"
-                                  title="Tambah sub-bangunan (massa tambahan di atas bangunan ini, level baru otomatis dibuat)"
-                                >
-                                  <Plus className="h-2.5 w-2.5" /> sub
-                                </button>
+                                {onAddSubBuilding && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onAddSubBuilding(sl.id)}
+                                    className="flex h-5 items-center gap-1 rounded border border-dashed border-ember/50 bg-background/50 px-1.5 text-[10px] font-medium text-ember/80 transition hover:border-ember hover:bg-ember/10 hover:text-ember"
+                                    title="Tambah sub-bangunan (massa tambahan di atas bangunan ini, level baru otomatis dibuat)"
+                                  >
+                                    <Plus className="h-2.5 w-2.5" /> sub
+                                  </button>
+                                )}
+                                {onExportToSketch && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onExportToSketch(sl.id)}
+                                    className="flex h-5 items-center gap-1 rounded border border-dashed border-primary/50 bg-background/50 px-1.5 text-[10px] font-medium text-primary/80 transition hover:border-primary hover:bg-primary/10 hover:text-primary"
+                                    title="Ekspor bangunan ini ke halaman Sketsa untuk didetailkan"
+                                  >
+                                    <ArrowRight className="h-2.5 w-2.5" /> sketsa
+                                  </button>
+                                )}
                               </div>
                             )}
                             {mode === "masterplan" && !lahan && !lvl.parentLayerId && (sl.floors ?? 1) >= 1 && (() => {
