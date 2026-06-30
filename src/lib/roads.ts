@@ -90,6 +90,30 @@ export function unionFilletedCorridors(
 }
 
 
+/** Trim union rings (outer + holes) ke dalam polygon `clip`. Unit harus sama.
+ *  Bila clipping gagal atau hasil kosong, kembalikan rings asli. */
+export function clipRingsByPolygon(
+  rings: { outer: Vec2[]; holes: Vec2[][] }[],
+  clip: Vec2[],
+): { outer: Vec2[]; holes: Vec2[][] }[] {
+  if (!clip || clip.length < 3 || rings.length === 0) return rings;
+  try {
+    const clipPoly = [[clip.map((p) => [p.x, p.y] as [number, number])]];
+    const subj = rings.map((r) => [
+      r.outer.map((p) => [p.x, p.y] as [number, number]),
+      ...r.holes.map((h) => h.map((p) => [p.x, p.y] as [number, number])),
+    ]);
+    const inter = polygonClipping.intersection(subj as any, clipPoly as any);
+    if (!inter || inter.length === 0) return [];
+    return inter.map((poly) => ({
+      outer: poly[0].map(([x, y]) => ({ x, y })),
+      holes: poly.slice(1).map((h) => h.map(([x, y]) => ({ x, y }))),
+    }));
+  } catch {
+    return rings;
+  }
+}
+
 export type RoadKind = "garis" | "tangent";
 
 export type RoadSegment = {
