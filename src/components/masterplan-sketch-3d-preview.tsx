@@ -231,8 +231,11 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
     const corridors = roads
       .map((r) => buildRoadCorridor(r, pxPerMeter) as Point[])
       .filter((c) => c.length >= 3);
-    return unionFilletedCorridors(corridors, FILLET_M * pxPerMeter);
-  }, [sketch.roads, mPerPx]);
+    let rings = unionFilletedCorridors(corridors, FILLET_M * pxPerMeter);
+    const lah = sketch.layers.find((l) => isLahan(l.name) && l.points.length >= 3);
+    if (lah) rings = clipRingsByPolygon(rings, lah.points);
+    return rings;
+  }, [sketch.roads, sketch.layers, mPerPx]);
 
   const camDist = bound * 2.2 + 30;
 
