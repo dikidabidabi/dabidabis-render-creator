@@ -253,38 +253,50 @@ export function exportBuildingToSketch(opts: {
     floors: 1,
   });
 
-  // Tiap layer pada chain → 1 level baru "LT N" + 1 ruang referensi
+  // Tiap layer pada chain → N level baru "LT N" sesuai jumlah lapis (floors) layer tsb
   let storeyIdx = 1;
   for (const { layer } of chain) {
-    const ltLvl: AnyLevel = {
-      id: newId("LV"),
-      name: `LT ${storeyIdx}`,
-      mdpl: (storeyIdx - 1) * 4 + 0.001 * storeyIdx, // strict urutan; 4 m per lantai
-      opacity: 0.5,
-    };
-    newLevels.push(ltLvl);
+    const layerFloors = Math.max(1, Math.round(Number((layer as any).floors) || 1));
     const areaM2 = polyAreaM2(layer.points, pxm);
-    newLayers.push({
-      id: newId("LY"),
-      name: `Ruang Referensi ${storeyIdx}`,
-      points: layer.points.map((p) => ({ x: p.x, y: p.y })),
-      areaM2,
-      color: "#94a3b8",
-      locked: false,
-      levelId: ltLvl.id,
-      coefficient: 0,
-      floors: 1,
-      isReferenceRoom: true,
-      refSourceLayerId: layer.id,
-    });
-    storeyIdx++;
+    for (let f = 0; f < layerFloors; f++) {
+      const ltLvl: AnyLevel = {
+        id: newId("LV"),
+        name: `LT ${storeyIdx}`,
+        mdpl: (storeyIdx - 1) * 4 + 0.001 * storeyIdx, // strict urutan; 4 m per lantai
+        opacity: 0.5,
+      };
+      newLevels.push(ltLvl);
+      newLayers.push({
+        id: newId("LY"),
+        name: `Ruang Referensi ${storeyIdx}`,
+        points: layer.points.map((p) => ({ x: p.x, y: p.y })),
+        areaM2,
+        color: "#94a3b8",
+        locked: false,
+        levelId: ltLvl.id,
+        coefficient: 0,
+        floors: 1,
+        isReferenceRoom: true,
+        refSourceLayerId: layer.id,
+      });
+      storeyIdx++;
+    }
   }
+
+  // Propagasi properti yang harus identik dengan masterplan agar koordinat,
+  // skala, dan peta tidak bergeser saat berpindah halaman.
+  const inheritedProps: Record<string, unknown> = {
+    scale: mp.scale ?? "1:100",
+    geo: (mp as any).geo, // koordinat map ikut terekspor
+    northRotation: (mp as any).northRotation,
+    mmGridRotation: (mp as any).mmGridRotation,
+  };
 
   if (target) {
     // Re-sync: pertahankan ruang non-referensi & non-Lahan yang sudah digambar pengguna.
     const preserved = target.layers.filter((l) => !l.isReferenceRoom && !isLahan(l.name));
     target.title = buildingName;
-    target.scale = mp.scale ?? "1:100";
+    Object.assign(target, inheritedProps);
     target.levels = newLevels;
     // Pasang ulang layer preserved ke level Lahan (atau level pertama) untuk hindari orphan.
     const preservedAttached = preserved.map((l) => ({ ...l, levelId: lvlLahan.id }));
@@ -305,6 +317,7 @@ export function exportBuildingToSketch(opts: {
       levels: newLevels,
       activeLevelId: newLevels[1]?.id ?? lvlLahan.id,
       linkedMasterplan: { rootLayerId: opts.rootLayerId },
+      ...inheritedProps,
     };
     skStore.sketches.push(target);
   }
@@ -322,18 +335,24 @@ export function syncSketchReferenceToMasterplan(sketchId: string): void {
   if (!sk || !sk.linkedMasterplan) return;
   const mpStore = readStore(MASTERPLAN_KEY);
   let dirty = false;
+  const skPxm = pxPerMeterOf(sk.scale);
   for (const mp of mpStore.sketches) {
+    const mpPxm = pxPerMeterOf(mp.scale);
     for (const refLayer of sk.layers) {
       if (!refLayer.isReferenceRoom || !refLayer.refSourceLayerId) continue;
       const target = mp.layers.find((l) => l.id === refLayer.refSourceLayerId);
       if (!target) continue;
-      // Bandingkan checksum sederhana untuk hindari loop
+      // Konversi px-sketsa → meter → px-masterplan agar skala beda tidak menggeser.
+      const converted = refLayer.points.map((p) => ({
+        x: (p.x / skPxm) * mpPxm,
+        y: (p.y / skPxm) * mpPxm,
+      }));
       const same =
-        target.points.length === refLayer.points.length &&
-        target.points.every((p, i) => Math.abs(p.x - refLayer.points[i].x) < 0.01 && Math.abs(p.y - refLayer.points[i].y) < 0.01);
+        target.points.length === converted.length &&
+        target.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
       if (same) continue;
-      target.points = refLayer.points.map((p) => ({ x: p.x, y: p.y }));
-      target.areaM2 = polyAreaM2(target.points, pxPerMeterOf(mp.scale));
+      target.points = converted;
+      target.areaM2 = polyAreaM2(target.points, mpPxm);
       mp.updatedAt = Date.now();
       dirty = true;
     }
@@ -349,18 +368,24 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
   if (!mp) return;
   const skStore = readStore(SKETCH_KEY);
   let dirty = false;
+  const mpPxm = pxPerMeterOf(mp.scale);
   for (const sk of skStore.sketches) {
     if (!sk.linkedMasterplan) continue;
+    const skPxm = pxPerMeterOf(sk.scale);
     for (const refLayer of sk.layers) {
       if (!refLayer.isReferenceRoom || !refLayer.refSourceLayerId) continue;
       const source = mp.layers.find((l) => l.id === refLayer.refSourceLayerId);
       if (!source) continue;
+      const converted = source.points.map((p) => ({
+        x: (p.x / mpPxm) * skPxm,
+        y: (p.y / mpPxm) * skPxm,
+      }));
       const same =
-        source.points.length === refLayer.points.length &&
-        source.points.every((p, i) => Math.abs(p.x - refLayer.points[i].x) < 0.01 && Math.abs(p.y - refLayer.points[i].y) < 0.01);
+        refLayer.points.length === converted.length &&
+        refLayer.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
       if (same) continue;
-      refLayer.points = source.points.map((p) => ({ x: p.x, y: p.y }));
-      refLayer.areaM2 = polyAreaM2(refLayer.points, pxPerMeterOf(sk.scale));
+      refLayer.points = converted;
+      refLayer.areaM2 = polyAreaM2(refLayer.points, skPxm);
       sk.updatedAt = Date.now();
       dirty = true;
     }
