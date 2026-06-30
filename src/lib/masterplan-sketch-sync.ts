@@ -253,31 +253,34 @@ export function exportBuildingToSketch(opts: {
     floors: 1,
   });
 
-  // Tiap layer pada chain → 1 level baru "LT N" + 1 ruang referensi
+  // Tiap layer pada chain → N level baru "LT N" sesuai jumlah lapis (floors) layer tsb
   let storeyIdx = 1;
   for (const { layer } of chain) {
-    const ltLvl: AnyLevel = {
-      id: newId("LV"),
-      name: `LT ${storeyIdx}`,
-      mdpl: (storeyIdx - 1) * 4 + 0.001 * storeyIdx, // strict urutan; 4 m per lantai
-      opacity: 0.5,
-    };
-    newLevels.push(ltLvl);
+    const layerFloors = Math.max(1, Math.round(Number((layer as any).floors) || 1));
     const areaM2 = polyAreaM2(layer.points, pxm);
-    newLayers.push({
-      id: newId("LY"),
-      name: `Ruang Referensi ${storeyIdx}`,
-      points: layer.points.map((p) => ({ x: p.x, y: p.y })),
-      areaM2,
-      color: "#94a3b8",
-      locked: false,
-      levelId: ltLvl.id,
-      coefficient: 0,
-      floors: 1,
-      isReferenceRoom: true,
-      refSourceLayerId: layer.id,
-    });
-    storeyIdx++;
+    for (let f = 0; f < layerFloors; f++) {
+      const ltLvl: AnyLevel = {
+        id: newId("LV"),
+        name: `LT ${storeyIdx}`,
+        mdpl: (storeyIdx - 1) * 4 + 0.001 * storeyIdx, // strict urutan; 4 m per lantai
+        opacity: 0.5,
+      };
+      newLevels.push(ltLvl);
+      newLayers.push({
+        id: newId("LY"),
+        name: `Ruang Referensi ${storeyIdx}`,
+        points: layer.points.map((p) => ({ x: p.x, y: p.y })),
+        areaM2,
+        color: "#94a3b8",
+        locked: false,
+        levelId: ltLvl.id,
+        coefficient: 0,
+        floors: 1,
+        isReferenceRoom: true,
+        refSourceLayerId: layer.id,
+      });
+      storeyIdx++;
+    }
   }
 
   if (target) {
