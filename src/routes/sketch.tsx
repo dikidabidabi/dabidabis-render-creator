@@ -2106,15 +2106,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Mode "sketch": jika sketsa ini terhubung (linkedMasterplan), maka edit
   // pada "Ruang Referensi" akan tercermin balik ke layer masterplan-nya.
   useEffect(() => {
-    const t = window.setTimeout(() => {
+    const flush = () => {
       try {
         if (mode === "masterplan") syncMasterplanToSketches(sketch.id);
         else if (sketch.linkedMasterplan) syncSketchReferenceToMasterplan(sketch.id);
       } catch {
         // ignore — sync best-effort
       }
-    }, 350);
-    return () => window.clearTimeout(t);
+    };
+    const t = window.setTimeout(flush, 350);
+    // Flush juga saat user akan pindah halaman / tab close agar perubahan
+    // "Ruang Referensi" langsung tersimpan ke masterplan.
+    const onHide = () => flush();
+    window.addEventListener("beforeunload", onHide);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("beforeunload", onHide);
+      window.removeEventListener("pagehide", onHide);
+      flush(); // unmount = navigasi router → flush synchronously
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, sketch.id, layers, levels]);
 
