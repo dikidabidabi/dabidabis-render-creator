@@ -2095,7 +2095,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         return;
       }
       toast.success("Bangunan diekspor ke Sketsa");
-      void navigateFn({ to: "/sketsa" });
+      void navigateFn({ to: "/sketch" });
     },
     [navigateFn, sketch.id],
   );
