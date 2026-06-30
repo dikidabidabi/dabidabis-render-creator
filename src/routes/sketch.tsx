@@ -2109,6 +2109,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const jalanWidthM = Math.max(0.5, Number(jalanWidthInput) || 6);
   const jalanFilletM = Math.max(0, Number(jalanFilletInput) || 0);
   const [jalanDraft, setJalanDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
+  const [jalanOffsetEnabled, setJalanOffsetEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("dabidabis.jalan.offset") === "1";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dabidabis.jalan.offset", jalanOffsetEnabled ? "1" : "0");
+  }, [jalanOffsetEnabled]);
   // Ramp tool state
   const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
   const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
@@ -5899,6 +5907,49 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
       ctx.restore();
 
+      // SETBACK / OFFSET — garis putus-putus offset dari perimeter jalan sejauh ½ lebar (per ruas).
+      if (jalanOffsetEnabled) {
+        // Per ruas: bangun koridor diperbesar dengan width = widthM + 2*(widthM/2) = 2*widthM.
+        const expandedCorridors: Point[][] = roadsAll
+          .map((rd) => {
+            const c = roadCenterline(rd) as Point[];
+            if (c.length < 2) return [] as Point[];
+            const halfExpandedPx = ((rd.widthM * 2) * pxPerMeter) / 2; // = widthM*pxPerMeter
+            const left = offsetRoadPolyline(c, halfExpandedPx) as Point[];
+            const right = offsetRoadPolyline(c, -halfExpandedPx) as Point[];
+            return [...left, ...right.slice().reverse()];
+          })
+          .filter((c) => c.length >= 3);
+        if (expandedCorridors.length > 0) {
+          // Radius fillet di pertemuan offset = fillet jalan + ½ lebar rata-rata.
+          const avgHalfPx = roadsAll.reduce((s, r) => s + (r.widthM * pxPerMeter) / 2, 0) / roadsAll.length;
+          const offsetFilletPx = filletPx + avgHalfPx;
+          const offsetRings = unionFilletedCorridors(expandedCorridors, offsetFilletPx);
+          ctx.save();
+          ctx.strokeStyle = "#dc2626";
+          ctx.lineWidth = 1.1;
+          ctx.setLineDash([7, 5]);
+          ctx.lineCap = "butt";
+          ctx.lineJoin = "round";
+          for (const { outer, holes } of offsetRings) {
+            for (const ring of [outer, ...holes]) {
+              if (ring.length < 2) continue;
+              ctx.beginPath();
+              const s0 = worldToScreen(ring[0]);
+              ctx.moveTo(s0.x, s0.y);
+              for (let i = 1; i < ring.length; i++) {
+                const s = worldToScreen(ring[i]);
+                ctx.lineTo(s.x, s.y);
+              }
+              ctx.closePath();
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        }
+      }
+
+
 
       // Centerline putus-putus + fillet indicator per ruas
       for (const rd of roadsAll) {
@@ -5939,7 +5990,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -9951,6 +10002,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               />
               <span className="text-[10px] text-muted-foreground">m</span>
             </div>
+            <label className="flex items-center gap-1 text-[11px] text-zinc-700 cursor-pointer select-none" title="Tampilkan garis setback putus-putus sejauh ½ lebar jalan dari perimeter (mengikuti fillet pertemuan).">
+              <input
+                type="checkbox"
+                checked={jalanOffsetEnabled}
+                onChange={(e) => setJalanOffsetEnabled(e.target.checked)}
+                className="h-3.5 w-3.5 accent-rose-600"
+              />
+              <span>Offset (½ lebar)</span>
+            </label>
             {jalanSub === "tangent" && jalanDraft && (
               <Button
                 size="sm"
