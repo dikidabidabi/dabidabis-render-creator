@@ -5907,6 +5907,49 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
       ctx.restore();
 
+      // SETBACK / OFFSET — garis putus-putus offset dari perimeter jalan sejauh ½ lebar (per ruas).
+      if (jalanOffsetEnabled) {
+        // Per ruas: bangun koridor diperbesar dengan width = widthM + 2*(widthM/2) = 2*widthM.
+        const expandedCorridors: Point[][] = roadsAll
+          .map((rd) => {
+            const c = roadCenterline(rd) as Point[];
+            if (c.length < 2) return [] as Point[];
+            const halfExpandedPx = ((rd.widthM * 2) * pxPerMeter) / 2; // = widthM*pxPerMeter
+            const left = offsetRoadPolyline(c, halfExpandedPx) as Point[];
+            const right = offsetRoadPolyline(c, -halfExpandedPx) as Point[];
+            return [...left, ...right.slice().reverse()];
+          })
+          .filter((c) => c.length >= 3);
+        if (expandedCorridors.length > 0) {
+          // Radius fillet di pertemuan offset = fillet jalan + ½ lebar rata-rata.
+          const avgHalfPx = roadsAll.reduce((s, r) => s + (r.widthM * pxPerMeter) / 2, 0) / roadsAll.length;
+          const offsetFilletPx = filletPx + avgHalfPx;
+          const offsetRings = unionFilletedCorridors(expandedCorridors, offsetFilletPx);
+          ctx.save();
+          ctx.strokeStyle = "#dc2626";
+          ctx.lineWidth = 1.1;
+          ctx.setLineDash([7, 5]);
+          ctx.lineCap = "butt";
+          ctx.lineJoin = "round";
+          for (const { outer, holes } of offsetRings) {
+            for (const ring of [outer, ...holes]) {
+              if (ring.length < 2) continue;
+              ctx.beginPath();
+              const s0 = worldToScreen(ring[0]);
+              ctx.moveTo(s0.x, s0.y);
+              for (let i = 1; i < ring.length; i++) {
+                const s = worldToScreen(ring[i]);
+                ctx.lineTo(s.x, s.y);
+              }
+              ctx.closePath();
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        }
+      }
+
+
 
       // Centerline putus-putus + fillet indicator per ruas
       for (const rd of roadsAll) {
