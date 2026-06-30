@@ -5852,7 +5852,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         .filter((c) => c.length >= 3);
 
       // Union semua koridor → MultiPolygon (rings with holes) yang sudut-sudutnya sudah di-fillet.
-      const unionRings = unionFilletedCorridors(corridors, filletPx);
+      let unionRings = unionFilletedCorridors(corridors, filletPx);
+      // Trim ke perimeter "Lahan" agar tidak ada kelebihan garis jalan di luar tapak.
+      const lahanForClip = layers.find((l) => isLahanLayerName(l.name) && l.points.length >= 3);
+      if (lahanForClip) {
+        unionRings = clipRingsByPolygon(unionRings, lahanForClip.points);
+      }
 
 
 
