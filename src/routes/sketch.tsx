@@ -9461,6 +9461,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     });
   };
 
+  const setLayerFloors = (lid: string, floors: number) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
+      toast.error("Buka kunci dulu untuk mengubah jumlah lapis");
+      return;
+    }
+    const safe = Math.max(1, Math.min(99, Math.round(Number.isFinite(floors) ? floors : 1)));
+    if ((layer.floors ?? 1) === safe) return;
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, floors: safe } : l)),
+    });
+  };
+
   const setLayerGsbSide = (lid: string, sideIndex: number, meters: number) => {
     const layer = layers.find((l) => l.id === lid);
     if (!layer) return;
