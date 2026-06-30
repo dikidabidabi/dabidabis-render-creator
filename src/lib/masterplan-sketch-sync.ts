@@ -289,29 +289,11 @@ export function exportBuildingToSketch(opts: {
   const now = Date.now();
   const buildingName = rootLayer.name || "Bangunan";
 
-  // Susun levels: Lahan (mdpl 0) + LT 1..N sesuai urut MDPL chain
-  const lvlLahan: AnyLevel = {
-    id: newId("LV"),
-    name: "Lahan",
-    mdpl: 0,
-    opacity: 0.5,
-  };
-  const newLevels: AnyLevel[] = [lvlLahan];
+  // Susun levels: LT 1..N sesuai urut MDPL chain. Polygon "Lahan" digabung
+  // ke dalam level LT 1 (MDPL 0), tidak dipisah ke level Lahan tersendiri.
+  const newLevels: AnyLevel[] = [];
   const newLayers: AnyLayer[] = [];
-
-  // Layer "Lahan"
   const lahanArea = polyAreaM2(parcel, pxm);
-  newLayers.push({
-    id: newId("LY"),
-    name: "Lahan",
-    points: parcel.map((p) => ({ x: p.x, y: p.y })),
-    areaM2: lahanArea,
-    color: "#9ca3af",
-    locked: true,
-    levelId: lvlLahan.id,
-    coefficient: 0,
-    floors: 1,
-  });
 
   // Tiap layer pada chain → N level baru "LT N" sesuai jumlah lapis (floors) layer tsb
   let storeyIdx = 1;
@@ -322,10 +304,25 @@ export function exportBuildingToSketch(opts: {
       const ltLvl: AnyLevel = {
         id: newId("LV"),
         name: `LT ${storeyIdx}`,
-        mdpl: (storeyIdx - 1) * 4 + 0.001 * storeyIdx, // strict urutan; 4 m per lantai
+        // LT 1 sama dengan Lahan di MDPL 0; lantai berikutnya naik 4 m.
+        mdpl: (storeyIdx - 1) * 4,
         opacity: 0.5,
       };
       newLevels.push(ltLvl);
+      // Tambahkan polygon Lahan ke LT 1 saja (MDPL 0).
+      if (storeyIdx === 1) {
+        newLayers.push({
+          id: newId("LY"),
+          name: "Lahan",
+          points: parcel.map((p) => ({ x: p.x, y: p.y })),
+          areaM2: lahanArea,
+          color: "#9ca3af",
+          locked: true,
+          levelId: ltLvl.id,
+          coefficient: 0,
+          floors: 1,
+        });
+      }
       newLayers.push({
         id: newId("LY"),
         name: `Ruang Referensi ${storeyIdx}`,
@@ -342,6 +339,24 @@ export function exportBuildingToSketch(opts: {
       storeyIdx++;
     }
   }
+
+  // Fallback: jika chain kosong, tetap buat 1 level LT 1 berisi Lahan
+  if (newLevels.length === 0) {
+    const ltLvl: AnyLevel = { id: newId("LV"), name: "LT 1", mdpl: 0, opacity: 0.5 };
+    newLevels.push(ltLvl);
+    newLayers.push({
+      id: newId("LY"),
+      name: "Lahan",
+      points: parcel.map((p) => ({ x: p.x, y: p.y })),
+      areaM2: lahanArea,
+      color: "#9ca3af",
+      locked: true,
+      levelId: ltLvl.id,
+      coefficient: 0,
+      floors: 1,
+    });
+  }
+  const lvlFirst = newLevels[0];
 
   // Propagasi properti yang harus identik dengan masterplan agar koordinat,
   // skala, dan peta tidak bergeser saat berpindah halaman.
