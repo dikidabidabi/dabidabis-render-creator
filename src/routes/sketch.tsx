@@ -2103,7 +2103,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const aksisBufferM = Math.max(0, Number(aksisBufferInput) || 8);
   const [aksisDraft, setAksisDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
   // Jalan tool — koridor jalan (lebar + fillet) untuk Master Plan
-  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet">("garis");
+  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet" | "hapus">("garis");
   const [jalanWidthInput, setJalanWidthInput] = useState<string>("6");
   const [jalanFilletInput, setJalanFilletInput] = useState<string>("4");
   const jalanWidthM = Math.max(0.5, Number(jalanWidthInput) || 6);
