@@ -211,6 +211,9 @@ type Level = {
   opacity: number; // 0..1 — opacity ketika level ini tidak aktif
   typicalCount?: number; // ≥1, jumlah lantai tipikal yang menggandakan luas + koefisien
   typicalHeight?: number; // m, tinggi tiap lantai tipikal (default TYPICAL_FLOOR_H)
+  /** Masterplan: jika level ini adalah massa tambahan di atas bangunan lain,
+   *  simpan id layer induknya. Total luas bangunan akan diakumulasi ke induk. */
+  parentLayerId?: string;
 };
 
 // Tinggi default per lantai tipikal (m). Setiap tambahan tipikal menumpuk 3 m.
@@ -821,6 +824,7 @@ function normalizeSketch(s: any): Sketch {
         opacity: typeof lv.opacity === "number" ? Math.max(0, Math.min(1, lv.opacity)) : 0.5,
         typicalCount: Number.isFinite(Number(lv.typicalCount)) ? Math.max(1, Math.round(Number(lv.typicalCount))) : 1,
         typicalHeight: Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : undefined,
+        ...(typeof lv.parentLayerId === "string" && lv.parentLayerId ? { parentLayerId: lv.parentLayerId } : {}),
       }))
     : [];
   let lines: Line[] = Array.isArray(s?.lines) ? s.lines : [];
@@ -2037,6 +2041,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     onChange({ levels: [...levels, lvl], activeLevelId: lvl.id });
     toast.success(`${lvl.name} ditambahkan`);
   }, [levels, onChange]);
+
+  // Masterplan: tambah massa tambahan (sub-bangunan) di atas bangunan tertentu.
+  // Membuat level baru pada mdpl = induk.level.mdpl + induk.floors × 4,
+  // diikat ke induk via parentLayerId, lalu mengaktifkannya agar pengguna
+  // bisa langsung menggambar massa baru.
+  const addSubBuildingLevel = useCallback(
+    (parentLayerId: string) => {
+      const parent = layers.find((l) => l.id === parentLayerId);
+      if (!parent) return;
+      const parentLevel = levels.find((l) => l.id === parent.levelId);
+      if (!parentLevel) return;
+      const floors = Math.max(1, Math.round(parent.floors ?? 1));
+      const newMdpl = Math.round((parentLevel.mdpl + floors * 4) * 100) / 100;
+      const baseName = parent.name?.trim() || "Bangunan";
+      // hitung suffix agar nama tidak duplikat
+      const existingSubs = levels.filter((l) => l.parentLayerId === parentLayerId);
+      const lvl: Level = {
+        id: `LV${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name: `${baseName} · sub ${existingSubs.length + 1}`,
+        mdpl: newMdpl,
+        opacity: 0.5,
+        parentLayerId,
+      };
+      onChange({ levels: [...levels, lvl], activeLevelId: lvl.id });
+      toast.success(`Sub-bangunan dibuat di MDPL ${newMdpl} m — gambar massa pada level ini`);
+    },
+    [layers, levels, onChange],
+  );
+
 
   const renameLevel = useCallback(
     (lvlId: string, name: string) => {
@@ -12084,6 +12117,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onSetLayerCoefficient={setLayerCoefficient}
             onSetLayerFloors={setLayerFloors}
             onSetLayerGsb={setLayerGsbSide}
+            onAddSubBuilding={addSubBuildingLevel}
             mode={mode}
             lines={lines}
             layers={layers}
@@ -12632,6 +12666,7 @@ function LevelsPanel({
   onSetLayerCoefficient,
   onSetLayerFloors,
   onSetLayerGsb,
+  onAddSubBuilding,
   mode = "sketch",
   lines,
   layers,
@@ -12655,6 +12690,7 @@ function LevelsPanel({
   onSetLayerCoefficient: (id: string, coef: number) => void;
   onSetLayerFloors: (id: string, floors: number) => void;
   onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
+  onAddSubBuilding?: (parentLayerId: string) => void;
   mode?: "sketch" | "masterplan";
   lines: Line[];
   layers: Layer[];
@@ -12812,6 +12848,11 @@ function LevelsPanel({
                     {(lvl.typicalCount ?? 1) > 1 && (
                       <span className="ml-1 rounded bg-ember/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ember">
                         tipikal {lvl.typicalCount}×
+                      </span>
+                    )}
+                    {lvl.parentLayerId && (
+                      <span className="ml-1 rounded bg-ember/10 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ember/80" title="Massa tambahan di atas bangunan induk">
+                        sub
                       </span>
                     )}
                   </button>
@@ -13134,15 +13175,45 @@ function LevelsPanel({
                               </button>
                             )}
                             </div>
-                            {mode === "masterplan" && !lahan && (sl.floors ?? 1) >= 1 && (
-                              <div className="mt-0.5 flex items-center justify-between rounded bg-background/50 px-1.5 py-0.5">
-                                <span className="text-[10px] text-muted-foreground">Total bangunan</span>
-                                <span className="font-display text-[11px] font-semibold text-foreground">
-                                  {(sl.areaM2 * Math.max(1, sl.floors ?? 1)).toFixed(2)}
-                                  <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m²</span>
-                                </span>
+                            {mode === "masterplan" && !lahan && onAddSubBuilding && (
+                              <div className="mt-0.5 flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => onAddSubBuilding(sl.id)}
+                                  className="flex h-5 items-center gap-1 rounded border border-dashed border-ember/50 bg-background/50 px-1.5 text-[10px] font-medium text-ember/80 transition hover:border-ember hover:bg-ember/10 hover:text-ember"
+                                  title="Tambah sub-bangunan (massa tambahan di atas bangunan ini, level baru otomatis dibuat)"
+                                >
+                                  <Plus className="h-2.5 w-2.5" /> sub
+                                </button>
                               </div>
                             )}
+                            {mode === "masterplan" && !lahan && !lvl.parentLayerId && (sl.floors ?? 1) >= 1 && (() => {
+                              // akumulasi: luas total bangunan ini + semua sub-bangunan (rekursif)
+                              const sumDesc = (lid: string): number => {
+                                let s = 0;
+                                for (const childLvl of levels) {
+                                  if (childLvl.parentLayerId !== lid) continue;
+                                  for (const ch of layers) {
+                                    if (ch.levelId !== childLvl.id) continue;
+                                    if (isLahanName(ch.name)) continue;
+                                    const f = Math.max(1, Math.round(ch.floors ?? 1));
+                                    s += ch.areaM2 * f + sumDesc(ch.id);
+                                  }
+                                }
+                                return s;
+                              };
+                              const own = sl.areaM2 * Math.max(1, sl.floors ?? 1);
+                              const total = own + sumDesc(sl.id);
+                              return (
+                                <div className="mt-0.5 flex items-center justify-between rounded bg-background/50 px-1.5 py-0.5">
+                                  <span className="text-[10px] text-muted-foreground">Total bangunan</span>
+                                  <span className="font-display text-[11px] font-semibold text-foreground">
+                                    {total.toFixed(2)}
+                                    <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m²</span>
+                                  </span>
+                                </div>
+                              );
+                            })()}
                             {lahan && sl.points.length >= 3 && (() => {
                               const open = !!gsbOpen[sl.id];
                               const n = sl.points.length;
