@@ -155,7 +155,53 @@ function collectBuildingChain(
   return out;
 }
 
-/** Cari polygon persil (region "Lahan" yang memuat sebuah titik). */
+function pointInPolygon(pt: AnyPt, poly: AnyPt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > pt.y) !== (yj > pt.y))
+      && (pt.x < ((xj - xi) * (pt.y - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function polyAreaPxAbs(pts: AnyPt[]): number {
+  if (pts.length < 3) return 0;
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return Math.abs(a) / 2;
+}
+
+function ptsToRing(pts: AnyPt[]): [number, number][] {
+  const r: [number, number][] = pts.map((p) => [p.x, p.y]);
+  if (r.length > 0) {
+    const a = r[0], b = r[r.length - 1];
+    if (a[0] !== b[0] || a[1] !== b[1]) r.push([a[0], a[1]]);
+  }
+  return r;
+}
+
+function ringToPts(ring: [number, number][]): AnyPt[] {
+  const out: AnyPt[] = ring.map(([x, y]) => ({ x, y }));
+  if (out.length > 1) {
+    const a = out[0], b = out[out.length - 1];
+    if (a.x === b.x && a.y === b.y) out.pop();
+  }
+  return out;
+}
+
+/**
+ * Cari polygon persil yang memuat sebuah titik, MENGGUNAKAN ALGORITMA
+ * IDENTIK dengan deteksi persil di halaman sketsa (sketch.tsx):
+ *   Lahan − union(koridor jalan, fillet 4 m, di-clip oleh Lahan).
+ * Bekerja sepenuhnya di koordinat px masterplan agar tidak ada
+ * pergeseran akibat konversi unit.
+ */
 function findParcelForPoint(
   mpSketch: AnySketch,
   point: AnyPt,
@@ -163,42 +209,51 @@ function findParcelForPoint(
   const pxm = pxPerMeterOf(mpSketch.scale);
   const lahan = mpSketch.layers.find((l) => isLahan(l.name) && l.points.length >= 3);
   if (!lahan) return null;
-  const sitePolyM = lahan.points.map((p) => ({ x: p.x / pxm, y: p.y / pxm }));
-  const roads = ((mpSketch as any).roads || []) as { points: AnyPt[]; widthM: number; kind?: string }[];
-  const roadCenters = roads.map((r) => ({
-    center: roadCenterline(r as any).map((p) => ({ x: p.x / pxm, y: p.y / pxm })),
-    widthM: r.widthM,
-  }));
+  const lahanPts: AnyPt[] = lahan.points.map((p) => ({ x: p.x, y: p.y }));
+  const roads = ((mpSketch as any).roads || []) as {
+    id?: string; points: AnyPt[]; widthM: number; kind?: string; createdAt?: number;
+  }[];
+  if (roads.length === 0) return lahanPts;
+
   try {
-    const regions = roadNetworkRegions(sitePolyM, roadCenters);
-    const pM = { x: point.x / pxm, y: point.y / pxm };
-    // pilih region yang centroidnya terdekat dengan footprint center
-    let best: { polygon: AnyPt[]; d: number } | null = null;
-    for (const r of regions) {
-      // titik dalam polygon (ray-cast)
-      let inside = false;
-      const poly = r.polygon;
-      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-        const xi = poly[i].x, yi = poly[i].y;
-        const xj = poly[j].x, yj = poly[j].y;
-        const intersect = ((yi > pM.y) !== (yj > pM.y))
-          && (pM.x < ((xj - xi) * (pM.y - yi)) / ((yj - yi) || 1e-9) + xi);
-        if (intersect) inside = !inside;
-      }
-      if (inside) {
-        const d = Math.hypot(r.centroid.x - pM.x, r.centroid.y - pM.y);
-        if (!best || d < best.d) best = { polygon: r.polygon, d };
+    const FILLET_PX = 4 * pxm;
+    const corridors = roads
+      .map((rd) => roadCorridorPolygon(rd as any, pxm) as AnyPt[])
+      .filter((c) => c.length >= 3);
+    if (corridors.length === 0) return lahanPts;
+
+    let unionRings = unionFilletedCorridors(corridors, FILLET_PX);
+    unionRings = clipRingsByPolygon(unionRings, lahanPts);
+    if (unionRings.length === 0) return lahanPts;
+
+    const lahanSubj = [[ptsToRing(lahanPts)]] as Parameters<typeof polygonClipping.difference>[0];
+    const roadSubj = unionRings.map((r) => [
+      ptsToRing(r.outer),
+      ...r.holes.map((h) => ptsToRing(h)),
+    ]) as Parameters<typeof polygonClipping.difference>[0];
+    const parcels = polygonClipping.difference(lahanSubj, roadSubj);
+    if (!parcels || parcels.length === 0) return lahanPts;
+
+    // Pilih parcel yang memuat titik footprint; fallback: parcel terbesar.
+    let best: { pts: AnyPt[]; area: number } | null = null;
+    let containing: AnyPt[] | null = null;
+    for (const poly of parcels) {
+      if (!poly || poly.length === 0) continue;
+      const outerPts = ringToPts(poly[0]);
+      if (outerPts.length < 3) continue;
+      const area = polyAreaPxAbs(outerPts);
+      if (!best || area > best.area) best = { pts: outerPts, area };
+      if (pointInPolygon(point, outerPts)) {
+        containing = outerPts;
+        break;
       }
     }
-    if (best) {
-      // konversi balik ke px sketsa tujuan (pxPerMeter yang sama dengan masterplan)
-      return best.polygon.map((p) => ({ x: p.x * pxm, y: p.y * pxm }));
-    }
+    return containing ?? best?.pts ?? lahanPts;
   } catch {
-    // ignore
+    return lahanPts;
   }
-  return sitePolyM.map((p) => ({ x: p.x * pxm, y: p.y * pxm }));
 }
+
 
 function centroid(pts: AnyPt[]): AnyPt {
   let sx = 0, sy = 0;
