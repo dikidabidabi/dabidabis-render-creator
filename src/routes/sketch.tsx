@@ -12705,6 +12705,7 @@ function LevelsPanel({
   onSetLayerFloors,
   onSetLayerGsb,
   onAddSubBuilding,
+  onExportToSketch,
   mode = "sketch",
   lines,
   layers,
@@ -12729,6 +12730,7 @@ function LevelsPanel({
   onSetLayerFloors: (id: string, floors: number) => void;
   onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
   onAddSubBuilding?: (parentLayerId: string) => void;
+  onExportToSketch?: (rootLayerId: string) => void;
   mode?: "sketch" | "masterplan";
   lines: Line[];
   layers: Layer[];
