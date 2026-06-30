@@ -169,6 +169,8 @@ function RoadExtruded({
 
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const mPerPx = metersPerPx(sketch.scale);
 
   const origin = useMemo<Point>(() => {
