@@ -448,6 +448,72 @@ function ringToPts(ring: [number, number][]): Point[] {
   return out;
 }
 
+function lineIntersection(a1: Point, a2: Point, b1: Point, b2: Point): Point | null {
+  const dax = a2.x - a1.x, day = a2.y - a1.y;
+  const dbx = b2.x - b1.x, dby = b2.y - b1.y;
+  const det = dax * dby - day * dbx;
+  if (Math.abs(det) < 1e-9) return null;
+  const t = ((b1.x - a1.x) * dby - (b1.y - a1.y) * dbx) / det;
+  return { x: a1.x + t * dax, y: a1.y + t * day };
+}
+function segOrientation(a: Point, b: Point, c: Point): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+function onSegment(a: Point, b: Point, c: Point): boolean {
+  return Math.min(a.x, b.x) - 1e-9 <= c.x && c.x <= Math.max(a.x, b.x) + 1e-9 &&
+    Math.min(a.y, b.y) - 1e-9 <= c.y && c.y <= Math.max(a.y, b.y) + 1e-9;
+}
+function segmentsIntersect(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
+  const o1 = segOrientation(p1, p2, p3);
+  const o2 = segOrientation(p1, p2, p4);
+  const o3 = segOrientation(p3, p4, p1);
+  const o4 = segOrientation(p3, p4, p2);
+  if (o1 * o2 < 0 && o3 * o4 < 0) return true;
+  if (Math.abs(o1) < 1e-9 && onSegment(p1, p2, p3)) return true;
+  if (Math.abs(o2) < 1e-9 && onSegment(p1, p2, p4)) return true;
+  if (Math.abs(o3) < 1e-9 && onSegment(p3, p4, p1)) return true;
+  if (Math.abs(o4) < 1e-9 && onSegment(p3, p4, p2)) return true;
+  return false;
+}
+/** Tengah persil = perpotongan dua diagonal imajiner.
+ *  Untuk persegi empat: perpotongan diagonal 0-2 dan 1-3.
+ *  Untuk n>4: dua diagonal terpanjang yang berpotongan.
+ *  Fallback ke centroid bila tidak ditemukan perpotongan. */
+function diagonalCenter(poly: Point[]): Point {
+  const n = poly.length;
+  if (n < 3) return polygonCentroid(poly);
+  if (n === 3) {
+    return { x: (poly[0].x + poly[1].x + poly[2].x) / 3, y: (poly[0].y + poly[1].y + poly[2].y) / 3 };
+  }
+  if (n === 4) {
+    const ix = lineIntersection(poly[0], poly[2], poly[1], poly[3]);
+    if (ix) return ix;
+    return polygonCentroid(poly);
+  }
+  // n > 4: kumpulkan diagonal non-adjacent, urutkan panjang, cari sepasang yang berpotongan.
+  const diagonals: { i: number; j: number; d: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue; // adjacent via wrap
+      const d = Math.hypot(poly[j].x - poly[i].x, poly[j].y - poly[i].y);
+      diagonals.push({ i, j, d });
+    }
+  }
+  diagonals.sort((a, b) => b.d - a.d);
+  for (let a = 0; a < diagonals.length; a++) {
+    for (let b = a + 1; b < diagonals.length; b++) {
+      const da = diagonals[a], db = diagonals[b];
+      // tidak boleh berbagi titik ujung
+      if (da.i === db.i || da.i === db.j || da.j === db.i || da.j === db.j) continue;
+      if (segmentsIntersect(poly[da.i], poly[da.j], poly[db.i], poly[db.j])) {
+        const ix = lineIntersection(poly[da.i], poly[da.j], poly[db.i], poly[db.j]);
+        if (ix) return ix;
+      }
+    }
+  }
+  return polygonCentroid(poly);
+}
+
 // Subtract `subtractor` polygon from `subject` polygon. Returns the largest
 // resulting outer ring (holes are dropped). Returns null if nothing remains.
 function subtractPolygon(subject: Point[], subtractor: Point[]): Point[] | null {
@@ -5940,7 +6006,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               }
               const areaM2 = areaPx / pxPm2;
               if (areaM2 < 1) continue;
-              const c = polygonCentroid(outerPts);
+              const c = diagonalCenter(outerPts);
               const sp = worldToScreen(c);
               const label = `Persil ${pi + 1}`;
               const areaTxt = `${areaM2.toFixed(2)} m²`;
