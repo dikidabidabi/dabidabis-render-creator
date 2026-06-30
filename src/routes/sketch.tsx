@@ -9028,6 +9028,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       });
       layers.forEach((ly) => {
         if (!inLvl(ly.levelId)) return;
+        if (ly.hidden || ly.locked) return;
         if (ly.points.length < 2) return;
         if (ly.points.every(inRect)) next.add(`layer:${ly.id}`);
       });
