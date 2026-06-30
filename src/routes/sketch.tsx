@@ -13,6 +13,8 @@ import {
   MapPin,
   Lock,
   LockOpen,
+  Lightbulb,
+  LightbulbOff,
   ChevronDown,
   ChevronUp,
   Save,
@@ -199,6 +201,8 @@ type Layer = {
   areaM2: number;
   color: string;
   locked?: boolean;
+  /** Sembunyikan visual & nonaktifkan semua operasi. Default false. */
+  hidden?: boolean;
   levelId?: string;
   coefficient?: number; // 1 | 0.5 | 0 — pengali luas efektif
   gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
@@ -3067,6 +3071,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
       for (const ly of layers) {
         if (!inLvl(ly.levelId)) continue;
+        if (ly.hidden || ly.locked) continue;
         if (ly.points.length < 2) continue;
         for (let i = 0; i < ly.points.length; i++) {
           const a = ly.points[i];
@@ -3089,6 +3094,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       // Hit-fill (di dalam polygon) sebagai fallback
       for (const ly of layers) {
         if (!inLvl(ly.levelId)) continue;
+        if (ly.hidden || ly.locked) continue;
         if (ly.points.length >= 3 && pointInPolygon(raw, ly.points)) return `layer:${ly.id}`;
       }
       for (const fl of floors) {
@@ -3110,7 +3116,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     const inLvl = (l?: string) => !lvl || !l || l === lvl;
     const out: MoveSelKey[] = [];
     lines.forEach((ln, i) => { if (inLvl(ln.levelId)) out.push(`line:${i}`); });
-    layers.forEach((ly) => { if (inLvl(ly.levelId)) out.push(`layer:${ly.id}`); });
+    layers.forEach((ly) => { if (inLvl(ly.levelId) && !ly.hidden && !ly.locked) out.push(`layer:${ly.id}`); });
     (sketch.circles ?? []).forEach((c) => { if (inLvl(c.levelId)) out.push(`circle:${c.id}`); });
     (sketch.doors ?? []).forEach((d) => { if (inLvl(d.levelId)) out.push(`door:${d.id}`); });
     (sketch.floors ?? []).forEach((f) => { if (inLvl(f.levelId)) out.push(`floor:${f.id}`); });
@@ -3856,6 +3862,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
       // Layers
       (layersByLvl.get(lvl.id) || []).forEach((layer) => {
+        if (layer.hidden) return;
         if (layer.points.length < 3) return;
         ctx.beginPath();
         ctx.moveTo(layer.points[0].x, layer.points[0].y);
@@ -5053,6 +5060,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     // Layer labels (vertical: name on top, area below) drawn upright
     layers.forEach((layer) => {
+      if (layer.hidden) return;
       if (layer.points.length < 3) return;
       const lvl = levels.find((l) => l.id === layer.levelId);
       const labelAlpha = !lvl || activeLvlId == null || lvl.id === activeLvlId ? 1 : lvl.opacity;
@@ -9020,6 +9028,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       });
       layers.forEach((ly) => {
         if (!inLvl(ly.levelId)) return;
+        if (ly.hidden || ly.locked) return;
         if (ly.points.length < 2) return;
         if (ly.points.every(inRect)) next.add(`layer:${ly.id}`);
       });
@@ -9546,6 +9555,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     pushHistory();
     onChange({
       layers: layers.map((l) => (l.id === lid ? { ...l, locked: !l.locked } : l)),
+    });
+  };
+
+  const toggleHidden = (lid: string) => {
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, hidden: !l.hidden } : l)),
     });
   };
 
@@ -12194,6 +12210,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onSetTypicalHeight={setLevelTypicalHeight}
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
+            onToggleHiddenLayer={toggleHidden}
             onRemoveLayer={removeLayer}
             onDuplicateLayer={duplicateLayer}
             onSetLayerCoefficient={setLayerCoefficient}
@@ -12744,6 +12761,7 @@ function LevelsPanel({
   onSetTypicalHeight,
   onRenameLayer,
   onToggleLockLayer,
+  onToggleHiddenLayer,
   onRemoveLayer,
   onDuplicateLayer,
   onSetLayerCoefficient,
@@ -12769,6 +12787,7 @@ function LevelsPanel({
   onSetTypicalHeight: (id: string, meters: number) => void;
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
+  onToggleHiddenLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
   onDuplicateLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
@@ -13227,6 +13246,23 @@ function LevelsPanel({
                               title="Salin ruang (digeser 1 m)"
                             >
                               <Copy className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => onToggleHiddenLayer(sl.id)}
+                              className={cn(
+                                "shrink-0 rounded p-0.5 transition",
+                                sl.hidden
+                                  ? "text-muted-foreground/60 hover:text-muted-foreground"
+                                  : "text-amber-400 hover:text-amber-500",
+                              )}
+                              aria-label={sl.hidden ? "Tampilkan layer" : "Sembunyikan layer"}
+                              title={sl.hidden ? "Layer disembunyikan — klik untuk tampilkan" : "Layer terlihat — klik untuk sembunyikan"}
+                            >
+                              {sl.hidden ? (
+                                <LightbulbOff className="h-3 w-3" />
+                              ) : (
+                                <Lightbulb className="h-3 w-3 fill-amber-300" />
+                              )}
                             </button>
                             <button
                               onClick={() => onToggleLockLayer(sl.id)}
