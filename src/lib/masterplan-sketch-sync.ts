@@ -7,7 +7,7 @@
 //
 // Tombol "→" di panel Level Masterplan memanggil `exportBuildingToSketch`,
 // yang membuat (atau mem-pakai-ulang) sketsa pada storage sketsa dengan:
-//  • 1 level "Lahan" (mdpl 0) berisi polygon persil sebagai layer "Lahan".
+//  • level "LT 1" (mdpl 0) berisi polygon persil sebagai layer "Lahan".
 //  • N level "LT 1..N" sesuai jumlah lapis bangunan + sub-bangunan urut MDPL.
 //  • Masing-masing level berisi 1 layer "Ruang Referensi N" (polygon footprint
 //    bangunan tsb di masterplan), ditandai `isReferenceRoom: true` dan
@@ -68,17 +68,16 @@ const MASTERPLAN_KEY = "dabidabis_masterplan_canvas_v1";
 const SKETCH_KEY = "dabidabis_sketch_v2";
 
 const SCALE_TO_PXM: Record<string, number> = {
-  "1:100": 1,
-  "1:200": 0.5,
-  "1:500": 0.2,
-  "1:1000": 0.1,
-  "1:1200": 100 / 1200,
-  "1:1500": 100 / 1500,
-  "1:2000": 0.05,
+  "1:100": 80,
+  "1:200": 40,
+  "1:500": 16,
+  "1:1000": 8,
+  "1:1200": 80 / 12,
+  "1:1500": 80 / 15,
+  "1:2000": 4,
 };
-// Note: scale denominator vs pixel-per-meter is the sketch's internal
-// definition. Saat ekspor, kita TIDAK mengkonversi koordinat — kita
-// memakai scale yang sama dengan masterplan agar koordinat px = px.
+// Harus identik dengan sketch.tsx: pxPerMeter = (8px × 10 minor-grid) / meter-per-major.
+// Ini yang membuat angka m² masterplan, persil, jalan, dan sketsa detail sama persis.
 
 function readStore(key: string): { sketches: AnySketch[]; openId: string | null } {
   if (typeof window === "undefined") return { sketches: [], openId: null };
@@ -122,6 +121,15 @@ function pxPerMeterOf(scale: string | undefined): number {
   if (!scale) return 1;
   const v = SCALE_TO_PXM[scale];
   return Number.isFinite(v) && v > 0 ? v : 1;
+}
+
+function metricAreaForLayer(layer: AnyLayer, pxPerMeter: number): number {
+  const stored = Number(layer.areaM2);
+  return Number.isFinite(stored) && stored >= 0 ? stored : polyAreaM2(layer.points, pxPerMeter);
+}
+
+function areaSame(a: number, b: number): boolean {
+  return Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005;
 }
 
 function isLahan(name: string) {
@@ -299,7 +307,7 @@ export function exportBuildingToSketch(opts: {
   let storeyIdx = 1;
   for (const { layer } of chain) {
     const layerFloors = Math.max(1, Math.round(Number((layer as any).floors) || 1));
-    const areaM2 = polyAreaM2(layer.points, pxm);
+    const areaM2 = metricAreaForLayer(layer, pxm);
     for (let f = 0; f < layerFloors; f++) {
       const ltLvl: AnyLevel = {
         id: newId("LV"),
@@ -441,12 +449,13 @@ export function syncSketchReferenceToMasterplan(sketchId: string): void {
         x: (p.x / skPxm) * mpPxm,
         y: (p.y / skPxm) * mpPxm,
       }));
+      const nextAreaM2 = polyAreaM2(converted, mpPxm);
       const same =
         target.points.length === converted.length &&
         target.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
-      if (same) continue;
+      if (same && areaSame(target.areaM2, nextAreaM2)) continue;
       target.points = converted;
-      target.areaM2 = polyAreaM2(target.points, mpPxm);
+      target.areaM2 = nextAreaM2;
       mp.updatedAt = Date.now();
       dirty = true;
     }
@@ -480,16 +489,22 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
         masterplanSketchId: mp.id,
         rootLayerId: sk.linkedMasterplan.rootLayerId,
       });
-      dirty = true;
-      continue; // sketsa sudah ditulis ulang oleh exportBuildingToSketch
+      return; // sketsa sudah ditulis ulang; hindari menimpa ulang dengan snapshot lama.
     }
 
     // 2) Sinkronisasi data jalan (agar perimeter Lahan tetap identik).
     const mpRoads = ((mp as any).roads || []) as any[];
     const skRoads = ((sk as any).roads || []) as any[];
+    const convertedRoads = mpRoads.map((r: any) => ({
+      ...r,
+      points: r.points.map((p: AnyPt) => ({
+        x: (p.x / mpPxm) * skPxm,
+        y: (p.y / mpPxm) * skPxm,
+      })),
+    }));
     const roadsSame =
-      mpRoads.length === skRoads.length &&
-      mpRoads.every((r, i) => {
+      convertedRoads.length === skRoads.length &&
+      convertedRoads.every((r, i) => {
         const s = skRoads[i];
         return (
           s &&
@@ -499,10 +514,7 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
         );
       });
     if (!roadsSame) {
-      (sk as any).roads = mpRoads.map((r: any) => ({
-        ...r,
-        points: r.points.map((p: AnyPt) => ({ x: p.x, y: p.y })),
-      }));
+      (sk as any).roads = convertedRoads;
       sk.updatedAt = Date.now();
       dirty = true;
     }
@@ -516,12 +528,13 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
         x: (p.x / mpPxm) * skPxm,
         y: (p.y / mpPxm) * skPxm,
       }));
+      const expectedAreaM2 = metricAreaForLayer(source, mpPxm);
       const same =
         refLayer.points.length === converted.length &&
         refLayer.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
-      if (same) continue;
+      if (same && areaSame(refLayer.areaM2, expectedAreaM2)) continue;
       refLayer.points = converted;
-      refLayer.areaM2 = polyAreaM2(refLayer.points, skPxm);
+      refLayer.areaM2 = expectedAreaM2;
       sk.updatedAt = Date.now();
       dirty = true;
     }
@@ -532,6 +545,7 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
       const newParcel = findParcelForPoint(mp, centroid(rootLayer.points)) ?? rootLayer.points;
       const lahanLayer = sk.layers.find((l) => isLahan(l.name));
       if (lahanLayer) {
+        const expectedAreaM2 = polyAreaM2(newParcel, mpPxm);
         const converted = newParcel.map((p) => ({
           x: (p.x / mpPxm) * skPxm,
           y: (p.y / mpPxm) * skPxm,
@@ -539,9 +553,9 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
         const same =
           lahanLayer.points.length === converted.length &&
           lahanLayer.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
-        if (!same) {
+        if (!same || !areaSame(lahanLayer.areaM2, expectedAreaM2)) {
           lahanLayer.points = converted;
-          lahanLayer.areaM2 = polyAreaM2(lahanLayer.points, skPxm);
+          lahanLayer.areaM2 = expectedAreaM2;
           sk.updatedAt = Date.now();
           dirty = true;
         }
