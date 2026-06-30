@@ -5929,7 +5929,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           // Radius fillet di pertemuan offset = fillet jalan + ½ lebar rata-rata.
           const avgHalfPx = roadsAll.reduce((s, r) => s + (r.widthM * pxPerMeter) / 2, 0) / roadsAll.length;
           const offsetFilletPx = filletPx + avgHalfPx;
-          const offsetRings = unionFilletedCorridors(expandedCorridors, offsetFilletPx);
+          let offsetRings = unionFilletedCorridors(expandedCorridors, offsetFilletPx);
+          if (lahanForClip) offsetRings = clipRingsByPolygon(offsetRings, lahanForClip.points);
           ctx.save();
           ctx.strokeStyle = "#dc2626";
           ctx.lineWidth = 1.1;
