@@ -28,6 +28,7 @@ type Layer = {
   areaM2: number;
   color: string;
   levelId?: string;
+  floors?: number;
 };
 type Level = {
   id: string;
