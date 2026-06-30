@@ -12210,6 +12210,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onSetTypicalHeight={setLevelTypicalHeight}
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
+            onToggleHiddenLayer={toggleHidden}
             onRemoveLayer={removeLayer}
             onDuplicateLayer={duplicateLayer}
             onSetLayerCoefficient={setLayerCoefficient}
