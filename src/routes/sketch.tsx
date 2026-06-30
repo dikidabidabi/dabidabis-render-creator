@@ -5913,6 +5913,76 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
       ctx.restore();
 
+      // PARSIL — area "Lahan" yang dibatasi perimeter jalan + perimeter lahan.
+      // Subtraksi: Lahan − (gabungan koridor jalan, sudah di-clip ke Lahan) → pecahan persil.
+      if (lahanForClip && unionRings.length > 0) {
+        try {
+          const lahanSubj = [[ptsToRing(lahanForClip.points)]] as Parameters<typeof polygonClipping.difference>[0];
+          const roadSubj = unionRings.map((r) => [
+            ptsToRing(r.outer),
+            ...r.holes.map((h) => ptsToRing(h)),
+          ]) as Parameters<typeof polygonClipping.difference>[0];
+          const parcels = polygonClipping.difference(lahanSubj, roadSubj);
+          if (parcels && parcels.length > 1) {
+            const pxPm2 = pxPerMeter * pxPerMeter;
+            ctx.save();
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            for (let pi = 0; pi < parcels.length; pi++) {
+              const poly = parcels[pi];
+              if (!poly || poly.length === 0) continue;
+              const outerPts = ringToPts(poly[0]);
+              if (outerPts.length < 3) continue;
+              let areaPx = polygonAreaPx(outerPts);
+              for (let h = 1; h < poly.length; h++) {
+                const holePts = ringToPts(poly[h]);
+                if (holePts.length >= 3) areaPx -= polygonAreaPx(holePts);
+              }
+              const areaM2 = areaPx / pxPm2;
+              if (areaM2 < 1) continue;
+              const c = polygonCentroid(outerPts);
+              const sp = worldToScreen(c);
+              const label = `Persil ${pi + 1}`;
+              const areaTxt = `${areaM2.toFixed(2)} m²`;
+              ctx.font = "600 12px Manrope, sans-serif";
+              const w1 = ctx.measureText(label).width;
+              ctx.font = "700 13px Manrope, sans-serif";
+              const w2 = ctx.measureText(areaTxt).width;
+              const boxW = Math.max(w1, w2) + 14;
+              const boxH = 36;
+              const r = 7;
+              const bx = sp.x - boxW / 2;
+              const by = sp.y - boxH / 2;
+              ctx.fillStyle = "rgba(255,247,237,0.92)";
+              ctx.strokeStyle = "rgba(234,88,12,0.85)";
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(bx + r, by);
+              ctx.lineTo(bx + boxW - r, by);
+              ctx.quadraticCurveTo(bx + boxW, by, bx + boxW, by + r);
+              ctx.lineTo(bx + boxW, by + boxH - r);
+              ctx.quadraticCurveTo(bx + boxW, by + boxH, bx + boxW - r, by + boxH);
+              ctx.lineTo(bx + r, by + boxH);
+              ctx.quadraticCurveTo(bx, by + boxH, bx, by + boxH - r);
+              ctx.lineTo(bx, by + r);
+              ctx.quadraticCurveTo(bx, by, bx + r, by);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+              ctx.fillStyle = "#9a3412";
+              ctx.font = "600 12px Manrope, sans-serif";
+              ctx.fillText(label, sp.x, sp.y - 7);
+              ctx.fillStyle = "#1f2937";
+              ctx.font = "700 13px Manrope, sans-serif";
+              ctx.fillText(areaTxt, sp.x, sp.y + 9);
+            }
+            ctx.restore();
+          }
+        } catch {
+          // diam: jika clipping gagal, lewati label persil.
+        }
+      }
+
       // SETBACK / OFFSET — garis putus-putus offset dari perimeter jalan sejauh ½ lebar (per ruas).
       if (jalanOffsetEnabled) {
         // Per ruas: bangun koridor diperbesar dengan width = widthM + 2*(widthM/2) = 2*widthM.
