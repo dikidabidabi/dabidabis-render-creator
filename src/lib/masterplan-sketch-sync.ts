@@ -17,7 +17,12 @@
 // menghindari siklus; kita memakai bentuk lepas (loose-typed) lalu sketch.tsx
 // akan menormalkan ulang isi storage saat memuatnya.
 
-import { roadCenterline, roadNetworkRegions } from "@/lib/roads";
+import {
+  roadCorridorPolygon,
+  unionFilletedCorridors,
+  clipRingsByPolygon,
+} from "@/lib/roads";
+import polygonClipping from "polygon-clipping";
 
 type AnyPt = { x: number; y: number };
 
