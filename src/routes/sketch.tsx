@@ -3071,6 +3071,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
       for (const ly of layers) {
         if (!inLvl(ly.levelId)) continue;
+        if (ly.hidden || ly.locked) continue;
         if (ly.points.length < 2) continue;
         for (let i = 0; i < ly.points.length; i++) {
           const a = ly.points[i];
