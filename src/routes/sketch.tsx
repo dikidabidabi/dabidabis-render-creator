@@ -2100,6 +2100,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     [navigateFn, sketch.id],
   );
 
+  // Bidirectional sync — debounced agar tidak menyebabkan loop infinite.
+  // Mode "masterplan": setiap perubahan geometry layer/level memicu update
+  // bentuk "Ruang Referensi" di sketsa-sketsa yang terhubung.
+  // Mode "sketch": jika sketsa ini terhubung (linkedMasterplan), maka edit
+  // pada "Ruang Referensi" akan tercermin balik ke layer masterplan-nya.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try {
+        if (mode === "masterplan") syncMasterplanToSketches(sketch.id);
+        else if (sketch.linkedMasterplan) syncSketchReferenceToMasterplan(sketch.id);
+      } catch {
+        // ignore — sync best-effort
+      }
+    }, 350);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, sketch.id, layers, levels]);
+
+
+
 
 
 
