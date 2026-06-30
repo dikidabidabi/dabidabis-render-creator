@@ -12668,6 +12668,7 @@ function LevelsPanel({
   const [layerEditId, setLayerEditId] = useState<string | null>(null);
   const [layerDraft, setLayerDraft] = useState("");
   const [typicalDrafts, setTypicalDrafts] = useState<Record<string, string>>({});
+  const [floorsDrafts, setFloorsDrafts] = useState<Record<string, string>>({});
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const normalizeMdplDraft = (value: string) => value.replace(/[−–—]/g, "-").replace(/\s+/g, "");
   const isValidMdplDraft = (value: string) => value === "" || /^-?\d*([.,]\d*)?$/.test(value);
