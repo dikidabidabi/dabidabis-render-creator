@@ -3116,7 +3116,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     const inLvl = (l?: string) => !lvl || !l || l === lvl;
     const out: MoveSelKey[] = [];
     lines.forEach((ln, i) => { if (inLvl(ln.levelId)) out.push(`line:${i}`); });
-    layers.forEach((ly) => { if (inLvl(ly.levelId)) out.push(`layer:${ly.id}`); });
+    layers.forEach((ly) => { if (inLvl(ly.levelId) && !ly.hidden && !ly.locked) out.push(`layer:${ly.id}`); });
     (sketch.circles ?? []).forEach((c) => { if (inLvl(c.levelId)) out.push(`circle:${c.id}`); });
     (sketch.doors ?? []).forEach((d) => { if (inLvl(d.levelId)) out.push(`door:${d.id}`); });
     (sketch.floors ?? []).forEach((f) => { if (inLvl(f.levelId)) out.push(`floor:${f.id}`); });
