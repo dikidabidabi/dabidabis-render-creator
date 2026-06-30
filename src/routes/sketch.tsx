@@ -202,6 +202,10 @@ type Layer = {
   gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
   /** Jumlah lapis bangunan (masterplan). Default 1. Setiap lapis = 4 m tinggi di 3D. */
   floors?: number;
+  /** Layer hasil konversi dari Masterplan: tidak dihitung di tabulasi/presentasi. */
+  isReferenceRoom?: boolean;
+  /** Asal masterplan (untuk sinkronisasi dua arah). */
+  refSourceLayerId?: string;
 };
 
 type Level = {
@@ -355,6 +359,8 @@ type Sketch = {
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
+  /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
+  linkedMasterplan?: { rootLayerId: string };
 };
 
 type Circle = {
@@ -853,7 +859,9 @@ function normalizeSketch(s: any): Sketch {
     const coef = c === 0 || c === 0.5 || c === 1 ? c : 1;
     const fRaw = Number((base as any).floors);
     const floors = Number.isFinite(fRaw) && fRaw >= 1 ? Math.max(1, Math.round(fRaw)) : 1;
-    return { ...base, coefficient: coef, floors };
+    const isRef = (base as any).isReferenceRoom === true;
+    const refSrc = typeof (base as any).refSourceLayerId === "string" ? (base as any).refSourceLayerId : undefined;
+    return { ...base, coefficient: coef, floors, ...(isRef ? { isReferenceRoom: true } : {}), ...(refSrc ? { refSourceLayerId: refSrc } : {}) };
   });
   ({ levels, layers } = bindLahanLayersToMdplZero(levels, layers));
   return {
