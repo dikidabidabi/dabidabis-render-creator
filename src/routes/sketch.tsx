@@ -13134,6 +13134,15 @@ function LevelsPanel({
                               </button>
                             )}
                             </div>
+                            {mode === "masterplan" && !lahan && (sl.floors ?? 1) >= 1 && (
+                              <div className="mt-0.5 flex items-center justify-between rounded bg-background/50 px-1.5 py-0.5">
+                                <span className="text-[10px] text-muted-foreground">Total bangunan</span>
+                                <span className="font-display text-[11px] font-semibold text-foreground">
+                                  {(sl.areaM2 * Math.max(1, sl.floors ?? 1)).toFixed(2)}
+                                  <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m²</span>
+                                </span>
+                              </div>
+                            )}
                             {lahan && sl.points.length >= 3 && (() => {
                               const open = !!gsbOpen[sl.id];
                               const n = sl.points.length;
