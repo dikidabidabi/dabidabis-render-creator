@@ -200,6 +200,8 @@ type Layer = {
   levelId?: string;
   coefficient?: number; // 1 | 0.5 | 0 — pengali luas efektif
   gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
+  /** Jumlah lapis bangunan (masterplan). Default 1. Setiap lapis = 4 m tinggi di 3D. */
+  floors?: number;
 };
 
 type Level = {
@@ -845,7 +847,9 @@ function normalizeSketch(s: any): Sketch {
     const base = ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback };
     const c = typeof (base as any).coefficient === "number" ? (base as any).coefficient : 1;
     const coef = c === 0 || c === 0.5 || c === 1 ? c : 1;
-    return { ...base, coefficient: coef };
+    const fRaw = Number((base as any).floors);
+    const floors = Number.isFinite(fRaw) && fRaw >= 1 ? Math.max(1, Math.round(fRaw)) : 1;
+    return { ...base, coefficient: coef, floors };
   });
   ({ levels, layers } = bindLahanLayersToMdplZero(levels, layers));
   return {
@@ -4973,12 +4977,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const isLahan = isLahanLayerName(layer.name);
       const nameText = layer.locked ? `🔒 ${layer.name}` : layer.name;
       const areaText = `${layer.areaM2.toFixed(2)} m²`;
+      // Masterplan: "bangunan" → "{N} lapis · {total} m²" → "{base} m²" (selain Lahan)
+      const isMP = mode === "masterplan" && !isLahan;
+      const floors = Math.max(1, Math.round(layer.floors ?? 1));
+      const mpLine1 = "bangunan";
+      const mpLine2 = `${floors} lapis · ${(layer.areaM2 * floors).toFixed(2)} m²`;
+      const mpLine3 = areaText;
       ctx.font = "600 13px Manrope, sans-serif";
       const nameW = ctx.measureText(nameText).width;
       ctx.font = "700 12px Manrope, sans-serif";
       const areaW = ctx.measureText(areaText).width;
-      const boxW = Math.max(nameW, areaW) + 16;
-      const boxH = 38;
+      let boxW: number;
+      let boxH: number;
+      if (isMP) {
+        ctx.font = "700 11px Manrope, sans-serif";
+        const w1 = ctx.measureText(mpLine1).width;
+        ctx.font = "700 12px Manrope, sans-serif";
+        const w2 = ctx.measureText(mpLine2).width;
+        const w3 = ctx.measureText(mpLine3).width;
+        boxW = Math.max(nameW, w1, w2, w3) + 18;
+        boxH = 70;
+      } else {
+        boxW = Math.max(nameW, areaW) + 16;
+        boxH = 38;
+      }
       const boxR = 8;
       if (isLahan) {
         // Lahan: teks abu-abu muda, tanpa background
@@ -5006,16 +5028,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#000";
-        ctx.font = "600 13px Manrope, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(nameText, sp.x, sp.y - 3);
-        ctx.fillStyle = "rgba(0,0,0,0.85)";
-        ctx.font = "700 12px Manrope, sans-serif";
-        ctx.fillText(areaText, sp.x, sp.y + 14);
+        if (isMP) {
+          ctx.font = "600 13px Manrope, sans-serif";
+          ctx.fillText(nameText, sp.x, sp.y - 22);
+          ctx.fillStyle = "rgba(0,0,0,0.65)";
+          ctx.font = "700 11px Manrope, sans-serif";
+          ctx.fillText(mpLine1, sp.x, sp.y - 6);
+          ctx.fillStyle = "rgba(0,0,0,0.9)";
+          ctx.font = "700 12px Manrope, sans-serif";
+          ctx.fillText(mpLine2, sp.x, sp.y + 10);
+          ctx.fillStyle = "rgba(0,0,0,0.7)";
+          ctx.font = "600 11px Manrope, sans-serif";
+          ctx.fillText(mpLine3, sp.x, sp.y + 26);
+        } else {
+          ctx.font = "600 13px Manrope, sans-serif";
+          ctx.fillText(nameText, sp.x, sp.y - 3);
+          ctx.fillStyle = "rgba(0,0,0,0.85)";
+          ctx.font = "700 12px Manrope, sans-serif";
+          ctx.fillText(areaText, sp.x, sp.y + 14);
+        }
       }
       ctx.textAlign = "start";
     });
     ctx.globalAlpha = 1;
+
 
     // ===== Lantai (slab) — outline + hatch + label nama level =====
     const allFloors = sketch.floors ?? [];
@@ -9457,6 +9494,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     });
   };
 
+  const setLayerFloors = (lid: string, floors: number) => {
+    const layer = layers.find((l) => l.id === lid);
+    if (!layer) return;
+    if (layer.locked) {
+      toast.error("Buka kunci dulu untuk mengubah jumlah lapis");
+      return;
+    }
+    const safe = Math.max(1, Math.min(99, Math.round(Number.isFinite(floors) ? floors : 1)));
+    if ((layer.floors ?? 1) === safe) return;
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, floors: safe } : l)),
+    });
+  };
+
   const setLayerGsbSide = (lid: string, sideIndex: number, meters: number) => {
     const layer = layers.find((l) => l.id === lid);
     if (!layer) return;
@@ -12030,7 +12082,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onRemoveLayer={removeLayer}
             onDuplicateLayer={duplicateLayer}
             onSetLayerCoefficient={setLayerCoefficient}
+            onSetLayerFloors={setLayerFloors}
             onSetLayerGsb={setLayerGsbSide}
+            mode={mode}
             lines={lines}
             layers={layers}
           />
@@ -12576,7 +12630,9 @@ function LevelsPanel({
   onRemoveLayer,
   onDuplicateLayer,
   onSetLayerCoefficient,
+  onSetLayerFloors,
   onSetLayerGsb,
+  mode = "sketch",
   lines,
   layers,
 }: {
@@ -12597,7 +12653,9 @@ function LevelsPanel({
   onRemoveLayer: (id: string) => void;
   onDuplicateLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
+  onSetLayerFloors: (id: string, floors: number) => void;
   onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
+  mode?: "sketch" | "masterplan";
   lines: Line[];
   layers: Layer[];
 }) {
@@ -12610,6 +12668,7 @@ function LevelsPanel({
   const [layerEditId, setLayerEditId] = useState<string | null>(null);
   const [layerDraft, setLayerDraft] = useState("");
   const [typicalDrafts, setTypicalDrafts] = useState<Record<string, string>>({});
+  const [floorsDrafts, setFloorsDrafts] = useState<Record<string, string>>({});
   const isLahanName = (n: string) => n.trim().toLowerCase().startsWith("lahan");
   const normalizeMdplDraft = (value: string) => value.replace(/[−–—]/g, "-").replace(/\s+/g, "");
   const isValidMdplDraft = (value: string) => value === "" || /^-?\d*([.,]\d*)?$/.test(value);
@@ -12970,25 +13029,54 @@ function LevelsPanel({
                                 <span className="truncate">{sl.name}</span>
                               </button>
                             )}
-                            <Select
-                              value={String(sl.coefficient ?? 1)}
-                              onValueChange={(v) =>
-                                onSetLayerCoefficient(sl.id, parseFloat(v))
-                              }
-                              disabled={sl.locked}
-                            >
-                              <SelectTrigger
-                                className="h-6 w-[58px] shrink-0 px-1.5 py-0 text-[10px]"
-                                title="Koefisien pengali luas"
+                            {mode === "masterplan" && !lahan ? (
+                              <div className="flex shrink-0 items-center gap-0.5" title="Jumlah lapis bangunan (×4 m di 3D)">
+                                <Input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  disabled={sl.locked}
+                                  value={floorsDrafts[sl.id] ?? String(sl.floors ?? 1)}
+                                  onChange={(e) =>
+                                    setFloorsDrafts((d) => ({ ...d, [sl.id]: e.target.value }))
+                                  }
+                                  onBlur={() => {
+                                    const v = parseInt(floorsDrafts[sl.id] ?? "", 10);
+                                    if (Number.isFinite(v)) onSetLayerFloors(sl.id, v);
+                                    setFloorsDrafts((d) => {
+                                      const n = { ...d };
+                                      delete n[sl.id];
+                                      return n;
+                                    });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                  }}
+                                  className="h-6 w-9 px-1 py-0 text-center text-[10px]"
+                                />
+                                <span className="text-[9px] text-muted-foreground">lps</span>
+                              </div>
+                            ) : (
+                              <Select
+                                value={String(sl.coefficient ?? 1)}
+                                onValueChange={(v) =>
+                                  onSetLayerCoefficient(sl.id, parseFloat(v))
+                                }
+                                disabled={sl.locked}
                               >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="1">×1</SelectItem>
-                                <SelectItem value="0.5">×0,5</SelectItem>
-                                <SelectItem value="0">×0</SelectItem>
-                              </SelectContent>
-                            </Select>
+                                <SelectTrigger
+                                  className="h-6 w-[58px] shrink-0 px-1.5 py-0 text-[10px]"
+                                  title="Koefisien pengali luas"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">×1</SelectItem>
+                                  <SelectItem value="0.5">×0,5</SelectItem>
+                                  <SelectItem value="0">×0</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                             <span
                               className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground"
                               title={`Luas asli ${sl.areaM2.toFixed(2)} m² · efektif ${(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)} m²`}
@@ -13046,6 +13134,15 @@ function LevelsPanel({
                               </button>
                             )}
                             </div>
+                            {mode === "masterplan" && !lahan && (sl.floors ?? 1) >= 1 && (
+                              <div className="mt-0.5 flex items-center justify-between rounded bg-background/50 px-1.5 py-0.5">
+                                <span className="text-[10px] text-muted-foreground">Total bangunan</span>
+                                <span className="font-display text-[11px] font-semibold text-foreground">
+                                  {(sl.areaM2 * Math.max(1, sl.floors ?? 1)).toFixed(2)}
+                                  <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">m²</span>
+                                </span>
+                              </div>
+                            )}
                             {lahan && sl.points.length >= 3 && (() => {
                               const open = !!gsbOpen[sl.id];
                               const n = sl.points.length;
