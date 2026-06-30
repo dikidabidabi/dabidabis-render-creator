@@ -138,6 +138,7 @@ import {
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { MasterplanSketch3DPreview } from "@/components/masterplan-sketch-3d-preview";
 import { useProjectStore } from "@/store/project-store";
+import { exportBuildingToSketch, syncSketchReferenceToMasterplan, syncMasterplanToSketches } from "@/lib/masterplan-sketch-sync";
 import {
   type Ramp,
   type RampAnchor,
