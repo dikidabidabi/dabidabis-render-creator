@@ -309,7 +309,11 @@ export function exportBuildingToSketch(opts: {
   if (chain.length === 0) return null;
 
   const pxm = pxPerMeterOf(mp.scale);
-  const parcel = findParcelForPoint(mp, centroid(rootLayer.points)) ?? rootLayer.points;
+  const parcelInfo = findParcelForPointInfo(mp, centroid(rootLayer.points)) ?? {
+    points: rootLayer.points,
+    areaPx: polyAreaPxAbs(rootLayer.points),
+  };
+  const parcel = parcelInfo.points;
 
   // Cari sketsa target di SKETCH_KEY
   const skStore = readStore(SKETCH_KEY);
@@ -323,7 +327,7 @@ export function exportBuildingToSketch(opts: {
   // ke dalam level LT 1 (MDPL 0), tidak dipisah ke level Lahan tersendiri.
   const newLevels: AnyLevel[] = [];
   const newLayers: AnyLayer[] = [];
-  const lahanArea = polyAreaM2(parcel, pxm);
+  const lahanArea = parcelInfo.areaPx / (pxm * pxm);
 
   // Tiap layer pada chain → N level baru "LT N" sesuai jumlah lapis (floors) layer tsb
   let storeyIdx = 1;
@@ -570,10 +574,14 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
     // 4) Update polygon Lahan agar mengikuti perubahan jalan/persil.
     const rootLayer = mp.layers.find((l) => l.id === sk.linkedMasterplan!.rootLayerId);
     if (rootLayer) {
-      const newParcel = findParcelForPoint(mp, centroid(rootLayer.points)) ?? rootLayer.points;
+      const parcelInfo = findParcelForPointInfo(mp, centroid(rootLayer.points)) ?? {
+        points: rootLayer.points,
+        areaPx: polyAreaPxAbs(rootLayer.points),
+      };
+      const newParcel = parcelInfo.points;
       const lahanLayer = sk.layers.find((l) => isLahan(l.name));
       if (lahanLayer) {
-        const expectedAreaM2 = polyAreaM2(newParcel, mpPxm);
+        const expectedAreaM2 = parcelInfo.areaPx / (mpPxm * mpPxm);
         const converted = newParcel.map((p) => ({
           x: (p.x / mpPxm) * skPxm,
           y: (p.y / mpPxm) * skPxm,
