@@ -8261,6 +8261,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
   const onPointerMove = (e: React.PointerEvent) => {
     // Ramp vertex drag
+    if (roadVertexDrag) {
+      const wp = getWorldPos(e);
+      onChange({
+        roads: (sketch.roads ?? []).map((r) =>
+          r.id !== roadVertexDrag.roadId ? r : { ...r, points: r.points.map((pt, i) => i === roadVertexDrag.idx ? { x: wp.x, y: wp.y } : pt) }
+        ),
+      });
+      return;
+    }
     if (rampVertexDrag) {
       const wp = getWorldPos(e);
       onChange({
