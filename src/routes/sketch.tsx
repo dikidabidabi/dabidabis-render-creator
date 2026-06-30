@@ -2886,6 +2886,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       anchors: r.anchors.map((a) => ({ ...sp(a), filletR: a.filletR })),
     }));
 
+    const nextRoads = (sketch.roads || []).map((r) => ({
+      ...r,
+      anchors: r.anchors.map((a: any) => ({ ...a, x: a.x * k, y: a.y * k })),
+      points: r.points.map(sp),
+    }));
+
     onChange({
       lines: nextLines,
       layers: nextLayers,
@@ -2894,6 +2900,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       circles: nextCircles,
       parkingAreas: nextParking,
       ramps: nextRamps,
+      roads: nextRoads,
       sectionCuts: nextSectionCuts,
       sectionCut: nextSectionCut,
       structuralGrid: nextGrid,
@@ -3921,19 +3928,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             ctx.stroke();
           }
           ctx.setLineDash([]);
-          // Label "GSB i (x m)" — teks hitam, tanpa background
-          const fontPx = 11 / s;
-          ctx.font = `600 ${fontPx}px var(--font-display), sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillStyle = "rgba(0,0,0,1)";
-          for (let i = 0; i < n; i++) {
-            const m = getGsbMeters(layer, i);
-            if (m <= 0) continue;
-            const seg = inwardOffsetSegmentPx(layer.points, i, m * pxPerMeter);
-            const label = `GSB ${i + 1} (${m}m)`;
-            ctx.fillText(label, seg.mid.x, seg.mid.y);
-          }
           ctx.restore();
         }
 
