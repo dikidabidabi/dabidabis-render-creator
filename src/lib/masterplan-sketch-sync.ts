@@ -382,6 +382,7 @@ export function exportBuildingToSketch(opts: {
 
   if (target) {
     // Re-sync: pertahankan ruang non-referensi & non-Lahan yang sudah digambar pengguna.
+    const oldTargetPxm = pxPerMeterOf(target.scale);
     const preserved = target.layers.filter((l) => !l.isReferenceRoom && !isLahan(l.name));
     // Buat peta level-lama → level-baru berdasarkan nama level agar layer
     // yang sudah dibuat user tetap berada di level yang benar.
@@ -400,7 +401,12 @@ export function exportBuildingToSketch(opts: {
     const preservedAttached = preserved.map((l) => {
       const oldName = l.levelId ? oldLevelNameMap.get(l.levelId) : undefined;
       const matchedNewId = oldName ? newLevelByName.get(oldName) : undefined;
-      return { ...l, levelId: matchedNewId ?? lvlFirst.id };
+      return {
+        ...l,
+        points: l.points.map((p) => ({ x: (p.x / oldTargetPxm) * pxm, y: (p.y / oldTargetPxm) * pxm })),
+        // areaM2 tetap: ukuran riil ruang detail tidak berubah walau scale target disamakan lagi ke masterplan.
+        levelId: matchedNewId ?? lvlFirst.id,
+      };
     });
     target.layers = [...newLayers, ...preservedAttached];
     target.activeLevelId = lvlFirst.id;
