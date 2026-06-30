@@ -13101,7 +13101,7 @@ function LevelsPanel({
                                 title={sl.locked ? "Buka kunci untuk ganti nama" : "Klik untuk ganti nama"}
                               >
                                 {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
-                                <span className="truncate">{sl.name}</span>
+                                <span className="truncate">{displaySlName}</span>
                               </button>
                             )}
                             {mode === "masterplan" && !lahan ? (
