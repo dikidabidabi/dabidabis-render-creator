@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   Pencil,
@@ -43,6 +43,7 @@ import {
   Car,
   RotateCw,
   SplitSquareHorizontal,
+  ArrowRight,
 } from "lucide-react";
 import {
   type Floor,
@@ -138,6 +139,7 @@ import {
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { MasterplanSketch3DPreview } from "@/components/masterplan-sketch-3d-preview";
 import { useProjectStore } from "@/store/project-store";
+import { exportBuildingToSketch, syncSketchReferenceToMasterplan, syncMasterplanToSketches } from "@/lib/masterplan-sketch-sync";
 import {
   type Ramp,
   type RampAnchor,
@@ -202,6 +204,10 @@ type Layer = {
   gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
   /** Jumlah lapis bangunan (masterplan). Default 1. Setiap lapis = 4 m tinggi di 3D. */
   floors?: number;
+  /** Layer hasil konversi dari Masterplan: tidak dihitung di tabulasi/presentasi. */
+  isReferenceRoom?: boolean;
+  /** Asal masterplan (untuk sinkronisasi dua arah). */
+  refSourceLayerId?: string;
 };
 
 type Level = {
@@ -355,6 +361,8 @@ type Sketch = {
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
+  /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
+  linkedMasterplan?: { rootLayerId: string };
 };
 
 type Circle = {
@@ -853,7 +861,9 @@ function normalizeSketch(s: any): Sketch {
     const coef = c === 0 || c === 0.5 || c === 1 ? c : 1;
     const fRaw = Number((base as any).floors);
     const floors = Number.isFinite(fRaw) && fRaw >= 1 ? Math.max(1, Math.round(fRaw)) : 1;
-    return { ...base, coefficient: coef, floors };
+    const isRef = (base as any).isReferenceRoom === true;
+    const refSrc = typeof (base as any).refSourceLayerId === "string" ? (base as any).refSourceLayerId : undefined;
+    return { ...base, coefficient: coef, floors, ...(isRef ? { isReferenceRoom: true } : {}), ...(refSrc ? { refSourceLayerId: refSrc } : {}) };
   });
   ({ levels, layers } = bindLahanLayersToMdplZero(levels, layers));
   return {
@@ -876,6 +886,9 @@ function normalizeSketch(s: any): Sketch {
     fungsi: typeof s?.fungsi === "string" ? s.fungsi : undefined,
     clusterGraph: s?.clusterGraph && Array.isArray(s.clusterGraph.nodes) && Array.isArray(s.clusterGraph.links)
       ? { nodes: s.clusterGraph.nodes, links: s.clusterGraph.links }
+      : undefined,
+    linkedMasterplan: s?.linkedMasterplan && typeof s.linkedMasterplan.rootLayerId === "string"
+      ? { rootLayerId: s.linkedMasterplan.rootLayerId }
       : undefined,
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
@@ -2069,6 +2082,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     },
     [layers, levels, onChange],
   );
+
+  const navigateFn = useNavigate();
+  const handleExportToSketch = useCallback(
+    (rootLayerId: string) => {
+      const res = exportBuildingToSketch({
+        masterplanSketchId: sketch.id,
+        rootLayerId,
+      });
+      if (!res) {
+        toast.error("Gagal ekspor — pastikan bangunan punya geometry");
+        return;
+      }
+      toast.success("Bangunan diekspor ke Sketsa");
+      void navigateFn({ to: "/sketch" });
+    },
+    [navigateFn, sketch.id],
+  );
+
+  // Bidirectional sync — debounced agar tidak menyebabkan loop infinite.
+  // Mode "masterplan": setiap perubahan geometry layer/level memicu update
+  // bentuk "Ruang Referensi" di sketsa-sketsa yang terhubung.
+  // Mode "sketch": jika sketsa ini terhubung (linkedMasterplan), maka edit
+  // pada "Ruang Referensi" akan tercermin balik ke layer masterplan-nya.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try {
+        if (mode === "masterplan") syncMasterplanToSketches(sketch.id);
+        else if (sketch.linkedMasterplan) syncSketchReferenceToMasterplan(sketch.id);
+      } catch {
+        // ignore — sync best-effort
+      }
+    }, 350);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, sketch.id, layers, levels]);
+
+
+
+
 
 
   const renameLevel = useCallback(
@@ -10282,17 +10334,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <Waypoints className="mr-1.5 h-4 w-4" /> Aksis
             </Button>
           )}
-          {mode === "masterplan" && (
-            <Button
-              variant={tool === "jalan" ? "default" : "outline"}
-              size="sm"
-              onClick={() => { cancelPendingCurve(); setTool("jalan"); setJalanDraft(null); }}
-              className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")}
-              title="Jalan — koridor dengan lebar & fillet; memandu Cluster Generator."
-            >
-              <Spline className="mr-1.5 h-4 w-4" /> Jalan
-            </Button>
-          )}
+          <Button
+            variant={tool === "jalan" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("jalan"); setJalanDraft(null); }}
+            className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")}
+            title="Jalan — koridor dengan lebar & fillet."
+          >
+            <Spline className="mr-1.5 h-4 w-4" /> Jalan
+          </Button>
         </div>
         {tool === "aksis" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
@@ -10346,7 +10396,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
-        {tool === "jalan" && mode === "masterplan" && (
+        {tool === "jalan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-500/40 bg-zinc-500/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-700">Jalan</span>
             <Button
@@ -12146,6 +12196,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onSetLayerFloors={setLayerFloors}
             onSetLayerGsb={setLayerGsbSide}
             onAddSubBuilding={addSubBuildingLevel}
+            onExportToSketch={mode === "masterplan" ? handleExportToSketch : undefined}
             mode={mode}
             lines={lines}
             layers={layers}
@@ -12695,6 +12746,7 @@ function LevelsPanel({
   onSetLayerFloors,
   onSetLayerGsb,
   onAddSubBuilding,
+  onExportToSketch,
   mode = "sketch",
   lines,
   layers,
@@ -12719,6 +12771,7 @@ function LevelsPanel({
   onSetLayerFloors: (id: string, floors: number) => void;
   onSetLayerGsb: (id: string, sideIndex: number, meters: number) => void;
   onAddSubBuilding?: (parentLayerId: string) => void;
+  onExportToSketch?: (rootLayerId: string) => void;
   mode?: "sketch" | "masterplan";
   lines: Line[];
   layers: Layer[];
@@ -13209,16 +13262,28 @@ function LevelsPanel({
                               </button>
                             )}
                             </div>
-                            {mode === "masterplan" && !lahan && onAddSubBuilding && (
+                            {mode === "masterplan" && !lahan && !lvl.parentLayerId && (onAddSubBuilding || onExportToSketch) && (
                               <div className="mt-0.5 flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => onAddSubBuilding(sl.id)}
-                                  className="flex h-5 items-center gap-1 rounded border border-dashed border-ember/50 bg-background/50 px-1.5 text-[10px] font-medium text-ember/80 transition hover:border-ember hover:bg-ember/10 hover:text-ember"
-                                  title="Tambah sub-bangunan (massa tambahan di atas bangunan ini, level baru otomatis dibuat)"
-                                >
-                                  <Plus className="h-2.5 w-2.5" /> sub
-                                </button>
+                                {onAddSubBuilding && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onAddSubBuilding(sl.id)}
+                                    className="flex h-5 items-center gap-1 rounded border border-dashed border-ember/50 bg-background/50 px-1.5 text-[10px] font-medium text-ember/80 transition hover:border-ember hover:bg-ember/10 hover:text-ember"
+                                    title="Tambah sub-bangunan (massa tambahan di atas bangunan ini, level baru otomatis dibuat)"
+                                  >
+                                    <Plus className="h-2.5 w-2.5" /> sub
+                                  </button>
+                                )}
+                                {onExportToSketch && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onExportToSketch(sl.id)}
+                                    className="flex h-5 items-center gap-1 rounded border border-dashed border-primary/50 bg-background/50 px-1.5 text-[10px] font-medium text-primary/80 transition hover:border-primary hover:bg-primary/10 hover:text-primary"
+                                    title="Ekspor bangunan ini ke halaman Sketsa untuk didetailkan"
+                                  >
+                                    <ArrowRight className="h-2.5 w-2.5" /> sketsa
+                                  </button>
+                                )}
                               </div>
                             )}
                             {mode === "masterplan" && !lahan && !lvl.parentLayerId && (sl.floors ?? 1) >= 1 && (() => {

@@ -41,6 +41,7 @@ type Layer = {
   color: string;
   levelId?: string;
   coefficient?: number;
+  isReferenceRoom?: boolean;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Line = { a: Point; b: Point; kind?: string; levelId?: string };
@@ -127,7 +128,12 @@ function TabulasiPage() {
       }
       const s = JSON.parse(raw) as StoreShape;
       if (s && Array.isArray(s.sketches)) {
-        setSketches(s.sketches as Sketch[]);
+        // Drop reference rooms (hasil ekspor masterplan) — tidak dihitung di tabulasi.
+        const filtered = s.sketches.map((sk) => ({
+          ...sk,
+          layers: (sk.layers ?? []).filter((l) => !l.isReferenceRoom),
+        }));
+        setSketches(filtered as Sketch[]);
         setOpenId((prev) => {
           if (prev && s.sketches.some((x) => x.id === prev)) return prev;
           return s.openId ?? s.sketches[0]?.id ?? null;
