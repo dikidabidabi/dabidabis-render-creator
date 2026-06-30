@@ -290,16 +290,35 @@ export function exportBuildingToSketch(opts: {
     geo: (mp as any).geo, // koordinat map ikut terekspor
     northRotation: (mp as any).northRotation,
     mmGridRotation: (mp as any).mmGridRotation,
+    // Sinkronkan data jalan agar perimeter Lahan identik
+    roads: ((mp as any).roads || []).map((r: any) => ({
+      ...r,
+      points: r.points.map((p: AnyPt) => ({ x: p.x, y: p.y })),
+    })),
   };
 
   if (target) {
     // Re-sync: pertahankan ruang non-referensi & non-Lahan yang sudah digambar pengguna.
     const preserved = target.layers.filter((l) => !l.isReferenceRoom && !isLahan(l.name));
+    // Buat peta level-lama → level-baru berdasarkan nama level agar layer
+    // yang sudah dibuat user tetap berada di level yang benar.
+    const oldLevelNameMap = new Map<string, string>(); // oldLevelId → levelName
+    if (target.levels) {
+      for (const lv of target.levels) oldLevelNameMap.set(lv.id, lv.name);
+    }
+    const newLevelByName = new Map<string, string>(); // levelName → newLevelId
+    for (const lv of newLevels) newLevelByName.set(lv.name, lv.id);
+
     target.title = buildingName;
     Object.assign(target, inheritedProps);
     target.levels = newLevels;
-    // Pasang ulang layer preserved ke level Lahan (atau level pertama) untuk hindari orphan.
-    const preservedAttached = preserved.map((l) => ({ ...l, levelId: lvlLahan.id }));
+    // Pasang ulang preserved layers ke level baru yang namanya cocok,
+    // fallback ke level pertama (Lahan).
+    const preservedAttached = preserved.map((l) => {
+      const oldName = l.levelId ? oldLevelNameMap.get(l.levelId) : undefined;
+      const matchedNewId = oldName ? newLevelByName.get(oldName) : undefined;
+      return { ...l, levelId: matchedNewId ?? lvlLahan.id };
+    });
     target.layers = [...newLayers, ...preservedAttached];
     target.activeLevelId = newLevels[1]?.id ?? lvlLahan.id;
     target.linkedMasterplan = { rootLayerId: opts.rootLayerId };
@@ -372,6 +391,48 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
   for (const sk of skStore.sketches) {
     if (!sk.linkedMasterplan) continue;
     const skPxm = pxPerMeterOf(sk.scale);
+
+    // 1) Deteksi perubahan jumlah lapis (floors) → trigger full re-export agar
+    //    jumlah level di sketsa selalu konsisten dengan masterplan.
+    const chain = collectBuildingChain(sk.linkedMasterplan.rootLayerId, mp.layers, mp.levels);
+    const expectedLT = chain.reduce(
+      (sum, { layer }) => sum + Math.max(1, Math.round(Number((layer as any).floors) || 1)),
+      0,
+    );
+    const currentLT = sk.levels.filter((lv) => /^LT\s*\d+/i.test(lv.name)).length;
+    if (chain.length > 0 && expectedLT !== currentLT) {
+      exportBuildingToSketch({
+        masterplanSketchId: mp.id,
+        rootLayerId: sk.linkedMasterplan.rootLayerId,
+      });
+      dirty = true;
+      continue; // sketsa sudah ditulis ulang oleh exportBuildingToSketch
+    }
+
+    // 2) Sinkronisasi data jalan (agar perimeter Lahan tetap identik).
+    const mpRoads = ((mp as any).roads || []) as any[];
+    const skRoads = ((sk as any).roads || []) as any[];
+    const roadsSame =
+      mpRoads.length === skRoads.length &&
+      mpRoads.every((r, i) => {
+        const s = skRoads[i];
+        return (
+          s &&
+          r.widthM === s.widthM &&
+          r.points.length === s.points.length &&
+          r.points.every((p: AnyPt, j: number) => Math.abs(p.x - s.points[j].x) < 0.01 && Math.abs(p.y - s.points[j].y) < 0.01)
+        );
+      });
+    if (!roadsSame) {
+      (sk as any).roads = mpRoads.map((r: any) => ({
+        ...r,
+        points: r.points.map((p: AnyPt) => ({ x: p.x, y: p.y })),
+      }));
+      sk.updatedAt = Date.now();
+      dirty = true;
+    }
+
+    // 3) Sinkronisasi polygon ruang referensi.
     for (const refLayer of sk.layers) {
       if (!refLayer.isReferenceRoom || !refLayer.refSourceLayerId) continue;
       const source = mp.layers.find((l) => l.id === refLayer.refSourceLayerId);
@@ -388,6 +449,28 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
       refLayer.areaM2 = polyAreaM2(refLayer.points, skPxm);
       sk.updatedAt = Date.now();
       dirty = true;
+    }
+
+    // 4) Update polygon Lahan agar mengikuti perubahan jalan/persil.
+    const rootLayer = mp.layers.find((l) => l.id === sk.linkedMasterplan!.rootLayerId);
+    if (rootLayer) {
+      const newParcel = findParcelForPoint(mp, centroid(rootLayer.points)) ?? rootLayer.points;
+      const lahanLayer = sk.layers.find((l) => isLahan(l.name));
+      if (lahanLayer) {
+        const converted = newParcel.map((p) => ({
+          x: (p.x / mpPxm) * skPxm,
+          y: (p.y / mpPxm) * skPxm,
+        }));
+        const same =
+          lahanLayer.points.length === converted.length &&
+          lahanLayer.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
+        if (!same) {
+          lahanLayer.points = converted;
+          lahanLayer.areaM2 = polyAreaM2(lahanLayer.points, skPxm);
+          sk.updatedAt = Date.now();
+          dirty = true;
+        }
+      }
     }
   }
   if (dirty) writeStore(SKETCH_KEY, skStore);
