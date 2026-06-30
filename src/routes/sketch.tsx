@@ -2109,6 +2109,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const jalanWidthM = Math.max(0.5, Number(jalanWidthInput) || 6);
   const jalanFilletM = Math.max(0, Number(jalanFilletInput) || 0);
   const [jalanDraft, setJalanDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
+  const [jalanOffsetEnabled, setJalanOffsetEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("dabidabis.jalan.offset") === "1";
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("dabidabis.jalan.offset", jalanOffsetEnabled ? "1" : "0");
+  }, [jalanOffsetEnabled]);
   // Ramp tool state
   const [rampSub, setRampSub] = useState<"tarik" | "lebar" | "kemiringan" | "fillet" | "geser" | "addpt">("tarik");
   const [rampDraft, setRampDraft] = useState<{ levelId: string; anchors: RampAnchor[]; offsetSide: "left" | "right" } | null>(null);
