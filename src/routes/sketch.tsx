@@ -12157,6 +12157,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onSetLayerFloors={setLayerFloors}
             onSetLayerGsb={setLayerGsbSide}
             onAddSubBuilding={addSubBuildingLevel}
+            onExportToSketch={mode === "masterplan" ? handleExportToSketch : undefined}
             mode={mode}
             lines={lines}
             layers={layers}
