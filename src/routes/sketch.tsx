@@ -847,7 +847,9 @@ function normalizeSketch(s: any): Sketch {
     const base = ly.levelId && levels.some((l) => l.id === ly.levelId) ? ly : { ...ly, levelId: fallback };
     const c = typeof (base as any).coefficient === "number" ? (base as any).coefficient : 1;
     const coef = c === 0 || c === 0.5 || c === 1 ? c : 1;
-    return { ...base, coefficient: coef };
+    const fRaw = Number((base as any).floors);
+    const floors = Number.isFinite(fRaw) && fRaw >= 1 ? Math.max(1, Math.round(fRaw)) : 1;
+    return { ...base, coefficient: coef, floors };
   });
   ({ levels, layers } = bindLahanLayersToMdplZero(levels, layers));
   return {
