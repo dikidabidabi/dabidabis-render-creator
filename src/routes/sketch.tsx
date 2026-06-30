@@ -4977,12 +4977,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const isLahan = isLahanLayerName(layer.name);
       const nameText = layer.locked ? `🔒 ${layer.name}` : layer.name;
       const areaText = `${layer.areaM2.toFixed(2)} m²`;
+      // Masterplan: "bangunan" → "{N} lapis · {total} m²" → "{base} m²" (selain Lahan)
+      const isMP = mode === "masterplan" && !isLahan;
+      const floors = Math.max(1, Math.round(layer.floors ?? 1));
+      const mpLine1 = "bangunan";
+      const mpLine2 = `${floors} lapis · ${(layer.areaM2 * floors).toFixed(2)} m²`;
+      const mpLine3 = areaText;
       ctx.font = "600 13px Manrope, sans-serif";
       const nameW = ctx.measureText(nameText).width;
       ctx.font = "700 12px Manrope, sans-serif";
       const areaW = ctx.measureText(areaText).width;
-      const boxW = Math.max(nameW, areaW) + 16;
-      const boxH = 38;
+      let boxW: number;
+      let boxH: number;
+      if (isMP) {
+        ctx.font = "700 11px Manrope, sans-serif";
+        const w1 = ctx.measureText(mpLine1).width;
+        ctx.font = "700 12px Manrope, sans-serif";
+        const w2 = ctx.measureText(mpLine2).width;
+        const w3 = ctx.measureText(mpLine3).width;
+        boxW = Math.max(nameW, w1, w2, w3) + 18;
+        boxH = 70;
+      } else {
+        boxW = Math.max(nameW, areaW) + 16;
+        boxH = 38;
+      }
       const boxR = 8;
       if (isLahan) {
         // Lahan: teks abu-abu muda, tanpa background
@@ -5010,16 +5028,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#000";
-        ctx.font = "600 13px Manrope, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(nameText, sp.x, sp.y - 3);
-        ctx.fillStyle = "rgba(0,0,0,0.85)";
-        ctx.font = "700 12px Manrope, sans-serif";
-        ctx.fillText(areaText, sp.x, sp.y + 14);
+        if (isMP) {
+          ctx.font = "600 13px Manrope, sans-serif";
+          ctx.fillText(nameText, sp.x, sp.y - 22);
+          ctx.fillStyle = "rgba(0,0,0,0.65)";
+          ctx.font = "700 11px Manrope, sans-serif";
+          ctx.fillText(mpLine1, sp.x, sp.y - 6);
+          ctx.fillStyle = "rgba(0,0,0,0.9)";
+          ctx.font = "700 12px Manrope, sans-serif";
+          ctx.fillText(mpLine2, sp.x, sp.y + 10);
+          ctx.fillStyle = "rgba(0,0,0,0.7)";
+          ctx.font = "600 11px Manrope, sans-serif";
+          ctx.fillText(mpLine3, sp.x, sp.y + 26);
+        } else {
+          ctx.font = "600 13px Manrope, sans-serif";
+          ctx.fillText(nameText, sp.x, sp.y - 3);
+          ctx.fillStyle = "rgba(0,0,0,0.85)";
+          ctx.font = "700 12px Manrope, sans-serif";
+          ctx.fillText(areaText, sp.x, sp.y + 14);
+        }
       }
       ctx.textAlign = "start";
     });
     ctx.globalAlpha = 1;
+
 
     // ===== Lantai (slab) — outline + hatch + label nama level =====
     const allFloors = sketch.floors ?? [];
