@@ -203,6 +203,23 @@ function ringToPts(ring: [number, number][]): AnyPt[] {
   return out;
 }
 
+type ParcelResult = { points: AnyPt[]; areaPx: number };
+
+function polygonNetAreaPx(poly: [number, number][][]): { outerPts: AnyPt[]; holePts: AnyPt[][]; areaPx: number } | null {
+  if (!poly || poly.length === 0) return null;
+  const outerPts = ringToPts(poly[0]);
+  if (outerPts.length < 3) return null;
+  const holePts: AnyPt[][] = [];
+  let areaPx = polyAreaPxAbs(outerPts);
+  for (let h = 1; h < poly.length; h++) {
+    const hp = ringToPts(poly[h]);
+    if (hp.length < 3) continue;
+    holePts.push(hp);
+    areaPx -= polyAreaPxAbs(hp);
+  }
+  return { outerPts, holePts, areaPx: Math.max(0, areaPx) };
+}
+
 /**
  * Cari polygon persil yang memuat sebuah titik, MENGGUNAKAN ALGORITMA
  * IDENTIK dengan deteksi persil di halaman sketsa (sketch.tsx):
@@ -210,10 +227,10 @@ function ringToPts(ring: [number, number][]): AnyPt[] {
  * Bekerja sepenuhnya di koordinat px masterplan agar tidak ada
  * pergeseran akibat konversi unit.
  */
-function findParcelForPoint(
+function findParcelForPointInfo(
   mpSketch: AnySketch,
   point: AnyPt,
-): AnyPt[] | null {
+): ParcelResult | null {
   const pxm = pxPerMeterOf(mpSketch.scale);
   const lahan = mpSketch.layers.find((l) => isLahan(l.name) && l.points.length >= 3);
   if (!lahan) return null;
@@ -221,18 +238,18 @@ function findParcelForPoint(
   const roads = ((mpSketch as any).roads || []) as {
     id?: string; points: AnyPt[]; widthM: number; kind?: string; createdAt?: number;
   }[];
-  if (roads.length === 0) return lahanPts;
+  if (roads.length === 0) return { points: lahanPts, areaPx: polyAreaPxAbs(lahanPts) };
 
   try {
     const FILLET_PX = 4 * pxm;
     const corridors = roads
       .map((rd) => roadCorridorPolygon(rd as any, pxm) as AnyPt[])
       .filter((c) => c.length >= 3);
-    if (corridors.length === 0) return lahanPts;
+    if (corridors.length === 0) return { points: lahanPts, areaPx: polyAreaPxAbs(lahanPts) };
 
     let unionRings = unionFilletedCorridors(corridors, FILLET_PX);
     unionRings = clipRingsByPolygon(unionRings, lahanPts);
-    if (unionRings.length === 0) return lahanPts;
+    if (unionRings.length === 0) return { points: lahanPts, areaPx: polyAreaPxAbs(lahanPts) };
 
     const lahanSubj = [[ptsToRing(lahanPts)]] as Parameters<typeof polygonClipping.difference>[0];
     const roadSubj = unionRings.map((r) => [
@@ -240,26 +257,31 @@ function findParcelForPoint(
       ...r.holes.map((h) => ptsToRing(h)),
     ]) as Parameters<typeof polygonClipping.difference>[0];
     const parcels = polygonClipping.difference(lahanSubj, roadSubj);
-    if (!parcels || parcels.length === 0) return lahanPts;
+    if (!parcels || parcels.length === 0) return { points: lahanPts, areaPx: polyAreaPxAbs(lahanPts) };
 
     // Pilih parcel yang memuat titik footprint; fallback: parcel terbesar.
-    let best: { pts: AnyPt[]; area: number } | null = null;
-    let containing: AnyPt[] | null = null;
+    let best: ParcelResult | null = null;
+    let containing: ParcelResult | null = null;
     for (const poly of parcels) {
-      if (!poly || poly.length === 0) continue;
-      const outerPts = ringToPts(poly[0]);
-      if (outerPts.length < 3) continue;
-      const area = polyAreaPxAbs(outerPts);
-      if (!best || area > best.area) best = { pts: outerPts, area };
-      if (pointInPolygon(point, outerPts)) {
-        containing = outerPts;
+      const net = polygonNetAreaPx(poly as [number, number][][]);
+      if (!net) continue;
+      const result: ParcelResult = { points: net.outerPts, areaPx: net.areaPx };
+      if (!best || result.areaPx > best.areaPx) best = result;
+      const inOuter = pointInPolygon(point, net.outerPts);
+      const inHole = net.holePts.some((h) => pointInPolygon(point, h));
+      if (inOuter && !inHole) {
+        containing = result;
         break;
       }
     }
-    return containing ?? best?.pts ?? lahanPts;
+    return containing ?? best ?? { points: lahanPts, areaPx: polyAreaPxAbs(lahanPts) };
   } catch {
-    return lahanPts;
+    return { points: lahanPts, areaPx: polyAreaPxAbs(lahanPts) };
   }
+}
+
+function findParcelForPoint(mpSketch: AnySketch, point: AnyPt): AnyPt[] | null {
+  return findParcelForPointInfo(mpSketch, point)?.points ?? null;
 }
 
 
