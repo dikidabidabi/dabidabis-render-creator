@@ -283,11 +283,20 @@ export function exportBuildingToSketch(opts: {
     }
   }
 
+  // Propagasi properti yang harus identik dengan masterplan agar koordinat,
+  // skala, dan peta tidak bergeser saat berpindah halaman.
+  const inheritedProps: Record<string, unknown> = {
+    scale: mp.scale ?? "1:100",
+    geo: (mp as any).geo, // koordinat map ikut terekspor
+    northRotation: (mp as any).northRotation,
+    mmGridRotation: (mp as any).mmGridRotation,
+  };
+
   if (target) {
     // Re-sync: pertahankan ruang non-referensi & non-Lahan yang sudah digambar pengguna.
     const preserved = target.layers.filter((l) => !l.isReferenceRoom && !isLahan(l.name));
     target.title = buildingName;
-    target.scale = mp.scale ?? "1:100";
+    Object.assign(target, inheritedProps);
     target.levels = newLevels;
     // Pasang ulang layer preserved ke level Lahan (atau level pertama) untuk hindari orphan.
     const preservedAttached = preserved.map((l) => ({ ...l, levelId: lvlLahan.id }));
@@ -308,6 +317,7 @@ export function exportBuildingToSketch(opts: {
       levels: newLevels,
       activeLevelId: newLevels[1]?.id ?? lvlLahan.id,
       linkedMasterplan: { rootLayerId: opts.rootLayerId },
+      ...inheritedProps,
     };
     skStore.sketches.push(target);
   }
