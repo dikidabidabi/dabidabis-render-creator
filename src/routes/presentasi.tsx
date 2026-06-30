@@ -2896,8 +2896,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
           {/* Garis batas lahan & GSB pada potongan — garis putus-putus vertikal
               setinggi rentang elevasi. Ketebalan sama dengan garis dimensi.
-              Batas lahan: merah marun. GSB: biru. Di tengah ditimpa tulisan
-              vertikal yang memotong garis putus-putus. */}
+              Batas lahan tetap berlabel; garis GSB tanpa teks. */}
           {(() => {
             const lahanLayers = (sketch.layers ?? []).filter((l) => isLahanSec(l.name));
             if (!lahanLayers.length) return null;
@@ -2942,24 +2941,32 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
             const renderGroup = (ts: number[], color: string, text: string, keyPrefix: string) => {
               if (!ts.length) return null;
-              const textH = text.length * fs * 0.62;
-              const halfH = textH / 2 + 2;
+              const hasText = text.trim().length > 0;
+              const textH = hasText ? text.length * fs * 0.62 : 0;
+              const halfH = hasText ? textH / 2 + 2 : 0;
               return (
                 <g pointerEvents="none">
                   {ts.map((t, i) => {
                     const xx = mx(t * cutLenM);
                     return (
                       <g key={`${keyPrefix}-${i}`}>
-                        <line x1={xx} y1={yT} x2={xx} y2={midY - halfH}
-                          stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
-                        <line x1={xx} y1={midY + halfH} x2={xx} y2={yB}
-                          stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
-                        <text x={xx} y={midY} fontSize={fs} fill={color}
-                          textAnchor="middle" dominantBaseline="central"
-                          transform={`rotate(-90 ${xx} ${midY})`}
-                          style={{ fontFamily: "Sora, sans-serif", fontWeight: 400, letterSpacing: "0.18em" }}>
-                          {text}
-                        </text>
+                        {hasText ? (
+                          <>
+                            <line x1={xx} y1={yT} x2={xx} y2={midY - halfH}
+                              stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
+                            <line x1={xx} y1={midY + halfH} x2={xx} y2={yB}
+                              stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
+                            <text x={xx} y={midY} fontSize={fs} fill={color}
+                              textAnchor="middle" dominantBaseline="central"
+                              transform={`rotate(-90 ${xx} ${midY})`}
+                              style={{ fontFamily: "Sora, sans-serif", fontWeight: 400, letterSpacing: "0.18em" }}>
+                              {text}
+                            </text>
+                          </>
+                        ) : (
+                          <line x1={xx} y1={yT} x2={xx} y2={yB}
+                            stroke={color} strokeWidth={sw} strokeDasharray="7 5" />
+                        )}
                       </g>
                     );
                   })}
@@ -2970,7 +2977,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             return (
               <>
                 {renderGroup(collectTs(lahanSegs), "#7a1f1f", "BATAS LAHAN", "bl")}
-                {renderGroup(collectTs(gsbSegs), "#1e40af", "GSB", "gsb")}
+                {renderGroup(collectTs(gsbSegs), "#1e40af", "", "gsb")}
               </>
             );
           })()}
@@ -3327,14 +3334,6 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       strokeWidth={sw * 0.0012}
                       strokeDasharray={`${sw * 0.006} ${sw * 0.004}`}
                     />
-                    <text
-                      x={seg.mid.x} y={seg.mid.y}
-                      textAnchor="middle" dominantBaseline="central"
-                      fontSize={sw * 0.014} fontWeight={600} fill="#0a0a0a"
-                      style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.9)", strokeWidth: sw * 0.006 } as React.CSSProperties}
-                    >
-                      {`GSB ${i + 1} (${getLayerGsbM(l, i)}m)`}
-                    </text>
                   </g>
                 );
               })}
