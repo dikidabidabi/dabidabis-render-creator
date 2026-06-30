@@ -12787,6 +12787,7 @@ function LevelsPanel({
   onSetTypicalHeight: (id: string, meters: number) => void;
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
+  onToggleHiddenLayer: (id: string) => void;
   onRemoveLayer: (id: string) => void;
   onDuplicateLayer: (id: string) => void;
   onSetLayerCoefficient: (id: string, coef: number) => void;
