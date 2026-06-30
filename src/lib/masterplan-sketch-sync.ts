@@ -368,18 +368,24 @@ export function syncMasterplanToSketches(masterplanSketchId: string): void {
   if (!mp) return;
   const skStore = readStore(SKETCH_KEY);
   let dirty = false;
+  const mpPxm = pxPerMeterOf(mp.scale);
   for (const sk of skStore.sketches) {
     if (!sk.linkedMasterplan) continue;
+    const skPxm = pxPerMeterOf(sk.scale);
     for (const refLayer of sk.layers) {
       if (!refLayer.isReferenceRoom || !refLayer.refSourceLayerId) continue;
       const source = mp.layers.find((l) => l.id === refLayer.refSourceLayerId);
       if (!source) continue;
+      const converted = source.points.map((p) => ({
+        x: (p.x / mpPxm) * skPxm,
+        y: (p.y / mpPxm) * skPxm,
+      }));
       const same =
-        source.points.length === refLayer.points.length &&
-        source.points.every((p, i) => Math.abs(p.x - refLayer.points[i].x) < 0.01 && Math.abs(p.y - refLayer.points[i].y) < 0.01);
+        refLayer.points.length === converted.length &&
+        refLayer.points.every((p, i) => Math.abs(p.x - converted[i].x) < 0.01 && Math.abs(p.y - converted[i].y) < 0.01);
       if (same) continue;
-      refLayer.points = source.points.map((p) => ({ x: p.x, y: p.y }));
-      refLayer.areaM2 = polyAreaM2(refLayer.points, pxPerMeterOf(sk.scale));
+      refLayer.points = converted;
+      refLayer.areaM2 = polyAreaM2(refLayer.points, skPxm);
       sk.updatedAt = Date.now();
       dirty = true;
     }
