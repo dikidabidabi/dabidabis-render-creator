@@ -12082,7 +12082,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onRemoveLayer={removeLayer}
             onDuplicateLayer={duplicateLayer}
             onSetLayerCoefficient={setLayerCoefficient}
+            onSetLayerFloors={setLayerFloors}
             onSetLayerGsb={setLayerGsbSide}
+            mode={mode}
             lines={lines}
             layers={layers}
           />
