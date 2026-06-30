@@ -13211,9 +13211,13 @@ function LevelsPanel({
                             )}
                             <span
                               className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground"
-                              title={`Luas asli ${sl.areaM2.toFixed(2)} m² · efektif ${(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)} m²`}
+                              title={
+                                lahan || sl.isReferenceRoom
+                                  ? `Luas metrik ${sl.areaM2.toFixed(2)} m²`
+                                  : `Luas asli ${sl.areaM2.toFixed(2)} m² · efektif ${(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)} m²`
+                              }
                             >
-                              {(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(1)}
+                              {(lahan || sl.isReferenceRoom ? sl.areaM2 : sl.areaM2 * (sl.coefficient ?? 1)).toFixed(1)}
                               <span className="ml-0.5 text-[9px] font-normal">m²</span>
                             </span>
                             <button
