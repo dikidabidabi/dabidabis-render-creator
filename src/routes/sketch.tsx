@@ -13,6 +13,8 @@ import {
   MapPin,
   Lock,
   LockOpen,
+  Lightbulb,
+  LightbulbOff,
   ChevronDown,
   ChevronUp,
   Save,
