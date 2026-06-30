@@ -94,6 +94,7 @@ type Line = {
 };
 type Layer = {
   id: string; name: string; points: Point[]; areaM2: number; color: string; levelId?: string; coefficient?: number; gsb?: number[];
+  isReferenceRoom?: boolean;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
@@ -431,7 +432,12 @@ function PresentasiPage() {
         else {
           const s = JSON.parse(raw) as StoreShape;
           if (s && Array.isArray(s.sketches)) {
-            setSketches((s.sketches as Sketch[]).map(bindLahanToMdplZero));
+            // Drop reference rooms — hanya bentuk yang digambar di sketsa yang dirender.
+            const filtered = s.sketches.map((sk) => ({
+              ...sk,
+              layers: (sk.layers ?? []).filter((l) => !l.isReferenceRoom),
+            }));
+            setSketches(filtered.map(bindLahanToMdplZero));
             setOpenId((prev) => {
               if (prev && s.sketches.some((x) => x.id === prev)) return prev;
               return s.openId ?? s.sketches[0]?.id ?? null;
