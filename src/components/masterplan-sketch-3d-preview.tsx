@@ -208,6 +208,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
     return r;
   }, [sketch.layers, origin.x, origin.y, mPerPx]);
 
+  const MP_FLOOR_H = 4; // default 4 m per lapis di masterplan 3D
   const meshes = useMemo(() => {
     const out: { key: string; pts: Point[]; base: number; h: number; color: string }[] = [];
     for (const ly of sketch.layers) {
@@ -219,6 +220,11 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
       let color = solidColorForRoomName(ly.name) || ly.color || "#cbd5e1";
       if (isLahan(ly.name)) { h = 0.05; color = "#d6d3d1"; }
       else if (isTaman(ly.name)) { h = 0.3; color = "#22c55e"; }
+      else {
+        // Gunakan floors per-layer × 4 m
+        const floors = Math.max(1, Math.round(ly.floors ?? 1));
+        h = floors * MP_FLOOR_H;
+      }
       out.push({ key: ly.id, pts: ly.points, base: baseMdpl, h, color });
     }
     return out;
