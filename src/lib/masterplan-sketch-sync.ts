@@ -280,10 +280,6 @@ function findParcelForPointInfo(
   }
 }
 
-function findParcelForPoint(mpSketch: AnySketch, point: AnyPt): AnyPt[] | null {
-  return findParcelForPointInfo(mpSketch, point)?.points ?? null;
-}
-
 
 function centroid(pts: AnyPt[]): AnyPt {
   let sx = 0, sy = 0;
