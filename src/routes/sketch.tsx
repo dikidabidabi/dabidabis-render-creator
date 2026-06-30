@@ -10282,17 +10282,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <Waypoints className="mr-1.5 h-4 w-4" /> Aksis
             </Button>
           )}
-          {mode === "masterplan" && (
-            <Button
-              variant={tool === "jalan" ? "default" : "outline"}
-              size="sm"
-              onClick={() => { cancelPendingCurve(); setTool("jalan"); setJalanDraft(null); }}
-              className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")}
-              title="Jalan — koridor dengan lebar & fillet; memandu Cluster Generator."
-            >
-              <Spline className="mr-1.5 h-4 w-4" /> Jalan
-            </Button>
-          )}
+          <Button
+            variant={tool === "jalan" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("jalan"); setJalanDraft(null); }}
+            className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")}
+            title="Jalan — koridor dengan lebar & fillet."
+          >
+            <Spline className="mr-1.5 h-4 w-4" /> Jalan
+          </Button>
         </div>
         {tool === "aksis" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
@@ -10346,7 +10344,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
-        {tool === "jalan" && mode === "masterplan" && (
+        {tool === "jalan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-zinc-500/40 bg-zinc-500/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-700">Jalan</span>
             <Button
