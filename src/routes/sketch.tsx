@@ -7874,6 +7874,76 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       } else {
         toast.error("Klik di atas jalan untuk menghapus");
       }
+    } else if (tool === "jalan" && jalanSub === "geser") {
+      const roads = sketch.roads ?? [];
+      const tolPx = 14 / view.s;
+      let best: { ri: number; vi: number; d: number } | null = null;
+      for (let i = 0; i < roads.length; i++) {
+        for (let v = 0; v < roads[i].points.length; v++) {
+          const d = Math.hypot(roads[i].points[v].x - p.x, roads[i].points[v].y - p.y);
+          if (d <= tolPx && (!best || d < best.d)) best = { ri: i, vi: v, d };
+        }
+      }
+      if (best) {
+        pushHistory();
+        setRoadVertexDrag({ roadId: roads[best.ri].id, idx: best.vi });
+      } else {
+        toast.error("Klik tepat pada titik jalan untuk menggeser");
+      }
+    } else if (tool === "jalan" && jalanSub === "tambahTitik") {
+      const roads = sketch.roads ?? [];
+      const tolPx = 12 / view.s;
+      let best: { ri: number; segIdx: number; pt: Point; d: number } | null = null;
+      for (let i = 0; i < roads.length; i++) {
+        const pts = roads[i].points;
+        for (let s = 0; s < pts.length - 1; s++) {
+          const a2 = pts[s], b2 = pts[s + 1];
+          const dx = b2.x - a2.x, dy = b2.y - a2.y;
+          const l2 = dx * dx + dy * dy;
+          let t = l2 > 1e-9 ? ((p.x - a2.x) * dx + (p.y - a2.y) * dy) / l2 : 0;
+          t = Math.max(0, Math.min(1, t));
+          const cx = a2.x + t * dx, cy = a2.y + t * dy;
+          const d = Math.hypot(p.x - cx, p.y - cy);
+          if (d <= tolPx && (!best || d < best.d)) best = { ri: i, segIdx: s, pt: { x: cx, y: cy }, d };
+        }
+      }
+      if (best) {
+        pushHistory();
+        const next = roads.map((rd, i) => {
+          if (i !== best!.ri) return rd;
+          const np = rd.points.slice();
+          np.splice(best!.segIdx + 1, 0, best!.pt);
+          return { ...rd, points: np };
+        });
+        onChange({ roads: next });
+        toast.success("Titik ditambahkan");
+      } else {
+        toast.error("Klik pada centerline jalan untuk menambah titik");
+      }
+    } else if (tool === "jalan" && jalanSub === "hapusTitik") {
+      const roads = sketch.roads ?? [];
+      const tolPx = 14 / view.s;
+      let best: { ri: number; vi: number; d: number } | null = null;
+      for (let i = 0; i < roads.length; i++) {
+        for (let v = 0; v < roads[i].points.length; v++) {
+          const d = Math.hypot(roads[i].points[v].x - p.x, roads[i].points[v].y - p.y);
+          if (d <= tolPx && (!best || d < best.d)) best = { ri: i, vi: v, d };
+        }
+      }
+      if (best) {
+        const rd = roads[best.ri];
+        const minPts = rd.kind === "tangent" ? 3 : 2;
+        if (rd.points.length <= minPts) {
+          toast.error(`Tidak bisa hapus — jalan minimum ${minPts} titik`);
+        } else {
+          pushHistory();
+          const next = roads.map((r, i) => i === best!.ri ? { ...r, points: r.points.filter((_, v) => v !== best!.vi) } : r);
+          onChange({ roads: next });
+          toast.success("Titik dihapus");
+        }
+      } else {
+        toast.error("Klik pada titik jalan untuk menghapus");
+      }
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
