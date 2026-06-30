@@ -118,9 +118,9 @@ function polyAreaM2(pts: AnyPt[], pxPerMeter: number): number {
 }
 
 function pxPerMeterOf(scale: string | undefined): number {
-  if (!scale) return 1;
+  if (!scale) return SCALE_TO_PXM["1:100"];
   const v = SCALE_TO_PXM[scale];
-  return Number.isFinite(v) && v > 0 ? v : 1;
+  return Number.isFinite(v) && v > 0 ? v : SCALE_TO_PXM["1:100"];
 }
 
 function metricAreaForLayer(layer: AnyLayer, pxPerMeter: number): number {
