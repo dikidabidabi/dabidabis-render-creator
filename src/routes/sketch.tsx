@@ -13057,6 +13057,11 @@ function LevelsPanel({
                           onRenameLayer(sl.id, layerDraft);
                           setLayerEditId(null);
                         };
+                        // Sub-bangunan (level induk punya parentLayerId): tampilkan nama induk
+                        const parentLayer = lvl.parentLayerId
+                          ? layers.find((l) => l.id === lvl.parentLayerId)
+                          : undefined;
+                        const displaySlName = parentLayer ? parentLayer.name : sl.name;
                         return (
                           <li
                             key={sl.id}
@@ -13065,9 +13070,10 @@ function LevelsPanel({
                               lahan && "bg-ember/5",
                               sl.locked && "ring-1 ring-foreground/15",
                             )}
-                            title={sl.name}
+                            title={displaySlName}
                           >
                             <div className="flex items-center gap-1.5">
+
                             <span
                               className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
                               style={{ background: (colorForRoomName(sl.name) ?? sl.color).replace("ALPHA", "0.9") }}
