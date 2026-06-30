@@ -290,16 +290,35 @@ export function exportBuildingToSketch(opts: {
     geo: (mp as any).geo, // koordinat map ikut terekspor
     northRotation: (mp as any).northRotation,
     mmGridRotation: (mp as any).mmGridRotation,
+    // Sinkronkan data jalan agar perimeter Lahan identik
+    roads: ((mp as any).roads || []).map((r: any) => ({
+      ...r,
+      points: r.points.map((p: AnyPt) => ({ x: p.x, y: p.y })),
+    })),
   };
 
   if (target) {
     // Re-sync: pertahankan ruang non-referensi & non-Lahan yang sudah digambar pengguna.
     const preserved = target.layers.filter((l) => !l.isReferenceRoom && !isLahan(l.name));
+    // Buat peta level-lama → level-baru berdasarkan nama level agar layer
+    // yang sudah dibuat user tetap berada di level yang benar.
+    const oldLevelNameMap = new Map<string, string>(); // oldLevelId → levelName
+    if (target.levels) {
+      for (const lv of target.levels) oldLevelNameMap.set(lv.id, lv.name);
+    }
+    const newLevelByName = new Map<string, string>(); // levelName → newLevelId
+    for (const lv of newLevels) newLevelByName.set(lv.name, lv.id);
+
     target.title = buildingName;
     Object.assign(target, inheritedProps);
     target.levels = newLevels;
-    // Pasang ulang layer preserved ke level Lahan (atau level pertama) untuk hindari orphan.
-    const preservedAttached = preserved.map((l) => ({ ...l, levelId: lvlLahan.id }));
+    // Pasang ulang preserved layers ke level baru yang namanya cocok,
+    // fallback ke level pertama (Lahan).
+    const preservedAttached = preserved.map((l) => {
+      const oldName = l.levelId ? oldLevelNameMap.get(l.levelId) : undefined;
+      const matchedNewId = oldName ? newLevelByName.get(oldName) : undefined;
+      return { ...l, levelId: matchedNewId ?? lvlLahan.id };
+    });
     target.layers = [...newLayers, ...preservedAttached];
     target.activeLevelId = newLevels[1]?.id ?? lvlLahan.id;
     target.linkedMasterplan = { rootLayerId: opts.rootLayerId };
