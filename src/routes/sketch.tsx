@@ -1619,7 +1619,6 @@ function SketchCard(props: SketchCardProps) {
       </div>
 
       {isOpen && <SketchEditor sketch={sketch} onChange={onChange} fullscreen={false} mode={mode} />}
-      {isOpen && mode === "masterplan" && <MasterplanSketch3DPreview sketch={sketch as any} />}
     </section>
   );
 }
@@ -12145,37 +12144,40 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   return (
     <div className="space-y-4 p-4 lg:p-5">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_400px]">
-        <div
-          ref={wrapRef}
-          className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
-        >
-          <canvas
-            ref={canvasRef}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerCancel}
-            onPointerLeave={() => setHover(null)}
-            className={cn(
-              "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
-            )}
-          />
-          <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 shadow-soft backdrop-blur">
-            <div className="font-display text-xs font-semibold">
-              {activeLvlId && (() => {
-                const lvl = levels.find((l) => l.id === activeLvlId);
-                return lvl ? (
-                  <span className="text-ember">{lvl.name}</span>
-                ) : null;
-              })()}
-              {activeLvlId && <span className="mx-1.5 text-border">·</span>}
-              <span className="text-foreground">Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m</span>
+        <div className="flex flex-col gap-4">
+          <div
+            ref={wrapRef}
+            className="relative h-[70vh] min-h-[460px] overflow-hidden rounded-2xl border border-border/60 bg-surface/40 shadow-soft"
+          >
+            <canvas
+              ref={canvasRef}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+              onPointerLeave={() => setHover(null)}
+              className={cn(
+                "block touch-none select-none",
+                tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              )}
+            />
+            <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 shadow-soft backdrop-blur">
+              <div className="font-display text-xs font-semibold">
+                {activeLvlId && (() => {
+                  const lvl = levels.find((l) => l.id === activeLvlId);
+                  return lvl ? (
+                    <span className="text-ember">{lvl.name}</span>
+                  ) : null;
+                })()}
+                {activeLvlId && <span className="mx-1.5 text-border">·</span>}
+                <span className="text-foreground">Skala {scale} • 1 kotak besar = {METERS_PER_MAJOR[scale]} m</span>
+              </div>
+            </div>
+            <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
+              <CompassMarker rotation={northRotation} size={64} />
             </div>
           </div>
-          <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
-            <CompassMarker rotation={northRotation} size={64} />
-          </div>
+          {mode === "masterplan" && <MasterplanSketch3DPreview sketch={sketch as any} />}
         </div>
         {SidePanel}
       </div>
