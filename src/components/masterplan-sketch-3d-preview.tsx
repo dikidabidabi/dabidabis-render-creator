@@ -36,6 +36,7 @@ type Level = {
   mdpl: number;
   typicalCount?: number;
   typicalHeight?: number;
+  parentLayerId?: string;
 };
 type Sketch = {
   id: string;
@@ -168,6 +169,45 @@ function RoadExtruded({
   );
 }
 
+/** Garis lapis horisontal di setiap kelipatan 4 m pada bangunan. */
+function FloorLines({
+  points, origin, mPerPx, baseY, floorH, floors,
+}: {
+  points: Point[]; origin: Point; mPerPx: number;
+  baseY: number; floorH: number; floors: number;
+}) {
+  const geo = useMemo(() => {
+    if (points.length < 3 || floors < 2) return null;
+    // ring di y=0 (akan dipindahkan via position) — buat untuk tiap lapis antara
+    const positions: number[] = [];
+    for (let i = 1; i < floors; i++) {
+      const y = i * floorH;
+      for (let j = 0; j < points.length; j++) {
+        const a = points[j];
+        const b = points[(j + 1) % points.length];
+        const ax = (a.x - origin.x) * mPerPx;
+        const az = -(a.y - origin.y) * mPerPx;
+        const bx = (b.x - origin.x) * mPerPx;
+        const bz = -(b.y - origin.y) * mPerPx;
+        positions.push(ax, y, az, bx, y, bz);
+      }
+    }
+    if (!positions.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    return g;
+  }, [points, origin.x, origin.y, mPerPx, floorH, floors]);
+  if (!geo) return null;
+  return (
+    <group position={[0, baseY, 0]}>
+      <lineSegments geometry={geo}>
+        <lineBasicMaterial color="#1f2937" transparent opacity={0.55} />
+      </lineSegments>
+    </group>
+  );
+}
+
+
 
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
@@ -210,7 +250,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
 
   const MP_FLOOR_H = 4; // default 4 m per lapis di masterplan 3D
   const meshes = useMemo(() => {
-    const out: { key: string; pts: Point[]; base: number; h: number; color: string }[] = [];
+    const out: { key: string; pts: Point[]; base: number; h: number; color: string; floors: number }[] = [];
     for (const ly of sketch.layers) {
       if (isVoid(ly.name)) continue;
       if (ly.points.length < 3) continue;
@@ -218,14 +258,14 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
       const baseMdpl = lv?.baseMdpl ?? 0;
       let h = lv?.height ?? TYPICAL_FLOOR_H;
       let color = solidColorForRoomName(ly.name) || ly.color || "#cbd5e1";
+      let floors = 1;
       if (isLahan(ly.name)) { h = 0.05; color = "#d6d3d1"; }
       else if (isTaman(ly.name)) { h = 0.3; color = "#22c55e"; }
       else {
-        // Gunakan floors per-layer × 4 m
-        const floors = Math.max(1, Math.round(ly.floors ?? 1));
+        floors = Math.max(1, Math.round(ly.floors ?? 1));
         h = floors * MP_FLOOR_H;
       }
-      out.push({ key: ly.id, pts: ly.points, base: baseMdpl, h, color });
+      out.push({ key: ly.id, pts: ly.points, base: baseMdpl, h, color, floors });
     }
     return out;
   }, [sketch.layers, levelMap]);
@@ -313,6 +353,19 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               color={m.color}
             />
           ))}
+          {meshes.map((m) =>
+            m.floors >= 2 ? (
+              <FloorLines
+                key={`fl-${m.key}`}
+                points={m.pts}
+                origin={origin}
+                mPerPx={mPerPx}
+                baseY={m.base}
+                floorH={MP_FLOOR_H}
+                floors={m.floors}
+              />
+            ) : null,
+          )}
           {roadRings.map((rr, i) => (
             <RoadExtruded
               key={`road-${i}`}
