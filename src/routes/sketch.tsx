@@ -13029,25 +13029,54 @@ function LevelsPanel({
                                 <span className="truncate">{sl.name}</span>
                               </button>
                             )}
-                            <Select
-                              value={String(sl.coefficient ?? 1)}
-                              onValueChange={(v) =>
-                                onSetLayerCoefficient(sl.id, parseFloat(v))
-                              }
-                              disabled={sl.locked}
-                            >
-                              <SelectTrigger
-                                className="h-6 w-[58px] shrink-0 px-1.5 py-0 text-[10px]"
-                                title="Koefisien pengali luas"
+                            {mode === "masterplan" && !lahan ? (
+                              <div className="flex shrink-0 items-center gap-0.5" title="Jumlah lapis bangunan (×4 m di 3D)">
+                                <Input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  disabled={sl.locked}
+                                  value={floorsDrafts[sl.id] ?? String(sl.floors ?? 1)}
+                                  onChange={(e) =>
+                                    setFloorsDrafts((d) => ({ ...d, [sl.id]: e.target.value }))
+                                  }
+                                  onBlur={() => {
+                                    const v = parseInt(floorsDrafts[sl.id] ?? "", 10);
+                                    if (Number.isFinite(v)) onSetLayerFloors(sl.id, v);
+                                    setFloorsDrafts((d) => {
+                                      const n = { ...d };
+                                      delete n[sl.id];
+                                      return n;
+                                    });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                  }}
+                                  className="h-6 w-9 px-1 py-0 text-center text-[10px]"
+                                />
+                                <span className="text-[9px] text-muted-foreground">lps</span>
+                              </div>
+                            ) : (
+                              <Select
+                                value={String(sl.coefficient ?? 1)}
+                                onValueChange={(v) =>
+                                  onSetLayerCoefficient(sl.id, parseFloat(v))
+                                }
+                                disabled={sl.locked}
                               >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="1">×1</SelectItem>
-                                <SelectItem value="0.5">×0,5</SelectItem>
-                                <SelectItem value="0">×0</SelectItem>
-                              </SelectContent>
-                            </Select>
+                                <SelectTrigger
+                                  className="h-6 w-[58px] shrink-0 px-1.5 py-0 text-[10px]"
+                                  title="Koefisien pengali luas"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">×1</SelectItem>
+                                  <SelectItem value="0.5">×0,5</SelectItem>
+                                  <SelectItem value="0">×0</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                             <span
                               className="shrink-0 font-display text-[11px] font-semibold text-muted-foreground"
                               title={`Luas asli ${sl.areaM2.toFixed(2)} m² · efektif ${(sl.areaM2 * (sl.coefficient ?? 1)).toFixed(2)} m²`}
