@@ -186,9 +186,9 @@ function FloorLines({
         const a = points[j];
         const b = points[(j + 1) % points.length];
         const ax = (a.x - origin.x) * mPerPx;
-        const az = -(a.y - origin.y) * mPerPx;
+        const az = (a.y - origin.y) * mPerPx;
         const bx = (b.x - origin.x) * mPerPx;
-        const bz = -(b.y - origin.y) * mPerPx;
+        const bz = (b.y - origin.y) * mPerPx;
         positions.push(ax, y, az, bx, y, bz);
       }
     }

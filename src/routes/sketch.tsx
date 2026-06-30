@@ -5008,13 +5008,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       cy /= layer.points.length;
       const sp = worldToScreen({ x: cx, y: cy });
       const isLahan = isLahanLayerName(layer.name);
+      // Masterplan: jika layer ini adalah sub-bangunan (level-nya punya parentLayerId),
+      // sembunyikan label — keterangan hanya muncul di bangunan induk (akumulatif).
+      if (mode === "masterplan" && !isLahan && lvl?.parentLayerId) {
+        ctx.globalAlpha = 1;
+        return;
+      }
+      // Akumulasi rekursif sub-bangunan (hanya untuk root building di masterplan)
+      const aggregateBuilding = (rootId: string): { floors: number; totalArea: number } => {
+        let f = 0, ta = 0;
+        const walk = (lid: string) => {
+          for (const childLvl of levels) {
+            if (childLvl.parentLayerId !== lid) continue;
+            for (const ch of layers) {
+              if (ch.levelId !== childLvl.id) continue;
+              if (isLahanLayerName(ch.name)) continue;
+              const cf = Math.max(1, Math.round(ch.floors ?? 1));
+              f += cf;
+              ta += ch.areaM2 * cf;
+              walk(ch.id);
+            }
+          }
+        };
+        walk(rootId);
+        return { floors: f, totalArea: ta };
+      };
       const nameText = layer.locked ? `🔒 ${layer.name}` : layer.name;
       const areaText = `${layer.areaM2.toFixed(2)} m²`;
       // Masterplan: "bangunan" → "{N} lapis · {total} m²" → "{base} m²" (selain Lahan)
       const isMP = mode === "masterplan" && !isLahan;
-      const floors = Math.max(1, Math.round(layer.floors ?? 1));
+      const ownFloors = Math.max(1, Math.round(layer.floors ?? 1));
+      const agg = isMP ? aggregateBuilding(layer.id) : { floors: 0, totalArea: 0 };
+      const floors = ownFloors + agg.floors;
+      const totalArea = layer.areaM2 * ownFloors + agg.totalArea;
       const mpLine1 = "bangunan";
-      const mpLine2 = `${floors} lapis · ${(layer.areaM2 * floors).toFixed(2)} m²`;
+      const mpLine2 = `${floors} lapis · ${totalArea.toFixed(2)} m²`;
       const mpLine3 = areaText;
       ctx.font = "600 13px Manrope, sans-serif";
       const nameW = ctx.measureText(nameText).width;
@@ -13029,6 +13057,11 @@ function LevelsPanel({
                           onRenameLayer(sl.id, layerDraft);
                           setLayerEditId(null);
                         };
+                        // Sub-bangunan (level induk punya parentLayerId): tampilkan nama induk
+                        const parentLayer = lvl.parentLayerId
+                          ? layers.find((l) => l.id === lvl.parentLayerId)
+                          : undefined;
+                        const displaySlName = parentLayer ? parentLayer.name : sl.name;
                         return (
                           <li
                             key={sl.id}
@@ -13037,9 +13070,10 @@ function LevelsPanel({
                               lahan && "bg-ember/5",
                               sl.locked && "ring-1 ring-foreground/15",
                             )}
-                            title={sl.name}
+                            title={displaySlName}
                           >
                             <div className="flex items-center gap-1.5">
+
                             <span
                               className="h-2.5 w-2.5 shrink-0 rounded-sm border border-foreground/20"
                               style={{ background: (colorForRoomName(sl.name) ?? sl.color).replace("ALPHA", "0.9") }}
@@ -13067,7 +13101,7 @@ function LevelsPanel({
                                 title={sl.locked ? "Buka kunci untuk ganti nama" : "Klik untuk ganti nama"}
                               >
                                 {lahan && <MapPin className="h-3 w-3 shrink-0 text-ember" />}
-                                <span className="truncate">{sl.name}</span>
+                                <span className="truncate">{displaySlName}</span>
                               </button>
                             )}
                             {mode === "masterplan" && !lahan ? (
