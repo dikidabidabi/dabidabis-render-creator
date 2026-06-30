@@ -12761,6 +12761,7 @@ function LevelsPanel({
   onSetTypicalHeight,
   onRenameLayer,
   onToggleLockLayer,
+  onToggleHiddenLayer,
   onRemoveLayer,
   onDuplicateLayer,
   onSetLayerCoefficient,
