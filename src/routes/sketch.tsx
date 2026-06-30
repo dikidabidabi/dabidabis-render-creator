@@ -157,6 +157,7 @@ import {
   roadCorridorPolygon as buildRoadCorridor,
   offsetPolyline as offsetRoadPolyline,
   unionFilletedCorridors,
+  clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
 
