@@ -9558,6 +9558,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     });
   };
 
+  const toggleHidden = (lid: string) => {
+    pushHistory();
+    onChange({
+      layers: layers.map((l) => (l.id === lid ? { ...l, hidden: !l.hidden } : l)),
+    });
+  };
+
   const renameLayer = (lid: string, name: string) => {
     const layer = layers.find((l) => l.id === lid);
     if (!layer) return;
