@@ -3860,6 +3860,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
       // Layers
       (layersByLvl.get(lvl.id) || []).forEach((layer) => {
+        if (layer.hidden) return;
         if (layer.points.length < 3) return;
         ctx.beginPath();
         ctx.moveTo(layer.points[0].x, layer.points[0].y);
