@@ -2103,7 +2103,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const aksisBufferM = Math.max(0, Number(aksisBufferInput) || 8);
   const [aksisDraft, setAksisDraft] = useState<{ kind: "garis" | "tangent"; points: Point[]; cursor: Point } | null>(null);
   // Jalan tool — koridor jalan (lebar + fillet) untuk Master Plan
-  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet" | "hapus">("garis");
+  const [jalanSub, setJalanSub] = useState<"garis" | "tangent" | "fillet" | "hapus" | "geser" | "tambahTitik" | "hapusTitik">("garis");
+  const [roadVertexDrag, setRoadVertexDrag] = useState<{ roadId: string; idx: number } | null>(null);
   const [jalanWidthInput, setJalanWidthInput] = useState<string>("6");
   const [jalanFilletInput, setJalanFilletInput] = useState<string>("4");
   const jalanWidthM = Math.max(0.5, Number(jalanWidthInput) || 6);
@@ -5975,6 +5976,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.restore();
         }
       }
+
+      // Vertex handles untuk mode edit titik jalan
+      if (tool === "jalan" && (jalanSub === "geser" || jalanSub === "tambahTitik" || jalanSub === "hapusTitik")) {
+        ctx.save();
+        for (const rd of roadsAll) {
+          for (let i = 0; i < rd.points.length; i++) {
+            const sp = worldToScreen(rd.points[i]);
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = jalanSub === "hapusTitik" ? "#dc2626" : jalanSub === "tambahTitik" ? "#16a34a" : "#2563eb";
+            ctx.fill();
+            ctx.lineWidth = 1.25;
+            ctx.strokeStyle = "#ffffff";
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
     }
     // Draft jalan tangent
     if (jalanDraft && jalanDraft.kind === "tangent" && tool === "jalan") {
@@ -7855,6 +7874,76 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       } else {
         toast.error("Klik di atas jalan untuk menghapus");
       }
+    } else if (tool === "jalan" && jalanSub === "geser") {
+      const roads = sketch.roads ?? [];
+      const tolPx = 14 / view.s;
+      let best: { ri: number; vi: number; d: number } | null = null;
+      for (let i = 0; i < roads.length; i++) {
+        for (let v = 0; v < roads[i].points.length; v++) {
+          const d = Math.hypot(roads[i].points[v].x - p.x, roads[i].points[v].y - p.y);
+          if (d <= tolPx && (!best || d < best.d)) best = { ri: i, vi: v, d };
+        }
+      }
+      if (best) {
+        pushHistory();
+        setRoadVertexDrag({ roadId: roads[best.ri].id, idx: best.vi });
+      } else {
+        toast.error("Klik tepat pada titik jalan untuk menggeser");
+      }
+    } else if (tool === "jalan" && jalanSub === "tambahTitik") {
+      const roads = sketch.roads ?? [];
+      const tolPx = 12 / view.s;
+      let best: { ri: number; segIdx: number; pt: Point; d: number } | null = null;
+      for (let i = 0; i < roads.length; i++) {
+        const pts = roads[i].points;
+        for (let s = 0; s < pts.length - 1; s++) {
+          const a2 = pts[s], b2 = pts[s + 1];
+          const dx = b2.x - a2.x, dy = b2.y - a2.y;
+          const l2 = dx * dx + dy * dy;
+          let t = l2 > 1e-9 ? ((p.x - a2.x) * dx + (p.y - a2.y) * dy) / l2 : 0;
+          t = Math.max(0, Math.min(1, t));
+          const cx = a2.x + t * dx, cy = a2.y + t * dy;
+          const d = Math.hypot(p.x - cx, p.y - cy);
+          if (d <= tolPx && (!best || d < best.d)) best = { ri: i, segIdx: s, pt: { x: cx, y: cy }, d };
+        }
+      }
+      if (best) {
+        pushHistory();
+        const next = roads.map((rd, i) => {
+          if (i !== best!.ri) return rd;
+          const np = rd.points.slice();
+          np.splice(best!.segIdx + 1, 0, best!.pt);
+          return { ...rd, points: np };
+        });
+        onChange({ roads: next });
+        toast.success("Titik ditambahkan");
+      } else {
+        toast.error("Klik pada centerline jalan untuk menambah titik");
+      }
+    } else if (tool === "jalan" && jalanSub === "hapusTitik") {
+      const roads = sketch.roads ?? [];
+      const tolPx = 14 / view.s;
+      let best: { ri: number; vi: number; d: number } | null = null;
+      for (let i = 0; i < roads.length; i++) {
+        for (let v = 0; v < roads[i].points.length; v++) {
+          const d = Math.hypot(roads[i].points[v].x - p.x, roads[i].points[v].y - p.y);
+          if (d <= tolPx && (!best || d < best.d)) best = { ri: i, vi: v, d };
+        }
+      }
+      if (best) {
+        const rd = roads[best.ri];
+        const minPts = rd.kind === "tangent" ? 3 : 2;
+        if (rd.points.length <= minPts) {
+          toast.error(`Tidak bisa hapus — jalan minimum ${minPts} titik`);
+        } else {
+          pushHistory();
+          const next = roads.map((r, i) => i === best!.ri ? { ...r, points: r.points.filter((_, v) => v !== best!.vi) } : r);
+          onChange({ roads: next });
+          toast.success("Titik dihapus");
+        }
+      } else {
+        toast.error("Klik pada titik jalan untuk menghapus");
+      }
     } else if (tool === "polyline") {
       setPolyDraft({ points: [p], lastSample: p, cursor: p });
     } else if (tool === "edit") {
@@ -8172,6 +8261,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
   const onPointerMove = (e: React.PointerEvent) => {
     // Ramp vertex drag
+    if (roadVertexDrag) {
+      const wp = getWorldPos(e);
+      onChange({
+        roads: (sketch.roads ?? []).map((r) =>
+          r.id !== roadVertexDrag.roadId ? r : { ...r, points: r.points.map((pt, i) => i === roadVertexDrag.idx ? { x: wp.x, y: wp.y } : pt) }
+        ),
+      });
+      return;
+    }
     if (rampVertexDrag) {
       const wp = getWorldPos(e);
       onChange({
@@ -8549,6 +8647,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const onPointerUp = (e: React.PointerEvent) => {
     if (sectionEndpointDrag) {
       setSectionEndpointDrag(null);
+      endPointer(e);
+      return;
+    }
+    if (roadVertexDrag) {
+      setRoadVertexDrag(null);
       endPointer(e);
       return;
     }
@@ -10022,6 +10125,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               onClick={() => { setJalanSub("hapus"); setJalanDraft(null); }}
               title="Klik di atas sebuah jalan untuk menghapus jalan tersebut"
             >Hapus</Button>
+            <div className="mx-1 h-5 w-px bg-zinc-300" />
+            <span className="text-[10px] text-muted-foreground">Edit Titik:</span>
+            <Button
+              size="sm"
+              variant={jalanSub === "geser" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("geser"); setJalanDraft(null); }}
+              title="Tarik titik jalan untuk menggesernya"
+            >Geser</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "tambahTitik" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("tambahTitik"); setJalanDraft(null); }}
+              title="Klik pada centerline jalan untuk menambah titik kontrol"
+            >+ Titik</Button>
+            <Button
+              size="sm"
+              variant={jalanSub === "hapusTitik" ? "default" : "outline"}
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setJalanSub("hapusTitik"); setJalanDraft(null); }}
+              title="Klik pada titik jalan untuk menghapus titik tersebut"
+            >− Titik</Button>
             <div className="ml-2 flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">Lebar</span>
               <Input
