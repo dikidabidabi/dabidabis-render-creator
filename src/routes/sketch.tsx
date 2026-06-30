@@ -201,6 +201,8 @@ type Layer = {
   areaM2: number;
   color: string;
   locked?: boolean;
+  /** Sembunyikan visual & nonaktifkan semua operasi. Default false. */
+  hidden?: boolean;
   levelId?: string;
   coefficient?: number; // 1 | 0.5 | 0 — pengali luas efektif
   gsb?: number[]; // GSB offset (meter) per sisi, hanya untuk layer "lahan"
