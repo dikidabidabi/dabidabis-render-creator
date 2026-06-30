@@ -2888,7 +2888,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     const nextRoads = (sketch.roads || []).map((r) => ({
       ...r,
-      anchors: r.anchors.map((a: any) => ({ ...a, x: a.x * k, y: a.y * k })),
       points: r.points.map(sp),
     }));
 
