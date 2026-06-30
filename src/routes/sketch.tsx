@@ -3094,6 +3094,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       // Hit-fill (di dalam polygon) sebagai fallback
       for (const ly of layers) {
         if (!inLvl(ly.levelId)) continue;
+        if (ly.hidden || ly.locked) continue;
         if (ly.points.length >= 3 && pointInPolygon(raw, ly.points)) return `layer:${ly.id}`;
       }
       for (const fl of floors) {
