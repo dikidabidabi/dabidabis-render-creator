@@ -10002,6 +10002,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               />
               <span className="text-[10px] text-muted-foreground">m</span>
             </div>
+            <label className="flex items-center gap-1 text-[11px] text-zinc-700 cursor-pointer select-none" title="Tampilkan garis setback putus-putus sejauh ½ lebar jalan dari perimeter (mengikuti fillet pertemuan).">
+              <input
+                type="checkbox"
+                checked={jalanOffsetEnabled}
+                onChange={(e) => setJalanOffsetEnabled(e.target.checked)}
+                className="h-3.5 w-3.5 accent-rose-600"
+              />
+              <span>Offset (½ lebar)</span>
+            </label>
             {jalanSub === "tangent" && jalanDraft && (
               <Button
                 size="sm"
