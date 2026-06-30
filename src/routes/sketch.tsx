@@ -2083,6 +2083,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     [layers, levels, onChange],
   );
 
+  const navigateFn = useNavigate();
+  const handleExportToSketch = useCallback(
+    (rootLayerId: string) => {
+      const res = exportBuildingToSketch({
+        masterplanSketchId: sketch.id,
+        rootLayerId,
+      });
+      if (!res) {
+        toast.error("Gagal ekspor — pastikan bangunan punya geometry");
+        return;
+      }
+      toast.success("Bangunan diekspor ke Sketsa");
+      void navigateFn({ to: "/sketsa" });
+    },
+    [navigateFn, sketch.id],
+  );
+
+
+
 
   const renameLevel = useCallback(
     (lvlId: string, name: string) => {
