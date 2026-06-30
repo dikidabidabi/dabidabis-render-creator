@@ -392,10 +392,10 @@ export function exportBuildingToSketch(opts: {
     const preservedAttached = preserved.map((l) => {
       const oldName = l.levelId ? oldLevelNameMap.get(l.levelId) : undefined;
       const matchedNewId = oldName ? newLevelByName.get(oldName) : undefined;
-      return { ...l, levelId: matchedNewId ?? lvlLahan.id };
+      return { ...l, levelId: matchedNewId ?? lvlFirst.id };
     });
     target.layers = [...newLayers, ...preservedAttached];
-    target.activeLevelId = newLevels[1]?.id ?? lvlLahan.id;
+    target.activeLevelId = lvlFirst.id;
     target.linkedMasterplan = { rootLayerId: opts.rootLayerId };
     target.updatedAt = now;
   } else {
@@ -409,7 +409,7 @@ export function exportBuildingToSketch(opts: {
       lines: [],
       layers: newLayers,
       levels: newLevels,
-      activeLevelId: newLevels[1]?.id ?? lvlLahan.id,
+      activeLevelId: lvlFirst.id,
       linkedMasterplan: { rootLayerId: opts.rootLayerId },
       ...inheritedProps,
     };
