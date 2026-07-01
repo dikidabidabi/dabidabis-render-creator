@@ -1108,7 +1108,8 @@ type Slide =
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
-  | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan };
+  | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }
+  | { kind: "siteplan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
