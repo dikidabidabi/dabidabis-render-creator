@@ -1313,6 +1313,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "biaya": return "Estimasi Biaya";
       case "closing": return "Penutup";
       case "masterplan": return "Master Plan";
+      case "siteplan": return "Siteplan Kawasan";
       default: return null;
     }
   };
