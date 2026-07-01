@@ -210,9 +210,8 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
       if (corridors.length > 0) {
         let rings = unionFilletedCorridors(corridors, FILLET_PX);
         // Clip by union of Lahan polygons
-        const lahanUnion = polygonClipping.union(
-          ...lahanLayers.map((l) => [ptsToRing(l.points)] as [number, number][][]),
-        );
+        const lahanPolys = lahanLayers.map((l) => [ptsToRing(l.points)]) as any;
+        const lahanUnion = (polygonClipping.union as any)(...lahanPolys);
         // clipRingsByPolygon expects a single polygon; use outer of first union piece.
         // But we can do difference-based clip via polygon-clipping intersection.
         const roadPolys = rings.map((r) => [ptsToRing(r.outer), ...r.holes.map(ptsToRing)]);
