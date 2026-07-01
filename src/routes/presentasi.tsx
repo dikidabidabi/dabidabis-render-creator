@@ -8998,49 +8998,350 @@ function WwrPanel({ sketch }: { sketch: Sketch }) {
 }
 
 // ---------- Master Plan Slide ----------
-function MasterPlanBody({ plan }: { plan: import("@/lib/masterplan").MasterPlan }) {
+function MasterPlanBody({ plan, analysis }: { plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }) {
+  if (analysis && (analysis.buildings.length > 0 || analysis.lahanPolygonsPx.length > 0)) {
+    return <MasterPlanBodyFromSketch a={analysis} />;
+  }
+  return <MasterPlanBodyLegacy plan={plan} />;
+}
+
+// ---------- Ring infographic ----------
+function RingStat({ pct, color, size = 78, label, value, sub }: {
+  pct: number; color: string; size?: number; label: string; value: string; sub?: string;
+}) {
+  const p = Math.max(0, Math.min(100, pct));
+  const r = (size / 2) - 6;
+  const c = 2 * Math.PI * r;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <svg width={size} height={size} style={{ flexShrink: 0 }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={6} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={6}
+          strokeDasharray={`${(p / 100) * c} ${c}`} strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+        <text x={size / 2} y={size / 2 + 4} textAnchor="middle" fontSize={14} fontWeight={700} fill="#0f172a">
+          {p.toFixed(0)}%
+        </text>
+      </svg>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#64748b", fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap" }}>{value}</div>
+        {sub && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Top-view helpers ----------
+function computeViewport(a: MasterplanAnalysis, w: number, h: number, pad = 16) {
+  const bx = a.boundsPx;
+  const bw = Math.max(1, bx.maxX - bx.minX);
+  const bh = Math.max(1, bx.maxY - bx.minY);
+  const s = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh);
+  const ox = pad + ((w - pad * 2) - bw * s) / 2 - bx.minX * s;
+  const oy = pad + ((h - pad * 2) - bh * s) / 2 - bx.minY * s;
+  return { s, ox, oy };
+}
+function toPath(pts: { x: number; y: number }[], s: number, ox: number, oy: number): string {
+  if (pts.length === 0) return "";
+  return pts.map((p, i) => `${i === 0 ? "M" : "L"}${(p.x * s + ox).toFixed(1)},${(p.y * s + oy).toFixed(1)}`).join(" ") + " Z";
+}
+
+function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = true, numbered = false }: {
+  a: MasterplanAnalysis; w: number; h: number; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean; numbered?: boolean;
+}) {
+  const vp = computeViewport(a, w, h);
+  return (
+    <svg width={w} height={h} style={{ background: "#fff", border: "1px solid #e2e8f0", display: "block" }}>
+      {/* Lahan */}
+      {showLahan && a.lahanPolygonsPx.map((poly, i) => (
+        <path key={`la-${i}`} d={toPath(poly, vp.s, vp.ox, vp.oy)} fill="#f1f5f9" stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" />
+      ))}
+      {/* Roads */}
+      {showRoads && a.roadRingsPx.map((r, i) => (
+        <g key={`r-${i}`}>
+          <path d={toPath(r.outer, vp.s, vp.ox, vp.oy)} fill="#cbd5e1" stroke="#64748b" strokeWidth={0.6} fillRule="evenodd" />
+          {r.holes.map((h, j) => (
+            <path key={j} d={toPath(h, vp.s, vp.ox, vp.oy)} fill="#f8fafc" stroke="none" />
+          ))}
+        </g>
+      ))}
+      {/* Buildings (root + subs) */}
+      {a.buildings.map((b, i) => {
+        const cx = b.centroidPx.x * vp.s + vp.ox;
+        const cy = b.centroidPx.y * vp.s + vp.oy;
+        return (
+          <g key={b.id}>
+            <path d={toPath(b.polygonPx, vp.s, vp.ox, vp.oy)} fill={b.color} fillOpacity={0.75} stroke="#0f172a" strokeWidth={0.8} />
+            {b.subMasses.map((s, k) => (
+              <path key={k} d={toPath(s.polygonPx, vp.s, vp.ox, vp.oy)} fill={b.color} fillOpacity={0.45} stroke="#0f172a" strokeWidth={0.5} />
+            ))}
+            {showLabels && (
+              numbered ? (
+                <g>
+                  <circle cx={cx} cy={cy} r={11} fill="#fff" stroke="#0f172a" strokeWidth={1.2} />
+                  <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize={10} fontWeight={700} fill="#0f172a">{i + 1}</text>
+                </g>
+              ) : (
+                <text x={cx} y={cy + 3} textAnchor="middle" fontSize={9} fontWeight={700} fill="#0f172a" style={{ textShadow: "0 0 3px #fff, 0 0 2px #fff" }}>
+                  {b.name}
+                </text>
+              )
+            )}
+          </g>
+        );
+      })}
+      {/* Compass */}
+      <g transform={`translate(${w - 34},26)`}>
+        <circle r={16} fill="#fff" stroke="#0f172a" />
+        <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="#0f172a">U</text>
+      </g>
+    </svg>
+  );
+}
+
+// ---------- New MasterPlan slide body sourced from the masterplan sketch ----------
+function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
+  const totalHardArea = a.totalFootprintM2 + a.totalRoadAreaM2;
+  const kdbPct = a.kdbKawasanPct;
+  const footprintPct = a.totalLahanM2 > 0 ? (a.totalFootprintM2 / a.totalLahanM2) * 100 : 0;
+  const roadPct = a.totalLahanM2 > 0 ? (a.totalRoadAreaM2 / a.totalLahanM2) * 100 : 0;
+  const gfaOfPlot = a.totalLahanM2 > 0 ? (a.totalGfaM2 / a.totalLahanM2) * 100 : 0;
+
+  // Skyline (south elevation, +Y downward = south)
+  const skyW = 1300, skyH = 300;
+  const bx = a.boundsPx;
+  const bw = Math.max(1, bx.maxX - bx.minX);
+  const maxH = Math.max(12, ...a.buildings.map((b) => b.heightM));
+  const sxSky = (skyW - 40) / bw;
+  const sy = (skyH - 40) / maxH;
+  // Draw far → near using centroid Y
+  const orderedForSky = [...a.buildings].sort((p, q) => p.centroidPx.y - q.centroidPx.y);
+  const groundY = skyH - 22;
+
+  const totalBuildings = a.buildings.length;
+  const totalBlok = totalBuildings + a.lahanPolygonsPx.length;
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Ring stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <RingStat pct={100} color="#0f766e" label="Total Blok" value={String(totalBlok)} sub={`${a.buildings.length} bangunan · ${a.lahanPolygonsPx.length} area`} />
+        <RingStat pct={100} color="#334155" label="Luas Tapak" value={`${(a.totalLahanM2 / 10000).toFixed(2)} ha`} sub={`${a.totalLahanM2.toFixed(0)} m² · ${a.lahanPolygonsPx.length} persil`} />
+        <RingStat pct={kdbPct} color="#dc2626" label="KDB Kawasan" value={`${kdbPct.toFixed(1)}%`} sub={`${totalHardArea.toFixed(0)} m² terbangun+jalan`} />
+        <RingStat pct={Math.min(100, gfaOfPlot)} color="#2563eb" label="Total GFA" value={`${a.totalGfaM2.toFixed(0)} m²`} sub={`${gfaOfPlot.toFixed(0)}% dari tapak`} />
+      </div>
+
+      {/* Footprint breakdown row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <RingStat pct={footprintPct} color="#f97316" label={`Footprint Bangunan (${totalBuildings})`} value={`${a.totalFootprintM2.toFixed(0)} m²`} sub={`${footprintPct.toFixed(1)}% dari tapak`} />
+        <RingStat pct={roadPct} color="#64748b" label="Perkerasan/Jalan" value={`${a.totalRoadAreaM2.toFixed(0)} m²`} sub={`${roadPct.toFixed(1)}% dari tapak`} />
+        <RingStat pct={kdbPct} color="#0f766e" label="Total Terbangun (KDB)" value={`${totalHardArea.toFixed(0)} m²`} sub={`${kdbPct.toFixed(1)}% (Footprint+Jalan)`} />
+      </div>
+
+      {/* Main grid: Top view + Skyline & buildings list */}
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 14, flex: 1, minHeight: 0 }}>
+        {/* Top view */}
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Tata Letak Kawasan (Top View)</div>
+          <TopView a={a} w={520} h={520} showLabels showRoads showLahan />
+        </div>
+
+        {/* Right column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+          {/* Skyline */}
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Skyline Kawasan (Tampak Selatan)</div>
+            <svg width={skyW} height={skyH} style={{ background: "linear-gradient(to bottom, #fef9c3 0%, #ffedd5 60%, #fef3c7 100%)", border: "1px solid #e2e8f0", display: "block" }}>
+              <rect x={0} y={groundY} width={skyW} height={skyH - groundY} fill="#475569" />
+              <circle cx={skyW - 60} cy={40} r={18} fill="#fbbf24" opacity={0.85} />
+              {orderedForSky.map((b, i) => {
+                // Bounds of building footprint on X axis
+                const xs = b.polygonPx.map((p) => p.x);
+                const minPx = Math.min(...xs), maxPx = Math.max(...xs);
+                const x = (minPx - bx.minX) * sxSky + 20;
+                const w = Math.max(6, (maxPx - minPx) * sxSky);
+                const h = b.heightM * sy;
+                const y = groundY - h;
+                // Depth attenuation (front buildings darker)
+                const depth = 1 - (b.centroidPx.y - bx.minY) / Math.max(1, bx.maxY - bx.minY);
+                const fade = 0.55 + 0.45 * depth;
+                return (
+                  <g key={b.id}>
+                    <rect x={x} y={y} width={w} height={h} fill={b.color} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
+                    {h > 26 && (
+                      <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#0f172a">
+                        {b.heightM.toFixed(0)}m
+                      </text>
+                    )}
+                    <rect x={x + w} y={groundY - 1} width={h * 0.35} height={2} fill="#0f172a" opacity={0.25} />
+                    <text x={x + w / 2} y={groundY + 14} textAnchor="middle" fontSize={8} fill="#f8fafc">
+                      #{i + 1}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+
+          {/* Per-building GFA rincian */}
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Rincian GFA per Bangunan</div>
+            <div style={{ flex: 1, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 4 }}>
+              <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+                <thead style={{ background: "#f1f5f9", position: "sticky", top: 0 }}>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "5px 8px", width: 34 }}>#</th>
+                    <th style={{ textAlign: "left", padding: "5px 8px" }}>Nama</th>
+                    <th style={{ textAlign: "right", padding: "5px 8px" }}>Lantai Dasar (m²)</th>
+                    <th style={{ textAlign: "right", padding: "5px 8px" }}>Lapis</th>
+                    <th style={{ textAlign: "right", padding: "5px 8px" }}>GFA (m²)</th>
+                    <th style={{ textAlign: "right", padding: "5px 8px" }}>% GFA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {a.buildings.map((b, i) => {
+                    const pct = a.totalGfaM2 > 0 ? (b.totalGfaM2 / a.totalGfaM2) * 100 : 0;
+                    return (
+                      <tr key={b.id} style={{ borderTop: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "4px 8px", fontFamily: "monospace", color: "#64748b" }}>{i + 1}</td>
+                        <td style={{ padding: "4px 8px", fontWeight: 500 }}>
+                          <span style={{ display: "inline-block", width: 8, height: 8, background: b.color, borderRadius: 2, marginRight: 6 }} />
+                          {b.name}
+                        </td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>{b.footprintM2.toFixed(2)}</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace" }}>{b.totalFloors}</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{b.totalGfaM2.toFixed(2)}</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", fontFamily: "monospace", color: "#2563eb" }}>{pct.toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: "#f1f5f9", fontWeight: 700 }}>
+                    <td colSpan={2} style={{ padding: "5px 8px" }}>Total</td>
+                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{a.totalFootprintM2.toFixed(2)}</td>
+                    <td />
+                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>{a.totalGfaM2.toFixed(2)}</td>
+                    <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace" }}>100%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Siteplan slide ----------
+function SiteplanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
+  return (
+    <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: "1fr 340px", gap: 14 }}>
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Siteplan Kawasan · {a.title}</div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <TopView a={a} w={900} h={720} showLabels showRoads showLahan numbered />
+        </div>
+        <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Skala referensi: {a.scale}</div>
+      </div>
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Legenda</div>
+
+        {/* Global legend swatches */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 14, height: 14, background: "#f1f5f9", border: "1px dashed #94a3b8" }} />
+            Area Persil (Lahan) · <b>{a.totalLahanM2.toFixed(2)} m²</b>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 14, height: 14, background: "#cbd5e1", border: "1px solid #64748b" }} />
+            Jalan · <b>{a.totalRoadAreaM2.toFixed(2)} m²</b>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 14, height: 14, background: "#94a3b8", border: "1px solid #0f172a" }} />
+            Bangunan · Total GFA <b>{a.totalGfaM2.toFixed(2)} m²</b>
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: "#e2e8f0" }} />
+        <div style={{ fontSize: 12, fontWeight: 700 }}>Bangunan (Nomor · GFA)</div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 4, background: "#fff" }}>
+          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+            <tbody>
+              {a.buildings.map((b, i) => (
+                <tr key={b.id} style={{ borderTop: i === 0 ? "none" : "1px solid #e2e8f0" }}>
+                  <td style={{ padding: "5px 8px", width: 30 }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: 20, height: 20, borderRadius: 999, background: "#fff",
+                      border: "1.2px solid #0f172a", fontSize: 10, fontWeight: 700,
+                    }}>{i + 1}</span>
+                  </td>
+                  <td style={{ padding: "5px 8px" }}>
+                    <div style={{ fontWeight: 600 }}>{b.name}</div>
+                    <div style={{ fontSize: 9, color: "#64748b" }}>
+                      {b.totalFloors} lapis · dasar {b.footprintM2.toFixed(2)} m²
+                    </div>
+                  </td>
+                  <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: "monospace", fontWeight: 700, color: "#2563eb" }}>
+                    {b.totalGfaM2.toFixed(2)} m²
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, fontSize: 10, color: "#334155" }}>
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: 6, borderRadius: 4 }}>
+            <div style={{ color: "#64748b" }}>Persil</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{a.totalLahanM2.toFixed(2)} m²</div>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: 6, borderRadius: 4 }}>
+            <div style={{ color: "#64748b" }}>Jalan</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{a.totalRoadAreaM2.toFixed(2)} m²</div>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", padding: 6, borderRadius: 4, gridColumn: "span 2" }}>
+            <div style={{ color: "#64748b" }}>Total GFA</div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{a.totalGfaM2.toFixed(2)} m²</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Legacy masterplan slide (fallback: MasterPlan model, no sketch analysis) ----------
+function MasterPlanBodyLegacy({ plan }: { plan: import("@/lib/masterplan").MasterPlan }) {
   const { FUNCTION_META, totalsByFunction, blockGFA } = { FUNCTION_META: MP_FUNCTION_META, totalsByFunction: mpTotalsByFunction, blockGFA: mpBlockGFA };
   const totals = totalsByFunction(plan);
   const totalGFA = totals.komersial.gfa + totals.fasum.gfa + totals.rth.gfa;
   const totalFootprint = totals.komersial.footprint + totals.fasum.footprint + totals.rth.footprint;
-
-  // Skyline projection (front elevation along Z axis) — orthographic-like.
   const skyW = 1300;
   const skyH = 380;
   const half = plan.siteSize / 2;
   const sx = skyW / plan.siteSize;
   const maxH = Math.max(20, ...plan.blocks.map((b) => b.height));
   const sy = (skyH - 30) / Math.max(maxH, 1);
-  // sort by Z so far blocks render first (background)
   const ordered = [...plan.blocks].sort((a, b) => b.z - a.z);
-
-  // Plan diagram (top view).
   const planSize = 580;
   const ps = planSize / plan.siteSize;
-
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* KPI Strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
         <KpiCard label="Total Blok" value={String(plan.blocks.length)} sub="massing" />
         <KpiCard label="Luas Tapak" value={`${(plan.siteSize * plan.siteSize / 10000).toFixed(2)} ha`} sub={`${plan.siteSize}×${plan.siteSize} m`} />
         <KpiCard label="Total Footprint" value={`${Math.round(totalFootprint).toLocaleString("id-ID")} m²`} sub={`${((totalFootprint / (plan.siteSize * plan.siteSize)) * 100).toFixed(1)}% KDB makro`} />
         <KpiCard label="Total GFA" value={`${Math.round(totalGFA).toLocaleString("id-ID")} m²`} sub="seluruh fungsi" />
       </div>
-
-      {/* Main grid: Plan + Skyline */}
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 20, flex: 1, minHeight: 0 }}>
-        {/* Top view plan */}
         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14 }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Tata Letak Kawasan (Top View)</div>
           <svg width={planSize} height={planSize} style={{ background: "#fff", border: "1px solid #e2e8f0" }}>
-            {/* grid lines */}
-            {Array.from({ length: 9 }, (_, i) => (
-              <g key={i}>
-                <line x1={(i / 8) * planSize} y1={0} x2={(i / 8) * planSize} y2={planSize} stroke="#e2e8f0" strokeWidth={0.5} />
-                <line x1={0} y1={(i / 8) * planSize} x2={planSize} y2={(i / 8) * planSize} stroke="#e2e8f0" strokeWidth={0.5} />
-              </g>
-            ))}
             {plan.blocks.map((b) => {
               const m = FUNCTION_META[b.fn];
               const x = (b.x + half - b.w / 2) * ps;
@@ -9048,121 +9349,30 @@ function MasterPlanBody({ plan }: { plan: import("@/lib/masterplan").MasterPlan 
               return (
                 <g key={b.id}>
                   <rect x={x} y={y} width={b.w * ps} height={b.d * ps} fill={m.color} fillOpacity={b.fn === "rth" ? 0.4 : 0.85} stroke="#0f172a" strokeWidth={0.7} />
-                  <text x={x + (b.w * ps) / 2} y={y + (b.d * ps) / 2 + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight={600} style={{ textShadow: "0 0 2px rgba(0,0,0,0.5)" }}>
-                    {b.id.replace("block-", "")}
+                  <text x={x + (b.w * ps) / 2} y={y + (b.d * ps) / 2 + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight={600}>
+                    {b.name}
                   </text>
                 </g>
               );
             })}
-            {/* compass */}
-            <g transform={`translate(${planSize - 38},28)`}>
-              <circle r={18} fill="#fff" stroke="#0f172a" />
-              <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="#0f172a">U</text>
-            </g>
           </svg>
         </div>
-
-        {/* Right column: Skyline + Function breakdown */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-          {/* Skyline */}
           <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14 }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Skyline Kawasan (Tampak Selatan)</div>
             <svg width={skyW} height={skyH} style={{ background: "linear-gradient(to bottom, #fef9c3 0%, #ffedd5 50%, #fef3c7 100%)", border: "1px solid #e2e8f0", display: "block" }}>
-              {/* ground */}
               <rect x={0} y={skyH - 20} width={skyW} height={20} fill="#475569" />
-              {/* sun */}
-              <circle cx={skyW - 80} cy={50} r={22} fill="#fbbf24" opacity={0.85} />
               {ordered.map((b) => {
                 const m = FUNCTION_META[b.fn];
                 const x = (b.x + half - b.w / 2) * sx;
                 const w = b.w * sx;
                 const h = b.height * sy;
                 const y = skyH - 20 - h;
-                // depth attenuation
-                const depth = (b.z + half) / plan.siteSize; // 0..1
+                const depth = (b.z + half) / plan.siteSize;
                 const fade = 0.45 + 0.55 * depth;
-                return (
-                  <g key={b.id}>
-                    <rect x={x} y={y} width={w} height={h} fill={m.color} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
-                    {h > 30 && (
-                      <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#0f172a">
-                        {b.height.toFixed(0)}m
-                      </text>
-                    )}
-                    {/* macro shadow projection */}
-                    <polygon
-                      points={`${x},${skyH - 20} ${x + h * 0.6},${skyH - 20} ${x + w + h * 0.6},${skyH - 20} ${x + w},${skyH - 20}`}
-                      fill="#0f172a"
-                      opacity={0}
-                    />
-                    <rect x={x + w} y={skyH - 21} width={h * 0.55} height={2} fill="#0f172a" opacity={0.35} />
-                  </g>
-                );
+                return <rect key={b.id} x={x} y={y} width={w} height={h} fill={m.color} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />;
               })}
             </svg>
-            <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>
-              Studi bayangan makro pukul 15:00 · proyeksi azimut barat
-            </div>
-          </div>
-
-          {/* Function breakdown */}
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 14, flex: 1, minHeight: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Komposisi GFA per Fungsi</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {(Object.keys(FUNCTION_META) as Array<"komersial" | "fasum" | "rth">).map((fn) => {
-                const m = FUNCTION_META[fn];
-                const t = totals[fn];
-                const pct = totalGFA > 0 ? (t.gfa / totalGFA) * 100 : 0;
-                return (
-                  <div key={fn}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ display: "inline-block", width: 10, height: 10, background: m.color, borderRadius: 2 }} />
-                        <span style={{ fontWeight: 500 }}>{m.label}</span>
-                        <span style={{ color: "#64748b" }}>· {t.count} blok</span>
-                      </span>
-                      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
-                        {Math.round(t.gfa).toLocaleString("id-ID")} m² ({pct.toFixed(1)}%)
-                      </span>
-                    </div>
-                    <div style={{ height: 10, background: "#e2e8f0", borderRadius: 4, overflow: "hidden" }}>
-                      <div style={{ width: `${pct}%`, height: "100%", background: m.color, transition: "width 200ms" }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Block table */}
-            <div style={{ marginTop: 14, maxHeight: 130, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 4 }}>
-              <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
-                <thead style={{ background: "#f1f5f9", position: "sticky", top: 0 }}>
-                  <tr>
-                    <th style={{ textAlign: "left", padding: "4px 6px" }}>ID</th>
-                    <th style={{ textAlign: "left", padding: "4px 6px" }}>Nama</th>
-                    <th style={{ textAlign: "left", padding: "4px 6px" }}>Fungsi</th>
-                    <th style={{ textAlign: "right", padding: "4px 6px" }}>Lt</th>
-                    <th style={{ textAlign: "right", padding: "4px 6px" }}>T (m)</th>
-                    <th style={{ textAlign: "right", padding: "4px 6px" }}>GFA (m²)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {plan.blocks.map((b) => (
-                    <tr key={b.id} style={{ borderTop: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "3px 6px", fontFamily: "monospace" }}>{b.id}</td>
-                      <td style={{ padding: "3px 6px" }}>{b.name}</td>
-                      <td style={{ padding: "3px 6px", color: FUNCTION_META[b.fn].color, fontWeight: 600 }}>
-                        {FUNCTION_META[b.fn].label}
-                      </td>
-                      <td style={{ padding: "3px 6px", textAlign: "right", fontFamily: "monospace" }}>{b.floors}</td>
-                      <td style={{ padding: "3px 6px", textAlign: "right", fontFamily: "monospace" }}>{b.height}</td>
-                      <td style={{ padding: "3px 6px", textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>
-                        {Math.round(blockGFA(b)).toLocaleString("id-ID")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
       </div>
@@ -9179,5 +9389,6 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
     </div>
   );
 }
+
 
 
