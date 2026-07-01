@@ -549,11 +549,14 @@ function PresentasiBox({
   sketch, narasi, perspektif, open, onToggle,
 }: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
   const [masterPlan, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
+  const [mpAnalysis, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
   useEffect(() => {
     let mounted = true;
+    const refreshAnalysis = () => setMpAnalysis(loadMasterplanAnalysis());
+    refreshAnalysis();
     import("@/lib/masterplan").then((m) => {
       if (!mounted) return;
-      const refresh = () => setMasterPlan(m.loadPlan());
+      const refresh = () => { setMasterPlan(m.loadPlan()); refreshAnalysis(); };
       refresh();
       window.addEventListener("masterplan:update", refresh);
       window.addEventListener("storage", refresh);
@@ -564,7 +567,7 @@ function PresentasiBox({
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
   }, []);
-  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif, masterPlan), [sketch, narasi, perspektif, masterPlan]);
+  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif, masterPlan, mpAnalysis), [sketch, narasi, perspektif, masterPlan, mpAnalysis]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
