@@ -117,6 +117,7 @@ type Sketch = {
   parkingAreas?: ParkingArea[];
   ramps?: Ramp[];
   mmGridRotation?: number;
+  linkedMasterplan?: { rootLayerId: string };
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
