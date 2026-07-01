@@ -1134,7 +1134,7 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -1143,8 +1143,13 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   // Slide judul (paling awal)
   out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
   // Slide Master Plan — analisis kawasan makro (skyline + GFA per fungsi).
-  if (plan && plan.blocks.length > 0) {
-    out.push({ kind: "masterplan", id: "masterplan", title: "Analisis Master Plan Kawasan", sketch: sk, plan });
+  const hasAnalysis = analysis && (analysis.buildings.length > 0 || analysis.lahanPolygonsPx.length > 0);
+  if (hasAnalysis || (plan && plan.blocks.length > 0)) {
+    out.push({ kind: "masterplan", id: "masterplan", title: "Analisis Master Plan Kawasan", sketch: sk, plan: plan ?? { blocks: [], siteSize: 200, updatedAt: 0 } as any, analysis });
+  }
+  // Slide Siteplan — hanya bila sketsa aktif terkait masterplan.
+  if (hasAnalysis && sk.linkedMasterplan) {
+    out.push({ kind: "siteplan", id: "siteplan", title: "Siteplan Kawasan", sketch: sk, analysis: analysis! });
   }
   // 4 slide analisa site — selalu ada (pakai koordinat default jika belum dikunci).
   out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
