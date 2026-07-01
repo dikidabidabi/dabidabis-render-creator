@@ -1669,7 +1669,8 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "komposisi" && <KomposisiBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
-      {slide.kind === "masterplan" && <MasterPlanBody plan={slide.plan} />}
+      {slide.kind === "masterplan" && <MasterPlanBody plan={slide.plan} analysis={slide.analysis} />}
+      {slide.kind === "siteplan" && <SiteplanBody analysis={slide.analysis} />}
     </>
   );
   // All non-special slides default to centered fit; users can pan and pinch-to-zoom.
