@@ -567,7 +567,8 @@ function PresentasiBox({
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
   }, []);
-  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif, masterPlan, mpAnalysis), [sketch, narasi, perspektif, masterPlan, mpAnalysis]);
+  const effectiveSketch = useMemo(() => (mpAnalysis && sketch.linkedMasterplan && mpAnalysis.title ? { ...sketch, title: mpAnalysis.title } : sketch), [sketch, mpAnalysis]);
+  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
