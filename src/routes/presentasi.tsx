@@ -688,7 +688,7 @@ function PresentasiBox({
         await new Promise<void>((r) => setTimeout(r, 0));
       }
 
-      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
+      const fname = `${(effectiveSketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
       // writeFile is async — keep UI thread responsive during zipping
       await pres.writeFile({ fileName: fname });
     } catch (err) {
