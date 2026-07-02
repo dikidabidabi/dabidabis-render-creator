@@ -751,7 +751,7 @@ function PresentasiBox({
       setExporting(null);
       setExportProgress(null);
     }
-  }, [sketch.title]);
+  }, [effectiveSketch.title]);
 
 
   return (
