@@ -9213,7 +9213,27 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
                 const fade = 0.55 + 0.45 * depth;
                 return (
                   <g key={b.id}>
-                    <rect x={x} y={y} width={w} height={h} fill={b.color} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
+                    {/* Root mass */}
+                    <rect x={x} y={y} width={w} height={h} fill={mpStroke(b.name, b.color)} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
+                    {/* Sub masses stacked with own colors */}
+                    {b.subMasses.map((s, k) => {
+                      const sxs = s.polygonPx.map((p) => p.x);
+                      const smin = Math.min(...sxs), smax = Math.max(...sxs);
+                      const sx = (smin - bx.minX) * sxSky + 20;
+                      const sw = Math.max(4, (smax - smin) * sxSky);
+                      const sh = s.heightM * sy;
+                      const sy2 = groundY - s.baseM * sy - sh;
+                      return (
+                        <g key={k}>
+                          <rect x={sx} y={sy2} width={sw} height={sh} fill={mpStroke(s.name, s.color)} opacity={fade * 0.95} stroke="#0f172a" strokeWidth={0.5} />
+                          {sh > 22 && (
+                            <text x={sx + sw / 2} y={sy2 + sh / 2 + 3} textAnchor="middle" fontSize={8} fill="#0f172a" style={{ pointerEvents: "none" }}>
+                              {s.name}
+                            </text>
+                          )}
+                        </g>
+                      );
+                    })}
                     {h > 26 && (
                       <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#0f172a">
                         {b.heightM.toFixed(0)}m
