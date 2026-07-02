@@ -33,6 +33,8 @@ type AnyLevel = {
   parentLayerId?: string;
 };
 
+type AnyGeo = { mapRotation?: number };
+
 type AnySketch = {
   id: string;
   title: string;
@@ -41,6 +43,7 @@ type AnySketch = {
   levels: AnyLevel[];
   roads?: RoadSegment[];
   linkedMasterplan?: { rootLayerId: string };
+  geo?: AnyGeo;
 };
 
 const MP_KEY = "dabidabis_masterplan_canvas_v1";
@@ -81,33 +84,39 @@ function polyCentroid(pts: Pt[]): Pt {
   return { x: sx / pts.length, y: sy / pts.length };
 }
 
+export type SubMassInfo = { name: string; color: string; polygonPx: Pt[]; centroidPx: Pt; floors: number; areaM2: number; heightM: number; baseM: number };
+
 export type BuildingInfo = {
   id: string;
   name: string;
   color: string;
-  polygonPx: Pt[];        // footprint root polygon (px)
+  polygonPx: Pt[];
   centroidPx: Pt;
-  footprintM2: number;    // root layer areaM2
-  totalFloors: number;    // sum floors including subs
-  totalGfaM2: number;     // sum areaM2 * floors including subs
-  heightM: number;        // totalFloors * 4 m (default)
-  subMasses: { polygonPx: Pt[]; floors: number; areaM2: number }[];
+  footprintM2: number;
+  totalFloors: number;
+  totalGfaM2: number;
+  heightM: number;
+  subMasses: SubMassInfo[];
 };
+
+export type LahanInfo = { name: string; color: string; polygonPx: Pt[] };
 
 export type MasterplanAnalysis = {
   sketchId: string;
   title: string;
   scale: string;
   pxm: number;
+  mapRotationDeg: number;
   boundsPx: { minX: number; minY: number; maxX: number; maxY: number };
   lahanPolygonsPx: Pt[][];
+  lahanInfos: LahanInfo[];
   totalLahanM2: number;
   buildings: BuildingInfo[];
   totalFootprintM2: number;
   totalGfaM2: number;
-  roadRingsPx: { outer: Pt[]; holes: Pt[][] }[]; // union corridors clipped by Lahan
+  roadRingsPx: { outer: Pt[]; holes: Pt[][] }[];
   totalRoadAreaM2: number;
-  kdbKawasanPct: number; // (footprint + jalan) / lahan * 100
+  kdbKawasanPct: number;
 };
 
 export function loadMasterplanAnalysis(): MasterplanAnalysis | null {
@@ -137,6 +146,7 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
   // Lahan polygons (root parcels)
   const lahanLayers = layers.filter((l) => isLahan(l.name) && l.points.length >= 3);
   const lahanPolygonsPx = lahanLayers.map((l) => l.points);
+  const lahanInfos: LahanInfo[] = lahanLayers.map((l) => ({ name: l.name || "Lahan", color: l.color || "#e5e7eb", polygonPx: l.points }));
   const totalLahanM2 = lahanLayers.reduce((s, l) => s + (Number(l.areaM2) || polyAreaPx(l.points) / (pxm * pxm)), 0);
 
   // Root buildings = non-Lahan layers whose level has no parentLayerId AND
@@ -152,10 +162,10 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     roots.push(l);
   }
 
-  function aggregate(rootId: string): { floors: number; area: number; subs: BuildingInfo["subMasses"] } {
+  function aggregate(rootId: string): { floors: number; area: number; subs: SubMassInfo[] } {
     let f = 0, a = 0;
-    const subs: BuildingInfo["subMasses"] = [];
-    const walk = (lid: string) => {
+    const subs: SubMassInfo[] = [];
+    const walk = (lid: string, baseFloors: number) => {
       for (const child of levels) {
         if (child.parentLayerId !== lid) continue;
         for (const ch of layers) {
@@ -165,12 +175,21 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
           const ca = Number(ch.areaM2) || polyAreaPx(ch.points) / (pxm * pxm);
           f += cf;
           a += ca * cf;
-          subs.push({ polygonPx: ch.points, floors: cf, areaM2: ca });
-          walk(ch.id);
+          subs.push({
+            name: ch.name || "Sub",
+            color: ch.color || "#94a3b8",
+            polygonPx: ch.points,
+            centroidPx: polyCentroid(ch.points),
+            floors: cf,
+            areaM2: ca,
+            heightM: cf * 4,
+            baseM: baseFloors * 4,
+          });
+          walk(ch.id, baseFloors + cf);
         }
       }
     };
-    walk(rootId);
+    walk(rootId, 0);
     return { floors: f, area: a, subs };
   }
 
@@ -266,8 +285,10 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     title: sk.title || "Master Plan",
     scale: sk.scale || "1:500",
     pxm,
+    mapRotationDeg: ((Number(sk.geo?.mapRotation) || 0) % 360 + 360) % 360,
     boundsPx: { minX, minY, maxX, maxY },
     lahanPolygonsPx,
+    lahanInfos,
     totalLahanM2,
     buildings,
     totalFootprintM2,

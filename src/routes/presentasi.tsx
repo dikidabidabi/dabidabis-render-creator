@@ -567,7 +567,8 @@ function PresentasiBox({
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
   }, []);
-  const slides = useMemo(() => buildSlides(sketch, narasi, perspektif, masterPlan, mpAnalysis), [sketch, narasi, perspektif, masterPlan, mpAnalysis]);
+  const effectiveSketch = useMemo(() => (mpAnalysis && sketch.linkedMasterplan && mpAnalysis.title ? { ...sketch, title: mpAnalysis.title } : sketch), [sketch, mpAnalysis]);
+  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
@@ -687,7 +688,7 @@ function PresentasiBox({
         await new Promise<void>((r) => setTimeout(r, 0));
       }
 
-      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
+      const fname = `${(effectiveSketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pptx`;
       // writeFile is async — keep UI thread responsive during zipping
       await pres.writeFile({ fileName: fname });
     } catch (err) {
@@ -699,7 +700,7 @@ function PresentasiBox({
       setExporting(null);
       setExportProgress(null);
     }
-  }, [sketch.title]);
+  }, [effectiveSketch.title]);
 
   const doExportPdf = useCallback(async () => {
     setExporting("pdf");
@@ -741,7 +742,7 @@ function PresentasiBox({
         await new Promise<void>((r) => setTimeout(r, 0));
       }
 
-      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pdf`;
+      const fname = `${(effectiveSketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pdf`;
       pdf.save(fname);
     } catch (err) {
       console.error(err);
@@ -750,7 +751,7 @@ function PresentasiBox({
       setExporting(null);
       setExportProgress(null);
     }
-  }, [sketch.title]);
+  }, [effectiveSketch.title]);
 
 
   return (
@@ -763,9 +764,9 @@ function PresentasiBox({
         <div className="flex min-w-0 items-center gap-3">
           <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{sketch.title}</div>
+            <div className="truncate text-sm font-medium">{effectiveSketch.title}</div>
             <div className="truncate text-xs text-muted-foreground">
-              {slides.length} slide · {sketch.levels.length} level · A3 lanskap
+              {slides.length} slide · {effectiveSketch.levels.length} level · A3 lanskap
             </div>
           </div>
         </div>
@@ -1146,9 +1147,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   const out: Slide[] = [];
   // Slide judul (paling awal)
   out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
-  // Slide Master Plan — analisis kawasan makro (skyline + GFA per fungsi).
+  // Slide Master Plan — hanya untuk proyek hasil impor dari halaman Master Plan.
   const hasAnalysis = analysis && (analysis.buildings.length > 0 || analysis.lahanPolygonsPx.length > 0);
-  if (hasAnalysis || (plan && plan.blocks.length > 0)) {
+  if (hasAnalysis && sk.linkedMasterplan) {
     out.push({ kind: "masterplan", id: "masterplan", title: "Analisis Master Plan Kawasan", sketch: sk, plan: plan ?? { blocks: [], siteSize: 200, updatedAt: 0 } as any, analysis });
   }
   // Slide Siteplan — hanya bila sketsa aktif terkait masterplan.
@@ -9005,30 +9006,31 @@ function MasterPlanBody({ plan, analysis }: { plan: import("@/lib/masterplan").M
   return <MasterPlanBodyLegacy plan={plan} />;
 }
 
-// ---------- Ring infographic ----------
-function RingStat({ pct, color, size = 78, label, value, sub }: {
+// ---------- Ring infographic (2x scale) ----------
+function RingStat({ pct, color, size = 156, label, value, sub }: {
   pct: number; color: string; size?: number; label: string; value: string; sub?: string;
 }) {
   const p = Math.max(0, Math.min(100, pct));
-  const r = (size / 2) - 6;
+  const strokeW = 12;
+  const r = (size / 2) - strokeW;
   const c = 2 * Math.PI * r;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
       <svg width={size} height={size} style={{ flexShrink: 0 }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={6} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={strokeW} />
         <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={6}
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={strokeW}
           strokeDasharray={`${(p / 100) * c} ${c}`} strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
-        <text x={size / 2} y={size / 2 + 4} textAnchor="middle" fontSize={14} fontWeight={700} fill="#0f172a">
+        <text x={size / 2} y={size / 2 + 8} textAnchor="middle" fontSize={26} fontWeight={700} fill="#0f172a">
           {p.toFixed(0)}%
         </text>
       </svg>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#64748b", fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap" }}>{value}</div>
-        {sub && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>{sub}</div>}
+        <div style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1.5, color: "#64748b", fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 30, fontWeight: 700, marginTop: 4, whiteSpace: "nowrap" }}>{value}</div>
+        {sub && <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{sub}</div>}
       </div>
     </div>
   );
@@ -9049,58 +9051,99 @@ function toPath(pts: { x: number; y: number }[], s: number, ox: number, oy: numb
   return pts.map((p, i) => `${i === 0 ? "M" : "L"}${(p.x * s + ox).toFixed(1)},${(p.y * s + oy).toFixed(1)}`).join(" ") + " Z";
 }
 
-function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = true, numbered = false }: {
-  a: MasterplanAnalysis; w: number; h: number; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean; numbered?: boolean;
+// Denah-style fill/stroke for masterplan layers (buildings, subs, lahan, roads)
+function mpFill(name: string, layerColor: string): string {
+  const override = roomFillOverride(name, "0.28");
+  if (override) return override;
+  const base = colorForRoomName(name);
+  if (base) return base.replace("ALPHA", "0.28");
+  // layer.color may be a hex or rgb; blend via rgba wrapper
+  return hexToRgba(layerColor, 0.28);
+}
+function mpStroke(name: string, layerColor: string): string {
+  const override = roomStrokeOverride(name);
+  if (override) return override;
+  const base = colorForRoomName(name);
+  if (base) return base.replace("ALPHA", "1");
+  return hexToRgba(layerColor, 1);
+}
+function hexToRgba(c: string, a: number): string {
+  if (!c) return `rgba(120,120,120,${a})`;
+  if (c.startsWith("rgba") || c.startsWith("rgb")) {
+    // simple pass-through; try to inject alpha for rgb()
+    if (c.startsWith("rgb(")) return c.replace("rgb(", "rgba(").replace(")", `,${a})`);
+    return c;
+  }
+  const m = c.replace("#", "");
+  const full = m.length === 3 ? m.split("").map((x) => x + x).join("") : m;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if ([r, g, b].some((x) => Number.isNaN(x))) return `rgba(120,120,120,${a})`;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = true, numbered = false, compassId }: {
+  a: MasterplanAnalysis; w: number; h: number; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean; numbered?: boolean; compassId?: string;
 }) {
   const vp = computeViewport(a, w, h);
   return (
-    <svg width={w} height={h} style={{ background: "#fff", border: "1px solid #e2e8f0", display: "block" }}>
-      {/* Lahan */}
-      {showLahan && a.lahanPolygonsPx.map((poly, i) => (
-        <path key={`la-${i}`} d={toPath(poly, vp.s, vp.ox, vp.oy)} fill="#f1f5f9" stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" />
-      ))}
-      {/* Roads */}
-      {showRoads && a.roadRingsPx.map((r, i) => (
-        <g key={`r-${i}`}>
-          <path d={toPath(r.outer, vp.s, vp.ox, vp.oy)} fill="#cbd5e1" stroke="#64748b" strokeWidth={0.6} fillRule="evenodd" />
-          {r.holes.map((h, j) => (
-            <path key={j} d={toPath(h, vp.s, vp.ox, vp.oy)} fill="#f8fafc" stroke="none" />
-          ))}
-        </g>
-      ))}
-      {/* Buildings (root + subs) */}
-      {a.buildings.map((b, i) => {
-        const cx = b.centroidPx.x * vp.s + vp.ox;
-        const cy = b.centroidPx.y * vp.s + vp.oy;
-        return (
-          <g key={b.id}>
-            <path d={toPath(b.polygonPx, vp.s, vp.ox, vp.oy)} fill={b.color} fillOpacity={0.75} stroke="#0f172a" strokeWidth={0.8} />
-            {b.subMasses.map((s, k) => (
-              <path key={k} d={toPath(s.polygonPx, vp.s, vp.ox, vp.oy)} fill={b.color} fillOpacity={0.45} stroke="#0f172a" strokeWidth={0.5} />
+    <div style={{ position: "relative", width: w, height: h }}>
+      <svg width={w} height={h} style={{ background: "#fff", border: "1px solid #e2e8f0", display: "block" }}>
+        {/* Lahan */}
+        {showLahan && a.lahanInfos.map((l, i) => (
+          <path key={`la-${i}`} d={toPath(l.polygonPx, vp.s, vp.ox, vp.oy)}
+            fill={mpFill(l.name, l.color)} stroke={mpStroke(l.name, l.color)}
+            strokeWidth={1.2} strokeDasharray="6 4" />
+        ))}
+        {/* Roads (rendered as thin perkerasan layer, denah palette) */}
+        {showRoads && a.roadRingsPx.map((r, i) => (
+          <g key={`r-${i}`}>
+            <path d={toPath(r.outer, vp.s, vp.ox, vp.oy)} fill="rgba(148,163,184,0.28)" stroke="rgb(100,116,139)" strokeWidth={0.8} fillRule="evenodd" />
+            {r.holes.map((h, j) => (
+              <path key={j} d={toPath(h, vp.s, vp.ox, vp.oy)} fill="#fff" stroke="none" />
             ))}
-            {showLabels && (
-              numbered ? (
-                <g>
-                  <circle cx={cx} cy={cy} r={11} fill="#fff" stroke="#0f172a" strokeWidth={1.2} />
-                  <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize={10} fontWeight={700} fill="#0f172a">{i + 1}</text>
-                </g>
-              ) : (
-                <text x={cx} y={cy + 3} textAnchor="middle" fontSize={9} fontWeight={700} fill="#0f172a" style={{ textShadow: "0 0 3px #fff, 0 0 2px #fff" }}>
-                  {b.name}
-                </text>
-              )
-            )}
           </g>
-        );
-      })}
-      {/* Compass */}
-      <g transform={`translate(${w - 34},26)`}>
-        <circle r={16} fill="#fff" stroke="#0f172a" />
-        <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="#0f172a">U</text>
-      </g>
-    </svg>
+        ))}
+        {/* Buildings (root) then sub-masses with layer colors */}
+        {a.buildings.map((b) => (
+          <g key={b.id}>
+            <path d={toPath(b.polygonPx, vp.s, vp.ox, vp.oy)}
+              fill={mpFill(b.name, b.color)} stroke={mpStroke(b.name, b.color)} strokeWidth={1.1} />
+            {b.subMasses.map((s, k) => (
+              <path key={k} d={toPath(s.polygonPx, vp.s, vp.ox, vp.oy)}
+                fill={mpFill(s.name, s.color)} stroke={mpStroke(s.name, s.color)} strokeWidth={0.9} />
+            ))}
+          </g>
+        ))}
+        {/* Labels */}
+        {showLabels && a.buildings.map((b, i) => {
+          const cx = b.centroidPx.x * vp.s + vp.ox;
+          const cy = b.centroidPx.y * vp.s + vp.oy;
+          return numbered ? (
+            <g key={`lbl-${b.id}`}>
+              <circle cx={cx} cy={cy} r={13} fill="#fff" stroke="#0f172a" strokeWidth={1.2} />
+              <text x={cx} y={cy + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0f172a">{i + 1}</text>
+            </g>
+          ) : (
+            <text key={`lbl-${b.id}`} x={cx} y={cy + 3} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0f172a" style={{ textShadow: "0 0 3px #fff, 0 0 2px #fff" }}>
+              {b.name}
+            </text>
+          );
+        })}
+      </svg>
+      {/* Compass (denah style) */}
+      {compassId ? (
+        <SlideCompass rotation={a.mapRotationDeg} draggableId={compassId} />
+      ) : (
+        <div style={{ position: "absolute", top: 10, right: 10 }}>
+          <SlideCompass rotation={a.mapRotationDeg} />
+        </div>
+      )}
+    </div>
   );
 }
+
 
 // ---------- New MasterPlan slide body sourced from the masterplan sketch ----------
 function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
@@ -9114,7 +9157,7 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
   const skyW = 1300, skyH = 300;
   const bx = a.boundsPx;
   const bw = Math.max(1, bx.maxX - bx.minX);
-  const maxH = Math.max(12, ...a.buildings.map((b) => b.heightM));
+  const maxH = Math.max(12, ...a.buildings.flatMap((b) => [b.heightM, ...b.subMasses.map((s) => s.baseM + s.heightM)]));
   const sxSky = (skyW - 40) / bw;
   const sy = (skyH - 40) / maxH;
   // Draw far → near using centroid Y
@@ -9146,7 +9189,7 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
         {/* Top view */}
         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Tata Letak Kawasan (Top View)</div>
-          <TopView a={a} w={520} h={520} showLabels showRoads showLahan />
+          <TopView a={a} w={520} h={520} showLabels showRoads showLahan compassId={`masterplan-topview-${a.sketchId}`} />
         </div>
 
         {/* Right column */}
@@ -9170,7 +9213,27 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
                 const fade = 0.55 + 0.45 * depth;
                 return (
                   <g key={b.id}>
-                    <rect x={x} y={y} width={w} height={h} fill={b.color} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
+                    {/* Root mass */}
+                    <rect x={x} y={y} width={w} height={h} fill={mpStroke(b.name, b.color)} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
+                    {/* Sub masses stacked with own colors */}
+                    {b.subMasses.map((s, k) => {
+                      const sxs = s.polygonPx.map((p) => p.x);
+                      const smin = Math.min(...sxs), smax = Math.max(...sxs);
+                      const sx = (smin - bx.minX) * sxSky + 20;
+                      const sw = Math.max(4, (smax - smin) * sxSky);
+                      const sh = s.heightM * sy;
+                      const sy2 = groundY - s.baseM * sy - sh;
+                      return (
+                        <g key={k}>
+                          <rect x={sx} y={sy2} width={sw} height={sh} fill={mpStroke(s.name, s.color)} opacity={fade * 0.95} stroke="#0f172a" strokeWidth={0.5} />
+                          {sh > 22 && (
+                            <text x={sx + sw / 2} y={sy2 + sh / 2 + 3} textAnchor="middle" fontSize={8} fill="#0f172a" style={{ pointerEvents: "none" }}>
+                              {s.name}
+                            </text>
+                          )}
+                        </g>
+                      );
+                    })}
                     {h > 26 && (
                       <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#0f172a">
                         {b.heightM.toFixed(0)}m
@@ -9244,25 +9307,27 @@ function SiteplanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Siteplan Kawasan · {a.title}</div>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <TopView a={a} w={900} h={720} showLabels showRoads showLahan numbered />
+          <TopView a={a} w={900} h={720} showLabels showRoads showLahan numbered compassId={`siteplan-${a.sketchId}`} />
         </div>
         <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Skala referensi: {a.scale}</div>
       </div>
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Legenda</div>
 
-        {/* Global legend swatches */}
+        {/* Global legend swatches (denah palette) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+          {a.lahanInfos.slice(0, 1).map((l, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 14, height: 14, background: mpFill(l.name, l.color), border: `1px dashed ${mpStroke(l.name, l.color)}` }} />
+              Area Persil (Lahan) · <b>{a.totalLahanM2.toFixed(2)} m²</b>
+            </div>
+          ))}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 14, height: 14, background: "#f1f5f9", border: "1px dashed #94a3b8" }} />
-            Area Persil (Lahan) · <b>{a.totalLahanM2.toFixed(2)} m²</b>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 14, height: 14, background: "#cbd5e1", border: "1px solid #64748b" }} />
+            <span style={{ width: 14, height: 14, background: "rgba(148,163,184,0.28)", border: "1px solid rgb(100,116,139)" }} />
             Jalan · <b>{a.totalRoadAreaM2.toFixed(2)} m²</b>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 14, height: 14, background: "#94a3b8", border: "1px solid #0f172a" }} />
+            <span style={{ width: 14, height: 14, background: "rgba(148,163,184,0.28)", border: "1px solid #0f172a" }} />
             Bangunan · Total GFA <b>{a.totalGfaM2.toFixed(2)} m²</b>
           </div>
         </div>
