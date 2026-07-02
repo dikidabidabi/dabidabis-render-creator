@@ -33,6 +33,8 @@ type AnyLevel = {
   parentLayerId?: string;
 };
 
+type AnyGeo = { mapRotation?: number };
+
 type AnySketch = {
   id: string;
   title: string;
