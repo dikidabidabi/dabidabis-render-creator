@@ -700,7 +700,7 @@ function PresentasiBox({
       setExporting(null);
       setExportProgress(null);
     }
-  }, [sketch.title]);
+  }, [effectiveSketch.title]);
 
   const doExportPdf = useCallback(async () => {
     setExporting("pdf");
