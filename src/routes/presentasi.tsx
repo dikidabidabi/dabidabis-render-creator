@@ -742,7 +742,7 @@ function PresentasiBox({
         await new Promise<void>((r) => setTimeout(r, 0));
       }
 
-      const fname = `${(sketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pdf`;
+      const fname = `${(effectiveSketch.title || "presentasi").replace(/[^\w\-]+/g, "_")}.pdf`;
       pdf.save(fname);
     } catch (err) {
       console.error(err);
