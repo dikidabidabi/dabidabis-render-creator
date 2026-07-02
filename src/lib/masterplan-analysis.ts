@@ -84,33 +84,39 @@ function polyCentroid(pts: Pt[]): Pt {
   return { x: sx / pts.length, y: sy / pts.length };
 }
 
+export type SubMassInfo = { name: string; color: string; polygonPx: Pt[]; centroidPx: Pt; floors: number; areaM2: number; heightM: number; baseM: number };
+
 export type BuildingInfo = {
   id: string;
   name: string;
   color: string;
-  polygonPx: Pt[];        // footprint root polygon (px)
+  polygonPx: Pt[];
   centroidPx: Pt;
-  footprintM2: number;    // root layer areaM2
-  totalFloors: number;    // sum floors including subs
-  totalGfaM2: number;     // sum areaM2 * floors including subs
-  heightM: number;        // totalFloors * 4 m (default)
-  subMasses: { polygonPx: Pt[]; floors: number; areaM2: number }[];
+  footprintM2: number;
+  totalFloors: number;
+  totalGfaM2: number;
+  heightM: number;
+  subMasses: SubMassInfo[];
 };
+
+export type LahanInfo = { name: string; color: string; polygonPx: Pt[] };
 
 export type MasterplanAnalysis = {
   sketchId: string;
   title: string;
   scale: string;
   pxm: number;
+  mapRotationDeg: number;
   boundsPx: { minX: number; minY: number; maxX: number; maxY: number };
   lahanPolygonsPx: Pt[][];
+  lahanInfos: LahanInfo[];
   totalLahanM2: number;
   buildings: BuildingInfo[];
   totalFootprintM2: number;
   totalGfaM2: number;
-  roadRingsPx: { outer: Pt[]; holes: Pt[][] }[]; // union corridors clipped by Lahan
+  roadRingsPx: { outer: Pt[]; holes: Pt[][] }[];
   totalRoadAreaM2: number;
-  kdbKawasanPct: number; // (footprint + jalan) / lahan * 100
+  kdbKawasanPct: number;
 };
 
 export function loadMasterplanAnalysis(): MasterplanAnalysis | null {
