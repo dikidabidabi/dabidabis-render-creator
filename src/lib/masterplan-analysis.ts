@@ -43,6 +43,7 @@ type AnySketch = {
   levels: AnyLevel[];
   roads?: RoadSegment[];
   linkedMasterplan?: { rootLayerId: string };
+  geo?: AnyGeo;
 };
 
 const MP_KEY = "dabidabis_masterplan_canvas_v1";
