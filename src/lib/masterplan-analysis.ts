@@ -161,10 +161,10 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     roots.push(l);
   }
 
-  function aggregate(rootId: string): { floors: number; area: number; subs: BuildingInfo["subMasses"] } {
+  function aggregate(rootId: string): { floors: number; area: number; subs: SubMassInfo[] } {
     let f = 0, a = 0;
-    const subs: BuildingInfo["subMasses"] = [];
-    const walk = (lid: string) => {
+    const subs: SubMassInfo[] = [];
+    const walk = (lid: string, baseFloors: number) => {
       for (const child of levels) {
         if (child.parentLayerId !== lid) continue;
         for (const ch of layers) {
@@ -174,12 +174,21 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
           const ca = Number(ch.areaM2) || polyAreaPx(ch.points) / (pxm * pxm);
           f += cf;
           a += ca * cf;
-          subs.push({ polygonPx: ch.points, floors: cf, areaM2: ca });
-          walk(ch.id);
+          subs.push({
+            name: ch.name || "Sub",
+            color: ch.color || "#94a3b8",
+            polygonPx: ch.points,
+            centroidPx: polyCentroid(ch.points),
+            floors: cf,
+            areaM2: ca,
+            heightM: cf * 4,
+            baseM: baseFloors * 4,
+          });
+          walk(ch.id, baseFloors + cf);
         }
       }
     };
-    walk(rootId);
+    walk(rootId, 0);
     return { floors: f, area: a, subs };
   }
 
