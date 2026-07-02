@@ -9157,7 +9157,7 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
   const skyW = 1300, skyH = 300;
   const bx = a.boundsPx;
   const bw = Math.max(1, bx.maxX - bx.minX);
-  const maxH = Math.max(12, ...a.buildings.map((b) => b.heightM));
+  const maxH = Math.max(12, ...a.buildings.flatMap((b) => [b.heightM, ...b.subMasses.map((s) => s.baseM + s.heightM)]));
   const sxSky = (skyW - 40) / bw;
   const sy = (skyH - 40) / maxH;
   // Draw far → near using centroid Y
