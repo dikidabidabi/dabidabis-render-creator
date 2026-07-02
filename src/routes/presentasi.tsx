@@ -9006,30 +9006,31 @@ function MasterPlanBody({ plan, analysis }: { plan: import("@/lib/masterplan").M
   return <MasterPlanBodyLegacy plan={plan} />;
 }
 
-// ---------- Ring infographic ----------
-function RingStat({ pct, color, size = 78, label, value, sub }: {
+// ---------- Ring infographic (2x scale) ----------
+function RingStat({ pct, color, size = 156, label, value, sub }: {
   pct: number; color: string; size?: number; label: string; value: string; sub?: string;
 }) {
   const p = Math.max(0, Math.min(100, pct));
-  const r = (size / 2) - 6;
+  const strokeW = 12;
+  const r = (size / 2) - strokeW;
   const c = 2 * Math.PI * r;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
       <svg width={size} height={size} style={{ flexShrink: 0 }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={6} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={strokeW} />
         <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={6}
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={strokeW}
           strokeDasharray={`${(p / 100) * c} ${c}`} strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
-        <text x={size / 2} y={size / 2 + 4} textAnchor="middle" fontSize={14} fontWeight={700} fill="#0f172a">
+        <text x={size / 2} y={size / 2 + 8} textAnchor="middle" fontSize={26} fontWeight={700} fill="#0f172a">
           {p.toFixed(0)}%
         </text>
       </svg>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "#64748b", fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap" }}>{value}</div>
-        {sub && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>{sub}</div>}
+        <div style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1.5, color: "#64748b", fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 30, fontWeight: 700, marginTop: 4, whiteSpace: "nowrap" }}>{value}</div>
+        {sub && <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>{sub}</div>}
       </div>
     </div>
   );
@@ -9050,58 +9051,99 @@ function toPath(pts: { x: number; y: number }[], s: number, ox: number, oy: numb
   return pts.map((p, i) => `${i === 0 ? "M" : "L"}${(p.x * s + ox).toFixed(1)},${(p.y * s + oy).toFixed(1)}`).join(" ") + " Z";
 }
 
-function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = true, numbered = false }: {
-  a: MasterplanAnalysis; w: number; h: number; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean; numbered?: boolean;
+// Denah-style fill/stroke for masterplan layers (buildings, subs, lahan, roads)
+function mpFill(name: string, layerColor: string): string {
+  const override = roomFillOverride(name, "0.28");
+  if (override) return override;
+  const base = colorForRoomName(name);
+  if (base) return base.replace("ALPHA", "0.28");
+  // layer.color may be a hex or rgb; blend via rgba wrapper
+  return hexToRgba(layerColor, 0.28);
+}
+function mpStroke(name: string, layerColor: string): string {
+  const override = roomStrokeOverride(name);
+  if (override) return override;
+  const base = colorForRoomName(name);
+  if (base) return base.replace("ALPHA", "1");
+  return hexToRgba(layerColor, 1);
+}
+function hexToRgba(c: string, a: number): string {
+  if (!c) return `rgba(120,120,120,${a})`;
+  if (c.startsWith("rgba") || c.startsWith("rgb")) {
+    // simple pass-through; try to inject alpha for rgb()
+    if (c.startsWith("rgb(")) return c.replace("rgb(", "rgba(").replace(")", `,${a})`);
+    return c;
+  }
+  const m = c.replace("#", "");
+  const full = m.length === 3 ? m.split("").map((x) => x + x).join("") : m;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if ([r, g, b].some((x) => Number.isNaN(x))) return `rgba(120,120,120,${a})`;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = true, numbered = false, compassId }: {
+  a: MasterplanAnalysis; w: number; h: number; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean; numbered?: boolean; compassId?: string;
 }) {
   const vp = computeViewport(a, w, h);
   return (
-    <svg width={w} height={h} style={{ background: "#fff", border: "1px solid #e2e8f0", display: "block" }}>
-      {/* Lahan */}
-      {showLahan && a.lahanPolygonsPx.map((poly, i) => (
-        <path key={`la-${i}`} d={toPath(poly, vp.s, vp.ox, vp.oy)} fill="#f1f5f9" stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" />
-      ))}
-      {/* Roads */}
-      {showRoads && a.roadRingsPx.map((r, i) => (
-        <g key={`r-${i}`}>
-          <path d={toPath(r.outer, vp.s, vp.ox, vp.oy)} fill="#cbd5e1" stroke="#64748b" strokeWidth={0.6} fillRule="evenodd" />
-          {r.holes.map((h, j) => (
-            <path key={j} d={toPath(h, vp.s, vp.ox, vp.oy)} fill="#f8fafc" stroke="none" />
-          ))}
-        </g>
-      ))}
-      {/* Buildings (root + subs) */}
-      {a.buildings.map((b, i) => {
-        const cx = b.centroidPx.x * vp.s + vp.ox;
-        const cy = b.centroidPx.y * vp.s + vp.oy;
-        return (
-          <g key={b.id}>
-            <path d={toPath(b.polygonPx, vp.s, vp.ox, vp.oy)} fill={b.color} fillOpacity={0.75} stroke="#0f172a" strokeWidth={0.8} />
-            {b.subMasses.map((s, k) => (
-              <path key={k} d={toPath(s.polygonPx, vp.s, vp.ox, vp.oy)} fill={b.color} fillOpacity={0.45} stroke="#0f172a" strokeWidth={0.5} />
+    <div style={{ position: "relative", width: w, height: h }}>
+      <svg width={w} height={h} style={{ background: "#fff", border: "1px solid #e2e8f0", display: "block" }}>
+        {/* Lahan */}
+        {showLahan && a.lahanInfos.map((l, i) => (
+          <path key={`la-${i}`} d={toPath(l.polygonPx, vp.s, vp.ox, vp.oy)}
+            fill={mpFill(l.name, l.color)} stroke={mpStroke(l.name, l.color)}
+            strokeWidth={1.2} strokeDasharray="6 4" />
+        ))}
+        {/* Roads (rendered as thin perkerasan layer, denah palette) */}
+        {showRoads && a.roadRingsPx.map((r, i) => (
+          <g key={`r-${i}`}>
+            <path d={toPath(r.outer, vp.s, vp.ox, vp.oy)} fill="rgba(148,163,184,0.28)" stroke="rgb(100,116,139)" strokeWidth={0.8} fillRule="evenodd" />
+            {r.holes.map((h, j) => (
+              <path key={j} d={toPath(h, vp.s, vp.ox, vp.oy)} fill="#fff" stroke="none" />
             ))}
-            {showLabels && (
-              numbered ? (
-                <g>
-                  <circle cx={cx} cy={cy} r={11} fill="#fff" stroke="#0f172a" strokeWidth={1.2} />
-                  <text x={cx} y={cy + 3.5} textAnchor="middle" fontSize={10} fontWeight={700} fill="#0f172a">{i + 1}</text>
-                </g>
-              ) : (
-                <text x={cx} y={cy + 3} textAnchor="middle" fontSize={9} fontWeight={700} fill="#0f172a" style={{ textShadow: "0 0 3px #fff, 0 0 2px #fff" }}>
-                  {b.name}
-                </text>
-              )
-            )}
           </g>
-        );
-      })}
-      {/* Compass */}
-      <g transform={`translate(${w - 34},26)`}>
-        <circle r={16} fill="#fff" stroke="#0f172a" />
-        <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="#0f172a">U</text>
-      </g>
-    </svg>
+        ))}
+        {/* Buildings (root) then sub-masses with layer colors */}
+        {a.buildings.map((b) => (
+          <g key={b.id}>
+            <path d={toPath(b.polygonPx, vp.s, vp.ox, vp.oy)}
+              fill={mpFill(b.name, b.color)} stroke={mpStroke(b.name, b.color)} strokeWidth={1.1} />
+            {b.subMasses.map((s, k) => (
+              <path key={k} d={toPath(s.polygonPx, vp.s, vp.ox, vp.oy)}
+                fill={mpFill(s.name, s.color)} stroke={mpStroke(s.name, s.color)} strokeWidth={0.9} />
+            ))}
+          </g>
+        ))}
+        {/* Labels */}
+        {showLabels && a.buildings.map((b, i) => {
+          const cx = b.centroidPx.x * vp.s + vp.ox;
+          const cy = b.centroidPx.y * vp.s + vp.oy;
+          return numbered ? (
+            <g key={`lbl-${b.id}`}>
+              <circle cx={cx} cy={cy} r={13} fill="#fff" stroke="#0f172a" strokeWidth={1.2} />
+              <text x={cx} y={cy + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0f172a">{i + 1}</text>
+            </g>
+          ) : (
+            <text key={`lbl-${b.id}`} x={cx} y={cy + 3} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0f172a" style={{ textShadow: "0 0 3px #fff, 0 0 2px #fff" }}>
+              {b.name}
+            </text>
+          );
+        })}
+      </svg>
+      {/* Compass (denah style) */}
+      {compassId ? (
+        <SlideCompass rotation={a.mapRotationDeg} draggableId={compassId} />
+      ) : (
+        <div style={{ position: "absolute", top: 10, right: 10 }}>
+          <SlideCompass rotation={a.mapRotationDeg} />
+        </div>
+      )}
+    </div>
   );
 }
+
 
 // ---------- New MasterPlan slide body sourced from the masterplan sketch ----------
 function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
