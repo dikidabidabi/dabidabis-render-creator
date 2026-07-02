@@ -9189,7 +9189,7 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
         {/* Top view */}
         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Tata Letak Kawasan (Top View)</div>
-          <TopView a={a} w={520} h={520} showLabels showRoads showLahan />
+          <TopView a={a} w={520} h={520} showLabels showRoads showLahan compassId={`masterplan-topview-${a.sketchId}`} />
         </div>
 
         {/* Right column */}
