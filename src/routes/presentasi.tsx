@@ -1146,9 +1146,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   const out: Slide[] = [];
   // Slide judul (paling awal)
   out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
-  // Slide Master Plan — analisis kawasan makro (skyline + GFA per fungsi).
+  // Slide Master Plan — hanya untuk proyek hasil impor dari halaman Master Plan.
   const hasAnalysis = analysis && (analysis.buildings.length > 0 || analysis.lahanPolygonsPx.length > 0);
-  if (hasAnalysis || (plan && plan.blocks.length > 0)) {
+  if (hasAnalysis && sk.linkedMasterplan) {
     out.push({ kind: "masterplan", id: "masterplan", title: "Analisis Master Plan Kawasan", sketch: sk, plan: plan ?? { blocks: [], siteSize: 200, updatedAt: 0 } as any, analysis });
   }
   // Slide Siteplan — hanya bila sketsa aktif terkait masterplan.
