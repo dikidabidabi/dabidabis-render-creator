@@ -146,6 +146,7 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
   // Lahan polygons (root parcels)
   const lahanLayers = layers.filter((l) => isLahan(l.name) && l.points.length >= 3);
   const lahanPolygonsPx = lahanLayers.map((l) => l.points);
+  const lahanInfos: LahanInfo[] = lahanLayers.map((l) => ({ name: l.name || "Lahan", color: l.color || "#e5e7eb", polygonPx: l.points }));
   const totalLahanM2 = lahanLayers.reduce((s, l) => s + (Number(l.areaM2) || polyAreaPx(l.points) / (pxm * pxm)), 0);
 
   // Root buildings = non-Lahan layers whose level has no parentLayerId AND
