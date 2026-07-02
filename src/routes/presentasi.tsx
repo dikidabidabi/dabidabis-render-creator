@@ -764,9 +764,9 @@ function PresentasiBox({
         <div className="flex min-w-0 items-center gap-3">
           <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{sketch.title}</div>
+            <div className="truncate text-sm font-medium">{effectiveSketch.title}</div>
             <div className="truncate text-xs text-muted-foreground">
-              {slides.length} slide · {sketch.levels.length} level · A3 lanskap
+              {slides.length} slide · {effectiveSketch.levels.length} level · A3 lanskap
             </div>
           </div>
         </div>
