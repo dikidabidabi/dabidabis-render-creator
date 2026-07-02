@@ -9307,25 +9307,27 @@ function SiteplanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Siteplan Kawasan · {a.title}</div>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <TopView a={a} w={900} h={720} showLabels showRoads showLahan numbered />
+          <TopView a={a} w={900} h={720} showLabels showRoads showLahan numbered compassId={`siteplan-${a.sketchId}`} />
         </div>
         <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Skala referensi: {a.scale}</div>
       </div>
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Legenda</div>
 
-        {/* Global legend swatches */}
+        {/* Global legend swatches (denah palette) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+          {a.lahanInfos.slice(0, 1).map((l, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 14, height: 14, background: mpFill(l.name, l.color), border: `1px dashed ${mpStroke(l.name, l.color)}` }} />
+              Area Persil (Lahan) · <b>{a.totalLahanM2.toFixed(2)} m²</b>
+            </div>
+          ))}
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 14, height: 14, background: "#f1f5f9", border: "1px dashed #94a3b8" }} />
-            Area Persil (Lahan) · <b>{a.totalLahanM2.toFixed(2)} m²</b>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 14, height: 14, background: "#cbd5e1", border: "1px solid #64748b" }} />
+            <span style={{ width: 14, height: 14, background: "rgba(148,163,184,0.28)", border: "1px solid rgb(100,116,139)" }} />
             Jalan · <b>{a.totalRoadAreaM2.toFixed(2)} m²</b>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 14, height: 14, background: "#94a3b8", border: "1px solid #0f172a" }} />
+            <span style={{ width: 14, height: 14, background: "rgba(148,163,184,0.28)", border: "1px solid #0f172a" }} />
             Bangunan · Total GFA <b>{a.totalGfaM2.toFixed(2)} m²</b>
           </div>
         </div>
