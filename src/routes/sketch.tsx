@@ -156,6 +156,15 @@ import {
 } from "@/lib/ramps";
 import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
 import {
+  ANNOTATION_PRESETS,
+  ANNOTATION_COLOR_SWATCHES,
+  drawAnnotationCanvas,
+  newAnnotationId,
+  normalizeAnnotations,
+  type Annotation,
+  type AnnotationKind,
+} from "@/lib/analysis-illustrations";
+import {
   newRoadId,
   roadCenterline,
   roadCorridorPolygon as buildRoadCorridor,
