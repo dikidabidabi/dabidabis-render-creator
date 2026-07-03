@@ -299,6 +299,7 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     roadRingsPx,
     totalRoadAreaM2,
     kdbKawasanPct: totalLahanM2 > 0 ? ((totalFootprintM2 + totalRoadAreaM2) / totalLahanM2) * 100 : 0,
+    illustrations: normalizeAnnotations(sk.illustrations),
   };
 }
 
