@@ -156,6 +156,15 @@ import {
 } from "@/lib/ramps";
 import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
 import {
+  ANNOTATION_PRESETS,
+  ANNOTATION_COLOR_SWATCHES,
+  drawAnnotationCanvas,
+  newAnnotationId,
+  normalizeAnnotations,
+  type Annotation,
+  type AnnotationKind,
+} from "@/lib/analysis-illustrations";
+import {
   newRoadId,
   roadCenterline,
   roadCorridorPolygon as buildRoadCorridor,
@@ -364,6 +373,7 @@ type Sketch = {
   ramps?: Ramp[]; // Ramp antar level
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
+  illustrations?: Annotation[]; // Ilustrasi Analisa (panah, zona, node, dsb) — Master Plan
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
   /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
   linkedMasterplan?: { rootLayerId: string };
@@ -1106,6 +1116,7 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    illustrations: normalizeAnnotations((s as any)?.illustrations),
   };
 }
 
@@ -2266,7 +2277,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
+  const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
+  const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
+  const [iluText, setIluText] = useState<string>("");
+  const [iluDraft, setIluDraft] = useState<{ points: Point[]; cursor: Point } | null>(null);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
@@ -6071,6 +6087,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
+    // Ilustrasi Analisa — di atas layer, di bawah handle.
+    const illos: Annotation[] = sketch.illustrations ?? [];
+    for (const an of illos) {
+      drawAnnotationCanvas(ctx, an, worldToScreen, view.s);
+    }
+    // Draft ilustrasi (multi-klik)
+    if (iluDraft && tool === "iluanalisa") {
+      const preset = ANNOTATION_PRESETS[iluKind];
+      const previewPts = [...iluDraft.points, iluDraft.cursor];
+      if (previewPts.length >= preset.minPts) {
+        drawAnnotationCanvas(ctx, {
+          id: "_draft",
+          kind: iluKind,
+          style: preset.style,
+          points: previewPts,
+          color: iluColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          text: iluText || "Label",
+          createdAt: 0,
+        }, worldToScreen, view.s);
+      }
+      ctx.fillStyle = iluColor;
+      for (const p of iluDraft.points) {
+        const sp = worldToScreen(p);
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     // Jalan — koridor disatukan (union) dengan SUDUT FILLET 4 m di setiap pertemuan.
     const roadsAll: RoadSegment[] = sketch.roads ?? [];
     if (roadsAll.length > 0) {
@@ -6313,7 +6356,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, iluDraft, iluKind, iluColor, iluText, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -8127,6 +8170,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       } else {
         setJalanDraft({ ...jalanDraft, points: [...jalanDraft.points, p], cursor: p });
       }
+    } else if (tool === "iluanalisa") {
+      const preset = ANNOTATION_PRESETS[iluKind];
+      if (!preset.needsPath) {
+        // Single-point kinds → langsung commit.
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: iluKind,
+          style: preset.style,
+          points: [{ x: p.x, y: p.y }],
+          color: iluColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          text: iluKind === "label" ? (iluText || "Label") : undefined,
+          createdAt: Date.now(),
+        };
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+        toast.success(`${preset.label} ditambahkan`);
+      } else {
+        if (!iluDraft) setIluDraft({ points: [p], cursor: p });
+        else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
+      }
     } else if (tool === "jalan" && jalanSub === "fillet") {
       // Klik dekat vertex internal jalan → set radius fillet jalan tsb.
       const tolPx = 12 / view.s;
@@ -8903,6 +8966,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
     if (aksisDraft && tool === "aksis" && aksisSub === "tangent") setAksisDraft({ ...aksisDraft, cursor: p });
     if (jalanDraft && tool === "jalan" && jalanSub === "tangent") setJalanDraft({ ...jalanDraft, cursor: p });
+    if (iluDraft && tool === "iluanalisa") setIluDraft({ ...iluDraft, cursor: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
       const pts = polyDraft.points;
@@ -10363,7 +10427,85 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Spline className="mr-1.5 h-4 w-4" /> Jalan
           </Button>
+          {mode === "masterplan" && (
+            <Button
+              variant={tool === "iluanalisa" ? "default" : "outline"}
+              size="sm"
+              onClick={() => { cancelPendingCurve(); setTool("iluanalisa"); setIluDraft(null); }}
+              className={cn(tool === "iluanalisa" && "bg-gradient-primary shadow-primary")}
+              title="Ilustrasi Analisa — panah, zona, alur, node, label untuk framework diagram."
+            >
+              <PenTool className="mr-1.5 h-4 w-4" /> Ilustrasi Analisa
+            </Button>
+          )}
         </div>
+        {tool === "iluanalisa" && mode === "masterplan" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Ilustrasi Analisa</span>
+            {(Object.keys(ANNOTATION_PRESETS) as AnnotationKind[]).map((k) => (
+              <Button
+                key={k}
+                size="sm"
+                variant={iluKind === k ? "default" : "outline"}
+                className="h-7 px-2 text-[11px]"
+                onClick={() => { setIluKind(k); setIluDraft(null); setIluColor(ANNOTATION_PRESETS[k].color); }}
+                title={ANNOTATION_PRESETS[k].hint}
+              >{ANNOTATION_PRESETS[k].label}</Button>
+            ))}
+            <div className="ml-1 flex items-center gap-1">
+              {ANNOTATION_COLOR_SWATCHES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setIluColor(c)}
+                  className="h-5 w-5 rounded-full border"
+                  style={{ background: c, outline: iluColor === c ? "2px solid #0f172a" : "none" }}
+                  title={c}
+                />
+              ))}
+            </div>
+            {iluKind === "label" && (
+              <Input
+                value={iluText}
+                onChange={(e) => setIluText(e.target.value)}
+                placeholder="Teks label"
+                className="h-7 w-40 text-[11px]"
+              />
+            )}
+            {ANNOTATION_PRESETS[iluKind].needsPath && iluDraft && iluDraft.points.length >= ANNOTATION_PRESETS[iluKind].minPts && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  const preset = ANNOTATION_PRESETS[iluKind];
+                  const ann: Annotation = {
+                    id: newAnnotationId(),
+                    kind: iluKind,
+                    style: preset.style,
+                    points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                    color: iluColor,
+                    strokeWidthPx: preset.strokeWidthPx,
+                    createdAt: Date.now(),
+                  };
+                  onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+                  setIluDraft(null);
+                  toast.success(`${preset.label} tersimpan`);
+                }}
+              >Selesai ({iluDraft.points.length} titik)</Button>
+            )}
+            {iluDraft && (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluDraft(null)}>Batal</Button>
+            )}
+            {(sketch.illustrations ?? []).length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => { onChange({ illustrations: [] }); toast.success("Semua ilustrasi dihapus"); }}
+              >Hapus semua ({(sketch.illustrations ?? []).length})</Button>
+            )}
+          </div>
+        )}
         {tool === "aksis" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Aksis</span>

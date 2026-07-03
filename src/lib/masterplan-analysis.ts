@@ -10,6 +10,7 @@ import {
   clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
+import { normalizeAnnotations, type Annotation } from "@/lib/analysis-illustrations";
 
 export type Pt = { x: number; y: number };
 
@@ -42,6 +43,7 @@ type AnySketch = {
   layers: AnyLayer[];
   levels: AnyLevel[];
   roads?: RoadSegment[];
+  illustrations?: unknown;
   linkedMasterplan?: { rootLayerId: string };
   geo?: AnyGeo;
 };
@@ -117,6 +119,7 @@ export type MasterplanAnalysis = {
   roadRingsPx: { outer: Pt[]; holes: Pt[][] }[];
   totalRoadAreaM2: number;
   kdbKawasanPct: number;
+  illustrations: Annotation[];
 };
 
 export function loadMasterplanAnalysis(): MasterplanAnalysis | null {
@@ -296,6 +299,7 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     roadRingsPx,
     totalRoadAreaM2,
     kdbKawasanPct: totalLahanM2 > 0 ? ((totalFootprintM2 + totalRoadAreaM2) / totalLahanM2) * 100 : 0,
+    illustrations: normalizeAnnotations(sk.illustrations),
   };
 }
 
