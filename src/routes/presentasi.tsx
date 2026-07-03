@@ -1157,6 +1157,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   if (hasAnalysis && sk.linkedMasterplan) {
     out.push({ kind: "siteplan", id: "siteplan", title: "Siteplan Kawasan", sketch: sk, analysis: analysis! });
   }
+  if (hasAnalysis && sk.linkedMasterplan && analysis && analysis.illustrations.length > 0) {
+    out.push({ kind: "analisis-kawasan", id: "analisis-kawasan", title: "Analisis Kawasan", sketch: sk, analysis });
+  }
   // 4 slide analisa site — selalu ada (pakai koordinat default jika belum dikunci).
   out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
   out.push({ kind: "site", id: "site-akses", title: "Akses & Sirkulasi", sketch: sk, bounds, view: "akses" });
