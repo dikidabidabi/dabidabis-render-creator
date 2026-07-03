@@ -9462,5 +9462,86 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
   );
 }
 
+// ---------- Analisis Kawasan slide (Ilustrasi Analisa overlay) ----------
+function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
+  const w = 1300, h = 780;
+  const vp = computeViewport(a, w, h);
+  const worldToScreen = (p: { x: number; y: number }) => ({ x: p.x * vp.s + vp.ox, y: p.y * vp.s + vp.oy });
+  // Kelompokkan legenda unik berdasarkan kind + warna
+  const legendMap = new Map<string, { kind: string; color: string; label: string; count: number }>();
+  for (const an of a.illustrations) {
+    const k = `${an.kind}::${an.color}`;
+    const prev = legendMap.get(k);
+    if (prev) prev.count++;
+    else legendMap.set(k, { kind: an.kind, color: an.color, label: ANNOTATION_PRESETS[an.kind as Annotation["kind"]].label, count: 1 });
+  }
+  const legend = Array.from(legendMap.values());
+  return (
+    <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: "1fr 300px", gap: 14 }}>
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ilustrasi Analisa Kawasan · {a.title}</div>
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <div style={{ position: "relative", width: w, height: h }}>
+            <svg width={w} height={h} style={{ background: "#fff", border: "1px solid #e2e8f0", display: "block" }}>
+              {/* Base: lahan */}
+              {a.lahanInfos.map((l, i) => (
+                <path key={`la-${i}`} d={toPath(l.polygonPx, vp.s, vp.ox, vp.oy)}
+                  fill={mpFill(l.name, l.color)} stroke={mpStroke(l.name, l.color)}
+                  strokeWidth={1.2} strokeDasharray="6 4" />
+              ))}
+              {/* Roads */}
+              {a.roadRingsPx.map((r, i) => (
+                <g key={`r-${i}`}>
+                  <path d={toPath(r.outer, vp.s, vp.ox, vp.oy)} fill="rgba(148,163,184,0.28)" stroke="rgb(100,116,139)" strokeWidth={0.8} fillRule="evenodd" />
+                  {r.holes.map((hh, j) => (
+                    <path key={j} d={toPath(hh, vp.s, vp.ox, vp.oy)} fill="#fff" stroke="none" />
+                  ))}
+                </g>
+              ))}
+              {/* Buildings */}
+              {a.buildings.map((b) => (
+                <g key={b.id}>
+                  <path d={toPath(b.polygonPx, vp.s, vp.ox, vp.oy)}
+                    fill={mpFill(b.name, b.color)} stroke={mpStroke(b.name, b.color)} strokeWidth={1.0} opacity={0.8} />
+                  {b.subMasses.map((s, k) => (
+                    <path key={k} d={toPath(s.polygonPx, vp.s, vp.ox, vp.oy)}
+                      fill={mpFill(s.name, s.color)} stroke={mpStroke(s.name, s.color)} strokeWidth={0.8} opacity={0.8} />
+                  ))}
+                </g>
+              ))}
+              {/* Ilustrasi Analisa overlay */}
+              {a.illustrations.map((an, i) => (
+                <g key={an.id || `ill-${i}`}>
+                  {annotationSvgElements(an, worldToScreen, `ill-${i}`, Math.max(0.6, Math.min(1.4, vp.s * 40)))}
+                </g>
+              ))}
+            </svg>
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Skala referensi: {a.scale}</div>
+      </div>
+      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Legenda Analisa</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+          {legend.length === 0 && <div style={{ color: "#94a3b8" }}>Belum ada ilustrasi.</div>}
+          {legend.map((it, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ display: "inline-block", width: 22, height: 12, background: it.color, borderRadius: 3, opacity: 0.85 }} />
+              <span style={{ flex: 1 }}>{it.label}</span>
+              <span style={{ color: "#64748b" }}>×{it.count}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ height: 1, background: "#e2e8f0" }} />
+        <div style={{ fontSize: 11, color: "#334155", lineHeight: 1.45 }}>
+          Notasi framework diagram: panah menandakan pergerakan/konteks; zona menandakan cluster fungsi;
+          alur (dashed) untuk desire line pedestrian/transit; node untuk simpul aktivitas; label untuk anotasi lokasi.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 
 
