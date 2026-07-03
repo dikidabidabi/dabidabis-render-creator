@@ -10427,7 +10427,85 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Spline className="mr-1.5 h-4 w-4" /> Jalan
           </Button>
+          {mode === "masterplan" && (
+            <Button
+              variant={tool === "iluanalisa" ? "default" : "outline"}
+              size="sm"
+              onClick={() => { cancelPendingCurve(); setTool("iluanalisa"); setIluDraft(null); }}
+              className={cn(tool === "iluanalisa" && "bg-gradient-primary shadow-primary")}
+              title="Ilustrasi Analisa — panah, zona, alur, node, label untuk framework diagram."
+            >
+              <PenTool className="mr-1.5 h-4 w-4" /> Ilustrasi Analisa
+            </Button>
+          )}
         </div>
+        {tool === "iluanalisa" && mode === "masterplan" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Ilustrasi Analisa</span>
+            {(Object.keys(ANNOTATION_PRESETS) as AnnotationKind[]).map((k) => (
+              <Button
+                key={k}
+                size="sm"
+                variant={iluKind === k ? "default" : "outline"}
+                className="h-7 px-2 text-[11px]"
+                onClick={() => { setIluKind(k); setIluDraft(null); setIluColor(ANNOTATION_PRESETS[k].color); }}
+                title={ANNOTATION_PRESETS[k].hint}
+              >{ANNOTATION_PRESETS[k].label}</Button>
+            ))}
+            <div className="ml-1 flex items-center gap-1">
+              {ANNOTATION_COLOR_SWATCHES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setIluColor(c)}
+                  className="h-5 w-5 rounded-full border"
+                  style={{ background: c, outline: iluColor === c ? "2px solid #0f172a" : "none" }}
+                  title={c}
+                />
+              ))}
+            </div>
+            {iluKind === "label" && (
+              <Input
+                value={iluText}
+                onChange={(e) => setIluText(e.target.value)}
+                placeholder="Teks label"
+                className="h-7 w-40 text-[11px]"
+              />
+            )}
+            {ANNOTATION_PRESETS[iluKind].needsPath && iluDraft && iluDraft.points.length >= ANNOTATION_PRESETS[iluKind].minPts && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => {
+                  const preset = ANNOTATION_PRESETS[iluKind];
+                  const ann: Annotation = {
+                    id: newAnnotationId(),
+                    kind: iluKind,
+                    style: preset.style,
+                    points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
+                    color: iluColor,
+                    strokeWidthPx: preset.strokeWidthPx,
+                    createdAt: Date.now(),
+                  };
+                  onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+                  setIluDraft(null);
+                  toast.success(`${preset.label} tersimpan`);
+                }}
+              >Selesai ({iluDraft.points.length} titik)</Button>
+            )}
+            {iluDraft && (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluDraft(null)}>Batal</Button>
+            )}
+            {(sketch.illustrations ?? []).length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => { onChange({ illustrations: [] }); toast.success("Semua ilustrasi dihapus"); }}
+              >Hapus semua ({(sketch.illustrations ?? []).length})</Button>
+            )}
+          </div>
+        )}
         {tool === "aksis" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Aksis</span>
