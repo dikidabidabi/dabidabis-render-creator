@@ -119,6 +119,7 @@ export type MasterplanAnalysis = {
   roadRingsPx: { outer: Pt[]; holes: Pt[][] }[];
   totalRoadAreaM2: number;
   kdbKawasanPct: number;
+  illustrations: Annotation[];
 };
 
 export function loadMasterplanAnalysis(): MasterplanAnalysis | null {
