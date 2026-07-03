@@ -43,6 +43,7 @@ type AnySketch = {
   layers: AnyLayer[];
   levels: AnyLevel[];
   roads?: RoadSegment[];
+  illustrations?: unknown;
   linkedMasterplan?: { rootLayerId: string };
   geo?: AnyGeo;
 };
