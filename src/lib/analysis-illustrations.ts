@@ -2,6 +2,7 @@
 // alur, node, label) yang digambar di halaman Master Plan. Memakai model
 // polyline garis/tangent yang sudah ada di src/lib/axes.ts.
 
+import * as React from "react";
 import { sampleTangent } from "@/lib/axes";
 
 export type Vec2 = { x: number; y: number };
