@@ -6087,6 +6087,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
+    // Ilustrasi Analisa — di atas layer, di bawah handle.
+    const illos: Annotation[] = sketch.illustrations ?? [];
+    for (const an of illos) {
+      drawAnnotationCanvas(ctx, an, worldToScreen, view.s);
+    }
+    // Draft ilustrasi (multi-klik)
+    if (iluDraft && tool === "iluanalisa") {
+      const preset = ANNOTATION_PRESETS[iluKind];
+      const previewPts = [...iluDraft.points, iluDraft.cursor];
+      if (previewPts.length >= preset.minPts) {
+        drawAnnotationCanvas(ctx, {
+          id: "_draft",
+          kind: iluKind,
+          style: preset.style,
+          points: previewPts,
+          color: iluColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          text: iluText || "Label",
+          createdAt: 0,
+        }, worldToScreen, view.s);
+      }
+      ctx.fillStyle = iluColor;
+      for (const p of iluDraft.points) {
+        const sp = worldToScreen(p);
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     // Jalan — koridor disatukan (union) dengan SUDUT FILLET 4 m di setiap pertemuan.
     const roadsAll: RoadSegment[] = sketch.roads ?? [];
     if (roadsAll.length > 0) {
