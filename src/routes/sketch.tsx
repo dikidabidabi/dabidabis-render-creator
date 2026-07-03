@@ -8143,6 +8143,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       } else {
         setJalanDraft({ ...jalanDraft, points: [...jalanDraft.points, p], cursor: p });
       }
+    } else if (tool === "iluanalisa") {
+      const preset = ANNOTATION_PRESETS[iluKind];
+      if (!preset.needsPath) {
+        // Single-point kinds → langsung commit.
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: iluKind,
+          style: preset.style,
+          points: [{ x: p.x, y: p.y }],
+          color: iluColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          text: iluKind === "label" ? (iluText || "Label") : undefined,
+          createdAt: Date.now(),
+        };
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+        toast.success(`${preset.label} ditambahkan`);
+      } else {
+        if (!iluDraft) setIluDraft({ points: [p], cursor: p });
+        else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
+      }
     } else if (tool === "jalan" && jalanSub === "fillet") {
       // Klik dekat vertex internal jalan → set radius fillet jalan tsb.
       const tolPx = 12 / view.s;
