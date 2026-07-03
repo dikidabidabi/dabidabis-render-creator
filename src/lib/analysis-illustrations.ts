@@ -255,7 +255,7 @@ export function annotationSvgElements(
     const boxH = 20 * scale;
     nodes.push(React.createElement("line", { key: `${keyPrefix}-l`, x1: p.x, y1: p.y, x2: p.x + 10, y2: p.y, stroke: a.color, strokeWidth: 1 }));
     nodes.push(React.createElement("circle", { key: `${keyPrefix}-a`, cx: p.x, cy: p.y, r: 3, fill: a.color }));
-    nodes.push(React.createElement("rect", { key: `${keyPrefix}-b`, x: p.x + 10, y: p.y - boxH / 2, width: 0, height: boxH, fill: "rgba(255,255,255,0.9)", stroke: a.color }));
+    nodes.push(React.createElement("rect", { key: `${keyPrefix}-b`, x: p.x + 10, y: p.y - boxH / 2, width: Math.max(28, txt.length * fs * 0.6 + 12), height: boxH, fill: "rgba(255,255,255,0.9)", stroke: a.color }));
     nodes.push(React.createElement("text", { key: `${keyPrefix}-t`, x: p.x + 16, y: p.y + fs * 0.35, fill: a.color, fontSize: fs, fontWeight: 600, style: { fontFamily: "Manrope, sans-serif" } }, txt));
     return nodes;
   }
