@@ -1,93 +1,68 @@
-## Tujuan
-1. **Fitur "Jalan" di halaman Sketsa** dengan sub-tool persis seperti di Masterplan.
-2. **Tombol "→" di Masterplan** pada sub-layer induk bangunan untuk mengekspor bangunan ke halaman Sketsa, lengkap dengan sinkronisasi dua arah, konversi level, "ruang referensi", area "Lahan", judul proyek, dan slide masterplan otomatis.
+# Fitur "Ilustrasi Analisa" pada Master Plan
 
----
+Menambahkan set tool notasi analisa urban design (mengacu gambar Framework Diagram) yang digambar di kanvas halaman Master Plan dengan memanfaatkan sistem **garis** (lurus) dan **tangent** (kurva Catmull-Rom) yang sudah ada di `src/lib/axes.ts`. Hasilnya muncul otomatis sebagai slide baru **"Analisis Kawasan"** di halaman presentasi, hanya untuk sketsa yang terhubung (linked) dengan halaman Sketsa.
 
-## A. Fitur "Jalan" di halaman Sketsa (`src/routes/sketch.tsx`)
+## Tool notasi (palet "Ilustrasi Analisa")
 
-Saat ini tombol toolbar `jalan`, panel sub-tool, dan logika gambar/edit jalan **sudah ada** tetapi di-gate dengan `mode === "masterplan"` di tiga tempat:
-- baris ~10285 (tombol toolbar Jalan)
-- baris ~10349 (panel sub-tool Jalan)
-- baris ~10274 (tombol toolbar Aksis — tidak diubah)
+Semua notasi disimpan sebagai anotasi terpisah dari geometri bangunan/lahan/jalan (tidak mempengaruhi perhitungan luas, KDB, dll). Model data mirip `AxisSegment` — polyline dari garis atau kurva tangent, plus properti visual.
 
-Buka gate `mode === "masterplan"` menjadi `(mode === "masterplan" || mode === "sketch")` hanya untuk tombol & panel **Jalan** (Aksis tetap eksklusif Masterplan). Logika rendering (`roadCorridorPolygon`, persil split, vertex edit) sudah jalan untuk kedua mode karena membaca `sketch.roads`.
+1. **Panah arah** (lurus / kurva) — garis atau tangent dengan arrowhead di ujung. Ketebalan & warna dipilih. Untuk panah masif abu-abu seperti referensi: preset "Panah Konteks".
+2. **Zona area** — polygon isian (fill) semi-transparan berwarna (merah, biru, ungu, oranye, hijau) untuk menandai kluster fungsi. Menggunakan tangent tertutup atau garis tertutup.
+3. **Alur / desire line** — garis putus-putus tebal (dash pattern) berwarna hijau/oranye/biru untuk jalur pedestrian, bus, atau kanal. Preset dash size.
+4. **Node marker** — titik lingkaran + simbol asterisk di tengah (warna dipilih). Untuk "Key Nodal Space", "Pipeline Projects", dll.
+5. **Access point** — lingkaran outline saja (tanpa isian), warna oranye default.
+6. **Label callout** — teks + leader line (garis pendek) + titik jangkar. Untuk anotasi seperti "INTENSIFIED RESIDENTIAL...".
+7. **Border dashed** — outline putus-putus (kontur area rencana) memakai tangent.
 
-Catatan: di mode sketsa, road tidak akan memicu "persil" split di luar "Lahan" (logika existing sudah memerlukan polygon "Lahan"); ini sesuai harapan.
+Setiap tool punya kontrol: **warna**, **ketebalan**, **opasitas**, **dash on/off**, **arrowhead on/off**, **label**.
 
----
+## UI di halaman Master Plan
 
-## B. Ekspor Bangunan Masterplan → Sketsa
+- Panel toolbar baru di sisi (mengikuti gaya panel yang sudah ada), judul **"Ilustrasi Analisa"**, expand/collapse.
+- Berisi 7 tombol tool di atas + row kecil legend/warna preset.
+- Saat tool aktif: klik untuk letakkan titik, double-click / Enter untuk selesai (mengikuti pola tangent existing).
+- Anotasi tersimpan di `sketch.analysisIllustrations` (array baru) — persist ke `dabidabis_masterplan_canvas_v1`.
+- Tampil di kanvas Master Plan sebagai layer paling atas (di atas jalan, di bawah handle edit).
+- Ikon **mata (visibility)** & **kunci** ikut standar layer (bisa disembunyikan/dikunci).
 
-### B1. Tombol "→" di panel Level (mode masterplan)
-Di `LevelsPanel` (panel level mode masterplan), pada baris **sub-layer yang berperan sebagai layer induk bangunan** (sudah ada deteksi untuk tombol `+` sub-bangunan), tambahkan tombol kecil di sebelahnya berikon panah kanan (lucide `ArrowRight`). Tooltip: "Ekspor ke sketsa untuk didetailkan".
+## Slide "Analisis Kawasan" (presentasi)
 
-Klik → panggil `exportBuildingToSketch(rootLayerId)`.
+- Slide baru muncul di `buildSlides` **hanya jika**:
+  - `sk.linkedMasterplan` present (sketsa presentasi mengimpor dari masterplan), DAN
+  - Masterplan sumber memiliki ≥ 1 anotasi ilustrasi analisa.
+- Urutan: **setelah** "Analisis Masterplan Kawasan" dan "Siteplan Kawasan".
+- Konten: SVG top-view kawasan (reuse `TopView`) + overlay seluruh anotasi ilustrasi analisa dengan style aslinya, plus legend otomatis (warna → label preset), compass, judul proyek.
 
-### B2. Skema data baru
-Tambahkan di tipe `Layer` (file sketch.tsx):
-- `refSourceSketchId?: string` — id sketsa masterplan asal
-- `refSourceLayerId?: string` — id layer induk di masterplan
-- `isReferenceRoom?: boolean` — true untuk "ruang referensi" hasil konversi
+## Perubahan file
 
-Tambahkan di tipe `Sketch`:
-- `linkedMasterplan?: { sketchId: string; rootLayerId: string }` — sketsa yang berasal dari ekspor masterplan
+### Baru
+- `src/lib/analysis-illustrations.ts` — tipe `AnalysisAnnotation` (union: `arrow`, `zone`, `flow`, `node`, `access`, `label`, `border`), helper render SVG (path builder untuk garis/tangent + arrowhead + dash), preset warna & konstanta.
 
-Normalizer persist (loader/saver yang sudah ada) dipertahankan agar field opsional baru selalu round-trip.
+### Diedit
+- `src/routes/sketch.tsx` (dipakai juga untuk `/masterplan` via `SketchPage`):
+  - Tambah state `annotations` + toolbar "Ilustrasi Analisa" (hanya di `mode="masterplan"`).
+  - Tambah interaksi gambar (klik titik → polyline; Enter = commit; Esc = batal) reuse `sampleTangent`.
+  - Render anotasi di kanvas SVG.
+  - Persist ke store masterplan.
+- `src/lib/masterplan-analysis.ts`:
+  - Tambah field `analysisAnnotations: AnalysisAnnotation[]` ke `MasterplanAnalysis`, load dari sketsa.
+- `src/routes/presentasi.tsx`:
+  - Tambah `AnalisisKawasanBody` (SVG top-view + overlay anotasi + legend + compass).
+  - `buildSlides`: append slide "Analisis Kawasan" saat kondisi terpenuhi.
 
-### B3. Algoritma ekspor (`exportBuildingToSketch`)
-Input: `rootLayerId` di sketsa masterplan aktif.
+## Catatan teknis
 
-1. Kumpulkan **induk + semua sub-layer rekursif** (`parentLayerId === root` / cucu, dst.), urutkan menaik berdasarkan `level.mdpl`.
-2. Cari/buat sketsa target:
-   - Judul = nama bangunan layer induk (mis. "Bangunan A").
-   - Jika sudah ada sketsa dengan `linkedMasterplan.rootLayerId === root.id`, pakai itu (re-sync, bukan duplikasi).
-   - Jika belum ada, buat sketsa baru (tambah ke `STORAGE_KEY = dabidabis_sketch_v2`), scale default mengikuti masterplan, set `linkedMasterplan`.
-3. Susun **levels** di sketsa target:
-   - Level "Lahan" (mdpl 0) — lantai dasar referensi.
-   - Untuk setiap layer pada bangunan (induk + sub) urut menaik: 1 level baru, nama `"LT 1"`, `"LT 2"`, dst.
-4. Susun **layers**:
-   - **Layer "Lahan"** di level Lahan: polygon = area persil (dari `roadNetworkRegions` di masterplan yang memuat induk; fallback: `sitePolygon`). Kunci `locked: true`, nama `"Lahan"`. Ini **dianggap layer biasa** sehingga ikut perhitungan tabulasi/presentasi.
-   - **"Ruang referensi N"** di tiap level LT: polygon = footprint layer masterplan tsb (dikonversi koordinat dunia px). `isReferenceRoom: true`, `refSourceSketchId/refSourceLayerId` diisi.
-5. Simpan sketsa target (memicu update tabulasi/narasi/presentasi otomatis — semua halaman tsb membaca dari `dabidabis_sketch_v2`).
-6. Navigate (`useNavigate`) ke `/sketsa` dan set `openId` ke sketsa target.
+- **Tidak** mengubah perhitungan `totalFootprintM2`, `totalGfaM2`, dll — anotasi murni visual.
+- Reuse `sampleTangent` dari `src/lib/axes.ts` untuk semua path kurva (konsisten dengan tangent existing).
+- Arrowhead digambar SVG `<marker>` (single def per slide).
+- Dash pattern default: `[14, 8]` (px pada skala master).
+- Warna preset selaras palet Charcoal & Ember (semantic tokens); warna khusus notasi tetap warna literal karena bagian dari makna diagram (merah = residensial intensif, biru = kanal, hijau = pedestrian, oranye = bus, ungu = future development).
+- Simpan `strokeWidthPx` dalam pixel dunia agar konsisten saat zoom.
 
-### B4. Sinkronisasi dua arah
-Buat util `src/lib/masterplan-sketch-sync.ts` dengan dua fungsi:
-- `syncSketchReferenceToMasterplan(sketchId)` — saat user mengedit polygon "Ruang referensi N" di sketsa, replikasi geometry ke `layers[refSourceLayerId].points` di sketsa masterplan, lalu `save`.
-- `syncMasterplanLayerToSketch(rootLayerId)` — saat user mengedit footprint bangunan di masterplan, replikasi ke semua sketsa yang punya `linkedMasterplan.rootLayerId === rootLayerId` (update polygon "Ruang referensi" yang `refSourceLayerId` cocok).
+## Verifikasi
 
-Hook keduanya:
-- Di `onChange` sketsa (debounced), jika layer yang berubah adalah ruang referensi, panggil `syncSketchReferenceToMasterplan`.
-- Di `onChange` masterplan, jika layer yang berubah punya descendant di sketsa target, panggil `syncMasterplanLayerToSketch`.
-
-Guard rekursi: tandai update sebagai `__fromSync = true` agar tidak memicu loop.
-
-### B5. Aturan tampilan "Ruang Referensi"
-- **Tabulasi** (`src/routes/tabulasi.tsx`): di `computeStats` & komponen rincian, skip layer dengan `isReferenceRoom === true` saat menghitung luas/komposisi.
-- **Presentasi** (`src/routes/presentasi.tsx`): di renderer denah, gambar polygon referensi sebagai **garis putus-putus tipis abu** tanpa label/luas (atau langsung skip kalau lebih bersih). "Lahan" tetap dirender.
-- **Sketsa**: render polygon referensi dengan stroke putus-putus + fill transparan + label kecil "ref" sehingga jelas berbeda dari ruang asli. Bisa diedit (drag vertex) untuk memicu sync.
-
-### B6. Judul proyek
-Tambah field `linkedSketchId?: string` di `MasterPlan` (`src/lib/masterplan.ts`). Saat ekspor, set `linkedSketchId = sketsa.id`. Di komponen yang menampilkan "Judul Proyek" untuk presentasi:
-- Jika `sketch.linkedMasterplan` ada → judul proyek = title sketsa **masterplan** (`localStorage["dabidabis-masterplan-v1"]` punya nama, atau pakai default "Master Plan" — kita tambahkan field `title?: string` di `MasterPlan` jika belum ada).
-- Else → judul proyek = title sketsa biasa (perilaku existing).
-
-### B7. Slide Masterplan di Presentasi
-Di `src/routes/presentasi.tsx`, deteksi `sketch.linkedMasterplan`. Jika ada, sisipkan **2 slide baru sebelum slide denah bangunan pertama**:
-1. **"Denah Masterplan"** — render 2D dari sketsa masterplan (re-use renderer existing yang menggambar layers + roads + persil).
-2. **"Aksonometri Masterplan"** — re-use `<MasterplanSketch3DPreview>` (sudah ada komponen 3D).
-
-Slide-slide ini auto-muncul, tidak ada toggle khusus.
-
----
-
-## C. Detail teknis kecil
-
-- Konversi koordinat px↔meter di masterplan vs sketsa: keduanya sudah menggunakan `pxPerMeter` dari `scale`. Saat ekspor, polygon disimpan dalam unit pixel sketsa target (dengan `scale` sketsa target = scale masterplan agar 1:1 secara meter).
-- Mode `sketch` sudah default — tidak ada perubahan routing.
-- Tidak menambah dependency baru.
-
-## Sanity check
-- Build via Vite (otomatis).
-- Manual: buat 1 bangunan masterplan dengan sub, klik →, lalu cek (a) sketsa baru muncul, (b) "Lahan" ada & berkontribusi ke tabulasi, (c) "Ruang referensi 1/2" muncul putus-putus & tidak terhitung, (d) tabulasi & narasi & presentasi memunculkan judul baru, (e) slide masterplan muncul sebelum denah, (f) edit ruang referensi mengubah masterplan, dan sebaliknya.
+- Buat 1 anotasi dari tiap tool di masterplan, refresh → tersimpan.
+- Buka presentasi dari sketsa terkait → slide "Analisis Kawasan" muncul setelah "Siteplan Kawasan".
+- Sketsa tanpa link masterplan atau tanpa anotasi → slide tidak muncul.
+- Toggle hidden/lock pada layer ilustrasi berfungsi.
+- Typecheck via `tsgo` bersih.
