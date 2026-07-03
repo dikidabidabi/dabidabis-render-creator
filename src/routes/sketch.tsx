@@ -8939,6 +8939,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (circleDraft && tool === "circle") setCircleDraft({ ...circleDraft, cur: p });
     if (aksisDraft && tool === "aksis" && aksisSub === "tangent") setAksisDraft({ ...aksisDraft, cursor: p });
     if (jalanDraft && tool === "jalan" && jalanSub === "tangent") setJalanDraft({ ...jalanDraft, cursor: p });
+    if (iluDraft && tool === "iluanalisa") setIluDraft({ ...iluDraft, cursor: p });
     if (polyDraft && tool === "polyline") {
       const cur = p;
       const pts = polyDraft.points;
