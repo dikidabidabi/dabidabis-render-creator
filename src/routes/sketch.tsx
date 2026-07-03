@@ -2277,7 +2277,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
+  const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
+  const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
+  const [iluText, setIluText] = useState<string>("");
+  const [iluDraft, setIluDraft] = useState<{ points: Point[]; cursor: Point } | null>(null);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
