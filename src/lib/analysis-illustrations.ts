@@ -227,7 +227,7 @@ export function annotationSvgElements(
   const preset = ANNOTATION_PRESETS[a.kind];
   const sw = (a.strokeWidthPx ?? preset.strokeWidthPx) * scale;
   const nodes: any[] = [];
-  const React = require("react");
+  // React imported at top of module.
 
   if (a.kind === "node" || a.kind === "access") {
     const p = worldToScreen(a.points[0]);
