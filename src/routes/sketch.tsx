@@ -10535,7 +10535,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {tool === "iluanalisa" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Ilustrasi Analisa</span>
-            {(Object.keys(ANNOTATION_PRESETS) as AnnotationKind[]).map((k) => (
+            <div className="flex items-center gap-1 rounded border border-orange-500/30 bg-white/60 px-1 py-0.5">
+              {([
+                { k: "draw", label: "Gambar" },
+                { k: "geser", label: "Geser titik" },
+                { k: "tambahTitik", label: "+ Titik" },
+                { k: "hapusTitik", label: "− Titik" },
+              ] as const).map(({ k, label }) => (
+                <Button
+                  key={k}
+                  size="sm"
+                  variant={iluSub === k ? "default" : "outline"}
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => { setIluSub(k); setIluDraft(null); setIluVertexDrag(null); }}
+                  title={
+                    k === "draw" ? "Mode gambar ilustrasi baru" :
+                    k === "geser" ? "Klik + drag titik ilustrasi untuk menggeser" :
+                    k === "tambahTitik" ? "Klik di sepanjang garis ilustrasi untuk sisipkan titik" :
+                    "Klik pada titik ilustrasi untuk menghapus"
+                  }
+                >{label}</Button>
+              ))}
+            </div>
+            {iluSub === "draw" && (Object.keys(ANNOTATION_PRESETS) as AnnotationKind[]).map((k) => (
               <Button
                 key={k}
                 size="sm"
