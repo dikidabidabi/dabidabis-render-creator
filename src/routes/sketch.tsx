@@ -2283,6 +2283,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
   const [iluText, setIluText] = useState<string>("");
   const [iluDraft, setIluDraft] = useState<{ points: Point[]; cursor: Point } | null>(null);
+  const [iluSub, setIluSub] = useState<"draw" | "geser" | "tambahTitik" | "hapusTitik">("draw");
+  const [iluVertexDrag, setIluVertexDrag] = useState<{ annId: string; idx: number } | null>(null);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
