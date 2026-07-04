@@ -65,7 +65,9 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
     if (!r || typeof r !== "object") continue;
     const kind: AnnotationKind = ["arrow", "arrowDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
     const preset = ANNOTATION_PRESETS[kind];
-    const style: PathStyle = r.style === "tangent" || r.style === "garis" ? r.style : preset.style;
+    const style: PathStyle = kind === "arrowDashed"
+      ? "garis"
+      : (r.style === "tangent" || r.style === "garis" ? r.style : preset.style);
     const pts: Vec2[] = [];
     if (Array.isArray(r.points)) {
       for (const p of r.points) {
