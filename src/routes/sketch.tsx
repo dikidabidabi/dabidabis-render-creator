@@ -8173,6 +8173,83 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         setJalanDraft({ ...jalanDraft, points: [...jalanDraft.points, p], cursor: p });
       }
     } else if (tool === "iluanalisa") {
+      const illos = sketch.illustrations ?? [];
+      if (iluSub === "geser") {
+        const tolPx = 14 / view.s;
+        let best: { annId: string; idx: number; d: number } | null = null;
+        for (const an of illos) {
+          for (let i = 0; i < an.points.length; i++) {
+            const d = Math.hypot(an.points[i].x - p.x, an.points[i].y - p.y);
+            if (d <= tolPx && (!best || d < best.d)) best = { annId: an.id, idx: i, d };
+          }
+        }
+        if (best) {
+          pushHistory();
+          setIluVertexDrag({ annId: best.annId, idx: best.idx });
+        } else {
+          toast.error("Klik tepat pada titik ilustrasi untuk menggeser");
+        }
+        return;
+      }
+      if (iluSub === "tambahTitik") {
+        const tolPx = 12 / view.s;
+        let best: { annId: string; segIdx: number; pt: Point; d: number } | null = null;
+        for (const an of illos) {
+          if (an.points.length < 2) continue;
+          for (let s = 0; s < an.points.length - 1; s++) {
+            const a2 = an.points[s], b2 = an.points[s + 1];
+            const dx = b2.x - a2.x, dy = b2.y - a2.y;
+            const l2 = dx * dx + dy * dy;
+            let t = l2 > 1e-9 ? ((p.x - a2.x) * dx + (p.y - a2.y) * dy) / l2 : 0;
+            t = Math.max(0, Math.min(1, t));
+            const cx = a2.x + t * dx, cy = a2.y + t * dy;
+            const d = Math.hypot(p.x - cx, p.y - cy);
+            if (d <= tolPx && (!best || d < best.d)) best = { annId: an.id, segIdx: s, pt: { x: cx, y: cy }, d };
+          }
+        }
+        if (best) {
+          pushHistory();
+          onChange({
+            illustrations: illos.map((an) => {
+              if (an.id !== best!.annId) return an;
+              const np = an.points.slice();
+              np.splice(best!.segIdx + 1, 0, best!.pt);
+              return { ...an, points: np };
+            }),
+          });
+          toast.success("Titik ditambahkan");
+        } else {
+          toast.error("Klik pada garis ilustrasi untuk menambah titik");
+        }
+        return;
+      }
+      if (iluSub === "hapusTitik") {
+        const tolPx = 14 / view.s;
+        let best: { annId: string; idx: number; d: number } | null = null;
+        for (const an of illos) {
+          for (let i = 0; i < an.points.length; i++) {
+            const d = Math.hypot(an.points[i].x - p.x, an.points[i].y - p.y);
+            if (d <= tolPx && (!best || d < best.d)) best = { annId: an.id, idx: i, d };
+          }
+        }
+        if (best) {
+          const an = illos.find((x) => x.id === best!.annId)!;
+          const preset = ANNOTATION_PRESETS[an.kind];
+          const minPts = preset.needsPath ? Math.max(2, preset.minPts) : 1;
+          if (an.points.length <= minPts) {
+            toast.error(`Tidak bisa hapus — ilustrasi minimum ${minPts} titik. Hapus seluruh ilustrasi via "Hapus semua".`);
+          } else {
+            pushHistory();
+            onChange({
+              illustrations: illos.map((x) => x.id === best!.annId ? { ...x, points: x.points.filter((_, i) => i !== best!.idx) } : x),
+            });
+            toast.success("Titik dihapus");
+          }
+        } else {
+          toast.error("Klik pada titik ilustrasi untuk menghapus");
+        }
+        return;
+      }
       const preset = ANNOTATION_PRESETS[iluKind];
       if (!preset.needsPath) {
         // Single-point kinds → langsung commit.
