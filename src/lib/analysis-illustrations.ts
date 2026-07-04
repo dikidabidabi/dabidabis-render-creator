@@ -283,13 +283,15 @@ export function annotationSvgElements(
     nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d: dd, fill: "none", stroke: a.color, strokeWidth: sw, strokeDasharray: dash, strokeLinecap: "round" }));
     return nodes;
   }
-  // arrow
+  // arrow / arrowDashed
   const mid = `${keyPrefix}-am`;
+  const arrowColor = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.65);
+  const dashAttr = a.kind === "arrowDashed" ? `${sw * 8},${sw * 1}` : undefined;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
     React.createElement("marker", {
       id: mid, viewBox: "0 0 12 12", refX: 8, refY: 6, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse",
     }, React.createElement("path", { d: "M 0 0 L 12 6 L 0 12 z", fill: a.color })),
   ));
-  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: withAlpha(a.color, 0.65), strokeWidth: sw, strokeLinecap: "round", markerEnd: `url(#${mid})` }));
+  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: arrowColor, strokeWidth: sw, strokeLinecap: "round", strokeDasharray: dashAttr, markerEnd: `url(#${mid})` }));
   return nodes;
 }
