@@ -33,7 +33,7 @@ export type Annotation = {
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
   arrow:       { label: "Panah",        color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
-  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "tangent", strokeWidthPx: 10, needsPath: true,  minPts: 2, hint: "Panah putus-putus lebar (dash 8 : gap 1). Klik titik-titik, Enter/Selesai. Bisa lurus atau kurva tangent." },
+  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 100, needsPath: true, minPts: 2, hint: "Panah putus-putus lebar siku (tanpa kurva). Klik titik-titik, Enter/Selesai." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
   flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed). Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
@@ -65,7 +65,9 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
     if (!r || typeof r !== "object") continue;
     const kind: AnnotationKind = ["arrow", "arrowDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
     const preset = ANNOTATION_PRESETS[kind];
-    const style: PathStyle = r.style === "tangent" || r.style === "garis" ? r.style : preset.style;
+    const style: PathStyle = kind === "arrowDashed"
+      ? "garis"
+      : (r.style === "tangent" || r.style === "garis" ? r.style : preset.style);
     const pts: Vec2[] = [];
     if (Array.isArray(r.points)) {
       for (const p of r.points) {
@@ -198,25 +200,62 @@ export function drawAnnotationCanvas(
     return;
   }
 
-  // arrow (garis solid) atau arrowDashed (garis putus-putus lebar dash:gap = 8:1)
+  // arrow (garis solid) atau arrowDashed (garis putus-putus lebar, siku, chevron head)
   if (a.kind === "arrowDashed") {
-    ctx.setLineDash([sw * 8, sw * 1]);
+    // Chevron arrowhead — dihitung dulu supaya shaft dipendekkan agar tidak menembus head.
+    const sEndFull = worldToScreen(poly[poly.length - 1]);
+    const sPrevFull = worldToScreen(poly[poly.length - 2]);
+    const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
+    const hL = sw * 2.4;        // panjang chevron (searah panah)
+    const hW = sw * 2.6;        // lebar chevron (tegak lurus)
+    const notch = hL * 0.45;    // kedalaman takik pada bagian belakang
+    const cx = Math.cos(angH), cy = Math.sin(angH);
+    const nx = -cy, ny = cx;    // normal
+    const tip = sEndFull;
+    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
+    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
+    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
+    // Shaft dipendekkan sampai basis chevron
+    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.setLineDash([sw * 2.0, sw * 1.0]);
     ctx.strokeStyle = a.color;
-  } else {
-    ctx.strokeStyle = withAlpha(a.color, 0.55);
+    ctx.lineWidth = sw;
+    ctx.beginPath();
+    const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
+    for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
+    ctx.lineTo(shaftEnd.x, shaftEnd.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Chevron (segi empat berujung: tip, backL, notch, backR)
+    ctx.fillStyle = a.color;
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(backL.x, backL.y);
+    ctx.lineTo(notchP.x, notchP.y);
+    ctx.lineTo(backR.x, backR.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return;
   }
+
+  ctx.strokeStyle = withAlpha(a.color, 0.55);
   ctx.lineWidth = sw;
   ctx.beginPath();
   const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
   for (let i = 1; i < poly.length; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
   ctx.stroke();
   ctx.setLineDash([]);
-  // arrowhead at last point
+  // arrowhead at last point (arrow biasa — segitiga)
   const sEnd = worldToScreen(poly[poly.length - 1]);
   const sPrev = worldToScreen(poly[poly.length - 2]);
   const ang = Math.atan2(sEnd.y - sPrev.y, sEnd.x - sPrev.x);
   const hs = Math.max(14, sw * 1.6);
-  ctx.fillStyle = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.85);
+  ctx.fillStyle = withAlpha(a.color, 0.85);
   ctx.beginPath();
   ctx.moveTo(sEnd.x, sEnd.y);
   ctx.lineTo(sEnd.x - Math.cos(ang - 0.42) * hs, sEnd.y - Math.sin(ang - 0.42) * hs);
@@ -284,14 +323,34 @@ export function annotationSvgElements(
     return nodes;
   }
   // arrow / arrowDashed
+  if (a.kind === "arrowDashed") {
+    const tip = pts[pts.length - 1];
+    const prev = pts[pts.length - 2];
+    const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
+    const hL = sw * 2.4, hW = sw * 2.6, notch = hL * 0.45;
+    const cx = Math.cos(angH), cy = Math.sin(angH);
+    const nx = -cy, ny = cx;
+    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
+    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
+    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
+    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+    const shaftPts = [...pts.slice(0, -1), shaftEnd];
+    const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
+    nodes.push(React.createElement("path", {
+      key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
+      strokeLinecap: "butt", strokeLinejoin: "miter",
+      strokeDasharray: `${sw * 2.0},${sw * 1.0}`,
+    }));
+    const dHead = `M ${tip.x} ${tip.y} L ${backL.x} ${backL.y} L ${notchP.x} ${notchP.y} L ${backR.x} ${backR.y} Z`;
+    nodes.push(React.createElement("path", { key: `${keyPrefix}-h`, d: dHead, fill: a.color, stroke: "none" }));
+    return nodes;
+  }
   const mid = `${keyPrefix}-am`;
-  const arrowColor = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.65);
-  const dashAttr = a.kind === "arrowDashed" ? `${sw * 8},${sw * 1}` : undefined;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
     React.createElement("marker", {
       id: mid, viewBox: "0 0 12 12", refX: 8, refY: 6, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse",
     }, React.createElement("path", { d: "M 0 0 L 12 6 L 0 12 z", fill: a.color })),
   ));
-  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: arrowColor, strokeWidth: sw, strokeLinecap: "round", strokeDasharray: dashAttr, markerEnd: `url(#${mid})` }));
+  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: withAlpha(a.color, 0.65), strokeWidth: sw, strokeLinecap: "round", markerEnd: `url(#${mid})` }));
   return nodes;
 }
