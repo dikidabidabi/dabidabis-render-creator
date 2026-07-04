@@ -198,19 +198,25 @@ export function drawAnnotationCanvas(
     return;
   }
 
-  // arrow
-  ctx.strokeStyle = withAlpha(a.color, 0.55);
+  // arrow (garis solid) atau arrowDashed (garis putus-putus lebar dash:gap = 8:1)
+  if (a.kind === "arrowDashed") {
+    ctx.setLineDash([sw * 8, sw * 1]);
+    ctx.strokeStyle = a.color;
+  } else {
+    ctx.strokeStyle = withAlpha(a.color, 0.55);
+  }
   ctx.lineWidth = sw;
   ctx.beginPath();
   const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
   for (let i = 1; i < poly.length; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
   ctx.stroke();
+  ctx.setLineDash([]);
   // arrowhead at last point
   const sEnd = worldToScreen(poly[poly.length - 1]);
   const sPrev = worldToScreen(poly[poly.length - 2]);
   const ang = Math.atan2(sEnd.y - sPrev.y, sEnd.x - sPrev.x);
   const hs = Math.max(14, sw * 1.6);
-  ctx.fillStyle = withAlpha(a.color, 0.85);
+  ctx.fillStyle = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.85);
   ctx.beginPath();
   ctx.moveTo(sEnd.x, sEnd.y);
   ctx.lineTo(sEnd.x - Math.cos(ang - 0.42) * hs, sEnd.y - Math.sin(ang - 0.42) * hs);
