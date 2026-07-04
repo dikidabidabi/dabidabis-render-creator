@@ -6116,6 +6116,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2); ctx.fill();
       }
     }
+    // Handle titik ilustrasi saat mode edit titik aktif
+    if (tool === "iluanalisa" && (iluSub === "geser" || iluSub === "tambahTitik" || iluSub === "hapusTitik")) {
+      for (const an of illos) {
+        for (const pt of an.points) {
+          const sp = worldToScreen(pt);
+          ctx.beginPath(); ctx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = iluSub === "hapusTitik" ? "#dc2626" : iluSub === "tambahTitik" ? "#16a34a" : "#2563eb";
+          ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5;
+          ctx.fill(); ctx.stroke();
+        }
+      }
     // Jalan — koridor disatukan (union) dengan SUDUT FILLET 4 m di setiap pertemuan.
     const roadsAll: RoadSegment[] = sketch.roads ?? [];
     if (roadsAll.length > 0) {
