@@ -323,14 +323,34 @@ export function annotationSvgElements(
     return nodes;
   }
   // arrow / arrowDashed
+  if (a.kind === "arrowDashed") {
+    const tip = pts[pts.length - 1];
+    const prev = pts[pts.length - 2];
+    const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
+    const hL = sw * 2.4, hW = sw * 2.6, notch = hL * 0.45;
+    const cx = Math.cos(angH), cy = Math.sin(angH);
+    const nx = -cy, ny = cx;
+    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
+    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
+    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
+    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+    const shaftPts = [...pts.slice(0, -1), shaftEnd];
+    const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
+    nodes.push(React.createElement("path", {
+      key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
+      strokeLinecap: "butt", strokeLinejoin: "miter",
+      strokeDasharray: `${sw * 2.0},${sw * 1.0}`,
+    }));
+    const dHead = `M ${tip.x} ${tip.y} L ${backL.x} ${backL.y} L ${notchP.x} ${notchP.y} L ${backR.x} ${backR.y} Z`;
+    nodes.push(React.createElement("path", { key: `${keyPrefix}-h`, d: dHead, fill: a.color, stroke: "none" }));
+    return nodes;
+  }
   const mid = `${keyPrefix}-am`;
-  const arrowColor = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.65);
-  const dashAttr = a.kind === "arrowDashed" ? `${sw * 8},${sw * 1}` : undefined;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
     React.createElement("marker", {
       id: mid, viewBox: "0 0 12 12", refX: 8, refY: 6, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse",
     }, React.createElement("path", { d: "M 0 0 L 12 6 L 0 12 z", fill: a.color })),
   ));
-  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: arrowColor, strokeWidth: sw, strokeLinecap: "round", strokeDasharray: dashAttr, markerEnd: `url(#${mid})` }));
+  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: withAlpha(a.color, 0.65), strokeWidth: sw, strokeLinecap: "round", markerEnd: `url(#${mid})` }));
   return nodes;
 }
