@@ -8,13 +8,14 @@ import { sampleTangent } from "@/lib/axes";
 export type Vec2 = { x: number; y: number };
 
 export type AnnotationKind =
-  | "arrow"   // panah — polyline dengan arrowhead
-  | "zone"    // area terisi (polygon tertutup)
-  | "flow"    // alur / desire line — garis putus-putus tebal
-  | "node"    // titik nodal (lingkaran + asterisk)
-  | "access"  // access point (lingkaran outline)
-  | "label"   // callout teks + leader line
-  | "border"; // outline putus-putus (kontur area)
+  | "arrow"       // panah — polyline dengan arrowhead
+  | "arrowDashed" // panah dashed — polyline lebar putus-putus dengan arrowhead
+  | "zone"        // area terisi (polygon tertutup)
+  | "flow"        // alur / desire line — garis putus-putus tebal
+  | "node"        // titik nodal (lingkaran + asterisk)
+  | "access"      // access point (lingkaran outline)
+  | "label"       // callout teks + leader line
+  | "border";     // outline putus-putus (kontur area)
 
 export type PathStyle = "garis" | "tangent";
 
@@ -31,7 +32,8 @@ export type Annotation = {
 };
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
-  arrow:  { label: "Panah",       color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
+  arrow:       { label: "Panah",        color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
+  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "tangent", strokeWidthPx: 10, needsPath: true,  minPts: 2, hint: "Panah putus-putus lebar (dash 8 : gap 1). Klik titik-titik, Enter/Selesai. Bisa lurus atau kurva tangent." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
   flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed). Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
@@ -61,7 +63,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
   const out: Annotation[] = [];
   for (const r of raw as any[]) {
     if (!r || typeof r !== "object") continue;
-    const kind: AnnotationKind = ["arrow", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
+    const kind: AnnotationKind = ["arrow", "arrowDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
     const preset = ANNOTATION_PRESETS[kind];
     const style: PathStyle = r.style === "tangent" || r.style === "garis" ? r.style : preset.style;
     const pts: Vec2[] = [];
@@ -196,19 +198,25 @@ export function drawAnnotationCanvas(
     return;
   }
 
-  // arrow
-  ctx.strokeStyle = withAlpha(a.color, 0.55);
+  // arrow (garis solid) atau arrowDashed (garis putus-putus lebar dash:gap = 8:1)
+  if (a.kind === "arrowDashed") {
+    ctx.setLineDash([sw * 8, sw * 1]);
+    ctx.strokeStyle = a.color;
+  } else {
+    ctx.strokeStyle = withAlpha(a.color, 0.55);
+  }
   ctx.lineWidth = sw;
   ctx.beginPath();
   const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
   for (let i = 1; i < poly.length; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
   ctx.stroke();
+  ctx.setLineDash([]);
   // arrowhead at last point
   const sEnd = worldToScreen(poly[poly.length - 1]);
   const sPrev = worldToScreen(poly[poly.length - 2]);
   const ang = Math.atan2(sEnd.y - sPrev.y, sEnd.x - sPrev.x);
   const hs = Math.max(14, sw * 1.6);
-  ctx.fillStyle = withAlpha(a.color, 0.85);
+  ctx.fillStyle = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.85);
   ctx.beginPath();
   ctx.moveTo(sEnd.x, sEnd.y);
   ctx.lineTo(sEnd.x - Math.cos(ang - 0.42) * hs, sEnd.y - Math.sin(ang - 0.42) * hs);
@@ -275,13 +283,15 @@ export function annotationSvgElements(
     nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d: dd, fill: "none", stroke: a.color, strokeWidth: sw, strokeDasharray: dash, strokeLinecap: "round" }));
     return nodes;
   }
-  // arrow
+  // arrow / arrowDashed
   const mid = `${keyPrefix}-am`;
+  const arrowColor = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.65);
+  const dashAttr = a.kind === "arrowDashed" ? `${sw * 8},${sw * 1}` : undefined;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
     React.createElement("marker", {
       id: mid, viewBox: "0 0 12 12", refX: 8, refY: 6, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse",
     }, React.createElement("path", { d: "M 0 0 L 12 6 L 0 12 z", fill: a.color })),
   ));
-  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: withAlpha(a.color, 0.65), strokeWidth: sw, strokeLinecap: "round", markerEnd: `url(#${mid})` }));
+  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: arrowColor, strokeWidth: sw, strokeLinecap: "round", strokeDasharray: dashAttr, markerEnd: `url(#${mid})` }));
   return nodes;
 }
