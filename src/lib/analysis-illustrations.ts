@@ -8,13 +8,14 @@ import { sampleTangent } from "@/lib/axes";
 export type Vec2 = { x: number; y: number };
 
 export type AnnotationKind =
-  | "arrow"   // panah — polyline dengan arrowhead
-  | "zone"    // area terisi (polygon tertutup)
-  | "flow"    // alur / desire line — garis putus-putus tebal
-  | "node"    // titik nodal (lingkaran + asterisk)
-  | "access"  // access point (lingkaran outline)
-  | "label"   // callout teks + leader line
-  | "border"; // outline putus-putus (kontur area)
+  | "arrow"       // panah — polyline dengan arrowhead
+  | "arrowDashed" // panah dashed — polyline lebar putus-putus dengan arrowhead
+  | "zone"        // area terisi (polygon tertutup)
+  | "flow"        // alur / desire line — garis putus-putus tebal
+  | "node"        // titik nodal (lingkaran + asterisk)
+  | "access"      // access point (lingkaran outline)
+  | "label"       // callout teks + leader line
+  | "border";     // outline putus-putus (kontur area)
 
 export type PathStyle = "garis" | "tangent";
 
