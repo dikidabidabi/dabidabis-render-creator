@@ -200,25 +200,62 @@ export function drawAnnotationCanvas(
     return;
   }
 
-  // arrow (garis solid) atau arrowDashed (garis putus-putus lebar dash:gap = 8:1)
+  // arrow (garis solid) atau arrowDashed (garis putus-putus lebar, siku, chevron head)
   if (a.kind === "arrowDashed") {
-    ctx.setLineDash([sw * 8, sw * 1]);
+    // Chevron arrowhead — dihitung dulu supaya shaft dipendekkan agar tidak menembus head.
+    const sEndFull = worldToScreen(poly[poly.length - 1]);
+    const sPrevFull = worldToScreen(poly[poly.length - 2]);
+    const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
+    const hL = sw * 2.4;        // panjang chevron (searah panah)
+    const hW = sw * 2.6;        // lebar chevron (tegak lurus)
+    const notch = hL * 0.45;    // kedalaman takik pada bagian belakang
+    const cx = Math.cos(angH), cy = Math.sin(angH);
+    const nx = -cy, ny = cx;    // normal
+    const tip = sEndFull;
+    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
+    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
+    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
+    // Shaft dipendekkan sampai basis chevron
+    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.setLineDash([sw * 2.0, sw * 1.0]);
     ctx.strokeStyle = a.color;
-  } else {
-    ctx.strokeStyle = withAlpha(a.color, 0.55);
+    ctx.lineWidth = sw;
+    ctx.beginPath();
+    const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
+    for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
+    ctx.lineTo(shaftEnd.x, shaftEnd.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Chevron (segi empat berujung: tip, backL, notch, backR)
+    ctx.fillStyle = a.color;
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(backL.x, backL.y);
+    ctx.lineTo(notchP.x, notchP.y);
+    ctx.lineTo(backR.x, backR.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return;
   }
+
+  ctx.strokeStyle = withAlpha(a.color, 0.55);
   ctx.lineWidth = sw;
   ctx.beginPath();
   const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
   for (let i = 1; i < poly.length; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
   ctx.stroke();
   ctx.setLineDash([]);
-  // arrowhead at last point
+  // arrowhead at last point (arrow biasa — segitiga)
   const sEnd = worldToScreen(poly[poly.length - 1]);
   const sPrev = worldToScreen(poly[poly.length - 2]);
   const ang = Math.atan2(sEnd.y - sPrev.y, sEnd.x - sPrev.x);
   const hs = Math.max(14, sw * 1.6);
-  ctx.fillStyle = a.kind === "arrowDashed" ? a.color : withAlpha(a.color, 0.85);
+  ctx.fillStyle = withAlpha(a.color, 0.85);
   ctx.beginPath();
   ctx.moveTo(sEnd.x, sEnd.y);
   ctx.lineTo(sEnd.x - Math.cos(ang - 0.42) * hs, sEnd.y - Math.sin(ang - 0.42) * hs);
