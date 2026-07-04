@@ -6127,6 +6127,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.fill(); ctx.stroke();
         }
       }
+    }
     // Jalan — koridor disatukan (union) dengan SUDUT FILLET 4 m di setiap pertemuan.
     const roadsAll: RoadSegment[] = sketch.roads ?? [];
     if (roadsAll.length > 0) {
