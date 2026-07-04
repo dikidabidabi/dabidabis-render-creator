@@ -8710,6 +8710,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       });
       return;
     }
+    if (iluVertexDrag) {
+      const wp = getWorldPos(e);
+      onChange({
+        illustrations: (sketch.illustrations ?? []).map((an) =>
+          an.id !== iluVertexDrag.annId ? an : { ...an, points: an.points.map((pt, i) => i === iluVertexDrag.idx ? { x: wp.x, y: wp.y } : pt) }
+        ),
+      });
+      return;
+    }
     if (rampVertexDrag) {
       const wp = getWorldPos(e);
       onChange({
