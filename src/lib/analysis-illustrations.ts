@@ -331,24 +331,34 @@ export function annotationSvgElements(
     const tip = pts[pts.length - 1];
     const prev = pts[pts.length - 2];
     const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-    const hL = sw * 2.4, hW = sw * 2.6, notch = hL * 0.45;
-    const cx = Math.cos(angH), cy = Math.sin(angH);
-    const nx = -cy, ny = cx;
-    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
-    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
-    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
-    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+    const hL = sw * 2.2;
+    const barThick = Math.max(1, sw * 0.7);
+    const cs = Math.cos(angH), sn = Math.sin(angH);
+    const shaftEnd = { x: tip.x - cs * hL * Math.SQRT1_2, y: tip.y - sn * hL * Math.SQRT1_2 };
     const shaftPts = [...pts.slice(0, -1), shaftEnd];
     const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
     nodes.push(React.createElement("path", {
       key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
       strokeLinecap: "butt", strokeLinejoin: "miter",
-      strokeDasharray: `${sw * 2.0},${sw * 1.0}`,
+      strokeDasharray: `${sw * 0.5},${sw * 0.3}`,
     }));
-    const dHead = `M ${tip.x} ${tip.y} L ${backL.x} ${backL.y} L ${notchP.x} ${notchP.y} L ${backR.x} ${backR.y} Z`;
-    nodes.push(React.createElement("path", { key: `${keyPrefix}-h`, d: dHead, fill: a.color, stroke: "none" }));
+    // Dua bar persegi panjang bertemu di tip pada sudut siku-siku (90°).
+    const barPath = (dirRad: number, key: string) => {
+      const dx = Math.cos(dirRad), dy = Math.sin(dirRad);
+      const px = -dy, py = dx;
+      const h = barThick / 2;
+      const p1 = { x: tip.x + px * h, y: tip.y + py * h };
+      const p2 = { x: tip.x + dx * hL + px * h, y: tip.y + dy * hL + py * h };
+      const p3 = { x: tip.x + dx * hL - px * h, y: tip.y + dy * hL - py * h };
+      const p4 = { x: tip.x - px * h, y: tip.y - py * h };
+      const dd = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y} Z`;
+      nodes.push(React.createElement("path", { key, d: dd, fill: a.color, stroke: "none" }));
+    };
+    barPath(angH + Math.PI - Math.PI / 4, `${keyPrefix}-h1`);
+    barPath(angH + Math.PI + Math.PI / 4, `${keyPrefix}-h2`);
     return nodes;
   }
+
   const mid = `${keyPrefix}-am`;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
     React.createElement("marker", {
