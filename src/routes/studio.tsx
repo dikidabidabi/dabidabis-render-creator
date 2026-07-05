@@ -87,6 +87,57 @@ function loadShots(sketchId: string): Shot[] {
   }
 }
 
+function useSketchList(): SketchLite[] {
+  const [list, setList] = useState<SketchLite[]>(() => loadSketches());
+  useEffect(() => {
+    const reload = () => setList(loadSketches());
+    window.addEventListener("storage", reload);
+    window.addEventListener("focus", reload);
+    return () => {
+      window.removeEventListener("storage", reload);
+      window.removeEventListener("focus", reload);
+    };
+  }, []);
+  return list;
+}
+
+function SketchSelector({
+  sketches,
+  value,
+  onChange,
+  tone,
+}: {
+  sketches: SketchLite[];
+  value: string;
+  onChange: (sk: SketchLite) => void;
+  tone: "sky" | "emerald";
+}) {
+  const ringCls = tone === "sky" ? "focus:border-sky-500" : "focus:border-emerald-500";
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        const sk = sketches.find((s) => s.id === e.target.value);
+        if (sk) onChange(sk);
+      }}
+      className={cn(
+        "w-full rounded border border-border/60 bg-background px-2 py-1 text-[11px] font-medium outline-none",
+        ringCls,
+      )}
+    >
+      {sketches.length === 0 && <option value="">(Belum ada sketsa)</option>}
+      {sketches.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.title}
+        </option>
+      ))}
+      {sketches.length > 0 && !sketches.some((s) => s.id === value) && (
+        <option value={value}>{value ? "(sketsa terhapus)" : ""}</option>
+      )}
+    </select>
+  );
+}
+
 // ---------- Angles ----------
 const DEFAULT_ANGLES = ["Eye Level", "Bird's Eye", "Worm's Eye"];
 const ANGLE_PROMPT: Record<string, string> = {
