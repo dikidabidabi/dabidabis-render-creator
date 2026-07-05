@@ -710,6 +710,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
           kind: "prompt",
           style: "bare finish concrete, cinematic lighting",
           detail: "",
+          geometryConsistency: 70,
         } satisfies PromptNodeData,
       },
       {
@@ -726,6 +727,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
           kind: "output",
           sketchId: sk.id,
           sketchTitle: sk.title,
+          geometryConsistency: 80,
         } satisfies OutputNodeData,
       },
     );
