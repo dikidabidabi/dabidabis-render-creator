@@ -383,20 +383,16 @@ function PromptNode({ id, data }: NodeProps) {
       position: pos,
       data: { kind: "reference", image: null, label: "Referensi Style" } satisfies ReferenceNodeData,
     });
-    // auto-connect ref → nearest render node (if any downstream from this prompt)
-    const promptOut = useStudioStore
-      .getState()
-      .graph.edges.find((e) => e.source === id);
-    if (promptOut) {
-      addEdgeStore({
-        id: `${refId}->${promptOut.target}`,
-        source: refId,
-        target: promptOut.target,
-        animated: true,
-        style: { stroke: "#ec4899", strokeWidth: 2 },
-      });
-    }
-    toast.success("Node Referensi Style dibuat");
+    // auto-connect reference → this prompt node (reference is a visual style
+    // addition to the prompt; geometry still comes from Input node via prompt).
+    addEdgeStore({
+      id: `${refId}->${id}`,
+      source: refId,
+      target: id,
+      animated: true,
+      style: { stroke: "#ec4899", strokeWidth: 2 },
+    });
+    toast.success("Node Referensi Style tersambung ke Prompt");
   };
 
   return (
@@ -1078,9 +1074,17 @@ function useStudioExecute() {
         .map((e) => graph.nodes.find((n) => n.id === e.source))
         .filter(Boolean) as Node[];
 
-      const referenceNode = incomingNodes.find((n) => n.type === "reference");
       const promptNode = incomingNodes.find((n) => n.type === "prompt");
       const editNode = incomingNodes.find((n) => n.type === "edit");
+
+      // Reference Style attaches to the Prompt node (visual style addition to
+      // the prompt). Geometry is anchored to the Input node, not the reference.
+      const referenceNode = promptNode
+        ? (graph.edges
+            .filter((e) => e.target === promptNode.id)
+            .map((e) => graph.nodes.find((n) => n.id === e.source))
+            .find((n) => n?.type === "reference") ?? null)
+        : incomingNodes.find((n) => n.type === "reference") ?? null;
 
       const outEdgeR = outEdges(renderNodeId)[0];
       const outputNode = outEdgeR
@@ -1187,6 +1191,9 @@ function useStudioExecute() {
       const finalPrompt = [
         prData.style,
         prData.detail,
+        refImage
+          ? "Gunakan gambar referensi HANYA sebagai panduan gaya visual (palet, material, mood, pencahayaan). GEOMETRY tetap mengikuti sketsa input — jangan meniru bentuk atau komposisi dari referensi."
+          : "",
         "arsitektur fotorealistis, kualitas tinggi",
       ]
         .filter(Boolean)
