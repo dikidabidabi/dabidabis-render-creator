@@ -507,8 +507,14 @@ function useStudioExecute() {
       const outData = outputNode.data as OutputNodeData;
 
       const shots = loadShots(inData.sketchId);
-      const chosen = shots.find((s) => s.id === inData.selectedShotId) ?? shots[0];
-      if (!chosen) return toast.error(`Pilih screenshot 3D untuk ${inData.sketchTitle}`);
+      const uploads = inData.uploads ?? [];
+      const pool: { id: string; dataUrl: string }[] = [
+        ...shots.map((s) => ({ id: s.id, dataUrl: s.dataUrl })),
+        ...uploads.map((u) => ({ id: u.id, dataUrl: u.dataUrl })),
+      ];
+      const chosen =
+        pool.find((s) => s.id === inData.selectedShotId) ?? pool[0];
+      if (!chosen) return toast.error(`Pilih atau unggah gambar untuk ${inData.sketchTitle}`);
 
       const finalPrompt = [prData.style, prData.detail, "arsitektur fotorealistis, kualitas tinggi"]
         .filter(Boolean)
