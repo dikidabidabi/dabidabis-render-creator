@@ -156,8 +156,42 @@ function InputNode({ id, data }: NodeProps) {
   const d = data as InputNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
   const [shots, setShots] = useState<Shot[]>(() => loadShots(d.sketchId));
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = () => setShots(loadShots(d.sketchId));
+  const uploads = d.uploads ?? [];
+  const merged: { id: string; dataUrl: string; source: "3d" | "upload" }[] = [
+    ...shots.map((s) => ({ id: s.id, dataUrl: s.dataUrl, source: "3d" as const })),
+    ...uploads.map((u) => ({ id: u.id, dataUrl: u.dataUrl, source: "upload" as const })),
+  ];
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const readers = Array.from(files).map(
+      (f) =>
+        new Promise<UploadedShot>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () =>
+            resolve({ id: crypto.randomUUID(), dataUrl: fr.result as string, name: f.name });
+          fr.onerror = () => reject(fr.error);
+          fr.readAsDataURL(f);
+        }),
+    );
+    try {
+      const newOnes = await Promise.all(readers);
+      updateNode(id, { uploads: [...uploads, ...newOnes] });
+    } catch {
+      toast.error("Gagal membaca file");
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const removeUpload = (uid: string) => {
+    updateNode(id, {
+      uploads: uploads.filter((u) => u.id !== uid),
+      selectedShotId: d.selectedShotId === uid ? null : d.selectedShotId,
+    });
+  };
 
   return (
     <NodeShell
@@ -169,37 +203,78 @@ function InputNode({ id, data }: NodeProps) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">
-            {shots.length} screenshot tersedia
+            {shots.length} dari 3D · {uploads.length} unggahan
           </span>
-          <button
-            type="button"
-            onClick={refresh}
-            className="rounded p-1 hover:bg-muted"
-            title="Muat ulang"
-          >
-            <RefreshCcw className="h-3 w-3" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={refresh}
+              className="rounded p-1 hover:bg-muted"
+              title="Muat ulang screenshot 3D"
+            >
+              <RefreshCcw className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-1 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 hover:bg-sky-500/25"
+              title="Unggah gambar eksternal"
+            >
+              <Upload className="h-3 w-3" /> Unggah
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleUpload(e.target.files)}
+            />
+          </div>
         </div>
-        {shots.length === 0 ? (
+        {merged.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">
-            Belum ada screenshot. Ambil dari halaman 3D untuk sketsa ini.
+            Belum ada gambar. Ambil screenshot di halaman 3D atau klik{" "}
+            <span className="font-medium">Unggah</span> untuk pakai gambar eksternal.
           </p>
         ) : (
           <div className="grid max-h-40 grid-cols-3 gap-1 overflow-y-auto">
-            {shots.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => updateNode(id, { selectedShotId: s.id })}
-                className={cn(
-                  "overflow-hidden rounded border-2 transition",
-                  d.selectedShotId === s.id
-                    ? "border-ember ring-1 ring-ember/50"
-                    : "border-transparent hover:border-border",
+            {merged.map((s) => (
+              <div key={s.id} className="relative">
+                <button
+                  type="button"
+                  onClick={() => updateNode(id, { selectedShotId: s.id })}
+                  className={cn(
+                    "block w-full overflow-hidden rounded border-2 transition",
+                    d.selectedShotId === s.id
+                      ? "border-ember ring-1 ring-ember/50"
+                      : "border-transparent hover:border-border",
+                  )}
+                >
+                  <img src={s.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                </button>
+                <span
+                  className={cn(
+                    "pointer-events-none absolute left-0 top-0 rounded-br px-1 text-[8px] font-medium text-white",
+                    s.source === "3d" ? "bg-sky-500/80" : "bg-emerald-500/80",
+                  )}
+                >
+                  {s.source === "3d" ? "3D" : "UP"}
+                </span>
+                {s.source === "upload" && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeUpload(s.id);
+                    }}
+                    className="absolute right-0 top-0 rounded-bl bg-black/60 px-1 text-[8px] text-white opacity-0 transition hover:bg-red-500/80 group-hover:opacity-100"
+                    title="Hapus"
+                  >
+                    ×
+                  </button>
                 )}
-              >
-                <img src={s.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
-              </button>
+              </div>
             ))}
           </div>
         )}
