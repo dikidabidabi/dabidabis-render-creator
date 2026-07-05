@@ -57,6 +57,57 @@ export function annotationPolyline(a: Annotation): Vec2[] {
   return a.points.slice();
 }
 
+/** Konfigurasi "Layer Ilustrasi" — layer khusus untuk semua notasi ilustrasi
+ *  analisa, dengan sub-layer per tool (kind). Bisa diatur visible & opacity. */
+export type IluSubLayer = { visible: boolean; opacity: number };
+export type IluLayerCfg = {
+  visible: boolean;
+  opacity: number;
+  subs: Partial<Record<AnnotationKind, IluSubLayer>>;
+};
+
+export function makeIluLayerCfg(): IluLayerCfg {
+  return { visible: true, opacity: 1, subs: {} };
+}
+
+export function ensureIluSub(cfg: IluLayerCfg, kind: AnnotationKind): IluLayerCfg {
+  if (cfg.subs[kind]) return cfg;
+  return { ...cfg, subs: { ...cfg.subs, [kind]: { visible: true, opacity: 1 } } };
+}
+
+export function normalizeIluLayer(raw: unknown): IluLayerCfg | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r: any = raw;
+  const cfg: IluLayerCfg = {
+    visible: r.visible !== false,
+    opacity: Number.isFinite(Number(r.opacity)) ? Math.max(0, Math.min(1, Number(r.opacity))) : 1,
+    subs: {},
+  };
+  if (r.subs && typeof r.subs === "object") {
+    for (const k of Object.keys(r.subs) as AnnotationKind[]) {
+      if (!(k in ANNOTATION_PRESETS)) continue;
+      const s: any = r.subs[k];
+      if (!s || typeof s !== "object") continue;
+      cfg.subs[k] = {
+        visible: s.visible !== false,
+        opacity: Number.isFinite(Number(s.opacity)) ? Math.max(0, Math.min(1, Number(s.opacity))) : 1,
+      };
+    }
+  }
+  return cfg;
+}
+
+/** Alpha efektif untuk sebuah annotation kind di dalam Layer Ilustrasi. */
+export function iluAlphaFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind): number {
+  if (!cfg) return 1;
+  if (!cfg.visible) return 0;
+  const sub = cfg.subs[kind];
+  if (sub && !sub.visible) return 0;
+  const subA = sub ? sub.opacity : 1;
+  return Math.max(0, Math.min(1, cfg.opacity * subA));
+}
+
+
 /** Normalize dari data mentah localStorage. */
 export function normalizeAnnotations(raw: unknown): Annotation[] {
   if (!Array.isArray(raw)) return [];
