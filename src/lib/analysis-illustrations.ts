@@ -33,7 +33,7 @@ export type Annotation = {
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
   arrow:       { label: "Panah",        color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
-  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 100, needsPath: true, minPts: 2, hint: "Panah putus-putus lebar siku (tanpa kurva). Klik titik-titik, Enter/Selesai." },
+  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 50, needsPath: true, minPts: 2, hint: "Panah putus-putus lebar siku (tanpa kurva). Klik titik-titik, Enter/Selesai." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
   flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed). Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
