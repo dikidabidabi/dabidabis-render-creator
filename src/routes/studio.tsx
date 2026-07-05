@@ -314,7 +314,7 @@ function RenderNode({
 
 function OutputNode({ data }: NodeProps) {
   const d = data as OutputNodeData;
-  const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId] ?? []);
+  const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
   const sync = useStudioStore((s) => s.syncToPresentasi);
   const total = outputs.length || 3;
   const done = outputs.filter((o) => o.status === "done").length;
