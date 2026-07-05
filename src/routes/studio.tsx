@@ -79,11 +79,13 @@ const ANGLE_PROMPT: Record<string, string> = {
 };
 
 // ---------- Node data types ----------
+type UploadedShot = { id: string; dataUrl: string; name?: string };
 type InputNodeData = {
   kind: "input";
   sketchId: string;
   sketchTitle: string;
   selectedShotId: string | null;
+  uploads: UploadedShot[];
 };
 type PromptNodeData = {
   kind: "prompt";
@@ -101,6 +103,10 @@ type OutputNodeData = {
   sketchId: string;
   sketchTitle: string;
 };
+
+// Stable empty-array reference so zustand selectors don't return a new array
+// every render (which triggers "getSnapshot should be cached" + infinite loop).
+const EMPTY_OUTPUTS: RenderAngle[] = [];
 
 // ---------- Nodes ----------
 function NodeShell({
