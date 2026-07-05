@@ -161,8 +161,13 @@ import {
   drawAnnotationCanvas,
   newAnnotationId,
   normalizeAnnotations,
+  normalizeIluLayer,
+  makeIluLayerCfg,
+  ensureIluSub,
+  iluAlphaFor,
   type Annotation,
   type AnnotationKind,
+  type IluLayerCfg,
 } from "@/lib/analysis-illustrations";
 import {
   newRoadId,
