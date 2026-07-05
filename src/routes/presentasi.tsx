@@ -9357,13 +9357,14 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
 function SiteplanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
   return (
     <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: "1fr 340px", gap: 14 }}>
-      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Siteplan Kawasan · {a.title}</div>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <TopView a={a} w={900} h={720} showLabels showRoads showLahan numbered compassId={`siteplan-${a.sketchId}`} />
+          <TopViewFit a={a} showLabels showRoads showLahan numbered compassId={`siteplan-${a.sketchId}`} />
         </div>
         <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Skala referensi: {a.scale}</div>
       </div>
+
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ fontSize: 13, fontWeight: 700 }}>Legenda</div>
 
