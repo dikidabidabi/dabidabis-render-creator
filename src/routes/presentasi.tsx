@@ -9090,56 +9090,90 @@ function hexToRgba(c: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = true, numbered = false, compassId }: {
-  a: MasterplanAnalysis; w: number; h: number; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean; numbered?: boolean; compassId?: string;
+function boundsIncludingIllustrations(a: MasterplanAnalysis, pad = 0.04): { minX: number; minY: number; maxX: number; maxY: number } {
+  let { minX, minY, maxX, maxY } = a.boundsPx;
+  for (const an of a.illustrations) {
+    for (const p of an.points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  const w = Math.max(1, maxX - minX);
+  const h = Math.max(1, maxY - minY);
+  const px = w * pad, py = h * pad;
+  return { minX: minX - px, minY: minY - py, maxX: maxX + px, maxY: maxY + py };
+}
+
+/** Denah-style TopView: SVG scales via viewBox, tanpa frame abu-abu. Mengisi container. */
+function TopViewFit({
+  a, showLabels = true, showRoads = true, showLahan = true, numbered = false,
+  showIllustrations = false, compassId, boundsOverride,
+}: {
+  a: MasterplanAnalysis; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean;
+  numbered?: boolean; showIllustrations?: boolean; compassId?: string;
+  boundsOverride?: { minX: number; minY: number; maxX: number; maxY: number };
 }) {
-  const vp = computeViewport(a, w, h);
+  const b = boundsOverride ?? a.boundsPx;
+  const vw = Math.max(1, b.maxX - b.minX);
+  const vh = Math.max(1, b.maxY - b.minY);
+  const sw = Math.max(vw, vh); // sketch-relative stroke ref (mirip Denah)
+  const worldToScreen = (p: { x: number; y: number }) => ({ x: p.x, y: p.y });
+  // Approx px→screen scale factor for illustration stroke widths. Slide box ~1300px.
+  const illuScale = 1300 / sw;
   return (
-    <div style={{ position: "relative", width: w, height: h }}>
-      <svg width={w} height={h} style={{ background: "#fff", border: "1px solid #e2e8f0", display: "block" }}>
-        {/* Lahan */}
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <svg
+        viewBox={`${b.minX} ${b.minY} ${vw} ${vh}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: "100%", height: "100%", display: "block", background: "transparent" }}
+      >
         {showLahan && a.lahanInfos.map((l, i) => (
-          <path key={`la-${i}`} d={toPath(l.polygonPx, vp.s, vp.ox, vp.oy)}
+          <path key={`la-${i}`} d={toPath(l.polygonPx, 1, 0, 0)}
             fill={mpFill(l.name, l.color)} stroke={mpStroke(l.name, l.color)}
-            strokeWidth={1.2} strokeDasharray="6 4" />
+            strokeWidth={sw * 0.0015} strokeDasharray={`${sw * 0.006} ${sw * 0.004}`} />
         ))}
-        {/* Roads (rendered as thin perkerasan layer, denah palette) */}
         {showRoads && a.roadRingsPx.map((r, i) => (
           <g key={`r-${i}`}>
-            <path d={toPath(r.outer, vp.s, vp.ox, vp.oy)} fill="rgba(148,163,184,0.28)" stroke="rgb(100,116,139)" strokeWidth={0.8} fillRule="evenodd" />
+            <path d={toPath(r.outer, 1, 0, 0)} fill="rgba(148,163,184,0.28)" stroke="rgb(100,116,139)" strokeWidth={sw * 0.001} fillRule="evenodd" />
             {r.holes.map((h, j) => (
-              <path key={j} d={toPath(h, vp.s, vp.ox, vp.oy)} fill="#fff" stroke="none" />
+              <path key={j} d={toPath(h, 1, 0, 0)} fill="#fff" stroke="none" />
             ))}
           </g>
         ))}
-        {/* Buildings (root) then sub-masses with layer colors */}
-        {a.buildings.map((b) => (
-          <g key={b.id}>
-            <path d={toPath(b.polygonPx, vp.s, vp.ox, vp.oy)}
-              fill={mpFill(b.name, b.color)} stroke={mpStroke(b.name, b.color)} strokeWidth={1.1} />
-            {b.subMasses.map((s, k) => (
-              <path key={k} d={toPath(s.polygonPx, vp.s, vp.ox, vp.oy)}
-                fill={mpFill(s.name, s.color)} stroke={mpStroke(s.name, s.color)} strokeWidth={0.9} />
+        {a.buildings.map((bld) => (
+          <g key={bld.id}>
+            <path d={toPath(bld.polygonPx, 1, 0, 0)}
+              fill={mpFill(bld.name, bld.color)} stroke={mpStroke(bld.name, bld.color)} strokeWidth={sw * 0.0014} />
+            {bld.subMasses.map((s, k) => (
+              <path key={k} d={toPath(s.polygonPx, 1, 0, 0)}
+                fill={mpFill(s.name, s.color)} stroke={mpStroke(s.name, s.color)} strokeWidth={sw * 0.0011} />
             ))}
           </g>
         ))}
-        {/* Labels */}
-        {showLabels && a.buildings.map((b, i) => {
-          const cx = b.centroidPx.x * vp.s + vp.ox;
-          const cy = b.centroidPx.y * vp.s + vp.oy;
+        {showLabels && a.buildings.map((bld, i) => {
+          const cx = bld.centroidPx.x;
+          const cy = bld.centroidPx.y;
+          const r = sw * 0.018;
+          const fs = sw * 0.016;
           return numbered ? (
-            <g key={`lbl-${b.id}`}>
-              <circle cx={cx} cy={cy} r={13} fill="#fff" stroke="#0f172a" strokeWidth={1.2} />
-              <text x={cx} y={cy + 4} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0f172a">{i + 1}</text>
+            <g key={`lbl-${bld.id}`}>
+              <circle cx={cx} cy={cy} r={r} fill="#fff" stroke="#0f172a" strokeWidth={sw * 0.0015} />
+              <text x={cx} y={cy + fs * 0.35} textAnchor="middle" fontSize={fs} fontWeight={700} fill="#0f172a">{i + 1}</text>
             </g>
           ) : (
-            <text key={`lbl-${b.id}`} x={cx} y={cy + 3} textAnchor="middle" fontSize={11} fontWeight={700} fill="#0f172a" style={{ textShadow: "0 0 3px #fff, 0 0 2px #fff" }}>
-              {b.name}
+            <text key={`lbl-${bld.id}`} x={cx} y={cy + sw * 0.005} textAnchor="middle" fontSize={fs} fontWeight={700} fill="#0f172a" style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: sw * 0.003 } as any}>
+              {bld.name}
             </text>
           );
         })}
+        {showIllustrations && a.illustrations.map((an, i) => (
+          <g key={an.id || `ill-${i}`}>
+            {annotationSvgElements(an, worldToScreen, `ill-${i}`, Math.max(0.6, Math.min(1.4, illuScale)))}
+          </g>
+        ))}
       </svg>
-      {/* Compass (denah style) */}
       {compassId ? (
         <SlideCompass rotation={a.mapRotationDeg} draggableId={compassId} />
       ) : (
@@ -9150,6 +9184,18 @@ function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = tru
     </div>
   );
 }
+
+function TopView({ a, w, h, showLabels = true, showRoads = true, showLahan = true, numbered = false, compassId }: {
+  a: MasterplanAnalysis; w: number; h: number; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean; numbered?: boolean; compassId?: string;
+}) {
+  // Legacy fixed-size wrapper (masih dipakai slide masterplan). Delegasi ke TopViewFit.
+  return (
+    <div style={{ width: w, height: h }}>
+      <TopViewFit a={a} showLabels={showLabels} showRoads={showRoads} showLahan={showLahan} numbered={numbered} compassId={compassId} />
+    </div>
+  );
+}
+
 
 
 // ---------- New MasterPlan slide body sourced from the masterplan sketch ----------
