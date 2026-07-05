@@ -309,8 +309,13 @@ function InputNode({ id, data }: NodeProps) {
   const d = data as InputNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
+  const sketches = useSketchList();
   const [shots, setShots] = useState<Shot[]>(() => loadShots(d.sketchId));
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setShots(loadShots(d.sketchId));
+  }, [d.sketchId]);
 
   const refresh = () => setShots(loadShots(d.sketchId));
   const uploads = d.uploads ?? [];
@@ -342,13 +347,22 @@ function InputNode({ id, data }: NodeProps) {
 
   return (
     <NodeShell
-      title={`3D Input · ${d.sketchTitle}`}
+      title="3D Input"
       icon={<ImageIcon className="h-3.5 w-3.5 text-sky-500" />}
       tone="input"
       hasSource
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
+        <SketchSelector
+          sketches={sketches}
+          value={d.sketchId}
+          tone="sky"
+          onChange={(sk) => {
+            updateNode(id, { sketchId: sk.id, sketchTitle: sk.title, selectedShotId: null });
+            setShots(loadShots(sk.id));
+          }}
+        />
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">
             {shots.length} dari 3D · {uploads.length} unggahan
