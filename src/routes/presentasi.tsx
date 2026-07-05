@@ -1886,11 +1886,45 @@ function SlideCompass({ rotation, size = 92, draggableId }: { rotation: number; 
   );
 }
 // ---- Title body ----
+function loadLatestStudioRender(sketchId: string): string | null {
+  try {
+    const raw = localStorage.getItem("dabidabis_studio_graph_v1");
+    if (!raw) return null;
+    const g = JSON.parse(raw) as {
+      outputs?: Record<string, { image: string | null; status?: string }[]>;
+    };
+    const list = g?.outputs?.[sketchId] ?? [];
+    // Latest completed image = last entry with an image (arrays are append-only per render batch)
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.image) return list[i].image;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
   const now = useNowOnMount();
   const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
+  const [bgImage, setBgImage] = useState<string | null>(() => loadLatestStudioRender(slide.sketch.id));
+  useEffect(() => {
+    setBgImage(loadLatestStudioRender(slide.sketch.id));
+    const reload = () => setBgImage(loadLatestStudioRender(slide.sketch.id));
+    window.addEventListener("storage", reload);
+    window.addEventListener("focus", reload);
+    return () => {
+      window.removeEventListener("storage", reload);
+      window.removeEventListener("focus", reload);
+    };
+  }, [slide.sketch.id]);
+
+  const hasBg = !!bgImage;
+  const titleColor = hasBg ? "#ffffff" : "#0a0a0a";
+  const subColor = hasBg ? "rgba(255,255,255,0.85)" : "#555";
+  const kickerColor = hasBg ? "rgba(255,255,255,0.75)" : "#888";
   return (
     <div
       style={{
@@ -1902,11 +1936,13 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
         justifyContent: "center",
         textAlign: "center",
         padding: PAD,
-        background: "#ffffff",
+        background: hasBg
+          ? `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.55)), url("${bgImage}") center/cover no-repeat`
+          : "#ffffff",
         position: "relative",
       }}
     >
-      <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 600, marginBottom: 28 }}>
+      <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: kickerColor, fontWeight: 600, marginBottom: 28 }}>
         Presentasi Proyek
       </div>
       <div
@@ -1916,24 +1952,26 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
           lineHeight: 1.05,
           letterSpacing: "-0.04em",
           fontWeight: 700,
-          color: "#0a0a0a",
+          color: titleColor,
+          textShadow: hasBg ? "0 4px 24px rgba(0,0,0,0.45)" : "none",
           maxWidth: 1100,
         }}
       >
         {slide.sketch.title || "Proyek"}
       </div>
       <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 36, marginBottom: 36 }} />
-      <div style={{ fontSize: 22, color: "#555", letterSpacing: "0.02em" }}>
+      <div style={{ fontSize: 22, color: subColor, letterSpacing: "0.02em" }}>
         {dateStr}
       </div>
-      <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-        <span style={{ fontWeight: 700, color: "#111" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
+      <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: kickerColor }}>
+        <span style={{ fontWeight: 700, color: hasBg ? "#fff" : "#111" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
         <span>Cetak {formatCetak(now)}</span>
       </div>
     </div>
   );
 }
+
 
 // ---- Table of Contents body ----
 function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
