@@ -553,7 +553,8 @@ function PresentasiBox({
   const [mpAnalysis, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
   useEffect(() => {
     let mounted = true;
-    const refreshAnalysis = () => setMpAnalysis(loadMasterplanAnalysis());
+    const rootId = sketch.linkedMasterplan?.rootLayerId;
+    const refreshAnalysis = () => setMpAnalysis(loadMasterplanAnalysis(rootId));
     refreshAnalysis();
     import("@/lib/masterplan").then((m) => {
       if (!mounted) return;
@@ -567,7 +568,7 @@ function PresentasiBox({
       };
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
-  }, []);
+  }, [sketch.linkedMasterplan?.rootLayerId]);
   // Nama bangunan pada masterplan yang terhubung dengan sketsa ini.
   // Dipakai untuk sinkron judul di halaman Presentasi ↔ Sketsa ↔ Masterplan
   // (tanpa crossing: satu bangunan → satu judul).
@@ -575,11 +576,15 @@ function PresentasiBox({
     if (!mpAnalysis || !sketch.linkedMasterplan) return null;
     return mpAnalysis.buildings.find((b) => b.id === sketch.linkedMasterplan!.rootLayerId)?.name ?? null;
   }, [mpAnalysis, sketch.linkedMasterplan]);
+  // Judul halaman Masterplan (sumber bangunan). Dipakai sebagai judul UTAMA
+  // presentasi — agar konsisten dengan halaman masterplan asalnya, bukan
+  // dengan sketsa yang kebetulan aktif.
+  const masterplanTitle = mpAnalysis?.title ?? null;
   const effectiveSketch = useMemo(
     () => (linkedBuildingName ? { ...sketch, title: linkedBuildingName } : sketch),
     [sketch, linkedBuildingName],
   );
-  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis]);
+  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
