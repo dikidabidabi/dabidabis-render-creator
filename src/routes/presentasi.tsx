@@ -1199,10 +1199,14 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       level: lv,
       bounds,
     });
+    // Judul utama slide denah = nama bangunan (sinkron dengan halaman Sketsa
+    // & Masterplan). Level tetap tampil di kicker & sidebar. Bila belum
+    // terhubung ke masterplan, fallback ke nama level.
+    const lvName = displayNames[lv.id] ?? lv.name;
     out.push({
       kind: "level",
       id: `lvl-${lv.id}`,
-      title: displayNames[lv.id] ?? lv.name,
+      title: sk.linkedMasterplan ? (sk.title || lvName) : lvName,
       sketch: sk,
       level: lv,
       bounds,
