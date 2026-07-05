@@ -1156,14 +1156,16 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels, sk.layers ?? []);
   const out: Slide[] = [];
-  // Slide judul (paling awal)
-  out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
+  // Slide judul (paling awal) — pakai judul halaman Masterplan sumber bila
+  // sketsa terhubung ke masterplan; jika tidak, fallback ke judul sketsa.
+  const mainTitle = (sk.linkedMasterplan && masterplanTitle) ? masterplanTitle : (sk.title || "Proyek");
+  out.push({ kind: "title", id: "title-slide", title: mainTitle, sketch: sk });
   // Slide Master Plan — hanya untuk proyek hasil impor dari halaman Master Plan.
   const hasAnalysis = analysis && (analysis.buildings.length > 0 || analysis.lahanPolygonsPx.length > 0);
   if (hasAnalysis && sk.linkedMasterplan) {
