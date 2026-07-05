@@ -775,21 +775,21 @@ function LibraryGrid({
             className="block aspect-[4/3] w-full cursor-pointer object-cover"
             onClick={() => onDownload(s)}
           />
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-1.5 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(s.id);
+            }}
+            className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600/90"
+            aria-label="Hapus screenshot"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+          <div className="absolute inset-x-0 bottom-0 flex items-center bg-black/55 px-1.5 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
             <span className="font-mono">
               {new Date(s.ts).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
             </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemove(s.id);
-              }}
-              className="rounded p-0.5 hover:bg-white/20"
-              aria-label="Hapus"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
           </div>
         </div>
       ))}
