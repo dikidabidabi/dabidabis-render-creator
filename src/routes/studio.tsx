@@ -36,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/lib/auth";
 import { generateRender } from "@/lib/render.functions";
 import { useStudioStore, type RenderAngle } from "@/store/studio-store";
@@ -92,6 +93,7 @@ type PromptNodeData = {
   kind: "prompt";
   style: string;
   detail: string;
+  geometryConsistency: number; // 0-100, konsistensi bentuk terhadap referensi sketsa
 };
 type RenderNodeData = {
   kind: "render";
@@ -103,6 +105,7 @@ type OutputNodeData = {
   kind: "output";
   sketchId: string;
   sketchTitle: string;
+  geometryConsistency: number; // 0-100, konsistensi geometry saat berubah angle
 };
 
 // Stable empty-array reference so zustand selectors don't return a new array
@@ -349,6 +352,23 @@ function PromptNode({ id, data }: NodeProps) {
             className="mt-1 resize-none text-xs"
           />
         </div>
+        <div className="rounded border border-border/60 bg-background/60 p-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px]">Geometry Consistency</Label>
+            <span className="text-[10px] font-medium text-ember">{d.geometryConsistency ?? 70}%</span>
+          </div>
+          <Slider
+            value={[d.geometryConsistency ?? 70]}
+            onValueChange={(v) => updateNode(id, { geometryConsistency: v[0] })}
+            min={0}
+            max={100}
+            step={1}
+            className="mt-2"
+          />
+          <p className="mt-1 text-[9px] leading-tight text-muted-foreground">
+            0% bebas bentuk · 100% ikuti sketsa referensi persis
+          </p>
+        </div>
       </div>
     </NodeShell>
   );
@@ -403,10 +423,11 @@ function RenderNode({
   );
 }
 
-function OutputNode({ data }: NodeProps) {
+function OutputNode({ id, data }: NodeProps) {
   const d = data as OutputNodeData;
   const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
   const sync = useStudioStore((s) => s.syncToPresentasi);
+  const updateNode = useStudioStore((s) => s.updateNode);
   const total = outputs.length || 3;
   const done = outputs.filter((o) => o.status === "done").length;
   const avgProgress = outputs.length
@@ -431,6 +452,25 @@ function OutputNode({ data }: NodeProps) {
             className="h-full bg-gradient-primary transition-all duration-300"
             style={{ width: `${avgProgress}%` }}
           />
+        </div>
+        <div className="rounded border border-border/60 bg-background/60 p-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px]">Geometry Consistency</Label>
+            <span className="text-[10px] font-medium text-emerald-500">
+              {d.geometryConsistency ?? 80}%
+            </span>
+          </div>
+          <Slider
+            value={[d.geometryConsistency ?? 80]}
+            onValueChange={(v) => updateNode(id, { geometryConsistency: v[0] })}
+            min={0}
+            max={100}
+            step={1}
+            className="mt-2"
+          />
+          <p className="mt-1 text-[9px] leading-tight text-muted-foreground">
+            0% bentuk berbeda tiap angle · 100% bentuk identik, hanya sudut berubah
+          </p>
         </div>
         <div className="grid grid-cols-3 gap-1">
           {(outputs.length ? outputs : DEFAULT_ANGLES.map((a, i) => ({
@@ -536,6 +576,19 @@ function useStudioExecute() {
         .join(", ");
       if (!finalPrompt.trim()) return toast.error("Isi gaya atau detail prompt");
 
+      const promptGeom = Math.max(0, Math.min(100, prData.geometryConsistency ?? 70));
+      const outputGeom = Math.max(0, Math.min(100, outData.geometryConsistency ?? 80));
+      // Map 0-100 → accuracy 1-10 untuk kesetiaan geometry ke sketsa referensi.
+      const accuracyLevel = Math.max(1, Math.min(10, Math.round((promptGeom / 100) * 9) + 1));
+      const angleConsistencyText =
+        outputGeom >= 90
+          ? "KRITIS: Pertahankan bentuk massa, siluet, jumlah lantai, posisi bukaan, dan seluruh elemen arsitektural PERSIS SAMA di semua angle. Hanya sudut kamera yang berubah, geometry bangunan identik."
+          : outputGeom >= 60
+          ? `Jaga konsistensi bentuk bangunan ${outputGeom}% antar angle — massa utama, proporsi, dan komposisi harus sama; detail sekunder boleh sedikit variasi.`
+          : outputGeom >= 30
+          ? `Boleh interpretasi variasi bentuk (~${100 - outputGeom}% variasi) antar angle sambil menjaga karakter umum.`
+          : "Bebas berkreasi variasi bentuk pada tiap angle — hanya gaya dan mood yang konsisten.";
+
       // Init outputs (3 angles)
       const angles: RenderAngle[] = DEFAULT_ANGLES.map((a) => ({
         id: crypto.randomUUID(),
@@ -564,7 +617,7 @@ function useStudioExecute() {
         // Kick off in parallel, but yield to UI between starts so canvas stays smooth.
         const results = await Promise.all(
           angles.map(async (a) => {
-            const anglePrompt = `${finalPrompt}. ${ANGLE_PROMPT[a.angle] ?? a.angle}`;
+            const anglePrompt = `${finalPrompt}. ${ANGLE_PROMPT[a.angle] ?? a.angle}. ${angleConsistencyText}`;
             try {
               const res = await callRender({
                 data: {
@@ -572,8 +625,8 @@ function useStudioExecute() {
                   referenceBase64: null,
                   prompt: anglePrompt,
                   renderType: "exterior",
-                  accuracy: 8,
-                  consistency: 6,
+                  accuracy: accuracyLevel,
+                  consistency: Math.max(1, Math.min(10, Math.round((outputGeom / 100) * 9) + 1)),
                 },
               });
               clearInterval(timers[a.id]);
@@ -670,6 +723,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
           kind: "prompt",
           style: "bare finish concrete, cinematic lighting",
           detail: "",
+          geometryConsistency: 70,
         } satisfies PromptNodeData,
       },
       {
@@ -686,6 +740,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
           kind: "output",
           sketchId: sk.id,
           sketchTitle: sk.title,
+          geometryConsistency: 80,
         } satisfies OutputNodeData,
       },
     );
