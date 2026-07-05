@@ -8292,7 +8292,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           text: iluKind === "label" ? (iluText || "Label") : undefined,
           createdAt: Date.now(),
         };
-        onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         toast.success(`${preset.label} ditambahkan`);
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
