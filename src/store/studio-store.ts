@@ -98,6 +98,27 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     persist(next);
     set({ graph: next });
   },
+  addNode: (node) => {
+    const g = get().graph;
+    const next = { ...g, nodes: [...g.nodes, node] };
+    persist(next);
+    set({ graph: next });
+  },
+  addEdge: (edge) => {
+    const g = get().graph;
+    if (g.edges.some((e) => e.id === edge.id)) return;
+    const next = { ...g, edges: [...g.edges, edge] };
+    persist(next);
+    set({ graph: next });
+  },
+  removeNode: (nodeId) => {
+    const g = get().graph;
+    const nodes = g.nodes.filter((n) => n.id !== nodeId);
+    const edges = g.edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+    const next = { ...g, nodes, edges };
+    persist(next);
+    set({ graph: next });
+  },
   setOutputs: (sketchId, outputs) => {
     const g = get().graph;
     const next = { ...g, outputs: { ...g.outputs, [sketchId]: outputs } };
