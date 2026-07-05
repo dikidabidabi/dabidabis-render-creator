@@ -253,18 +253,29 @@ export function drawAnnotationCanvas(
 
   // arrow (garis solid) atau arrowDashed (garis putus-putus lebar, siku, chevron head)
   if (a.kind === "arrowDashed") {
-    // Arrowhead — dua persegi panjang yang bertemu di ujung membentuk sudut siku-siku (90°).
+    // Arrowhead — dua persegi panjang yang bertemu di TIP membentuk sudut
+    // siku-siku (90°). Titik pertemuan (tip) = ujung runcing menghadap arah
+    // panah; masing-masing bar menjulur ke belakang pada sudut 45° dari
+    // sumbu panah, sehingga sudut internal antar bar = 90°.
     const sEndFull = worldToScreen(poly[poly.length - 1]);
     const sPrevFull = worldToScreen(poly[poly.length - 2]);
     const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
-    const hL = sw * 2.2;                 // panjang bar arrowhead
-    const barThick = Math.max(1, sw * 0.7); // ketebalan bar (persegi panjang)
-    const cs = Math.cos(angH), sn = Math.sin(angH);
+    const hL = sw * 2.4;
+    const barThick = Math.max(1, sw * 0.6);
     const tip = sEndFull;
-    // Kedua bar bertemu di tip pada sudut 90° (masing-masing 45° dari sumbu panah).
-    // Shaft berakhir tepat di titik pertemuan bagian dalam kedua bar (proyeksi ke sumbu).
-    const shaftEnd = { x: tip.x - cs * hL * Math.SQRT1_2, y: tip.y - sn * hL * Math.SQRT1_2 };
 
+    // Arah bar A (back-left) = angH + 3π/4, bar B (back-right) = angH − 3π/4.
+    // Perp outward untuk masing-masing = angH ± π/4 (menjauh dari sumbu panah).
+    const angA = angH + (3 * Math.PI) / 4;
+    const angB = angH - (3 * Math.PI) / 4;
+    const perpA = angH + Math.PI / 4;
+    const perpB = angH - Math.PI / 4;
+    const dA = { x: Math.cos(angA), y: Math.sin(angA) };
+    const dB = { x: Math.cos(angB), y: Math.sin(angB) };
+    const nA = { x: Math.cos(perpA), y: Math.sin(perpA) };
+    const nB = { x: Math.cos(perpB), y: Math.sin(perpB) };
+
+    // Shaft: berhenti tepat di tip (bar akan menutupi ujung dash).
     ctx.lineCap = "butt";
     ctx.lineJoin = "miter";
     ctx.setLineDash([sw * 0.5, sw * 0.3]);
@@ -273,26 +284,27 @@ export function drawAnnotationCanvas(
     ctx.beginPath();
     const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
     for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
-    ctx.lineTo(shaftEnd.x, shaftEnd.y);
+    ctx.lineTo(tip.x, tip.y);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Dua bar persegi panjang bertemu di tip pada sudut siku-siku.
+    // Dua bar bertemu tepat di tip (satu titik bersama = sudut siku tersambung).
     ctx.fillStyle = a.color;
-    const drawBar = (dirRad: number) => {
-      const dx = Math.cos(dirRad), dy = Math.sin(dirRad);
-      const px = -dy, py = dx;
-      const h = barThick / 2;
+    const drawBar = (d: { x: number; y: number }, n: { x: number; y: number }) => {
+      const p1 = { x: tip.x, y: tip.y };
+      const p2 = { x: tip.x + d.x * hL, y: tip.y + d.y * hL };
+      const p3 = { x: p2.x + n.x * barThick, y: p2.y + n.y * barThick };
+      const p4 = { x: tip.x + n.x * barThick, y: tip.y + n.y * barThick };
       ctx.beginPath();
-      ctx.moveTo(tip.x + px * h, tip.y + py * h);
-      ctx.lineTo(tip.x + dx * hL + px * h, tip.y + dy * hL + py * h);
-      ctx.lineTo(tip.x + dx * hL - px * h, tip.y + dy * hL - py * h);
-      ctx.lineTo(tip.x - px * h, tip.y - py * h);
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.lineTo(p3.x, p3.y);
+      ctx.lineTo(p4.x, p4.y);
       ctx.closePath();
       ctx.fill();
     };
-    drawBar(angH + Math.PI - Math.PI / 4);
-    drawBar(angH + Math.PI + Math.PI / 4);
+    drawBar(dA, nA);
+    drawBar(dB, nB);
     ctx.restore();
     return;
   }
@@ -382,33 +394,35 @@ export function annotationSvgElements(
     const tip = pts[pts.length - 1];
     const prev = pts[pts.length - 2];
     const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-    const hL = sw * 2.2;
-    const barThick = Math.max(1, sw * 0.7);
-    const cs = Math.cos(angH), sn = Math.sin(angH);
-    const shaftEnd = { x: tip.x - cs * hL * Math.SQRT1_2, y: tip.y - sn * hL * Math.SQRT1_2 };
-    const shaftPts = [...pts.slice(0, -1), shaftEnd];
+    const hL = sw * 2.4;
+    const barThick = Math.max(1, sw * 0.6);
+    const shaftPts = [...pts.slice(0, -1), tip];
     const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
     nodes.push(React.createElement("path", {
       key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
       strokeLinecap: "butt", strokeLinejoin: "miter",
       strokeDasharray: `${sw * 0.5},${sw * 0.3}`,
     }));
-    // Dua bar persegi panjang bertemu di tip pada sudut siku-siku (90°).
-    const barPath = (dirRad: number, key: string) => {
-      const dx = Math.cos(dirRad), dy = Math.sin(dirRad);
-      const px = -dy, py = dx;
-      const h = barThick / 2;
-      const p1 = { x: tip.x + px * h, y: tip.y + py * h };
-      const p2 = { x: tip.x + dx * hL + px * h, y: tip.y + dy * hL + py * h };
-      const p3 = { x: tip.x + dx * hL - px * h, y: tip.y + dy * hL - py * h };
-      const p4 = { x: tip.x - px * h, y: tip.y - py * h };
+    // Dua bar bertemu tepat di tip (satu titik bersama = siku tersambung).
+    const angA = angH + (3 * Math.PI) / 4;
+    const angB = angH - (3 * Math.PI) / 4;
+    const perpA = angH + Math.PI / 4;
+    const perpB = angH - Math.PI / 4;
+    const barPath = (dRad: number, nRad: number, key: string) => {
+      const dx = Math.cos(dRad), dy = Math.sin(dRad);
+      const nx = Math.cos(nRad), ny = Math.sin(nRad);
+      const p1 = tip;
+      const p2 = { x: tip.x + dx * hL, y: tip.y + dy * hL };
+      const p3 = { x: p2.x + nx * barThick, y: p2.y + ny * barThick };
+      const p4 = { x: tip.x + nx * barThick, y: tip.y + ny * barThick };
       const dd = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y} Z`;
       nodes.push(React.createElement("path", { key, d: dd, fill: a.color, stroke: "none" }));
     };
-    barPath(angH + Math.PI - Math.PI / 4, `${keyPrefix}-h1`);
-    barPath(angH + Math.PI + Math.PI / 4, `${keyPrefix}-h2`);
+    barPath(angA, perpA, `${keyPrefix}-h1`);
+    barPath(angB, perpB, `${keyPrefix}-h2`);
     return nodes;
   }
+
 
   const mid = `${keyPrefix}-am`;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },

@@ -568,7 +568,17 @@ function PresentasiBox({
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
   }, []);
-  const effectiveSketch = useMemo(() => (mpAnalysis && sketch.linkedMasterplan && mpAnalysis.title ? { ...sketch, title: mpAnalysis.title } : sketch), [sketch, mpAnalysis]);
+  // Nama bangunan pada masterplan yang terhubung dengan sketsa ini.
+  // Dipakai untuk sinkron judul di halaman Presentasi ↔ Sketsa ↔ Masterplan
+  // (tanpa crossing: satu bangunan → satu judul).
+  const linkedBuildingName = useMemo(() => {
+    if (!mpAnalysis || !sketch.linkedMasterplan) return null;
+    return mpAnalysis.buildings.find((b) => b.id === sketch.linkedMasterplan!.rootLayerId)?.name ?? null;
+  }, [mpAnalysis, sketch.linkedMasterplan]);
+  const effectiveSketch = useMemo(
+    () => (linkedBuildingName ? { ...sketch, title: linkedBuildingName } : sketch),
+    [sketch, linkedBuildingName],
+  );
   const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis]);
 
   const [idx, setIdx] = useState(0);
@@ -1189,10 +1199,14 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       level: lv,
       bounds,
     });
+    // Judul utama slide denah = nama bangunan (sinkron dengan halaman Sketsa
+    // & Masterplan). Level tetap tampil di kicker & sidebar. Bila belum
+    // terhubung ke masterplan, fallback ke nama level.
+    const lvName = displayNames[lv.id] ?? lv.name;
     out.push({
       kind: "level",
       id: `lvl-${lv.id}`,
-      title: displayNames[lv.id] ?? lv.name,
+      title: sk.linkedMasterplan ? (sk.title || lvName) : lvName,
       sketch: sk,
       level: lv,
       bounds,
@@ -1713,7 +1727,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
 
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
-    slide.kind === "level" ? "Sketsa · Level"
+    slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
     : slide.kind === "site" ? (
@@ -4239,6 +4253,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           const gapPx = n > 60 ? 2 : n > 28 ? 3 : 4;
           return (
             <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
+              {/* Judul halaman sketsa (bangunan) — ditempatkan di atas legenda,
+                  sinkron dengan judul utama slide & nama bangunan di masterplan. */}
+              <div
+                style={{
+                  fontFamily: "var(--font-display, Sora, sans-serif)",
+                  fontSize: 20,
+                  fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  color: "#111",
+                  lineHeight: 1.15,
+                  marginBottom: 10,
+                  wordBreak: "break-word",
+                }}
+                title="Judul halaman sketsa"
+              >
+                {sketch.title}
+              </div>
               <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
                 Legenda Ruang
               </div>
