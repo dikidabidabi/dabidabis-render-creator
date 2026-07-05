@@ -825,7 +825,12 @@ function StudioPage() {
             fitView
             fitViewOptions={{ padding: 0.2 }}
             proOptions={{ hideAttribution: true }}
-            defaultEdgeOptions={{ animated: true }}
+            defaultEdgeOptions={{ animated: true, style: { stroke: "hsl(24 95% 53%)", strokeWidth: 2 } }}
+            connectionMode={"loose" as never}
+            connectionRadius={40}
+            nodesDraggable
+            nodesConnectable
+            elementsSelectable
           >
             <Background gap={24} color="hsl(var(--border))" />
             <Controls className="!bg-surface !border-border" />
