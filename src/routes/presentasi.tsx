@@ -568,7 +568,17 @@ function PresentasiBox({
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
   }, []);
-  const effectiveSketch = useMemo(() => (mpAnalysis && sketch.linkedMasterplan && mpAnalysis.title ? { ...sketch, title: mpAnalysis.title } : sketch), [sketch, mpAnalysis]);
+  // Nama bangunan pada masterplan yang terhubung dengan sketsa ini.
+  // Dipakai untuk sinkron judul di halaman Presentasi ↔ Sketsa ↔ Masterplan
+  // (tanpa crossing: satu bangunan → satu judul).
+  const linkedBuildingName = useMemo(() => {
+    if (!mpAnalysis || !sketch.linkedMasterplan) return null;
+    return mpAnalysis.buildings.find((b) => b.id === sketch.linkedMasterplan!.rootLayerId)?.name ?? null;
+  }, [mpAnalysis, sketch.linkedMasterplan]);
+  const effectiveSketch = useMemo(
+    () => (linkedBuildingName ? { ...sketch, title: linkedBuildingName } : sketch),
+    [sketch, linkedBuildingName],
+  );
   const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis]);
 
   const [idx, setIdx] = useState(0);
