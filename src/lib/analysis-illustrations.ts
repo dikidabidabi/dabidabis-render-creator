@@ -202,25 +202,21 @@ export function drawAnnotationCanvas(
 
   // arrow (garis solid) atau arrowDashed (garis putus-putus lebar, siku, chevron head)
   if (a.kind === "arrowDashed") {
-    // Chevron arrowhead — dihitung dulu supaya shaft dipendekkan agar tidak menembus head.
+    // Arrowhead — dua persegi panjang yang bertemu di ujung membentuk sudut siku-siku (90°).
     const sEndFull = worldToScreen(poly[poly.length - 1]);
     const sPrevFull = worldToScreen(poly[poly.length - 2]);
     const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
-    const hL = sw * 2.4;        // panjang chevron (searah panah)
-    const hW = sw * 2.6;        // lebar chevron (tegak lurus)
-    const notch = hL * 0.45;    // kedalaman takik pada bagian belakang
-    const cx = Math.cos(angH), cy = Math.sin(angH);
-    const nx = -cy, ny = cx;    // normal
+    const hL = sw * 2.2;                 // panjang bar arrowhead
+    const barThick = Math.max(1, sw * 0.7); // ketebalan bar (persegi panjang)
+    const cs = Math.cos(angH), sn = Math.sin(angH);
     const tip = sEndFull;
-    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
-    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
-    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
-    // Shaft dipendekkan sampai basis chevron
-    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+    // Kedua bar bertemu di tip pada sudut 90° (masing-masing 45° dari sumbu panah).
+    // Shaft berakhir tepat di titik pertemuan bagian dalam kedua bar (proyeksi ke sumbu).
+    const shaftEnd = { x: tip.x - cs * hL * Math.SQRT1_2, y: tip.y - sn * hL * Math.SQRT1_2 };
 
     ctx.lineCap = "butt";
     ctx.lineJoin = "miter";
-    ctx.setLineDash([sw * 2.0, sw * 1.0]);
+    ctx.setLineDash([sw * 0.5, sw * 0.3]);
     ctx.strokeStyle = a.color;
     ctx.lineWidth = sw;
     ctx.beginPath();
@@ -230,18 +226,26 @@ export function drawAnnotationCanvas(
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Chevron (segi empat berujung: tip, backL, notch, backR)
+    // Dua bar persegi panjang bertemu di tip pada sudut siku-siku.
     ctx.fillStyle = a.color;
-    ctx.beginPath();
-    ctx.moveTo(tip.x, tip.y);
-    ctx.lineTo(backL.x, backL.y);
-    ctx.lineTo(notchP.x, notchP.y);
-    ctx.lineTo(backR.x, backR.y);
-    ctx.closePath();
-    ctx.fill();
+    const drawBar = (dirRad: number) => {
+      const dx = Math.cos(dirRad), dy = Math.sin(dirRad);
+      const px = -dy, py = dx;
+      const h = barThick / 2;
+      ctx.beginPath();
+      ctx.moveTo(tip.x + px * h, tip.y + py * h);
+      ctx.lineTo(tip.x + dx * hL + px * h, tip.y + dy * hL + py * h);
+      ctx.lineTo(tip.x + dx * hL - px * h, tip.y + dy * hL - py * h);
+      ctx.lineTo(tip.x - px * h, tip.y - py * h);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawBar(angH + Math.PI - Math.PI / 4);
+    drawBar(angH + Math.PI + Math.PI / 4);
     ctx.restore();
     return;
   }
+
 
   ctx.strokeStyle = withAlpha(a.color, 0.55);
   ctx.lineWidth = sw;
