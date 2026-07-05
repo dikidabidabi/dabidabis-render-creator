@@ -383,20 +383,16 @@ function PromptNode({ id, data }: NodeProps) {
       position: pos,
       data: { kind: "reference", image: null, label: "Referensi Style" } satisfies ReferenceNodeData,
     });
-    // auto-connect ref → nearest render node (if any downstream from this prompt)
-    const promptOut = useStudioStore
-      .getState()
-      .graph.edges.find((e) => e.source === id);
-    if (promptOut) {
-      addEdgeStore({
-        id: `${refId}->${promptOut.target}`,
-        source: refId,
-        target: promptOut.target,
-        animated: true,
-        style: { stroke: "#ec4899", strokeWidth: 2 },
-      });
-    }
-    toast.success("Node Referensi Style dibuat");
+    // auto-connect reference → this prompt node (reference is a visual style
+    // addition to the prompt; geometry still comes from Input node via prompt).
+    addEdgeStore({
+      id: `${refId}->${id}`,
+      source: refId,
+      target: id,
+      animated: true,
+      style: { stroke: "#ec4899", strokeWidth: 2 },
+    });
+    toast.success("Node Referensi Style tersambung ke Prompt");
   };
 
   return (
