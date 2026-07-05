@@ -731,13 +731,15 @@ function OutputNode({
 
   return (
     <NodeShell
-      title={`Multi-Angle Output · ${d.sketchTitle}`}
+      title="Multi-Angle Output"
       icon={<Layers className="h-3.5 w-3.5 text-emerald-500" />}
       tone="output"
       hasTarget
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
+        <OutputSketchSelector id={id} sketchId={d.sketchId} />
+
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>
             {done}/{total} angle
