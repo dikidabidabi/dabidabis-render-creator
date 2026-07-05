@@ -1507,15 +1507,20 @@ function StudioPage() {
     [graph, setNodesEdges],
   );
 
-  // Spawn node from dropdown
-  const spawnNode = (kind: "input" | "prompt" | "render" | "output" | "reference" | "edit") => {
+  // Spawn node from dropdown. For input/output, an optional sketchId picks
+  // the sketch to bind — otherwise the first sketch is used.
+  const spawnNode = (
+    kind: "input" | "prompt" | "render" | "output" | "reference" | "edit",
+    sketchId?: string,
+  ) => {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
     const uid = crypto.randomUUID().slice(0, 8);
-    const sk = sketches[0];
+    const sk = sketchId ? sketches.find((s) => s.id === sketchId) ?? sketches[0] : sketches[0];
     if ((kind === "input" || kind === "output") && !sk) {
       toast.error("Belum ada sketsa. Buat sketsa dulu.");
       return;
     }
+
     let node: Node | null = null;
     if (kind === "input" && sk) {
       node = {
