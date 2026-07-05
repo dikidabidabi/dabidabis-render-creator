@@ -4253,6 +4253,23 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           const gapPx = n > 60 ? 2 : n > 28 ? 3 : 4;
           return (
             <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
+              {/* Judul halaman sketsa (bangunan) — ditempatkan di atas legenda,
+                  sinkron dengan judul utama slide & nama bangunan di masterplan. */}
+              <div
+                style={{
+                  fontFamily: "var(--font-display, Sora, sans-serif)",
+                  fontSize: 20,
+                  fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                  color: "#111",
+                  lineHeight: 1.15,
+                  marginBottom: 10,
+                  wordBreak: "break-word",
+                }}
+                title="Judul halaman sketsa"
+              >
+                {sketch.title}
+              </div>
               <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
                 Legenda Ruang
               </div>
