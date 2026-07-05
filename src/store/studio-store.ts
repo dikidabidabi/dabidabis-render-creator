@@ -28,11 +28,15 @@ type StudioState = {
   setGraph: (g: StudioGraph) => void;
   setNodesEdges: (nodes: Node[], edges: Edge[]) => void;
   updateNode: (nodeId: string, patch: Record<string, unknown>) => void;
+  addNode: (node: Node) => void;
+  addEdge: (edge: Edge) => void;
+  removeNode: (nodeId: string) => void;
   setOutputs: (sketchId: string, outputs: RenderAngle[]) => void;
   updateOutput: (sketchId: string, angleId: string, patch: Partial<RenderAngle>) => void;
   hydrate: () => void;
   syncToPresentasi: (sketchId: string, sketchTitle: string) => void;
 };
+
 
 const EMPTY: StudioGraph = { nodes: [], edges: [], outputs: {} };
 
