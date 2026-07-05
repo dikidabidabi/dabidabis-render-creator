@@ -87,6 +87,57 @@ function loadShots(sketchId: string): Shot[] {
   }
 }
 
+function useSketchList(): SketchLite[] {
+  const [list, setList] = useState<SketchLite[]>(() => loadSketches());
+  useEffect(() => {
+    const reload = () => setList(loadSketches());
+    window.addEventListener("storage", reload);
+    window.addEventListener("focus", reload);
+    return () => {
+      window.removeEventListener("storage", reload);
+      window.removeEventListener("focus", reload);
+    };
+  }, []);
+  return list;
+}
+
+function SketchSelector({
+  sketches,
+  value,
+  onChange,
+  tone,
+}: {
+  sketches: SketchLite[];
+  value: string;
+  onChange: (sk: SketchLite) => void;
+  tone: "sky" | "emerald";
+}) {
+  const ringCls = tone === "sky" ? "focus:border-sky-500" : "focus:border-emerald-500";
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        const sk = sketches.find((s) => s.id === e.target.value);
+        if (sk) onChange(sk);
+      }}
+      className={cn(
+        "w-full rounded border border-border/60 bg-background px-2 py-1 text-[11px] font-medium outline-none",
+        ringCls,
+      )}
+    >
+      {sketches.length === 0 && <option value="">(Belum ada sketsa)</option>}
+      {sketches.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.title}
+        </option>
+      ))}
+      {sketches.length > 0 && !sketches.some((s) => s.id === value) && (
+        <option value={value}>{value ? "(sketsa terhapus)" : ""}</option>
+      )}
+    </select>
+  );
+}
+
 // ---------- Angles ----------
 const DEFAULT_ANGLES = ["Eye Level", "Bird's Eye", "Worm's Eye"];
 const ANGLE_PROMPT: Record<string, string> = {
@@ -258,8 +309,13 @@ function InputNode({ id, data }: NodeProps) {
   const d = data as InputNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
+  const sketches = useSketchList();
   const [shots, setShots] = useState<Shot[]>(() => loadShots(d.sketchId));
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setShots(loadShots(d.sketchId));
+  }, [d.sketchId]);
 
   const refresh = () => setShots(loadShots(d.sketchId));
   const uploads = d.uploads ?? [];
@@ -291,13 +347,22 @@ function InputNode({ id, data }: NodeProps) {
 
   return (
     <NodeShell
-      title={`3D Input · ${d.sketchTitle}`}
+      title="3D Input"
       icon={<ImageIcon className="h-3.5 w-3.5 text-sky-500" />}
       tone="input"
       hasSource
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
+        <SketchSelector
+          sketches={sketches}
+          value={d.sketchId}
+          tone="sky"
+          onChange={(sk) => {
+            updateNode(id, { sketchId: sk.id, sketchTitle: sk.title, selectedShotId: null });
+            setShots(loadShots(sk.id));
+          }}
+        />
         <div className="flex items-center justify-between">
           <span className="text-[10px] text-muted-foreground">
             {shots.length} dari 3D · {uploads.length} unggahan
@@ -588,6 +653,8 @@ function OutputNode({
   const sync = useStudioStore((s) => s.syncToPresentasi);
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
+  const sketches = useSketchList();
+
 
   // Standalone output (from edit node)
   if (d.standalone) {
@@ -666,13 +733,21 @@ function OutputNode({
 
   return (
     <NodeShell
-      title={`Multi-Angle Output · ${d.sketchTitle}`}
+      title="Multi-Angle Output"
       icon={<Layers className="h-3.5 w-3.5 text-emerald-500" />}
       tone="output"
       hasTarget
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
+        <SketchSelector
+          sketches={sketches}
+          value={d.sketchId}
+          tone="emerald"
+          onChange={(sk) => updateNode(id, { sketchId: sk.id, sketchTitle: sk.title })}
+        />
+
+
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>
             {done}/{total} angle
@@ -1432,15 +1507,20 @@ function StudioPage() {
     [graph, setNodesEdges],
   );
 
-  // Spawn node from dropdown
-  const spawnNode = (kind: "input" | "prompt" | "render" | "output" | "reference" | "edit") => {
+  // Spawn node from dropdown. For input/output, an optional sketchId picks
+  // the sketch to bind — otherwise the first sketch is used.
+  const spawnNode = (
+    kind: "input" | "prompt" | "render" | "output" | "reference" | "edit",
+    sketchId?: string,
+  ) => {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
     const uid = crypto.randomUUID().slice(0, 8);
-    const sk = sketches[0];
+    const sk = sketchId ? sketches.find((s) => s.id === sketchId) ?? sketches[0] : sketches[0];
     if ((kind === "input" || kind === "output") && !sk) {
       toast.error("Belum ada sketsa. Buat sketsa dulu.");
       return;
     }
+
     let node: Node | null = null;
     if (kind === "input" && sk) {
       node = {
@@ -1651,20 +1731,41 @@ function StudioPage() {
                 <Plus className="h-3.5 w-3.5" /> Tambah Node
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuLabel>Node Utama</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => spawnNode("input")}>
-                1 · 3D Input
-              </DropdownMenuItem>
+            <DropdownMenuContent align="start" className="max-h-[70vh] w-64 overflow-y-auto">
+              <DropdownMenuLabel>1 · 3D Input — pilih sketsa</DropdownMenuLabel>
+              {sketches.length === 0 ? (
+                <DropdownMenuItem disabled>(belum ada sketsa)</DropdownMenuItem>
+              ) : (
+                sketches.map((sk) => (
+                  <DropdownMenuItem
+                    key={`in-${sk.id}`}
+                    onClick={() => spawnNode("input", sk.id)}
+                  >
+                    <ImageIcon className="mr-2 h-3 w-3 text-sky-500" /> {sk.title}
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => spawnNode("prompt")}>
                 2 · Prompt & Style
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("render")}>
                 3 · AI Render Engine
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => spawnNode("output")}>
-                4 · Multi-Angle Output
-              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>4 · Multi-Angle Output — pilih sketsa</DropdownMenuLabel>
+              {sketches.length === 0 ? (
+                <DropdownMenuItem disabled>(belum ada sketsa)</DropdownMenuItem>
+              ) : (
+                sketches.map((sk) => (
+                  <DropdownMenuItem
+                    key={`out-${sk.id}`}
+                    onClick={() => spawnNode("output", sk.id)}
+                  >
+                    <Layers className="mr-2 h-3 w-3 text-emerald-500" /> {sk.title}
+                  </DropdownMenuItem>
+                ))
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => spawnNode("reference")}>
@@ -1674,6 +1775,7 @@ function StudioPage() {
                 Sketsa Perbaikan (via anotasi)
               </DropdownMenuItem>
             </DropdownMenuContent>
+
           </DropdownMenu>
           <div>
             <h1 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
