@@ -1123,6 +1123,7 @@ function normalizeSketch(s: any): Sketch {
       return out;
     })(),
     illustrations: normalizeAnnotations((s as any)?.illustrations),
+    illustrationLayer: normalizeIluLayer((s as any)?.illustrationLayer),
   };
 }
 
