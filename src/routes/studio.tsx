@@ -576,6 +576,19 @@ function useStudioExecute() {
         .join(", ");
       if (!finalPrompt.trim()) return toast.error("Isi gaya atau detail prompt");
 
+      const promptGeom = Math.max(0, Math.min(100, prData.geometryConsistency ?? 70));
+      const outputGeom = Math.max(0, Math.min(100, outData.geometryConsistency ?? 80));
+      // Map 0-100 → accuracy 1-10 untuk kesetiaan geometry ke sketsa referensi.
+      const accuracyLevel = Math.max(1, Math.min(10, Math.round((promptGeom / 100) * 9) + 1));
+      const angleConsistencyText =
+        outputGeom >= 90
+          ? "KRITIS: Pertahankan bentuk massa, siluet, jumlah lantai, posisi bukaan, dan seluruh elemen arsitektural PERSIS SAMA di semua angle. Hanya sudut kamera yang berubah, geometry bangunan identik."
+          : outputGeom >= 60
+          ? `Jaga konsistensi bentuk bangunan ${outputGeom}% antar angle — massa utama, proporsi, dan komposisi harus sama; detail sekunder boleh sedikit variasi.`
+          : outputGeom >= 30
+          ? `Boleh interpretasi variasi bentuk (~${100 - outputGeom}% variasi) antar angle sambil menjaga karakter umum.`
+          : "Bebas berkreasi variasi bentuk pada tiap angle — hanya gaya dan mood yang konsisten.";
+
       // Init outputs (3 angles)
       const angles: RenderAngle[] = DEFAULT_ANGLES.map((a) => ({
         id: crypto.randomUUID(),
