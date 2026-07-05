@@ -1074,9 +1074,17 @@ function useStudioExecute() {
         .map((e) => graph.nodes.find((n) => n.id === e.source))
         .filter(Boolean) as Node[];
 
-      const referenceNode = incomingNodes.find((n) => n.type === "reference");
       const promptNode = incomingNodes.find((n) => n.type === "prompt");
       const editNode = incomingNodes.find((n) => n.type === "edit");
+
+      // Reference Style attaches to the Prompt node (visual style addition to
+      // the prompt). Geometry is anchored to the Input node, not the reference.
+      const referenceNode = promptNode
+        ? (graph.edges
+            .filter((e) => e.target === promptNode.id)
+            .map((e) => graph.nodes.find((n) => n.id === e.source))
+            .find((n) => n?.type === "reference") ?? null)
+        : incomingNodes.find((n) => n.type === "reference") ?? null;
 
       const outEdgeR = outEdges(renderNodeId)[0];
       const outputNode = outEdgeR
