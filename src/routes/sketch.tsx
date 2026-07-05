@@ -10616,6 +10616,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 className="h-7 w-40 text-[11px]"
               />
             )}
+            {iluKind === "arrowDashed" && (
+              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
+                <Slider
+                  value={[iluStrokeArrowDashed]}
+                  min={10}
+                  max={200}
+                  step={2}
+                  onValueChange={(v) => setIluStrokeArrowDashed(v[0] ?? 50)}
+                  className="w-32"
+                />
+                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrowDashed)}</span>
+              </div>
+            )}
             {ANNOTATION_PRESETS[iluKind].needsPath && iluDraft && iluDraft.points.length >= ANNOTATION_PRESETS[iluKind].minPts && (
               <Button
                 size="sm"
@@ -10629,10 +10643,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     style: preset.style,
                     points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
                     color: iluColor,
-                    strokeWidthPx: preset.strokeWidthPx,
+                    strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : preset.strokeWidthPx,
                     createdAt: Date.now(),
                   };
-                  onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+                  const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
+                  onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
                   setIluDraft(null);
                   toast.success(`${preset.label} tersimpan`);
                 }}
@@ -10651,6 +10666,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
+        {tool === "iluanalisa" && mode === "masterplan" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={sketch.illustrationLayer.visible}
+                onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, visible: e.target.checked } })}
+                className="h-3.5 w-3.5"
+                title="Tampilkan / sembunyikan Layer Ilustrasi"
+              />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Layer Ilustrasi</span>
+              <Slider
+                value={[Math.round(sketch.illustrationLayer.opacity * 100)]}
+                min={0} max={100} step={5}
+                onValueChange={(v) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, opacity: (v[0] ?? 100) / 100 } })}
+                className="w-40"
+              />
+              <span className="w-9 text-right text-[10px] tabular-nums text-slate-700">{Math.round(sketch.illustrationLayer.opacity * 100)}%</span>
+            </div>
+            <div className="flex flex-col gap-1 pl-5">
+              {(Object.keys(sketch.illustrationLayer.subs) as AnnotationKind[]).map((k) => {
+                const sub = sketch.illustrationLayer!.subs[k]!;
+                const count = (sketch.illustrations ?? []).filter((a) => a.kind === k).length;
+                return (
+                  <div key={k} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={sub.visible}
+                      onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, visible: e.target.checked } } } })}
+                      className="h-3.5 w-3.5"
+                    />
+                    <span className="w-28 text-[10px] text-slate-700">{ANNOTATION_PRESETS[k].label} <span className="text-slate-400">({count})</span></span>
+                    <Slider
+                      value={[Math.round(sub.opacity * 100)]}
+                      min={0} max={100} step={5}
+                      onValueChange={(v) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, opacity: (v[0] ?? 100) / 100 } } } })}
+                      className="w-40"
+                    />
+                    <span className="w-9 text-right text-[10px] tabular-nums text-slate-700">{Math.round(sub.opacity * 100)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {tool === "aksis" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Aksis</span>
