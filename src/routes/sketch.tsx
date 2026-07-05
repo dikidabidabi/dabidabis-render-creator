@@ -161,8 +161,13 @@ import {
   drawAnnotationCanvas,
   newAnnotationId,
   normalizeAnnotations,
+  normalizeIluLayer,
+  makeIluLayerCfg,
+  ensureIluSub,
+  iluAlphaFor,
   type Annotation,
   type AnnotationKind,
+  type IluLayerCfg,
 } from "@/lib/analysis-illustrations";
 import {
   newRoadId,
@@ -374,6 +379,7 @@ type Sketch = {
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   illustrations?: Annotation[]; // Ilustrasi Analisa (panah, zona, node, dsb) — Master Plan
+  illustrationLayer?: IluLayerCfg; // Layer khusus untuk Ilustrasi Analisa (visible+opacity per kind)
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
   /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
   linkedMasterplan?: { rootLayerId: string };
@@ -1117,6 +1123,7 @@ function normalizeSketch(s: any): Sketch {
       return out;
     })(),
     illustrations: normalizeAnnotations((s as any)?.illustrations),
+    illustrationLayer: normalizeIluLayer((s as any)?.illustrationLayer),
   };
 }
 
@@ -2285,6 +2292,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluDraft, setIluDraft] = useState<{ points: Point[]; cursor: Point } | null>(null);
   const [iluSub, setIluSub] = useState<"draw" | "geser" | "tambahTitik" | "hapusTitik">("draw");
   const [iluVertexDrag, setIluVertexDrag] = useState<{ annId: string; idx: number } | null>(null);
+  // Ketebalan panah dashed (px world) — bisa diatur user via slider.
+  const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
@@ -6089,10 +6098,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
-    // Ilustrasi Analisa — di atas layer, di bawah handle.
+    // Ilustrasi Analisa — di atas layer, di bawah handle. Setiap kind di-render
+    // dengan alpha efektif dari Layer Ilustrasi (visible + opacity per sub-layer).
     const illos: Annotation[] = sketch.illustrations ?? [];
+    const iluCfg = sketch.illustrationLayer;
     for (const an of illos) {
+      const alpha = iluAlphaFor(iluCfg, an.kind);
+      if (alpha <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = ctx.globalAlpha * alpha;
       drawAnnotationCanvas(ctx, an, worldToScreen, view.s);
+      ctx.restore();
     }
     // Draft ilustrasi (multi-klik)
     if (iluDraft && tool === "iluanalisa") {
@@ -6105,11 +6121,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           style: preset.style,
           points: previewPts,
           color: iluColor,
-          strokeWidthPx: preset.strokeWidthPx,
+          strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : preset.strokeWidthPx,
           text: iluText || "Label",
           createdAt: 0,
         }, worldToScreen, view.s);
       }
+
       ctx.fillStyle = iluColor;
       for (const p of iluDraft.points) {
         const sp = worldToScreen(p);
@@ -6370,7 +6387,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, iluDraft, iluKind, iluColor, iluText, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -8275,7 +8292,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           text: iluKind === "label" ? (iluText || "Label") : undefined,
           createdAt: Date.now(),
         };
-        onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         toast.success(`${preset.label} ditambahkan`);
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
@@ -10598,6 +10616,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 className="h-7 w-40 text-[11px]"
               />
             )}
+            {iluKind === "arrowDashed" && (
+              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
+                <Slider
+                  value={[iluStrokeArrowDashed]}
+                  min={10}
+                  max={200}
+                  step={2}
+                  onValueChange={(v) => setIluStrokeArrowDashed(v[0] ?? 50)}
+                  className="w-32"
+                />
+                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrowDashed)}</span>
+              </div>
+            )}
             {ANNOTATION_PRESETS[iluKind].needsPath && iluDraft && iluDraft.points.length >= ANNOTATION_PRESETS[iluKind].minPts && (
               <Button
                 size="sm"
@@ -10611,10 +10643,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     style: preset.style,
                     points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
                     color: iluColor,
-                    strokeWidthPx: preset.strokeWidthPx,
+                    strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : preset.strokeWidthPx,
                     createdAt: Date.now(),
                   };
-                  onChange({ illustrations: [...(sketch.illustrations ?? []), ann] });
+                  const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
+                  onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
                   setIluDraft(null);
                   toast.success(`${preset.label} tersimpan`);
                 }}
@@ -10633,6 +10666,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
+        {tool === "iluanalisa" && mode === "masterplan" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={sketch.illustrationLayer.visible}
+                onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, visible: e.target.checked } })}
+                className="h-3.5 w-3.5"
+                title="Tampilkan / sembunyikan Layer Ilustrasi"
+              />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Layer Ilustrasi</span>
+              <Slider
+                value={[Math.round(sketch.illustrationLayer.opacity * 100)]}
+                min={0} max={100} step={5}
+                onValueChange={(v) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, opacity: (v[0] ?? 100) / 100 } })}
+                className="w-40"
+              />
+              <span className="w-9 text-right text-[10px] tabular-nums text-slate-700">{Math.round(sketch.illustrationLayer.opacity * 100)}%</span>
+            </div>
+            <div className="flex flex-col gap-1 pl-5">
+              {(Object.keys(sketch.illustrationLayer.subs) as AnnotationKind[]).map((k) => {
+                const sub = sketch.illustrationLayer!.subs[k]!;
+                const count = (sketch.illustrations ?? []).filter((a) => a.kind === k).length;
+                return (
+                  <div key={k} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={sub.visible}
+                      onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, visible: e.target.checked } } } })}
+                      className="h-3.5 w-3.5"
+                    />
+                    <span className="w-28 text-[10px] text-slate-700">{ANNOTATION_PRESETS[k].label} <span className="text-slate-400">({count})</span></span>
+                    <Slider
+                      value={[Math.round(sub.opacity * 100)]}
+                      min={0} max={100} step={5}
+                      onValueChange={(v) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, opacity: (v[0] ?? 100) / 100 } } } })}
+                      className="w-40"
+                    />
+                    <span className="w-9 text-right text-[10px] tabular-nums text-slate-700">{Math.round(sub.opacity * 100)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {tool === "aksis" && mode === "masterplan" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">Aksis</span>

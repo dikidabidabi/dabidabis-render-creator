@@ -33,7 +33,7 @@ export type Annotation = {
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
   arrow:       { label: "Panah",        color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
-  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 100, needsPath: true, minPts: 2, hint: "Panah putus-putus lebar siku (tanpa kurva). Klik titik-titik, Enter/Selesai." },
+  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 50, needsPath: true, minPts: 2, hint: "Panah putus-putus lebar siku (tanpa kurva). Klik titik-titik, Enter/Selesai." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
   flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed). Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
@@ -56,6 +56,57 @@ export function annotationPolyline(a: Annotation): Vec2[] {
   if (a.style === "tangent" && a.points.length >= 3) return sampleTangent(a.points, 18);
   return a.points.slice();
 }
+
+/** Konfigurasi "Layer Ilustrasi" — layer khusus untuk semua notasi ilustrasi
+ *  analisa, dengan sub-layer per tool (kind). Bisa diatur visible & opacity. */
+export type IluSubLayer = { visible: boolean; opacity: number };
+export type IluLayerCfg = {
+  visible: boolean;
+  opacity: number;
+  subs: Partial<Record<AnnotationKind, IluSubLayer>>;
+};
+
+export function makeIluLayerCfg(): IluLayerCfg {
+  return { visible: true, opacity: 1, subs: {} };
+}
+
+export function ensureIluSub(cfg: IluLayerCfg, kind: AnnotationKind): IluLayerCfg {
+  if (cfg.subs[kind]) return cfg;
+  return { ...cfg, subs: { ...cfg.subs, [kind]: { visible: true, opacity: 1 } } };
+}
+
+export function normalizeIluLayer(raw: unknown): IluLayerCfg | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r: any = raw;
+  const cfg: IluLayerCfg = {
+    visible: r.visible !== false,
+    opacity: Number.isFinite(Number(r.opacity)) ? Math.max(0, Math.min(1, Number(r.opacity))) : 1,
+    subs: {},
+  };
+  if (r.subs && typeof r.subs === "object") {
+    for (const k of Object.keys(r.subs) as AnnotationKind[]) {
+      if (!(k in ANNOTATION_PRESETS)) continue;
+      const s: any = r.subs[k];
+      if (!s || typeof s !== "object") continue;
+      cfg.subs[k] = {
+        visible: s.visible !== false,
+        opacity: Number.isFinite(Number(s.opacity)) ? Math.max(0, Math.min(1, Number(s.opacity))) : 1,
+      };
+    }
+  }
+  return cfg;
+}
+
+/** Alpha efektif untuk sebuah annotation kind di dalam Layer Ilustrasi. */
+export function iluAlphaFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind): number {
+  if (!cfg) return 1;
+  if (!cfg.visible) return 0;
+  const sub = cfg.subs[kind];
+  if (sub && !sub.visible) return 0;
+  const subA = sub ? sub.opacity : 1;
+  return Math.max(0, Math.min(1, cfg.opacity * subA));
+}
+
 
 /** Normalize dari data mentah localStorage. */
 export function normalizeAnnotations(raw: unknown): Annotation[] {
@@ -202,25 +253,21 @@ export function drawAnnotationCanvas(
 
   // arrow (garis solid) atau arrowDashed (garis putus-putus lebar, siku, chevron head)
   if (a.kind === "arrowDashed") {
-    // Chevron arrowhead — dihitung dulu supaya shaft dipendekkan agar tidak menembus head.
+    // Arrowhead — dua persegi panjang yang bertemu di ujung membentuk sudut siku-siku (90°).
     const sEndFull = worldToScreen(poly[poly.length - 1]);
     const sPrevFull = worldToScreen(poly[poly.length - 2]);
     const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
-    const hL = sw * 2.4;        // panjang chevron (searah panah)
-    const hW = sw * 2.6;        // lebar chevron (tegak lurus)
-    const notch = hL * 0.45;    // kedalaman takik pada bagian belakang
-    const cx = Math.cos(angH), cy = Math.sin(angH);
-    const nx = -cy, ny = cx;    // normal
+    const hL = sw * 2.2;                 // panjang bar arrowhead
+    const barThick = Math.max(1, sw * 0.7); // ketebalan bar (persegi panjang)
+    const cs = Math.cos(angH), sn = Math.sin(angH);
     const tip = sEndFull;
-    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
-    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
-    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
-    // Shaft dipendekkan sampai basis chevron
-    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+    // Kedua bar bertemu di tip pada sudut 90° (masing-masing 45° dari sumbu panah).
+    // Shaft berakhir tepat di titik pertemuan bagian dalam kedua bar (proyeksi ke sumbu).
+    const shaftEnd = { x: tip.x - cs * hL * Math.SQRT1_2, y: tip.y - sn * hL * Math.SQRT1_2 };
 
     ctx.lineCap = "butt";
     ctx.lineJoin = "miter";
-    ctx.setLineDash([sw * 2.0, sw * 1.0]);
+    ctx.setLineDash([sw * 0.5, sw * 0.3]);
     ctx.strokeStyle = a.color;
     ctx.lineWidth = sw;
     ctx.beginPath();
@@ -230,18 +277,26 @@ export function drawAnnotationCanvas(
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Chevron (segi empat berujung: tip, backL, notch, backR)
+    // Dua bar persegi panjang bertemu di tip pada sudut siku-siku.
     ctx.fillStyle = a.color;
-    ctx.beginPath();
-    ctx.moveTo(tip.x, tip.y);
-    ctx.lineTo(backL.x, backL.y);
-    ctx.lineTo(notchP.x, notchP.y);
-    ctx.lineTo(backR.x, backR.y);
-    ctx.closePath();
-    ctx.fill();
+    const drawBar = (dirRad: number) => {
+      const dx = Math.cos(dirRad), dy = Math.sin(dirRad);
+      const px = -dy, py = dx;
+      const h = barThick / 2;
+      ctx.beginPath();
+      ctx.moveTo(tip.x + px * h, tip.y + py * h);
+      ctx.lineTo(tip.x + dx * hL + px * h, tip.y + dy * hL + py * h);
+      ctx.lineTo(tip.x + dx * hL - px * h, tip.y + dy * hL - py * h);
+      ctx.lineTo(tip.x - px * h, tip.y - py * h);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawBar(angH + Math.PI - Math.PI / 4);
+    drawBar(angH + Math.PI + Math.PI / 4);
     ctx.restore();
     return;
   }
+
 
   ctx.strokeStyle = withAlpha(a.color, 0.55);
   ctx.lineWidth = sw;
@@ -327,24 +382,34 @@ export function annotationSvgElements(
     const tip = pts[pts.length - 1];
     const prev = pts[pts.length - 2];
     const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-    const hL = sw * 2.4, hW = sw * 2.6, notch = hL * 0.45;
-    const cx = Math.cos(angH), cy = Math.sin(angH);
-    const nx = -cy, ny = cx;
-    const backL = { x: tip.x - cx * hL + nx * (hW / 2), y: tip.y - cy * hL + ny * (hW / 2) };
-    const backR = { x: tip.x - cx * hL - nx * (hW / 2), y: tip.y - cy * hL - ny * (hW / 2) };
-    const notchP = { x: tip.x - cx * (hL - notch), y: tip.y - cy * (hL - notch) };
-    const shaftEnd = { x: tip.x - cx * hL, y: tip.y - cy * hL };
+    const hL = sw * 2.2;
+    const barThick = Math.max(1, sw * 0.7);
+    const cs = Math.cos(angH), sn = Math.sin(angH);
+    const shaftEnd = { x: tip.x - cs * hL * Math.SQRT1_2, y: tip.y - sn * hL * Math.SQRT1_2 };
     const shaftPts = [...pts.slice(0, -1), shaftEnd];
     const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
     nodes.push(React.createElement("path", {
       key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
       strokeLinecap: "butt", strokeLinejoin: "miter",
-      strokeDasharray: `${sw * 2.0},${sw * 1.0}`,
+      strokeDasharray: `${sw * 0.5},${sw * 0.3}`,
     }));
-    const dHead = `M ${tip.x} ${tip.y} L ${backL.x} ${backL.y} L ${notchP.x} ${notchP.y} L ${backR.x} ${backR.y} Z`;
-    nodes.push(React.createElement("path", { key: `${keyPrefix}-h`, d: dHead, fill: a.color, stroke: "none" }));
+    // Dua bar persegi panjang bertemu di tip pada sudut siku-siku (90°).
+    const barPath = (dirRad: number, key: string) => {
+      const dx = Math.cos(dirRad), dy = Math.sin(dirRad);
+      const px = -dy, py = dx;
+      const h = barThick / 2;
+      const p1 = { x: tip.x + px * h, y: tip.y + py * h };
+      const p2 = { x: tip.x + dx * hL + px * h, y: tip.y + dy * hL + py * h };
+      const p3 = { x: tip.x + dx * hL - px * h, y: tip.y + dy * hL - py * h };
+      const p4 = { x: tip.x - px * h, y: tip.y - py * h };
+      const dd = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y} Z`;
+      nodes.push(React.createElement("path", { key, d: dd, fill: a.color, stroke: "none" }));
+    };
+    barPath(angH + Math.PI - Math.PI / 4, `${keyPrefix}-h1`);
+    barPath(angH + Math.PI + Math.PI / 4, `${keyPrefix}-h2`);
     return nodes;
   }
+
   const mid = `${keyPrefix}-am`;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
     React.createElement("marker", {
