@@ -352,6 +352,23 @@ function PromptNode({ id, data }: NodeProps) {
             className="mt-1 resize-none text-xs"
           />
         </div>
+        <div className="rounded border border-border/60 bg-background/60 p-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px]">Geometry Consistency</Label>
+            <span className="text-[10px] font-medium text-ember">{d.geometryConsistency ?? 70}%</span>
+          </div>
+          <Slider
+            value={[d.geometryConsistency ?? 70]}
+            onValueChange={(v) => updateNode(id, { geometryConsistency: v[0] })}
+            min={0}
+            max={100}
+            step={1}
+            className="mt-2"
+          />
+          <p className="mt-1 text-[9px] leading-tight text-muted-foreground">
+            0% bebas bentuk · 100% ikuti sketsa referensi persis
+          </p>
+        </div>
       </div>
     </NodeShell>
   );
