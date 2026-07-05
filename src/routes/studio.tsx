@@ -617,7 +617,7 @@ function useStudioExecute() {
         // Kick off in parallel, but yield to UI between starts so canvas stays smooth.
         const results = await Promise.all(
           angles.map(async (a) => {
-            const anglePrompt = `${finalPrompt}. ${ANGLE_PROMPT[a.angle] ?? a.angle}`;
+            const anglePrompt = `${finalPrompt}. ${ANGLE_PROMPT[a.angle] ?? a.angle}. ${angleConsistencyText}`;
             try {
               const res = await callRender({
                 data: {
@@ -625,8 +625,8 @@ function useStudioExecute() {
                   referenceBase64: null,
                   prompt: anglePrompt,
                   renderType: "exterior",
-                  accuracy: 8,
-                  consistency: 6,
+                  accuracy: accuracyLevel,
+                  consistency: Math.max(1, Math.min(10, Math.round((outputGeom / 100) * 9) + 1)),
                 },
               });
               clearInterval(timers[a.id]);
