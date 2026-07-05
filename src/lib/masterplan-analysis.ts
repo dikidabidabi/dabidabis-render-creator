@@ -122,7 +122,7 @@ export type MasterplanAnalysis = {
   illustrations: Annotation[];
 };
 
-export function loadMasterplanAnalysis(): MasterplanAnalysis | null {
+export function loadMasterplanAnalysis(rootLayerId?: string): MasterplanAnalysis | null {
   if (typeof window === "undefined") return null;
   let store: { sketches: AnySketch[]; openId: string | null };
   try {
@@ -136,7 +136,14 @@ export function loadMasterplanAnalysis(): MasterplanAnalysis | null {
   } catch {
     return null;
   }
-  const sk = store.sketches.find((s) => s.id === store.openId) ?? store.sketches[0];
+  // Bila rootLayerId diberikan, cari masterplan sketch yang memuat layer tsb.
+  // Ini memastikan analisis kawasan mengikuti masterplan SUMBER bangunan yang
+  // diekspor ke halaman sketsa — bukan masterplan yang kebetulan aktif.
+  let sk: AnySketch | undefined;
+  if (rootLayerId) {
+    sk = store.sketches.find((s) => (s.layers || []).some((l) => l.id === rootLayerId));
+  }
+  if (!sk) sk = store.sketches.find((s) => s.id === store.openId) ?? store.sketches[0];
   if (!sk) return null;
   return analyze(sk);
 }

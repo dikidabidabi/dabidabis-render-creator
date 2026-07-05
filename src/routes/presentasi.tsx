@@ -553,7 +553,8 @@ function PresentasiBox({
   const [mpAnalysis, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
   useEffect(() => {
     let mounted = true;
-    const refreshAnalysis = () => setMpAnalysis(loadMasterplanAnalysis());
+    const rootId = sketch.linkedMasterplan?.rootLayerId;
+    const refreshAnalysis = () => setMpAnalysis(loadMasterplanAnalysis(rootId));
     refreshAnalysis();
     import("@/lib/masterplan").then((m) => {
       if (!mounted) return;
@@ -567,7 +568,7 @@ function PresentasiBox({
       };
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
-  }, []);
+  }, [sketch.linkedMasterplan?.rootLayerId]);
   // Nama bangunan pada masterplan yang terhubung dengan sketsa ini.
   // Dipakai untuk sinkron judul di halaman Presentasi ↔ Sketsa ↔ Masterplan
   // (tanpa crossing: satu bangunan → satu judul).
@@ -575,11 +576,15 @@ function PresentasiBox({
     if (!mpAnalysis || !sketch.linkedMasterplan) return null;
     return mpAnalysis.buildings.find((b) => b.id === sketch.linkedMasterplan!.rootLayerId)?.name ?? null;
   }, [mpAnalysis, sketch.linkedMasterplan]);
+  // Judul halaman Masterplan (sumber bangunan). Dipakai sebagai judul UTAMA
+  // presentasi — agar konsisten dengan halaman masterplan asalnya, bukan
+  // dengan sketsa yang kebetulan aktif.
+  const masterplanTitle = mpAnalysis?.title ?? null;
   const effectiveSketch = useMemo(
     () => (linkedBuildingName ? { ...sketch, title: linkedBuildingName } : sketch),
     [sketch, linkedBuildingName],
   );
-  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis]);
+  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
@@ -1151,14 +1156,16 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
   const displayNames = computeLevelDisplayNames(levels, sk.layers ?? []);
   const out: Slide[] = [];
-  // Slide judul (paling awal)
-  out.push({ kind: "title", id: "title-slide", title: sk.title || "Proyek", sketch: sk });
+  // Slide judul (paling awal) — pakai judul halaman Masterplan sumber bila
+  // sketsa terhubung ke masterplan; jika tidak, fallback ke judul sketsa.
+  const mainTitle = (sk.linkedMasterplan && masterplanTitle) ? masterplanTitle : (sk.title || "Proyek");
+  out.push({ kind: "title", id: "title-slide", title: mainTitle, sketch: sk });
   // Slide Master Plan — hanya untuk proyek hasil impor dari halaman Master Plan.
   const hasAnalysis = analysis && (analysis.buildings.length > 0 || analysis.lahanPolygonsPx.length > 0);
   if (hasAnalysis && sk.linkedMasterplan) {
