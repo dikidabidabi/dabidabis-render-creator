@@ -6098,10 +6098,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
-    // Ilustrasi Analisa — di atas layer, di bawah handle.
+    // Ilustrasi Analisa — di atas layer, di bawah handle. Setiap kind di-render
+    // dengan alpha efektif dari Layer Ilustrasi (visible + opacity per sub-layer).
     const illos: Annotation[] = sketch.illustrations ?? [];
+    const iluCfg = sketch.illustrationLayer;
     for (const an of illos) {
+      const alpha = iluAlphaFor(iluCfg, an.kind);
+      if (alpha <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = ctx.globalAlpha * alpha;
       drawAnnotationCanvas(ctx, an, worldToScreen, view.s);
+      ctx.restore();
     }
     // Draft ilustrasi (multi-klik)
     if (iluDraft && tool === "iluanalisa") {
@@ -6114,11 +6121,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           style: preset.style,
           points: previewPts,
           color: iluColor,
-          strokeWidthPx: preset.strokeWidthPx,
+          strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : preset.strokeWidthPx,
           text: iluText || "Label",
           createdAt: 0,
         }, worldToScreen, view.s);
       }
+
       ctx.fillStyle = iluColor;
       for (const p of iluDraft.points) {
         const sp = worldToScreen(p);
