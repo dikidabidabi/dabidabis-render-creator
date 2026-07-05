@@ -28,11 +28,15 @@ type StudioState = {
   setGraph: (g: StudioGraph) => void;
   setNodesEdges: (nodes: Node[], edges: Edge[]) => void;
   updateNode: (nodeId: string, patch: Record<string, unknown>) => void;
+  addNode: (node: Node) => void;
+  addEdge: (edge: Edge) => void;
+  removeNode: (nodeId: string) => void;
   setOutputs: (sketchId: string, outputs: RenderAngle[]) => void;
   updateOutput: (sketchId: string, angleId: string, patch: Partial<RenderAngle>) => void;
   hydrate: () => void;
   syncToPresentasi: (sketchId: string, sketchTitle: string) => void;
 };
+
 
 const EMPTY: StudioGraph = { nodes: [], edges: [], outputs: {} };
 
@@ -91,6 +95,27 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       n.id === nodeId ? { ...n, data: { ...(n.data ?? {}), ...patch } } : n,
     );
     const next = { ...g, nodes };
+    persist(next);
+    set({ graph: next });
+  },
+  addNode: (node) => {
+    const g = get().graph;
+    const next = { ...g, nodes: [...g.nodes, node] };
+    persist(next);
+    set({ graph: next });
+  },
+  addEdge: (edge) => {
+    const g = get().graph;
+    if (g.edges.some((e) => e.id === edge.id)) return;
+    const next = { ...g, edges: [...g.edges, edge] };
+    persist(next);
+    set({ graph: next });
+  },
+  removeNode: (nodeId) => {
+    const g = get().graph;
+    const nodes = g.nodes.filter((n) => n.id !== nodeId);
+    const edges = g.edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+    const next = { ...g, nodes, edges };
     persist(next);
     set({ graph: next });
   },

@@ -32,11 +32,26 @@ import {
   CheckCircle2,
   Send,
   Upload,
+  Palette,
+  Pencil,
+  Highlighter,
+  Eraser,
+  Plus,
+  X,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { generateRender } from "@/lib/render.functions";
 import { useStudioStore, type RenderAngle } from "@/store/studio-store";
@@ -93,7 +108,7 @@ type PromptNodeData = {
   kind: "prompt";
   style: string;
   detail: string;
-  geometryConsistency: number; // 0-100, konsistensi bentuk terhadap referensi sketsa
+  geometryConsistency: number;
 };
 type RenderNodeData = {
   kind: "render";
@@ -105,14 +120,41 @@ type OutputNodeData = {
   kind: "output";
   sketchId: string;
   sketchTitle: string;
-  geometryConsistency: number; // 0-100, konsistensi geometry saat berubah angle
+  geometryConsistency: number;
+  // For "edit output" nodes we render a single image (not multi-angle)
+  standalone?: boolean;
+  standaloneImage?: string | null;
+  standaloneStatus?: "idle" | "processing" | "done" | "error";
+  standaloneProgress?: number;
+  standaloneError?: string;
+};
+type ReferenceNodeData = {
+  kind: "reference";
+  image: string | null;
+  label: string;
+};
+type EditNodeData = {
+  kind: "edit";
+  sketchId: string;
+  sketchTitle: string;
+  sourceImage: string;
+  annotatedImage: string;
+  colorPrompts: { color: string; label: string; prompt: string }[];
 };
 
-// Stable empty-array reference so zustand selectors don't return a new array
-// every render (which triggers "getSnapshot should be cached" + infinite loop).
 const EMPTY_OUTPUTS: RenderAngle[] = [];
 
-// ---------- Nodes ----------
+// Color palette for annotation
+const ANNOTATION_COLORS = [
+  { color: "#ef4444", label: "Merah" },
+  { color: "#f59e0b", label: "Oranye" },
+  { color: "#eab308", label: "Kuning" },
+  { color: "#22c55e", label: "Hijau" },
+  { color: "#3b82f6", label: "Biru" },
+  { color: "#a855f7", label: "Ungu" },
+];
+
+// ---------- Node shell ----------
 function NodeShell({
   title,
   icon,
@@ -120,19 +162,25 @@ function NodeShell({
   children,
   hasTarget,
   hasSource,
+  extraSource,
+  onRemove,
 }: {
   title: string;
   icon: React.ReactNode;
-  tone: "input" | "prompt" | "render" | "output";
+  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit";
   children: React.ReactNode;
   hasTarget?: boolean;
   hasSource?: boolean;
+  extraSource?: { id: string; topPct: number; color?: string; label?: string };
+  onRemove?: () => void;
 }) {
   const toneMap = {
     input: "border-sky-500/40 bg-sky-500/5",
     prompt: "border-violet-500/40 bg-violet-500/5",
     render: "border-amber-500/40 bg-amber-500/5",
     output: "border-emerald-500/40 bg-emerald-500/5",
+    reference: "border-pink-500/40 bg-pink-500/5",
+    edit: "border-cyan-500/40 bg-cyan-500/5",
   } as const;
   return (
     <div
@@ -162,18 +210,54 @@ function NodeShell({
           style={{ right: -8, zIndex: 20 }}
         />
       )}
+      {extraSource && (
+        <Handle
+          id={extraSource.id}
+          type="source"
+          position={Position.Right}
+          isConnectable
+          className="!h-4 !w-4 !border-2 !border-background !cursor-crosshair"
+          style={{
+            right: -8,
+            top: `${extraSource.topPct}%`,
+            background: extraSource.color ?? "#ec4899",
+            zIndex: 20,
+          }}
+          title={extraSource.label}
+        />
+      )}
       <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
         {icon}
-        <span className="text-xs font-semibold uppercase tracking-wide">{title}</span>
+        <span className="flex-1 text-xs font-semibold uppercase tracking-wide">{title}</span>
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            title="Hapus node"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
       </div>
       <div className="p-3">{children}</div>
     </div>
   );
 }
 
+// ---------- Ephemeral annotation modal state (module-level for simplicity) ----------
+type AnnotationTarget = {
+  sketchId: string;
+  sketchTitle: string;
+  angleId: string;
+  angleName: string;
+  image: string;
+};
+
+// ---------- Input Node ----------
 function InputNode({ id, data }: NodeProps) {
   const d = data as InputNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
   const [shots, setShots] = useState<Shot[]>(() => loadShots(d.sketchId));
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -205,19 +289,13 @@ function InputNode({ id, data }: NodeProps) {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const removeUpload = (uid: string) => {
-    updateNode(id, {
-      uploads: uploads.filter((u) => u.id !== uid),
-      selectedShotId: d.selectedShotId === uid ? null : d.selectedShotId,
-    });
-  };
-
   return (
     <NodeShell
       title={`3D Input · ${d.sketchTitle}`}
       icon={<ImageIcon className="h-3.5 w-3.5 text-sky-500" />}
       tone="input"
       hasSource
+      onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -237,7 +315,6 @@ function InputNode({ id, data }: NodeProps) {
               type="button"
               onClick={() => fileRef.current?.click()}
               className="flex items-center gap-1 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 hover:bg-sky-500/25"
-              title="Unggah gambar eksternal"
             >
               <Upload className="h-3 w-3" /> Unggah
             </button>
@@ -253,47 +330,24 @@ function InputNode({ id, data }: NodeProps) {
         </div>
         {merged.length === 0 ? (
           <p className="text-[11px] text-muted-foreground">
-            Belum ada gambar. Ambil screenshot di halaman 3D atau klik{" "}
-            <span className="font-medium">Unggah</span> untuk pakai gambar eksternal.
+            Belum ada gambar. Ambil screenshot 3D atau klik <b>Unggah</b>.
           </p>
         ) : (
           <div className="grid max-h-40 grid-cols-3 gap-1 overflow-y-auto">
             {merged.map((s) => (
-              <div key={s.id} className="relative">
-                <button
-                  type="button"
-                  onClick={() => updateNode(id, { selectedShotId: s.id })}
-                  className={cn(
-                    "block w-full overflow-hidden rounded border-2 transition",
-                    d.selectedShotId === s.id
-                      ? "border-ember ring-1 ring-ember/50"
-                      : "border-transparent hover:border-border",
-                  )}
-                >
-                  <img src={s.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
-                </button>
-                <span
-                  className={cn(
-                    "pointer-events-none absolute left-0 top-0 rounded-br px-1 text-[8px] font-medium text-white",
-                    s.source === "3d" ? "bg-sky-500/80" : "bg-emerald-500/80",
-                  )}
-                >
-                  {s.source === "3d" ? "3D" : "UP"}
-                </span>
-                {s.source === "upload" && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeUpload(s.id);
-                    }}
-                    className="absolute right-0 top-0 rounded-bl bg-black/60 px-1 text-[8px] text-white opacity-0 transition hover:bg-red-500/80 group-hover:opacity-100"
-                    title="Hapus"
-                  >
-                    ×
-                  </button>
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => updateNode(id, { selectedShotId: s.id })}
+                className={cn(
+                  "block w-full overflow-hidden rounded border-2 transition",
+                  d.selectedShotId === s.id
+                    ? "border-ember ring-1 ring-ember/50"
+                    : "border-transparent hover:border-border",
                 )}
-              </div>
+              >
+                <img src={s.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+              </button>
             ))}
           </div>
         )}
@@ -302,9 +356,15 @@ function InputNode({ id, data }: NodeProps) {
   );
 }
 
+// ---------- Prompt Node ----------
 function PromptNode({ id, data }: NodeProps) {
   const d = data as PromptNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
+  const addNode = useStudioStore((s) => s.addNode);
+  const addEdgeStore = useStudioStore((s) => s.addEdge);
+  const nodes = useStudioStore((s) => s.graph.nodes);
+
   const presets = [
     "bare finish concrete",
     "cinematic lighting golden hour",
@@ -312,6 +372,33 @@ function PromptNode({ id, data }: NodeProps) {
     "tropical modern, lush vegetation",
     "brutalist, dramatic shadows",
   ];
+
+  const spawnReference = () => {
+    const me = nodes.find((n) => n.id === id);
+    const pos = me ? { x: me.position.x + 60, y: me.position.y + 360 } : { x: 200, y: 400 };
+    const refId = `reference-${crypto.randomUUID().slice(0, 8)}`;
+    addNode({
+      id: refId,
+      type: "reference",
+      position: pos,
+      data: { kind: "reference", image: null, label: "Referensi Style" } satisfies ReferenceNodeData,
+    });
+    // auto-connect ref → nearest render node (if any downstream from this prompt)
+    const promptOut = useStudioStore
+      .getState()
+      .graph.edges.find((e) => e.source === id);
+    if (promptOut) {
+      addEdgeStore({
+        id: `${refId}->${promptOut.target}`,
+        source: refId,
+        target: promptOut.target,
+        animated: true,
+        style: { stroke: "#ec4899", strokeWidth: 2 },
+      });
+    }
+    toast.success("Node Referensi Style dibuat");
+  };
+
   return (
     <NodeShell
       title="Prompt & Style"
@@ -319,6 +406,7 @@ function PromptNode({ id, data }: NodeProps) {
       tone="prompt"
       hasTarget
       hasSource
+      onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
         <div>
@@ -355,7 +443,9 @@ function PromptNode({ id, data }: NodeProps) {
         <div className="rounded border border-border/60 bg-background/60 p-2">
           <div className="flex items-center justify-between">
             <Label className="text-[10px]">Geometry Consistency</Label>
-            <span className="text-[10px] font-medium text-ember">{d.geometryConsistency ?? 70}%</span>
+            <span className="text-[10px] font-medium text-ember">
+              {d.geometryConsistency ?? 70}%
+            </span>
           </div>
           <Slider
             value={[d.geometryConsistency ?? 70]}
@@ -369,16 +459,86 @@ function PromptNode({ id, data }: NodeProps) {
             0% bebas bentuk · 100% ikuti sketsa referensi persis
           </p>
         </div>
+        <button
+          type="button"
+          onClick={spawnReference}
+          className="flex w-full items-center justify-center gap-1 rounded border border-pink-500/40 bg-pink-500/10 px-2 py-1.5 text-[11px] font-medium text-pink-600 hover:bg-pink-500/20"
+        >
+          <Palette className="h-3 w-3" /> Unggah Referensi Style
+        </button>
       </div>
     </NodeShell>
   );
 }
 
-function RenderNode({
-  id,
-  data,
-}: NodeProps) {
+// ---------- Reference Style Node ----------
+function ReferenceNode({ id, data }: NodeProps) {
+  const d = data as ReferenceNodeData;
+  const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const handleUpload = (files: FileList | null) => {
+    if (!files || !files[0]) return;
+    const fr = new FileReader();
+    fr.onload = () => updateNode(id, { image: fr.result as string });
+    fr.readAsDataURL(files[0]);
+  };
+
+  return (
+    <NodeShell
+      title="Referensi Style"
+      icon={<Palette className="h-3.5 w-3.5 text-pink-500" />}
+      tone="reference"
+      hasSource
+      onRemove={() => removeNode(id)}
+    >
+      <div className="space-y-2">
+        <input
+          value={d.label}
+          onChange={(e) => updateNode(id, { label: e.target.value })}
+          className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs outline-none focus:border-pink-500"
+          placeholder="Nama referensi"
+        />
+        {d.image ? (
+          <div className="relative overflow-hidden rounded border border-border/60">
+            <img src={d.image} alt={d.label} className="w-full object-cover" />
+            <button
+              onClick={() => updateNode(id, { image: null })}
+              className="absolute right-1 top-1 rounded bg-black/70 p-1 text-white hover:bg-red-500/80"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex h-24 w-full flex-col items-center justify-center gap-1 rounded border-2 border-dashed border-pink-500/40 bg-pink-500/5 text-[11px] text-pink-600 hover:bg-pink-500/10"
+          >
+            <Upload className="h-4 w-4" />
+            Klik unggah gambar referensi
+          </button>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => handleUpload(e.target.files)}
+        />
+        <p className="text-[9px] leading-tight text-muted-foreground">
+          Hubungkan ke <b>AI Render Engine</b> untuk mengarahkan gaya visual.
+        </p>
+      </div>
+    </NodeShell>
+  );
+}
+
+// ---------- Render Node ----------
+function RenderNode({ id, data }: NodeProps) {
   const d = data as RenderNodeData;
+  const removeNode = useStudioStore((s) => s.removeNode);
   const trigger = useStudioExecute();
   return (
     <NodeShell
@@ -387,11 +547,9 @@ function RenderNode({
       tone="render"
       hasTarget
       hasSource
+      onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
-        <p className="text-[11px] text-muted-foreground">
-          Memroses melalui Lovable AI (Gemini image). Multi-angle otomatis 3 variasi.
-        </p>
         <Button
           size="sm"
           onClick={() => trigger(id)}
@@ -423,11 +581,86 @@ function RenderNode({
   );
 }
 
-function OutputNode({ id, data }: NodeProps) {
+// ---------- Output Node ----------
+function OutputNode({
+  id,
+  data,
+  onAnnotate,
+}: NodeProps & { onAnnotate?: (t: AnnotationTarget) => void }) {
   const d = data as OutputNodeData;
   const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
   const sync = useStudioStore((s) => s.syncToPresentasi);
   const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
+
+  // Standalone output (from edit node)
+  if (d.standalone) {
+    const status = d.standaloneStatus ?? "idle";
+    return (
+      <NodeShell
+        title={`Output Perbaikan · ${d.sketchTitle}`}
+        icon={<Layers className="h-3.5 w-3.5 text-emerald-500" />}
+        tone="output"
+        hasTarget
+        onRemove={() => removeNode(id)}
+      >
+        <div className="space-y-2">
+          <div className="relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background">
+            {d.standaloneImage ? (
+              <img
+                src={d.standaloneImage}
+                alt="Hasil perbaikan"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                {status === "processing" ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                )}
+              </div>
+            )}
+          </div>
+          {status === "error" && (
+            <p className="text-[10px] text-destructive">
+              {d.standaloneError ?? "Render gagal."}
+            </p>
+          )}
+          {d.standaloneImage && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                try {
+                  const raw = localStorage.getItem("dabidabis_perspektif_v1");
+                  const store: Record<
+                    string,
+                    { id: string; title: string; image: string | null }[]
+                  > = raw ? JSON.parse(raw) : {};
+                  const items = store[d.sketchId] ?? [];
+                  items.push({
+                    id: `studio-edit-${id}`,
+                    title: `${d.sketchTitle} · Perbaikan`,
+                    image: d.standaloneImage!,
+                  });
+                  store[d.sketchId] = items;
+                  localStorage.setItem("dabidabis_perspektif_v1", JSON.stringify(store));
+                  toast.success("Terkirim ke Presentasi");
+                } catch {
+                  toast.error("Gagal menyimpan");
+                }
+              }}
+              className="w-full text-xs"
+            >
+              <Send className="mr-1 h-3 w-3" /> Kirim ke Presentasi
+            </Button>
+          )}
+        </div>
+      </NodeShell>
+    );
+  }
+
   const total = outputs.length || 3;
   const done = outputs.filter((o) => o.status === "done").length;
   const avgProgress = outputs.length
@@ -441,10 +674,13 @@ function OutputNode({ id, data }: NodeProps) {
       icon={<Layers className="h-3.5 w-3.5 text-emerald-500" />}
       tone="output"
       hasTarget
+      onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>{done}/{total} angle</span>
+          <span>
+            {done}/{total} angle
+          </span>
           <span>{avgProgress}%</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -468,20 +704,41 @@ function OutputNode({ id, data }: NodeProps) {
             step={1}
             className="mt-2"
           />
-          <p className="mt-1 text-[9px] leading-tight text-muted-foreground">
-            0% bentuk berbeda tiap angle · 100% bentuk identik, hanya sudut berubah
-          </p>
         </div>
         <div className="grid grid-cols-3 gap-1">
-          {(outputs.length ? outputs : DEFAULT_ANGLES.map((a, i) => ({
-            id: `ph-${i}`, angle: a, image: null, status: "idle" as const, progress: 0,
-          }))).map((o) => (
+          {(outputs.length
+            ? outputs
+            : DEFAULT_ANGLES.map((a, i) => ({
+                id: `ph-${i}`,
+                angle: a,
+                image: null,
+                status: "idle" as const,
+                progress: 0,
+              }))
+          ).map((o) => (
             <div
               key={o.id}
-              className="relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background"
+              className={cn(
+                "group relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background",
+                o.image && "cursor-pointer hover:border-ember",
+              )}
+              onClick={() => {
+                if (!o.image || !onAnnotate) return;
+                onAnnotate({
+                  sketchId: d.sketchId,
+                  sketchTitle: d.sketchTitle,
+                  angleId: o.id,
+                  angleName: o.angle,
+                  image: o.image,
+                });
+              }}
             >
               {o.image ? (
-                <img src={o.image} alt={o.angle} className="h-full w-full object-cover" />
+                <img
+                  src={o.image}
+                  alt={o.angle}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <div className="flex h-full items-center justify-center">
                   {o.status === "processing" ? (
@@ -498,7 +755,8 @@ function OutputNode({ id, data }: NodeProps) {
                 <a
                   href={o.image}
                   download={`${d.sketchTitle}-${o.angle}.png`}
-                  className="absolute right-0 top-0 rounded-bl bg-black/60 p-0.5 text-white opacity-0 hover:opacity-100"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-0 rounded-bl bg-black/60 p-0.5 text-white opacity-0 group-hover:opacity-100"
                 >
                   <Download className="h-2.5 w-2.5" />
                 </a>
@@ -516,20 +774,288 @@ function OutputNode({ id, data }: NodeProps) {
           }}
           className="w-full text-xs"
         >
-          <Send className="mr-1 h-3 w-3" />
-          Kirim ke Presentasi
+          <Send className="mr-1 h-3 w-3" /> Kirim ke Presentasi
         </Button>
       </div>
     </NodeShell>
   );
 }
 
-const nodeTypes = {
-  input: InputNode,
-  prompt: PromptNode,
-  render: RenderNode,
-  output: OutputNode,
-};
+// ---------- Edit Node (sketsa perbaikan) ----------
+function EditNode({ id, data }: NodeProps) {
+  const d = data as EditNodeData;
+  const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
+
+  return (
+    <NodeShell
+      title={`Sketsa Perbaikan · ${d.sketchTitle}`}
+      icon={<Pencil className="h-3.5 w-3.5 text-cyan-500" />}
+      tone="edit"
+      hasSource
+      onRemove={() => removeNode(id)}
+    >
+      <div className="space-y-2">
+        <div className="overflow-hidden rounded border border-border/60">
+          <img src={d.annotatedImage} alt="Anotasi" className="w-full object-cover" />
+        </div>
+        <p className="text-[10px] font-medium text-muted-foreground">
+          Prompt per warna coretan:
+        </p>
+        <div className="space-y-1.5">
+          {d.colorPrompts.map((cp, idx) => (
+            <div key={idx} className="flex items-start gap-1.5">
+              <div
+                className="mt-1 h-3 w-3 shrink-0 rounded-full border border-border"
+                style={{ background: cp.color }}
+                title={cp.label}
+              />
+              <Textarea
+                value={cp.prompt}
+                onChange={(e) => {
+                  const next = d.colorPrompts.map((c, i) =>
+                    i === idx ? { ...c, prompt: e.target.value } : c,
+                  );
+                  updateNode(id, { colorPrompts: next });
+                }}
+                rows={2}
+                placeholder={`Maksud coretan ${cp.label}…`}
+                className="min-h-0 resize-none text-[11px] leading-tight"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-[9px] leading-tight text-muted-foreground">
+          Hubungkan ke <b>AI Render Engine</b> untuk memproses perbaikan.
+        </p>
+      </div>
+    </NodeShell>
+  );
+}
+
+// ---------- Annotation Modal ----------
+function AnnotationModal({
+  target,
+  onClose,
+  onMakeNode,
+}: {
+  target: AnnotationTarget;
+  onClose: () => void;
+  onMakeNode: (annotatedDataUrl: string, usedColors: string[]) => void;
+}) {
+  const [color, setColor] = useState(ANNOTATION_COLORS[0].color);
+  const [tool, setTool] = useState<"pen" | "highlighter" | "eraser">("pen");
+  const [size, setSize] = useState(6);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const drawing = useRef(false);
+  const last = useRef<{ x: number; y: number } | null>(null);
+  const usedColors = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      imgRef.current = img;
+      const c = canvasRef.current;
+      if (!c) return;
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+    };
+    img.src = target.image;
+  }, [target.image]);
+
+  const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const c = canvasRef.current!;
+    const r = c.getBoundingClientRect();
+    return {
+      x: ((e.clientX - r.left) / r.width) * c.width,
+      y: ((e.clientY - r.top) / r.height) * c.height,
+    };
+  };
+
+  const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    drawing.current = true;
+    last.current = getPos(e);
+    (e.target as Element).setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    const c = canvasRef.current!;
+    const ctx = c.getContext("2d")!;
+    const p = getPos(e);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (tool === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.lineWidth = size * 3;
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = tool === "highlighter" ? 0.35 : 1;
+      ctx.lineWidth = tool === "highlighter" ? size * 3 : size;
+      usedColors.current.add(color);
+    }
+    ctx.beginPath();
+    ctx.moveTo(last.current!.x, last.current!.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    last.current = p;
+  };
+  const onUp = () => {
+    drawing.current = false;
+    last.current = null;
+  };
+
+  const clearCanvas = () => {
+    const c = canvasRef.current;
+    if (!c) return;
+    c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
+    usedColors.current.clear();
+  };
+
+  const makeNode = () => {
+    const img = imgRef.current;
+    const overlay = canvasRef.current;
+    if (!img || !overlay) return;
+    const flat = document.createElement("canvas");
+    flat.width = img.naturalWidth;
+    flat.height = img.naturalHeight;
+    const ctx = flat.getContext("2d")!;
+    ctx.drawImage(img, 0, 0);
+    ctx.drawImage(overlay, 0, 0);
+    const dataUrl = flat.toDataURL("image/png");
+    onMakeNode(dataUrl, Array.from(usedColors.current));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur">
+      <div className="flex max-h-[95vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border/60 bg-background shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+          <div>
+            <h3 className="font-display text-base font-semibold">
+              Anotasi · {target.sketchTitle}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {target.angleName} — coret dengan warna untuk menandai perbaikan
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-surface/60 px-4 py-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTool("pen")}
+              className={cn(
+                "flex items-center gap-1 rounded px-2 py-1 text-xs",
+                tool === "pen" ? "bg-ember/20 text-ember" : "hover:bg-muted",
+              )}
+            >
+              <Pencil className="h-3.5 w-3.5" /> Pen
+            </button>
+            <button
+              onClick={() => setTool("highlighter")}
+              className={cn(
+                "flex items-center gap-1 rounded px-2 py-1 text-xs",
+                tool === "highlighter" ? "bg-ember/20 text-ember" : "hover:bg-muted",
+              )}
+            >
+              <Highlighter className="h-3.5 w-3.5" /> Stabilo
+            </button>
+            <button
+              onClick={() => setTool("eraser")}
+              className={cn(
+                "flex items-center gap-1 rounded px-2 py-1 text-xs",
+                tool === "eraser" ? "bg-ember/20 text-ember" : "hover:bg-muted",
+              )}
+            >
+              <Eraser className="h-3.5 w-3.5" /> Hapus
+            </button>
+          </div>
+          <div className="mx-2 h-5 w-px bg-border" />
+          <div className="flex items-center gap-1">
+            {ANNOTATION_COLORS.map((c) => (
+              <button
+                key={c.color}
+                onClick={() => setColor(c.color)}
+                className={cn(
+                  "h-6 w-6 rounded-full border-2 transition",
+                  color === c.color
+                    ? "border-foreground scale-110"
+                    : "border-border hover:border-foreground/60",
+                )}
+                style={{ background: c.color }}
+                title={c.label}
+              />
+            ))}
+          </div>
+          <div className="mx-2 h-5 w-px bg-border" />
+          <div className="flex items-center gap-2">
+            <Label className="text-[10px]">Tebal</Label>
+            <input
+              type="range"
+              min={2}
+              max={20}
+              value={size}
+              onChange={(e) => setSize(Number(e.target.value))}
+              className="w-24"
+            />
+          </div>
+          <div className="ml-auto">
+            <Button size="sm" variant="outline" onClick={clearCanvas} className="text-xs">
+              Bersihkan
+            </Button>
+          </div>
+        </div>
+
+        <div className="relative flex-1 overflow-auto bg-[repeating-conic-gradient(#0002_0%_25%,transparent_0%_50%)_50%/24px_24px] p-4">
+          <div className="relative mx-auto max-w-full" style={{ width: "fit-content" }}>
+            <img
+              src={target.image}
+              alt=""
+              className="block max-h-[65vh] w-auto rounded"
+              draggable={false}
+            />
+            <canvas
+              ref={canvasRef}
+              onPointerDown={onDown}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+              className="absolute inset-0 h-full w-full touch-none rounded"
+              style={{ cursor: "crosshair" }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
+          <p className="text-xs text-muted-foreground">
+            Setiap warna akan menjadi baris prompt sendiri di node "Sketsa Perbaikan".
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Batal
+            </Button>
+            <Button
+              size="sm"
+              onClick={makeNode}
+              className="bg-gradient-primary shadow-primary"
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" /> Jadikan Node
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ---------- Execute hook ----------
 function useStudioExecute() {
@@ -542,24 +1068,111 @@ function useStudioExecute() {
 
   return useCallback(
     async (renderNodeId: string) => {
-      // Trace graph: input -> prompt -> renderNodeId -> output.
-      const inEdges = (target: string) => graph.edges.filter((e) => e.target === target);
-      const outEdges = (source: string) => graph.edges.filter((e) => e.source === source);
+      const inEdges = (target: string) =>
+        graph.edges.filter((e) => e.target === target);
+      const outEdges = (source: string) =>
+        graph.edges.filter((e) => e.source === source);
 
-      const promptEdge = inEdges(renderNodeId)[0];
-      if (!promptEdge) return toast.error("Sambungkan Prompt ke Render Engine");
-      const promptNode = graph.nodes.find((n) => n.id === promptEdge.source);
-      const inputEdge = promptNode ? inEdges(promptNode.id)[0] : null;
-      const inputNode = inputEdge ? graph.nodes.find((n) => n.id === inputEdge.source) : null;
-      const outputEdge = outEdges(renderNodeId)[0];
-      const outputNode = outputEdge ? graph.nodes.find((n) => n.id === outputEdge.target) : null;
+      const incoming = inEdges(renderNodeId);
+      const incomingNodes = incoming
+        .map((e) => graph.nodes.find((n) => n.id === e.source))
+        .filter(Boolean) as Node[];
 
-      if (!inputNode || !promptNode || !outputNode) {
-        return toast.error("Rangkaian node belum lengkap");
+      const referenceNode = incomingNodes.find((n) => n.type === "reference");
+      const promptNode = incomingNodes.find((n) => n.type === "prompt");
+      const editNode = incomingNodes.find((n) => n.type === "edit");
+
+      const outEdgeR = outEdges(renderNodeId)[0];
+      const outputNode = outEdgeR
+        ? graph.nodes.find((n) => n.id === outEdgeR.target)
+        : null;
+
+      if (!outputNode) return toast.error("Sambungkan Render → Output");
+
+      const outData = outputNode.data as OutputNodeData;
+      const refImage = referenceNode
+        ? (referenceNode.data as ReferenceNodeData).image ?? null
+        : null;
+
+      // === EDIT FLOW: single-image inpaint-style render ===
+      if (editNode && outData.standalone) {
+        const ed = editNode.data as EditNodeData;
+        const colorPart = ed.colorPrompts
+          .filter((c) => c.prompt.trim())
+          .map((c) => `Coretan ${c.label} (${c.color}): ${c.prompt.trim()}`)
+          .join(". ");
+        const finalPrompt = [
+          "Perbaiki gambar berikut sesuai anotasi coretan berwarna pada gambar",
+          colorPart || "Perbaiki area yang ditandai",
+          "Hasilkan foto arsitektur fotorealistis berkualitas tinggi, jaga geometry utama",
+        ].join(". ");
+
+        updateNode(outputNode.id, {
+          standaloneStatus: "processing",
+          standaloneProgress: 10,
+          standaloneError: undefined,
+        });
+        updateNode(renderNodeId, { status: "processing", progress: 0 });
+        try {
+          const res = await callRender({
+            data: {
+              sketchBase64: ed.annotatedImage,
+              referenceBase64: refImage,
+              prompt: finalPrompt,
+              renderType: "exterior",
+              accuracy: 9,
+              consistency: refImage ? 8 : 5,
+            },
+          });
+          if (res.ok && res.resultUrl) {
+            let dataUrl = res.resultUrl;
+            try {
+              const r = await fetch(res.resultUrl);
+              const blob = await r.blob();
+              dataUrl = await new Promise<string>((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result as string);
+                fr.onerror = () => reject(fr.error);
+                fr.readAsDataURL(blob);
+              });
+            } catch {
+              /* fallback to url */
+            }
+            updateNode(outputNode.id, {
+              standaloneImage: dataUrl,
+              standaloneStatus: "done",
+              standaloneProgress: 100,
+            });
+            updateNode(renderNodeId, { status: "done", progress: 100 });
+            toast.success("Perbaikan selesai");
+          } else {
+            updateNode(outputNode.id, {
+              standaloneStatus: "error",
+              standaloneError: res.ok ? "Tidak ada URL" : res.error,
+            });
+            updateNode(renderNodeId, {
+              status: "error",
+              error: res.ok ? "Tidak ada URL" : res.error,
+            });
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Error";
+          updateNode(outputNode.id, { standaloneStatus: "error", standaloneError: msg });
+          updateNode(renderNodeId, { status: "error", error: msg });
+        }
+        return;
       }
+
+      // === STANDARD FLOW: input + prompt → multi-angle output ===
+      if (!promptNode) return toast.error("Sambungkan Prompt ke Render Engine");
+      const inputEdge = inEdges(promptNode.id)[0];
+      const inputNode = inputEdge
+        ? graph.nodes.find((n) => n.id === inputEdge.source)
+        : null;
+      if (!inputNode) return toast.error("Sambungkan Input ke Prompt");
+
       const inData = inputNode.data as InputNodeData;
       const prData = promptNode.data as PromptNodeData;
-      const outData = outputNode.data as OutputNodeData;
 
       const shots = loadShots(inData.sketchId);
       const uploads = inData.uploads ?? [];
@@ -567,29 +1180,31 @@ function useStudioExecute() {
         ...shots.map((s) => ({ id: s.id, dataUrl: s.dataUrl })),
         ...uploads.map((u) => ({ id: u.id, dataUrl: u.dataUrl })),
       ];
-      const chosen =
-        pool.find((s) => s.id === inData.selectedShotId) ?? pool[0];
-      if (!chosen) return toast.error(`Pilih atau unggah gambar untuk ${inData.sketchTitle}`);
+      const chosen = pool.find((s) => s.id === inData.selectedShotId) ?? pool[0];
+      if (!chosen)
+        return toast.error(`Pilih atau unggah gambar untuk ${inData.sketchTitle}`);
 
-      const finalPrompt = [prData.style, prData.detail, "arsitektur fotorealistis, kualitas tinggi"]
+      const finalPrompt = [
+        prData.style,
+        prData.detail,
+        "arsitektur fotorealistis, kualitas tinggi",
+      ]
         .filter(Boolean)
         .join(", ");
       if (!finalPrompt.trim()) return toast.error("Isi gaya atau detail prompt");
 
       const promptGeom = Math.max(0, Math.min(100, prData.geometryConsistency ?? 70));
       const outputGeom = Math.max(0, Math.min(100, outData.geometryConsistency ?? 80));
-      // Map 0-100 → accuracy 1-10 untuk kesetiaan geometry ke sketsa referensi.
       const accuracyLevel = Math.max(1, Math.min(10, Math.round((promptGeom / 100) * 9) + 1));
       const angleConsistencyText =
         outputGeom >= 90
-          ? "KRITIS: Pertahankan bentuk massa, siluet, jumlah lantai, posisi bukaan, dan seluruh elemen arsitektural PERSIS SAMA di semua angle. Hanya sudut kamera yang berubah, geometry bangunan identik."
+          ? "KRITIS: Pertahankan geometry PERSIS SAMA di semua angle."
           : outputGeom >= 60
-          ? `Jaga konsistensi bentuk bangunan ${outputGeom}% antar angle — massa utama, proporsi, dan komposisi harus sama; detail sekunder boleh sedikit variasi.`
-          : outputGeom >= 30
-          ? `Boleh interpretasi variasi bentuk (~${100 - outputGeom}% variasi) antar angle sambil menjaga karakter umum.`
-          : "Bebas berkreasi variasi bentuk pada tiap angle — hanya gaya dan mood yang konsisten.";
+            ? `Jaga konsistensi bentuk ${outputGeom}% antar angle.`
+            : outputGeom >= 30
+              ? `Boleh variasi bentuk ~${100 - outputGeom}% antar angle.`
+              : "Bebas variasi bentuk tiap angle.";
 
-      // Init outputs (3 angles)
       const angles: RenderAngle[] = DEFAULT_ANGLES.map((a) => ({
         id: crypto.randomUUID(),
         angle: a,
@@ -600,13 +1215,12 @@ function useStudioExecute() {
       setOutputs(outData.sketchId, angles);
       updateNode(renderNodeId, { status: "processing", progress: 0, error: undefined });
 
-      // Simulated smooth progress per angle (keeps UI lively during async waits)
       const timers: Record<string, ReturnType<typeof setInterval>> = {};
       for (const a of angles) {
         timers[a.id] = setInterval(() => {
-          const cur = useStudioStore.getState().graph.outputs[outData.sketchId]?.find(
-            (o) => o.id === a.id,
-          );
+          const cur = useStudioStore
+            .getState()
+            .graph.outputs[outData.sketchId]?.find((o) => o.id === a.id);
           if (!cur || cur.status !== "processing") return;
           const next = Math.min(cur.progress + 3 + Math.random() * 4, 90);
           updateOutput(outData.sketchId, a.id, { progress: next });
@@ -614,7 +1228,6 @@ function useStudioExecute() {
       }
 
       try {
-        // Kick off in parallel, but yield to UI between starts so canvas stays smooth.
         const results = await Promise.all(
           angles.map(async (a) => {
             const anglePrompt = `${finalPrompt}. ${ANGLE_PROMPT[a.angle] ?? a.angle}. ${angleConsistencyText}`;
@@ -622,16 +1235,18 @@ function useStudioExecute() {
               const res = await callRender({
                 data: {
                   sketchBase64: chosen.dataUrl,
-                  referenceBase64: null,
+                  referenceBase64: refImage,
                   prompt: anglePrompt,
                   renderType: "exterior",
                   accuracy: accuracyLevel,
-                  consistency: Math.max(1, Math.min(10, Math.round((outputGeom / 100) * 9) + 1)),
+                  consistency: Math.max(
+                    1,
+                    Math.min(10, Math.round((outputGeom / 100) * 9) + 1),
+                  ),
                 },
               });
               clearInterval(timers[a.id]);
               if (res.ok && res.resultUrl) {
-                // Fetch and encode as data URL so it persists offline.
                 let dataUrl: string | null = null;
                 try {
                   const r = await fetch(res.resultUrl);
@@ -672,12 +1287,11 @@ function useStudioExecute() {
 
         const success = results.filter(Boolean).length;
         updateNode(renderNodeId, {
-          status: success === angles.length ? "done" : success > 0 ? "done" : "error",
+          status: success > 0 ? "done" : "error",
           progress: 100,
           error: success === 0 ? "Semua angle gagal" : undefined,
         });
         if (success > 0) {
-          // Auto-sync ke Presentasi.
           syncToPresentasi(outData.sketchId, outData.sketchTitle);
           toast.success(`${success}/${angles.length} angle selesai · disinkron ke Presentasi`);
         } else {
@@ -749,7 +1363,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
       source,
       target,
       animated: true,
-      style: { stroke: "hsl(var(--ember, 24 95% 53%))", strokeWidth: 2 },
+      style: { stroke: "hsl(24 95% 53%)", strokeWidth: 2 },
     });
     edges.push(
       mkEdge(inputId, promptId),
@@ -769,8 +1383,11 @@ function StudioPage() {
   const graph = useStudioStore((s) => s.graph);
   const setNodesEdges = useStudioStore((s) => s.setNodesEdges);
   const setGraph = useStudioStore((s) => s.setGraph);
+  const addNode = useStudioStore((s) => s.addNode);
+  const addEdgeStore = useStudioStore((s) => s.addEdge);
 
   const [sketches, setSketches] = useState<SketchLite[]>([]);
+  const [annotationTarget, setAnnotationTarget] = useState<AnnotationTarget | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -806,6 +1423,181 @@ function StudioPage() {
       setNodesEdges(graph.nodes, next);
     },
     [graph, setNodesEdges],
+  );
+
+  // Spawn node from dropdown
+  const spawnNode = (kind: "input" | "prompt" | "render" | "output" | "reference" | "edit") => {
+    const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
+    const uid = crypto.randomUUID().slice(0, 8);
+    const sk = sketches[0];
+    if ((kind === "input" || kind === "output") && !sk) {
+      toast.error("Belum ada sketsa. Buat sketsa dulu.");
+      return;
+    }
+    let node: Node | null = null;
+    if (kind === "input" && sk) {
+      node = {
+        id: `input-manual-${uid}`,
+        type: "input",
+        position: anchor,
+        data: {
+          kind: "input",
+          sketchId: sk.id,
+          sketchTitle: sk.title,
+          selectedShotId: null,
+          uploads: [],
+        } satisfies InputNodeData,
+      };
+    } else if (kind === "prompt") {
+      node = {
+        id: `prompt-manual-${uid}`,
+        type: "prompt",
+        position: anchor,
+        data: {
+          kind: "prompt",
+          style: "",
+          detail: "",
+          geometryConsistency: 70,
+        } satisfies PromptNodeData,
+      };
+    } else if (kind === "render") {
+      node = {
+        id: `render-manual-${uid}`,
+        type: "render",
+        position: anchor,
+        data: { kind: "render", status: "idle", progress: 0 } satisfies RenderNodeData,
+      };
+    } else if (kind === "output" && sk) {
+      node = {
+        id: `output-manual-${uid}`,
+        type: "output",
+        position: anchor,
+        data: {
+          kind: "output",
+          sketchId: sk.id,
+          sketchTitle: sk.title,
+          geometryConsistency: 80,
+        } satisfies OutputNodeData,
+      };
+    } else if (kind === "reference") {
+      node = {
+        id: `reference-${uid}`,
+        type: "reference",
+        position: anchor,
+        data: {
+          kind: "reference",
+          image: null,
+          label: "Referensi Style",
+        } satisfies ReferenceNodeData,
+      };
+    } else if (kind === "edit") {
+      toast.info("Node Edit dibuat dari klik gambar di Output — lalu tekan 'Jadikan Node'.");
+      return;
+    }
+    if (node) {
+      addNode(node);
+      toast.success(`Node ditambahkan`);
+    }
+  };
+
+  // Handle "Jadikan Node" from annotation modal
+  const handleMakeEditNode = (annotatedDataUrl: string, usedColors: string[]) => {
+    if (!annotationTarget) return;
+    const uid = crypto.randomUUID().slice(0, 8);
+    const editId = `edit-${uid}`;
+    const renderId = `render-edit-${uid}`;
+    const outputId = `output-edit-${uid}`;
+
+    // Locate source output node to anchor near it
+    const outputNode = graph.nodes.find(
+      (n) =>
+        n.type === "output" &&
+        (n.data as OutputNodeData).sketchId === annotationTarget.sketchId &&
+        !(n.data as OutputNodeData).standalone,
+    );
+    const base = outputNode
+      ? { x: outputNode.position.x + 340, y: outputNode.position.y + 60 }
+      : { x: 800, y: 200 };
+
+    const colorPrompts =
+      usedColors.length > 0
+        ? usedColors.map((c) => ({
+            color: c,
+            label: ANNOTATION_COLORS.find((x) => x.color === c)?.label ?? c,
+            prompt: "",
+          }))
+        : ANNOTATION_COLORS.slice(0, 2).map((c) => ({
+            color: c.color,
+            label: c.label,
+            prompt: "",
+          }));
+
+    addNode({
+      id: editId,
+      type: "edit",
+      position: base,
+      data: {
+        kind: "edit",
+        sketchId: annotationTarget.sketchId,
+        sketchTitle: annotationTarget.sketchTitle,
+        sourceImage: annotationTarget.image,
+        annotatedImage: annotatedDataUrl,
+        colorPrompts,
+      } satisfies EditNodeData,
+    });
+    addNode({
+      id: renderId,
+      type: "render",
+      position: { x: base.x + 340, y: base.y },
+      data: { kind: "render", status: "idle", progress: 0 } satisfies RenderNodeData,
+    });
+    addNode({
+      id: outputId,
+      type: "output",
+      position: { x: base.x + 680, y: base.y },
+      data: {
+        kind: "output",
+        sketchId: annotationTarget.sketchId,
+        sketchTitle: annotationTarget.sketchTitle,
+        geometryConsistency: 90,
+        standalone: true,
+        standaloneImage: null,
+        standaloneStatus: "idle",
+        standaloneProgress: 0,
+      } satisfies OutputNodeData,
+    });
+    addEdgeStore({
+      id: `${editId}->${renderId}`,
+      source: editId,
+      target: renderId,
+      animated: true,
+      style: { stroke: "hsl(180 70% 45%)", strokeWidth: 2 },
+    });
+    addEdgeStore({
+      id: `${renderId}->${outputId}`,
+      source: renderId,
+      target: outputId,
+      animated: true,
+      style: { stroke: "hsl(24 95% 53%)", strokeWidth: 2 },
+    });
+
+    setAnnotationTarget(null);
+    toast.success("Node Sketsa Perbaikan + Render + Output dibuat");
+  };
+
+  // Node types with annotation callback baked in
+  const nodeTypes = useMemo(
+    () => ({
+      input: InputNode,
+      prompt: PromptNode,
+      render: RenderNode,
+      output: (props: NodeProps) => (
+        <OutputNode {...props} onAnnotate={setAnnotationTarget} />
+      ),
+      reference: ReferenceNode,
+      edit: EditNode,
+    }),
+    [],
   );
 
   const loadPreset = () => {
@@ -845,23 +1637,56 @@ function StudioPage() {
   return (
     <main className="flex h-[calc(100vh-4rem)] flex-col">
       <div className="flex items-center justify-between border-b border-border/60 bg-surface/60 px-4 py-3 backdrop-blur sm:px-6">
-        <div>
-          <h1 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
-            Render Studio · Node Canvas
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {sketches.length} sketsa · {graph.nodes.length} node · {totalOutputs} render selesai
-          </p>
+        <div className="flex items-center gap-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1">
+                <Plus className="h-3.5 w-3.5" /> Tambah Node
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>Node Utama</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => spawnNode("input")}>
+                1 · 3D Input
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("prompt")}>
+                2 · Prompt & Style
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("render")}>
+                3 · AI Render Engine
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("output")}>
+                4 · Multi-Angle Output
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => spawnNode("reference")}>
+                Referensi Style
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("edit")}>
+                Sketsa Perbaikan (via anotasi)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div>
+            <h1 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
+              Render Studio · Node Canvas
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {sketches.length} sketsa · {graph.nodes.length} node · {totalOutputs} render selesai
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={clearAll} disabled={graph.nodes.length === 0}>
-            Bersihkan
-          </Button>
           <Button
             size="sm"
-            onClick={loadPreset}
-            className="bg-gradient-primary shadow-primary"
+            variant="outline"
+            onClick={clearAll}
+            disabled={graph.nodes.length === 0}
           >
+            Bersihkan
+          </Button>
+          <Button size="sm" onClick={loadPreset} className="bg-gradient-primary shadow-primary">
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             Load Default Render Preset
           </Button>
@@ -880,7 +1705,10 @@ function StudioPage() {
             fitView
             fitViewOptions={{ padding: 0.2 }}
             proOptions={{ hideAttribution: true }}
-            defaultEdgeOptions={{ animated: true, style: { stroke: "hsl(24 95% 53%)", strokeWidth: 2 } }}
+            defaultEdgeOptions={{
+              animated: true,
+              style: { stroke: "hsl(24 95% 53%)", strokeWidth: 2 },
+            }}
             connectionMode={"loose" as never}
             connectionRadius={40}
             nodesDraggable
@@ -895,11 +1723,20 @@ function StudioPage() {
               className="!bg-surface !border-border"
               nodeColor={(n) => {
                 switch (n.type) {
-                  case "input": return "#0ea5e9";
-                  case "prompt": return "#8b5cf6";
-                  case "render": return "#f59e0b";
-                  case "output": return "#10b981";
-                  default: return "#888";
+                  case "input":
+                    return "#0ea5e9";
+                  case "prompt":
+                    return "#8b5cf6";
+                  case "render":
+                    return "#f59e0b";
+                  case "output":
+                    return "#10b981";
+                  case "reference":
+                    return "#ec4899";
+                  case "edit":
+                    return "#06b6d4";
+                  default:
+                    return "#888";
                 }
               }}
             />
@@ -911,13 +1748,21 @@ function StudioPage() {
               <Sparkles className="mx-auto mb-3 h-8 w-8 text-ember" />
               <h2 className="font-display text-lg font-semibold">Kanvas Kosong</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Klik <span className="font-medium">Load Default Render Preset</span> untuk
-                membuat rangkaian node per sketsa (Input → Prompt → Render → Output).
+                Klik <span className="font-medium">Load Default Render Preset</span> atau{" "}
+                <span className="font-medium">Tambah Node</span> di kiri atas.
               </p>
             </div>
           </div>
         )}
       </div>
+
+      {annotationTarget && (
+        <AnnotationModal
+          target={annotationTarget}
+          onClose={() => setAnnotationTarget(null)}
+          onMakeNode={handleMakeEditNode}
+        />
+      )}
     </main>
   );
 }
