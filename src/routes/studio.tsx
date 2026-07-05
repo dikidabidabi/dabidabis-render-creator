@@ -740,7 +740,13 @@ function OutputNode({
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
-        <OutputSketchPicker id={id} sketchId={d.sketchId} />
+        <SketchSelector
+          sketches={sketches}
+          value={d.sketchId}
+          tone="emerald"
+          onChange={(sk) => updateNode(id, { sketchId: sk.id, sketchTitle: sk.title })}
+        />
+
 
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>
