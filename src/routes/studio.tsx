@@ -1191,6 +1191,9 @@ function useStudioExecute() {
       const finalPrompt = [
         prData.style,
         prData.detail,
+        refImage
+          ? "Gunakan gambar referensi HANYA sebagai panduan gaya visual (palet, material, mood, pencahayaan). GEOMETRY tetap mengikuti sketsa input — jangan meniru bentuk atau komposisi dari referensi."
+          : "",
         "arsitektur fotorealistis, kualitas tinggi",
       ]
         .filter(Boolean)
