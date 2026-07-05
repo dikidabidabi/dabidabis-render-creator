@@ -1727,7 +1727,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
 
 function SlideHeader({ slide }: { slide: Slide }) {
   const kicker =
-    slide.kind === "level" ? "Sketsa · Level"
+    slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
     : slide.kind === "site" ? (
