@@ -423,10 +423,11 @@ function RenderNode({
   );
 }
 
-function OutputNode({ data }: NodeProps) {
+function OutputNode({ id, data }: NodeProps) {
   const d = data as OutputNodeData;
   const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
   const sync = useStudioStore((s) => s.syncToPresentasi);
+  const updateNode = useStudioStore((s) => s.updateNode);
   const total = outputs.length || 3;
   const done = outputs.filter((o) => o.status === "done").length;
   const avgProgress = outputs.length
@@ -451,6 +452,25 @@ function OutputNode({ data }: NodeProps) {
             className="h-full bg-gradient-primary transition-all duration-300"
             style={{ width: `${avgProgress}%` }}
           />
+        </div>
+        <div className="rounded border border-border/60 bg-background/60 p-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px]">Geometry Consistency</Label>
+            <span className="text-[10px] font-medium text-emerald-500">
+              {d.geometryConsistency ?? 80}%
+            </span>
+          </div>
+          <Slider
+            value={[d.geometryConsistency ?? 80]}
+            onValueChange={(v) => updateNode(id, { geometryConsistency: v[0] })}
+            min={0}
+            max={100}
+            step={1}
+            className="mt-2"
+          />
+          <p className="mt-1 text-[9px] leading-tight text-muted-foreground">
+            0% bentuk berbeda tiap angle · 100% bentuk identik, hanya sudut berubah
+          </p>
         </div>
         <div className="grid grid-cols-3 gap-1">
           {(outputs.length ? outputs : DEFAULT_ANGLES.map((a, i) => ({
