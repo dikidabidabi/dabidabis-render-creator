@@ -134,15 +134,30 @@ function NodeShell({
   return (
     <div
       className={cn(
-        "w-[280px] rounded-xl border bg-background/95 shadow-lg backdrop-blur",
+        "relative w-[280px] rounded-xl border bg-background/95 shadow-lg backdrop-blur",
         toneMap[tone],
       )}
+      style={{ overflow: "visible" }}
     >
       {hasTarget && (
-        <Handle type="target" position={Position.Left} className="!h-3 !w-3 !bg-ember" />
+        <Handle
+          id="in"
+          type="target"
+          position={Position.Left}
+          isConnectable
+          className="!h-4 !w-4 !bg-ember !border-2 !border-background !cursor-crosshair"
+          style={{ left: -8, zIndex: 20 }}
+        />
       )}
       {hasSource && (
-        <Handle type="source" position={Position.Right} className="!h-3 !w-3 !bg-ember" />
+        <Handle
+          id="out"
+          type="source"
+          position={Position.Right}
+          isConnectable
+          className="!h-4 !w-4 !bg-ember !border-2 !border-background !cursor-crosshair"
+          style={{ right: -8, zIndex: 20 }}
+        />
       )}
       <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
         {icon}
@@ -810,7 +825,12 @@ function StudioPage() {
             fitView
             fitViewOptions={{ padding: 0.2 }}
             proOptions={{ hideAttribution: true }}
-            defaultEdgeOptions={{ animated: true }}
+            defaultEdgeOptions={{ animated: true, style: { stroke: "hsl(24 95% 53%)", strokeWidth: 2 } }}
+            connectionMode={"loose" as never}
+            connectionRadius={40}
+            nodesDraggable
+            nodesConnectable
+            elementsSelectable
           >
             <Background gap={24} color="hsl(var(--border))" />
             <Controls className="!bg-surface !border-border" />
