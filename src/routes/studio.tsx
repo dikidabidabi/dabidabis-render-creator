@@ -738,7 +738,7 @@ function OutputNode({
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
-        <OutputSketchSelector id={id} sketchId={d.sketchId} />
+        <OutputSketchPicker id={id} sketchId={d.sketchId} />
 
         <div className="flex items-center justify-between text-[10px] text-muted-foreground">
           <span>
