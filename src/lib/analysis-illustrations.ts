@@ -394,33 +394,35 @@ export function annotationSvgElements(
     const tip = pts[pts.length - 1];
     const prev = pts[pts.length - 2];
     const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-    const hL = sw * 2.2;
-    const barThick = Math.max(1, sw * 0.7);
-    const cs = Math.cos(angH), sn = Math.sin(angH);
-    const shaftEnd = { x: tip.x - cs * hL * Math.SQRT1_2, y: tip.y - sn * hL * Math.SQRT1_2 };
-    const shaftPts = [...pts.slice(0, -1), shaftEnd];
+    const hL = sw * 2.4;
+    const barThick = Math.max(1, sw * 0.6);
+    const shaftPts = [...pts.slice(0, -1), tip];
     const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
     nodes.push(React.createElement("path", {
       key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
       strokeLinecap: "butt", strokeLinejoin: "miter",
       strokeDasharray: `${sw * 0.5},${sw * 0.3}`,
     }));
-    // Dua bar persegi panjang bertemu di tip pada sudut siku-siku (90°).
-    const barPath = (dirRad: number, key: string) => {
-      const dx = Math.cos(dirRad), dy = Math.sin(dirRad);
-      const px = -dy, py = dx;
-      const h = barThick / 2;
-      const p1 = { x: tip.x + px * h, y: tip.y + py * h };
-      const p2 = { x: tip.x + dx * hL + px * h, y: tip.y + dy * hL + py * h };
-      const p3 = { x: tip.x + dx * hL - px * h, y: tip.y + dy * hL - py * h };
-      const p4 = { x: tip.x - px * h, y: tip.y - py * h };
+    // Dua bar bertemu tepat di tip (satu titik bersama = siku tersambung).
+    const angA = angH + (3 * Math.PI) / 4;
+    const angB = angH - (3 * Math.PI) / 4;
+    const perpA = angH + Math.PI / 4;
+    const perpB = angH - Math.PI / 4;
+    const barPath = (dRad: number, nRad: number, key: string) => {
+      const dx = Math.cos(dRad), dy = Math.sin(dRad);
+      const nx = Math.cos(nRad), ny = Math.sin(nRad);
+      const p1 = tip;
+      const p2 = { x: tip.x + dx * hL, y: tip.y + dy * hL };
+      const p3 = { x: p2.x + nx * barThick, y: p2.y + ny * barThick };
+      const p4 = { x: tip.x + nx * barThick, y: tip.y + ny * barThick };
       const dd = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y} Z`;
       nodes.push(React.createElement("path", { key, d: dd, fill: a.color, stroke: "none" }));
     };
-    barPath(angH + Math.PI - Math.PI / 4, `${keyPrefix}-h1`);
-    barPath(angH + Math.PI + Math.PI / 4, `${keyPrefix}-h2`);
+    barPath(angA, perpA, `${keyPrefix}-h1`);
+    barPath(angB, perpB, `${keyPrefix}-h2`);
     return nodes;
   }
+
 
   const mid = `${keyPrefix}-am`;
   nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
