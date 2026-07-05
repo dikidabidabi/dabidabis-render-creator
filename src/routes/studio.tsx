@@ -562,6 +562,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
           sketchId: sk.id,
           sketchTitle: sk.title,
           selectedShotId: null,
+          uploads: [],
         } satisfies InputNodeData,
       },
       {
