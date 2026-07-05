@@ -93,6 +93,7 @@ type PromptNodeData = {
   kind: "prompt";
   style: string;
   detail: string;
+  geometryConsistency: number; // 0-100, konsistensi bentuk terhadap referensi sketsa
 };
 type RenderNodeData = {
   kind: "render";
@@ -104,6 +105,7 @@ type OutputNodeData = {
   kind: "output";
   sketchId: string;
   sketchTitle: string;
+  geometryConsistency: number; // 0-100, konsistensi geometry saat berubah angle
 };
 
 // Stable empty-array reference so zustand selectors don't return a new array
