@@ -67,14 +67,28 @@ type SketchLite = { id: string; title: string };
 type Shot = { id: string; dataUrl: string; ts: number };
 
 function loadSketches(): SketchLite[] {
-  try {
-    const raw = localStorage.getItem("dabidabis_sketch_v2");
-    if (!raw) return [];
-    const s = JSON.parse(raw) as { sketches?: { id: string; title: string }[] };
-    return (s.sketches ?? []).map((x) => ({ id: x.id, title: x.title }));
-  } catch {
-    return [];
+  const out: SketchLite[] = [];
+  const seen = new Set<string>();
+  const push = (arr?: { id: string; title: string }[]) => {
+    if (!arr) return;
+    for (const x of arr) {
+      if (x?.id && !seen.has(x.id)) {
+        seen.add(x.id);
+        out.push({ id: x.id, title: x.title ?? "(tanpa judul)" });
+      }
+    }
+  };
+  for (const key of ["dabidabis_sketch_v2", "dabidabis_masterplan_canvas_v1"]) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const s = JSON.parse(raw) as { sketches?: { id: string; title: string }[] };
+      push(s.sketches);
+    } catch {
+      /* ignore */
+    }
   }
+  return out;
 }
 function loadShots(sketchId: string): Shot[] {
   try {
@@ -85,6 +99,12 @@ function loadShots(sketchId: string): Shot[] {
   } catch {
     return [];
   }
+}
+function hasShots(sketchId: string): boolean {
+  return loadShots(sketchId).length > 0;
+}
+function sketchesWithShots(list: SketchLite[]): SketchLite[] {
+  return list.filter((s) => hasShots(s.id));
 }
 
 function useSketchList(): SketchLite[] {
@@ -100,6 +120,23 @@ function useSketchList(): SketchLite[] {
   }, []);
   return list;
 }
+
+/** Sketch list restricted to those with at least one screenshot in library. */
+function useSketchesWithShots(): SketchLite[] {
+  const all = useSketchList();
+  const [ver, setVer] = useState(0);
+  useEffect(() => {
+    const reload = () => setVer((v) => v + 1);
+    window.addEventListener("storage", reload);
+    window.addEventListener("focus", reload);
+    return () => {
+      window.removeEventListener("storage", reload);
+      window.removeEventListener("focus", reload);
+    };
+  }, []);
+  return useMemo(() => sketchesWithShots(all), [all, ver]);
+}
+
 
 function SketchSelector({
   sketches,
