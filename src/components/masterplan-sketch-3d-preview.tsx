@@ -1,15 +1,21 @@
 // MasterplanSketch3DPreview
-// Lightweight 3D preview of a sketch — designed to sit just below the 2D
-// SketchCard on the Master Plan page. Reads layers + levels from the sketch
-// prop, extrudes each layer at its level's elevation. Real-time by default;
-// includes an "Update" button at the top-right that forces a remount + camera
-// refit (useful after large structural edits).
+// Lightweight 3D preview of a sketch. Now includes Screenshot (JPEG) + hi-res
+// 2K/4K capture + a library of stored screenshots keyed by sketch id, so the
+// Studio page's Input node can consume them automatically.
 
-import { useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Edges, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
-import { RefreshCw, Box as BoxIcon, Maximize2, Minimize2 } from "lucide-react";
+import {
+  RefreshCw,
+  Box as BoxIcon,
+  Maximize2,
+  Minimize2,
+  Camera,
+  Trash2,
+  Download,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { solidColorForRoomName } from "@/lib/room-color";
 import {
@@ -46,6 +52,8 @@ type Sketch = {
   levels: Level[];
   roads?: RoadSegment[];
 };
+
+type Shot = { id: string; dataUrl: string; ts: number };
 
 
 const MINOR_PX = 8;
@@ -169,7 +177,6 @@ function RoadExtruded({
   );
 }
 
-/** Garis lapis horisontal di setiap kelipatan 4 m pada bangunan. */
 function FloorLines({
   points, origin, mPerPx, baseY, floorH, floors,
 }: {
@@ -178,7 +185,6 @@ function FloorLines({
 }) {
   const geo = useMemo(() => {
     if (points.length < 3 || floors < 2) return null;
-    // ring di y=0 (akan dipindahkan via position) — buat untuk tiap lapis antara
     const positions: number[] = [];
     for (let i = 1; i < floors; i++) {
       const y = i * floorH;
@@ -207,13 +213,120 @@ function FloorLines({
   );
 }
 
+function R3FRefCapture({
+  target,
+}: {
+  target: React.MutableRefObject<{ gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera } | null>;
+}) {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    target.current = { gl, scene, camera };
+  }, [gl, scene, camera, target]);
+  return null;
+}
 
 
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const canvasWrapRef = useRef<HTMLDivElement | null>(null);
+  const r3fRef = useRef<{ gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera } | null>(null);
   const mPerPx = metersPerPx(sketch.scale);
+
+  const shotsKey = `dabidabis_model3d_shots_${sketch.id}`;
+  const [shots, setShots] = useState<Shot[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(shotsKey);
+      setShots(raw ? JSON.parse(raw) : []);
+    } catch {
+      setShots([]);
+    }
+  }, [shotsKey]);
+
+  const saveShots = useCallback(
+    (next: Shot[]) => {
+      setShots(next);
+      let attempt = next.slice();
+      for (let i = 0; i < 10; i++) {
+        try {
+          localStorage.setItem(shotsKey, JSON.stringify(attempt));
+          return;
+        } catch {
+          if (attempt.length <= 1) {
+            try { localStorage.removeItem(shotsKey); } catch { /* ignore */ }
+            try { localStorage.setItem(shotsKey, JSON.stringify(attempt)); return; } catch { /* fall */ }
+            return;
+          }
+          attempt = attempt.slice(0, attempt.length - 1);
+          setShots(attempt);
+        }
+      }
+    },
+    [shotsKey],
+  );
+
+  const takeScreenshot = useCallback(() => {
+    const el = canvasWrapRef.current?.querySelector("canvas") as HTMLCanvasElement | null;
+    if (!el) return;
+    try {
+      const dataUrl = el.toDataURL("image/jpeg", 0.9);
+      if (!dataUrl || dataUrl.length < 1000) return;
+      const item: Shot = { id: `s_${Date.now()}`, dataUrl, ts: Date.now() };
+      saveShots([item, ...shots].slice(0, 12));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [shots, saveShots]);
+
+  const takeHiRes = useCallback((targetW: number, label: string) => {
+    const r = r3fRef.current;
+    if (!r) return;
+    const { gl, scene, camera } = r;
+    const prevSize = new THREE.Vector2();
+    gl.getSize(prevSize);
+    const prevPR = gl.getPixelRatio();
+    const aspect = prevSize.x > 0 && prevSize.y > 0 ? prevSize.x / prevSize.y : 16 / 9;
+    const targetH = Math.max(1, Math.round(targetW / aspect));
+    const persp = (camera as THREE.PerspectiveCamera).isPerspectiveCamera;
+    const prevAspect = persp ? (camera as THREE.PerspectiveCamera).aspect : 1;
+    try {
+      gl.setPixelRatio(1);
+      gl.setSize(targetW, targetH, false);
+      if (persp) {
+        (camera as THREE.PerspectiveCamera).aspect = targetW / targetH;
+        (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+      }
+      gl.render(scene, camera);
+      const dataUrl = gl.domElement.toDataURL("image/jpeg", 0.95);
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${(sketch.title || "masterplan").replace(/[^a-zA-Z0-9_-]+/g, "_")}_${label}_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      gl.setPixelRatio(prevPR);
+      gl.setSize(prevSize.x, prevSize.y, false);
+      if (persp) {
+        (camera as THREE.PerspectiveCamera).aspect = prevAspect;
+        (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+      }
+    }
+  }, [sketch.title]);
+
+  const removeShot = (id: string) => saveShots(shots.filter((s) => s.id !== id));
+  const downloadShot = (s: Shot) => {
+    const a = document.createElement("a");
+    a.href = s.dataUrl;
+    a.download = `${(sketch.title || "masterplan").replace(/[^a-zA-Z0-9_-]+/g, "_")}_${s.ts}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const origin = useMemo<Point>(() => {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, n = 0;
@@ -235,7 +348,6 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
     return m;
   }, [expanded]);
 
-  // Bound — for camera framing
   const bound = useMemo(() => {
     let r = 30;
     for (const ly of sketch.layers) {
@@ -248,7 +360,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
     return r;
   }, [sketch.layers, origin.x, origin.y, mPerPx]);
 
-  const MP_FLOOR_H = 4; // default 4 m per lapis di masterplan 3D
+  const MP_FLOOR_H = 4;
   const meshes = useMemo(() => {
     const out: { key: string; pts: Point[]; base: number; h: number; color: string; floors: number }[] = [];
     for (const ly of sketch.layers) {
@@ -286,7 +398,6 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
 
   const camDist = bound * 2.2 + 30;
 
-
   return (
     <div
       ref={wrapRef}
@@ -296,32 +407,37 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
           : "relative border-t border-border/40 bg-gradient-to-b from-slate-100 to-slate-200"
       }
     >
-      <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+      <div className="absolute right-3 top-3 z-10 flex flex-wrap items-center gap-2">
         <div className="rounded-md border border-border/40 bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
           <BoxIcon className="mr-1 inline h-3 w-3" /> Pratinjau 3D
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setTick((t) => t + 1)}
-          title="Perbarui & paskan kamera"
-          className="h-7 bg-background/80 backdrop-blur"
-        >
+        <Button variant="outline" size="sm" onClick={takeScreenshot} title="Screenshot"
+          className="h-7 bg-background/80 backdrop-blur">
+          <Camera className="mr-1 h-3 w-3" /> Screenshot
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => takeHiRes(2560, "2K")} title="Ekspor 2K"
+          className="h-7 bg-background/80 backdrop-blur">
+          2K
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => takeHiRes(3840, "4K")} title="Ekspor 4K"
+          className="h-7 bg-background/80 backdrop-blur">
+          4K
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setTick((t) => t + 1)} title="Perbarui"
+          className="h-7 bg-background/80 backdrop-blur">
           <RefreshCw className="mr-1 h-3 w-3" /> Update
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
+        <Button variant="outline" size="sm"
           onClick={() => { setFullscreen((v) => !v); setTick((t) => t + 1); }}
           title={fullscreen ? "Keluar layar penuh" : "Layar penuh"}
-          className="h-7 bg-background/80 backdrop-blur"
-        >
+          className="h-7 bg-background/80 backdrop-blur">
           {fullscreen ? <Minimize2 className="mr-1 h-3 w-3" /> : <Maximize2 className="mr-1 h-3 w-3" />}
           {fullscreen ? "Tutup" : "Full"}
         </Button>
       </div>
-      <div style={{ height: fullscreen ? "100vh" : 360 }} className="w-full">
-        <Canvas key={tick} shadows dpr={[1, 1.5]}>
+      <div ref={canvasWrapRef} style={{ height: fullscreen ? "100vh" : 360 }} className="w-full">
+        <Canvas key={tick} shadows dpr={[1, 1.5]} gl={{ preserveDrawingBuffer: true }}>
+          <R3FRefCapture target={r3fRef} />
           <PerspectiveCamera
             makeDefault
             position={[camDist * 0.7, camDist * 0.8, camDist * 0.7]}
@@ -337,7 +453,6 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             shadow-mapSize-width={1024}
             shadow-mapSize-height={1024}
           />
-          {/* ground */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
             <planeGeometry args={[bound * 6, bound * 6]} />
             <meshStandardMaterial color="#e2e8f0" roughness={1} />
@@ -377,7 +492,6 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               height={0.15}
             />
           ))}
-
           <OrbitControls
             makeDefault
             enableDamping
@@ -385,6 +499,51 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             maxPolarAngle={Math.PI / 2 - 0.02}
           />
         </Canvas>
+      </div>
+
+      {/* Library Screenshot */}
+      <div className={fullscreen
+        ? "absolute bottom-3 left-3 right-3 z-10 max-h-40 overflow-auto rounded-lg border border-border/40 bg-background/90 p-2 backdrop-blur"
+        : "border-t border-border/40 bg-background/60 p-2"}>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Library Screenshot · {shots.length}
+          </span>
+        </div>
+        {shots.length === 0 ? (
+          <p className="text-[10px] text-muted-foreground">
+            Belum ada screenshot. Klik <b>Screenshot</b>. Screenshot tersedia di halaman Studio sebagai input.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
+            {shots.map((s) => (
+              <div key={s.id} className="group relative overflow-hidden rounded border border-border/60 bg-background">
+                <img
+                  src={s.dataUrl}
+                  alt="shot"
+                  className="block aspect-[4/3] w-full cursor-pointer object-cover"
+                  onClick={() => downloadShot(s)}
+                />
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeShot(s.id); }}
+                  className="absolute right-1 top-1 rounded bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-600/90"
+                  aria-label="Hapus screenshot"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); downloadShot(s); }}
+                  className="absolute left-1 top-1 rounded bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  aria-label="Unduh"
+                >
+                  <Download className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
