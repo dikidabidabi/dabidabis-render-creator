@@ -652,6 +652,18 @@ function RenderNode({ id, data }: NodeProps) {
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
+        <div>
+          <Label className="text-[10px]">Model AI</Label>
+          <select
+            value={currentModel}
+            onChange={(e) => updateNode(id, { model: e.target.value })}
+            className="mt-1 w-full rounded border border-border/60 bg-background px-2 py-1 text-[11px] font-medium outline-none focus:border-amber-500"
+          >
+            <option value="google/gemini-2.5-flash-image">Gemini 2.5 Flash Image (default)</option>
+            <option value="google/gemini-3.1-flash-image">Gemini 3.1 Flash Image</option>
+            <option value="google/gemini-3-pro-image">Gemini 3 Pro Image</option>
+          </select>
+        </div>
         <Button
           size="sm"
           onClick={() => trigger(id)}
