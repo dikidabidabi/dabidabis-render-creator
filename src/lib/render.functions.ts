@@ -13,6 +13,12 @@ const RENDER_TYPE_PROMPTS: Record<string, string> = {
     "Render sebagai ilustrasi cat air arsitektur artistik. Wash warna lembut, garis kontur tinta tipis, tekstur kertas terlihat, akurasi proporsi tetap terjaga, palet warna tenang dan elegan, gaya presentasi konsep arsitek.",
 };
 
+const ALLOWED_MODELS = [
+  "google/gemini-2.5-flash-image",
+  "google/gemini-3.1-flash-image",
+  "google/gemini-3-pro-image",
+] as const;
+
 const InputSchema = z.object({
   sketchBase64: z.string().min(10),
   referenceBase64: z.string().nullable().optional(),
@@ -20,6 +26,7 @@ const InputSchema = z.object({
   renderType: z.enum(["exterior", "interior", "night", "watercolor"]),
   accuracy: z.number().int().min(1).max(10),
   consistency: z.number().int().min(1).max(10),
+  model: z.enum(ALLOWED_MODELS).optional(),
 });
 
 function buildSystemPrompt(
@@ -117,7 +124,7 @@ export const generateRender = createServerFn({ method: "POST" })
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
+          model: data.model ?? "google/gemini-2.5-flash-image",
           messages: [{ role: "user", content: userContent }],
           modalities: ["image", "text"],
         }),

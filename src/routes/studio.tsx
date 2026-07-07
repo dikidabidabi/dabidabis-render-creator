@@ -67,14 +67,28 @@ type SketchLite = { id: string; title: string };
 type Shot = { id: string; dataUrl: string; ts: number };
 
 function loadSketches(): SketchLite[] {
-  try {
-    const raw = localStorage.getItem("dabidabis_sketch_v2");
-    if (!raw) return [];
-    const s = JSON.parse(raw) as { sketches?: { id: string; title: string }[] };
-    return (s.sketches ?? []).map((x) => ({ id: x.id, title: x.title }));
-  } catch {
-    return [];
+  const out: SketchLite[] = [];
+  const seen = new Set<string>();
+  const push = (arr?: { id: string; title: string }[]) => {
+    if (!arr) return;
+    for (const x of arr) {
+      if (x?.id && !seen.has(x.id)) {
+        seen.add(x.id);
+        out.push({ id: x.id, title: x.title ?? "(tanpa judul)" });
+      }
+    }
+  };
+  for (const key of ["dabidabis_sketch_v2", "dabidabis_masterplan_canvas_v1"]) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const s = JSON.parse(raw) as { sketches?: { id: string; title: string }[] };
+      push(s.sketches);
+    } catch {
+      /* ignore */
+    }
   }
+  return out;
 }
 function loadShots(sketchId: string): Shot[] {
   try {
@@ -85,6 +99,12 @@ function loadShots(sketchId: string): Shot[] {
   } catch {
     return [];
   }
+}
+function hasShots(sketchId: string): boolean {
+  return loadShots(sketchId).length > 0;
+}
+function sketchesWithShots(list: SketchLite[]): SketchLite[] {
+  return list.filter((s) => hasShots(s.id));
 }
 
 function useSketchList(): SketchLite[] {
@@ -100,6 +120,23 @@ function useSketchList(): SketchLite[] {
   }, []);
   return list;
 }
+
+/** Sketch list restricted to those with at least one screenshot in library. */
+function useSketchesWithShots(): SketchLite[] {
+  const all = useSketchList();
+  const [ver, setVer] = useState(0);
+  useEffect(() => {
+    const reload = () => setVer((v) => v + 1);
+    window.addEventListener("storage", reload);
+    window.addEventListener("focus", reload);
+    return () => {
+      window.removeEventListener("storage", reload);
+      window.removeEventListener("focus", reload);
+    };
+  }, []);
+  return useMemo(() => sketchesWithShots(all), [all, ver]);
+}
+
 
 function SketchSelector({
   sketches,
@@ -166,7 +203,9 @@ type RenderNodeData = {
   status: "idle" | "processing" | "done" | "error";
   progress: number;
   error?: string;
+  model?: "google/gemini-2.5-flash-image" | "google/gemini-3.1-flash-image" | "google/gemini-3-pro-image";
 };
+
 type OutputNodeData = {
   kind: "output";
   sketchId: string;
@@ -309,7 +348,7 @@ function InputNode({ id, data }: NodeProps) {
   const d = data as InputNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
-  const sketches = useSketchList();
+  const sketches = useSketchesWithShots();
   const [shots, setShots] = useState<Shot[]>(() => loadShots(d.sketchId));
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -600,7 +639,9 @@ function ReferenceNode({ id, data }: NodeProps) {
 function RenderNode({ id, data }: NodeProps) {
   const d = data as RenderNodeData;
   const removeNode = useStudioStore((s) => s.removeNode);
+  const updateNode = useStudioStore((s) => s.updateNode);
   const trigger = useStudioExecute();
+  const currentModel = d.model ?? "google/gemini-2.5-flash-image";
   return (
     <NodeShell
       title="AI Render Engine"
@@ -611,6 +652,18 @@ function RenderNode({ id, data }: NodeProps) {
       onRemove={() => removeNode(id)}
     >
       <div className="space-y-2">
+        <div>
+          <Label className="text-[10px]">Model AI</Label>
+          <select
+            value={currentModel}
+            onChange={(e) => updateNode(id, { model: e.target.value })}
+            className="mt-1 w-full rounded border border-border/60 bg-background px-2 py-1 text-[11px] font-medium outline-none focus:border-amber-500"
+          >
+            <option value="google/gemini-2.5-flash-image">Gemini 2.5 Flash Image (default)</option>
+            <option value="google/gemini-3.1-flash-image">Gemini 3.1 Flash Image</option>
+            <option value="google/gemini-3-pro-image">Gemini 3 Pro Image</option>
+          </select>
+        </div>
         <Button
           size="sm"
           onClick={() => trigger(id)}
@@ -653,7 +706,7 @@ function OutputNode({
   const sync = useStudioStore((s) => s.syncToPresentasi);
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
-  const sketches = useSketchList();
+  const sketches = useSketchesWithShots();
 
 
   // Standalone output (from edit node)
@@ -827,7 +880,8 @@ function OutputNode({
                   href={o.image}
                   download={`${d.sketchTitle}-${o.angle}.png`}
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-0 rounded-bl bg-black/60 p-0.5 text-white opacity-0 group-hover:opacity-100"
+                  className="absolute right-0 top-0 flex items-center gap-0.5 rounded-bl bg-black/70 px-1 py-0.5 text-[8px] font-medium text-white hover:bg-ember"
+                  title="Unduh gambar"
                 >
                   <Download className="h-2.5 w-2.5" />
                 </a>
@@ -1161,6 +1215,10 @@ function useStudioExecute() {
             .find((n) => n?.type === "reference") ?? null)
         : incomingNodes.find((n) => n.type === "reference") ?? null;
 
+      const renderNode = graph.nodes.find((n) => n.id === renderNodeId);
+      const selectedModel = (renderNode?.data as RenderNodeData | undefined)?.model
+        ?? "google/gemini-2.5-flash-image";
+
       const outEdgeR = outEdges(renderNodeId)[0];
       const outputNode = outEdgeR
         ? graph.nodes.find((n) => n.id === outEdgeR.target)
@@ -1201,6 +1259,7 @@ function useStudioExecute() {
               renderType: "exterior",
               accuracy: 9,
               consistency: refImage ? 8 : 5,
+              model: selectedModel,
             },
           });
           if (res.ok && res.resultUrl) {
@@ -1259,9 +1318,8 @@ function useStudioExecute() {
         ...shots.map((s) => ({ id: s.id, dataUrl: s.dataUrl })),
         ...uploads.map((u) => ({ id: u.id, dataUrl: u.dataUrl })),
       ];
-      const chosen = pool.find((s) => s.id === inData.selectedShotId) ?? pool[0];
-      if (!chosen)
-        return toast.error(`Pilih atau unggah gambar untuk ${inData.sketchTitle}`);
+      if (pool.length === 0)
+        return toast.error(`Belum ada screenshot / unggahan untuk ${inData.sketchTitle}`);
 
       const finalPrompt = [
         prData.style,
@@ -1280,16 +1338,18 @@ function useStudioExecute() {
       const accuracyLevel = Math.max(1, Math.min(10, Math.round((promptGeom / 100) * 9) + 1));
       const angleConsistencyText =
         outputGeom >= 90
-          ? "KRITIS: Pertahankan geometry PERSIS SAMA di semua angle."
+          ? "KRITIS: Pertahankan geometry PERSIS SAMA dari sketsa input."
           : outputGeom >= 60
-            ? `Jaga konsistensi bentuk ${outputGeom}% antar angle.`
+            ? `Jaga konsistensi bentuk ${outputGeom}% dari sketsa input.`
             : outputGeom >= 30
-              ? `Boleh variasi bentuk ~${100 - outputGeom}% antar angle.`
-              : "Bebas variasi bentuk tiap angle.";
+              ? `Boleh variasi bentuk ~${100 - outputGeom}% dari sketsa input.`
+              : "Bebas variasi bentuk.";
 
-      const angles: RenderAngle[] = DEFAULT_ANGLES.map((a) => ({
+      // Output count = input count. Each output uses its own input image so the
+      // camera angle mirrors the source screenshot. Naming: view 1, view 2, ...
+      const angles: RenderAngle[] = pool.map((_, i) => ({
         id: crypto.randomUUID(),
-        angle: a,
+        angle: `view ${i + 1}`,
         image: null,
         status: "processing",
         progress: 5,
@@ -1311,12 +1371,13 @@ function useStudioExecute() {
 
       try {
         const results = await Promise.all(
-          angles.map(async (a) => {
-            const anglePrompt = `${finalPrompt}. ${ANGLE_PROMPT[a.angle] ?? a.angle}. ${angleConsistencyText}`;
+          angles.map(async (a, idx) => {
+            const src = pool[idx];
+            const anglePrompt = `${finalPrompt}. Ikuti sudut pandang & komposisi persis dari sketsa input (${a.angle}). ${angleConsistencyText}`;
             try {
               const res = await callRender({
                 data: {
-                  sketchBase64: chosen.dataUrl,
+                  sketchBase64: src.dataUrl,
                   referenceBase64: refImage,
                   prompt: anglePrompt,
                   renderType: "exterior",
@@ -1325,6 +1386,7 @@ function useStudioExecute() {
                     1,
                     Math.min(10, Math.round((outputGeom / 100) * 9) + 1),
                   ),
+                  model: selectedModel,
                 },
               });
               clearInterval(timers[a.id]);
@@ -1480,6 +1542,21 @@ function StudioPage() {
     hydrate();
     setSketches(loadSketches());
   }, [hydrate]);
+
+  // Auto-provision the default 4-node row per sketch that ALREADY has
+  // screenshots — only when the canvas is empty. Prevents an empty canvas
+  // on first visit while shots exist, and avoids clobbering user edits.
+  const didAutoLoad = useRef(false);
+  useEffect(() => {
+    if (!loaded || didAutoLoad.current) return;
+    if (graph.nodes.length > 0) { didAutoLoad.current = true; return; }
+    const withShots = sketchesWithShots(loadSketches());
+    if (withShots.length === 0) return;
+    didAutoLoad.current = true;
+    const { nodes, edges } = buildPreset(withShots);
+    setGraph({ nodes, edges, outputs: graph.outputs });
+  }, [loaded, graph.nodes.length, graph.outputs, setGraph]);
+
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -1690,14 +1767,16 @@ function StudioPage() {
   const loadPreset = () => {
     const fresh = loadSketches();
     setSketches(fresh);
-    if (fresh.length === 0) {
-      toast.error("Belum ada sketsa. Buat sketsa di halaman Sketsa dahulu.");
+    const withShots = sketchesWithShots(fresh);
+    if (withShots.length === 0) {
+      toast.error("Belum ada screenshot 3D. Ambil screenshot di halaman 3D Model / Master Plan dahulu.");
       return;
     }
-    const { nodes, edges } = buildPreset(fresh);
+    const { nodes, edges } = buildPreset(withShots);
     setGraph({ nodes, edges, outputs: graph.outputs });
-    toast.success(`Preset dimuat: ${fresh.length} sketsa`);
+    toast.success(`Preset dimuat: ${withShots.length} sketsa`);
   };
+
 
   const clearAll = () => {
     setGraph({ nodes: [], edges: [], outputs: {} });
@@ -1731,50 +1810,30 @@ function StudioPage() {
                 <Plus className="h-3.5 w-3.5" /> Tambah Node
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-[70vh] w-64 overflow-y-auto">
-              <DropdownMenuLabel>1 · 3D Input — pilih sketsa</DropdownMenuLabel>
-              {sketches.length === 0 ? (
-                <DropdownMenuItem disabled>(belum ada sketsa)</DropdownMenuItem>
-              ) : (
-                sketches.map((sk) => (
-                  <DropdownMenuItem
-                    key={`in-${sk.id}`}
-                    onClick={() => spawnNode("input", sk.id)}
-                  >
-                    <ImageIcon className="mr-2 h-3 w-3 text-sky-500" /> {sk.title}
-                  </DropdownMenuItem>
-                ))
-              )}
-              <DropdownMenuSeparator />
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>Jenis Node</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => spawnNode("input")}>
+                <ImageIcon className="mr-2 h-3 w-3 text-sky-500" /> 1 · 3D Input
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("prompt")}>
-                2 · Prompt & Style
+                <Wand2 className="mr-2 h-3 w-3 text-violet-500" /> 2 · Prompt & Style
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("render")}>
-                3 · AI Render Engine
+                <Sparkles className="mr-2 h-3 w-3 text-amber-500" /> 3 · AI Render Engine
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>4 · Multi-Angle Output — pilih sketsa</DropdownMenuLabel>
-              {sketches.length === 0 ? (
-                <DropdownMenuItem disabled>(belum ada sketsa)</DropdownMenuItem>
-              ) : (
-                sketches.map((sk) => (
-                  <DropdownMenuItem
-                    key={`out-${sk.id}`}
-                    onClick={() => spawnNode("output", sk.id)}
-                  >
-                    <Layers className="mr-2 h-3 w-3 text-emerald-500" /> {sk.title}
-                  </DropdownMenuItem>
-                ))
-              )}
+              <DropdownMenuItem onClick={() => spawnNode("output")}>
+                <Layers className="mr-2 h-3 w-3 text-emerald-500" /> 4 · Multi-Angle Output
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => spawnNode("reference")}>
-                Referensi Style
+                <Palette className="mr-2 h-3 w-3 text-pink-500" /> Referensi Style
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("edit")}>
-                Sketsa Perbaikan (via anotasi)
+                <Pencil className="mr-2 h-3 w-3 text-cyan-500" /> Sketsa Perbaikan (via anotasi)
               </DropdownMenuItem>
             </DropdownMenuContent>
+
 
           </DropdownMenu>
           <div>
