@@ -1793,50 +1793,30 @@ function StudioPage() {
                 <Plus className="h-3.5 w-3.5" /> Tambah Node
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-[70vh] w-64 overflow-y-auto">
-              <DropdownMenuLabel>1 · 3D Input — pilih sketsa</DropdownMenuLabel>
-              {sketches.length === 0 ? (
-                <DropdownMenuItem disabled>(belum ada sketsa)</DropdownMenuItem>
-              ) : (
-                sketches.map((sk) => (
-                  <DropdownMenuItem
-                    key={`in-${sk.id}`}
-                    onClick={() => spawnNode("input", sk.id)}
-                  >
-                    <ImageIcon className="mr-2 h-3 w-3 text-sky-500" /> {sk.title}
-                  </DropdownMenuItem>
-                ))
-              )}
-              <DropdownMenuSeparator />
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>Jenis Node</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => spawnNode("input")}>
+                <ImageIcon className="mr-2 h-3 w-3 text-sky-500" /> 1 · 3D Input
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("prompt")}>
-                2 · Prompt & Style
+                <Wand2 className="mr-2 h-3 w-3 text-violet-500" /> 2 · Prompt & Style
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("render")}>
-                3 · AI Render Engine
+                <Sparkles className="mr-2 h-3 w-3 text-amber-500" /> 3 · AI Render Engine
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>4 · Multi-Angle Output — pilih sketsa</DropdownMenuLabel>
-              {sketches.length === 0 ? (
-                <DropdownMenuItem disabled>(belum ada sketsa)</DropdownMenuItem>
-              ) : (
-                sketches.map((sk) => (
-                  <DropdownMenuItem
-                    key={`out-${sk.id}`}
-                    onClick={() => spawnNode("output", sk.id)}
-                  >
-                    <Layers className="mr-2 h-3 w-3 text-emerald-500" /> {sk.title}
-                  </DropdownMenuItem>
-                ))
-              )}
+              <DropdownMenuItem onClick={() => spawnNode("output")}>
+                <Layers className="mr-2 h-3 w-3 text-emerald-500" /> 4 · Multi-Angle Output
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => spawnNode("reference")}>
-                Referensi Style
+                <Palette className="mr-2 h-3 w-3 text-pink-500" /> Referensi Style
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("edit")}>
-                Sketsa Perbaikan (via anotasi)
+                <Pencil className="mr-2 h-3 w-3 text-cyan-500" /> Sketsa Perbaikan (via anotasi)
               </DropdownMenuItem>
             </DropdownMenuContent>
+
 
           </DropdownMenu>
           <div>
