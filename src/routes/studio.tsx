@@ -1259,6 +1259,7 @@ function useStudioExecute() {
               renderType: "exterior",
               accuracy: 9,
               consistency: refImage ? 8 : 5,
+              model: selectedModel,
             },
           });
           if (res.ok && res.resultUrl) {
