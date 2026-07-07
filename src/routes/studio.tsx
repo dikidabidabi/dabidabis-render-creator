@@ -1215,6 +1215,10 @@ function useStudioExecute() {
             .find((n) => n?.type === "reference") ?? null)
         : incomingNodes.find((n) => n.type === "reference") ?? null;
 
+      const renderNode = graph.nodes.find((n) => n.id === renderNodeId);
+      const selectedModel = (renderNode?.data as RenderNodeData | undefined)?.model
+        ?? "google/gemini-2.5-flash-image";
+
       const outEdgeR = outEdges(renderNodeId)[0];
       const outputNode = outEdgeR
         ? graph.nodes.find((n) => n.id === outEdgeR.target)
