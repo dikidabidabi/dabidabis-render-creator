@@ -1543,6 +1543,21 @@ function StudioPage() {
     setSketches(loadSketches());
   }, [hydrate]);
 
+  // Auto-provision the default 4-node row per sketch that ALREADY has
+  // screenshots — only when the canvas is empty. Prevents an empty canvas
+  // on first visit while shots exist, and avoids clobbering user edits.
+  const didAutoLoad = useRef(false);
+  useEffect(() => {
+    if (!loaded || didAutoLoad.current) return;
+    if (graph.nodes.length > 0) { didAutoLoad.current = true; return; }
+    const withShots = sketchesWithShots(loadSketches());
+    if (withShots.length === 0) return;
+    didAutoLoad.current = true;
+    const { nodes, edges } = buildPreset(withShots);
+    setGraph({ nodes, edges, outputs: graph.outputs });
+  }, [loaded, graph.nodes.length, graph.outputs, setGraph]);
+
+
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const next = applyNodeChanges(changes, graph.nodes);
