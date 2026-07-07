@@ -124,7 +124,7 @@ export const generateRender = createServerFn({ method: "POST" })
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
+          model: data.model ?? "google/gemini-2.5-flash-image",
           messages: [{ role: "user", content: userContent }],
           modalities: ["image", "text"],
         }),
