@@ -1767,14 +1767,16 @@ function StudioPage() {
   const loadPreset = () => {
     const fresh = loadSketches();
     setSketches(fresh);
-    if (fresh.length === 0) {
-      toast.error("Belum ada sketsa. Buat sketsa di halaman Sketsa dahulu.");
+    const withShots = sketchesWithShots(fresh);
+    if (withShots.length === 0) {
+      toast.error("Belum ada screenshot 3D. Ambil screenshot di halaman 3D Model / Master Plan dahulu.");
       return;
     }
-    const { nodes, edges } = buildPreset(fresh);
+    const { nodes, edges } = buildPreset(withShots);
     setGraph({ nodes, edges, outputs: graph.outputs });
-    toast.success(`Preset dimuat: ${fresh.length} sketsa`);
+    toast.success(`Preset dimuat: ${withShots.length} sketsa`);
   };
+
 
   const clearAll = () => {
     setGraph({ nodes: [], edges: [], outputs: {} });
