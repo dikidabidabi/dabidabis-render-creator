@@ -639,7 +639,9 @@ function ReferenceNode({ id, data }: NodeProps) {
 function RenderNode({ id, data }: NodeProps) {
   const d = data as RenderNodeData;
   const removeNode = useStudioStore((s) => s.removeNode);
+  const updateNode = useStudioStore((s) => s.updateNode);
   const trigger = useStudioExecute();
+  const currentModel = d.model ?? "google/gemini-2.5-flash-image";
   return (
     <NodeShell
       title="AI Render Engine"
