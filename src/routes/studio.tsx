@@ -348,7 +348,7 @@ function InputNode({ id, data }: NodeProps) {
   const d = data as InputNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
-  const sketches = useSketchList();
+  const sketches = useSketchesWithShots();
   const [shots, setShots] = useState<Shot[]>(() => loadShots(d.sketchId));
   const fileRef = useRef<HTMLInputElement | null>(null);
 
