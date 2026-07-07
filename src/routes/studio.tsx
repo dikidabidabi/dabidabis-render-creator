@@ -880,7 +880,8 @@ function OutputNode({
                   href={o.image}
                   download={`${d.sketchTitle}-${o.angle}.png`}
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-0 rounded-bl bg-black/60 p-0.5 text-white opacity-0 group-hover:opacity-100"
+                  className="absolute right-0 top-0 flex items-center gap-0.5 rounded-bl bg-black/70 px-1 py-0.5 text-[8px] font-medium text-white hover:bg-ember"
+                  title="Unduh gambar"
                 >
                   <Download className="h-2.5 w-2.5" />
                 </a>
