@@ -203,7 +203,9 @@ type RenderNodeData = {
   status: "idle" | "processing" | "done" | "error";
   progress: number;
   error?: string;
+  model?: "google/gemini-2.5-flash-image" | "google/gemini-3.1-flash-image" | "google/gemini-3-pro-image";
 };
+
 type OutputNodeData = {
   kind: "output";
   sketchId: string;
