@@ -1318,9 +1318,8 @@ function useStudioExecute() {
         ...shots.map((s) => ({ id: s.id, dataUrl: s.dataUrl })),
         ...uploads.map((u) => ({ id: u.id, dataUrl: u.dataUrl })),
       ];
-      const chosen = pool.find((s) => s.id === inData.selectedShotId) ?? pool[0];
-      if (!chosen)
-        return toast.error(`Pilih atau unggah gambar untuk ${inData.sketchTitle}`);
+      if (pool.length === 0)
+        return toast.error(`Belum ada screenshot / unggahan untuk ${inData.sketchTitle}`);
 
       const finalPrompt = [
         prData.style,
@@ -1339,16 +1338,18 @@ function useStudioExecute() {
       const accuracyLevel = Math.max(1, Math.min(10, Math.round((promptGeom / 100) * 9) + 1));
       const angleConsistencyText =
         outputGeom >= 90
-          ? "KRITIS: Pertahankan geometry PERSIS SAMA di semua angle."
+          ? "KRITIS: Pertahankan geometry PERSIS SAMA dari sketsa input."
           : outputGeom >= 60
-            ? `Jaga konsistensi bentuk ${outputGeom}% antar angle.`
+            ? `Jaga konsistensi bentuk ${outputGeom}% dari sketsa input.`
             : outputGeom >= 30
-              ? `Boleh variasi bentuk ~${100 - outputGeom}% antar angle.`
-              : "Bebas variasi bentuk tiap angle.";
+              ? `Boleh variasi bentuk ~${100 - outputGeom}% dari sketsa input.`
+              : "Bebas variasi bentuk.";
 
-      const angles: RenderAngle[] = DEFAULT_ANGLES.map((a) => ({
+      // Output count = input count. Each output uses its own input image so the
+      // camera angle mirrors the source screenshot. Naming: view 1, view 2, ...
+      const angles: RenderAngle[] = pool.map((_, i) => ({
         id: crypto.randomUUID(),
-        angle: a,
+        angle: `view ${i + 1}`,
         image: null,
         status: "processing",
         progress: 5,
@@ -1370,12 +1371,13 @@ function useStudioExecute() {
 
       try {
         const results = await Promise.all(
-          angles.map(async (a) => {
-            const anglePrompt = `${finalPrompt}. ${ANGLE_PROMPT[a.angle] ?? a.angle}. ${angleConsistencyText}`;
+          angles.map(async (a, idx) => {
+            const src = pool[idx];
+            const anglePrompt = `${finalPrompt}. Ikuti sudut pandang & komposisi persis dari sketsa input (${a.angle}). ${angleConsistencyText}`;
             try {
               const res = await callRender({
                 data: {
-                  sketchBase64: chosen.dataUrl,
+                  sketchBase64: src.dataUrl,
                   referenceBase64: refImage,
                   prompt: anglePrompt,
                   renderType: "exterior",
@@ -1384,6 +1386,7 @@ function useStudioExecute() {
                     1,
                     Math.min(10, Math.round((outputGeom / 100) * 9) + 1),
                   ),
+                  model: selectedModel,
                 },
               });
               clearInterval(timers[a.id]);
