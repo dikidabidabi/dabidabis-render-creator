@@ -692,7 +692,7 @@ function OutputNode({
   const sync = useStudioStore((s) => s.syncToPresentasi);
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
-  const sketches = useSketchList();
+  const sketches = useSketchesWithShots();
 
 
   // Standalone output (from edit node)
