@@ -52,6 +52,7 @@ import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency"
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
 import { loadMasterplanAnalysis, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
 import { annotationSvgElements, ANNOTATION_PRESETS, type Annotation } from "@/lib/analysis-illustrations";
+import { lonLatToTile, pickTileZoom, metersPerMapPx } from "@/lib/geo";
 import {
   type ParkingArea,
   type ParkingObstacle,
