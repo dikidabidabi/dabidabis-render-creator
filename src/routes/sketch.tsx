@@ -8328,6 +8328,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
         onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         toast.success(`${preset.label} ditambahkan`);
+      } else if (iluKind === "label" && iluDraft && iluDraft.points.length === 1) {
+        // Klik ke-2 pada label = posisi kotak label → langsung commit.
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: "label",
+          style: preset.style,
+          points: [iluDraft.points[0], { x: p.x, y: p.y }],
+          color: iluColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          text: iluText || "Label",
+          fontScale: 1,
+          createdAt: Date.now(),
+        };
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "label");
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
+        setIluDraft(null);
+        toast.success("Label ditambahkan");
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
         else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
