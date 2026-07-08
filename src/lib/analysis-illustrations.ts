@@ -117,9 +117,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
     if (!r || typeof r !== "object") continue;
     const kind: AnnotationKind = ["arrow", "arrowDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
     const preset = ANNOTATION_PRESETS[kind];
-    const style: PathStyle = kind === "arrowDashed"
-      ? "garis"
-      : (r.style === "tangent" || r.style === "garis" ? r.style : preset.style);
+    const style: PathStyle = (r.style === "tangent" || r.style === "garis") ? r.style : preset.style;
     const pts: Vec2[] = [];
     if (Array.isArray(r.points)) {
       for (const p of r.points) {
@@ -127,7 +125,9 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
         if (Number.isFinite(x) && Number.isFinite(y)) pts.push({ x, y });
       }
     }
-    if (pts.length < preset.minPts) continue;
+    // Toleransi migrasi: label lama boleh punya 1 titik (fallback offset otomatis).
+    const minPtsEff = kind === "label" ? 1 : preset.minPts;
+    if (pts.length < minPtsEff) continue;
     out.push({
       id: typeof r.id === "string" && r.id ? r.id : newAnnotationId(),
       kind,
@@ -136,6 +136,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       color: typeof r.color === "string" ? r.color : preset.color,
       strokeWidthPx: Number.isFinite(Number(r.strokeWidthPx)) ? Number(r.strokeWidthPx) : preset.strokeWidthPx,
       text: typeof r.text === "string" ? r.text : undefined,
+      fontScale: Number.isFinite(Number(r.fontScale)) ? Math.max(0.4, Math.min(5, Number(r.fontScale))) : 1,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
     });
   }
