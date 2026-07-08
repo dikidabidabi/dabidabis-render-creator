@@ -120,6 +120,7 @@ export type MasterplanAnalysis = {
   totalRoadAreaM2: number;
   kdbKawasanPct: number;
   illustrations: Annotation[];
+  geo?: { lat: number; lon: number; mapOpacity: number; mapRotation: number };
 };
 
 export function loadMasterplanAnalysis(rootLayerId?: string): MasterplanAnalysis | null {
