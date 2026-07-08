@@ -28,18 +28,19 @@ export type Annotation = {
   color: string;             // warna utama (stroke + fill semi-transparan)
   strokeWidthPx?: number;    // default per-kind
   text?: string;             // untuk label
+  fontScale?: number;        // multiplier ukuran teks label (default 1)
   createdAt: number;
 };
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
   arrow:       { label: "Panah",        color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
-  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 50, needsPath: true, minPts: 2, hint: "Panah putus-putus lebar siku (tanpa kurva). Klik titik-titik, Enter/Selesai." },
+  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true, minPts: 2, hint: "Panah putus-putus tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
   flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed). Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
   node:   { label: "Node",        color: "#f97316", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk meletakkan node." },
   access: { label: "Access",      color: "#ea580c", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk access point." },
-  label:  { label: "Label",       color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: false, minPts: 1, hint: "Klik titik jangkar, lalu isi teks di panel." },
+  label:  { label: "Label",       color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: true,  minPts: 2, hint: "Klik titik jangkar, lalu klik posisi kotak label (panah bebas panjang), Enter/Selesai." },
 };
 
 export const ANNOTATION_COLOR_SWATCHES = [
