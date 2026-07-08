@@ -2290,8 +2290,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
   const [iluText, setIluText] = useState<string>("");
   const [iluDraft, setIluDraft] = useState<{ points: Point[]; cursor: Point } | null>(null);
-  const [iluSub, setIluSub] = useState<"draw" | "geser" | "tambahTitik" | "hapusTitik">("draw");
+  const [iluSub, setIluSub] = useState<"draw" | "geser" | "tambahTitik" | "hapusTitik" | "hapusItem">("draw");
   const [iluVertexDrag, setIluVertexDrag] = useState<{ annId: string; idx: number } | null>(null);
+  const [iluSelectedId, setIluSelectedId] = useState<string | null>(null);
   // Ketebalan panah dashed (px world) — bisa diatur user via slider.
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
