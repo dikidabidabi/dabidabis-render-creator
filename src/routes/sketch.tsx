@@ -10621,6 +10621,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 { k: "geser", label: "Geser titik" },
                 { k: "tambahTitik", label: "+ Titik" },
                 { k: "hapusTitik", label: "− Titik" },
+                { k: "hapusItem", label: "Hapus" },
               ] as const).map(({ k, label }) => (
                 <Button
                   key={k}
@@ -10630,9 +10631,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   onClick={() => { setIluSub(k); setIluDraft(null); setIluVertexDrag(null); }}
                   title={
                     k === "draw" ? "Mode gambar ilustrasi baru" :
-                    k === "geser" ? "Klik + drag titik ilustrasi untuk menggeser" :
+                    k === "geser" ? "Klik + drag titik ilustrasi untuk menggeser (klik label untuk edit teks/ukuran)" :
                     k === "tambahTitik" ? "Klik di sepanjang garis ilustrasi untuk sisipkan titik" :
-                    "Klik pada titik ilustrasi untuk menghapus"
+                    k === "hapusTitik" ? "Klik pada titik ilustrasi untuk menghapus titik" :
+                    "Klik pada ilustrasi untuk menghapus satu ilustrasi"
                   }
                 >{label}</Button>
               ))}
