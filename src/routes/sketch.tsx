@@ -8204,6 +8204,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
     } else if (tool === "iluanalisa") {
       const illos = sketch.illustrations ?? [];
+      if (iluSub === "hapusItem") {
+        // Klik pada titik / dekat garis anotasi → hapus anotasi tsb.
+        const tolPx = 16 / view.s;
+        let bestId: string | null = null;
+        let bestD = Infinity;
+        for (const an of illos) {
+          for (let i = 0; i < an.points.length; i++) {
+            const d = Math.hypot(an.points[i].x - p.x, an.points[i].y - p.y);
+            if (d < bestD) { bestD = d; bestId = an.id; }
+          }
+          for (let s = 0; s < an.points.length - 1; s++) {
+            const a2 = an.points[s], b2 = an.points[s + 1];
+            const dx = b2.x - a2.x, dy = b2.y - a2.y;
+            const l2 = dx * dx + dy * dy;
+            let t = l2 > 1e-9 ? ((p.x - a2.x) * dx + (p.y - a2.y) * dy) / l2 : 0;
+            t = Math.max(0, Math.min(1, t));
+            const cx = a2.x + t * dx, cy = a2.y + t * dy;
+            const d = Math.hypot(p.x - cx, p.y - cy);
+            if (d < bestD) { bestD = d; bestId = an.id; }
+          }
+        }
+        if (bestId && bestD <= tolPx * 2) {
+          pushHistory();
+          onChange({ illustrations: illos.filter((x) => x.id !== bestId) });
+          if (iluSelectedId === bestId) setIluSelectedId(null);
+          toast.success("Ilustrasi dihapus");
+        } else {
+          toast.error("Klik dekat ilustrasi untuk menghapus");
+        }
+        return;
+      }
       if (iluSub === "geser") {
         const tolPx = 14 / view.s;
         let best: { annId: string; idx: number; d: number } | null = null;
@@ -8216,6 +8247,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         if (best) {
           pushHistory();
           setIluVertexDrag({ annId: best.annId, idx: best.idx });
+          setIluSelectedId(best.annId);
         } else {
           toast.error("Klik tepat pada titik ilustrasi untuk menggeser");
         }
