@@ -10720,6 +10720,48 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
+        {/* Panel edit Label — muncul saat sebuah label terpilih (mode geser). */}
+        {tool === "iluanalisa" && mode === "masterplan" && iluSub === "geser" && iluSelectedId && (() => {
+          const sel = (sketch.illustrations ?? []).find((x) => x.id === iluSelectedId);
+          if (!sel || sel.kind !== "label") return null;
+          const fs = sel.fontScale ?? 1;
+          return (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/10 px-2 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Edit Label</span>
+              <Input
+                value={sel.text ?? ""}
+                onChange={(e) => {
+                  const t = e.target.value;
+                  onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, text: t } : x) });
+                }}
+                placeholder="Teks label"
+                className="h-7 w-52 text-[11px]"
+              />
+              <span className="text-[10px] text-slate-600">Ukuran</span>
+              <Slider
+                value={[Math.round(fs * 100)]}
+                min={50} max={400} step={5}
+                onValueChange={(v) => {
+                  const nv = Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100));
+                  onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, fontScale: nv } : x) });
+                }}
+                className="w-40"
+              />
+              <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluSelectedId(null)}>Selesai</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => {
+                  onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
+                  setIluSelectedId(null);
+                  toast.success("Label dihapus");
+                }}
+              >Hapus label</Button>
+            </div>
+          );
+        })()}
         {tool === "iluanalisa" && mode === "masterplan" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <div className="flex items-center gap-2">
