@@ -9186,10 +9186,10 @@ function boundsIncludingIllustrations(a: MasterplanAnalysis, pad = 0.04): { minX
 /** Denah-style TopView: SVG scales via viewBox, tanpa frame abu-abu. Mengisi container. */
 function TopViewFit({
   a, showLabels = true, showRoads = true, showLahan = true, numbered = false,
-  showIllustrations = false, compassId, boundsOverride,
+  showIllustrations = false, showBuildings = true, showMap = false, compassId, boundsOverride,
 }: {
   a: MasterplanAnalysis; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean;
-  numbered?: boolean; showIllustrations?: boolean; compassId?: string;
+  numbered?: boolean; showIllustrations?: boolean; showBuildings?: boolean; showMap?: boolean; compassId?: string;
   boundsOverride?: { minX: number; minY: number; maxX: number; maxY: number };
 }) {
   const b = boundsOverride ?? a.boundsPx;
@@ -9199,6 +9199,43 @@ function TopViewFit({
   const worldToScreen = (p: { x: number; y: number }) => ({ x: p.x, y: p.y });
   // Approx px→screen scale factor for illustration stroke widths. Slide box ~1300px.
   const illuScale = 1300 / sw;
+  // Peta OSM tiles — hanya jika showMap dan geo terkunci.
+  const mapTiles: { href: string; x: number; y: number; w: number; h: number }[] = [];
+  let mapRotDeg = 0;
+  if (showMap && a.geo) {
+    const { lat, lon } = a.geo;
+    mapRotDeg = a.geo.mapRotation || 0;
+    const z = pickTileZoom(lat, a.pxm);
+    const mpp = metersPerMapPx(lat, z);
+    const k = a.pxm * mpp;
+    const tileSize = 256 * k;
+    const center = lonLatToTile(lon, lat, z);
+    // Perluas bounds untuk mengakomodasi rotasi peta.
+    const pad = Math.max(vw, vh) * 0.6;
+    const rMinX = b.minX - pad, rMaxX = b.maxX + pad;
+    const rMinY = b.minY - pad, rMaxY = b.maxY + pad;
+    const tx0 = Math.floor(rMinX / tileSize + center.x);
+    const ty0 = Math.floor(rMinY / tileSize + center.y);
+    const tx1 = Math.ceil(rMaxX / tileSize + center.x);
+    const ty1 = Math.ceil(rMaxY / tileSize + center.y);
+    const maxT = Math.pow(2, z);
+    for (let ty = ty0; ty <= ty1; ty++) {
+      if (ty < 0 || ty >= maxT) continue;
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const wrappedX = ((tx % maxT) + maxT) % maxT;
+        const sub = ["a", "b", "c"][((wrappedX + ty) % 3 + 3) % 3];
+        mapTiles.push({
+          href: `https://${sub}.tile.openstreetmap.org/${z}/${wrappedX}/${ty}.png`,
+          x: (tx - center.x) * tileSize,
+          y: (ty - center.y) * tileSize,
+          w: tileSize,
+          h: tileSize,
+        });
+      }
+    }
+  }
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <svg
@@ -9206,6 +9243,13 @@ function TopViewFit({
         preserveAspectRatio="xMidYMid meet"
         style={{ width: "100%", height: "100%", display: "block", background: "transparent" }}
       >
+        {showMap && a.geo && (
+          <g opacity={a.geo.mapOpacity} transform={`rotate(${mapRotDeg} ${cx} ${cy})`}>
+            {mapTiles.map((t, i) => (
+              <image key={i} href={t.href} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" crossOrigin="anonymous" />
+            ))}
+          </g>
+        )}
         {showLahan && a.lahanInfos.map((l, i) => (
           <path key={`la-${i}`} d={toPath(l.polygonPx, 1, 0, 0)}
             fill={mpFill(l.name, l.color)} stroke={mpStroke(l.name, l.color)}
@@ -9219,7 +9263,7 @@ function TopViewFit({
             ))}
           </g>
         ))}
-        {a.buildings.map((bld) => (
+        {showBuildings && a.buildings.map((bld) => (
           <g key={bld.id}>
             <path d={toPath(bld.polygonPx, 1, 0, 0)}
               fill={mpFill(bld.name, bld.color)} stroke={mpStroke(bld.name, bld.color)} strokeWidth={sw * 0.0014} />
@@ -9229,7 +9273,7 @@ function TopViewFit({
             ))}
           </g>
         ))}
-        {showLabels && a.buildings.map((bld, i) => {
+        {showBuildings && showLabels && a.buildings.map((bld, i) => {
           const cx = bld.centroidPx.x;
           const cy = bld.centroidPx.y;
           const r = sw * 0.018;
