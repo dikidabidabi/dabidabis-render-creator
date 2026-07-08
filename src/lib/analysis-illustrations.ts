@@ -28,18 +28,19 @@ export type Annotation = {
   color: string;             // warna utama (stroke + fill semi-transparan)
   strokeWidthPx?: number;    // default per-kind
   text?: string;             // untuk label
+  fontScale?: number;        // multiplier ukuran teks label (default 1)
   createdAt: number;
 };
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
   arrow:       { label: "Panah",        color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
-  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 50, needsPath: true, minPts: 2, hint: "Panah putus-putus lebar siku (tanpa kurva). Klik titik-titik, Enter/Selesai." },
+  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true, minPts: 2, hint: "Panah putus-putus tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
   flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed). Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
   node:   { label: "Node",        color: "#f97316", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk meletakkan node." },
   access: { label: "Access",      color: "#ea580c", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk access point." },
-  label:  { label: "Label",       color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: false, minPts: 1, hint: "Klik titik jangkar, lalu isi teks di panel." },
+  label:  { label: "Label",       color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: true,  minPts: 2, hint: "Klik titik jangkar, lalu klik posisi kotak label (panah bebas panjang), Enter/Selesai." },
 };
 
 export const ANNOTATION_COLOR_SWATCHES = [
@@ -116,9 +117,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
     if (!r || typeof r !== "object") continue;
     const kind: AnnotationKind = ["arrow", "arrowDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
     const preset = ANNOTATION_PRESETS[kind];
-    const style: PathStyle = kind === "arrowDashed"
-      ? "garis"
-      : (r.style === "tangent" || r.style === "garis" ? r.style : preset.style);
+    const style: PathStyle = (r.style === "tangent" || r.style === "garis") ? r.style : preset.style;
     const pts: Vec2[] = [];
     if (Array.isArray(r.points)) {
       for (const p of r.points) {
@@ -126,7 +125,9 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
         if (Number.isFinite(x) && Number.isFinite(y)) pts.push({ x, y });
       }
     }
-    if (pts.length < preset.minPts) continue;
+    // Toleransi migrasi: label lama boleh punya 1 titik (fallback offset otomatis).
+    const minPtsEff = kind === "label" ? 1 : preset.minPts;
+    if (pts.length < minPtsEff) continue;
     out.push({
       id: typeof r.id === "string" && r.id ? r.id : newAnnotationId(),
       kind,
@@ -135,6 +136,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       color: typeof r.color === "string" ? r.color : preset.color,
       strokeWidthPx: Number.isFinite(Number(r.strokeWidthPx)) ? Number(r.strokeWidthPx) : preset.strokeWidthPx,
       text: typeof r.text === "string" ? r.text : undefined,
+      fontScale: Number.isFinite(Number(r.fontScale)) ? Math.max(0.4, Math.min(5, Number(r.fontScale))) : 1,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
     });
   }
@@ -194,27 +196,33 @@ export function drawAnnotationCanvas(
   }
 
   if (a.kind === "label") {
-    const p = worldToScreen(a.points[0]);
+    const anchor = worldToScreen(a.points[0]);
+    const hasSecond = a.points.length >= 2;
+    const labelPos = hasSecond ? worldToScreen(a.points[1]) : { x: anchor.x + 10, y: anchor.y };
+    const fs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
     ctx.fillStyle = a.color;
-    ctx.font = `600 ${12 * Math.max(0.9, Math.min(1.6, viewScale))}px Manrope, sans-serif`;
+    ctx.font = `600 ${fs}px Manrope, sans-serif`;
     ctx.textBaseline = "middle";
     const txt = a.text || "Label";
-    const pad = 6;
+    const pad = fs * 0.5;
     const m = ctx.measureText(txt);
     const w = m.width + pad * 2;
-    const h = 20 * Math.max(0.9, Math.min(1.6, viewScale));
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    const h = fs * 1.6;
+    // leader line dulu (di belakang box)
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = Math.max(1, fs * 0.08);
+    ctx.beginPath(); ctx.moveTo(anchor.x, anchor.y); ctx.lineTo(labelPos.x, labelPos.y); ctx.stroke();
+    // box
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.strokeStyle = a.color;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.rect(p.x + 10, p.y - h / 2, w, h);
+    ctx.rect(labelPos.x - w / 2, labelPos.y - h / 2, w, h);
     ctx.fill(); ctx.stroke();
-    // leader line
-    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 10, p.y); ctx.stroke();
-    // dot
+    // dot di anchor
     ctx.fillStyle = a.color;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillText(txt, p.x + 10 + pad, p.y);
+    ctx.beginPath(); ctx.arc(anchor.x, anchor.y, Math.max(3, fs * 0.18), 0, Math.PI * 2); ctx.fill();
+    ctx.fillText(txt, labelPos.x - w / 2 + pad, labelPos.y);
     ctx.restore();
     return;
   }
@@ -363,14 +371,16 @@ export function annotationSvgElements(
   }
 
   if (a.kind === "label") {
-    const p = worldToScreen(a.points[0]);
+    const anchor = worldToScreen(a.points[0]);
+    const labelPos = a.points.length >= 2 ? worldToScreen(a.points[1]) : { x: anchor.x + 10, y: anchor.y };
     const txt = a.text || "Label";
-    const fs = 12 * scale;
-    const boxH = 20 * scale;
-    nodes.push(React.createElement("line", { key: `${keyPrefix}-l`, x1: p.x, y1: p.y, x2: p.x + 10, y2: p.y, stroke: a.color, strokeWidth: 1 }));
-    nodes.push(React.createElement("circle", { key: `${keyPrefix}-a`, cx: p.x, cy: p.y, r: 3, fill: a.color }));
-    nodes.push(React.createElement("rect", { key: `${keyPrefix}-b`, x: p.x + 10, y: p.y - boxH / 2, width: Math.max(28, txt.length * fs * 0.6 + 12), height: boxH, fill: "rgba(255,255,255,0.9)", stroke: a.color }));
-    nodes.push(React.createElement("text", { key: `${keyPrefix}-t`, x: p.x + 16, y: p.y + fs * 0.35, fill: a.color, fontSize: fs, fontWeight: 600, style: { fontFamily: "Manrope, sans-serif" } }, txt));
+    const fs = 12 * scale * (a.fontScale ?? 1);
+    const boxH = fs * 1.6;
+    const boxW = Math.max(fs * 2.5, txt.length * fs * 0.62 + fs);
+    nodes.push(React.createElement("line", { key: `${keyPrefix}-l`, x1: anchor.x, y1: anchor.y, x2: labelPos.x, y2: labelPos.y, stroke: a.color, strokeWidth: Math.max(1, fs * 0.08) }));
+    nodes.push(React.createElement("circle", { key: `${keyPrefix}-a`, cx: anchor.x, cy: anchor.y, r: Math.max(3, fs * 0.18), fill: a.color }));
+    nodes.push(React.createElement("rect", { key: `${keyPrefix}-b`, x: labelPos.x - boxW / 2, y: labelPos.y - boxH / 2, width: boxW, height: boxH, fill: "rgba(255,255,255,0.92)", stroke: a.color }));
+    nodes.push(React.createElement("text", { key: `${keyPrefix}-t`, x: labelPos.x, y: labelPos.y + fs * 0.35, textAnchor: "middle", fill: a.color, fontSize: fs, fontWeight: 600, style: { fontFamily: "Manrope, sans-serif" } }, txt));
     return nodes;
   }
 

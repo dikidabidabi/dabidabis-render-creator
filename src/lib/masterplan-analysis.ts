@@ -34,7 +34,7 @@ type AnyLevel = {
   parentLayerId?: string;
 };
 
-type AnyGeo = { mapRotation?: number };
+type AnyGeo = { mapRotation?: number; lat?: number; lon?: number; locked?: boolean; mapOpacity?: number };
 
 type AnySketch = {
   id: string;
@@ -120,6 +120,7 @@ export type MasterplanAnalysis = {
   totalRoadAreaM2: number;
   kdbKawasanPct: number;
   illustrations: Annotation[];
+  geo?: { lat: number; lon: number; mapOpacity: number; mapRotation: number };
 };
 
 export function loadMasterplanAnalysis(rootLayerId?: string): MasterplanAnalysis | null {
@@ -307,6 +308,14 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     totalRoadAreaM2,
     kdbKawasanPct: totalLahanM2 > 0 ? ((totalFootprintM2 + totalRoadAreaM2) / totalLahanM2) * 100 : 0,
     illustrations: normalizeAnnotations(sk.illustrations),
+    geo: (sk.geo && sk.geo.locked && Number.isFinite(Number(sk.geo.lat)) && Number.isFinite(Number(sk.geo.lon)))
+      ? {
+          lat: Number(sk.geo.lat),
+          lon: Number(sk.geo.lon),
+          mapOpacity: Number.isFinite(Number(sk.geo.mapOpacity)) ? Math.max(0, Math.min(1, Number(sk.geo.mapOpacity))) : 0.7,
+          mapRotation: Number(sk.geo.mapRotation) || 0,
+        }
+      : undefined,
   };
 }
 

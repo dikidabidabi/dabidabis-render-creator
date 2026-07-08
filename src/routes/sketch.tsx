@@ -2290,8 +2290,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
   const [iluText, setIluText] = useState<string>("");
   const [iluDraft, setIluDraft] = useState<{ points: Point[]; cursor: Point } | null>(null);
-  const [iluSub, setIluSub] = useState<"draw" | "geser" | "tambahTitik" | "hapusTitik">("draw");
+  const [iluSub, setIluSub] = useState<"draw" | "geser" | "tambahTitik" | "hapusTitik" | "hapusItem">("draw");
   const [iluVertexDrag, setIluVertexDrag] = useState<{ annId: string; idx: number } | null>(null);
+  const [iluSelectedId, setIluSelectedId] = useState<string | null>(null);
   // Ketebalan panah dashed (px world) — bisa diatur user via slider.
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
@@ -8203,6 +8204,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
     } else if (tool === "iluanalisa") {
       const illos = sketch.illustrations ?? [];
+      if (iluSub === "hapusItem") {
+        // Klik pada titik / dekat garis anotasi → hapus anotasi tsb.
+        const tolPx = 16 / view.s;
+        let bestId: string | null = null;
+        let bestD = Infinity;
+        for (const an of illos) {
+          for (let i = 0; i < an.points.length; i++) {
+            const d = Math.hypot(an.points[i].x - p.x, an.points[i].y - p.y);
+            if (d < bestD) { bestD = d; bestId = an.id; }
+          }
+          for (let s = 0; s < an.points.length - 1; s++) {
+            const a2 = an.points[s], b2 = an.points[s + 1];
+            const dx = b2.x - a2.x, dy = b2.y - a2.y;
+            const l2 = dx * dx + dy * dy;
+            let t = l2 > 1e-9 ? ((p.x - a2.x) * dx + (p.y - a2.y) * dy) / l2 : 0;
+            t = Math.max(0, Math.min(1, t));
+            const cx = a2.x + t * dx, cy = a2.y + t * dy;
+            const d = Math.hypot(p.x - cx, p.y - cy);
+            if (d < bestD) { bestD = d; bestId = an.id; }
+          }
+        }
+        if (bestId && bestD <= tolPx * 2) {
+          pushHistory();
+          onChange({ illustrations: illos.filter((x) => x.id !== bestId) });
+          if (iluSelectedId === bestId) setIluSelectedId(null);
+          toast.success("Ilustrasi dihapus");
+        } else {
+          toast.error("Klik dekat ilustrasi untuk menghapus");
+        }
+        return;
+      }
       if (iluSub === "geser") {
         const tolPx = 14 / view.s;
         let best: { annId: string; idx: number; d: number } | null = null;
@@ -8215,6 +8247,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         if (best) {
           pushHistory();
           setIluVertexDrag({ annId: best.annId, idx: best.idx });
+          setIluSelectedId(best.annId);
         } else {
           toast.error("Klik tepat pada titik ilustrasi untuk menggeser");
         }
@@ -8295,6 +8328,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
         onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         toast.success(`${preset.label} ditambahkan`);
+      } else if (iluKind === "label" && iluDraft && iluDraft.points.length === 1) {
+        // Klik ke-2 pada label = posisi kotak label → langsung commit.
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: "label",
+          style: preset.style,
+          points: [iluDraft.points[0], { x: p.x, y: p.y }],
+          color: iluColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          text: iluText || "Label",
+          fontScale: 1,
+          createdAt: Date.now(),
+        };
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "label");
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
+        setIluDraft(null);
+        toast.success("Label ditambahkan");
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
         else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
@@ -10571,6 +10621,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 { k: "geser", label: "Geser titik" },
                 { k: "tambahTitik", label: "+ Titik" },
                 { k: "hapusTitik", label: "− Titik" },
+                { k: "hapusItem", label: "Hapus" },
               ] as const).map(({ k, label }) => (
                 <Button
                   key={k}
@@ -10580,9 +10631,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   onClick={() => { setIluSub(k); setIluDraft(null); setIluVertexDrag(null); }}
                   title={
                     k === "draw" ? "Mode gambar ilustrasi baru" :
-                    k === "geser" ? "Klik + drag titik ilustrasi untuk menggeser" :
+                    k === "geser" ? "Klik + drag titik ilustrasi untuk menggeser (klik label untuk edit teks/ukuran)" :
                     k === "tambahTitik" ? "Klik di sepanjang garis ilustrasi untuk sisipkan titik" :
-                    "Klik pada titik ilustrasi untuk menghapus"
+                    k === "hapusTitik" ? "Klik pada titik ilustrasi untuk menghapus titik" :
+                    "Klik pada ilustrasi untuk menghapus satu ilustrasi"
                   }
                 >{label}</Button>
               ))}
@@ -10644,6 +10696,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
                     color: iluColor,
                     strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : preset.strokeWidthPx,
+                    text: iluKind === "label" ? (iluText || "Label") : undefined,
+                    fontScale: iluKind === "label" ? 1 : undefined,
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
@@ -10666,6 +10720,48 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
+        {/* Panel edit Label — muncul saat sebuah label terpilih (mode geser). */}
+        {tool === "iluanalisa" && mode === "masterplan" && iluSub === "geser" && iluSelectedId && (() => {
+          const sel = (sketch.illustrations ?? []).find((x) => x.id === iluSelectedId);
+          if (!sel || sel.kind !== "label") return null;
+          const fs = sel.fontScale ?? 1;
+          return (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/10 px-2 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Edit Label</span>
+              <Input
+                value={sel.text ?? ""}
+                onChange={(e) => {
+                  const t = e.target.value;
+                  onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, text: t } : x) });
+                }}
+                placeholder="Teks label"
+                className="h-7 w-52 text-[11px]"
+              />
+              <span className="text-[10px] text-slate-600">Ukuran</span>
+              <Slider
+                value={[Math.round(fs * 100)]}
+                min={50} max={400} step={5}
+                onValueChange={(v) => {
+                  const nv = Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100));
+                  onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, fontScale: nv } : x) });
+                }}
+                className="w-40"
+              />
+              <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluSelectedId(null)}>Selesai</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => {
+                  onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
+                  setIluSelectedId(null);
+                  toast.success("Label dihapus");
+                }}
+              >Hapus label</Button>
+            </div>
+          );
+        })()}
         {tool === "iluanalisa" && mode === "masterplan" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <div className="flex items-center gap-2">
