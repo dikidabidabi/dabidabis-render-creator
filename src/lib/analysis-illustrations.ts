@@ -196,27 +196,33 @@ export function drawAnnotationCanvas(
   }
 
   if (a.kind === "label") {
-    const p = worldToScreen(a.points[0]);
+    const anchor = worldToScreen(a.points[0]);
+    const hasSecond = a.points.length >= 2;
+    const labelPos = hasSecond ? worldToScreen(a.points[1]) : { x: anchor.x + 10, y: anchor.y };
+    const fs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
     ctx.fillStyle = a.color;
-    ctx.font = `600 ${12 * Math.max(0.9, Math.min(1.6, viewScale))}px Manrope, sans-serif`;
+    ctx.font = `600 ${fs}px Manrope, sans-serif`;
     ctx.textBaseline = "middle";
     const txt = a.text || "Label";
-    const pad = 6;
+    const pad = fs * 0.5;
     const m = ctx.measureText(txt);
     const w = m.width + pad * 2;
-    const h = 20 * Math.max(0.9, Math.min(1.6, viewScale));
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    const h = fs * 1.6;
+    // leader line dulu (di belakang box)
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = Math.max(1, fs * 0.08);
+    ctx.beginPath(); ctx.moveTo(anchor.x, anchor.y); ctx.lineTo(labelPos.x, labelPos.y); ctx.stroke();
+    // box
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.strokeStyle = a.color;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.rect(p.x + 10, p.y - h / 2, w, h);
+    ctx.rect(labelPos.x - w / 2, labelPos.y - h / 2, w, h);
     ctx.fill(); ctx.stroke();
-    // leader line
-    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + 10, p.y); ctx.stroke();
-    // dot
+    // dot di anchor
     ctx.fillStyle = a.color;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.fillText(txt, p.x + 10 + pad, p.y);
+    ctx.beginPath(); ctx.arc(anchor.x, anchor.y, Math.max(3, fs * 0.18), 0, Math.PI * 2); ctx.fill();
+    ctx.fillText(txt, labelPos.x - w / 2 + pad, labelPos.y);
     ctx.restore();
     return;
   }
