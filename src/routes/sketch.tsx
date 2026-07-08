@@ -10694,6 +10694,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
                     color: iluColor,
                     strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : preset.strokeWidthPx,
+                    text: iluKind === "label" ? (iluText || "Label") : undefined,
+                    fontScale: iluKind === "label" ? 1 : undefined,
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
