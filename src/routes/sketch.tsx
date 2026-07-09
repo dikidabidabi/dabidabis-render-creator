@@ -6125,8 +6125,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           style: preset.style,
           points: previewPts,
           color: iluColor,
-          strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : preset.strokeWidthPx,
+          strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : preset.strokeWidthPx),
           text: iluText || "Label",
+          hatch: iluKind === "zone" ? iluZoneHatch : undefined,
+          sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
           createdAt: 0,
         }, worldToScreen, view.s);
       }
