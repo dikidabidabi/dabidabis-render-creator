@@ -9653,7 +9653,7 @@ function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) 
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ilustrasi Analisa Kawasan · {a.title}</div>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <TopViewFit a={a} showLabels={false} showRoads showLahan showIllustrations
-            showBuildings={false} showMap
+            showBuildings={false} showMap mapGrayscale
             boundsOverride={bounds} compassId={`analisa-${a.sketchId}`} />
         </div>
         <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Skala referensi: {a.scale}</div>
