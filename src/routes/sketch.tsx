@@ -6104,7 +6104,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     // Ilustrasi Analisa — di atas layer, di bawah handle. Setiap kind di-render
     // dengan alpha efektif dari Layer Ilustrasi (visible + opacity per sub-layer).
-    const illos: Annotation[] = sketch.illustrations ?? [];
+    const illos: Annotation[] = sortAnnotationsForRender(sketch.illustrations ?? []);
     const iluCfg = sketch.illustrationLayer;
     for (const an of illos) {
       const alpha = iluAlphaFor(iluCfg, an.kind);
