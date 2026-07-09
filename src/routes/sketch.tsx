@@ -8323,6 +8323,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           color: iluColor,
           strokeWidthPx: preset.strokeWidthPx,
           text: iluKind === "label" ? (iluText || "Label") : undefined,
+          sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
           createdAt: Date.now(),
         };
         const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
