@@ -2295,6 +2295,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluSelectedId, setIluSelectedId] = useState<string | null>(null);
   // Ketebalan panah dashed (px world) — bisa diatur user via slider.
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
+  const [iluStrokeArrow, setIluStrokeArrow] = useState<number>(ANNOTATION_PRESETS.arrow.strokeWidthPx);
+  const [iluZoneHatch, setIluZoneHatch] = useState<boolean>(false);
+  const [iluNodeSize, setIluNodeSize] = useState<number>(1);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
