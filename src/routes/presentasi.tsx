@@ -9186,10 +9186,10 @@ function boundsIncludingIllustrations(a: MasterplanAnalysis, pad = 0.04): { minX
 /** Denah-style TopView: SVG scales via viewBox, tanpa frame abu-abu. Mengisi container. */
 function TopViewFit({
   a, showLabels = true, showRoads = true, showLahan = true, numbered = false,
-  showIllustrations = false, showBuildings = true, showMap = false, compassId, boundsOverride,
+  showIllustrations = false, showBuildings = true, showMap = false, mapGrayscale = false, compassId, boundsOverride,
 }: {
   a: MasterplanAnalysis; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean;
-  numbered?: boolean; showIllustrations?: boolean; showBuildings?: boolean; showMap?: boolean; compassId?: string;
+  numbered?: boolean; showIllustrations?: boolean; showBuildings?: boolean; showMap?: boolean; mapGrayscale?: boolean; compassId?: string;
   boundsOverride?: { minX: number; minY: number; maxX: number; maxY: number };
 }) {
   const b = boundsOverride ?? a.boundsPx;
