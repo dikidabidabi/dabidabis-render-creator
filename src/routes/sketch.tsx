@@ -165,6 +165,7 @@ import {
   makeIluLayerCfg,
   ensureIluSub,
   iluAlphaFor,
+  sortAnnotationsForRender,
   type Annotation,
   type AnnotationKind,
   type IluLayerCfg,
