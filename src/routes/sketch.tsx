@@ -10688,6 +10688,40 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrowDashed)}</span>
               </div>
             )}
+            {iluKind === "arrow" && (
+              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
+                <Slider
+                  value={[iluStrokeArrow]}
+                  min={10}
+                  max={200}
+                  step={2}
+                  onValueChange={(v) => setIluStrokeArrow(v[0] ?? 50)}
+                  className="w-32"
+                />
+                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrow)}</span>
+              </div>
+            )}
+            {iluKind === "zone" && (
+              <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={iluZoneHatch} onChange={(e) => setIluZoneHatch(e.target.checked)} className="h-3 w-3" />
+                Arsir 45° (tanpa border)
+              </label>
+            )}
+            {(iluKind === "node" || iluKind === "access") && (
+              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Ukuran</span>
+                <Slider
+                  value={[iluNodeSize]}
+                  min={0.5}
+                  max={4}
+                  step={0.1}
+                  onValueChange={(v) => setIluNodeSize(v[0] ?? 1)}
+                  className="w-32"
+                />
+                <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{iluNodeSize.toFixed(1)}×</span>
+              </div>
+            )}
             {ANNOTATION_PRESETS[iluKind].needsPath && iluDraft && iluDraft.points.length >= ANNOTATION_PRESETS[iluKind].minPts && (
               <Button
                 size="sm"
