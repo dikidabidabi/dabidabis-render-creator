@@ -51,7 +51,7 @@ import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAt
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
 import { loadMasterplanAnalysis, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
-import { annotationSvgElements, ANNOTATION_PRESETS, type Annotation } from "@/lib/analysis-illustrations";
+import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, type Annotation } from "@/lib/analysis-illustrations";
 import { lonLatToTile, pickTileZoom, metersPerMapPx } from "@/lib/geo";
 import {
   type ParkingArea,
@@ -9186,10 +9186,10 @@ function boundsIncludingIllustrations(a: MasterplanAnalysis, pad = 0.04): { minX
 /** Denah-style TopView: SVG scales via viewBox, tanpa frame abu-abu. Mengisi container. */
 function TopViewFit({
   a, showLabels = true, showRoads = true, showLahan = true, numbered = false,
-  showIllustrations = false, showBuildings = true, showMap = false, compassId, boundsOverride,
+  showIllustrations = false, showBuildings = true, showMap = false, mapGrayscale = false, compassId, boundsOverride,
 }: {
   a: MasterplanAnalysis; showLabels?: boolean; showRoads?: boolean; showLahan?: boolean;
-  numbered?: boolean; showIllustrations?: boolean; showBuildings?: boolean; showMap?: boolean; compassId?: string;
+  numbered?: boolean; showIllustrations?: boolean; showBuildings?: boolean; showMap?: boolean; mapGrayscale?: boolean; compassId?: string;
   boundsOverride?: { minX: number; minY: number; maxX: number; maxY: number };
 }) {
   const b = boundsOverride ?? a.boundsPx;
@@ -9244,7 +9244,11 @@ function TopViewFit({
         style={{ width: "100%", height: "100%", display: "block", background: "transparent" }}
       >
         {showMap && a.geo && (
-          <g opacity={a.geo.mapOpacity} transform={`rotate(${mapRotDeg} ${cx} ${cy})`}>
+          <g
+            opacity={a.geo.mapOpacity}
+            transform={`rotate(${mapRotDeg} ${cx} ${cy})`}
+            style={mapGrayscale ? { filter: "grayscale(1) brightness(1.25) contrast(0.85)" } : undefined}
+          >
             {mapTiles.map((t, i) => (
               <image key={i} href={t.href} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" crossOrigin="anonymous" />
             ))}
@@ -9289,7 +9293,7 @@ function TopViewFit({
             </text>
           );
         })}
-        {showIllustrations && a.illustrations.map((an, i) => (
+        {showIllustrations && sortAnnotationsForRender(a.illustrations).map((an, i) => (
           <g key={an.id || `ill-${i}`}>
             {annotationSvgElements(an, worldToScreen, `ill-${i}`, Math.max(0.6, Math.min(1.4, illuScale)))}
           </g>
@@ -9649,7 +9653,7 @@ function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) 
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ilustrasi Analisa Kawasan · {a.title}</div>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <TopViewFit a={a} showLabels={false} showRoads showLahan showIllustrations
-            showBuildings={false} showMap
+            showBuildings={false} showMap mapGrayscale
             boundsOverride={bounds} compassId={`analisa-${a.sketchId}`} />
         </div>
         <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Skala referensi: {a.scale}</div>

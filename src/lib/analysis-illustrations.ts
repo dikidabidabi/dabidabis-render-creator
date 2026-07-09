@@ -8,12 +8,12 @@ import { sampleTangent } from "@/lib/axes";
 export type Vec2 = { x: number; y: number };
 
 export type AnnotationKind =
-  | "arrow"       // panah — polyline dengan arrowhead
-  | "arrowDashed" // panah dashed — polyline lebar putus-putus dengan arrowhead
-  | "zone"        // area terisi (polygon tertutup)
-  | "flow"        // alur / desire line — garis putus-putus tebal
-  | "node"        // titik nodal (lingkaran + asterisk)
-  | "access"      // access point (lingkaran outline)
+  | "arrow"       // panah — polyline tangent + chevron head
+  | "arrowDashed" // panah dashed — polyline lebar putus-putus + chevron head
+  | "zone"        // area terisi (polygon tertutup) atau arsir 45°
+  | "flow"        // alur / desire line — dashed + chevron head
+  | "node"        // titik nodal (lingkaran putih + pola berwarna)
+  | "access"      // access point (lingkaran putih + border warna)
   | "label"       // callout teks + leader line
   | "border";     // outline putus-putus (kontur area)
 
@@ -29,14 +29,16 @@ export type Annotation = {
   strokeWidthPx?: number;    // default per-kind
   text?: string;             // untuk label
   fontScale?: number;        // multiplier ukuran teks label (default 1)
+  hatch?: boolean;           // zona: arsir 45° tanpa border (default false)
+  sizeScale?: number;        // node/access: multiplier ukuran (default 1)
   createdAt: number;
 };
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
-  arrow:       { label: "Panah",        color: "#64748b", style: "garis",   strokeWidthPx: 14, needsPath: true,  minPts: 2, hint: "Klik titik-titik jalur panah, tekan Enter/Selesai." },
-  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true, minPts: 2, hint: "Panah putus-putus tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
+  arrow:       { label: "Panah",        color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
+  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah putus-putus tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
-  flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed). Klik titik-titik, Enter/Selesai." },
+  flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed) + panah. Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
   node:   { label: "Node",        color: "#f97316", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk meletakkan node." },
   access: { label: "Access",      color: "#ea580c", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk access point." },
@@ -108,6 +110,17 @@ export function iluAlphaFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind):
   return Math.max(0, Math.min(1, cfg.opacity * subA));
 }
 
+/**
+ * Ordering: node & access selalu di atas ilustrasi lain.
+ * Panggil sebelum me-render array anotasi.
+ */
+export function sortAnnotationsForRender(list: Annotation[]): Annotation[] {
+  const order: Record<AnnotationKind, number> = {
+    zone: 0, border: 1, flow: 2, arrow: 3, arrowDashed: 4, label: 5, access: 6, node: 7,
+  };
+  return list.slice().sort((a, b) => (order[a.kind] ?? 0) - (order[b.kind] ?? 0));
+}
+
 
 /** Normalize dari data mentah localStorage. */
 export function normalizeAnnotations(raw: unknown): Annotation[] {
@@ -137,6 +150,8 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       strokeWidthPx: Number.isFinite(Number(r.strokeWidthPx)) ? Number(r.strokeWidthPx) : preset.strokeWidthPx,
       text: typeof r.text === "string" ? r.text : undefined,
       fontScale: Number.isFinite(Number(r.fontScale)) ? Math.max(0.4, Math.min(5, Number(r.fontScale))) : 1,
+      hatch: r.hatch === true,
+      sizeScale: Number.isFinite(Number(r.sizeScale)) ? Math.max(0.3, Math.min(6, Number(r.sizeScale))) : 1,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
     });
   }
@@ -157,6 +172,74 @@ export function withAlpha(color: string, alpha: number): string {
   return color;
 }
 
+/**
+ * Chevron arrowhead — dua bar 45° yang bertemu di TIP pada SUDUT LUAR
+ * masing-masing (outer corner). Bar A menuju back-left, bar B menuju
+ * back-right; thickness setiap bar tumbuh KE DALAM (ke arah sumbu panah),
+ * sehingga tip = sudut terluar yang bersama.
+ */
+function drawChevronCanvas(
+  ctx: CanvasRenderingContext2D,
+  tip: Vec2,
+  angH: number,
+  color: string,
+  sw: number,
+): void {
+  const hL = sw * 2.4;
+  const barThick = Math.max(1, sw * 0.6);
+  const angA = angH + (3 * Math.PI) / 4;
+  const angB = angH - (3 * Math.PI) / 4;
+  // Normal ke ARAH DALAM (toward axis) — kebalikan dari sebelumnya (outward).
+  const inA = angH - (3 * Math.PI) / 4;
+  const inB = angH + (3 * Math.PI) / 4;
+  const drawBar = (dRad: number, nRad: number) => {
+    const dx = Math.cos(dRad), dy = Math.sin(dRad);
+    const nx = Math.cos(nRad), ny = Math.sin(nRad);
+    const p1 = { x: tip.x, y: tip.y }; // outer corner @ tip
+    const p2 = { x: tip.x + dx * hL, y: tip.y + dy * hL }; // outer corner @ back
+    const p3 = { x: p2.x + nx * barThick, y: p2.y + ny * barThick }; // inner corner @ back
+    const p4 = { x: tip.x + nx * barThick, y: tip.y + ny * barThick }; // inner corner @ tip
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.lineTo(p3.x, p3.y);
+    ctx.lineTo(p4.x, p4.y);
+    ctx.closePath();
+    ctx.fill();
+  };
+  ctx.fillStyle = color;
+  drawBar(angA, inA);
+  drawBar(angB, inB);
+}
+
+function chevronSvg(
+  tip: Vec2,
+  angH: number,
+  color: string,
+  sw: number,
+  keyPrefix: string,
+  nodes: any[],
+): void {
+  const hL = sw * 2.4;
+  const barThick = Math.max(1, sw * 0.6);
+  const angA = angH + (3 * Math.PI) / 4;
+  const angB = angH - (3 * Math.PI) / 4;
+  const inA = angH - (3 * Math.PI) / 4;
+  const inB = angH + (3 * Math.PI) / 4;
+  const barPath = (dRad: number, nRad: number, key: string) => {
+    const dx = Math.cos(dRad), dy = Math.sin(dRad);
+    const nx = Math.cos(nRad), ny = Math.sin(nRad);
+    const p1 = tip;
+    const p2 = { x: tip.x + dx * hL, y: tip.y + dy * hL };
+    const p3 = { x: p2.x + nx * barThick, y: p2.y + ny * barThick };
+    const p4 = { x: tip.x + nx * barThick, y: tip.y + ny * barThick };
+    const dd = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y} Z`;
+    nodes.push(React.createElement("path", { key, d: dd, fill: color, stroke: "none" }));
+  };
+  barPath(angA, inA, `${keyPrefix}-h1`);
+  barPath(angB, inB, `${keyPrefix}-h2`);
+}
+
 /** Render satu anotasi ke Canvas 2D. worldToScreen di-supply oleh caller. */
 export function drawAnnotationCanvas(
   ctx: CanvasRenderingContext2D,
@@ -172,22 +255,28 @@ export function drawAnnotationCanvas(
 
   if (a.kind === "node" || a.kind === "access") {
     const p = worldToScreen(a.points[0]);
-    const r = a.kind === "node" ? 14 * Math.max(0.7, Math.min(1.6, viewScale)) : 16 * Math.max(0.7, Math.min(1.6, viewScale));
+    const sz = a.sizeScale ?? 1;
+    const rBase = a.kind === "node" ? 18 : 20;
+    const r = rBase * Math.max(0.7, Math.min(1.6, viewScale)) * sz;
+    // Latar putih
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    // Border warna (tebal)
     ctx.strokeStyle = a.color;
-    ctx.lineWidth = sw;
+    ctx.lineWidth = Math.max(2, r * 0.18);
     ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
     if (a.kind === "node") {
-      // asterisk
+      // Pola berwarna di tengah (dot + asterisk)
       ctx.fillStyle = a.color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.4, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = withAlpha(a.color, 0.9);
-      ctx.lineWidth = sw * 0.8;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.32, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = a.color;
+      ctx.lineWidth = Math.max(1.5, r * 0.14);
       const spikes = 6;
       for (let i = 0; i < spikes; i++) {
         const ang = (Math.PI * i) / spikes;
         ctx.beginPath();
-        ctx.moveTo(p.x + Math.cos(ang) * r * 0.9, p.y + Math.sin(ang) * r * 0.9);
-        ctx.lineTo(p.x - Math.cos(ang) * r * 0.9, p.y - Math.sin(ang) * r * 0.9);
+        ctx.moveTo(p.x + Math.cos(ang) * r * 0.75, p.y + Math.sin(ang) * r * 0.75);
+        ctx.lineTo(p.x - Math.cos(ang) * r * 0.75, p.y - Math.sin(ang) * r * 0.75);
         ctx.stroke();
       }
     }
@@ -208,18 +297,15 @@ export function drawAnnotationCanvas(
     const m = ctx.measureText(txt);
     const w = m.width + pad * 2;
     const h = fs * 1.6;
-    // leader line dulu (di belakang box)
     ctx.strokeStyle = a.color;
     ctx.lineWidth = Math.max(1, fs * 0.08);
     ctx.beginPath(); ctx.moveTo(anchor.x, anchor.y); ctx.lineTo(labelPos.x, labelPos.y); ctx.stroke();
-    // box
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.strokeStyle = a.color;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.rect(labelPos.x - w / 2, labelPos.y - h / 2, w, h);
     ctx.fill(); ctx.stroke();
-    // dot di anchor
     ctx.fillStyle = a.color;
     ctx.beginPath(); ctx.arc(anchor.x, anchor.y, Math.max(3, fs * 0.18), 0, Math.PI * 2); ctx.fill();
     ctx.fillText(txt, labelPos.x - w / 2 + pad, labelPos.y);
@@ -232,110 +318,86 @@ export function drawAnnotationCanvas(
   if (poly.length < 2) { ctx.restore(); return; }
 
   if (a.kind === "zone") {
+    // Bangun path polygon di screen space
     ctx.beginPath();
     const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
     for (let i = 1; i < poly.length; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
     ctx.closePath();
-    ctx.fillStyle = withAlpha(a.color, 0.35);
-    ctx.fill();
-    ctx.strokeStyle = withAlpha(a.color, 0.9);
-    ctx.lineWidth = Math.max(1, sw);
-    ctx.stroke();
+    if (a.hatch) {
+      // Arsir 45° tanpa border. Clip ke polygon, gambar garis diagonal.
+      ctx.save();
+      ctx.clip();
+      // Cari bbox dari poly di screen
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of poly) {
+        const s = worldToScreen(p);
+        if (s.x < minX) minX = s.x; if (s.y < minY) minY = s.y;
+        if (s.x > maxX) maxX = s.x; if (s.y > maxY) maxY = s.y;
+      }
+      const spacing = Math.max(6, sw * 4);
+      ctx.strokeStyle = withAlpha(a.color, 0.75);
+      ctx.lineWidth = Math.max(1, sw * 1.4);
+      ctx.lineCap = "butt";
+      // Garis 45°: y = x + c. c berkisar dari (minY-maxX) sampai (maxY-minX).
+      const cStart = Math.floor((minY - maxX) / spacing) * spacing;
+      const cEnd = maxY - minX;
+      for (let c = cStart; c <= cEnd; c += spacing) {
+        // Garis dari x=minX-100 → x=maxX+100
+        const x1 = minX - 200;
+        const x2 = maxX + 200;
+        const y1 = x1 + c;
+        const y2 = x2 + c;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      ctx.fillStyle = withAlpha(a.color, 0.35);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(a.color, 0.9);
+      ctx.lineWidth = Math.max(1, sw);
+      ctx.stroke();
+    }
     ctx.restore();
     return;
   }
 
-  if (a.kind === "flow" || a.kind === "border") {
-    const dash = a.kind === "flow" ? [Math.max(6, sw * 1.6), Math.max(4, sw * 1.0)] : [Math.max(6, sw * 4), Math.max(4, sw * 3)];
+  if (a.kind === "border") {
+    const dash = [Math.max(6, sw * 4), Math.max(4, sw * 3)];
     ctx.setLineDash(dash);
     ctx.strokeStyle = a.color;
     ctx.lineWidth = sw;
     ctx.beginPath();
     const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
     for (let i = 1; i < poly.length; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
-    if (a.kind === "border") ctx.closePath();
+    ctx.closePath();
     ctx.stroke();
     ctx.restore();
     return;
   }
 
-  // arrow (garis solid) atau arrowDashed (garis putus-putus lebar, siku, chevron head)
-  if (a.kind === "arrowDashed") {
-    // Arrowhead — dua persegi panjang yang bertemu di TIP membentuk sudut
-    // siku-siku (90°). Titik pertemuan (tip) = ujung runcing menghadap arah
-    // panah; masing-masing bar menjulur ke belakang pada sudut 45° dari
-    // sumbu panah, sehingga sudut internal antar bar = 90°.
-    const sEndFull = worldToScreen(poly[poly.length - 1]);
-    const sPrevFull = worldToScreen(poly[poly.length - 2]);
-    const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
-    const hL = sw * 2.4;
-    const barThick = Math.max(1, sw * 0.6);
-    const tip = sEndFull;
+  // arrow / arrowDashed / flow — semua pakai chevron head yang sama.
+  const sEndFull = worldToScreen(poly[poly.length - 1]);
+  const sPrevFull = worldToScreen(poly[poly.length - 2]);
+  const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
+  const tip = sEndFull;
 
-    // Arah bar A (back-left) = angH + 3π/4, bar B (back-right) = angH − 3π/4.
-    // Perp outward untuk masing-masing = angH ± π/4 (menjauh dari sumbu panah).
-    const angA = angH + (3 * Math.PI) / 4;
-    const angB = angH - (3 * Math.PI) / 4;
-    const perpA = angH + Math.PI / 4;
-    const perpB = angH - Math.PI / 4;
-    const dA = { x: Math.cos(angA), y: Math.sin(angA) };
-    const dB = { x: Math.cos(angB), y: Math.sin(angB) };
-    const nA = { x: Math.cos(perpA), y: Math.sin(perpA) };
-    const nB = { x: Math.cos(perpB), y: Math.sin(perpB) };
-
-    // Shaft: berhenti tepat di tip (bar akan menutupi ujung dash).
-    ctx.lineCap = "butt";
-    ctx.lineJoin = "miter";
-    ctx.setLineDash([sw * 0.5, sw * 0.3]);
-    ctx.strokeStyle = a.color;
-    ctx.lineWidth = sw;
-    ctx.beginPath();
-    const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
-    for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
-    ctx.lineTo(tip.x, tip.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Dua bar bertemu tepat di tip (satu titik bersama = sudut siku tersambung).
-    ctx.fillStyle = a.color;
-    const drawBar = (d: { x: number; y: number }, n: { x: number; y: number }) => {
-      const p1 = { x: tip.x, y: tip.y };
-      const p2 = { x: tip.x + d.x * hL, y: tip.y + d.y * hL };
-      const p3 = { x: p2.x + n.x * barThick, y: p2.y + n.y * barThick };
-      const p4 = { x: tip.x + n.x * barThick, y: tip.y + n.y * barThick };
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.lineTo(p3.x, p3.y);
-      ctx.lineTo(p4.x, p4.y);
-      ctx.closePath();
-      ctx.fill();
-    };
-    drawBar(dA, nA);
-    drawBar(dB, nB);
-    ctx.restore();
-    return;
-  }
-
-
-  ctx.strokeStyle = withAlpha(a.color, 0.55);
+  ctx.lineCap = a.kind === "flow" ? "round" : "butt";
+  ctx.lineJoin = a.kind === "flow" ? "round" : "miter";
+  if (a.kind === "arrowDashed") ctx.setLineDash([sw * 0.5, sw * 0.3]);
+  else if (a.kind === "flow") ctx.setLineDash([Math.max(6, sw * 1.6), Math.max(4, sw * 1.0)]);
+  else ctx.setLineDash([]);
+  ctx.strokeStyle = a.color;
   ctx.lineWidth = sw;
   ctx.beginPath();
   const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
-  for (let i = 1; i < poly.length; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
+  for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
+  ctx.lineTo(tip.x, tip.y);
   ctx.stroke();
   ctx.setLineDash([]);
-  // arrowhead at last point (arrow biasa — segitiga)
-  const sEnd = worldToScreen(poly[poly.length - 1]);
-  const sPrev = worldToScreen(poly[poly.length - 2]);
-  const ang = Math.atan2(sEnd.y - sPrev.y, sEnd.x - sPrev.x);
-  const hs = Math.max(14, sw * 1.6);
-  ctx.fillStyle = withAlpha(a.color, 0.85);
-  ctx.beginPath();
-  ctx.moveTo(sEnd.x, sEnd.y);
-  ctx.lineTo(sEnd.x - Math.cos(ang - 0.42) * hs, sEnd.y - Math.sin(ang - 0.42) * hs);
-  ctx.lineTo(sEnd.x - Math.cos(ang + 0.42) * hs, sEnd.y - Math.sin(ang + 0.42) * hs);
-  ctx.closePath(); ctx.fill();
+  drawChevronCanvas(ctx, tip, angH, a.color, sw);
   ctx.restore();
 }
 
@@ -349,21 +411,25 @@ export function annotationSvgElements(
   const preset = ANNOTATION_PRESETS[a.kind];
   const sw = (a.strokeWidthPx ?? preset.strokeWidthPx) * scale;
   const nodes: any[] = [];
-  // React imported at top of module.
 
   if (a.kind === "node" || a.kind === "access") {
     const p = worldToScreen(a.points[0]);
-    const r = (a.kind === "node" ? 14 : 16) * scale;
-    nodes.push(React.createElement("circle", { key: `${keyPrefix}-c`, cx: p.x, cy: p.y, r, fill: "none", stroke: a.color, strokeWidth: sw }));
+    const sz = a.sizeScale ?? 1;
+    const rBase = a.kind === "node" ? 18 : 20;
+    const r = rBase * scale * sz;
+    const border = Math.max(2, r * 0.18);
+    // Latar putih + border warna
+    nodes.push(React.createElement("circle", { key: `${keyPrefix}-bg`, cx: p.x, cy: p.y, r, fill: "#ffffff", stroke: a.color, strokeWidth: border }));
     if (a.kind === "node") {
-      nodes.push(React.createElement("circle", { key: `${keyPrefix}-d`, cx: p.x, cy: p.y, r: r * 0.35, fill: a.color }));
+      // Pola berwarna di tengah
+      nodes.push(React.createElement("circle", { key: `${keyPrefix}-d`, cx: p.x, cy: p.y, r: r * 0.32, fill: a.color }));
       for (let i = 0; i < 6; i++) {
         const ang = (Math.PI * i) / 6;
         nodes.push(React.createElement("line", {
           key: `${keyPrefix}-s${i}`,
-          x1: p.x + Math.cos(ang) * r * 0.9, y1: p.y + Math.sin(ang) * r * 0.9,
-          x2: p.x - Math.cos(ang) * r * 0.9, y2: p.y - Math.sin(ang) * r * 0.9,
-          stroke: a.color, strokeWidth: sw * 0.7, strokeLinecap: "round",
+          x1: p.x + Math.cos(ang) * r * 0.75, y1: p.y + Math.sin(ang) * r * 0.75,
+          x2: p.x - Math.cos(ang) * r * 0.75, y2: p.y - Math.sin(ang) * r * 0.75,
+          stroke: a.color, strokeWidth: Math.max(1.5, r * 0.14), strokeLinecap: "round",
         }));
       }
     }
@@ -390,56 +456,62 @@ export function annotationSvgElements(
   const d = "M " + pts.map((p) => `${p.x} ${p.y}`).join(" L ");
 
   if (a.kind === "zone") {
-    nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d: d + " Z", fill: withAlpha(a.color, 0.32), stroke: withAlpha(a.color, 0.9), strokeWidth: sw }));
+    if (a.hatch) {
+      // Bounding box screen
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of pts) {
+        if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
+      }
+      const spacing = Math.max(6, sw * 4);
+      const cStart = Math.floor((minY - maxX) / spacing) * spacing;
+      const cEnd = maxY - minX;
+      const clipId = `${keyPrefix}-clip`;
+      const lines: any[] = [];
+      let li = 0;
+      for (let c = cStart; c <= cEnd; c += spacing) {
+        const x1 = minX - 200;
+        const x2 = maxX + 200;
+        const y1 = x1 + c;
+        const y2 = x2 + c;
+        lines.push(React.createElement("line", {
+          key: `${keyPrefix}-hl-${li++}`,
+          x1, y1, x2, y2,
+          stroke: a.color, strokeOpacity: 0.75, strokeWidth: Math.max(1, sw * 1.4),
+        }));
+      }
+      nodes.push(React.createElement("defs", { key: `${keyPrefix}-defs` },
+        React.createElement("clipPath", { id: clipId },
+          React.createElement("path", { d: d + " Z" }),
+        ),
+      ));
+      nodes.push(React.createElement("g", { key: `${keyPrefix}-hatch`, clipPath: `url(#${clipId})` }, lines));
+    } else {
+      nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d: d + " Z", fill: withAlpha(a.color, 0.32), stroke: withAlpha(a.color, 0.9), strokeWidth: sw }));
+    }
     return nodes;
   }
-  if (a.kind === "flow" || a.kind === "border") {
-    const dash = a.kind === "flow" ? `${Math.max(6, sw * 1.6)},${Math.max(4, sw * 1.0)}` : `${Math.max(6, sw * 4)},${Math.max(4, sw * 3)}`;
-    const dd = a.kind === "border" ? d + " Z" : d;
-    nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d: dd, fill: "none", stroke: a.color, strokeWidth: sw, strokeDasharray: dash, strokeLinecap: "round" }));
-    return nodes;
-  }
-  // arrow / arrowDashed
-  if (a.kind === "arrowDashed") {
-    const tip = pts[pts.length - 1];
-    const prev = pts[pts.length - 2];
-    const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-    const hL = sw * 2.4;
-    const barThick = Math.max(1, sw * 0.6);
-    const shaftPts = [...pts.slice(0, -1), tip];
-    const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
-    nodes.push(React.createElement("path", {
-      key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
-      strokeLinecap: "butt", strokeLinejoin: "miter",
-      strokeDasharray: `${sw * 0.5},${sw * 0.3}`,
-    }));
-    // Dua bar bertemu tepat di tip (satu titik bersama = siku tersambung).
-    const angA = angH + (3 * Math.PI) / 4;
-    const angB = angH - (3 * Math.PI) / 4;
-    const perpA = angH + Math.PI / 4;
-    const perpB = angH - Math.PI / 4;
-    const barPath = (dRad: number, nRad: number, key: string) => {
-      const dx = Math.cos(dRad), dy = Math.sin(dRad);
-      const nx = Math.cos(nRad), ny = Math.sin(nRad);
-      const p1 = tip;
-      const p2 = { x: tip.x + dx * hL, y: tip.y + dy * hL };
-      const p3 = { x: p2.x + nx * barThick, y: p2.y + ny * barThick };
-      const p4 = { x: tip.x + nx * barThick, y: tip.y + ny * barThick };
-      const dd = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} L ${p4.x} ${p4.y} Z`;
-      nodes.push(React.createElement("path", { key, d: dd, fill: a.color, stroke: "none" }));
-    };
-    barPath(angA, perpA, `${keyPrefix}-h1`);
-    barPath(angB, perpB, `${keyPrefix}-h2`);
+  if (a.kind === "border") {
+    const dash = `${Math.max(6, sw * 4)},${Math.max(4, sw * 3)}`;
+    nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d: d + " Z", fill: "none", stroke: a.color, strokeWidth: sw, strokeDasharray: dash, strokeLinecap: "round" }));
     return nodes;
   }
 
-
-  const mid = `${keyPrefix}-am`;
-  nodes.push(React.createElement("defs", { key: `${keyPrefix}-def` },
-    React.createElement("marker", {
-      id: mid, viewBox: "0 0 12 12", refX: 8, refY: 6, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse",
-    }, React.createElement("path", { d: "M 0 0 L 12 6 L 0 12 z", fill: a.color })),
-  ));
-  nodes.push(React.createElement("path", { key: `${keyPrefix}-p`, d, fill: "none", stroke: withAlpha(a.color, 0.65), strokeWidth: sw, strokeLinecap: "round", markerEnd: `url(#${mid})` }));
+  // arrow / arrowDashed / flow — dash pattern beda, chevron head sama.
+  const tip = pts[pts.length - 1];
+  const prev = pts[pts.length - 2];
+  const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
+  const shaftPts = [...pts.slice(0, -1), tip];
+  const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
+  let strokeDasharray: string | undefined;
+  let strokeLinecap: "butt" | "round" = "butt";
+  let strokeLinejoin: "miter" | "round" = "miter";
+  if (a.kind === "arrowDashed") strokeDasharray = `${sw * 0.5},${sw * 0.3}`;
+  else if (a.kind === "flow") { strokeDasharray = `${Math.max(6, sw * 1.6)},${Math.max(4, sw * 1.0)}`; strokeLinecap = "round"; strokeLinejoin = "round"; }
+  nodes.push(React.createElement("path", {
+    key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
+    strokeLinecap, strokeLinejoin, ...(strokeDasharray ? { strokeDasharray } : {}),
+  }));
+  chevronSvg(tip, angH, a.color, sw, keyPrefix, nodes);
   return nodes;
 }
