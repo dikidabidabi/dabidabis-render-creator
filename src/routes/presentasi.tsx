@@ -9244,7 +9244,11 @@ function TopViewFit({
         style={{ width: "100%", height: "100%", display: "block", background: "transparent" }}
       >
         {showMap && a.geo && (
-          <g opacity={a.geo.mapOpacity} transform={`rotate(${mapRotDeg} ${cx} ${cy})`}>
+          <g
+            opacity={a.geo.mapOpacity}
+            transform={`rotate(${mapRotDeg} ${cx} ${cy})`}
+            style={mapGrayscale ? { filter: "grayscale(1) brightness(1.25) contrast(0.85)" } : undefined}
+          >
             {mapTiles.map((t, i) => (
               <image key={i} href={t.href} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" crossOrigin="anonymous" />
             ))}
