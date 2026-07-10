@@ -9636,13 +9636,14 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
 
 // ---------- Analisis Kawasan slide (Ilustrasi Analisa overlay) ----------
 function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
-  // Legenda unik: kind + warna
-  const legendMap = new Map<string, { kind: string; color: string; label: string; count: number }>();
+  // Legenda unik: kind + warna. Nama diambil dari Layer Ilustrasi (bila di-rename)
+  // atau fallback ke label preset.
+  const legendMap = new Map<string, { kind: Annotation["kind"]; color: string; label: string; count: number }>();
   for (const an of a.illustrations) {
     const k = `${an.kind}::${an.color}`;
     const prev = legendMap.get(k);
     if (prev) prev.count++;
-    else legendMap.set(k, { kind: an.kind, color: an.color, label: ANNOTATION_PRESETS[an.kind as Annotation["kind"]].label, count: 1 });
+    else legendMap.set(k, { kind: an.kind as Annotation["kind"], color: an.color, label: iluNameFor(a.illustrationLayer, an.kind as Annotation["kind"]), count: 1 });
   }
   const legend = Array.from(legendMap.values());
   // Bounds mencakup semua titik ilustrasi supaya tidak terpotong
