@@ -310,6 +310,7 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     totalRoadAreaM2,
     kdbKawasanPct: totalLahanM2 > 0 ? ((totalFootprintM2 + totalRoadAreaM2) / totalLahanM2) * 100 : 0,
     illustrations: normalizeAnnotations(sk.illustrations),
+    illustrationLayer: normalizeIluLayer((sk as any).illustrationLayer),
     geo: (sk.geo && sk.geo.locked && Number.isFinite(Number(sk.geo.lat)) && Number.isFinite(Number(sk.geo.lon)))
       ? {
           lat: Number(sk.geo.lat),
