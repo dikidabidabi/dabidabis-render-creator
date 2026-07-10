@@ -2297,6 +2297,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Ketebalan panah dashed (px world) — bisa diatur user via slider.
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   const [iluStrokeArrow, setIluStrokeArrow] = useState<number>(ANNOTATION_PRESETS.arrow.strokeWidthPx);
+  const [iluStrokeCircleDashed, setIluStrokeCircleDashed] = useState<number>(ANNOTATION_PRESETS.circleDashed.strokeWidthPx);
   const [iluZoneHatch, setIluZoneHatch] = useState<boolean>(false);
   const [iluNodeSize, setIluNodeSize] = useState<number>(1);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
