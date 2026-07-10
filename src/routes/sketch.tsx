@@ -2297,6 +2297,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Ketebalan panah dashed (px world) — bisa diatur user via slider.
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   const [iluStrokeArrow, setIluStrokeArrow] = useState<number>(ANNOTATION_PRESETS.arrow.strokeWidthPx);
+  const [iluStrokeCircleDashed, setIluStrokeCircleDashed] = useState<number>(ANNOTATION_PRESETS.circleDashed.strokeWidthPx);
   const [iluZoneHatch, setIluZoneHatch] = useState<boolean>(false);
   const [iluNodeSize, setIluNodeSize] = useState<number>(1);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
@@ -6126,7 +6127,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           style: preset.style,
           points: previewPts,
           color: iluColor,
-          strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : preset.strokeWidthPx),
+          strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
           text: iluText || "Label",
           hatch: iluKind === "zone" ? iluZoneHatch : undefined,
           sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
@@ -8352,6 +8353,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         setIluDraft(null);
         toast.success("Label ditambahkan");
+      } else if (iluKind === "circleDashed" && iluDraft && iluDraft.points.length === 1) {
+        // Klik ke-2 = titik pinggir (radius) → langsung commit.
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: "circleDashed",
+          style: preset.style,
+          points: [iluDraft.points[0], { x: p.x, y: p.y }],
+          color: iluColor,
+          strokeWidthPx: iluStrokeCircleDashed,
+          createdAt: Date.now(),
+        };
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "circleDashed");
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
+        setIluDraft(null);
+        toast.success("Lingkaran dashed ditambahkan");
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
         else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
@@ -10689,6 +10705,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrowDashed)}</span>
               </div>
             )}
+            {iluKind === "circleDashed" && (
+              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal border</span>
+                <Slider
+                  value={[iluStrokeCircleDashed]}
+                  min={4}
+                  max={120}
+                  step={1}
+                  onValueChange={(v) => setIluStrokeCircleDashed(v[0] ?? 20)}
+                  className="w-32"
+                />
+                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeCircleDashed)}</span>
+              </div>
+            )}
             {iluKind === "arrow" && (
               <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
@@ -10736,7 +10766,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     style: preset.style,
                     points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
                     color: iluColor,
-                    strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : preset.strokeWidthPx),
+                    strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
                     text: iluKind === "label" ? (iluText || "Label") : undefined,
                     fontScale: iluKind === "label" ? 1 : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
@@ -10835,7 +10865,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                       onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, visible: e.target.checked } } } })}
                       className="h-3.5 w-3.5"
                     />
-                    <span className="w-28 text-[10px] text-slate-700">{ANNOTATION_PRESETS[k].label} <span className="text-slate-400">({count})</span></span>
+                    <Input
+                      value={sub.name ?? ANNOTATION_PRESETS[k].label}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, name: v } } } });
+                      }}
+                      title={`Nama layer "${ANNOTATION_PRESETS[k].label}" (dipakai di Legenda Analisa slide Presentasi)`}
+                      className="h-6 w-36 text-[10px] px-1.5"
+                    />
+                    <span className="text-[10px] text-slate-400">({count})</span>
                     <Slider
                       value={[Math.round(sub.opacity * 100)]}
                       min={0} max={100} step={5}

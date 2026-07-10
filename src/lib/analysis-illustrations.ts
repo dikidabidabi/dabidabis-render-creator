@@ -10,6 +10,7 @@ export type Vec2 = { x: number; y: number };
 export type AnnotationKind =
   | "arrow"       // panah — polyline tangent + chevron head
   | "arrowDashed" // panah dashed — polyline lebar putus-putus + chevron head
+  | "circleDashed"// lingkaran dashed — border putus-putus, radius dari 2 titik
   | "zone"        // area terisi (polygon tertutup) atau arsir 45°
   | "flow"        // alur / desire line — dashed + chevron head
   | "node"        // titik nodal (lingkaran putih + pola berwarna)
@@ -35,8 +36,9 @@ export type Annotation = {
 };
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
-  arrow:       { label: "Panah",        color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
-  arrowDashed: { label: "Panah dashed", color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah putus-putus tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
+  arrow:        { label: "Panah",           color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
+  arrowDashed:  { label: "Panah dashed",    color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah putus-putus tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
+  circleDashed: { label: "Lingkaran dashed", color: "#0f172a", style: "garis",   strokeWidthPx: 20, needsPath: true,  minPts: 2, hint: "Klik titik pusat, lalu klik titik pinggir (drag diagonal) untuk radius." },
   zone:   { label: "Zona",        color: "#dc2626", style: "tangent", strokeWidthPx: 1.5, needsPath: true, minPts: 3, hint: "Klik keliling area, tekan Enter/Selesai untuk menutup." },
   flow:   { label: "Alur",        color: "#16a34a", style: "tangent", strokeWidthPx: 8,  needsPath: true,  minPts: 2, hint: "Alur / desire line (dashed) + panah. Klik titik-titik, Enter/Selesai." },
   border: { label: "Border",      color: "#2563eb", style: "tangent", strokeWidthPx: 2.5, needsPath: true, minPts: 3, hint: "Kontur/pembatas dashed. Klik titik-titik, Enter/Selesai." },
@@ -62,7 +64,7 @@ export function annotationPolyline(a: Annotation): Vec2[] {
 
 /** Konfigurasi "Layer Ilustrasi" — layer khusus untuk semua notasi ilustrasi
  *  analisa, dengan sub-layer per tool (kind). Bisa diatur visible & opacity. */
-export type IluSubLayer = { visible: boolean; opacity: number };
+export type IluSubLayer = { visible: boolean; opacity: number; name?: string };
 export type IluLayerCfg = {
   visible: boolean;
   opacity: number;
@@ -94,6 +96,7 @@ export function normalizeIluLayer(raw: unknown): IluLayerCfg | undefined {
       cfg.subs[k] = {
         visible: s.visible !== false,
         opacity: Number.isFinite(Number(s.opacity)) ? Math.max(0, Math.min(1, Number(s.opacity))) : 1,
+        name: typeof s.name === "string" && s.name.trim() ? s.name : undefined,
       };
     }
   }
@@ -110,13 +113,21 @@ export function iluAlphaFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind):
   return Math.max(0, Math.min(1, cfg.opacity * subA));
 }
 
+/** Nama sub-layer efektif (custom bila diisi, fallback ke label preset). */
+export function iluNameFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind): string {
+  const custom = cfg?.subs[kind]?.name;
+  if (custom && custom.trim()) return custom;
+  return ANNOTATION_PRESETS[kind].label;
+}
+
+
 /**
  * Ordering: node & access selalu di atas ilustrasi lain.
  * Panggil sebelum me-render array anotasi.
  */
 export function sortAnnotationsForRender(list: Annotation[]): Annotation[] {
   const order: Record<AnnotationKind, number> = {
-    zone: 0, border: 1, flow: 2, arrow: 3, arrowDashed: 4, label: 5, access: 6, node: 7,
+    zone: 0, border: 1, flow: 2, arrow: 3, arrowDashed: 4, circleDashed: 4.5, label: 5, access: 6, node: 7,
   };
   return list.slice().sort((a, b) => (order[a.kind] ?? 0) - (order[b.kind] ?? 0));
 }
@@ -128,7 +139,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
   const out: Annotation[] = [];
   for (const r of raw as any[]) {
     if (!r || typeof r !== "object") continue;
-    const kind: AnnotationKind = ["arrow", "arrowDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
+    const kind: AnnotationKind = ["arrow", "arrowDashed", "circleDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
     const preset = ANNOTATION_PRESETS[kind];
     const style: PathStyle = (r.style === "tangent" || r.style === "garis") ? r.style : preset.style;
     const pts: Vec2[] = [];
@@ -313,9 +324,28 @@ export function drawAnnotationCanvas(
     return;
   }
 
+  if (a.kind === "circleDashed") {
+    if (a.points.length < 2) { ctx.restore(); return; }
+    const c = worldToScreen(a.points[0]);
+    const e = worldToScreen(a.points[1]);
+    const r = Math.hypot(e.x - c.x, e.y - c.y);
+    // Rasio dash 0.5:0.3 mengikuti panah dashed
+    ctx.setLineDash([sw * 0.5, sw * 0.3]);
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = sw;
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, Math.max(1, r), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+
   // path kinds
   const poly = annotationPolyline(a);
   if (poly.length < 2) { ctx.restore(); return; }
+
 
   if (a.kind === "zone") {
     // Bangun path polygon di screen space
@@ -383,6 +413,10 @@ export function drawAnnotationCanvas(
   const sPrevFull = worldToScreen(poly[poly.length - 2]);
   const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
   const tip = sEndFull;
+  // Ujung shaft berakhir di sudut DALAM chevron (bukan di ujung terluar tip).
+  // barThick = sw*0.6 → inset di sepanjang sumbu panah = barThick * √2.
+  const inset = sw * 0.6 * Math.SQRT2;
+  const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
 
   ctx.lineCap = a.kind === "flow" ? "round" : "butt";
   ctx.lineJoin = a.kind === "flow" ? "round" : "miter";
@@ -394,7 +428,7 @@ export function drawAnnotationCanvas(
   ctx.beginPath();
   const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
   for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
-  ctx.lineTo(tip.x, tip.y);
+  ctx.lineTo(innerTip.x, innerTip.y);
   ctx.stroke();
   ctx.setLineDash([]);
   drawChevronCanvas(ctx, tip, angH, a.color, sw);
@@ -450,10 +484,24 @@ export function annotationSvgElements(
     return nodes;
   }
 
+  if (a.kind === "circleDashed") {
+    if (a.points.length < 2) return nodes;
+    const c = worldToScreen(a.points[0]);
+    const e = worldToScreen(a.points[1]);
+    const r = Math.max(1, Math.hypot(e.x - c.x, e.y - c.y));
+    const dash = `${sw * 0.5},${sw * 0.3}`;
+    nodes.push(React.createElement("circle", {
+      key: `${keyPrefix}-p`, cx: c.x, cy: c.y, r, fill: "none",
+      stroke: a.color, strokeWidth: sw, strokeDasharray: dash,
+    }));
+    return nodes;
+  }
+
   const poly = annotationPolyline(a);
   if (poly.length < 2) return nodes;
   const pts = poly.map(worldToScreen);
   const d = "M " + pts.map((p) => `${p.x} ${p.y}`).join(" L ");
+
 
   if (a.kind === "zone") {
     if (a.hatch) {
@@ -501,7 +549,9 @@ export function annotationSvgElements(
   const tip = pts[pts.length - 1];
   const prev = pts[pts.length - 2];
   const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-  const shaftPts = [...pts.slice(0, -1), tip];
+  const inset = sw * 0.6 * Math.SQRT2;
+  const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
+  const shaftPts = [...pts.slice(0, -1), innerTip];
   const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
   let strokeDasharray: string | undefined;
   let strokeLinecap: "butt" | "round" = "butt";

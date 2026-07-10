@@ -51,7 +51,7 @@ import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAt
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
 import { loadMasterplanAnalysis, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
-import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, type Annotation } from "@/lib/analysis-illustrations";
+import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, iluNameFor, type Annotation } from "@/lib/analysis-illustrations";
 import { lonLatToTile, pickTileZoom, metersPerMapPx } from "@/lib/geo";
 import {
   type ParkingArea,
@@ -9247,7 +9247,7 @@ function TopViewFit({
           <g
             opacity={a.geo.mapOpacity}
             transform={`rotate(${mapRotDeg} ${cx} ${cy})`}
-            style={mapGrayscale ? { filter: "grayscale(1) brightness(1.25) contrast(0.85)" } : undefined}
+            style={mapGrayscale ? { filter: "grayscale(1) contrast(1.55) brightness(1.05) saturate(0)" } : undefined}
           >
             {mapTiles.map((t, i) => (
               <image key={i} href={t.href} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" crossOrigin="anonymous" />
@@ -9636,13 +9636,14 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
 
 // ---------- Analisis Kawasan slide (Ilustrasi Analisa overlay) ----------
 function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
-  // Legenda unik: kind + warna
-  const legendMap = new Map<string, { kind: string; color: string; label: string; count: number }>();
+  // Legenda unik: kind + warna. Nama diambil dari Layer Ilustrasi (bila di-rename)
+  // atau fallback ke label preset.
+  const legendMap = new Map<string, { kind: Annotation["kind"]; color: string; label: string; count: number }>();
   for (const an of a.illustrations) {
     const k = `${an.kind}::${an.color}`;
     const prev = legendMap.get(k);
     if (prev) prev.count++;
-    else legendMap.set(k, { kind: an.kind, color: an.color, label: ANNOTATION_PRESETS[an.kind as Annotation["kind"]].label, count: 1 });
+    else legendMap.set(k, { kind: an.kind as Annotation["kind"], color: an.color, label: iluNameFor(a.illustrationLayer, an.kind as Annotation["kind"]), count: 1 });
   }
   const legend = Array.from(legendMap.values());
   // Bounds mencakup semua titik ilustrasi supaya tidak terpotong
