@@ -121,6 +121,7 @@ export type MasterplanAnalysis = {
   totalRoadAreaM2: number;
   kdbKawasanPct: number;
   illustrations: Annotation[];
+  illustrationLayer?: IluLayerCfg;
   geo?: { lat: number; lon: number; mapOpacity: number; mapRotation: number };
 };
 
