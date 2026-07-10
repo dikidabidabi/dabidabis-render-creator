@@ -113,6 +113,14 @@ export function iluAlphaFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind):
   return Math.max(0, Math.min(1, cfg.opacity * subA));
 }
 
+/** Nama sub-layer efektif (custom bila diisi, fallback ke label preset). */
+export function iluNameFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind): string {
+  const custom = cfg?.subs[kind]?.name;
+  if (custom && custom.trim()) return custom;
+  return ANNOTATION_PRESETS[kind].label;
+}
+
+
 /**
  * Ordering: node & access selalu di atas ilustrasi lain.
  * Panggil sebelum me-render array anotasi.
