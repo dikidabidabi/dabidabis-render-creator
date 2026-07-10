@@ -96,6 +96,7 @@ export function normalizeIluLayer(raw: unknown): IluLayerCfg | undefined {
       cfg.subs[k] = {
         visible: s.visible !== false,
         opacity: Number.isFinite(Number(s.opacity)) ? Math.max(0, Math.min(1, Number(s.opacity))) : 1,
+        name: typeof s.name === "string" && s.name.trim() ? s.name : undefined,
       };
     }
   }
