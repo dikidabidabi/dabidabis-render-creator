@@ -484,10 +484,24 @@ export function annotationSvgElements(
     return nodes;
   }
 
+  if (a.kind === "circleDashed") {
+    if (a.points.length < 2) return nodes;
+    const c = worldToScreen(a.points[0]);
+    const e = worldToScreen(a.points[1]);
+    const r = Math.max(1, Math.hypot(e.x - c.x, e.y - c.y));
+    const dash = `${sw * 0.5},${sw * 0.3}`;
+    nodes.push(React.createElement("circle", {
+      key: `${keyPrefix}-p`, cx: c.x, cy: c.y, r, fill: "none",
+      stroke: a.color, strokeWidth: sw, strokeDasharray: dash,
+    }));
+    return nodes;
+  }
+
   const poly = annotationPolyline(a);
   if (poly.length < 2) return nodes;
   const pts = poly.map(worldToScreen);
   const d = "M " + pts.map((p) => `${p.x} ${p.y}`).join(" L ");
+
 
   if (a.kind === "zone") {
     if (a.hatch) {
