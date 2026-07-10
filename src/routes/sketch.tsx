@@ -10705,6 +10705,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrowDashed)}</span>
               </div>
             )}
+            {iluKind === "circleDashed" && (
+              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal border</span>
+                <Slider
+                  value={[iluStrokeCircleDashed]}
+                  min={4}
+                  max={120}
+                  step={1}
+                  onValueChange={(v) => setIluStrokeCircleDashed(v[0] ?? 20)}
+                  className="w-32"
+                />
+                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeCircleDashed)}</span>
+              </div>
+            )}
             {iluKind === "arrow" && (
               <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
