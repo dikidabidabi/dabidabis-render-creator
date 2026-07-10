@@ -549,7 +549,9 @@ export function annotationSvgElements(
   const tip = pts[pts.length - 1];
   const prev = pts[pts.length - 2];
   const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-  const shaftPts = [...pts.slice(0, -1), tip];
+  const inset = sw * 0.6 * Math.SQRT2;
+  const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
+  const shaftPts = [...pts.slice(0, -1), innerTip];
   const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
   let strokeDasharray: string | undefined;
   let strokeLinecap: "butt" | "round" = "butt";
