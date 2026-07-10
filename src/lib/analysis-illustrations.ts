@@ -10,6 +10,7 @@ export type Vec2 = { x: number; y: number };
 export type AnnotationKind =
   | "arrow"       // panah — polyline tangent + chevron head
   | "arrowDashed" // panah dashed — polyline lebar putus-putus + chevron head
+  | "circleDashed"// lingkaran dashed — border putus-putus, radius dari 2 titik
   | "zone"        // area terisi (polygon tertutup) atau arsir 45°
   | "flow"        // alur / desire line — dashed + chevron head
   | "node"        // titik nodal (lingkaran putih + pola berwarna)
