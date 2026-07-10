@@ -10865,7 +10865,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                       onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, visible: e.target.checked } } } })}
                       className="h-3.5 w-3.5"
                     />
-                    <span className="w-28 text-[10px] text-slate-700">{ANNOTATION_PRESETS[k].label} <span className="text-slate-400">({count})</span></span>
+                    <Input
+                      value={sub.name ?? ANNOTATION_PRESETS[k].label}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, name: v } } } });
+                      }}
+                      title={`Nama layer "${ANNOTATION_PRESETS[k].label}" (dipakai di Legenda Analisa slide Presentasi)`}
+                      className="h-6 w-36 text-[10px] px-1.5"
+                    />
+                    <span className="text-[10px] text-slate-400">({count})</span>
                     <Slider
                       value={[Math.round(sub.opacity * 100)]}
                       min={0} max={100} step={5}
