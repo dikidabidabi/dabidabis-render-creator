@@ -8353,6 +8353,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         setIluDraft(null);
         toast.success("Label ditambahkan");
+      } else if (iluKind === "circleDashed" && iluDraft && iluDraft.points.length === 1) {
+        // Klik ke-2 = titik pinggir (radius) → langsung commit.
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: "circleDashed",
+          style: preset.style,
+          points: [iluDraft.points[0], { x: p.x, y: p.y }],
+          color: iluColor,
+          strokeWidthPx: iluStrokeCircleDashed,
+          createdAt: Date.now(),
+        };
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "circleDashed");
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
+        setIluDraft(null);
+        toast.success("Lingkaran dashed ditambahkan");
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
         else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
