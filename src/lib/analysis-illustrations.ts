@@ -324,9 +324,28 @@ export function drawAnnotationCanvas(
     return;
   }
 
+  if (a.kind === "circleDashed") {
+    if (a.points.length < 2) { ctx.restore(); return; }
+    const c = worldToScreen(a.points[0]);
+    const e = worldToScreen(a.points[1]);
+    const r = Math.hypot(e.x - c.x, e.y - c.y);
+    // Rasio dash 0.5:0.3 mengikuti panah dashed
+    ctx.setLineDash([sw * 0.5, sw * 0.3]);
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = sw;
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, Math.max(1, r), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+
   // path kinds
   const poly = annotationPolyline(a);
   if (poly.length < 2) { ctx.restore(); return; }
+
 
   if (a.kind === "zone") {
     // Bangun path polygon di screen space
