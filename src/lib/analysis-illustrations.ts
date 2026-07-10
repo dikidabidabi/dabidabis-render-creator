@@ -64,7 +64,7 @@ export function annotationPolyline(a: Annotation): Vec2[] {
 
 /** Konfigurasi "Layer Ilustrasi" — layer khusus untuk semua notasi ilustrasi
  *  analisa, dengan sub-layer per tool (kind). Bisa diatur visible & opacity. */
-export type IluSubLayer = { visible: boolean; opacity: number };
+export type IluSubLayer = { visible: boolean; opacity: number; name?: string };
 export type IluLayerCfg = {
   visible: boolean;
   opacity: number;
