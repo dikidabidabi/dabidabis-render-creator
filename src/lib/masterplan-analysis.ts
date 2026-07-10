@@ -10,7 +10,7 @@ import {
   clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
-import { normalizeAnnotations, type Annotation } from "@/lib/analysis-illustrations";
+import { normalizeAnnotations, normalizeIluLayer, type Annotation, type IluLayerCfg } from "@/lib/analysis-illustrations";
 
 export type Pt = { x: number; y: number };
 
