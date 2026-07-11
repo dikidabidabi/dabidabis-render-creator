@@ -415,7 +415,9 @@ export function drawAnnotationCanvas(
   const tip = sEndFull;
   // Ujung shaft berakhir di sudut DALAM chevron (bukan di ujung terluar tip).
   // barThick = sw*0.6 → inset di sepanjang sumbu panah = barThick * √2.
-  const inset = sw * 0.6 * Math.SQRT2;
+  // Untuk arrowDashed, beri jarak ekstra sw*0.5 antara ujung garis & chevron.
+  const gap = a.kind === "arrowDashed" ? sw * 0.5 : 0;
+  const inset = sw * 0.6 * Math.SQRT2 + gap;
   const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
 
   ctx.lineCap = a.kind === "flow" ? "round" : "butt";
@@ -549,7 +551,8 @@ export function annotationSvgElements(
   const tip = pts[pts.length - 1];
   const prev = pts[pts.length - 2];
   const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-  const inset = sw * 0.6 * Math.SQRT2;
+  const gap = a.kind === "arrowDashed" ? sw * 0.5 : 0;
+  const inset = sw * 0.6 * Math.SQRT2 + gap;
   const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
   const shaftPts = [...pts.slice(0, -1), innerTip];
   const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
