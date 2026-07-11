@@ -39,6 +39,7 @@ import {
   Plus,
   X,
   Trash2,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -531,13 +532,41 @@ function PromptNode({ id, data }: NodeProps) {
           ))}
         </div>
         <div>
-          <Label className="text-[10px]">Detail tambahan</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px]">Detail tambahan</Label>
+            <button
+              type="button"
+              onClick={() => {
+                const text = d.detail ?? "";
+                if (!text.trim()) { toast.error("Prompt kosong"); return; }
+                try {
+                  navigator.clipboard.writeText(text);
+                  toast.success("Prompt disalin");
+                } catch { toast.error("Gagal menyalin"); }
+              }}
+              className="flex items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 text-[9px] hover:border-ember"
+              title="Salin prompt"
+            >
+              <Copy className="h-2.5 w-2.5" /> Salin
+            </button>
+          </div>
           <Textarea
             value={d.detail}
-            onChange={(e) => updateNode(id, { detail: e.target.value })}
+            onChange={(e) => {
+              updateNode(id, { detail: e.target.value });
+              const el = e.currentTarget;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 600)}px`;
+            }}
+            ref={(el) => {
+              if (el) {
+                el.style.height = "auto";
+                el.style.height = `${Math.min(el.scrollHeight, 600)}px`;
+              }
+            }}
             rows={3}
             placeholder="Konteks vegetasi, cuaca, aktivitas..."
-            className="mt-1 resize-none text-xs"
+            className="mt-1 min-h-[64px] overflow-hidden text-xs"
           />
         </div>
         <div className="rounded border border-border/60 bg-background/60 p-2">
@@ -1453,7 +1482,10 @@ function useStudioExecute() {
 function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  const rowH = 340;
+  // Node width ~280px. Beri jarak antar-kolom & antar-baris agar tidak
+  // saling tumpang tindih walau isi node memanjang.
+  const colX = [0, 380, 760, 1140];
+  const rowH = 560;
   sketches.forEach((sk, i) => {
     const y = i * rowH;
     const inputId = `input-${sk.id}`;
@@ -1464,7 +1496,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
       {
         id: inputId,
         type: "input",
-        position: { x: 0, y },
+        position: { x: colX[0], y },
         data: {
           kind: "input",
           sketchId: sk.id,
@@ -1476,7 +1508,7 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
       {
         id: promptId,
         type: "prompt",
-        position: { x: 340, y },
+        position: { x: colX[1], y },
         data: {
           kind: "prompt",
           style: "bare finish concrete, cinematic lighting",
@@ -1487,13 +1519,13 @@ function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
       {
         id: renderId,
         type: "render",
-        position: { x: 680, y },
+        position: { x: colX[2], y },
         data: { kind: "render", status: "idle", progress: 0 } satisfies RenderNodeData,
       },
       {
         id: outputId,
         type: "output",
-        position: { x: 1020, y },
+        position: { x: colX[3], y },
         data: {
           kind: "output",
           sketchId: sk.id,

@@ -9247,7 +9247,7 @@ function TopViewFit({
           <g
             opacity={a.geo.mapOpacity}
             transform={`rotate(${mapRotDeg} ${cx} ${cy})`}
-            style={mapGrayscale ? { filter: "grayscale(1) contrast(1.55) brightness(1.05) saturate(0)" } : undefined}
+            style={mapGrayscale ? { filter: "grayscale(1) saturate(0) contrast(1.35) brightness(0.88)" } : undefined}
           >
             {mapTiles.map((t, i) => (
               <image key={i} href={t.href} x={t.x} y={t.y} width={t.w} height={t.h} preserveAspectRatio="none" crossOrigin="anonymous" />
