@@ -512,12 +512,38 @@ function PromptNode({ id, data }: NodeProps) {
       <div className="space-y-2">
         <div>
           <Label className="text-[10px]">Gaya arsitektur</Label>
-          <input
-            value={d.style}
-            onChange={(e) => updateNode(id, { style: e.target.value })}
-            placeholder="mis. bare finish concrete"
-            className="mt-1 w-full rounded border border-border/60 bg-background px-2 py-1 text-xs outline-none focus:border-ember"
-          />
+          <div className="relative mt-1">
+            <Textarea
+              value={d.style}
+              onChange={(e) => {
+                updateNode(id, { style: e.target.value });
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${Math.min(el.scrollHeight, 600)}px`;
+              }}
+              ref={(el) => {
+                if (el) {
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 600)}px`;
+                }
+              }}
+              rows={1}
+              placeholder="mis. bare finish concrete"
+              className="min-h-[64px] overflow-hidden pr-10 text-xs"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const text = d.style ?? "";
+                if (!text.trim()) { toast.error("Gaya arsitektur kosong"); return; }
+                try { navigator.clipboard.writeText(text); toast.success("Gaya arsitektur disalin"); } catch { toast.error("Gagal menyalin"); }
+              }}
+              className="absolute right-1 top-1 rounded border border-border/60 bg-background/90 p-1 text-[9px] hover:border-ember"
+              title="Salin gaya arsitektur"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1">
           {presets.map((p) => (
