@@ -10710,18 +10710,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>
             )}
             {iluKind === "circleDashed" && (
-              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal border</span>
-                <Slider
-                  value={[iluStrokeCircleDashed]}
-                  min={4}
-                  max={120}
-                  step={1}
-                  onValueChange={(v) => setIluStrokeCircleDashed(v[0] ?? 20)}
-                  className="w-32"
-                />
-                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeCircleDashed)}</span>
-              </div>
+              <>
+                <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal border</span>
+                  <Slider
+                    value={[iluStrokeCircleDashed]}
+                    min={4}
+                    max={120}
+                    step={1}
+                    onValueChange={(v) => setIluStrokeCircleDashed(v[0] ?? 20)}
+                    className="w-32"
+                  />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeCircleDashed)}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Transparansi isi</span>
+                  <Slider
+                    value={[iluCircleFillAlpha]}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onValueChange={(v) => setIluCircleFillAlpha(v[0] ?? 0)}
+                    className="w-32"
+                  />
+                  <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluCircleFillAlpha * 100)}%</span>
+                </div>
+              </>
             )}
             {iluKind === "arrow" && (
               <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
