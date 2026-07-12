@@ -230,7 +230,14 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
       footprintM2: ownArea,
       totalFloors,
       totalGfaM2: totalGfa,
-      heightM: totalFloors * 4,
+      heightM: (() => {
+        // Ketinggian root disesuaikan dengan MDPL sub tertinggi: bila ada sub
+        // di elevasi X m di atas root, root harus menjulur sampai X m sehingga
+        // sub duduk tepat di atasnya. Fallback ke ownFloors * 4 bila tidak ada
+        // sub dengan MDPL valid.
+        const maxSubBase = agg.subs.reduce((m, s) => (s.baseM > m ? s.baseM : m), 0);
+        return Math.max(ownFloors * 4, maxSubBase);
+      })(),
       subMasses: agg.subs,
     };
   });
