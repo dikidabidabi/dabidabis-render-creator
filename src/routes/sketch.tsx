@@ -6134,6 +6134,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
           text: iluText || "Label",
           hatch: iluKind === "zone" ? iluZoneHatch : undefined,
+          fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
           sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
           createdAt: 0,
         }, worldToScreen, view.s);
