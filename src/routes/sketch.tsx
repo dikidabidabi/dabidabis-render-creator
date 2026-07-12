@@ -2298,6 +2298,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   const [iluStrokeArrow, setIluStrokeArrow] = useState<number>(ANNOTATION_PRESETS.arrow.strokeWidthPx);
   const [iluStrokeCircleDashed, setIluStrokeCircleDashed] = useState<number>(ANNOTATION_PRESETS.circleDashed.strokeWidthPx);
+  // Transparansi isi solid untuk "lingkaran dashed" — hanya mempengaruhi
+  // isi lingkaran, bukan border. Transparansi keseluruhan (border+isi)
+  // diatur melalui panel Layer Ilustrasi.
+  const [iluCircleFillAlpha, setIluCircleFillAlpha] = useState<number>(0.25);
   const [iluZoneHatch, setIluZoneHatch] = useState<boolean>(false);
   const [iluNodeSize, setIluNodeSize] = useState<number>(1);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
@@ -6130,6 +6134,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
           text: iluText || "Label",
           hatch: iluKind === "zone" ? iluZoneHatch : undefined,
+          fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
           sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
           createdAt: 0,
         }, worldToScreen, view.s);
@@ -10706,18 +10711,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>
             )}
             {iluKind === "circleDashed" && (
-              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal border</span>
-                <Slider
-                  value={[iluStrokeCircleDashed]}
-                  min={4}
-                  max={120}
-                  step={1}
-                  onValueChange={(v) => setIluStrokeCircleDashed(v[0] ?? 20)}
-                  className="w-32"
-                />
-                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeCircleDashed)}</span>
-              </div>
+              <>
+                <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal border</span>
+                  <Slider
+                    value={[iluStrokeCircleDashed]}
+                    min={4}
+                    max={120}
+                    step={1}
+                    onValueChange={(v) => setIluStrokeCircleDashed(v[0] ?? 20)}
+                    className="w-32"
+                  />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeCircleDashed)}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Transparansi isi</span>
+                  <Slider
+                    value={[iluCircleFillAlpha]}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onValueChange={(v) => setIluCircleFillAlpha(v[0] ?? 0)}
+                    className="w-32"
+                  />
+                  <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluCircleFillAlpha * 100)}%</span>
+                </div>
+              </>
             )}
             {iluKind === "arrow" && (
               <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
@@ -10770,6 +10789,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     text: iluKind === "label" ? (iluText || "Label") : undefined,
                     fontScale: iluKind === "label" ? 1 : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
+                    fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);

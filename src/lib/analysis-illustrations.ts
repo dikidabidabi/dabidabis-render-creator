@@ -32,6 +32,9 @@ export type Annotation = {
   fontScale?: number;        // multiplier ukuran teks label (default 1)
   hatch?: boolean;           // zona: arsir 45° tanpa border (default false)
   sizeScale?: number;        // node/access: multiplier ukuran (default 1)
+  /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Tidak
+   *  mempengaruhi transparansi border. Default 0 (tidak ada isi). */
+  fillAlpha?: number;
   createdAt: number;
 };
 
@@ -163,6 +166,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       fontScale: Number.isFinite(Number(r.fontScale)) ? Math.max(0.4, Math.min(5, Number(r.fontScale))) : 1,
       hatch: r.hatch === true,
       sizeScale: Number.isFinite(Number(r.sizeScale)) ? Math.max(0.3, Math.min(6, Number(r.sizeScale))) : 1,
+      fillAlpha: Number.isFinite(Number(r.fillAlpha)) ? Math.max(0, Math.min(1, Number(r.fillAlpha))) : 0,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
     });
   }
@@ -251,6 +255,31 @@ function chevronSvg(
   barPath(angB, inB, `${keyPrefix}-h2`);
 }
 
+/**
+ * Pangkas polyline (screen-space) dari ujung terakhir mundur sejauh
+ * `inset` sepanjang arc-length. Menghapus sampel-sampel yang lebih dekat
+ * dari `inset` ke tip dan menyisipkan titik potong tepat pada jarak inset.
+ * Dipakai supaya ujung shaft panah dashed tidak melewati chevron di path
+ * tangent yang melengkung (sampel padat bisa membuat titik sebelum tip
+ * berada lebih dekat dari inset → segmen terakhir "membalik" ke belakang).
+ */
+function truncatePolylineAtInset(pts: Vec2[], inset: number): Vec2[] {
+  if (pts.length < 2 || inset <= 0) return pts.slice();
+  let remaining = inset;
+  for (let i = pts.length - 1; i > 0; i--) {
+    const cur = pts[i], prev = pts[i - 1];
+    const seg = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    if (seg >= remaining) {
+      const t = remaining / seg;
+      const nx = cur.x + (prev.x - cur.x) * t;
+      const ny = cur.y + (prev.y - cur.y) * t;
+      return [...pts.slice(0, i), { x: nx, y: ny }];
+    }
+    remaining -= seg;
+  }
+  return [pts[0]];
+}
+
 /** Render satu anotasi ke Canvas 2D. worldToScreen di-supply oleh caller. */
 export function drawAnnotationCanvas(
   ctx: CanvasRenderingContext2D,
@@ -328,14 +357,22 @@ export function drawAnnotationCanvas(
     if (a.points.length < 2) { ctx.restore(); return; }
     const c = worldToScreen(a.points[0]);
     const e = worldToScreen(a.points[1]);
-    const r = Math.hypot(e.x - c.x, e.y - c.y);
-    // Rasio dash 0.5:0.3 mengikuti panah dashed
+    const r = Math.max(1, Math.hypot(e.x - c.x, e.y - c.y));
+    // Isi solid (opsional) — hanya di dalam area lingkaran, tidak mempengaruhi border.
+    const fa = Math.max(0, Math.min(1, Number(a.fillAlpha) || 0));
+    if (fa > 0) {
+      ctx.fillStyle = withAlpha(a.color, fa);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Border dashed — rasio 0.5:0.3 mengikuti panah dashed
     ctx.setLineDash([sw * 0.5, sw * 0.3]);
     ctx.strokeStyle = a.color;
     ctx.lineWidth = sw;
     ctx.lineCap = "butt";
     ctx.beginPath();
-    ctx.arc(c.x, c.y, Math.max(1, r), 0, Math.PI * 2);
+    ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
@@ -409,16 +446,22 @@ export function drawAnnotationCanvas(
   }
 
   // arrow / arrowDashed / flow — semua pakai chevron head yang sama.
-  const sEndFull = worldToScreen(poly[poly.length - 1]);
-  const sPrevFull = worldToScreen(poly[poly.length - 2]);
-  const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
-  const tip = sEndFull;
-  // Ujung shaft berakhir di sudut DALAM chevron (bukan di ujung terluar tip).
+  const polyScreen = poly.map(worldToScreen);
+  const tip = polyScreen[polyScreen.length - 1];
   // barThick = sw*0.6 → inset di sepanjang sumbu panah = barThick * √2.
-  // Untuk arrowDashed, beri jarak ekstra 1× ketebalan antara ujung garis & sudut dalam chevron.
+  // Untuk arrowDashed, jarak ekstra 1× ketebalan antara ujung garis & sudut dalam chevron.
   const gap = a.kind === "arrowDashed" ? sw : 0;
   const inset = sw * 0.6 * Math.SQRT2 + gap;
-  const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
+  // Pangkas polyline dari tip mundur sepanjang arc-length sejauh inset. Ini
+  // mencegah "overshoot" pada tangent melengkung ketika sampel padat dekat
+  // tip lebih dekat dari inset (sebelumnya lineTo(innerTip) bisa berbalik
+  // ke belakang & dash rendering keluar dari chevron).
+  const shaftPts = truncatePolylineAtInset(polyScreen, inset);
+  const innerTip = shaftPts[shaftPts.length - 1];
+  // Angle chevron diambil dari innerTip → tip (arah pendekatan yang stabil
+  // pada arc-length `inset`, bukan segmen sampel terakhir yang bisa sangat
+  // pendek pada tangent).
+  const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
 
   ctx.lineCap = a.kind === "flow" ? "round" : "butt";
   ctx.lineJoin = a.kind === "flow" ? "round" : "miter";
@@ -428,9 +471,8 @@ export function drawAnnotationCanvas(
   ctx.strokeStyle = a.color;
   ctx.lineWidth = sw;
   ctx.beginPath();
-  const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
-  for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
-  ctx.lineTo(innerTip.x, innerTip.y);
+  ctx.moveTo(shaftPts[0].x, shaftPts[0].y);
+  for (let i = 1; i < shaftPts.length; i++) { ctx.lineTo(shaftPts[i].x, shaftPts[i].y); }
   ctx.stroke();
   ctx.setLineDash([]);
   drawChevronCanvas(ctx, tip, angH, a.color, sw);
@@ -492,6 +534,12 @@ export function annotationSvgElements(
     const e = worldToScreen(a.points[1]);
     const r = Math.max(1, Math.hypot(e.x - c.x, e.y - c.y));
     const dash = `${sw * 0.5},${sw * 0.3}`;
+    const fa = Math.max(0, Math.min(1, Number(a.fillAlpha) || 0));
+    if (fa > 0) {
+      nodes.push(React.createElement("circle", {
+        key: `${keyPrefix}-f`, cx: c.x, cy: c.y, r, fill: withAlpha(a.color, fa), stroke: "none",
+      }));
+    }
     nodes.push(React.createElement("circle", {
       key: `${keyPrefix}-p`, cx: c.x, cy: c.y, r, fill: "none",
       stroke: a.color, strokeWidth: sw, strokeDasharray: dash,
@@ -549,12 +597,13 @@ export function annotationSvgElements(
 
   // arrow / arrowDashed / flow — dash pattern beda, chevron head sama.
   const tip = pts[pts.length - 1];
-  const prev = pts[pts.length - 2];
-  const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
   const gap = a.kind === "arrowDashed" ? sw : 0;
   const inset = sw * 0.6 * Math.SQRT2 + gap;
-  const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
-  const shaftPts = [...pts.slice(0, -1), innerTip];
+  // Pangkas shaft di arc-length inset dari tip — hindari overshoot pada
+  // tangent melengkung dengan sampel padat dekat tip.
+  const shaftPts = truncatePolylineAtInset(pts, inset);
+  const innerTip = shaftPts[shaftPts.length - 1];
+  const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
   const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
   let strokeDasharray: string | undefined;
   let strokeLinecap: "butt" | "round" = "butt";
