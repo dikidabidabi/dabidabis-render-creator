@@ -357,14 +357,22 @@ export function drawAnnotationCanvas(
     if (a.points.length < 2) { ctx.restore(); return; }
     const c = worldToScreen(a.points[0]);
     const e = worldToScreen(a.points[1]);
-    const r = Math.hypot(e.x - c.x, e.y - c.y);
-    // Rasio dash 0.5:0.3 mengikuti panah dashed
+    const r = Math.max(1, Math.hypot(e.x - c.x, e.y - c.y));
+    // Isi solid (opsional) — hanya di dalam area lingkaran, tidak mempengaruhi border.
+    const fa = Math.max(0, Math.min(1, Number(a.fillAlpha) || 0));
+    if (fa > 0) {
+      ctx.fillStyle = withAlpha(a.color, fa);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Border dashed — rasio 0.5:0.3 mengikuti panah dashed
     ctx.setLineDash([sw * 0.5, sw * 0.3]);
     ctx.strokeStyle = a.color;
     ctx.lineWidth = sw;
     ctx.lineCap = "butt";
     ctx.beginPath();
-    ctx.arc(c.x, c.y, Math.max(1, r), 0, Math.PI * 2);
+    ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
