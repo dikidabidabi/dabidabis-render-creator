@@ -446,16 +446,22 @@ export function drawAnnotationCanvas(
   }
 
   // arrow / arrowDashed / flow — semua pakai chevron head yang sama.
-  const sEndFull = worldToScreen(poly[poly.length - 1]);
-  const sPrevFull = worldToScreen(poly[poly.length - 2]);
-  const angH = Math.atan2(sEndFull.y - sPrevFull.y, sEndFull.x - sPrevFull.x);
-  const tip = sEndFull;
-  // Ujung shaft berakhir di sudut DALAM chevron (bukan di ujung terluar tip).
+  const polyScreen = poly.map(worldToScreen);
+  const tip = polyScreen[polyScreen.length - 1];
   // barThick = sw*0.6 → inset di sepanjang sumbu panah = barThick * √2.
-  // Untuk arrowDashed, beri jarak ekstra 1× ketebalan antara ujung garis & sudut dalam chevron.
+  // Untuk arrowDashed, jarak ekstra 1× ketebalan antara ujung garis & sudut dalam chevron.
   const gap = a.kind === "arrowDashed" ? sw : 0;
   const inset = sw * 0.6 * Math.SQRT2 + gap;
-  const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
+  // Pangkas polyline dari tip mundur sepanjang arc-length sejauh inset. Ini
+  // mencegah "overshoot" pada tangent melengkung ketika sampel padat dekat
+  // tip lebih dekat dari inset (sebelumnya lineTo(innerTip) bisa berbalik
+  // ke belakang & dash rendering keluar dari chevron).
+  const shaftPts = truncatePolylineAtInset(polyScreen, inset);
+  const innerTip = shaftPts[shaftPts.length - 1];
+  // Angle chevron diambil dari innerTip → tip (arah pendekatan yang stabil
+  // pada arc-length `inset`, bukan segmen sampel terakhir yang bisa sangat
+  // pendek pada tangent).
+  const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
 
   ctx.lineCap = a.kind === "flow" ? "round" : "butt";
   ctx.lineJoin = a.kind === "flow" ? "round" : "miter";
@@ -465,9 +471,8 @@ export function drawAnnotationCanvas(
   ctx.strokeStyle = a.color;
   ctx.lineWidth = sw;
   ctx.beginPath();
-  const s0 = worldToScreen(poly[0]); ctx.moveTo(s0.x, s0.y);
-  for (let i = 1; i < poly.length - 1; i++) { const s = worldToScreen(poly[i]); ctx.lineTo(s.x, s.y); }
-  ctx.lineTo(innerTip.x, innerTip.y);
+  ctx.moveTo(shaftPts[0].x, shaftPts[0].y);
+  for (let i = 1; i < shaftPts.length; i++) { ctx.lineTo(shaftPts[i].x, shaftPts[i].y); }
   ctx.stroke();
   ctx.setLineDash([]);
   drawChevronCanvas(ctx, tip, angH, a.color, sw);
