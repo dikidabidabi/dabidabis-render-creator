@@ -216,7 +216,9 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
   const buildings: BuildingInfo[] = roots.map((r) => {
     const ownFloors = Math.max(1, Math.round(Number(r.floors) || 1));
     const ownArea = Number(r.areaM2) || polyAreaPx(r.points) / (pxm * pxm);
-    const agg = aggregate(r.id);
+    const rootLvl = levels.find((v) => v.id === r.levelId);
+    const rootMdpl = Number.isFinite(Number(rootLvl?.mdpl)) ? Number(rootLvl?.mdpl) : 0;
+    const agg = aggregate(r.id, rootMdpl);
     const totalFloors = ownFloors + agg.floors;
     const totalGfa = ownArea * ownFloors + agg.area;
     return {
