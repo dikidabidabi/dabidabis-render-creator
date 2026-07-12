@@ -32,6 +32,9 @@ export type Annotation = {
   fontScale?: number;        // multiplier ukuran teks label (default 1)
   hatch?: boolean;           // zona: arsir 45° tanpa border (default false)
   sizeScale?: number;        // node/access: multiplier ukuran (default 1)
+  /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Tidak
+   *  mempengaruhi transparansi border. Default 0 (tidak ada isi). */
+  fillAlpha?: number;
   createdAt: number;
 };
 
