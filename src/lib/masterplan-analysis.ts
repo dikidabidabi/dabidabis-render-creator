@@ -175,10 +175,10 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
     roots.push(l);
   }
 
-  function aggregate(rootId: string): { floors: number; area: number; subs: SubMassInfo[] } {
+  function aggregate(rootId: string, rootMdpl: number): { floors: number; area: number; subs: SubMassInfo[] } {
     let f = 0, a = 0;
     const subs: SubMassInfo[] = [];
-    const walk = (lid: string, baseFloors: number) => {
+    const walk = (lid: string, fallbackBaseM: number) => {
       for (const child of levels) {
         if (child.parentLayerId !== lid) continue;
         for (const ch of layers) {
@@ -188,6 +188,13 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
           const ca = Number(ch.areaM2) || polyAreaPx(ch.points) / (pxm * pxm);
           f += cf;
           a += ca * cf;
+          // Base elevation dari MDPL: relatif terhadap level root.
+          // Fallback ke stacking floor-based jika MDPL tidak valid.
+          const childMdpl = Number(child.mdpl);
+          const baseM = Number.isFinite(childMdpl)
+            ? Math.max(0, childMdpl - rootMdpl)
+            : fallbackBaseM;
+          const heightM = cf * 4;
           subs.push({
             name: ch.name || "Sub",
             color: ch.color || "#94a3b8",
@@ -195,10 +202,10 @@ function analyze(sk: AnySketch): MasterplanAnalysis {
             centroidPx: polyCentroid(ch.points),
             floors: cf,
             areaM2: ca,
-            heightM: cf * 4,
-            baseM: baseFloors * 4,
+            heightM,
+            baseM,
           });
-          walk(ch.id, baseFloors + cf);
+          walk(ch.id, baseM + heightM);
         }
       }
     };
