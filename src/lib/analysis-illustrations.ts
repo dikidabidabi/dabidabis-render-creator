@@ -255,6 +255,31 @@ function chevronSvg(
   barPath(angB, inB, `${keyPrefix}-h2`);
 }
 
+/**
+ * Pangkas polyline (screen-space) dari ujung terakhir mundur sejauh
+ * `inset` sepanjang arc-length. Menghapus sampel-sampel yang lebih dekat
+ * dari `inset` ke tip dan menyisipkan titik potong tepat pada jarak inset.
+ * Dipakai supaya ujung shaft panah dashed tidak melewati chevron di path
+ * tangent yang melengkung (sampel padat bisa membuat titik sebelum tip
+ * berada lebih dekat dari inset → segmen terakhir "membalik" ke belakang).
+ */
+function truncatePolylineAtInset(pts: Vec2[], inset: number): Vec2[] {
+  if (pts.length < 2 || inset <= 0) return pts.slice();
+  let remaining = inset;
+  for (let i = pts.length - 1; i > 0; i--) {
+    const cur = pts[i], prev = pts[i - 1];
+    const seg = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    if (seg >= remaining) {
+      const t = remaining / seg;
+      const nx = cur.x + (prev.x - cur.x) * t;
+      const ny = cur.y + (prev.y - cur.y) * t;
+      return [...pts.slice(0, i), { x: nx, y: ny }];
+    }
+    remaining -= seg;
+  }
+  return [pts[0]];
+}
+
 /** Render satu anotasi ke Canvas 2D. worldToScreen di-supply oleh caller. */
 export function drawAnnotationCanvas(
   ctx: CanvasRenderingContext2D,
