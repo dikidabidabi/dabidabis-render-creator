@@ -534,6 +534,12 @@ export function annotationSvgElements(
     const e = worldToScreen(a.points[1]);
     const r = Math.max(1, Math.hypot(e.x - c.x, e.y - c.y));
     const dash = `${sw * 0.5},${sw * 0.3}`;
+    const fa = Math.max(0, Math.min(1, Number(a.fillAlpha) || 0));
+    if (fa > 0) {
+      nodes.push(React.createElement("circle", {
+        key: `${keyPrefix}-f`, cx: c.x, cy: c.y, r, fill: withAlpha(a.color, fa), stroke: "none",
+      }));
+    }
     nodes.push(React.createElement("circle", {
       key: `${keyPrefix}-p`, cx: c.x, cy: c.y, r, fill: "none",
       stroke: a.color, strokeWidth: sw, strokeDasharray: dash,
