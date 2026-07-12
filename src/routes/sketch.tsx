@@ -10788,6 +10788,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     text: iluKind === "label" ? (iluText || "Label") : undefined,
                     fontScale: iluKind === "label" ? 1 : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
+                    fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
