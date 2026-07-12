@@ -2298,6 +2298,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   const [iluStrokeArrow, setIluStrokeArrow] = useState<number>(ANNOTATION_PRESETS.arrow.strokeWidthPx);
   const [iluStrokeCircleDashed, setIluStrokeCircleDashed] = useState<number>(ANNOTATION_PRESETS.circleDashed.strokeWidthPx);
+  // Transparansi isi solid untuk "lingkaran dashed" — hanya mempengaruhi
+  // isi lingkaran, bukan border. Transparansi keseluruhan (border+isi)
+  // diatur melalui panel Layer Ilustrasi.
+  const [iluCircleFillAlpha, setIluCircleFillAlpha] = useState<number>(0.25);
   const [iluZoneHatch, setIluZoneHatch] = useState<boolean>(false);
   const [iluNodeSize, setIluNodeSize] = useState<number>(1);
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
