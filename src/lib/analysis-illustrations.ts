@@ -597,12 +597,13 @@ export function annotationSvgElements(
 
   // arrow / arrowDashed / flow — dash pattern beda, chevron head sama.
   const tip = pts[pts.length - 1];
-  const prev = pts[pts.length - 2];
-  const angH = Math.atan2(tip.y - prev.y, tip.x - prev.x);
   const gap = a.kind === "arrowDashed" ? sw : 0;
   const inset = sw * 0.6 * Math.SQRT2 + gap;
-  const innerTip = { x: tip.x - Math.cos(angH) * inset, y: tip.y - Math.sin(angH) * inset };
-  const shaftPts = [...pts.slice(0, -1), innerTip];
+  // Pangkas shaft di arc-length inset dari tip — hindari overshoot pada
+  // tangent melengkung dengan sampel padat dekat tip.
+  const shaftPts = truncatePolylineAtInset(pts, inset);
+  const innerTip = shaftPts[shaftPts.length - 1];
+  const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
   const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
   let strokeDasharray: string | undefined;
   let strokeLinecap: "butt" | "round" = "butt";
