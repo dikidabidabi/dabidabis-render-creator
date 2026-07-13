@@ -9665,7 +9665,7 @@ function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) 
           {legend.length === 0 && <div style={{ color: "#94a3b8" }}>Belum ada ilustrasi.</div>}
           {legend.map((it, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ display: "inline-block", width: 22, height: 12, background: it.color, borderRadius: 3, opacity: 0.85 }} />
+              <LegendSymbol kind={it.kind} color={it.color} />
               <span style={{ flex: 1 }}>{it.label}</span>
               <span style={{ color: "#64748b" }}>×{it.count}</span>
             </div>
