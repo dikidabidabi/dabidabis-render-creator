@@ -6407,7 +6407,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -8374,6 +8374,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           points: [iluDraft.points[0], { x: p.x, y: p.y }],
           color: iluColor,
           strokeWidthPx: iluStrokeCircleDashed,
+          fillAlpha: iluCircleFillAlpha,
           createdAt: Date.now(),
         };
         const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "circleDashed");
