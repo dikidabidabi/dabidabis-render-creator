@@ -9681,6 +9681,92 @@ function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) 
   );
 }
 
+function LegendSymbol({ kind, color }: { kind: Annotation["kind"]; color: string }) {
+  const W = 28, H = 16;
+  const cy = H / 2;
+  const arrowHead = (x: number) => (
+    <polygon points={`${x},${cy} ${x - 6},${cy - 4} ${x - 6},${cy + 4}`} fill={color} />
+  );
+  switch (kind) {
+    case "arrow":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <line x1={2} y1={cy} x2={W - 6} y2={cy} stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+          {arrowHead(W - 2)}
+        </svg>
+      );
+    case "arrowDashed":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <line x1={2} y1={cy} x2={W - 6} y2={cy} stroke={color} strokeWidth={2.2} strokeDasharray="4,3" strokeLinecap="butt" />
+          {arrowHead(W - 2)}
+        </svg>
+      );
+    case "flow":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <line x1={2} y1={cy} x2={W - 6} y2={cy} stroke={color} strokeWidth={2.8} strokeDasharray="5,3" strokeLinecap="round" />
+          {arrowHead(W - 2)}
+        </svg>
+      );
+    case "zone":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <circle cx={W / 2} cy={cy} r={6} fill={color} fillOpacity={0.35} stroke={color} strokeWidth={1.2} />
+        </svg>
+      );
+    case "node": {
+      const r = 6.5;
+      const cx = W / 2;
+      const spokes = [];
+      for (let i = 0; i < 6; i++) {
+        const ang = (Math.PI * i) / 6;
+        spokes.push(
+          <line key={i}
+            x1={cx + Math.cos(ang) * r * 0.75} y1={cy + Math.sin(ang) * r * 0.75}
+            x2={cx - Math.cos(ang) * r * 0.75} y2={cy - Math.sin(ang) * r * 0.75}
+            stroke={color} strokeWidth={1.1} strokeLinecap="round" />
+        );
+      }
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <circle cx={cx} cy={cy} r={r} fill="#ffffff" stroke={color} strokeWidth={1.4} />
+          {spokes}
+          <circle cx={cx} cy={cy} r={r * 0.32} fill={color} />
+        </svg>
+      );
+    }
+    case "access":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <circle cx={W / 2} cy={cy} r={6.5} fill="#ffffff" stroke={color} strokeWidth={1.6} />
+        </svg>
+      );
+    case "border":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <circle cx={W / 2} cy={cy} r={6.5} fill="none" stroke={color} strokeWidth={1.8} />
+        </svg>
+      );
+    case "circleDashed":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <circle cx={W / 2} cy={cy} r={6.5} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.6} strokeDasharray="3,2" />
+        </svg>
+      );
+    case "label":
+      return (
+        <svg width={W} height={H} style={{ flexShrink: 0 }}>
+          <circle cx={4} cy={cy} r={2.2} fill={color} />
+          <line x1={4} y1={cy} x2={12} y2={cy} stroke={color} strokeWidth={1.2} />
+          <rect x={12} y={cy - 5} width={14} height={10} fill="#ffffff" stroke={color} strokeWidth={1} rx={1.5} />
+        </svg>
+      );
+    default:
+      return <span style={{ display: "inline-block", width: 22, height: 12, background: color, borderRadius: 3, opacity: 0.85 }} />;
+  }
+}
+
 
 
 
