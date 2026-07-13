@@ -6125,6 +6125,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const preset = ANNOTATION_PRESETS[iluKind];
       const previewPts = [...iluDraft.points, iluDraft.cursor];
       if (previewPts.length >= preset.minPts) {
+        // Terapkan alpha Layer Ilustrasi juga ke draft agar tampilan saat
+        // menggambar konsisten dengan setelah anotasi tersimpan (misal
+        // transparansi isi lingkaran dashed).
+        const draftAlpha = iluAlphaFor(iluCfg, iluKind);
+        ctx.save();
+        ctx.globalAlpha = ctx.globalAlpha * draftAlpha;
         drawAnnotationCanvas(ctx, {
           id: "_draft",
           kind: iluKind,
@@ -6138,6 +6144,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
           createdAt: 0,
         }, worldToScreen, view.s);
+        ctx.restore();
       }
 
       ctx.fillStyle = iluColor;
