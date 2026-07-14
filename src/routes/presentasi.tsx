@@ -9389,10 +9389,16 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
                 // Depth attenuation (front buildings darker)
                 const depth = 1 - (b.centroidPx.y - bx.minY) / Math.max(1, bx.maxY - bx.minY);
                 const fade = 0.55 + 0.45 * depth;
+                const rootFloors = Math.max(1, Math.round(b.heightM / 4));
                 return (
                   <g key={b.id}>
                     {/* Root mass */}
                     <rect x={x} y={y} width={w} height={h} fill={mpStroke(b.name, b.color)} opacity={fade} stroke="#0f172a" strokeWidth={0.6} />
+                    {/* Floor lines on root */}
+                    {Array.from({ length: rootFloors - 1 }, (_, fi) => {
+                      const fy = groundY - (fi + 1) * 4 * sy;
+                      return <line key={`rf-${fi}`} x1={x} y1={fy} x2={x + w} y2={fy} stroke="#0f172a" strokeWidth={0.4} opacity={0.45} />;
+                    })}
                     {/* Sub masses stacked with own colors */}
                     {b.subMasses.map((s, k) => {
                       const sxs = s.polygonPx.map((p) => p.x);
@@ -9404,9 +9410,14 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
                       return (
                         <g key={k}>
                           <rect x={sx} y={sy2} width={sw} height={sh} fill={mpStroke(s.name, s.color)} opacity={fade * 0.95} stroke="#0f172a" strokeWidth={0.5} />
+                          {/* Floor lines on sub */}
+                          {Array.from({ length: Math.max(0, s.floors - 1) }, (_, fi) => {
+                            const fy = sy2 + sh - (fi + 1) * 4 * sy;
+                            return <line key={`sf-${k}-${fi}`} x1={sx} y1={fy} x2={sx + sw} y2={fy} stroke="#0f172a" strokeWidth={0.4} opacity={0.5} />;
+                          })}
                           {sh > 22 && (
                             <text x={sx + sw / 2} y={sy2 + sh / 2 + 3} textAnchor="middle" fontSize={8} fill="#0f172a" style={{ pointerEvents: "none" }}>
-                              {s.name}
+                              {s.name} · {s.floors}L
                             </text>
                           )}
                         </g>
@@ -9414,7 +9425,7 @@ function MasterPlanBodyFromSketch({ a }: { a: MasterplanAnalysis }) {
                     })}
                     {h > 26 && (
                       <text x={x + w / 2} y={y - 4} textAnchor="middle" fontSize={9} fill="#0f172a">
-                        {b.heightM.toFixed(0)}m
+                        {b.heightM.toFixed(0)}m · {rootFloors}L
                       </text>
                     )}
                     <rect x={x + w} y={groundY - 1} width={h * 0.35} height={2} fill="#0f172a" opacity={0.25} />
