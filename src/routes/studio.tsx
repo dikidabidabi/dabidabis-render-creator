@@ -2102,6 +2102,8 @@ function StudioPage() {
                     return "#ec4899";
                   case "edit":
                     return "#06b6d4";
+                  case "upload":
+                    return "#6366f1";
                   default:
                     return "#888";
                 }
