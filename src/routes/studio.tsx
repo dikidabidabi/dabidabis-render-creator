@@ -2011,6 +2011,9 @@ function StudioPage() {
               <DropdownMenuItem onClick={() => spawnNode("input")}>
                 <ImageIcon className="mr-2 h-3 w-3 text-sky-500" /> 1 · 3D Input
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("upload")}>
+                <Upload className="mr-2 h-3 w-3 text-indigo-500" /> 1b · Unggah Input (Eksternal)
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("prompt")}>
                 <Wand2 className="mr-2 h-3 w-3 text-violet-500" /> 2 · Prompt & Style
               </DropdownMenuItem>
