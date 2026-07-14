@@ -258,7 +258,7 @@ function NodeShell({
 }: {
   title: string;
   icon: React.ReactNode;
-  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit";
+  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload";
   children: React.ReactNode;
   hasTarget?: boolean;
   hasSource?: boolean;
@@ -272,6 +272,7 @@ function NodeShell({
     output: "border-emerald-500/40 bg-emerald-500/5",
     reference: "border-pink-500/40 bg-pink-500/5",
     edit: "border-cyan-500/40 bg-cyan-500/5",
+    upload: "border-indigo-500/40 bg-indigo-500/5",
   } as const;
   return (
     <div
@@ -461,7 +462,130 @@ function InputNode({ id, data }: NodeProps) {
   );
 }
 
-// ---------- Prompt Node ----------
+// ---------- Upload Input Node (gambar eksternal, tanpa 3D screenshot) ----------
+type UploadNodeData = {
+  kind: "upload";
+  sketchId: string; // synthetic id (upload-<uid>) — reused by Output/executor
+  sketchTitle: string; // editable label, mis. "Unggahan Eksternal"
+  selectedShotId: string | null;
+  uploads: UploadedShot[];
+};
+
+function UploadNode({ id, data }: NodeProps) {
+  const d = data as UploadNodeData;
+  const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const uploads = d.uploads ?? [];
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const readers = Array.from(files).map(
+      (f) =>
+        new Promise<UploadedShot>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () =>
+            resolve({ id: crypto.randomUUID(), dataUrl: fr.result as string, name: f.name });
+          fr.onerror = () => reject(fr.error);
+          fr.readAsDataURL(f);
+        }),
+    );
+    try {
+      const newOnes = await Promise.all(readers);
+      updateNode(id, { uploads: [...uploads, ...newOnes] });
+    } catch {
+      toast.error("Gagal membaca file");
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const removeUpload = (uid: string) => {
+    updateNode(id, {
+      uploads: uploads.filter((u) => u.id !== uid),
+      selectedShotId: d.selectedShotId === uid ? null : d.selectedShotId,
+    });
+  };
+
+  return (
+    <NodeShell
+      title="Unggah Input"
+      icon={<Upload className="h-3.5 w-3.5 text-indigo-500" />}
+      tone="upload"
+      hasSource
+      onRemove={() => removeNode(id)}
+    >
+      <div className="space-y-2">
+        <input
+          value={d.sketchTitle}
+          onChange={(e) => updateNode(id, { sketchTitle: e.target.value })}
+          className="w-full rounded border border-border/60 bg-background px-2 py-1 text-[11px] font-medium outline-none focus:border-indigo-500"
+          placeholder="Nama sumber (mis. Konsep Klien)"
+        />
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-muted-foreground">
+            {uploads.length} gambar diunggah
+          </span>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 hover:bg-indigo-500/25"
+          >
+            <Upload className="h-3 w-3" /> Unggah
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handleUpload(e.target.files)}
+          />
+        </div>
+        {uploads.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex h-24 w-full flex-col items-center justify-center gap-1 rounded border-2 border-dashed border-indigo-500/40 bg-indigo-500/5 text-[11px] text-indigo-600 hover:bg-indigo-500/10"
+          >
+            <Upload className="h-4 w-4" />
+            Unggah gambar dari luar (JPG/PNG)
+          </button>
+        ) : (
+          <div className="grid max-h-40 grid-cols-3 gap-1 overflow-y-auto">
+            {uploads.map((u) => (
+              <div key={u.id} className="group relative">
+                <button
+                  type="button"
+                  onClick={() => updateNode(id, { selectedShotId: u.id })}
+                  className={cn(
+                    "block w-full overflow-hidden rounded border-2 transition",
+                    d.selectedShotId === u.id
+                      ? "border-ember ring-1 ring-ember/50"
+                      : "border-transparent hover:border-border",
+                  )}
+                >
+                  <img src={u.dataUrl} alt={u.name ?? ""} className="aspect-[4/3] w-full object-cover" />
+                </button>
+                <button
+                  onClick={() => removeUpload(u.id)}
+                  className="absolute right-0.5 top-0.5 rounded bg-black/70 p-0.5 text-white opacity-0 transition group-hover:opacity-100 hover:bg-red-500/80"
+                  title="Hapus gambar"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[9px] leading-tight text-muted-foreground">
+          Setiap gambar akan dirender sebagai satu output. Hubungkan ke <b>Prompt & Style</b>.
+        </p>
+      </div>
+    </NodeShell>
+  );
+}
+
+
 function PromptNode({ id, data }: NodeProps) {
   const d = data as PromptNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
@@ -1645,7 +1769,7 @@ function StudioPage() {
   // Spawn node from dropdown. For input/output, an optional sketchId picks
   // the sketch to bind — otherwise the first sketch is used.
   const spawnNode = (
-    kind: "input" | "prompt" | "render" | "output" | "reference" | "edit",
+    kind: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload",
     sketchId?: string,
   ) => {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
@@ -1711,6 +1835,19 @@ function StudioPage() {
           image: null,
           label: "Referensi Style",
         } satisfies ReferenceNodeData,
+      };
+    } else if (kind === "upload") {
+      node = {
+        id: `upload-${uid}`,
+        type: "upload",
+        position: anchor,
+        data: {
+          kind: "upload",
+          sketchId: `upload-${uid}`,
+          sketchTitle: "Unggahan Eksternal",
+          selectedShotId: null,
+          uploads: [],
+        } satisfies UploadNodeData,
       };
     } else if (kind === "edit") {
       toast.info("Node Edit dibuat dari klik gambar di Output — lalu tekan 'Jadikan Node'.");
@@ -1818,6 +1955,7 @@ function StudioPage() {
       ),
       reference: ReferenceNode,
       edit: EditNode,
+      upload: UploadNode,
     }),
     [],
   );
@@ -1872,6 +2010,9 @@ function StudioPage() {
               <DropdownMenuLabel>Jenis Node</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => spawnNode("input")}>
                 <ImageIcon className="mr-2 h-3 w-3 text-sky-500" /> 1 · 3D Input
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("upload")}>
+                <Upload className="mr-2 h-3 w-3 text-indigo-500" /> 1b · Unggah Input (Eksternal)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("prompt")}>
                 <Wand2 className="mr-2 h-3 w-3 text-violet-500" /> 2 · Prompt & Style
@@ -1961,6 +2102,8 @@ function StudioPage() {
                     return "#ec4899";
                   case "edit":
                     return "#06b6d4";
+                  case "upload":
+                    return "#6366f1";
                   default:
                     return "#888";
                 }
