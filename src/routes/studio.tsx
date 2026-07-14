@@ -1769,7 +1769,7 @@ function StudioPage() {
   // Spawn node from dropdown. For input/output, an optional sketchId picks
   // the sketch to bind — otherwise the first sketch is used.
   const spawnNode = (
-    kind: "input" | "prompt" | "render" | "output" | "reference" | "edit",
+    kind: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload",
     sketchId?: string,
   ) => {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
