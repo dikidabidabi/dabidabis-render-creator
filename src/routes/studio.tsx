@@ -1942,6 +1942,7 @@ function StudioPage() {
       ),
       reference: ReferenceNode,
       edit: EditNode,
+      upload: UploadNode,
     }),
     [],
   );
