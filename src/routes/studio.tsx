@@ -1836,6 +1836,19 @@ function StudioPage() {
           label: "Referensi Style",
         } satisfies ReferenceNodeData,
       };
+    } else if (kind === "upload") {
+      node = {
+        id: `upload-${uid}`,
+        type: "upload",
+        position: anchor,
+        data: {
+          kind: "upload",
+          sketchId: `upload-${uid}`,
+          sketchTitle: "Unggahan Eksternal",
+          selectedShotId: null,
+          uploads: [],
+        } satisfies UploadNodeData,
+      };
     } else if (kind === "edit") {
       toast.info("Node Edit dibuat dari klik gambar di Output — lalu tekan 'Jadikan Node'.");
       return;
