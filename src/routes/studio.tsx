@@ -258,7 +258,7 @@ function NodeShell({
 }: {
   title: string;
   icon: React.ReactNode;
-  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit";
+  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload";
   children: React.ReactNode;
   hasTarget?: boolean;
   hasSource?: boolean;
@@ -272,6 +272,7 @@ function NodeShell({
     output: "border-emerald-500/40 bg-emerald-500/5",
     reference: "border-pink-500/40 bg-pink-500/5",
     edit: "border-cyan-500/40 bg-cyan-500/5",
+    upload: "border-indigo-500/40 bg-indigo-500/5",
   } as const;
   return (
     <div
