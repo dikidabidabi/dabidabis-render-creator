@@ -232,6 +232,53 @@ function R3FRefCapture({
   return null;
 }
 
+function VerticalPerspectiveCorrection({
+  controlsRef,
+}: {
+  controlsRef: React.MutableRefObject<any>;
+}) {
+  const { size } = useThree();
+  useEffect(() => {
+    return () => {
+      const ctrl = controlsRef.current;
+      const cam = ctrl?.object as THREE.PerspectiveCamera | undefined;
+      if (cam && (cam as any).isPerspectiveCamera) cam.clearViewOffset();
+    };
+  }, [controlsRef]);
+  useFrame(() => {
+    const ctrl = controlsRef.current;
+    if (!ctrl?.object) return;
+    const cam = ctrl.object as THREE.PerspectiveCamera;
+    if (!(cam as any).isPerspectiveCamera) return;
+    const target = ctrl.target as THREE.Vector3;
+    const dx = target.x - cam.position.x;
+    const dz = target.z - cam.position.z;
+    const dy = target.y - cam.position.y;
+    const horiz = Math.hypot(dx, dz);
+    if (horiz < 1e-3) return;
+    cam.up.set(0, 1, 0);
+    cam.lookAt(target.x, cam.position.y, target.z);
+    const fovY = (cam.fov * Math.PI) / 180;
+    const ndcY = dy / horiz / Math.tan(fovY / 2);
+    const shiftPx = -ndcY * (size.height / 2);
+    cam.setViewOffset(size.width, size.height, 0, shiftPx, size.width, size.height);
+  });
+  return null;
+}
+
+function toBW(hex: string): string {
+  const h = hex.replace("#", "");
+  if (h.length < 6) return "#c8c8c8";
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  const v = Math.max(160, Math.min(230, l));
+  const s = v.toString(16).padStart(2, "0");
+  return `#${s}${s}${s}`;
+}
+
+
 
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
