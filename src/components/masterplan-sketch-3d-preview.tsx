@@ -283,10 +283,44 @@ function toBW(hex: string): string {
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  const [projection, setProjection] = useState<"persp" | "axon">("persp");
+  const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
+  const [noLight, setNoLight] = useState(false);
+  const [autoTilt, setAutoTilt] = useState(false);
+  const [hasSavedView, setHasSavedView] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
+  const orbitRef = useRef<any>(null);
   const r3fRef = useRef<{ gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera } | null>(null);
   const mPerPx = metersPerPx(sketch.scale);
+
+  const viewKey = `dabidabis_masterplan3d_view_${sketch.id}`;
+  useEffect(() => {
+    try { setHasSavedView(!!localStorage.getItem(viewKey)); } catch { setHasSavedView(false); }
+  }, [viewKey]);
+  const savePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    const cam = ctrl.object as THREE.Camera;
+    const t = ctrl.target as THREE.Vector3;
+    try {
+      localStorage.setItem(viewKey, JSON.stringify({ pos: [cam.position.x, cam.position.y, cam.position.z], target: [t.x, t.y, t.z] }));
+      setHasSavedView(true);
+    } catch { /* ignore */ }
+  }, [viewKey]);
+  const restorePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    try {
+      const raw = localStorage.getItem(viewKey);
+      if (!raw) return;
+      const { pos, target } = JSON.parse(raw) as { pos: number[]; target: number[] };
+      ctrl.object.position.set(pos[0], pos[1], pos[2]);
+      ctrl.target.set(target[0], target[1], target[2]);
+      ctrl.update();
+    } catch { /* ignore */ }
+  }, [viewKey]);
+
 
   const shotsKey = `dabidabis_model3d_shots_${sketch.id}`;
   const [shots, setShots] = useState<Shot[]>([]);
