@@ -4,8 +4,8 @@
 // Studio page's Input node can consume them automatically.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, Edges, PerspectiveCamera } from "@react-three/drei";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { OrbitControls, Edges, PerspectiveCamera, OrthographicCamera } from "@react-three/drei";
 import * as THREE from "three";
 import {
   RefreshCw,
@@ -15,7 +15,14 @@ import {
   Camera,
   Trash2,
   Download,
+  Palette,
+  Move3d,
+  Sun,
+  SunDim,
+  Save,
+  RotateCcw,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { solidColorForRoomName } from "@/lib/room-color";
 import {
@@ -225,14 +232,95 @@ function R3FRefCapture({
   return null;
 }
 
+function VerticalPerspectiveCorrection({
+  controlsRef,
+}: {
+  controlsRef: React.MutableRefObject<any>;
+}) {
+  const { size } = useThree();
+  useEffect(() => {
+    return () => {
+      const ctrl = controlsRef.current;
+      const cam = ctrl?.object as THREE.PerspectiveCamera | undefined;
+      if (cam && (cam as any).isPerspectiveCamera) cam.clearViewOffset();
+    };
+  }, [controlsRef]);
+  useFrame(() => {
+    const ctrl = controlsRef.current;
+    if (!ctrl?.object) return;
+    const cam = ctrl.object as THREE.PerspectiveCamera;
+    if (!(cam as any).isPerspectiveCamera) return;
+    const target = ctrl.target as THREE.Vector3;
+    const dx = target.x - cam.position.x;
+    const dz = target.z - cam.position.z;
+    const dy = target.y - cam.position.y;
+    const horiz = Math.hypot(dx, dz);
+    if (horiz < 1e-3) return;
+    cam.up.set(0, 1, 0);
+    cam.lookAt(target.x, cam.position.y, target.z);
+    const fovY = (cam.fov * Math.PI) / 180;
+    const ndcY = dy / horiz / Math.tan(fovY / 2);
+    const shiftPx = -ndcY * (size.height / 2);
+    cam.setViewOffset(size.width, size.height, 0, shiftPx, size.width, size.height);
+  });
+  return null;
+}
+
+function toBW(hex: string): string {
+  const h = hex.replace("#", "");
+  if (h.length < 6) return "#c8c8c8";
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  const v = Math.max(160, Math.min(230, l));
+  const s = v.toString(16).padStart(2, "0");
+  return `#${s}${s}${s}`;
+}
+
+
 
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  const [projection, setProjection] = useState<"persp" | "axon">("persp");
+  const [colorMode, setColorMode] = useState<"sketch" | "bw">("sketch");
+  const [noLight, setNoLight] = useState(false);
+  const [autoTilt, setAutoTilt] = useState(false);
+  const [hasSavedView, setHasSavedView] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
+  const orbitRef = useRef<any>(null);
   const r3fRef = useRef<{ gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera } | null>(null);
   const mPerPx = metersPerPx(sketch.scale);
+
+  const viewKey = `dabidabis_masterplan3d_view_${sketch.id}`;
+  useEffect(() => {
+    try { setHasSavedView(!!localStorage.getItem(viewKey)); } catch { setHasSavedView(false); }
+  }, [viewKey]);
+  const savePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    const cam = ctrl.object as THREE.Camera;
+    const t = ctrl.target as THREE.Vector3;
+    try {
+      localStorage.setItem(viewKey, JSON.stringify({ pos: [cam.position.x, cam.position.y, cam.position.z], target: [t.x, t.y, t.z] }));
+      setHasSavedView(true);
+    } catch { /* ignore */ }
+  }, [viewKey]);
+  const restorePerspectiveView = useCallback(() => {
+    const ctrl = orbitRef.current;
+    if (!ctrl?.object) return;
+    try {
+      const raw = localStorage.getItem(viewKey);
+      if (!raw) return;
+      const { pos, target } = JSON.parse(raw) as { pos: number[]; target: number[] };
+      ctrl.object.position.set(pos[0], pos[1], pos[2]);
+      ctrl.target.set(target[0], target[1], target[2]);
+      ctrl.update();
+    } catch { /* ignore */ }
+  }, [viewKey]);
+
 
   const shotsKey = `dabidabis_model3d_shots_${sketch.id}`;
   const [shots, setShots] = useState<Shot[]>([]);
@@ -411,6 +499,38 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
         <div className="rounded-md border border-border/40 bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
           <BoxIcon className="mr-1 inline h-3 w-3" /> Pratinjau 3D
         </div>
+        <div className="flex overflow-hidden rounded-md border border-border/40 bg-background/80 text-xs backdrop-blur">
+          <button
+            type="button"
+            onClick={() => setProjection("persp")}
+            className={cn("px-2 py-1 transition-colors", projection === "persp" ? "bg-primary text-primary-foreground" : "hover:bg-background")}
+          >
+            Perspektif
+          </button>
+          <button
+            type="button"
+            onClick={() => setProjection("axon")}
+            className={cn("px-2 py-1 transition-colors", projection === "axon" ? "bg-primary text-primary-foreground" : "hover:bg-background")}
+          >
+            Aksonometri
+          </button>
+        </div>
+        <div className="flex overflow-hidden rounded-md border border-border/40 bg-background/80 text-xs backdrop-blur">
+          <button
+            type="button"
+            onClick={() => setColorMode("sketch")}
+            className={cn("flex items-center gap-1 px-2 py-1 transition-colors", colorMode === "sketch" ? "bg-primary text-primary-foreground" : "hover:bg-background")}
+          >
+            <Palette className="h-3 w-3" /> Warna
+          </button>
+          <button
+            type="button"
+            onClick={() => setColorMode("bw")}
+            className={cn("px-2 py-1 transition-colors", colorMode === "bw" ? "bg-primary text-primary-foreground" : "hover:bg-background")}
+          >
+            Hitam-Putih
+          </button>
+        </div>
         <Button variant="outline" size="sm" onClick={takeScreenshot} title="Screenshot"
           className="h-7 bg-background/80 backdrop-blur">
           <Camera className="mr-1 h-3 w-3" /> Screenshot
@@ -423,6 +543,48 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
           className="h-7 bg-background/80 backdrop-blur">
           4K
         </Button>
+        {projection === "persp" && (
+          <>
+            <Button
+              variant={autoTilt ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAutoTilt((v) => !v)}
+              title="Koreksi perspektif vertikal (garis vertikal tetap lurus)"
+              className="h-7 bg-background/80 backdrop-blur"
+            >
+              <Move3d className="mr-1 h-3 w-3" /> {autoTilt ? "Koreksi V: On" : "Koreksi V"}
+            </Button>
+            <Button
+              variant={noLight ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setNoLight((v) => !v); setTick((t) => t + 1); }}
+              title="Matikan cahaya & bayangan"
+              className="h-7 bg-background/80 backdrop-blur"
+            >
+              {noLight ? <SunDim className="mr-1 h-3 w-3" /> : <Sun className="mr-1 h-3 w-3" />}
+              {noLight ? "No Light" : "Cahaya"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={savePerspectiveView}
+              title="Simpan sudut pandang perspektif"
+              className="h-7 bg-background/80 backdrop-blur"
+            >
+              <Save className="mr-1 h-3 w-3" /> Save View
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={restorePerspectiveView}
+              disabled={!hasSavedView}
+              title="Pulihkan sudut pandang tersimpan"
+              className="h-7 bg-background/80 backdrop-blur disabled:opacity-50"
+            >
+              <RotateCcw className="mr-1 h-3 w-3" /> Restore
+            </Button>
+          </>
+        )}
         <Button variant="outline" size="sm" onClick={() => setTick((t) => t + 1)} title="Perbarui"
           className="h-7 bg-background/80 backdrop-blur">
           <RefreshCw className="mr-1 h-3 w-3" /> Update
@@ -436,26 +598,43 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
         </Button>
       </div>
       <div ref={canvasWrapRef} style={{ height: fullscreen ? "100vh" : 360 }} className="w-full">
-        <Canvas key={tick} shadows dpr={[1, 1.5]} gl={{ preserveDrawingBuffer: true }}>
+        <Canvas key={`${tick}-${projection}-${noLight ? "nl" : "l"}`} shadows={!noLight} dpr={[1, 1.5]} gl={{ preserveDrawingBuffer: true }}>
           <R3FRefCapture target={r3fRef} />
-          <PerspectiveCamera
-            makeDefault
-            position={[camDist * 0.7, camDist * 0.8, camDist * 0.7]}
-            fov={40}
-            near={0.1}
-            far={camDist * 10}
-          />
-          <ambientLight intensity={0.55} />
-          <directionalLight
-            position={[bound, bound * 1.5, bound * 0.6]}
-            intensity={1.1}
-            castShadow
-            shadow-mapSize-width={1024}
-            shadow-mapSize-height={1024}
-          />
+          <color attach="background" args={[colorMode === "bw" ? "#f3f3f3" : "#eef1f4"]} />
+          {projection === "persp" ? (
+            <PerspectiveCamera
+              makeDefault
+              position={[camDist * 0.7, camDist * 0.8, camDist * 0.7]}
+              fov={40}
+              near={0.1}
+              far={camDist * 10}
+            />
+          ) : (
+            <OrthographicCamera
+              makeDefault
+              position={[camDist, camDist, camDist]}
+              zoom={Math.max(2, 400 / Math.max(40, camDist))}
+              near={-camDist * 10}
+              far={camDist * 10}
+            />
+          )}
+          {noLight ? (
+            <ambientLight intensity={1.0} />
+          ) : (
+            <>
+              <ambientLight intensity={0.55} />
+              <directionalLight
+                position={[bound, bound * 1.5, bound * 0.6]}
+                intensity={1.1}
+                castShadow
+                shadow-mapSize-width={1024}
+                shadow-mapSize-height={1024}
+              />
+            </>
+          )}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
             <planeGeometry args={[bound * 6, bound * 6]} />
-            <meshStandardMaterial color="#e2e8f0" roughness={1} />
+            <meshStandardMaterial color={colorMode === "bw" ? "#e5e5e5" : "#e2e8f0"} roughness={1} />
           </mesh>
           {meshes.map((m) => (
             <ExtrudedMesh
@@ -465,7 +644,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               mPerPx={mPerPx}
               baseY={m.base}
               height={m.h}
-              color={m.color}
+              color={colorMode === "bw" ? toBW(m.color) : m.color}
             />
           ))}
           {meshes.map((m) =>
@@ -493,13 +672,16 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             />
           ))}
           <OrbitControls
+            ref={orbitRef}
             makeDefault
             enableDamping
             target={[0, bound * 0.15, 0]}
             maxPolarAngle={Math.PI / 2 - 0.02}
           />
+          {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
         </Canvas>
       </div>
+
 
       {/* Library Screenshot */}
       <div className={fullscreen
