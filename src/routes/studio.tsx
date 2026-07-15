@@ -1968,9 +1968,35 @@ function StudioPage() {
       toast.error("Belum ada screenshot 3D. Ambil screenshot di halaman 3D Model / Master Plan dahulu.");
       return;
     }
-    const { nodes, edges } = buildPreset(withShots);
-    setGraph({ nodes, edges, outputs: graph.outputs });
-    toast.success(`Preset dimuat: ${withShots.length} sketsa`);
+    // Preserve "upload" nodes and any node/edge reachable from them (both directions).
+    const keepIds = new Set<string>();
+    for (const n of graph.nodes) if (n.type === "upload") keepIds.add(n.id);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const e of graph.edges) {
+        if (keepIds.has(e.source) && !keepIds.has(e.target)) { keepIds.add(e.target); changed = true; }
+        if (keepIds.has(e.target) && !keepIds.has(e.source)) { keepIds.add(e.source); changed = true; }
+      }
+    }
+    const keptNodes = graph.nodes.filter((n) => keepIds.has(n.id));
+    const keptEdges = graph.edges.filter((e) => keepIds.has(e.source) && keepIds.has(e.target));
+    const { nodes: presetNodes, edges: presetEdges } = buildPreset(withShots);
+    // Offset preset nodes below kept upload chains to avoid overlap
+    const maxY = keptNodes.reduce((m, n) => Math.max(m, (n.position?.y ?? 0) + 200), 0);
+    const shiftedPreset = keptNodes.length
+      ? presetNodes.map((n) => ({ ...n, position: { x: n.position.x, y: n.position.y + maxY } }))
+      : presetNodes;
+    setGraph({
+      nodes: [...keptNodes, ...shiftedPreset],
+      edges: [...keptEdges, ...presetEdges],
+      outputs: graph.outputs,
+    });
+    toast.success(
+      keptNodes.length
+        ? `Preset dimuat: ${withShots.length} sketsa (${keptNodes.filter((n) => n.type === "upload").length} unggah input dipertahankan)`
+        : `Preset dimuat: ${withShots.length} sketsa`,
+    );
   };
 
 
