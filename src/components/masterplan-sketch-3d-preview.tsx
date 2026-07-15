@@ -4,8 +4,8 @@
 // Studio page's Input node can consume them automatically.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, Edges, PerspectiveCamera } from "@react-three/drei";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { OrbitControls, Edges, PerspectiveCamera, OrthographicCamera } from "@react-three/drei";
 import * as THREE from "three";
 import {
   RefreshCw,
@@ -15,7 +15,14 @@ import {
   Camera,
   Trash2,
   Download,
+  Palette,
+  Move3d,
+  Sun,
+  SunDim,
+  Save,
+  RotateCcw,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { solidColorForRoomName } from "@/lib/room-color";
 import {
