@@ -14,6 +14,8 @@ export type RenderAngle = {
   status: "idle" | "processing" | "done" | "error";
   progress: number;
   error?: string;
+  credits?: number; // Lovable credits used for this angle
+  model?: string; // model id used
 };
 
 export type StudioGraph = {

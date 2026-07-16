@@ -184,6 +184,22 @@ const ANGLE_PROMPT: Record<string, string> = {
   "Worm's Eye": "sudut pandang worm's eye / low angle mendongak, kesan monumental",
 };
 
+// Perkiraan biaya kredit Lovable per gambar per model (berdasarkan log AI Gateway).
+// Digunakan untuk menampilkan estimasi pemakaian kredit & rupiah di node output.
+const MODEL_CREDIT_COST: Record<string, number> = {
+  "google/gemini-2.5-flash-image": 0.039,
+  "google/gemini-3.1-flash-image": 0.039,
+  "google/gemini-3-pro-image": 0.56,
+};
+// 1 kredit Lovable ≈ Rp 4.000 (Pro plan: $25 / 100 kredit @ ~Rp 16.000/USD).
+const IDR_PER_CREDIT = 4000;
+function estimateCredits(model?: string): number {
+  return MODEL_CREDIT_COST[model ?? ""] ?? MODEL_CREDIT_COST["google/gemini-2.5-flash-image"];
+}
+function formatIDR(v: number): string {
+  return "Rp " + Math.round(v).toLocaleString("id-ID");
+}
+
 // ---------- Node data types ----------
 type UploadedShot = { id: string; dataUrl: string; name?: string };
 type InputNodeData = {
@@ -218,6 +234,8 @@ type OutputNodeData = {
   standaloneStatus?: "idle" | "processing" | "done" | "error";
   standaloneProgress?: number;
   standaloneError?: string;
+  standaloneCredits?: number;
+  standaloneModel?: string;
 };
 type ReferenceNodeData = {
   kind: "reference";
@@ -922,6 +940,27 @@ function OutputNode({
               {d.standaloneError ?? "Render gagal."}
             </p>
           )}
+          {d.standaloneImage && d.standaloneCredits ? (
+            <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px] space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-emerald-600">Kredit Lovable terpakai</span>
+                <span className="font-semibold tabular-nums text-emerald-600">
+                  {d.standaloneCredits.toFixed(3)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Estimasi biaya</span>
+                <span className="font-semibold tabular-nums text-foreground">
+                  {formatIDR(d.standaloneCredits * IDR_PER_CREDIT)}
+                </span>
+              </div>
+              {d.standaloneModel && (
+                <div className="text-[9px] text-muted-foreground">
+                  {d.standaloneModel.replace("google/", "")}
+                </div>
+              )}
+            </div>
+          ) : null}
           {d.standaloneImage && (
             <Button
               size="sm"
@@ -962,6 +1001,8 @@ function OutputNode({
     ? Math.round(outputs.reduce((s, o) => s + o.progress, 0) / outputs.length)
     : 0;
   const anyProcessing = outputs.some((o) => o.status === "processing");
+  const totalCredits = outputs.reduce((s, o) => s + (o.credits ?? 0), 0);
+  const usedModels = Array.from(new Set(outputs.map((o) => o.model).filter(Boolean))) as string[];
 
   return (
     <NodeShell
@@ -1068,6 +1109,25 @@ function OutputNode({
             </div>
           ))}
         </div>
+        {done > 0 && totalCredits > 0 && (
+          <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px] space-y-0.5">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-emerald-600">Kredit Lovable terpakai</span>
+              <span className="font-semibold tabular-nums text-emerald-600">
+                {totalCredits.toFixed(3)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Estimasi biaya</span>
+              <span className="font-semibold tabular-nums text-foreground">
+                {formatIDR(totalCredits * IDR_PER_CREDIT)}
+              </span>
+            </div>
+            <div className="text-[9px] text-muted-foreground">
+              {done} render · {usedModels.map((m) => m.replace("google/", "")).join(", ")}
+            </div>
+          </div>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -1459,6 +1519,8 @@ function useStudioExecute() {
               standaloneImage: dataUrl,
               standaloneStatus: "done",
               standaloneProgress: 100,
+              standaloneCredits: estimateCredits(selectedModel),
+              standaloneModel: selectedModel,
             });
             updateNode(renderNodeId, { status: "done", progress: 100 });
             toast.success("Perbaikan selesai");
@@ -1587,6 +1649,8 @@ function useStudioExecute() {
                   image: dataUrl,
                   status: "done",
                   progress: 100,
+                  credits: estimateCredits(selectedModel),
+                  model: selectedModel,
                 });
                 return true;
               }
