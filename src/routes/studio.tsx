@@ -1970,6 +1970,50 @@ function useStudioExecute() {
 }
 
 // ---------- Upscale execute hook ----------
+// Resize dataURL image to target long-edge (in px) using high-quality canvas.
+// Gemini image models return a fixed ~1024–1344 px image regardless of the
+// prompt, so we upscale client-side to guarantee the chosen 2K/4K dimensions.
+async function upscaleDataUrl(dataUrl: string, longEdge: number): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error("Gagal memuat gambar untuk resize"));
+    i.src = dataUrl;
+  });
+  const srcLong = Math.max(img.width, img.height);
+  if (srcLong >= longEdge) return dataUrl; // sudah cukup besar
+  const scale = longEdge / srcLong;
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  // Two-step bicubic-like upsampling for smoother edges when scaling >1.6x.
+  if (scale > 1.6) {
+    const midW = Math.round(img.width * Math.sqrt(scale));
+    const midH = Math.round(img.height * Math.sqrt(scale));
+    const mid = document.createElement("canvas");
+    mid.width = midW;
+    mid.height = midH;
+    const midCtx = mid.getContext("2d");
+    if (midCtx) {
+      midCtx.imageSmoothingEnabled = true;
+      midCtx.imageSmoothingQuality = "high";
+      midCtx.drawImage(img, 0, 0, midW, midH);
+      ctx.drawImage(mid, 0, 0, w, h);
+    } else {
+      ctx.drawImage(img, 0, 0, w, h);
+    }
+  } else {
+    ctx.drawImage(img, 0, 0, w, h);
+  }
+  return canvas.toDataURL("image/png");
+}
+
 function useUpscaleExecute() {
   const graph = useStudioStore((s) => s.graph);
   const updateNode = useStudioStore((s) => s.updateNode);
@@ -2047,6 +2091,13 @@ function useUpscaleExecute() {
           } catch {
             /* fallback to url */
           }
+          // Enforce actual pixel dimensions on the long edge.
+          const targetLong = resolution === "4K" ? 3840 : 2560;
+          try {
+            dataUrl = await upscaleDataUrl(dataUrl, targetLong);
+          } catch {
+            /* keep AI output as-is if resize fails */
+          }
           updateNode(upNodeId, {
             resultImage: dataUrl,
             status: "done",
@@ -2054,6 +2105,7 @@ function useUpscaleExecute() {
             credits: estimateCredits(model),
           });
           toast.success(`Upscale ${resolution} selesai`);
+
         } else {
           updateNode(upNodeId, {
             status: "error",
