@@ -939,6 +939,7 @@ function OutputNode({
             <p className="text-[10px] text-destructive">
               {d.standaloneError ?? "Render gagal."}
             </p>
+          )}
           {d.standaloneImage && d.standaloneCredits ? (
             <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px] space-y-0.5">
               <div className="flex items-center justify-between">
