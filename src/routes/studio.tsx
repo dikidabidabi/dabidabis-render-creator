@@ -230,6 +230,9 @@ type OutputNodeData = {
   geometryConsistency: number;
   // For "edit output" nodes we render a single image (not multi-angle)
   standalone?: boolean;
+  // For "single output" nodes — one image dari pool input, tampilan mirip standalone
+  singleOutput?: boolean;
+  selectedShotId?: string | null;
   standaloneImage?: string | null;
   standaloneStatus?: "idle" | "processing" | "done" | "error";
   standaloneProgress?: number;
@@ -249,6 +252,22 @@ type EditNodeData = {
   sourceImage: string;
   annotatedImage: string;
   colorPrompts: { color: string; label: string; prompt: string }[];
+};
+type UpscaleModel =
+  | "google/gemini-2.5-flash-image"
+  | "google/gemini-3.1-flash-image"
+  | "google/gemini-3-pro-image";
+type UpscaleNodeData = {
+  kind: "upscale";
+  model: UpscaleModel;
+  resolution: "2K" | "4K";
+  sourceImage?: string | null;
+  sourceLabel?: string;
+  status?: "idle" | "processing" | "done" | "error";
+  progress?: number;
+  error?: string;
+  resultImage?: string | null;
+  credits?: number;
 };
 
 const EMPTY_OUTPUTS: RenderAngle[] = [];
@@ -276,7 +295,7 @@ function NodeShell({
 }: {
   title: string;
   icon: React.ReactNode;
-  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload";
+  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload" | "upscale";
   children: React.ReactNode;
   hasTarget?: boolean;
   hasSource?: boolean;
@@ -291,6 +310,7 @@ function NodeShell({
     reference: "border-pink-500/40 bg-pink-500/5",
     edit: "border-cyan-500/40 bg-cyan-500/5",
     upload: "border-indigo-500/40 bg-indigo-500/5",
+    upscale: "border-fuchsia-500/40 bg-fuchsia-500/5",
   } as const;
   return (
     <div
@@ -906,23 +926,68 @@ function OutputNode({
   const sketches = useSketchesWithShots();
 
 
-  // Standalone output (from edit node)
-  if (d.standalone) {
+  // Standalone output (from edit node) OR single-output pick
+  if (d.standalone || d.singleOutput) {
     const status = d.standaloneStatus ?? "idle";
+    const isSingle = !!d.singleOutput;
+    const shots = isSingle ? loadShots(d.sketchId) : [];
+    const selectedShotId = d.selectedShotId ?? shots[0]?.id ?? null;
     return (
       <NodeShell
-        title={`Output Perbaikan · ${d.sketchTitle}`}
+        title={isSingle ? `Single Output · ${d.sketchTitle}` : `Output Perbaikan · ${d.sketchTitle}`}
         icon={<Layers className="h-3.5 w-3.5 text-emerald-500" />}
         tone="output"
         hasTarget
+        hasSource={!!d.standaloneImage}
         onRemove={() => removeNode(id)}
       >
         <div className="space-y-2">
+          {isSingle && (
+            <>
+              <SketchSelector
+                sketches={sketches}
+                value={d.sketchId}
+                tone="emerald"
+                onChange={(sk) =>
+                  updateNode(id, {
+                    sketchId: sk.id,
+                    sketchTitle: sk.title,
+                    selectedShotId: null,
+                    standaloneImage: null,
+                    standaloneStatus: "idle",
+                  })
+                }
+              />
+              {shots.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground">
+                  Belum ada screenshot untuk sketsa ini.
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-1">
+                  {shots.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => updateNode(id, { selectedShotId: s.id })}
+                      className={cn(
+                        "block w-full overflow-hidden rounded border-2 transition",
+                        selectedShotId === s.id
+                          ? "border-ember ring-1 ring-ember/50"
+                          : "border-transparent hover:border-border",
+                      )}
+                    >
+                      <img src={s.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
           <div className="relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background">
             {d.standaloneImage ? (
               <img
                 src={d.standaloneImage}
-                alt="Hasil perbaikan"
+                alt={isSingle ? "Hasil render" : "Hasil perbaikan"}
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -943,7 +1008,7 @@ function OutputNode({
           {d.standaloneImage && d.standaloneCredits ? (
             <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px] space-y-0.5">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-emerald-600">Kredit Lovable terpakai</span>
+                <span className="font-medium text-emerald-600">Kredit AI terpakai</span>
                 <span className="font-semibold tabular-nums text-emerald-600">
                   {d.standaloneCredits.toFixed(3)}
                 </span>
@@ -974,8 +1039,8 @@ function OutputNode({
                   > = raw ? JSON.parse(raw) : {};
                   const items = store[d.sketchId] ?? [];
                   items.push({
-                    id: `studio-edit-${id}`,
-                    title: `${d.sketchTitle} · Perbaikan`,
+                    id: `studio-${isSingle ? "single" : "edit"}-${id}`,
+                    title: `${d.sketchTitle} · ${isSingle ? "Single" : "Perbaikan"}`,
                     image: d.standaloneImage!,
                   });
                   store[d.sketchId] = items;
@@ -994,6 +1059,7 @@ function OutputNode({
       </NodeShell>
     );
   }
+
 
   const total = outputs.length || 3;
   const done = outputs.filter((o) => o.status === "done").length;
@@ -1049,7 +1115,7 @@ function OutputNode({
             className="mt-2"
           />
         </div>
-        <div className="grid grid-cols-3 gap-1">
+        <div className="space-y-1.5">
           {(outputs.length
             ? outputs
             : DEFAULT_ANGLES.map((a, i) => ({
@@ -1062,57 +1128,77 @@ function OutputNode({
           ).map((o) => (
             <div
               key={o.id}
-              className={cn(
-                "group relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background",
-                o.image && "cursor-pointer hover:border-ember",
-              )}
-              onClick={() => {
-                if (!o.image || !onAnnotate) return;
-                onAnnotate({
-                  sketchId: d.sketchId,
-                  sketchTitle: d.sketchTitle,
-                  angleId: o.id,
-                  angleName: o.angle,
-                  image: o.image,
-                });
-              }}
+              className="relative flex items-center gap-2 rounded border border-border/60 bg-background p-1 pr-3"
             >
-              {o.image ? (
-                <img
-                  src={o.image}
-                  alt={o.angle}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  {o.status === "processing" ? (
-                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  ) : (
-                    <ImageIcon className="h-3 w-3 text-muted-foreground/40" />
-                  )}
-                </div>
-              )}
-              <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-[8px] text-white">
-                {o.angle}
-              </span>
+              <div
+                className={cn(
+                  "relative aspect-[4/3] w-24 shrink-0 overflow-hidden rounded",
+                  o.image && "cursor-pointer hover:ring-1 hover:ring-ember",
+                )}
+                onClick={() => {
+                  if (!o.image || !onAnnotate) return;
+                  onAnnotate({
+                    sketchId: d.sketchId,
+                    sketchTitle: d.sketchTitle,
+                    angleId: o.id,
+                    angleName: o.angle,
+                    image: o.image,
+                  });
+                }}
+              >
+                {o.image ? (
+                  <img src={o.image} alt={o.angle} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-muted/40">
+                    {o.status === "processing" ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    ) : (
+                      <ImageIcon className="h-3 w-3 text-muted-foreground/40" />
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1 text-[10px]">
+                <div className="truncate font-medium">{o.angle}</div>
+                {o.status === "processing" && (
+                  <div className="text-muted-foreground">{Math.round(o.progress)}%</div>
+                )}
+                {o.status === "done" && (
+                  <div className="text-emerald-600">Selesai</div>
+                )}
+                {o.status === "error" && (
+                  <div className="truncate text-destructive" title={o.error}>Gagal</div>
+                )}
+              </div>
               {o.image && (
                 <a
                   href={o.image}
                   download={`${d.sketchTitle}-${o.angle}.png`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-0 flex items-center gap-0.5 rounded-bl bg-black/70 px-1 py-0.5 text-[8px] font-medium text-white hover:bg-ember"
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                   title="Unduh gambar"
                 >
-                  <Download className="h-2.5 w-2.5" />
+                  <Download className="h-3 w-3" />
                 </a>
+              )}
+              {o.image && (
+                <Handle
+                  id={`img-${o.id}`}
+                  type="source"
+                  position={Position.Right}
+                  isConnectable
+                  className="!h-3 !w-3 !border-2 !border-background !bg-emerald-500 !cursor-crosshair"
+                  style={{ right: -6, zIndex: 20 }}
+                  title="Sambungkan gambar ini ke node Upscale"
+                />
               )}
             </div>
           ))}
         </div>
+
         {done > 0 && totalCredits > 0 && (
           <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px] space-y-0.5">
             <div className="flex items-center justify-between">
-              <span className="font-medium text-emerald-600">Kredit Lovable terpakai</span>
+              <span className="font-medium text-emerald-600">Kredit AI terpakai</span>
               <span className="font-semibold tabular-nums text-emerald-600">
                 {totalCredits.toFixed(3)}
               </span>
@@ -1145,7 +1231,131 @@ function OutputNode({
   );
 }
 
+// ---------- Upscale Node ----------
+function UpscaleNode({
+  id,
+  data,
+  onRun,
+}: NodeProps & { onRun?: (id: string) => void }) {
+  const d = data as UpscaleNodeData;
+  const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
+  const model = d.model ?? "google/gemini-2.5-flash-image";
+  const resolution = d.resolution ?? "2K";
+  const status = d.status ?? "idle";
+
+  return (
+    <NodeShell
+      title="Upscale AI"
+      icon={<Sparkles className="h-3.5 w-3.5 text-fuchsia-500" />}
+      tone="upscale"
+      hasTarget
+      onRemove={() => removeNode(id)}
+    >
+      <div className="space-y-2">
+        <div>
+          <Label className="text-[10px]">Model AI</Label>
+          <select
+            value={model}
+            onChange={(e) => updateNode(id, { model: e.target.value })}
+            className="mt-1 w-full rounded border border-border/60 bg-background px-2 py-1 text-[11px] font-medium outline-none focus:border-fuchsia-500"
+          >
+            <option value="google/gemini-2.5-flash-image">Gemini 2.5 Flash Image</option>
+            <option value="google/gemini-3.1-flash-image">Gemini 3.1 Flash Image</option>
+            <option value="google/gemini-3-pro-image">Gemini 3 Pro Image</option>
+          </select>
+        </div>
+        <div>
+          <Label className="text-[10px]">Resolusi</Label>
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            {(["2K", "4K"] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => updateNode(id, { resolution: r })}
+                className={cn(
+                  "rounded border px-2 py-1 text-[11px] font-medium",
+                  resolution === r
+                    ? "border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-600"
+                    : "border-border/60 hover:border-fuchsia-500/40",
+                )}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background">
+          {d.resultImage ? (
+            <img src={d.resultImage} alt="Upscaled" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              {status === "processing" ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+              )}
+            </div>
+          )}
+        </div>
+        {d.sourceLabel && (
+          <p className="truncate text-[9px] text-muted-foreground">Sumber: {d.sourceLabel}</p>
+        )}
+        {status === "error" && (
+          <p className="text-[10px] text-destructive">{d.error ?? "Upscale gagal."}</p>
+        )}
+        <Button
+          size="sm"
+          disabled={status === "processing"}
+          onClick={() => onRun?.(id)}
+          className="w-full bg-gradient-primary text-xs shadow-primary"
+        >
+          {status === "processing" ? (
+            <>
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              Upscaling…
+            </>
+          ) : (
+            <>
+              <Play className="mr-1 h-3 w-3" /> Upscale ke {resolution}
+            </>
+          )}
+        </Button>
+        {d.resultImage && d.credits ? (
+          <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px] space-y-0.5">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-emerald-600">Kredit AI terpakai</span>
+              <span className="font-semibold tabular-nums text-emerald-600">
+                {d.credits.toFixed(3)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Estimasi biaya</span>
+              <span className="font-semibold tabular-nums text-foreground">
+                {formatIDR(d.credits * IDR_PER_CREDIT)}
+              </span>
+            </div>
+            <div className="text-[9px] text-muted-foreground">
+              {model.replace("google/", "")} · {resolution}
+            </div>
+          </div>
+        ) : null}
+        {d.resultImage && (
+          <a
+            href={d.resultImage}
+            download={`upscale-${resolution}.png`}
+            className="flex w-full items-center justify-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] hover:border-ember"
+          >
+            <Download className="h-3 w-3" /> Unduh
+          </a>
+        )}
+      </div>
+    </NodeShell>
+  );
+}
+
 // ---------- Edit Node (sketsa perbaikan) ----------
+
 function EditNode({ id, data }: NodeProps) {
   const d = data as EditNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
@@ -1586,6 +1796,73 @@ function useStudioExecute() {
               ? `Boleh variasi bentuk ~${100 - outputGeom}% dari sketsa input.`
               : "Bebas variasi bentuk.";
 
+      // === SINGLE OUTPUT: one image from selected shot ===
+      if (outData.singleOutput) {
+        const selShot = outData.selectedShotId
+          ? pool.find((p) => p.id === outData.selectedShotId)
+          : null;
+        const src = selShot ?? pool[0];
+        updateNode(outputNode.id, {
+          standaloneStatus: "processing",
+          standaloneProgress: 10,
+          standaloneError: undefined,
+          standaloneImage: null,
+        });
+        updateNode(renderNodeId, { status: "processing", progress: 0 });
+        try {
+          const res = await callRender({
+            data: {
+              sketchBase64: src.dataUrl,
+              referenceBase64: refImage,
+              prompt: `${finalPrompt}. Ikuti sudut pandang & komposisi persis dari sketsa input. ${angleConsistencyText}`,
+              renderType: "exterior",
+              accuracy: accuracyLevel,
+              consistency: Math.max(1, Math.min(10, Math.round((outputGeom / 100) * 9) + 1)),
+              model: selectedModel,
+            },
+          });
+          if (res.ok && res.resultUrl) {
+            let dataUrl = res.resultUrl;
+            try {
+              const r = await fetch(res.resultUrl);
+              const blob = await r.blob();
+              dataUrl = await new Promise<string>((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result as string);
+                fr.onerror = () => reject(fr.error);
+                fr.readAsDataURL(blob);
+              });
+            } catch {
+              /* fallback to url */
+            }
+            updateNode(outputNode.id, {
+              standaloneImage: dataUrl,
+              standaloneStatus: "done",
+              standaloneProgress: 100,
+              standaloneCredits: estimateCredits(selectedModel),
+              standaloneModel: selectedModel,
+            });
+            updateNode(renderNodeId, { status: "done", progress: 100 });
+            toast.success("Single output selesai");
+          } else {
+            updateNode(outputNode.id, {
+              standaloneStatus: "error",
+              standaloneError: res.ok ? "Tidak ada URL" : res.error,
+            });
+            updateNode(renderNodeId, {
+              status: "error",
+              error: res.ok ? "Tidak ada URL" : res.error,
+            });
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Error";
+          updateNode(outputNode.id, { standaloneStatus: "error", standaloneError: msg });
+          updateNode(renderNodeId, { status: "error", error: msg });
+        }
+        return;
+      }
+
+
       // Output count = input count. Each output uses its own input image so the
       // camera angle mirrors the source screenshot. Naming: view 1, view 2, ...
       const angles: RenderAngle[] = pool.map((_, i) => ({
@@ -1692,7 +1969,110 @@ function useStudioExecute() {
   );
 }
 
+// ---------- Upscale execute hook ----------
+function useUpscaleExecute() {
+  const graph = useStudioStore((s) => s.graph);
+  const updateNode = useStudioStore((s) => s.updateNode);
+  const callRender = useServerFn(generateRender);
+
+  return useCallback(
+    async (upNodeId: string) => {
+      const upNode = graph.nodes.find((n) => n.id === upNodeId);
+      if (!upNode) return;
+      const d = upNode.data as UpscaleNodeData;
+      const model = d.model ?? "google/gemini-2.5-flash-image";
+      const resolution = d.resolution ?? "2K";
+
+      const inEdge = graph.edges.find((e) => e.target === upNodeId);
+      if (!inEdge) return toast.error("Sambungkan gambar output ke node Upscale");
+      const src = graph.nodes.find((n) => n.id === inEdge.source);
+      if (!src) return toast.error("Sumber tidak ditemukan");
+
+      let sourceImage: string | null = null;
+      let sourceLabel = "";
+      if (src.type === "output") {
+        const od = src.data as OutputNodeData;
+        if (od.standalone || od.singleOutput) {
+          sourceImage = od.standaloneImage ?? null;
+          sourceLabel = `${od.sketchTitle} · ${od.singleOutput ? "Single" : "Perbaikan"}`;
+        } else {
+          const angleId = inEdge.sourceHandle?.replace(/^img-/, "");
+          const outs = useStudioStore.getState().graph.outputs[od.sketchId] ?? [];
+          const angle = angleId ? outs.find((o) => o.id === angleId) : outs.find((o) => o.image);
+          sourceImage = angle?.image ?? null;
+          sourceLabel = `${od.sketchTitle} · ${angle?.angle ?? ""}`;
+        }
+      }
+      if (!sourceImage) return toast.error("Gambar sumber belum tersedia");
+
+      updateNode(upNodeId, {
+        status: "processing",
+        progress: 10,
+        error: undefined,
+        sourceImage,
+        sourceLabel,
+        resultImage: null,
+      });
+
+      const prompt = [
+        `Upscale gambar arsitektur ini ke resolusi ${resolution} (${resolution === "4K" ? "3840×2160" : "2560×1440"}).`,
+        "Tajamkan detail tekstur, material, garis edge, jendela, dan vegetasi.",
+        "JANGAN ubah komposisi, sudut pandang, geometri bangunan, warna, atau pencahayaan.",
+        "Hasil akhir: foto arsitektur fotorealistis ultra-tajam berkualitas tinggi.",
+      ].join(" ");
+
+      try {
+        const res = await callRender({
+          data: {
+            sketchBase64: sourceImage,
+            referenceBase64: null,
+            prompt,
+            renderType: "exterior",
+            accuracy: 10,
+            consistency: 10,
+            model,
+          },
+        });
+        if (res.ok && res.resultUrl) {
+          let dataUrl = res.resultUrl;
+          try {
+            const r = await fetch(res.resultUrl);
+            const blob = await r.blob();
+            dataUrl = await new Promise<string>((resolve, reject) => {
+              const fr = new FileReader();
+              fr.onload = () => resolve(fr.result as string);
+              fr.onerror = () => reject(fr.error);
+              fr.readAsDataURL(blob);
+            });
+          } catch {
+            /* fallback to url */
+          }
+          updateNode(upNodeId, {
+            resultImage: dataUrl,
+            status: "done",
+            progress: 100,
+            credits: estimateCredits(model),
+          });
+          toast.success(`Upscale ${resolution} selesai`);
+        } else {
+          updateNode(upNodeId, {
+            status: "error",
+            error: res.ok ? "Tidak ada URL" : res.error,
+          });
+        }
+      } catch (e) {
+        updateNode(upNodeId, {
+          status: "error",
+          error: e instanceof Error ? e.message : "Error",
+        });
+      }
+    },
+    [graph, callRender, updateNode],
+  );
+}
+
 // ---------- Preset builder ----------
+
 function buildPreset(sketches: SketchLite[]): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -1833,13 +2213,22 @@ function StudioPage() {
   // Spawn node from dropdown. For input/output, an optional sketchId picks
   // the sketch to bind — otherwise the first sketch is used.
   const spawnNode = (
-    kind: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload",
+    kind:
+      | "input"
+      | "prompt"
+      | "render"
+      | "output"
+      | "reference"
+      | "edit"
+      | "upload"
+      | "upscale"
+      | "singleOutput",
     sketchId?: string,
   ) => {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
     const uid = crypto.randomUUID().slice(0, 8);
     const sk = sketchId ? sketches.find((s) => s.id === sketchId) ?? sketches[0] : sketches[0];
-    if ((kind === "input" || kind === "output") && !sk) {
+    if ((kind === "input" || kind === "output" || kind === "singleOutput") && !sk) {
       toast.error("Belum ada sketsa. Buat sketsa dulu.");
       return;
     }
@@ -1912,6 +2301,35 @@ function StudioPage() {
           selectedShotId: null,
           uploads: [],
         } satisfies UploadNodeData,
+      };
+    } else if (kind === "upscale") {
+      node = {
+        id: `upscale-${uid}`,
+        type: "upscale",
+        position: anchor,
+        data: {
+          kind: "upscale",
+          model: "google/gemini-2.5-flash-image",
+          resolution: "2K",
+          status: "idle",
+          progress: 0,
+        } satisfies UpscaleNodeData,
+      };
+    } else if (kind === "singleOutput" && sk) {
+      node = {
+        id: `single-${uid}`,
+        type: "output",
+        position: anchor,
+        data: {
+          kind: "output",
+          sketchId: sk.id,
+          sketchTitle: sk.title,
+          geometryConsistency: 80,
+          singleOutput: true,
+          selectedShotId: null,
+          standaloneStatus: "idle",
+          standaloneImage: null,
+        } satisfies OutputNodeData,
       };
     } else if (kind === "edit") {
       toast.info("Node Edit dibuat dari klik gambar di Output — lalu tekan 'Jadikan Node'.");
@@ -2008,6 +2426,8 @@ function StudioPage() {
     toast.success("Node Sketsa Perbaikan + Render + Output dibuat");
   };
 
+  const runUpscale = useUpscaleExecute();
+
   // Node types with annotation callback baked in
   const nodeTypes = useMemo(
     () => ({
@@ -2020,8 +2440,9 @@ function StudioPage() {
       reference: ReferenceNode,
       edit: EditNode,
       upload: UploadNode,
+      upscale: (props: NodeProps) => <UpscaleNode {...props} onRun={runUpscale} />,
     }),
-    [],
+    [runUpscale],
   );
 
   const loadPreset = () => {
@@ -2034,7 +2455,10 @@ function StudioPage() {
     }
     // Preserve "upload" nodes and any node/edge reachable from them (both directions).
     const keepIds = new Set<string>();
-    for (const n of graph.nodes) if (n.type === "upload") keepIds.add(n.id);
+    for (const n of graph.nodes) {
+      if (n.type === "upload" || n.type === "upscale") { keepIds.add(n.id); continue; }
+      if (n.type === "output" && (n.data as OutputNodeData).singleOutput) keepIds.add(n.id);
+    }
     let changed = true;
     while (changed) {
       changed = false;
@@ -2112,6 +2536,12 @@ function StudioPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("output")}>
                 <Layers className="mr-2 h-3 w-3 text-emerald-500" /> 4 · Multi-Angle Output
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("singleOutput")}>
+                <Layers className="mr-2 h-3 w-3 text-emerald-500" /> 4b · Single Output
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("upscale")}>
+                <Sparkles className="mr-2 h-3 w-3 text-fuchsia-500" /> 5 · Upscale AI (2K/4K)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
