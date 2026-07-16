@@ -1088,6 +1088,25 @@ function OutputNode({
             </div>
           ))}
         </div>
+        {done > 0 && totalCredits > 0 && (
+          <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[10px] space-y-0.5">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-emerald-600">Kredit Lovable terpakai</span>
+              <span className="font-semibold tabular-nums text-emerald-600">
+                {totalCredits.toFixed(3)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Estimasi biaya</span>
+              <span className="font-semibold tabular-nums text-foreground">
+                {formatIDR(totalCredits * IDR_PER_CREDIT)}
+              </span>
+            </div>
+            <div className="text-[9px] text-muted-foreground">
+              {done} render · {usedModels.map((m) => m.replace("google/", "")).join(", ")}
+            </div>
+          </div>
+        )}
         <Button
           size="sm"
           variant="outline"
