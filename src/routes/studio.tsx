@@ -2455,7 +2455,10 @@ function StudioPage() {
     }
     // Preserve "upload" nodes and any node/edge reachable from them (both directions).
     const keepIds = new Set<string>();
-    for (const n of graph.nodes) if (n.type === "upload") keepIds.add(n.id);
+    for (const n of graph.nodes) {
+      if (n.type === "upload" || n.type === "upscale") { keepIds.add(n.id); continue; }
+      if (n.type === "output" && (n.data as OutputNodeData).singleOutput) keepIds.add(n.id);
+    }
     let changed = true;
     while (changed) {
       changed = false;
