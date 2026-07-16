@@ -980,6 +980,8 @@ function OutputNode({
     ? Math.round(outputs.reduce((s, o) => s + o.progress, 0) / outputs.length)
     : 0;
   const anyProcessing = outputs.some((o) => o.status === "processing");
+  const totalCredits = outputs.reduce((s, o) => s + (o.credits ?? 0), 0);
+  const usedModels = Array.from(new Set(outputs.map((o) => o.model).filter(Boolean))) as string[];
 
   return (
     <NodeShell
