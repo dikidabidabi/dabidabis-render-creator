@@ -1607,6 +1607,8 @@ function useStudioExecute() {
                   image: dataUrl,
                   status: "done",
                   progress: 100,
+                  credits: estimateCredits(selectedModel),
+                  model: selectedModel,
                 });
                 return true;
               }
