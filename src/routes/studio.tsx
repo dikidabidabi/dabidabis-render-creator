@@ -1477,6 +1477,8 @@ function useStudioExecute() {
               standaloneImage: dataUrl,
               standaloneStatus: "done",
               standaloneProgress: 100,
+              standaloneCredits: estimateCredits(selectedModel),
+              standaloneModel: selectedModel,
             });
             updateNode(renderNodeId, { status: "done", progress: 100 });
             toast.success("Perbaikan selesai");
