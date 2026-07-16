@@ -184,6 +184,22 @@ const ANGLE_PROMPT: Record<string, string> = {
   "Worm's Eye": "sudut pandang worm's eye / low angle mendongak, kesan monumental",
 };
 
+// Perkiraan biaya kredit Lovable per gambar per model (berdasarkan log AI Gateway).
+// Digunakan untuk menampilkan estimasi pemakaian kredit & rupiah di node output.
+const MODEL_CREDIT_COST: Record<string, number> = {
+  "google/gemini-2.5-flash-image": 0.039,
+  "google/gemini-3.1-flash-image": 0.039,
+  "google/gemini-3-pro-image": 0.56,
+};
+// 1 kredit Lovable ≈ Rp 4.000 (Pro plan: $25 / 100 kredit @ ~Rp 16.000/USD).
+const IDR_PER_CREDIT = 4000;
+function estimateCredits(model?: string): number {
+  return MODEL_CREDIT_COST[model ?? ""] ?? MODEL_CREDIT_COST["google/gemini-2.5-flash-image"];
+}
+function formatIDR(v: number): string {
+  return "Rp " + Math.round(v).toLocaleString("id-ID");
+}
+
 // ---------- Node data types ----------
 type UploadedShot = { id: string; dataUrl: string; name?: string };
 type InputNodeData = {
