@@ -218,6 +218,8 @@ type OutputNodeData = {
   standaloneStatus?: "idle" | "processing" | "done" | "error";
   standaloneProgress?: number;
   standaloneError?: string;
+  standaloneCredits?: number;
+  standaloneModel?: string;
 };
 type ReferenceNodeData = {
   kind: "reference";
