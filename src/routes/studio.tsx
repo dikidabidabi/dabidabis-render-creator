@@ -260,7 +260,7 @@ type UpscaleModel =
 type UpscaleNodeData = {
   kind: "upscale";
   model: UpscaleModel;
-  resolution: "2K" | "4K";
+  resolution: "2K" | "4K" | "8K";
   sourceImage?: string | null;
   sourceLabel?: string;
   status?: "idle" | "processing" | "done" | "error";
