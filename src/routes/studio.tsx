@@ -1354,6 +1354,54 @@ function UpscaleNode({
             <Download className="h-3 w-3" /> Unduh
           </a>
         )}
+        <div className="pt-1 border-t border-border/40">
+          <Label className="text-[10px]">Kirim ke presentasi</Label>
+          {sketches.length === 0 ? (
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Belum ada sketsa dengan screenshot.
+            </p>
+          ) : (
+            <div className="mt-1 space-y-1">
+              <SketchSelector
+                sketches={sketches}
+                value={targetSketch?.id ?? ""}
+                tone="emerald"
+                onChange={(sk) =>
+                  updateNode(id, { targetSketchId: sk.id, targetSketchTitle: sk.title })
+                }
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!d.resultImage || !targetSketch}
+                onClick={() => {
+                  if (!d.resultImage || !targetSketch) return;
+                  try {
+                    const raw = localStorage.getItem("dabidabis_perspektif_v1");
+                    const store: Record<
+                      string,
+                      { id: string; title: string; image: string | null }[]
+                    > = raw ? JSON.parse(raw) : {};
+                    const items = store[targetSketch.id] ?? [];
+                    items.push({
+                      id: `studio-upscale-${id}`,
+                      title: `${targetSketch.title} · Upscale ${resolution}`,
+                      image: d.resultImage,
+                    });
+                    store[targetSketch.id] = items;
+                    localStorage.setItem("dabidabis_perspektif_v1", JSON.stringify(store));
+                    toast.success("Terkirim ke Presentasi");
+                  } catch {
+                    toast.error("Gagal menyimpan");
+                  }
+                }}
+                className="w-full text-xs"
+              >
+                <Send className="mr-1 h-3 w-3" /> Kirim ke Presentasi
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </NodeShell>
   );
