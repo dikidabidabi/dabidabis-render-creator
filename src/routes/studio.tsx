@@ -1807,11 +1807,11 @@ function useStudioExecute() {
 
       // === STANDARD FLOW: input + prompt → multi-angle output ===
       if (!promptNode) return toast.error("Sambungkan Prompt ke Render Engine");
-      const inputEdge = inEdges(promptNode.id)[0];
-      const inputNode = inputEdge
-        ? graph.nodes.find((n) => n.id === inputEdge.source)
-        : null;
-      if (!inputNode) return toast.error("Sambungkan Input ke Prompt");
+      const inputNode =
+        inEdges(promptNode.id)
+          .map((e) => graph.nodes.find((n) => n.id === e.source))
+          .find((n) => n?.type === "input" || n?.type === "upload") ?? null;
+      if (!inputNode) return toast.error("Sambungkan Input / Unggah ke Prompt");
 
       const inData = inputNode.data as InputNodeData;
       const prData = promptNode.data as PromptNodeData;
