@@ -1782,9 +1782,13 @@ function useStudioExecute() {
               standaloneImage: dataUrl,
               standaloneStatus: "done",
               standaloneProgress: 100,
-              standaloneCredits: estimateCredits(selectedModel),
-              standaloneModel: selectedModel,
+              standaloneCredits: estimateCredits(res.modelUsed),
+              standaloneModel: res.modelUsed,
             });
+            if (res.fallbackFrom) {
+              updateNode(renderNodeId, { model: res.modelUsed });
+              toast.info("Model pilihan belum tersedia; render dilanjutkan dengan Gemini 2.5 Flash Image");
+            }
             updateNode(renderNodeId, { status: "done", progress: 100 });
             toast.success("Perbaikan selesai");
           } else {
@@ -1892,9 +1896,13 @@ function useStudioExecute() {
               standaloneImage: dataUrl,
               standaloneStatus: "done",
               standaloneProgress: 100,
-              standaloneCredits: estimateCredits(selectedModel),
-              standaloneModel: selectedModel,
+              standaloneCredits: estimateCredits(res.modelUsed),
+              standaloneModel: res.modelUsed,
             });
+            if (res.fallbackFrom) {
+              updateNode(renderNodeId, { model: res.modelUsed });
+              toast.info("Model pilihan belum tersedia; render dilanjutkan dengan Gemini 2.5 Flash Image");
+            }
             updateNode(renderNodeId, { status: "done", progress: 100 });
             toast.success("Single output selesai");
           } else {
@@ -1989,9 +1997,12 @@ function useStudioExecute() {
                   image: dataUrl,
                   status: "done",
                   progress: 100,
-                  credits: estimateCredits(selectedModel),
-                  model: selectedModel,
+                  credits: estimateCredits(res.modelUsed),
+                  model: res.modelUsed,
                 });
+                if (res.fallbackFrom) {
+                  updateNode(renderNodeId, { model: res.modelUsed });
+                }
                 return true;
               }
               updateOutput(outData.sketchId, a.id, {
@@ -1999,7 +2010,7 @@ function useStudioExecute() {
                 progress: 100,
                 error: res.ok ? "Tidak ada URL" : res.error,
               });
-              return false;
+                return res.ok ? "AI tidak menghasilkan URL gambar." : res.error;
             } catch (e) {
               clearInterval(timers[a.id]);
               updateOutput(outData.sketchId, a.id, {
@@ -2007,22 +2018,23 @@ function useStudioExecute() {
                 progress: 100,
                 error: e instanceof Error ? e.message : "Error",
               });
-              return false;
+              return e instanceof Error ? e.message : "Render gagal";
             }
           }),
         );
 
-        const success = results.filter(Boolean).length;
+        const success = results.filter((result) => result === true).length;
+        const firstError = results.find((result): result is string => typeof result === "string");
         updateNode(renderNodeId, {
           status: success > 0 ? "done" : "error",
           progress: 100,
-          error: success === 0 ? "Semua angle gagal" : undefined,
+          error: success === 0 ? firstError ?? "Semua angle gagal" : undefined,
         });
         if (success > 0) {
           syncToPresentasi(outData.sketchId, outData.sketchTitle);
           toast.success(`${success}/${angles.length} angle selesai · disinkron ke Presentasi`);
         } else {
-          toast.error("Render gagal");
+          toast.error(firstError ?? "Render gagal");
         }
       } finally {
         for (const k of Object.keys(timers)) clearInterval(timers[k]);
@@ -2174,8 +2186,12 @@ function useUpscaleExecute() {
             resultImage: dataUrl,
             status: "done",
             progress: 100,
-            credits: estimateCredits(model),
+            credits: estimateCredits(res.modelUsed),
+            model: res.modelUsed,
           });
+          if (res.fallbackFrom) {
+            toast.info("Model pilihan belum tersedia; upscale dilanjutkan dengan Gemini 2.5 Flash Image");
+          }
           toast.success(`Upscale ${resolution} selesai`);
 
         } else {

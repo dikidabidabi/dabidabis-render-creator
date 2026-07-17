@@ -117,27 +117,56 @@ export const generateRender = createServerFn({ method: "POST" })
     }
 
     try {
-      const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: data.model ?? "google/gemini-2.5-flash-image",
-          messages: [{ role: "user", content: userContent }],
-          modalities: ["image", "text"],
-        }),
-      });
+      const fallbackModel = "google/gemini-2.5-flash-image" as const;
+      const requestedModel = data.model ?? fallbackModel;
+      let modelUsed: (typeof ALLOWED_MODELS)[number] = requestedModel;
+      let fallbackFrom: (typeof ALLOWED_MODELS)[number] | null = null;
+      const requestImage = (model: (typeof ALLOWED_MODELS)[number]) =>
+        fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Lovable-API-Key": LOVABLE_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: userContent }],
+            modalities: ["image", "text"],
+          }),
+        });
+
+      let aiResp = await requestImage(requestedModel);
+      let aiErrorText = aiResp.ok ? "" : await aiResp.text();
+      const readErrorType = () => {
+        try {
+          return (JSON.parse(aiErrorText) as { type?: string }).type ?? "";
+        } catch {
+          return "";
+        }
+      };
+      // Sebagian workspace belum mendapat akses ke model image preview/pro.
+      // Jangan menggagalkan seluruh pipeline: gunakan model default yang stabil.
+      if (
+        aiResp.status === 403
+        && requestedModel !== fallbackModel
+        && readErrorType() !== "credit_limit_reached"
+      ) {
+        fallbackFrom = requestedModel;
+        modelUsed = fallbackModel;
+        aiResp = await requestImage(fallbackModel);
+        aiErrorText = aiResp.ok ? "" : await aiResp.text();
+      }
 
       if (!aiResp.ok) {
-        const errText = await aiResp.text();
         let msg = `AI error (${aiResp.status})`;
         if (aiResp.status === 429) msg = "Rate limit tercapai. Coba lagi sebentar.";
         if (aiResp.status === 402) msg = "Kredit AI habis. Tambahkan kredit di workspace.";
+        if (aiResp.status === 403 && readErrorType() === "credit_limit_reached") {
+          msg = "Batas kredit AI workspace tercapai. Minta pemilik workspace menaikkan batas kredit.";
+        }
         await supabase
           .from("renders")
-          .update({ status: "failed", error: msg + " — " + errText.slice(0, 200) })
+          .update({ status: "failed", error: msg + " — " + aiErrorText.slice(0, 200) })
           .eq("id", row.id);
         return { ok: false as const, error: msg };
       }
@@ -191,7 +220,7 @@ export const generateRender = createServerFn({ method: "POST" })
         .update({ status: "completed", result_url: resultUrl })
         .eq("id", row.id);
 
-      return { ok: true as const, id: row.id, resultUrl };
+      return { ok: true as const, id: row.id, resultUrl, modelUsed, fallbackFrom };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error";
       await supabase.from("renders").update({ status: "failed", error: msg }).eq("id", row.id);
