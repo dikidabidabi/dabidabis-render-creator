@@ -2681,7 +2681,7 @@ function StudioPage() {
                 <Layers className="mr-2 h-3 w-3 text-emerald-500" /> 4b · Single Output
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("upscale")}>
-                <Sparkles className="mr-2 h-3 w-3 text-fuchsia-500" /> 5 · Upscale AI (2K/4K)
+                <Sparkles className="mr-2 h-3 w-3 text-fuchsia-500" /> 5 · Upscale AI (2K/4K/8K)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
