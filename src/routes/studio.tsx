@@ -2112,10 +2112,12 @@ function useUpscaleExecute() {
       });
 
       const prompt = [
-        `Upscale gambar arsitektur ini ke resolusi ${resolution} (${resolution === "4K" ? "3840×2160" : "2560×1440"}).`,
-        "Tajamkan detail tekstur, material, garis edge, jendela, dan vegetasi.",
-        "JANGAN ubah komposisi, sudut pandang, geometri bangunan, warna, atau pencahayaan.",
-        "Hasil akhir: foto arsitektur fotorealistis ultra-tajam berkualitas tinggi.",
+        `Upscale presisi gambar arsitektur ini ke resolusi ${resolution} (${resolution === "4K" ? "3840×2160" : "2560×1440"}) sekaligus lakukan resize tajam.`,
+        "PERTAHANKAN 100% geometri bangunan, garis perspektif, proporsi, sudut pandang, komposisi, dan layout struktur asli — JANGAN mengubah bentuk, memindahkan bukaan, menggeser kolom, atau menambah/mengurangi massa apa pun.",
+        "Bersihkan pantulan berlebih dan noise pada permukaan kaca sehingga kaca terlihat jernih dan realistis, tanpa mengubah bingkai atau mullion.",
+        "Tajamkan pencahayaan dramatis: perkuat kontras highlight–shadow, pertegas rim light dan bounce light, pertahankan arah cahaya asli.",
+        "Suntikkan tekstur mikro ultra-detail yang sesuai untuk tiap material yang tampak: pori dan agregat pada beton kasar (fair-face concrete), serat dan grain pada kayu, butiran aspal/paving pada jalan, brushed/anodized detail pada logam, urat pada batu alam, tenun pada tekstil, dedaunan pada vegetasi.",
+        "Hasil akhir: foto arsitektur fotorealistis ultra-tajam kualitas portfolio, tanpa artefak AI, tanpa halusinasi elemen baru, tanpa teks/watermark.",
       ].join(" ");
 
       try {
