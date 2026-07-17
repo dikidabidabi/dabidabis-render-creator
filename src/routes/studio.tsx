@@ -260,7 +260,7 @@ type UpscaleModel =
 type UpscaleNodeData = {
   kind: "upscale";
   model: UpscaleModel;
-  resolution: "2K" | "4K";
+  resolution: "2K" | "4K" | "8K";
   sourceImage?: string | null;
   sourceLabel?: string;
   status?: "idle" | "processing" | "done" | "error";
@@ -1273,7 +1273,7 @@ function UpscaleNode({
         <div>
           <Label className="text-[10px]">Resolusi</Label>
           <div className="mt-1 grid grid-cols-2 gap-1">
-            {(["2K", "4K"] as const).map((r) => (
+            {(["2K", "4K", "8K"] as const).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -2140,8 +2140,21 @@ function useUpscaleExecute() {
           : { targetSketchId: inferredSketchId, targetSketchTitle: inferredSketchTitle }),
       });
 
+      // Deteksi orientasi gambar sumber agar upscale mengikuti aspek asli (portrait/landscape).
+      const srcDims = await new Promise<{ w: number; h: number }>((resolve) => {
+        const im = new Image();
+        im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+        im.onerror = () => resolve({ w: 1, h: 1 });
+        im.src = sourceImage!;
+      });
+      const isPortrait = srcDims.h > srcDims.w;
+      const longEdgePx = resolution === "8K" ? 7680 : resolution === "4K" ? 3840 : 2560;
+      const shortEdgePx = Math.round(longEdgePx * (isPortrait ? srcDims.w / srcDims.h : srcDims.h / srcDims.w));
+      const dimStr = isPortrait ? `${shortEdgePx}×${longEdgePx}` : `${longEdgePx}×${shortEdgePx}`;
+      const orientationLabel = isPortrait ? "portrait" : "landscape";
+
       const prompt = [
-        `Upscale presisi gambar arsitektur ini ke resolusi ${resolution} (${resolution === "4K" ? "3840×2160" : "2560×1440"}) sekaligus lakukan resize tajam.`,
+        `Upscale presisi gambar arsitektur ini ke resolusi ${resolution} (${dimStr}, orientasi ${orientationLabel}) sekaligus lakukan resize tajam. WAJIB pertahankan orientasi dan aspek rasio gambar sumber persis — jangan crop, jangan rotasi, jangan ubah framing.`,
         "PERTAHANKAN 100% geometri bangunan, garis perspektif, proporsi, sudut pandang, komposisi, dan layout struktur asli — JANGAN mengubah bentuk, memindahkan bukaan, menggeser kolom, atau menambah/mengurangi massa apa pun.",
         "Bersihkan pantulan berlebih dan noise pada permukaan kaca sehingga kaca terlihat jernih dan realistis, tanpa mengubah bingkai atau mullion.",
         "Tajamkan pencahayaan dramatis: perkuat kontras highlight–shadow, pertegas rim light dan bounce light, pertahankan arah cahaya asli.",
@@ -2176,7 +2189,7 @@ function useUpscaleExecute() {
             /* fallback to url */
           }
           // Enforce actual pixel dimensions on the long edge.
-          const targetLong = resolution === "4K" ? 3840 : 2560;
+          const targetLong = longEdgePx;
           try {
             dataUrl = await upscaleDataUrl(dataUrl, targetLong);
           } catch {
@@ -2681,7 +2694,7 @@ function StudioPage() {
                 <Layers className="mr-2 h-3 w-3 text-emerald-500" /> 4b · Single Output
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("upscale")}>
-                <Sparkles className="mr-2 h-3 w-3 text-fuchsia-500" /> 5 · Upscale AI (2K/4K)
+                <Sparkles className="mr-2 h-3 w-3 text-fuchsia-500" /> 5 · Upscale AI (2K/4K/8K)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
