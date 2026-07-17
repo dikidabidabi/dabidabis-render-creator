@@ -2140,8 +2140,21 @@ function useUpscaleExecute() {
           : { targetSketchId: inferredSketchId, targetSketchTitle: inferredSketchTitle }),
       });
 
+      // Deteksi orientasi gambar sumber agar upscale mengikuti aspek asli (portrait/landscape).
+      const srcDims = await new Promise<{ w: number; h: number }>((resolve) => {
+        const im = new Image();
+        im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+        im.onerror = () => resolve({ w: 1, h: 1 });
+        im.src = sourceImage!;
+      });
+      const isPortrait = srcDims.h > srcDims.w;
+      const longEdgePx = resolution === "8K" ? 7680 : resolution === "4K" ? 3840 : 2560;
+      const shortEdgePx = Math.round(longEdgePx * (isPortrait ? srcDims.w / srcDims.h : srcDims.h / srcDims.w));
+      const dimStr = isPortrait ? `${shortEdgePx}×${longEdgePx}` : `${longEdgePx}×${shortEdgePx}`;
+      const orientationLabel = isPortrait ? "portrait" : "landscape";
+
       const prompt = [
-        `Upscale presisi gambar arsitektur ini ke resolusi ${resolution} (${resolution === "4K" ? "3840×2160" : "2560×1440"}) sekaligus lakukan resize tajam.`,
+        `Upscale presisi gambar arsitektur ini ke resolusi ${resolution} (${dimStr}, orientasi ${orientationLabel}) sekaligus lakukan resize tajam. WAJIB pertahankan orientasi dan aspek rasio gambar sumber persis — jangan crop, jangan rotasi, jangan ubah framing.`,
         "PERTAHANKAN 100% geometri bangunan, garis perspektif, proporsi, sudut pandang, komposisi, dan layout struktur asli — JANGAN mengubah bentuk, memindahkan bukaan, menggeser kolom, atau menambah/mengurangi massa apa pun.",
         "Bersihkan pantulan berlebih dan noise pada permukaan kaca sehingga kaca terlihat jernih dan realistis, tanpa mengubah bingkai atau mullion.",
         "Tajamkan pencahayaan dramatis: perkuat kontras highlight–shadow, pertegas rim light dan bounce light, pertahankan arah cahaya asli.",
