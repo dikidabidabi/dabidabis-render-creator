@@ -1242,9 +1242,12 @@ function UpscaleNode({
   const d = data as UpscaleNodeData;
   const updateNode = useStudioStore((s) => s.updateNode);
   const removeNode = useStudioStore((s) => s.removeNode);
+  const sketches = useSketchesWithShots();
   const model = d.model ?? "google/gemini-2.5-flash-image";
   const resolution = d.resolution ?? "2K";
   const status = d.status ?? "idle";
+  const targetSketch =
+    sketches.find((s) => s.id === d.targetSketchId) ?? sketches[0] ?? null;
 
   return (
     <NodeShell
