@@ -1273,7 +1273,7 @@ function UpscaleNode({
         <div>
           <Label className="text-[10px]">Resolusi</Label>
           <div className="mt-1 grid grid-cols-2 gap-1">
-            {(["2K", "4K"] as const).map((r) => (
+            {(["2K", "4K", "8K"] as const).map((r) => (
               <button
                 key={r}
                 type="button"
