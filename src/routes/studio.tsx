@@ -1807,11 +1807,11 @@ function useStudioExecute() {
 
       // === STANDARD FLOW: input + prompt → multi-angle output ===
       if (!promptNode) return toast.error("Sambungkan Prompt ke Render Engine");
-      const inputEdge = inEdges(promptNode.id)[0];
-      const inputNode = inputEdge
-        ? graph.nodes.find((n) => n.id === inputEdge.source)
-        : null;
-      if (!inputNode) return toast.error("Sambungkan Input ke Prompt");
+      const inputNode =
+        inEdges(promptNode.id)
+          .map((e) => graph.nodes.find((n) => n.id === e.source))
+          .find((n) => n?.type === "input" || n?.type === "upload") ?? null;
+      if (!inputNode) return toast.error("Sambungkan Input / Unggah ke Prompt");
 
       const inData = inputNode.data as InputNodeData;
       const prData = promptNode.data as PromptNodeData;
@@ -1925,6 +1925,16 @@ function useStudioExecute() {
         status: "processing",
         progress: 5,
       }));
+      // For Upload flow the Output node may have no sketchId; inherit from input
+      // so outputs are stored/rendered under a consistent key.
+      if (!outData.sketchId && inData.sketchId) {
+        updateNode(outputNode.id, {
+          sketchId: inData.sketchId,
+          sketchTitle: inData.sketchTitle,
+        });
+        outData.sketchId = inData.sketchId;
+        outData.sketchTitle = inData.sketchTitle;
+      }
       setOutputs(outData.sketchId, angles);
       updateNode(renderNodeId, { status: "processing", progress: 0, error: undefined });
 
