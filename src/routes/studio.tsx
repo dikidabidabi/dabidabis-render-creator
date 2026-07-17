@@ -2189,7 +2189,7 @@ function useUpscaleExecute() {
             /* fallback to url */
           }
           // Enforce actual pixel dimensions on the long edge.
-          const targetLong = resolution === "4K" ? 3840 : 2560;
+          const targetLong = longEdgePx;
           try {
             dataUrl = await upscaleDataUrl(dataUrl, targetLong);
           } catch {
