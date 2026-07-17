@@ -2087,8 +2087,12 @@ function useUpscaleExecute() {
 
       let sourceImage: string | null = null;
       let sourceLabel = "";
+      let inferredSketchId: string | undefined;
+      let inferredSketchTitle: string | undefined;
       if (src.type === "output") {
         const od = src.data as OutputNodeData;
+        inferredSketchId = od.sketchId;
+        inferredSketchTitle = od.sketchTitle;
         if (od.standalone || od.singleOutput) {
           sourceImage = od.standaloneImage ?? null;
           sourceLabel = `${od.sketchTitle} · ${od.singleOutput ? "Single" : "Perbaikan"}`;
@@ -2109,6 +2113,9 @@ function useUpscaleExecute() {
         sourceImage,
         sourceLabel,
         resultImage: null,
+        ...(d.targetSketchId
+          ? {}
+          : { targetSketchId: inferredSketchId, targetSketchTitle: inferredSketchTitle }),
       });
 
       const prompt = [
