@@ -268,6 +268,8 @@ type UpscaleNodeData = {
   error?: string;
   resultImage?: string | null;
   credits?: number;
+  targetSketchId?: string;
+  targetSketchTitle?: string;
 };
 
 const EMPTY_OUTPUTS: RenderAngle[] = [];
