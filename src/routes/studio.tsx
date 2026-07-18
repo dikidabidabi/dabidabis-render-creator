@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { generateRender } from "@/lib/render.functions";
+import { upscaleTile } from "@/lib/upscale-tile.functions";
 import { useStudioStore, type RenderAngle } from "@/store/studio-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
