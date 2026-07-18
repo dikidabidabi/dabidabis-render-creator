@@ -2170,6 +2170,214 @@ async function upscaleDataUrl(dataUrl: string, longEdge: number): Promise<string
   return canvas.toDataURL("image/png");
 }
 
+// ============ Tiled Upscaling (Ubin AI) helpers ============
+// Grid size per target resolution.
+function tileGridSize(resolution: "2K" | "4K" | "8K"): number {
+  return resolution === "8K" ? 8 : resolution === "4K" ? 4 : 2;
+}
+
+// Load a data URL into an HTMLImageElement.
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gagal memuat gambar"));
+    img.src = dataUrl;
+  });
+}
+
+// Slice a source image into an NxN grid of overlapping tiles.
+// Each tile is drawn onto its own canvas at native size, so the AI
+// receives sharp square-ish crops. `overlapFrac` is the fraction of the
+// tile size that overlaps with the neighboring tile on each side.
+type Tile = {
+  row: number;
+  col: number;
+  // Destination rectangle in the final upscaled canvas (in target pixels).
+  destX: number;
+  destY: number;
+  destW: number;
+  destH: number;
+  // The tile image as a data URL (pre-AI). Client stitcher will replace
+  // this with the AI-enhanced version.
+  dataUrl: string;
+};
+
+async function sliceImageIntoTiles(
+  srcDataUrl: string,
+  grid: number,
+  overlapFrac: number,
+  targetW: number,
+  targetH: number,
+): Promise<{ tiles: Tile[]; tileW: number; tileH: number }> {
+  const img = await loadImage(srcDataUrl);
+  const sw = img.naturalWidth;
+  const sh = img.naturalHeight;
+
+  // Tile size in SOURCE space, with overlap. Each tile covers 1/grid of
+  // the source plus overlap on inner edges.
+  const baseSrcW = sw / grid;
+  const baseSrcH = sh / grid;
+  const overlapSrcW = baseSrcW * overlapFrac;
+  const overlapSrcH = baseSrcH * overlapFrac;
+
+  // Tile size in TARGET (upscaled) space. All tiles get the same target
+  // pixel size so the AI produces uniform detail.
+  const baseDstW = targetW / grid;
+  const baseDstH = targetH / grid;
+
+  const tiles: Tile[] = [];
+  // Draw all AI-input tiles at a fixed working size (1024 on the long
+  // edge) — Gemini image models return ~1024–1344px anyway, so this
+  // gives a clean square-ish input.
+  const inputLong = 1024;
+  let tileW = inputLong;
+  let tileH = inputLong;
+
+  for (let r = 0; r < grid; r++) {
+    for (let c = 0; c < grid; c++) {
+      // Source rectangle with symmetric overlap on inner edges.
+      const sx0 = Math.max(0, c * baseSrcW - (c > 0 ? overlapSrcW : 0));
+      const sy0 = Math.max(0, r * baseSrcH - (r > 0 ? overlapSrcH : 0));
+      const sx1 = Math.min(sw, (c + 1) * baseSrcW + (c < grid - 1 ? overlapSrcW : 0));
+      const sy1 = Math.min(sh, (r + 1) * baseSrcH + (r < grid - 1 ? overlapSrcH : 0));
+      const srcTileW = sx1 - sx0;
+      const srcTileH = sy1 - sy0;
+
+      // Destination rectangle in final canvas (mirrors source overlap).
+      const dx0 = Math.max(0, c * baseDstW - (c > 0 ? baseDstW * overlapFrac : 0));
+      const dy0 = Math.max(0, r * baseDstH - (r > 0 ? baseDstH * overlapFrac : 0));
+      const dx1 = Math.min(targetW, (c + 1) * baseDstW + (c < grid - 1 ? baseDstW * overlapFrac : 0));
+      const dy1 = Math.min(targetH, (r + 1) * baseDstH + (r < grid - 1 ? baseDstH * overlapFrac : 0));
+
+      // Preserve aspect on the AI-input canvas.
+      const aspect = srcTileW / srcTileH;
+      const inW = aspect >= 1 ? inputLong : Math.round(inputLong * aspect);
+      const inH = aspect >= 1 ? Math.round(inputLong / aspect) : inputLong;
+      tileW = inW;
+      tileH = inH;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = inW;
+      canvas.height = inH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas 2D unavailable");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, sx0, sy0, srcTileW, srcTileH, 0, 0, inW, inH);
+      tiles.push({
+        row: r,
+        col: c,
+        destX: dx0,
+        destY: dy0,
+        destW: dx1 - dx0,
+        destH: dy1 - dy0,
+        dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+      });
+    }
+  }
+  return { tiles, tileW, tileH };
+}
+
+// Feathered stitching: draws each AI-enhanced tile onto the final
+// canvas using an alpha mask that fades to 0 at overlap edges. This
+// produces seamless linear blending between adjacent tiles.
+async function stitchTiles(
+  tiles: Tile[],
+  grid: number,
+  overlapFrac: number,
+  targetW: number,
+  targetH: number,
+): Promise<string> {
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D unavailable");
+
+  for (const tile of tiles) {
+    const img = await loadImage(tile.dataUrl);
+    // Draw tile onto an offscreen canvas at destination size so we can
+    // apply a per-pixel alpha feather mask.
+    const off = document.createElement("canvas");
+    off.width = Math.max(1, Math.round(tile.destW));
+    off.height = Math.max(1, Math.round(tile.destH));
+    const offCtx = off.getContext("2d");
+    if (!offCtx) continue;
+    offCtx.imageSmoothingEnabled = true;
+    offCtx.imageSmoothingQuality = "high";
+    offCtx.drawImage(img, 0, 0, off.width, off.height);
+
+    // Feather width in pixels on each overlapping side.
+    const baseDstW = targetW / grid;
+    const baseDstH = targetH / grid;
+    const featherX = baseDstW * overlapFrac;
+    const featherY = baseDstH * overlapFrac;
+
+    const hasLeft = tile.col > 0;
+    const hasRight = tile.col < grid - 1;
+    const hasTop = tile.row > 0;
+    const hasBottom = tile.row < grid - 1;
+
+    // Apply mask via ImageData (fastest cross-browser path).
+    const imgData = offCtx.getImageData(0, 0, off.width, off.height);
+    const data = imgData.data;
+    for (let y = 0; y < off.height; y++) {
+      for (let x = 0; x < off.width; x++) {
+        let ax = 1;
+        let ay = 1;
+        if (hasLeft && x < featherX) ax = x / featherX;
+        if (hasRight && x > off.width - featherX) ax = (off.width - x) / featherX;
+        if (hasTop && y < featherY) ay = y / featherY;
+        if (hasBottom && y > off.height - featherY) ay = (off.height - y) / featherY;
+        const a = Math.max(0, Math.min(1, Math.min(ax, ay)));
+        const i = (y * off.width + x) * 4 + 3;
+        data[i] = Math.round(data[i] * a);
+      }
+    }
+    offCtx.putImageData(imgData, 0, 0);
+
+    ctx.drawImage(off, Math.round(tile.destX), Math.round(tile.destY));
+  }
+
+  return canvas.toDataURL("image/jpeg", 0.94);
+}
+
+// Sequential AI call per tile with exponential backoff on HTTP 429.
+async function runTileWithRetry(
+  callTile: (input: { tileBase64: string; prompt: string; model: string }) => Promise<
+    | { ok: true; image: string; model: string }
+    | { ok: false; status: number; error: string }
+  >,
+  tileBase64: string,
+  prompt: string,
+  model: string,
+  onWait: (ms: number, attempt: number) => void,
+): Promise<{ image: string; usedFallback: boolean }> {
+  let delay = 2000;
+  let usedFallback = false;
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    const res = await callTile({ tileBase64, prompt, model });
+    if (res.ok) return { image: res.image, usedFallback };
+    // 429 → back off and retry the same tile.
+    if (res.status === 429) {
+      onWait(delay, attempt);
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 32000);
+      continue;
+    }
+    // Non-429 permanent failure → fall back to flash and try once more.
+    if (!usedFallback && model !== "google/gemini-2.5-flash-image") {
+      usedFallback = true;
+      model = "google/gemini-2.5-flash-image";
+      continue;
+    }
+    throw new Error(res.error);
+  }
+  throw new Error("Rate limit: gagal setelah beberapa percobaan.");
+}
+
+
 function useUpscaleExecute() {
   const graph = useStudioStore((s) => s.graph);
   const updateNode = useStudioStore((s) => s.updateNode);
