@@ -1401,7 +1401,8 @@ function UpscaleNode({
             </>
           ) : (
             <>
-              <Play className="mr-1 h-3 w-3" /> Upscale ke {resolution}
+              <Play className="mr-1 h-3 w-3" />
+              {d.tiled ? `Execute Tiled Upscale ${resolution}` : `Upscale ke ${resolution}`}
             </>
           )}
         </Button>
