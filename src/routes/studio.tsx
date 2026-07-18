@@ -2382,6 +2382,7 @@ function useUpscaleExecute() {
   const graph = useStudioStore((s) => s.graph);
   const updateNode = useStudioStore((s) => s.updateNode);
   const callRender = useServerFn(generateRender);
+  const callTile = useServerFn(upscaleTile);
 
   return useCallback(
     async (upNodeId: string) => {
