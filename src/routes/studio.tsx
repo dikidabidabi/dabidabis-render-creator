@@ -1279,7 +1279,7 @@ function UpscaleNode({
         </div>
         <div>
           <Label className="text-[10px]">Resolusi</Label>
-          <div className="mt-1 grid grid-cols-2 gap-1">
+          <div className="mt-1 grid grid-cols-3 gap-1">
             {(["2K", "4K", "8K"] as const).map((r) => (
               <button
                 key={r}
@@ -1292,11 +1292,68 @@ function UpscaleNode({
                     : "border-border/60 hover:border-fuchsia-500/40",
                 )}
               >
-                {r}
+                {r === "2K" ? "2K · 2560×1440" : r === "4K" ? "4K · 3840×2160" : "8K · 7680×4320"}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Tiled Upscaling (Ubin AI) */}
+        <div className="rounded border border-fuchsia-500/30 bg-fuchsia-500/5 p-2 space-y-2">
+          <label className="flex items-center justify-between gap-2 text-[11px] font-medium cursor-pointer">
+            <span className="flex items-center gap-1">
+              <Layers className="h-3 w-3 text-fuchsia-500" />
+              Tiled Upscaling (Ubin AI)
+            </span>
+            <input
+              type="checkbox"
+              checked={!!d.tiled}
+              onChange={(e) => updateNode(id, { tiled: e.target.checked })}
+              className="h-3.5 w-3.5 accent-fuchsia-500"
+            />
+          </label>
+          {d.tiled ? (
+            <>
+              <div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Tile Overlap</span>
+                  <span className="tabular-nums">
+                    {Math.round((d.tileOverlap ?? 0.15) * 100)}%
+                  </span>
+                </div>
+                <Slider
+                  min={10}
+                  max={25}
+                  step={1}
+                  value={[Math.round((d.tileOverlap ?? 0.15) * 100)]}
+                  onValueChange={(v) => updateNode(id, { tileOverlap: v[0] / 100 })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Denoising Strength</span>
+                  <span className="tabular-nums">
+                    {(d.denoisingStrength ?? 0.3).toFixed(2)}
+                  </span>
+                </div>
+                <Slider
+                  min={15}
+                  max={45}
+                  step={1}
+                  value={[Math.round((d.denoisingStrength ?? 0.3) * 100)]}
+                  onValueChange={(v) => updateNode(id, { denoisingStrength: v[0] / 100 })}
+                  className="mt-1"
+                />
+              </div>
+              <p className="text-[9px] leading-tight text-muted-foreground">
+                Grid: {resolution === "2K" ? "2×2" : resolution === "4K" ? "4×4" : "8×8"} ubin ·
+                Flash untuk ubin, feather blending untuk sambungan.
+              </p>
+            </>
+          ) : null}
+        </div>
+
         <div className="relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background">
           {d.resultImage ? (
             <img src={d.resultImage} alt="Upscaled" className="h-full w-full object-cover" />
@@ -1310,6 +1367,21 @@ function UpscaleNode({
             </div>
           )}
         </div>
+        {status === "processing" && d.tilesTotal ? (
+          <div className="space-y-1">
+            <div className="h-1 rounded bg-muted overflow-hidden">
+              <div
+                className="h-full bg-fuchsia-500 transition-all"
+                style={{
+                  width: `${Math.round(((d.tilesDone ?? 0) / d.tilesTotal) * 100)}%`,
+                }}
+              />
+            </div>
+            <p className="text-[9px] text-muted-foreground">
+              {d.tileStatus ?? `Ubin ${d.tilesDone ?? 0}/${d.tilesTotal}`}
+            </p>
+          </div>
+        ) : null}
         {d.sourceLabel && (
           <p className="truncate text-[9px] text-muted-foreground">Sumber: {d.sourceLabel}</p>
         )}
