@@ -2452,6 +2452,130 @@ function useUpscaleExecute() {
         "Hasil akhir: foto arsitektur fotorealistis ultra-tajam kualitas portfolio, tanpa artefak AI, tanpa halusinasi elemen baru, tanpa teks/watermark.",
       ].join(" ");
 
+      // ============ Tiled Upscaling branch ============
+      if (d.tiled) {
+        const grid = tileGridSize(resolution);
+        const overlap = d.tileOverlap ?? 0.15;
+        const denoise = d.denoisingStrength ?? 0.3;
+        const targetW = isPortrait ? shortEdgePx : longEdgePx;
+        const targetH = isPortrait ? longEdgePx : shortEdgePx;
+
+        const tilePrompt = [
+          `Tingkatkan ketajaman dan detail ubin gambar arsitektur ini untuk komposit ${resolution} (${dimStr}, ${orientationLabel}).`,
+          "PERTAHANKAN 100% geometri, garis perspektif, dan komposisi ubin — jangan geser, jangan tambah/ubah elemen apa pun. Tepi ubin harus tetap sama agar dapat disambung mulus dengan ubin tetangga.",
+          `Kekuatan penambahan detail sekitar ${denoise.toFixed(2)}: sharp architectural detail, high-resolution texture, realistic material, photorealistic micro-texture (beton, kayu, kaca, logam, aspal, vegetasi).`,
+          "Tanpa teks, tanpa watermark, tanpa halusinasi elemen baru.",
+        ].join(" ");
+
+        // Flash model untuk ubin (banyak, cepat, hemat) — sesuai spec.
+        const tileModel = "google/gemini-2.5-flash-image";
+
+        updateNode(upNodeId, { tilesTotal: grid * grid, tilesDone: 0, tileStatus: "Memotong ubin…", progress: 15 });
+        let sliced: { tiles: Tile[]; tileW: number; tileH: number };
+        try {
+          sliced = await sliceImageIntoTiles(sourceImage, grid, overlap, targetW, targetH);
+        } catch (e) {
+          updateNode(upNodeId, { status: "error", error: e instanceof Error ? e.message : "Slice gagal" });
+          return;
+        }
+
+        const enhanced: Tile[] = [];
+        let totalCredits = 0;
+        for (let i = 0; i < sliced.tiles.length; i++) {
+          const t = sliced.tiles[i];
+          updateNode(upNodeId, {
+            tileStatus: `Menajamkan ubin ${i + 1}/${sliced.tiles.length}…`,
+            tilesDone: i,
+            progress: 15 + Math.round((i / sliced.tiles.length) * 70),
+          });
+          try {
+            const result = await runTileWithRetry(
+              async (input) => callTile({ data: input }),
+              t.dataUrl,
+              tilePrompt,
+              tileModel,
+              (ms, attempt) => {
+                updateNode(upNodeId, {
+                  tileStatus: `Rate limit — retry ubin ${i + 1} dalam ${Math.round(ms / 1000)}s (attempt ${attempt})`,
+                });
+              },
+            );
+            enhanced.push({ ...t, dataUrl: result.image });
+            totalCredits += estimateCredits(tileModel);
+          } catch (e) {
+            // Kegagalan permanen di satu ubin: gunakan ubin asli agar sambungan tetap terbentuk.
+            enhanced.push(t);
+            console.warn(`Tile ${i + 1} fallback ke sumber:`, e);
+          }
+        }
+
+        updateNode(upNodeId, { tileStatus: "Menyatukan ubin (feather blending)…", tilesDone: sliced.tiles.length, progress: 90 });
+        let stitched: string;
+        try {
+          stitched = await stitchTiles(enhanced, grid, overlap, targetW, targetH);
+        } catch (e) {
+          updateNode(upNodeId, { status: "error", error: e instanceof Error ? e.message : "Stitch gagal" });
+          return;
+        }
+
+        // Optional Pro pass on the full stitched canvas for global harmonization.
+        let finalImage = stitched;
+        if (model === "google/gemini-3-pro-image") {
+          updateNode(upNodeId, { tileStatus: "Penyelarasan akhir (Pro)…", progress: 95 });
+          try {
+            const proRes = await callRender({
+              data: {
+                sketchBase64: stitched,
+                referenceBase64: null,
+                prompt: `${prompt} Ini adalah komposit tiled — hanya lakukan penyelarasan global (color grading, kontras, sambungan) tanpa mengubah geometri.`,
+                renderType: "exterior",
+                accuracy: 10,
+                consistency: 10,
+                model,
+              },
+            });
+            if (proRes.ok && proRes.resultUrl) {
+              try {
+                const r = await fetch(proRes.resultUrl);
+                const blob = await r.blob();
+                finalImage = await new Promise<string>((resolve, reject) => {
+                  const fr = new FileReader();
+                  fr.onload = () => resolve(fr.result as string);
+                  fr.onerror = () => reject(fr.error);
+                  fr.readAsDataURL(blob);
+                });
+                totalCredits += estimateCredits(model);
+              } catch {
+                finalImage = proRes.resultUrl;
+              }
+            }
+          } catch {
+            /* keep stitched image */
+          }
+        }
+
+        // Enforce exact target dimensions.
+        try {
+          finalImage = await upscaleDataUrl(finalImage, longEdgePx);
+        } catch {
+          /* keep as-is */
+        }
+
+        updateNode(upNodeId, {
+          resultImage: finalImage,
+          status: "done",
+          progress: 100,
+          credits: totalCredits,
+          model: tileModel,
+          tileStatus: `${sliced.tiles.length} ubin tersambung mulus`,
+        });
+        toast.success(`Tiled upscale ${resolution} selesai (${sliced.tiles.length} ubin)`);
+        return;
+      }
+      // ============ End tiled branch ============
+
+
+
       try {
         const res = await callRender({
           data: {
