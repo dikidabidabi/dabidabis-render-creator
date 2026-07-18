@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { generateRender } from "@/lib/render.functions";
+import { upscaleTile } from "@/lib/upscale-tile.functions";
 import { useStudioStore, type RenderAngle } from "@/store/studio-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -270,6 +271,13 @@ type UpscaleNodeData = {
   credits?: number;
   targetSketchId?: string;
   targetSketchTitle?: string;
+  // Tiled upscaling (Ubin AI)
+  tiled?: boolean;
+  tileOverlap?: number; // 0.10 – 0.25 (fraction)
+  denoisingStrength?: number; // 0.15 – 0.45
+  tilesTotal?: number;
+  tilesDone?: number;
+  tileStatus?: string;
 };
 
 const EMPTY_OUTPUTS: RenderAngle[] = [];
@@ -1272,7 +1280,7 @@ function UpscaleNode({
         </div>
         <div>
           <Label className="text-[10px]">Resolusi</Label>
-          <div className="mt-1 grid grid-cols-2 gap-1">
+          <div className="mt-1 grid grid-cols-3 gap-1">
             {(["2K", "4K", "8K"] as const).map((r) => (
               <button
                 key={r}
@@ -1285,11 +1293,68 @@ function UpscaleNode({
                     : "border-border/60 hover:border-fuchsia-500/40",
                 )}
               >
-                {r}
+                {r === "2K" ? "2K · 2560×1440" : r === "4K" ? "4K · 3840×2160" : "8K · 7680×4320"}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Tiled Upscaling (Ubin AI) */}
+        <div className="rounded border border-fuchsia-500/30 bg-fuchsia-500/5 p-2 space-y-2">
+          <label className="flex items-center justify-between gap-2 text-[11px] font-medium cursor-pointer">
+            <span className="flex items-center gap-1">
+              <Layers className="h-3 w-3 text-fuchsia-500" />
+              Tiled Upscaling (Ubin AI)
+            </span>
+            <input
+              type="checkbox"
+              checked={!!d.tiled}
+              onChange={(e) => updateNode(id, { tiled: e.target.checked })}
+              className="h-3.5 w-3.5 accent-fuchsia-500"
+            />
+          </label>
+          {d.tiled ? (
+            <>
+              <div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Tile Overlap</span>
+                  <span className="tabular-nums">
+                    {Math.round((d.tileOverlap ?? 0.15) * 100)}%
+                  </span>
+                </div>
+                <Slider
+                  min={10}
+                  max={25}
+                  step={1}
+                  value={[Math.round((d.tileOverlap ?? 0.15) * 100)]}
+                  onValueChange={(v) => updateNode(id, { tileOverlap: v[0] / 100 })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Denoising Strength</span>
+                  <span className="tabular-nums">
+                    {(d.denoisingStrength ?? 0.3).toFixed(2)}
+                  </span>
+                </div>
+                <Slider
+                  min={15}
+                  max={45}
+                  step={1}
+                  value={[Math.round((d.denoisingStrength ?? 0.3) * 100)]}
+                  onValueChange={(v) => updateNode(id, { denoisingStrength: v[0] / 100 })}
+                  className="mt-1"
+                />
+              </div>
+              <p className="text-[9px] leading-tight text-muted-foreground">
+                Grid: {resolution === "2K" ? "2×2" : resolution === "4K" ? "4×4" : "8×8"} ubin ·
+                Flash untuk ubin, feather blending untuk sambungan.
+              </p>
+            </>
+          ) : null}
+        </div>
+
         <div className="relative aspect-[4/3] overflow-hidden rounded border border-border/60 bg-background">
           {d.resultImage ? (
             <img src={d.resultImage} alt="Upscaled" className="h-full w-full object-cover" />
@@ -1303,6 +1368,21 @@ function UpscaleNode({
             </div>
           )}
         </div>
+        {status === "processing" && d.tilesTotal ? (
+          <div className="space-y-1">
+            <div className="h-1 rounded bg-muted overflow-hidden">
+              <div
+                className="h-full bg-fuchsia-500 transition-all"
+                style={{
+                  width: `${Math.round(((d.tilesDone ?? 0) / d.tilesTotal) * 100)}%`,
+                }}
+              />
+            </div>
+            <p className="text-[9px] text-muted-foreground">
+              {d.tileStatus ?? `Ubin ${d.tilesDone ?? 0}/${d.tilesTotal}`}
+            </p>
+          </div>
+        ) : null}
         {d.sourceLabel && (
           <p className="truncate text-[9px] text-muted-foreground">Sumber: {d.sourceLabel}</p>
         )}
@@ -1322,7 +1402,8 @@ function UpscaleNode({
             </>
           ) : (
             <>
-              <Play className="mr-1 h-3 w-3" /> Upscale ke {resolution}
+              <Play className="mr-1 h-3 w-3" />
+              {d.tiled ? `Execute Tiled Upscale ${resolution}` : `Upscale ke ${resolution}`}
             </>
           )}
         </Button>
@@ -2089,10 +2170,219 @@ async function upscaleDataUrl(dataUrl: string, longEdge: number): Promise<string
   return canvas.toDataURL("image/png");
 }
 
+// ============ Tiled Upscaling (Ubin AI) helpers ============
+// Grid size per target resolution.
+function tileGridSize(resolution: "2K" | "4K" | "8K"): number {
+  return resolution === "8K" ? 8 : resolution === "4K" ? 4 : 2;
+}
+
+// Load a data URL into an HTMLImageElement.
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Gagal memuat gambar"));
+    img.src = dataUrl;
+  });
+}
+
+// Slice a source image into an NxN grid of overlapping tiles.
+// Each tile is drawn onto its own canvas at native size, so the AI
+// receives sharp square-ish crops. `overlapFrac` is the fraction of the
+// tile size that overlaps with the neighboring tile on each side.
+type Tile = {
+  row: number;
+  col: number;
+  // Destination rectangle in the final upscaled canvas (in target pixels).
+  destX: number;
+  destY: number;
+  destW: number;
+  destH: number;
+  // The tile image as a data URL (pre-AI). Client stitcher will replace
+  // this with the AI-enhanced version.
+  dataUrl: string;
+};
+
+async function sliceImageIntoTiles(
+  srcDataUrl: string,
+  grid: number,
+  overlapFrac: number,
+  targetW: number,
+  targetH: number,
+): Promise<{ tiles: Tile[]; tileW: number; tileH: number }> {
+  const img = await loadImage(srcDataUrl);
+  const sw = img.naturalWidth;
+  const sh = img.naturalHeight;
+
+  // Tile size in SOURCE space, with overlap. Each tile covers 1/grid of
+  // the source plus overlap on inner edges.
+  const baseSrcW = sw / grid;
+  const baseSrcH = sh / grid;
+  const overlapSrcW = baseSrcW * overlapFrac;
+  const overlapSrcH = baseSrcH * overlapFrac;
+
+  // Tile size in TARGET (upscaled) space. All tiles get the same target
+  // pixel size so the AI produces uniform detail.
+  const baseDstW = targetW / grid;
+  const baseDstH = targetH / grid;
+
+  const tiles: Tile[] = [];
+  // Draw all AI-input tiles at a fixed working size (1024 on the long
+  // edge) — Gemini image models return ~1024–1344px anyway, so this
+  // gives a clean square-ish input.
+  const inputLong = 1024;
+  let tileW = inputLong;
+  let tileH = inputLong;
+
+  for (let r = 0; r < grid; r++) {
+    for (let c = 0; c < grid; c++) {
+      // Source rectangle with symmetric overlap on inner edges.
+      const sx0 = Math.max(0, c * baseSrcW - (c > 0 ? overlapSrcW : 0));
+      const sy0 = Math.max(0, r * baseSrcH - (r > 0 ? overlapSrcH : 0));
+      const sx1 = Math.min(sw, (c + 1) * baseSrcW + (c < grid - 1 ? overlapSrcW : 0));
+      const sy1 = Math.min(sh, (r + 1) * baseSrcH + (r < grid - 1 ? overlapSrcH : 0));
+      const srcTileW = sx1 - sx0;
+      const srcTileH = sy1 - sy0;
+
+      // Destination rectangle in final canvas (mirrors source overlap).
+      const dx0 = Math.max(0, c * baseDstW - (c > 0 ? baseDstW * overlapFrac : 0));
+      const dy0 = Math.max(0, r * baseDstH - (r > 0 ? baseDstH * overlapFrac : 0));
+      const dx1 = Math.min(targetW, (c + 1) * baseDstW + (c < grid - 1 ? baseDstW * overlapFrac : 0));
+      const dy1 = Math.min(targetH, (r + 1) * baseDstH + (r < grid - 1 ? baseDstH * overlapFrac : 0));
+
+      // Preserve aspect on the AI-input canvas.
+      const aspect = srcTileW / srcTileH;
+      const inW = aspect >= 1 ? inputLong : Math.round(inputLong * aspect);
+      const inH = aspect >= 1 ? Math.round(inputLong / aspect) : inputLong;
+      tileW = inW;
+      tileH = inH;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = inW;
+      canvas.height = inH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas 2D unavailable");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, sx0, sy0, srcTileW, srcTileH, 0, 0, inW, inH);
+      tiles.push({
+        row: r,
+        col: c,
+        destX: dx0,
+        destY: dy0,
+        destW: dx1 - dx0,
+        destH: dy1 - dy0,
+        dataUrl: canvas.toDataURL("image/jpeg", 0.92),
+      });
+    }
+  }
+  return { tiles, tileW, tileH };
+}
+
+// Feathered stitching: draws each AI-enhanced tile onto the final
+// canvas using an alpha mask that fades to 0 at overlap edges. This
+// produces seamless linear blending between adjacent tiles.
+async function stitchTiles(
+  tiles: Tile[],
+  grid: number,
+  overlapFrac: number,
+  targetW: number,
+  targetH: number,
+): Promise<string> {
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D unavailable");
+
+  for (const tile of tiles) {
+    const img = await loadImage(tile.dataUrl);
+    // Draw tile onto an offscreen canvas at destination size so we can
+    // apply a per-pixel alpha feather mask.
+    const off = document.createElement("canvas");
+    off.width = Math.max(1, Math.round(tile.destW));
+    off.height = Math.max(1, Math.round(tile.destH));
+    const offCtx = off.getContext("2d");
+    if (!offCtx) continue;
+    offCtx.imageSmoothingEnabled = true;
+    offCtx.imageSmoothingQuality = "high";
+    offCtx.drawImage(img, 0, 0, off.width, off.height);
+
+    // Feather width in pixels on each overlapping side.
+    const baseDstW = targetW / grid;
+    const baseDstH = targetH / grid;
+    const featherX = baseDstW * overlapFrac;
+    const featherY = baseDstH * overlapFrac;
+
+    const hasLeft = tile.col > 0;
+    const hasRight = tile.col < grid - 1;
+    const hasTop = tile.row > 0;
+    const hasBottom = tile.row < grid - 1;
+
+    // Apply mask via ImageData (fastest cross-browser path).
+    const imgData = offCtx.getImageData(0, 0, off.width, off.height);
+    const data = imgData.data;
+    for (let y = 0; y < off.height; y++) {
+      for (let x = 0; x < off.width; x++) {
+        let ax = 1;
+        let ay = 1;
+        if (hasLeft && x < featherX) ax = x / featherX;
+        if (hasRight && x > off.width - featherX) ax = (off.width - x) / featherX;
+        if (hasTop && y < featherY) ay = y / featherY;
+        if (hasBottom && y > off.height - featherY) ay = (off.height - y) / featherY;
+        const a = Math.max(0, Math.min(1, Math.min(ax, ay)));
+        const i = (y * off.width + x) * 4 + 3;
+        data[i] = Math.round(data[i] * a);
+      }
+    }
+    offCtx.putImageData(imgData, 0, 0);
+
+    ctx.drawImage(off, Math.round(tile.destX), Math.round(tile.destY));
+  }
+
+  return canvas.toDataURL("image/jpeg", 0.94);
+}
+
+// Sequential AI call per tile with exponential backoff on HTTP 429.
+async function runTileWithRetry(
+  callTile: (input: { tileBase64: string; prompt: string; model: string }) => Promise<
+    | { ok: true; image: string; model: string }
+    | { ok: false; status: number; error: string }
+  >,
+  tileBase64: string,
+  prompt: string,
+  model: string,
+  onWait: (ms: number, attempt: number) => void,
+): Promise<{ image: string; usedFallback: boolean }> {
+  let delay = 2000;
+  let usedFallback = false;
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    const res = await callTile({ tileBase64, prompt, model });
+    if (res.ok) return { image: res.image, usedFallback };
+    // 429 → back off and retry the same tile.
+    if (res.status === 429) {
+      onWait(delay, attempt);
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 32000);
+      continue;
+    }
+    // Non-429 permanent failure → fall back to flash and try once more.
+    if (!usedFallback && model !== "google/gemini-2.5-flash-image") {
+      usedFallback = true;
+      model = "google/gemini-2.5-flash-image";
+      continue;
+    }
+    throw new Error(res.error);
+  }
+  throw new Error("Rate limit: gagal setelah beberapa percobaan.");
+}
+
+
 function useUpscaleExecute() {
   const graph = useStudioStore((s) => s.graph);
   const updateNode = useStudioStore((s) => s.updateNode);
   const callRender = useServerFn(generateRender);
+  const callTile = useServerFn(upscaleTile);
 
   return useCallback(
     async (upNodeId: string) => {
@@ -2161,6 +2451,130 @@ function useUpscaleExecute() {
         "Suntikkan tekstur mikro ultra-detail yang sesuai untuk tiap material yang tampak: pori dan agregat pada beton kasar (fair-face concrete), serat dan grain pada kayu, butiran aspal/paving pada jalan, brushed/anodized detail pada logam, urat pada batu alam, tenun pada tekstil, dedaunan pada vegetasi.",
         "Hasil akhir: foto arsitektur fotorealistis ultra-tajam kualitas portfolio, tanpa artefak AI, tanpa halusinasi elemen baru, tanpa teks/watermark.",
       ].join(" ");
+
+      // ============ Tiled Upscaling branch ============
+      if (d.tiled) {
+        const grid = tileGridSize(resolution);
+        const overlap = d.tileOverlap ?? 0.15;
+        const denoise = d.denoisingStrength ?? 0.3;
+        const targetW = isPortrait ? shortEdgePx : longEdgePx;
+        const targetH = isPortrait ? longEdgePx : shortEdgePx;
+
+        const tilePrompt = [
+          `Tingkatkan ketajaman dan detail ubin gambar arsitektur ini untuk komposit ${resolution} (${dimStr}, ${orientationLabel}).`,
+          "PERTAHANKAN 100% geometri, garis perspektif, dan komposisi ubin — jangan geser, jangan tambah/ubah elemen apa pun. Tepi ubin harus tetap sama agar dapat disambung mulus dengan ubin tetangga.",
+          `Kekuatan penambahan detail sekitar ${denoise.toFixed(2)}: sharp architectural detail, high-resolution texture, realistic material, photorealistic micro-texture (beton, kayu, kaca, logam, aspal, vegetasi).`,
+          "Tanpa teks, tanpa watermark, tanpa halusinasi elemen baru.",
+        ].join(" ");
+
+        // Flash model untuk ubin (banyak, cepat, hemat) — sesuai spec.
+        const tileModel = "google/gemini-2.5-flash-image";
+
+        updateNode(upNodeId, { tilesTotal: grid * grid, tilesDone: 0, tileStatus: "Memotong ubin…", progress: 15 });
+        let sliced: { tiles: Tile[]; tileW: number; tileH: number };
+        try {
+          sliced = await sliceImageIntoTiles(sourceImage, grid, overlap, targetW, targetH);
+        } catch (e) {
+          updateNode(upNodeId, { status: "error", error: e instanceof Error ? e.message : "Slice gagal" });
+          return;
+        }
+
+        const enhanced: Tile[] = [];
+        let totalCredits = 0;
+        for (let i = 0; i < sliced.tiles.length; i++) {
+          const t = sliced.tiles[i];
+          updateNode(upNodeId, {
+            tileStatus: `Menajamkan ubin ${i + 1}/${sliced.tiles.length}…`,
+            tilesDone: i,
+            progress: 15 + Math.round((i / sliced.tiles.length) * 70),
+          });
+          try {
+            const result = await runTileWithRetry(
+              async (input) => callTile({ data: input }),
+              t.dataUrl,
+              tilePrompt,
+              tileModel,
+              (ms, attempt) => {
+                updateNode(upNodeId, {
+                  tileStatus: `Rate limit — retry ubin ${i + 1} dalam ${Math.round(ms / 1000)}s (attempt ${attempt})`,
+                });
+              },
+            );
+            enhanced.push({ ...t, dataUrl: result.image });
+            totalCredits += estimateCredits(tileModel);
+          } catch (e) {
+            // Kegagalan permanen di satu ubin: gunakan ubin asli agar sambungan tetap terbentuk.
+            enhanced.push(t);
+            console.warn(`Tile ${i + 1} fallback ke sumber:`, e);
+          }
+        }
+
+        updateNode(upNodeId, { tileStatus: "Menyatukan ubin (feather blending)…", tilesDone: sliced.tiles.length, progress: 90 });
+        let stitched: string;
+        try {
+          stitched = await stitchTiles(enhanced, grid, overlap, targetW, targetH);
+        } catch (e) {
+          updateNode(upNodeId, { status: "error", error: e instanceof Error ? e.message : "Stitch gagal" });
+          return;
+        }
+
+        // Optional Pro pass on the full stitched canvas for global harmonization.
+        let finalImage = stitched;
+        if (model === "google/gemini-3-pro-image") {
+          updateNode(upNodeId, { tileStatus: "Penyelarasan akhir (Pro)…", progress: 95 });
+          try {
+            const proRes = await callRender({
+              data: {
+                sketchBase64: stitched,
+                referenceBase64: null,
+                prompt: `${prompt} Ini adalah komposit tiled — hanya lakukan penyelarasan global (color grading, kontras, sambungan) tanpa mengubah geometri.`,
+                renderType: "exterior",
+                accuracy: 10,
+                consistency: 10,
+                model,
+              },
+            });
+            if (proRes.ok && proRes.resultUrl) {
+              try {
+                const r = await fetch(proRes.resultUrl);
+                const blob = await r.blob();
+                finalImage = await new Promise<string>((resolve, reject) => {
+                  const fr = new FileReader();
+                  fr.onload = () => resolve(fr.result as string);
+                  fr.onerror = () => reject(fr.error);
+                  fr.readAsDataURL(blob);
+                });
+                totalCredits += estimateCredits(model);
+              } catch {
+                finalImage = proRes.resultUrl;
+              }
+            }
+          } catch {
+            /* keep stitched image */
+          }
+        }
+
+        // Enforce exact target dimensions.
+        try {
+          finalImage = await upscaleDataUrl(finalImage, longEdgePx);
+        } catch {
+          /* keep as-is */
+        }
+
+        updateNode(upNodeId, {
+          resultImage: finalImage,
+          status: "done",
+          progress: 100,
+          credits: totalCredits,
+          model: tileModel,
+          tileStatus: `${sliced.tiles.length} ubin tersambung mulus`,
+        });
+        toast.success(`Tiled upscale ${resolution} selesai (${sliced.tiles.length} ubin)`);
+        return;
+      }
+      // ============ End tiled branch ============
+
+
 
       try {
         const res = await callRender({
