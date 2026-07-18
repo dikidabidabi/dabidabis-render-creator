@@ -2405,13 +2405,28 @@ function useUpscaleExecute() {
         const od = src.data as OutputNodeData;
         inferredSketchId = od.sketchId;
         inferredSketchTitle = od.sketchTitle;
-        if (od.standalone || od.singleOutput) {
+        const handle = inEdge.sourceHandle ?? "";
+        const angleId = handle.startsWith("img-") ? handle.slice(4) : undefined;
+        // Prefer per-angle lookup whenever the edge came from a specific image
+        // handle, regardless of standalone/singleOutput flags — the user
+        // explicitly connected one view.
+        if (angleId) {
+          const allOutputs = useStudioStore.getState().graph.outputs;
+          let angle = (allOutputs[od.sketchId] ?? []).find((o) => o.id === angleId);
+          if (!angle) {
+            for (const list of Object.values(allOutputs)) {
+              const found = list.find((o) => o.id === angleId);
+              if (found) { angle = found; break; }
+            }
+          }
+          sourceImage = angle?.image ?? null;
+          sourceLabel = `${od.sketchTitle} · ${angle?.angle ?? "view"}`;
+        } else if (od.standalone || od.singleOutput) {
           sourceImage = od.standaloneImage ?? null;
           sourceLabel = `${od.sketchTitle} · ${od.singleOutput ? "Single" : "Perbaikan"}`;
         } else {
-          const angleId = inEdge.sourceHandle?.replace(/^img-/, "");
           const outs = useStudioStore.getState().graph.outputs[od.sketchId] ?? [];
-          const angle = angleId ? outs.find((o) => o.id === angleId) : outs.find((o) => o.image);
+          const angle = outs.find((o) => o.image);
           sourceImage = angle?.image ?? null;
           sourceLabel = `${od.sketchTitle} · ${angle?.angle ?? ""}`;
         }
