@@ -270,6 +270,13 @@ type UpscaleNodeData = {
   credits?: number;
   targetSketchId?: string;
   targetSketchTitle?: string;
+  // Tiled upscaling (Ubin AI)
+  tiled?: boolean;
+  tileOverlap?: number; // 0.10 – 0.25 (fraction)
+  denoisingStrength?: number; // 0.15 – 0.45
+  tilesTotal?: number;
+  tilesDone?: number;
+  tileStatus?: string;
 };
 
 const EMPTY_OUTPUTS: RenderAngle[] = [];
