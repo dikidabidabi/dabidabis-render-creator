@@ -719,6 +719,9 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             <planeGeometry args={[bound * 6, bound * 6]} />
             <meshStandardMaterial color={colorMode === "bw" ? "#e5e5e5" : "#e2e8f0"} roughness={1} />
           </mesh>
+          {showMap && sketch.geo && geoLocked && (
+            <MapGround geo={sketch.geo} origin={origin} mPerPx={mPerPx} bound={bound} />
+          )}
           {meshes.map((m) => (
             <ExtrudedMesh
               key={m.key}
