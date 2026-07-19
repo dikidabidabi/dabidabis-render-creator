@@ -60,7 +60,9 @@ type Sketch = {
   layers: Layer[];
   levels: Level[];
   roads?: RoadSegment[];
+  geo?: Geo;
 };
+
 
 type Shot = { id: string; dataUrl: string; ts: number };
 
