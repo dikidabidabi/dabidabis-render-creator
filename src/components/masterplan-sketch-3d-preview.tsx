@@ -284,6 +284,71 @@ function toBW(hex: string): string {
 
 
 
+function MapGround({
+  geo, origin, mPerPx, bound,
+}: {
+  geo: Geo; origin: Point; mPerPx: number; bound: number;
+}) {
+  const [state, setState] = useState<{ tex: THREE.CanvasTexture; w: number; h: number } | null>(null);
+  useEffect(() => {
+    const rangeM = Math.max(80, bound * 2.2);
+    const Wm = rangeM * 2;
+    const Hm = rangeM * 2;
+    const wpm = Math.min(4, 2048 / Wm); // canvas px per meter
+    const cw = Math.max(256, Math.round(Wm * wpm));
+    const ch = Math.max(256, Math.round(Hm * wpm));
+    const canvas = document.createElement("canvas");
+    canvas.width = cw; canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    // origin (3D world 0,0) sits at meter offset (cxM,cyM) from geo (sketch(0,0)).
+    const cxM = origin.x * mPerPx;
+    const cyM = origin.y * mPerPx;
+    // Anchor ctx so that geo maps to a specific canvas pixel; drawOsmTiles draws
+    // tiles positioned in world-coord where world(0,0) = geo.
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.translate(cw / 2 - cxM * wpm, ch / 2 - cyM * wpm);
+    const bounds = {
+      minX: (cxM - Wm / 2) * wpm,
+      maxX: (cxM + Wm / 2) * wpm,
+      minY: (cyM - Hm / 2) * wpm,
+      maxY: (cyM + Hm / 2) * wpm,
+    };
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    let cancelled = false;
+    const redraw = () => {
+      if (cancelled) return;
+      drawOsmTiles(ctx, {
+        lat: geo.lat, lon: geo.lon,
+        worldPxPerMeter: wpm,
+        bounds,
+        opacity: 1,
+        onTileLoad: () => { tex.needsUpdate = true; },
+      });
+      tex.needsUpdate = true;
+    };
+    redraw();
+    // Extra polls to catch async tile loads.
+    const timers = [400, 900, 1800, 3200, 5500].map((ms) => setTimeout(redraw, ms));
+    setState({ tex, w: Wm, h: Hm });
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+      tex.dispose();
+    };
+  }, [geo.lat, geo.lon, origin.x, origin.y, mPerPx, bound]);
+  if (!state) return null;
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]} receiveShadow>
+      <planeGeometry args={[state.w, state.h]} />
+      <meshBasicMaterial map={state.tex} transparent opacity={Math.max(0.2, Math.min(1, geo.mapOpacity ?? 0.85))} />
+    </mesh>
+  );
+}
+
+
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
