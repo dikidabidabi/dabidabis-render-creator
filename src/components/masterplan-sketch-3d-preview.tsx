@@ -603,6 +603,17 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             Hitam-Putih
           </button>
         </div>
+        {geoLocked && (
+          <Button
+            variant={showMap ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setShowMap((v) => !v); setTick((t) => t + 1); }}
+            title="Tampilkan peta OSM sesuai koordinat sketsa"
+            className="h-7 bg-background/80 backdrop-blur"
+          >
+            <MapIcon className="mr-1 h-3 w-3" /> {showMap ? "Peta: On" : "Peta"}
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={takeScreenshot} title="Screenshot"
           className="h-7 bg-background/80 backdrop-blur">
           <Camera className="mr-1 h-3 w-3" /> Screenshot
