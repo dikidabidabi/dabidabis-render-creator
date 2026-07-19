@@ -21,6 +21,7 @@ import {
   SunDim,
   Save,
   RotateCcw,
+  Map as MapIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import {
   clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
+import { drawOsmTiles, type Geo } from "@/lib/geo";
 
 
 type Point = { x: number; y: number };
