@@ -357,6 +357,9 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [noLight, setNoLight] = useState(false);
   const [autoTilt, setAutoTilt] = useState(false);
   const [hasSavedView, setHasSavedView] = useState(false);
+  const geoLocked = !!(sketch.geo && sketch.geo.locked && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon));
+  const [showMap, setShowMap] = useState<boolean>(geoLocked);
+  useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const orbitRef = useRef<any>(null);
