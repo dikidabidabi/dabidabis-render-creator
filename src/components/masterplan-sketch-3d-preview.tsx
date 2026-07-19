@@ -21,6 +21,7 @@ import {
   SunDim,
   Save,
   RotateCcw,
+  Map as MapIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import {
   clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
+import { drawOsmTiles, type Geo } from "@/lib/geo";
 
 
 type Point = { x: number; y: number };
@@ -58,7 +60,9 @@ type Sketch = {
   layers: Layer[];
   levels: Level[];
   roads?: RoadSegment[];
+  geo?: Geo;
 };
+
 
 type Shot = { id: string; dataUrl: string; ts: number };
 
@@ -280,6 +284,71 @@ function toBW(hex: string): string {
 
 
 
+function MapGround({
+  geo, origin, mPerPx, bound,
+}: {
+  geo: Geo; origin: Point; mPerPx: number; bound: number;
+}) {
+  const [state, setState] = useState<{ tex: THREE.CanvasTexture; w: number; h: number } | null>(null);
+  useEffect(() => {
+    const rangeM = Math.max(80, bound * 2.2);
+    const Wm = rangeM * 2;
+    const Hm = rangeM * 2;
+    const wpm = Math.min(4, 2048 / Wm); // canvas px per meter
+    const cw = Math.max(256, Math.round(Wm * wpm));
+    const ch = Math.max(256, Math.round(Hm * wpm));
+    const canvas = document.createElement("canvas");
+    canvas.width = cw; canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    // origin (3D world 0,0) sits at meter offset (cxM,cyM) from geo (sketch(0,0)).
+    const cxM = origin.x * mPerPx;
+    const cyM = origin.y * mPerPx;
+    // Anchor ctx so that geo maps to a specific canvas pixel; drawOsmTiles draws
+    // tiles positioned in world-coord where world(0,0) = geo.
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.translate(cw / 2 - cxM * wpm, ch / 2 - cyM * wpm);
+    const bounds = {
+      minX: (cxM - Wm / 2) * wpm,
+      maxX: (cxM + Wm / 2) * wpm,
+      minY: (cyM - Hm / 2) * wpm,
+      maxY: (cyM + Hm / 2) * wpm,
+    };
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    let cancelled = false;
+    const redraw = () => {
+      if (cancelled) return;
+      drawOsmTiles(ctx, {
+        lat: geo.lat, lon: geo.lon,
+        worldPxPerMeter: wpm,
+        bounds,
+        opacity: 1,
+        onTileLoad: () => { tex.needsUpdate = true; },
+      });
+      tex.needsUpdate = true;
+    };
+    redraw();
+    // Extra polls to catch async tile loads.
+    const timers = [400, 900, 1800, 3200, 5500].map((ms) => setTimeout(redraw, ms));
+    setState({ tex, w: Wm, h: Hm });
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+      tex.dispose();
+    };
+  }, [geo.lat, geo.lon, origin.x, origin.y, mPerPx, bound]);
+  if (!state) return null;
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]} receiveShadow>
+      <planeGeometry args={[state.w, state.h]} />
+      <meshBasicMaterial map={state.tex} transparent opacity={Math.max(0.2, Math.min(1, geo.mapOpacity ?? 0.85))} />
+    </mesh>
+  );
+}
+
+
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [tick, setTick] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
@@ -288,6 +357,9 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const [noLight, setNoLight] = useState(false);
   const [autoTilt, setAutoTilt] = useState(false);
   const [hasSavedView, setHasSavedView] = useState(false);
+  const geoLocked = !!(sketch.geo && sketch.geo.locked && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon));
+  const [showMap, setShowMap] = useState<boolean>(geoLocked);
+  useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const orbitRef = useRef<any>(null);
@@ -531,6 +603,17 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             Hitam-Putih
           </button>
         </div>
+        {geoLocked && (
+          <Button
+            variant={showMap ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setShowMap((v) => !v); setTick((t) => t + 1); }}
+            title="Tampilkan peta OSM sesuai koordinat sketsa"
+            className="h-7 bg-background/80 backdrop-blur"
+          >
+            <MapIcon className="mr-1 h-3 w-3" /> {showMap ? "Peta: On" : "Peta"}
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={takeScreenshot} title="Screenshot"
           className="h-7 bg-background/80 backdrop-blur">
           <Camera className="mr-1 h-3 w-3" /> Screenshot
@@ -636,6 +719,9 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             <planeGeometry args={[bound * 6, bound * 6]} />
             <meshStandardMaterial color={colorMode === "bw" ? "#e5e5e5" : "#e2e8f0"} roughness={1} />
           </mesh>
+          {showMap && sketch.geo && geoLocked && (
+            <MapGround geo={sketch.geo} origin={origin} mPerPx={mPerPx} bound={bound} />
+          )}
           {meshes.map((m) => (
             <ExtrudedMesh
               key={m.key}
