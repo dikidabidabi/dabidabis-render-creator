@@ -8375,6 +8375,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           color: iluColor,
           strokeWidthPx: iluStrokeCircleDashed,
           fillAlpha: iluCircleFillAlpha,
+          text: iluText || undefined,
           createdAt: Date.now(),
         };
         const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "circleDashed");
@@ -10696,11 +10697,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 />
               ))}
             </div>
-            {iluKind === "label" && (
+            {(iluKind === "label" || iluKind === "circleDashed") && (
               <Input
                 value={iluText}
                 onChange={(e) => setIluText(e.target.value)}
-                placeholder="Teks label"
+                placeholder={iluKind === "circleDashed" ? "Teks lingkaran (opsional)" : "Teks label"}
                 className="h-7 w-40 text-[11px]"
               />
             )}
@@ -10794,7 +10795,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
                     color: iluColor,
                     strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
-                    text: iluKind === "label" ? (iluText || "Label") : undefined,
+                    text: iluKind === "label" ? (iluText || "Label") : (iluKind === "circleDashed" ? (iluText || undefined) : undefined),
                     fontScale: iluKind === "label" ? 1 : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
                     fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
@@ -10823,31 +10824,34 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {/* Panel edit Label — muncul saat sebuah label terpilih (mode geser). */}
         {tool === "iluanalisa" && mode === "masterplan" && iluSub === "geser" && iluSelectedId && (() => {
           const sel = (sketch.illustrations ?? []).find((x) => x.id === iluSelectedId);
-          if (!sel || sel.kind !== "label") return null;
+          if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed")) return null;
           const fs = sel.fontScale ?? 1;
+          const isCircle = sel.kind === "circleDashed";
           return (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/10 px-2 py-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Edit Label</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">{isCircle ? "Edit Lingkaran" : "Edit Label"}</span>
               <Input
                 value={sel.text ?? ""}
                 onChange={(e) => {
                   const t = e.target.value;
                   onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, text: t } : x) });
                 }}
-                placeholder="Teks label"
+                placeholder={isCircle ? "Teks lingkaran (opsional)" : "Teks label"}
                 className="h-7 w-52 text-[11px]"
               />
-              <span className="text-[10px] text-slate-600">Ukuran</span>
-              <Slider
-                value={[Math.round(fs * 100)]}
-                min={50} max={400} step={5}
-                onValueChange={(v) => {
-                  const nv = Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100));
-                  onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, fontScale: nv } : x) });
-                }}
-                className="w-40"
-              />
-              <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
+              {!isCircle && (<>
+                <span className="text-[10px] text-slate-600">Ukuran</span>
+                <Slider
+                  value={[Math.round(fs * 100)]}
+                  min={50} max={400} step={5}
+                  onValueChange={(v) => {
+                    const nv = Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100));
+                    onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, fontScale: nv } : x) });
+                  }}
+                  className="w-40"
+                />
+                <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
+              </>)}
               <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluSelectedId(null)}>Selesai</Button>
               <Button
                 size="sm"
@@ -10856,9 +10860,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 onClick={() => {
                   onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
                   setIluSelectedId(null);
-                  toast.success("Label dihapus");
+                  toast.success(isCircle ? "Lingkaran dihapus" : "Label dihapus");
                 }}
-              >Hapus label</Button>
+              >{isCircle ? "Hapus lingkaran" : "Hapus label"}</Button>
             </div>
           );
         })()}
