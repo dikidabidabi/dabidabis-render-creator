@@ -8375,6 +8375,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           color: iluColor,
           strokeWidthPx: iluStrokeCircleDashed,
           fillAlpha: iluCircleFillAlpha,
+          text: iluText || undefined,
           createdAt: Date.now(),
         };
         const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "circleDashed");
