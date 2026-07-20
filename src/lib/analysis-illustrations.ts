@@ -375,19 +375,34 @@ export function drawAnnotationCanvas(
     ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    // Teks di sisi luar perimeter, 45° kiri atas. Offset 0.3× tebal, ukuran 1× tebal.
+    // Teks melengkung mengikuti perimeter, 45° kiri atas. Offset 0.3× tebal, ukuran 1× tebal.
     const cdTxt = (a.text ?? "").trim();
     if (cdTxt) {
       const fs = sw * 1;
       const off = sw * 0.3;
-      const ang = (5 * Math.PI) / 4; // top-left dalam screen (y ke bawah)
-      const tx = c.x + Math.cos(ang) * (r + off);
-      const ty = c.y + Math.sin(ang) * (r + off);
-      ctx.font = `600 ${fs}px Manrope, sans-serif`;
+      const text = cdTxt.toUpperCase();
+      const R = r + off + fs * 0.85; // baseline sedikit di luar perimeter, teks membaca ke luar
+      ctx.font = `700 ${fs}px "Bebas Neue", "Manrope", sans-serif`;
       ctx.fillStyle = a.color;
-      ctx.textAlign = "right";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(cdTxt, tx, ty);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      const chars = Array.from(text);
+      const widths = chars.map((ch) => ctx.measureText(ch).width);
+      const total = widths.reduce((s, w) => s + w, 0);
+      const totalAngle = total / R;
+      const centerAngle = (5 * Math.PI) / 4;
+      let a0 = centerAngle - totalAngle / 2;
+      for (let i = 0; i < chars.length; i++) {
+        const wi = widths[i];
+        const charAngle = wi / R;
+        const midA = a0 + charAngle / 2;
+        ctx.save();
+        ctx.translate(c.x + Math.cos(midA) * R, c.y + Math.sin(midA) * R);
+        ctx.rotate(midA + Math.PI / 2);
+        ctx.fillText(chars[i], 0, 0);
+        ctx.restore();
+        a0 += charAngle;
+      }
     }
     ctx.restore();
     return;
