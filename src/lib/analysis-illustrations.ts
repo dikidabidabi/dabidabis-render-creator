@@ -375,6 +375,20 @@ export function drawAnnotationCanvas(
     ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+    // Teks di sisi luar perimeter, 45° kiri atas. Offset 0.3× tebal, ukuran 1× tebal.
+    const cdTxt = (a.text ?? "").trim();
+    if (cdTxt) {
+      const fs = sw * 1;
+      const off = sw * 0.3;
+      const ang = (5 * Math.PI) / 4; // top-left dalam screen (y ke bawah)
+      const tx = c.x + Math.cos(ang) * (r + off);
+      const ty = c.y + Math.sin(ang) * (r + off);
+      ctx.font = `600 ${fs}px Manrope, sans-serif`;
+      ctx.fillStyle = a.color;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(cdTxt, tx, ty);
+    }
     ctx.restore();
     return;
   }
