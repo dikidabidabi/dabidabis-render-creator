@@ -577,15 +577,25 @@ export function annotationSvgElements(
     if (cdTxt) {
       const fs = sw * 1;
       const off = sw * 0.3;
-      const ang = (5 * Math.PI) / 4;
-      const tx = c.x + Math.cos(ang) * (r + off);
-      const ty = c.y + Math.sin(ang) * (r + off);
+      const R = r + off;
+      const pathId = `${keyPrefix}-cdpath`;
+      // Path lingkaran searah jarum jam (sweep=1 pada y-down = clockwise visual)
+      const arcD = `M ${c.x + R} ${c.y} A ${R} ${R} 0 1 1 ${c.x - R} ${c.y} A ${R} ${R} 0 1 1 ${c.x + R} ${c.y}`;
+      nodes.push(React.createElement("defs", { key: `${keyPrefix}-tdefs` },
+        React.createElement("path", { id: pathId, d: arcD, fill: "none" }),
+      ));
+      // startOffset 62.5% = 5π/4 sepanjang lingkaran (kiri atas)
       nodes.push(React.createElement("text", {
-        key: `${keyPrefix}-t`, x: tx, y: ty,
-        textAnchor: "end",
-        fill: a.color, fontSize: fs, fontWeight: 600,
-        style: { fontFamily: "Manrope, sans-serif" },
-      }, cdTxt));
+        key: `${keyPrefix}-t`,
+        fill: a.color, fontSize: fs, fontWeight: 700,
+        style: { fontFamily: '"Bebas Neue", "Manrope", sans-serif', letterSpacing: "0.04em" },
+      },
+        React.createElement("textPath", {
+          href: `#${pathId}`,
+          startOffset: "62.5%",
+          textAnchor: "middle",
+        }, cdTxt.toUpperCase()),
+      ));
     }
     return nodes;
   }
