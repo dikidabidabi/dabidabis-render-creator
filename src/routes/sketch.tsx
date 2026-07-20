@@ -10794,7 +10794,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
                     color: iluColor,
                     strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
-                    text: iluKind === "label" ? (iluText || "Label") : undefined,
+                    text: iluKind === "label" ? (iluText || "Label") : (iluKind === "circleDashed" ? (iluText || undefined) : undefined),
                     fontScale: iluKind === "label" ? 1 : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
                     fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
