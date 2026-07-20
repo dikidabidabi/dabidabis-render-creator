@@ -10696,11 +10696,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 />
               ))}
             </div>
-            {iluKind === "label" && (
+            {(iluKind === "label" || iluKind === "circleDashed") && (
               <Input
                 value={iluText}
                 onChange={(e) => setIluText(e.target.value)}
-                placeholder="Teks label"
+                placeholder={iluKind === "circleDashed" ? "Teks lingkaran (opsional)" : "Teks label"}
                 className="h-7 w-40 text-[11px]"
               />
             )}
