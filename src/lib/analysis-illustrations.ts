@@ -375,13 +375,13 @@ export function drawAnnotationCanvas(
     ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    // Teks melengkung mengikuti perimeter, 45° kiri atas. Offset 0.3× tebal, ukuran 1× tebal.
+    // Teks melengkung mengikuti perimeter, 45° kiri atas. Offset 0.2× tebal, ukuran 1.5× tebal.
     const cdTxt = (a.text ?? "").trim();
     if (cdTxt) {
-      const fs = sw * 1;
-      const off = sw * 0.3;
+      const fs = sw * 1.5;
+      const off = sw * 0.2;
       const text = cdTxt.toUpperCase();
-      const R = r + off + fs * 0.85; // baseline sedikit di luar perimeter, teks membaca ke luar
+      const R = r + off; // baseline pada path (samakan dengan SVG textPath di presentasi)
       ctx.font = `700 ${fs}px "Bebas Neue", "Manrope", sans-serif`;
       ctx.fillStyle = a.color;
       ctx.textAlign = "center";
