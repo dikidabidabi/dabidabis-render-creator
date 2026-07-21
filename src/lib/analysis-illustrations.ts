@@ -575,8 +575,8 @@ export function annotationSvgElements(
     }));
     const cdTxt = (a.text ?? "").trim();
     if (cdTxt) {
-      const fs = sw * 1;
-      const off = sw * 0.3;
+      const fs = sw * 1.5;
+      const off = sw * 0.2;
       const R = r + off;
       const pathId = `${keyPrefix}-cdpath`;
       // Path lingkaran searah jarum jam (sweep=1 pada y-down = clockwise visual)
