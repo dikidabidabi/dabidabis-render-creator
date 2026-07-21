@@ -375,11 +375,11 @@ export function drawAnnotationCanvas(
     ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    // Teks melengkung mengikuti perimeter, 45° kiri atas. Offset 0.2× tebal, ukuran 1.5× tebal.
+    // Teks melengkung mengikuti perimeter, 45° kiri atas. Offset 0.8× tebal, ukuran 1.5× tebal.
     const cdTxt = (a.text ?? "").trim();
     if (cdTxt) {
       const fs = sw * 1.5;
-      const off = sw * 0.2;
+      const off = sw * 0.8;
       const text = cdTxt.toUpperCase();
       const R = r + off; // baseline pada path (samakan dengan SVG textPath di presentasi)
       ctx.font = `700 ${fs}px "Bebas Neue", "Manrope", sans-serif`;
@@ -576,7 +576,7 @@ export function annotationSvgElements(
     const cdTxt = (a.text ?? "").trim();
     if (cdTxt) {
       const fs = sw * 1.5;
-      const off = sw * 0.2;
+      const off = sw * 0.8;
       const R = r + off;
       const pathId = `${keyPrefix}-cdpath`;
       // Path lingkaran searah jarum jam (sweep=1 pada y-down = clockwise visual)
