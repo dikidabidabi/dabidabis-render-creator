@@ -686,6 +686,96 @@ export function annotationSvgElements(
     return nodes;
   }
 
+  if (a.kind === "text") {
+    if (a.points.length < 2) return nodes;
+    const geom = textBoxGeom(a, worldToScreen);
+    const bodyFs = 12 * scale * (a.fontScale ?? 1);
+    const titleFs = 14 * scale * (a.titleFontScale ?? 1);
+    const titleBg = a.bgColor || a.color;
+    const bodyBg = a.bodyBgColor || "#ffffff";
+    const bodyAlpha = Math.max(0, Math.min(1, a.fillAlpha ?? 0.9));
+    const pad = Math.max(4, bodyFs * 0.45);
+    const titleH = Math.min(titleFs * 1.7, geom.h);
+    const clipId = `${keyPrefix}-txtclip`;
+    // Leader
+    if (a.points.length >= 4) {
+      const ls = worldToScreen(a.points[2]);
+      const le = worldToScreen(a.points[3]);
+      nodes.push(React.createElement("line", {
+        key: `${keyPrefix}-ll`, x1: ls.x, y1: ls.y, x2: le.x, y2: le.y,
+        stroke: a.color, strokeWidth: Math.max(1, bodyFs * 0.09),
+      }));
+      nodes.push(React.createElement("circle", {
+        key: `${keyPrefix}-la`, cx: le.x, cy: le.y, r: Math.max(3, bodyFs * 0.22), fill: a.color,
+      }));
+    }
+    // Body bg
+    nodes.push(React.createElement("rect", {
+      key: `${keyPrefix}-body`, x: geom.x, y: geom.y, width: geom.w, height: geom.h,
+      fill: withAlpha(bodyBg, bodyAlpha), stroke: withAlpha(a.color, 0.55), strokeWidth: 1,
+    }));
+    // Title bg
+    nodes.push(React.createElement("rect", {
+      key: `${keyPrefix}-title`, x: geom.x, y: geom.y, width: geom.w, height: titleH,
+      fill: titleBg, stroke: "none",
+    }));
+    // Title text
+    nodes.push(React.createElement("defs", { key: `${keyPrefix}-defs` },
+      React.createElement("clipPath", { id: clipId },
+        React.createElement("rect", { x: geom.x, y: geom.y, width: geom.w, height: titleH }),
+      ),
+    ));
+    const titleStr = (a.title || "JUDUL").toUpperCase();
+    nodes.push(React.createElement("text", {
+      key: `${keyPrefix}-tt`,
+      x: geom.x + pad, y: geom.y + titleH / 2,
+      dominantBaseline: "middle", fill: "#ffffff", fontSize: titleFs, fontWeight: 700,
+      clipPath: `url(#${clipId})`,
+      style: { fontFamily: '"Bebas Neue", "Sora", sans-serif', letterSpacing: "0.03em" },
+    }, titleStr));
+    // Body — wrap using approx char width; SVG has no native wrap, so use tspans.
+    const bodyStr = a.text || "";
+    const approxCharW = bodyFs * 0.55;
+    const maxCharsPerLine = Math.max(1, Math.floor((geom.w - pad * 2) / approxCharW));
+    const paragraphs = bodyStr.split(/\n/);
+    const lines: string[] = [];
+    for (const para of paragraphs) {
+      if (!para) { lines.push(""); continue; }
+      const words = para.split(/\s+/);
+      let cur = "";
+      for (const w of words) {
+        const test = cur ? cur + " " + w : w;
+        if (test.length <= maxCharsPerLine) cur = test;
+        else {
+          if (cur) lines.push(cur);
+          if (w.length > maxCharsPerLine) {
+            for (let i = 0; i < w.length; i += maxCharsPerLine) lines.push(w.slice(i, i + maxCharsPerLine));
+            cur = "";
+          } else {
+            cur = w;
+          }
+        }
+      }
+      if (cur) lines.push(cur);
+    }
+    const lineH = bodyFs * 1.35;
+    const maxLines = Math.max(0, Math.floor((geom.h - titleH - pad * 0.6) / lineH));
+    const bodyLines = lines.slice(0, maxLines);
+    const tspans = bodyLines.map((ln, i) => React.createElement("tspan", {
+      key: `bl-${i}`, x: geom.x + pad, dy: i === 0 ? 0 : lineH,
+    }, ln || " "));
+    if (bodyLines.length > 0) {
+      nodes.push(React.createElement("text", {
+        key: `${keyPrefix}-bt`,
+        x: geom.x + pad, y: geom.y + titleH + pad * 0.6 + bodyFs * 0.85,
+        fill: a.color, fontSize: bodyFs, fontWeight: 500,
+        style: { fontFamily: '"Manrope", sans-serif' },
+      }, tspans));
+    }
+    return nodes;
+  }
+
+
   if (a.kind === "circleDashed") {
     if (a.points.length < 2) return nodes;
     const c = worldToScreen(a.points[0]);
