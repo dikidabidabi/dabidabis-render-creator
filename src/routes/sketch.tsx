@@ -10917,30 +10917,72 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {/* Panel edit Label — muncul saat sebuah label terpilih (mode geser). */}
         {tool === "iluanalisa" && mode === "masterplan" && iluSub === "geser" && iluSelectedId && (() => {
           const sel = (sketch.illustrations ?? []).find((x) => x.id === iluSelectedId);
-          if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed")) return null;
+          if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed" && sel.kind !== "text")) return null;
           const fs = sel.fontScale ?? 1;
+          const tfs = sel.titleFontScale ?? 1;
           const isCircle = sel.kind === "circleDashed";
+          const isText = sel.kind === "text";
+          const patch = (upd: Partial<Annotation>) =>
+            onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, ...upd } : x) });
           return (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/10 px-2 py-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">{isCircle ? "Edit Lingkaran" : "Edit Label"}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">
+                {isText ? "Edit Teks" : isCircle ? "Edit Lingkaran" : "Edit Label"}
+              </span>
+              {isText && (
+                <Input
+                  value={sel.title ?? ""}
+                  onChange={(e) => patch({ title: e.target.value })}
+                  placeholder="Judul"
+                  className="h-7 w-32 text-[11px]"
+                />
+              )}
               <Input
                 value={sel.text ?? ""}
-                onChange={(e) => {
-                  const t = e.target.value;
-                  onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, text: t } : x) });
-                }}
-                placeholder={isCircle ? "Teks lingkaran (opsional)" : "Teks label"}
-                className="h-7 w-52 text-[11px]"
+                onChange={(e) => patch({ text: e.target.value })}
+                placeholder={isText ? "Isi teks" : (isCircle ? "Teks lingkaran (opsional)" : "Teks label")}
+                className={`h-7 text-[11px] ${isText ? "w-64" : "w-52"}`}
               />
-              {!isCircle && (<>
+              {isText && (
+                <>
+                  <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                    <span>Latar judul</span>
+                    <input type="color" value={sel.bgColor || "#0f172a"} onChange={(e) => patch({ bgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                  </label>
+                  <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                    <span>Latar isi</span>
+                    <input type="color" value={sel.bodyBgColor || "#ffffff"} onChange={(e) => patch({ bodyBgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                  </label>
+                  <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                    <span>Warna teks</span>
+                    <input type="color" value={sel.color} onChange={(e) => patch({ color: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600">Alpha isi</span>
+                    <Slider value={[Math.round((sel.fillAlpha ?? 0.9) * 100)]} min={0} max={100} step={5}
+                      onValueChange={(v) => patch({ fillAlpha: (v[0] ?? 90) / 100 })} className="w-20" />
+                    <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round((sel.fillAlpha ?? 0.9) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600">Judul</span>
+                    <Slider value={[Math.round(tfs * 100)]} min={50} max={400} step={5}
+                      onValueChange={(v) => patch({ titleFontScale: Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100)) })} className="w-24" />
+                    <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(tfs * 100)}%</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600">Isi</span>
+                    <Slider value={[Math.round(fs * 100)]} min={50} max={400} step={5}
+                      onValueChange={(v) => patch({ fontScale: Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100)) })} className="w-24" />
+                    <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
+                  </div>
+                </>
+              )}
+              {!isCircle && !isText && (<>
                 <span className="text-[10px] text-slate-600">Ukuran</span>
                 <Slider
                   value={[Math.round(fs * 100)]}
                   min={50} max={400} step={5}
-                  onValueChange={(v) => {
-                    const nv = Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100));
-                    onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, fontScale: nv } : x) });
-                  }}
+                  onValueChange={(v) => patch({ fontScale: Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100)) })}
                   className="w-40"
                 />
                 <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
@@ -10953,12 +10995,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 onClick={() => {
                   onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
                   setIluSelectedId(null);
-                  toast.success(isCircle ? "Lingkaran dihapus" : "Label dihapus");
+                  toast.success(isText ? "Kotak teks dihapus" : isCircle ? "Lingkaran dihapus" : "Label dihapus");
                 }}
-              >{isCircle ? "Hapus lingkaran" : "Hapus label"}</Button>
+              >{isText ? "Hapus" : isCircle ? "Hapus lingkaran" : "Hapus label"}</Button>
             </div>
           );
         })()}
+
         {tool === "iluanalisa" && mode === "masterplan" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <div className="flex items-center gap-2">
