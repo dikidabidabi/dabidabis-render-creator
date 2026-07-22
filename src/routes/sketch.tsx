@@ -8382,10 +8382,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         setIluDraft(null);
         toast.success("Lingkaran dashed ditambahkan");
+      } else if (iluKind === "text" && iluDraft && iluDraft.points.length === 1) {
+        // Klik ke-2 = titik diagonal kotak → commit dengan leader default.
+        const p0 = iluDraft.points[0];
+        const p1 = { x: p.x, y: p.y };
+        const cx = (p0.x + p1.x) / 2;
+        const cy = (p0.y + p1.y) / 2;
+        const off = Math.max(40, Math.abs(p1.x - p0.x) * 0.6) / view.s;
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: "text",
+          style: preset.style,
+          points: [p0, p1, { x: cx, y: cy }, { x: cx - off, y: cy - off }],
+          color: iluTextColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          title: iluTitle || "JUDUL",
+          text: iluText || "",
+          fontScale: iluBodyFs,
+          titleFontScale: iluTitleFs,
+          bgColor: iluTitleBg,
+          bodyBgColor: iluBodyBg,
+          fillAlpha: iluBodyAlpha,
+          createdAt: Date.now(),
+        };
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "text");
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
+        setIluDraft(null);
+        toast.success("Kotak teks ditambahkan");
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
         else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
       }
+
     } else if (tool === "jalan" && jalanSub === "fillet") {
       // Klik dekat vertex internal jalan → set radius fillet jalan tsb.
       const tolPx = 12 / view.s;
