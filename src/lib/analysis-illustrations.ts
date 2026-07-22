@@ -56,7 +56,9 @@ export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: 
   node:   { label: "Node",        color: "#f97316", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk meletakkan node." },
   access: { label: "Access",      color: "#ea580c", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk access point." },
   label:  { label: "Label",       color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: true,  minPts: 2, hint: "Klik titik jangkar, lalu klik posisi kotak label (panah bebas panjang), Enter/Selesai." },
+  text:   { label: "Teks",        color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: true,  minPts: 2, hint: "Klik 2 titik diagonal untuk membuat kotak judul+isi. Panah leader bisa digeser di mode Geser." },
 };
+
 
 export const ANNOTATION_COLOR_SWATCHES = [
   "#dc2626", "#ea580c", "#f59e0b", "#16a34a", "#0ea5e9",
