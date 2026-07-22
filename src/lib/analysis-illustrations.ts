@@ -16,7 +16,9 @@ export type AnnotationKind =
   | "node"        // titik nodal (lingkaran putih + pola berwarna)
   | "access"      // access point (lingkaran putih + border warna)
   | "label"       // callout teks + leader line
+  | "text"        // kotak judul + isi + leader line (2 titik geser)
   | "border";     // outline putus-putus (kontur area)
+
 
 export type PathStyle = "garis" | "tangent";
 
