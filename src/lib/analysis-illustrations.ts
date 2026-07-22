@@ -26,19 +26,25 @@ export type Annotation = {
   id: string;
   kind: AnnotationKind;
   style: PathStyle;          // untuk kind bertype path (arrow/zone/flow/border)
-  /** Titik-titik kontrol dunia (pixel). Untuk node/access/label = 1..2 titik. */
+  /** Titik-titik kontrol dunia (pixel). Untuk node/access/label = 1..2 titik.
+   *  Untuk text = 4 titik: [box-TL, box-BR, leader-start, leader-end]. */
   points: Vec2[];
-  color: string;             // warna utama (stroke + fill semi-transparan)
+  color: string;             // warna utama (stroke + fill semi-transparan) / warna teks isi utk text
   strokeWidthPx?: number;    // default per-kind
-  text?: string;             // untuk label
-  fontScale?: number;        // multiplier ukuran teks label (default 1)
+  text?: string;             // untuk label / teks isi text-block
+  title?: string;            // untuk kind="text" — judul (1 baris)
+  fontScale?: number;        // multiplier ukuran teks label / isi (default 1)
+  titleFontScale?: number;   // multiplier ukuran judul text-block (default 1)
+  bgColor?: string;          // text: warna latar judul (solid)
+  bodyBgColor?: string;      // text: warna latar isi
   hatch?: boolean;           // zona: arsir 45° tanpa border (default false)
   sizeScale?: number;        // node/access: multiplier ukuran (default 1)
-  /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Tidak
-   *  mempengaruhi transparansi border. Default 0 (tidak ada isi). */
+  /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Untuk text:
+   *  alpha latar isi. Default 0 (tidak ada isi). */
   fillAlpha?: number;
   createdAt: number;
 };
+
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
   arrow:        { label: "Panah",           color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
