@@ -340,7 +340,72 @@ export function drawAnnotationCanvas(
     return;
   }
 
+  if (a.kind === "text") {
+    if (a.points.length < 2) { ctx.restore(); return; }
+    const geom = textBoxGeom(a, worldToScreen);
+    const bodyFs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
+    const titleFs = 14 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.titleFontScale ?? 1);
+    const titleBg = a.bgColor || a.color;
+    const bodyBg = a.bodyBgColor || "#ffffff";
+    const bodyAlpha = Math.max(0, Math.min(1, a.fillAlpha ?? 0.9));
+    const pad = Math.max(4, bodyFs * 0.45);
+    const titleH = titleFs * 1.7;
+    // Leader
+    if (a.points.length >= 4) {
+      const ls = worldToScreen(a.points[2]);
+      const le = worldToScreen(a.points[3]);
+      ctx.strokeStyle = a.color;
+      ctx.lineWidth = Math.max(1, bodyFs * 0.09);
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(ls.x, ls.y); ctx.lineTo(le.x, le.y); ctx.stroke();
+      ctx.fillStyle = a.color;
+      ctx.beginPath(); ctx.arc(le.x, le.y, Math.max(3, bodyFs * 0.22), 0, Math.PI * 2); ctx.fill();
+    }
+    // Body background (behind title too so title bg overlays it)
+    ctx.fillStyle = withAlpha(bodyBg, bodyAlpha);
+    ctx.beginPath(); ctx.rect(geom.x, geom.y, geom.w, geom.h); ctx.fill();
+    // Title bar
+    ctx.fillStyle = titleBg;
+    ctx.beginPath(); ctx.rect(geom.x, geom.y, geom.w, Math.min(titleH, geom.h)); ctx.fill();
+    // Border
+    ctx.strokeStyle = withAlpha(a.color, 0.55);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(geom.x + 0.5, geom.y + 0.5, geom.w - 1, geom.h - 1);
+    // Title text
+    ctx.save();
+    ctx.beginPath(); ctx.rect(geom.x, geom.y, geom.w, Math.min(titleH, geom.h)); ctx.clip();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `700 ${titleFs}px "Bebas Neue", "Sora", sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    const titleStr = (a.title || "JUDUL").toUpperCase();
+    ctx.fillText(titleStr, geom.x + pad, geom.y + titleH / 2);
+    ctx.restore();
+    // Body text — wrap
+    if (geom.h > titleH + 2) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(geom.x, geom.y + titleH, geom.w, geom.h - titleH); ctx.clip();
+      ctx.fillStyle = a.color;
+      ctx.font = `500 ${bodyFs}px "Manrope", sans-serif`;
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      const bodyStr = a.text || "";
+      const lines = wrapText(ctx, bodyStr, geom.w - pad * 2);
+      const lineH = bodyFs * 1.35;
+      let ty = geom.y + titleH + pad * 0.6;
+      for (const ln of lines) {
+        if (ty > geom.y + geom.h - lineH * 0.2) break;
+        ctx.fillText(ln, geom.x + pad, ty);
+        ty += lineH;
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+    return;
+  }
+
   if (a.kind === "label") {
+
     const anchor = worldToScreen(a.points[0]);
     const hasSecond = a.points.length >= 2;
     const labelPos = hasSecond ? worldToScreen(a.points[1]) : { x: anchor.x + 10, y: anchor.y };
