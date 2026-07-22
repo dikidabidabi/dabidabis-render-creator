@@ -174,11 +174,16 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       color: typeof r.color === "string" ? r.color : preset.color,
       strokeWidthPx: Number.isFinite(Number(r.strokeWidthPx)) ? Number(r.strokeWidthPx) : preset.strokeWidthPx,
       text: typeof r.text === "string" ? r.text : undefined,
+      title: typeof r.title === "string" ? r.title : undefined,
       fontScale: Number.isFinite(Number(r.fontScale)) ? Math.max(0.4, Math.min(5, Number(r.fontScale))) : 1,
+      titleFontScale: Number.isFinite(Number(r.titleFontScale)) ? Math.max(0.4, Math.min(5, Number(r.titleFontScale))) : 1,
+      bgColor: typeof r.bgColor === "string" ? r.bgColor : undefined,
+      bodyBgColor: typeof r.bodyBgColor === "string" ? r.bodyBgColor : undefined,
       hatch: r.hatch === true,
       sizeScale: Number.isFinite(Number(r.sizeScale)) ? Math.max(0.3, Math.min(6, Number(r.sizeScale))) : 1,
       fillAlpha: Number.isFinite(Number(r.fillAlpha)) ? Math.max(0, Math.min(1, Number(r.fillAlpha))) : 0,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
+
     });
   }
   return out;
