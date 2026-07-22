@@ -10818,6 +10818,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{iluNodeSize.toFixed(1)}×</span>
               </div>
             )}
+            {iluKind === "text" && (
+              <div className="flex flex-wrap items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-1">
+                <Input
+                  value={iluTitle}
+                  onChange={(e) => setIluTitle(e.target.value)}
+                  placeholder="Judul"
+                  className="h-7 w-28 text-[11px]"
+                />
+                <Input
+                  value={iluText}
+                  onChange={(e) => setIluText(e.target.value)}
+                  placeholder="Isi teks (bisa multi-baris)"
+                  className="h-7 w-56 text-[11px]"
+                />
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <span>Latar judul</span>
+                  <input type="color" value={iluTitleBg} onChange={(e) => setIluTitleBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                </label>
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <span>Latar isi</span>
+                  <input type="color" value={iluBodyBg} onChange={(e) => setIluBodyBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                </label>
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <span>Warna teks</span>
+                  <input type="color" value={iluTextColor} onChange={(e) => setIluTextColor(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                </label>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-600">Alpha isi</span>
+                  <Slider value={[iluBodyAlpha]} min={0} max={1} step={0.05} onValueChange={(v) => setIluBodyAlpha(v[0] ?? 0.9)} className="w-20" />
+                  <span className="w-7 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluBodyAlpha * 100)}%</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-600">Ukuran judul</span>
+                  <Slider value={[iluTitleFs]} min={0.5} max={3} step={0.1} onValueChange={(v) => setIluTitleFs(v[0] ?? 1)} className="w-20" />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{iluTitleFs.toFixed(1)}×</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-600">Ukuran isi</span>
+                  <Slider value={[iluBodyFs]} min={0.5} max={3} step={0.1} onValueChange={(v) => setIluBodyFs(v[0] ?? 1)} className="w-20" />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{iluBodyFs.toFixed(1)}×</span>
+                </div>
+              </div>
+            )}
+
             {ANNOTATION_PRESETS[iluKind].needsPath && iluDraft && iluDraft.points.length >= ANNOTATION_PRESETS[iluKind].minPts && (
               <Button
                 size="sm"
