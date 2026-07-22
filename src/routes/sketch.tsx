@@ -2304,6 +2304,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluCircleFillAlpha, setIluCircleFillAlpha] = useState<number>(0.25);
   const [iluZoneHatch, setIluZoneHatch] = useState<boolean>(false);
   const [iluNodeSize, setIluNodeSize] = useState<number>(1);
+  // Text tool — kotak judul + isi + leader
+  const [iluTitle, setIluTitle] = useState<string>("JUDUL");
+  const [iluTitleBg, setIluTitleBg] = useState<string>("#0f172a");
+  const [iluBodyBg, setIluBodyBg] = useState<string>("#ffffff");
+  const [iluTextColor, setIluTextColor] = useState<string>("#0f172a");
+  const [iluBodyAlpha, setIluBodyAlpha] = useState<number>(0.9);
+  const [iluTitleFs, setIluTitleFs] = useState<number>(1);
+  const [iluBodyFs, setIluBodyFs] = useState<number>(1);
+
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
