@@ -2304,6 +2304,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [iluCircleFillAlpha, setIluCircleFillAlpha] = useState<number>(0.25);
   const [iluZoneHatch, setIluZoneHatch] = useState<boolean>(false);
   const [iluNodeSize, setIluNodeSize] = useState<number>(1);
+  // Text tool — kotak judul + isi + leader
+  const [iluTitle, setIluTitle] = useState<string>("JUDUL");
+  const [iluTitleBg, setIluTitleBg] = useState<string>("#0f172a");
+  const [iluBodyBg, setIluBodyBg] = useState<string>("#ffffff");
+  const [iluTextColor, setIluTextColor] = useState<string>("#0f172a");
+  const [iluBodyAlpha, setIluBodyAlpha] = useState<number>(0.9);
+  const [iluTitleFs, setIluTitleFs] = useState<number>(1);
+  const [iluBodyFs, setIluBodyFs] = useState<number>(1);
+
   // Aksis tool — garis sumbu rancangan yang harus dihindari Cluster Generator
   const [aksisSub, setAksisSub] = useState<"garis" | "tangent">("garis");
   const [aksisBufferInput, setAksisBufferInput] = useState<string>("8");
@@ -8382,10 +8391,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
         setIluDraft(null);
         toast.success("Lingkaran dashed ditambahkan");
+      } else if (iluKind === "text" && iluDraft && iluDraft.points.length === 1) {
+        // Klik ke-2 = titik diagonal kotak → commit dengan leader default.
+        const p0 = iluDraft.points[0];
+        const p1 = { x: p.x, y: p.y };
+        const cx = (p0.x + p1.x) / 2;
+        const cy = (p0.y + p1.y) / 2;
+        const off = Math.max(40, Math.abs(p1.x - p0.x) * 0.6) / view.s;
+        const ann: Annotation = {
+          id: newAnnotationId(),
+          kind: "text",
+          style: preset.style,
+          points: [p0, p1, { x: cx, y: cy }, { x: cx - off, y: cy - off }],
+          color: iluTextColor,
+          strokeWidthPx: preset.strokeWidthPx,
+          title: iluTitle || "JUDUL",
+          text: iluText || "",
+          fontScale: iluBodyFs,
+          titleFontScale: iluTitleFs,
+          bgColor: iluTitleBg,
+          bodyBgColor: iluBodyBg,
+          fillAlpha: iluBodyAlpha,
+          createdAt: Date.now(),
+        };
+        const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), "text");
+        onChange({ illustrations: [...(sketch.illustrations ?? []), ann], illustrationLayer: nextLayer });
+        setIluDraft(null);
+        toast.success("Kotak teks ditambahkan");
       } else {
         if (!iluDraft) setIluDraft({ points: [p], cursor: p });
         else setIluDraft({ points: [...iluDraft.points, p], cursor: p });
       }
+
     } else if (tool === "jalan" && jalanSub === "fillet") {
       // Klik dekat vertex internal jalan → set radius fillet jalan tsb.
       const tolPx = 12 / view.s;
@@ -10781,6 +10818,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{iluNodeSize.toFixed(1)}×</span>
               </div>
             )}
+            {iluKind === "text" && (
+              <div className="flex flex-wrap items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-1">
+                <Input
+                  value={iluTitle}
+                  onChange={(e) => setIluTitle(e.target.value)}
+                  placeholder="Judul"
+                  className="h-7 w-28 text-[11px]"
+                />
+                <Input
+                  value={iluText}
+                  onChange={(e) => setIluText(e.target.value)}
+                  placeholder="Isi teks (bisa multi-baris)"
+                  className="h-7 w-56 text-[11px]"
+                />
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <span>Latar judul</span>
+                  <input type="color" value={iluTitleBg} onChange={(e) => setIluTitleBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                </label>
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <span>Latar isi</span>
+                  <input type="color" value={iluBodyBg} onChange={(e) => setIluBodyBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                </label>
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <span>Warna teks</span>
+                  <input type="color" value={iluTextColor} onChange={(e) => setIluTextColor(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                </label>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-600">Alpha isi</span>
+                  <Slider value={[iluBodyAlpha]} min={0} max={1} step={0.05} onValueChange={(v) => setIluBodyAlpha(v[0] ?? 0.9)} className="w-20" />
+                  <span className="w-7 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluBodyAlpha * 100)}%</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-600">Ukuran judul</span>
+                  <Slider value={[iluTitleFs]} min={0.5} max={3} step={0.1} onValueChange={(v) => setIluTitleFs(v[0] ?? 1)} className="w-20" />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{iluTitleFs.toFixed(1)}×</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-slate-600">Ukuran isi</span>
+                  <Slider value={[iluBodyFs]} min={0.5} max={3} step={0.1} onValueChange={(v) => setIluBodyFs(v[0] ?? 1)} className="w-20" />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{iluBodyFs.toFixed(1)}×</span>
+                </div>
+              </div>
+            )}
+
             {ANNOTATION_PRESETS[iluKind].needsPath && iluDraft && iluDraft.points.length >= ANNOTATION_PRESETS[iluKind].minPts && (
               <Button
                 size="sm"
@@ -10788,17 +10869,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 className="h-7 px-2 text-[11px]"
                 onClick={() => {
                   const preset = ANNOTATION_PRESETS[iluKind];
+                  let pts = iluDraft.points.map((p) => ({ x: p.x, y: p.y }));
+                  if (iluKind === "text" && pts.length >= 2) {
+                    const p0 = pts[0], p1 = pts[1];
+                    const cx = (p0.x + p1.x) / 2, cy = (p0.y + p1.y) / 2;
+                    const off = Math.max(40, Math.abs(p1.x - p0.x) * 0.6) / view.s;
+                    pts = [p0, p1, { x: cx, y: cy }, { x: cx - off, y: cy - off }];
+                  }
                   const ann: Annotation = {
                     id: newAnnotationId(),
                     kind: iluKind,
                     style: preset.style,
-                    points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
-                    color: iluColor,
+                    points: pts,
+                    color: iluKind === "text" ? iluTextColor : iluColor,
                     strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
-                    text: iluKind === "label" ? (iluText || "Label") : (iluKind === "circleDashed" ? (iluText || undefined) : undefined),
-                    fontScale: iluKind === "label" ? 1 : undefined,
+                    title: iluKind === "text" ? (iluTitle || "JUDUL") : undefined,
+                    text: iluKind === "label" ? (iluText || "Label") : (iluKind === "circleDashed" || iluKind === "text" ? (iluText || undefined) : undefined),
+                    fontScale: iluKind === "label" ? 1 : (iluKind === "text" ? iluBodyFs : undefined),
+                    titleFontScale: iluKind === "text" ? iluTitleFs : undefined,
+                    bgColor: iluKind === "text" ? iluTitleBg : undefined,
+                    bodyBgColor: iluKind === "text" ? iluBodyBg : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
-                    fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
+                    fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : (iluKind === "text" ? iluBodyAlpha : undefined),
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
@@ -10808,6 +10900,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 }}
               >Selesai ({iluDraft.points.length} titik)</Button>
             )}
+
             {iluDraft && (
               <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluDraft(null)}>Batal</Button>
             )}
@@ -10824,30 +10917,72 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {/* Panel edit Label — muncul saat sebuah label terpilih (mode geser). */}
         {tool === "iluanalisa" && mode === "masterplan" && iluSub === "geser" && iluSelectedId && (() => {
           const sel = (sketch.illustrations ?? []).find((x) => x.id === iluSelectedId);
-          if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed")) return null;
+          if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed" && sel.kind !== "text")) return null;
           const fs = sel.fontScale ?? 1;
+          const tfs = sel.titleFontScale ?? 1;
           const isCircle = sel.kind === "circleDashed";
+          const isText = sel.kind === "text";
+          const patch = (upd: Partial<Annotation>) =>
+            onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, ...upd } : x) });
           return (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/10 px-2 py-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">{isCircle ? "Edit Lingkaran" : "Edit Label"}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">
+                {isText ? "Edit Teks" : isCircle ? "Edit Lingkaran" : "Edit Label"}
+              </span>
+              {isText && (
+                <Input
+                  value={sel.title ?? ""}
+                  onChange={(e) => patch({ title: e.target.value })}
+                  placeholder="Judul"
+                  className="h-7 w-32 text-[11px]"
+                />
+              )}
               <Input
                 value={sel.text ?? ""}
-                onChange={(e) => {
-                  const t = e.target.value;
-                  onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, text: t } : x) });
-                }}
-                placeholder={isCircle ? "Teks lingkaran (opsional)" : "Teks label"}
-                className="h-7 w-52 text-[11px]"
+                onChange={(e) => patch({ text: e.target.value })}
+                placeholder={isText ? "Isi teks" : (isCircle ? "Teks lingkaran (opsional)" : "Teks label")}
+                className={`h-7 text-[11px] ${isText ? "w-64" : "w-52"}`}
               />
-              {!isCircle && (<>
+              {isText && (
+                <>
+                  <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                    <span>Latar judul</span>
+                    <input type="color" value={sel.bgColor || "#0f172a"} onChange={(e) => patch({ bgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                  </label>
+                  <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                    <span>Latar isi</span>
+                    <input type="color" value={sel.bodyBgColor || "#ffffff"} onChange={(e) => patch({ bodyBgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                  </label>
+                  <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                    <span>Warna teks</span>
+                    <input type="color" value={sel.color} onChange={(e) => patch({ color: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600">Alpha isi</span>
+                    <Slider value={[Math.round((sel.fillAlpha ?? 0.9) * 100)]} min={0} max={100} step={5}
+                      onValueChange={(v) => patch({ fillAlpha: (v[0] ?? 90) / 100 })} className="w-20" />
+                    <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round((sel.fillAlpha ?? 0.9) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600">Judul</span>
+                    <Slider value={[Math.round(tfs * 100)]} min={50} max={400} step={5}
+                      onValueChange={(v) => patch({ titleFontScale: Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100)) })} className="w-24" />
+                    <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(tfs * 100)}%</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600">Isi</span>
+                    <Slider value={[Math.round(fs * 100)]} min={50} max={400} step={5}
+                      onValueChange={(v) => patch({ fontScale: Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100)) })} className="w-24" />
+                    <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
+                  </div>
+                </>
+              )}
+              {!isCircle && !isText && (<>
                 <span className="text-[10px] text-slate-600">Ukuran</span>
                 <Slider
                   value={[Math.round(fs * 100)]}
                   min={50} max={400} step={5}
-                  onValueChange={(v) => {
-                    const nv = Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100));
-                    onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, fontScale: nv } : x) });
-                  }}
+                  onValueChange={(v) => patch({ fontScale: Math.max(0.5, Math.min(4, (v[0] ?? 100) / 100)) })}
                   className="w-40"
                 />
                 <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
@@ -10860,12 +10995,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 onClick={() => {
                   onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
                   setIluSelectedId(null);
-                  toast.success(isCircle ? "Lingkaran dihapus" : "Label dihapus");
+                  toast.success(isText ? "Kotak teks dihapus" : isCircle ? "Lingkaran dihapus" : "Label dihapus");
                 }}
-              >{isCircle ? "Hapus lingkaran" : "Hapus label"}</Button>
+              >{isText ? "Hapus" : isCircle ? "Hapus lingkaran" : "Hapus label"}</Button>
             </div>
           );
         })()}
+
         {tool === "iluanalisa" && mode === "masterplan" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <div className="flex items-center gap-2">

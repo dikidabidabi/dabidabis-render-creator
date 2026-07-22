@@ -16,7 +16,9 @@ export type AnnotationKind =
   | "node"        // titik nodal (lingkaran putih + pola berwarna)
   | "access"      // access point (lingkaran putih + border warna)
   | "label"       // callout teks + leader line
+  | "text"        // kotak judul + isi + leader line (2 titik geser)
   | "border";     // outline putus-putus (kontur area)
+
 
 export type PathStyle = "garis" | "tangent";
 
@@ -24,19 +26,25 @@ export type Annotation = {
   id: string;
   kind: AnnotationKind;
   style: PathStyle;          // untuk kind bertype path (arrow/zone/flow/border)
-  /** Titik-titik kontrol dunia (pixel). Untuk node/access/label = 1..2 titik. */
+  /** Titik-titik kontrol dunia (pixel). Untuk node/access/label = 1..2 titik.
+   *  Untuk text = 4 titik: [box-TL, box-BR, leader-start, leader-end]. */
   points: Vec2[];
-  color: string;             // warna utama (stroke + fill semi-transparan)
+  color: string;             // warna utama (stroke + fill semi-transparan) / warna teks isi utk text
   strokeWidthPx?: number;    // default per-kind
-  text?: string;             // untuk label
-  fontScale?: number;        // multiplier ukuran teks label (default 1)
+  text?: string;             // untuk label / teks isi text-block
+  title?: string;            // untuk kind="text" — judul (1 baris)
+  fontScale?: number;        // multiplier ukuran teks label / isi (default 1)
+  titleFontScale?: number;   // multiplier ukuran judul text-block (default 1)
+  bgColor?: string;          // text: warna latar judul (solid)
+  bodyBgColor?: string;      // text: warna latar isi
   hatch?: boolean;           // zona: arsir 45° tanpa border (default false)
   sizeScale?: number;        // node/access: multiplier ukuran (default 1)
-  /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Tidak
-   *  mempengaruhi transparansi border. Default 0 (tidak ada isi). */
+  /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Untuk text:
+   *  alpha latar isi. Default 0 (tidak ada isi). */
   fillAlpha?: number;
   createdAt: number;
 };
+
 
 export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: string; style: PathStyle; strokeWidthPx: number; needsPath: boolean; minPts: number; hint: string }> = {
   arrow:        { label: "Panah",           color: "#0f172a", style: "tangent", strokeWidthPx: 50, needsPath: true,  minPts: 2, hint: "Panah tangent (bisa dilengkungkan). Klik titik-titik, Enter/Selesai." },
@@ -48,7 +56,9 @@ export const ANNOTATION_PRESETS: Record<AnnotationKind, { label: string; color: 
   node:   { label: "Node",        color: "#f97316", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk meletakkan node." },
   access: { label: "Access",      color: "#ea580c", style: "garis",   strokeWidthPx: 2,   needsPath: false, minPts: 1, hint: "Klik satu titik untuk access point." },
   label:  { label: "Label",       color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: true,  minPts: 2, hint: "Klik titik jangkar, lalu klik posisi kotak label (panah bebas panjang), Enter/Selesai." },
+  text:   { label: "Teks",        color: "#0f172a", style: "garis",   strokeWidthPx: 1.2, needsPath: true,  minPts: 2, hint: "Klik 2 titik diagonal untuk membuat kotak judul+isi. Panah leader bisa digeser di mode Geser." },
 };
+
 
 export const ANNOTATION_COLOR_SWATCHES = [
   "#dc2626", "#ea580c", "#f59e0b", "#16a34a", "#0ea5e9",
@@ -130,8 +140,9 @@ export function iluNameFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind): 
  */
 export function sortAnnotationsForRender(list: Annotation[]): Annotation[] {
   const order: Record<AnnotationKind, number> = {
-    zone: 0, border: 1, flow: 2, arrow: 3, arrowDashed: 4, circleDashed: 4.5, label: 5, access: 6, node: 7,
+    zone: 0, border: 1, flow: 2, arrow: 3, arrowDashed: 4, circleDashed: 4.5, label: 5, text: 5.5, access: 6, node: 7,
   };
+
   return list.slice().sort((a, b) => (order[a.kind] ?? 0) - (order[b.kind] ?? 0));
 }
 
@@ -142,7 +153,7 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
   const out: Annotation[] = [];
   for (const r of raw as any[]) {
     if (!r || typeof r !== "object") continue;
-    const kind: AnnotationKind = ["arrow", "arrowDashed", "circleDashed", "zone", "flow", "node", "access", "label", "border"].includes(r.kind) ? r.kind : "arrow";
+    const kind: AnnotationKind = ["arrow", "arrowDashed", "circleDashed", "zone", "flow", "node", "access", "label", "text", "border"].includes(r.kind) ? r.kind : "arrow";
     const preset = ANNOTATION_PRESETS[kind];
     const style: PathStyle = (r.style === "tangent" || r.style === "garis") ? r.style : preset.style;
     const pts: Vec2[] = [];
@@ -163,11 +174,16 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       color: typeof r.color === "string" ? r.color : preset.color,
       strokeWidthPx: Number.isFinite(Number(r.strokeWidthPx)) ? Number(r.strokeWidthPx) : preset.strokeWidthPx,
       text: typeof r.text === "string" ? r.text : undefined,
+      title: typeof r.title === "string" ? r.title : undefined,
       fontScale: Number.isFinite(Number(r.fontScale)) ? Math.max(0.4, Math.min(5, Number(r.fontScale))) : 1,
+      titleFontScale: Number.isFinite(Number(r.titleFontScale)) ? Math.max(0.4, Math.min(5, Number(r.titleFontScale))) : 1,
+      bgColor: typeof r.bgColor === "string" ? r.bgColor : undefined,
+      bodyBgColor: typeof r.bodyBgColor === "string" ? r.bodyBgColor : undefined,
       hatch: r.hatch === true,
       sizeScale: Number.isFinite(Number(r.sizeScale)) ? Math.max(0.3, Math.min(6, Number(r.sizeScale))) : 1,
       fillAlpha: Number.isFinite(Number(r.fillAlpha)) ? Math.max(0, Math.min(1, Number(r.fillAlpha))) : 0,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
+
     });
   }
   return out;
@@ -280,7 +296,55 @@ function truncatePolylineAtInset(pts: Vec2[], inset: number): Vec2[] {
   return [pts[0]];
 }
 
+/** Bounding box (screen space) untuk kotak teks dari 2 titik diagonal. */
+export function textBoxGeom(a: Annotation, worldToScreen: (p: Vec2) => Vec2) {
+  const p0 = worldToScreen(a.points[0]);
+  const p1 = worldToScreen(a.points[1]);
+  const x = Math.min(p0.x, p1.x);
+  const y = Math.min(p0.y, p1.y);
+  const w = Math.max(24, Math.abs(p1.x - p0.x));
+  const h = Math.max(24, Math.abs(p1.y - p0.y));
+  return { x, y, w, h };
+}
+
+/** Bungkus teks menjadi array baris sesuai lebar maksimum. Menghormati '\n'. */
+export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const out: string[] = [];
+  const paragraphs = (text || "").split(/\n/);
+  for (const para of paragraphs) {
+    if (!para) { out.push(""); continue; }
+    const words = para.split(/\s+/);
+    let cur = "";
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w;
+      if (ctx.measureText(test).width <= maxWidth) {
+        cur = test;
+      } else {
+        if (cur) out.push(cur);
+        // long word: force-break by chars if needed
+        if (ctx.measureText(w).width > maxWidth) {
+          let piece = "";
+          for (const ch of w) {
+            if (ctx.measureText(piece + ch).width > maxWidth) {
+              if (piece) out.push(piece);
+              piece = ch;
+            } else {
+              piece += ch;
+            }
+          }
+          cur = piece;
+        } else {
+          cur = w;
+        }
+      }
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+
 /** Render satu anotasi ke Canvas 2D. worldToScreen di-supply oleh caller. */
+
 export function drawAnnotationCanvas(
   ctx: CanvasRenderingContext2D,
   a: Annotation,
@@ -324,7 +388,72 @@ export function drawAnnotationCanvas(
     return;
   }
 
+  if (a.kind === "text") {
+    if (a.points.length < 2) { ctx.restore(); return; }
+    const geom = textBoxGeom(a, worldToScreen);
+    const bodyFs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
+    const titleFs = 14 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.titleFontScale ?? 1);
+    const titleBg = a.bgColor || a.color;
+    const bodyBg = a.bodyBgColor || "#ffffff";
+    const bodyAlpha = Math.max(0, Math.min(1, a.fillAlpha ?? 0.9));
+    const pad = Math.max(4, bodyFs * 0.45);
+    const titleH = titleFs * 1.7;
+    // Leader
+    if (a.points.length >= 4) {
+      const ls = worldToScreen(a.points[2]);
+      const le = worldToScreen(a.points[3]);
+      ctx.strokeStyle = a.color;
+      ctx.lineWidth = Math.max(1, bodyFs * 0.09);
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(ls.x, ls.y); ctx.lineTo(le.x, le.y); ctx.stroke();
+      ctx.fillStyle = a.color;
+      ctx.beginPath(); ctx.arc(le.x, le.y, Math.max(3, bodyFs * 0.22), 0, Math.PI * 2); ctx.fill();
+    }
+    // Body background (behind title too so title bg overlays it)
+    ctx.fillStyle = withAlpha(bodyBg, bodyAlpha);
+    ctx.beginPath(); ctx.rect(geom.x, geom.y, geom.w, geom.h); ctx.fill();
+    // Title bar
+    ctx.fillStyle = titleBg;
+    ctx.beginPath(); ctx.rect(geom.x, geom.y, geom.w, Math.min(titleH, geom.h)); ctx.fill();
+    // Border
+    ctx.strokeStyle = withAlpha(a.color, 0.55);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(geom.x + 0.5, geom.y + 0.5, geom.w - 1, geom.h - 1);
+    // Title text
+    ctx.save();
+    ctx.beginPath(); ctx.rect(geom.x, geom.y, geom.w, Math.min(titleH, geom.h)); ctx.clip();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `700 ${titleFs}px "Bebas Neue", "Sora", sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    const titleStr = (a.title || "JUDUL").toUpperCase();
+    ctx.fillText(titleStr, geom.x + pad, geom.y + titleH / 2);
+    ctx.restore();
+    // Body text — wrap
+    if (geom.h > titleH + 2) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(geom.x, geom.y + titleH, geom.w, geom.h - titleH); ctx.clip();
+      ctx.fillStyle = a.color;
+      ctx.font = `500 ${bodyFs}px "Manrope", sans-serif`;
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      const bodyStr = a.text || "";
+      const lines = wrapText(ctx, bodyStr, geom.w - pad * 2);
+      const lineH = bodyFs * 1.35;
+      let ty = geom.y + titleH + pad * 0.6;
+      for (const ln of lines) {
+        if (ty > geom.y + geom.h - lineH * 0.2) break;
+        ctx.fillText(ln, geom.x + pad, ty);
+        ty += lineH;
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+    return;
+  }
+
   if (a.kind === "label") {
+
     const anchor = worldToScreen(a.points[0]);
     const hasSecond = a.points.length >= 2;
     const labelPos = hasSecond ? worldToScreen(a.points[1]) : { x: anchor.x + 10, y: anchor.y };
@@ -556,6 +685,96 @@ export function annotationSvgElements(
     nodes.push(React.createElement("text", { key: `${keyPrefix}-t`, x: labelPos.x, y: labelPos.y + fs * 0.35, textAnchor: "middle", fill: a.color, fontSize: fs, fontWeight: 600, style: { fontFamily: "Manrope, sans-serif" } }, txt));
     return nodes;
   }
+
+  if (a.kind === "text") {
+    if (a.points.length < 2) return nodes;
+    const geom = textBoxGeom(a, worldToScreen);
+    const bodyFs = 12 * scale * (a.fontScale ?? 1);
+    const titleFs = 14 * scale * (a.titleFontScale ?? 1);
+    const titleBg = a.bgColor || a.color;
+    const bodyBg = a.bodyBgColor || "#ffffff";
+    const bodyAlpha = Math.max(0, Math.min(1, a.fillAlpha ?? 0.9));
+    const pad = Math.max(4, bodyFs * 0.45);
+    const titleH = Math.min(titleFs * 1.7, geom.h);
+    const clipId = `${keyPrefix}-txtclip`;
+    // Leader
+    if (a.points.length >= 4) {
+      const ls = worldToScreen(a.points[2]);
+      const le = worldToScreen(a.points[3]);
+      nodes.push(React.createElement("line", {
+        key: `${keyPrefix}-ll`, x1: ls.x, y1: ls.y, x2: le.x, y2: le.y,
+        stroke: a.color, strokeWidth: Math.max(1, bodyFs * 0.09),
+      }));
+      nodes.push(React.createElement("circle", {
+        key: `${keyPrefix}-la`, cx: le.x, cy: le.y, r: Math.max(3, bodyFs * 0.22), fill: a.color,
+      }));
+    }
+    // Body bg
+    nodes.push(React.createElement("rect", {
+      key: `${keyPrefix}-body`, x: geom.x, y: geom.y, width: geom.w, height: geom.h,
+      fill: withAlpha(bodyBg, bodyAlpha), stroke: withAlpha(a.color, 0.55), strokeWidth: 1,
+    }));
+    // Title bg
+    nodes.push(React.createElement("rect", {
+      key: `${keyPrefix}-title`, x: geom.x, y: geom.y, width: geom.w, height: titleH,
+      fill: titleBg, stroke: "none",
+    }));
+    // Title text
+    nodes.push(React.createElement("defs", { key: `${keyPrefix}-defs` },
+      React.createElement("clipPath", { id: clipId },
+        React.createElement("rect", { x: geom.x, y: geom.y, width: geom.w, height: titleH }),
+      ),
+    ));
+    const titleStr = (a.title || "JUDUL").toUpperCase();
+    nodes.push(React.createElement("text", {
+      key: `${keyPrefix}-tt`,
+      x: geom.x + pad, y: geom.y + titleH / 2,
+      dominantBaseline: "middle", fill: "#ffffff", fontSize: titleFs, fontWeight: 700,
+      clipPath: `url(#${clipId})`,
+      style: { fontFamily: '"Bebas Neue", "Sora", sans-serif', letterSpacing: "0.03em" },
+    }, titleStr));
+    // Body — wrap using approx char width; SVG has no native wrap, so use tspans.
+    const bodyStr = a.text || "";
+    const approxCharW = bodyFs * 0.55;
+    const maxCharsPerLine = Math.max(1, Math.floor((geom.w - pad * 2) / approxCharW));
+    const paragraphs = bodyStr.split(/\n/);
+    const lines: string[] = [];
+    for (const para of paragraphs) {
+      if (!para) { lines.push(""); continue; }
+      const words = para.split(/\s+/);
+      let cur = "";
+      for (const w of words) {
+        const test = cur ? cur + " " + w : w;
+        if (test.length <= maxCharsPerLine) cur = test;
+        else {
+          if (cur) lines.push(cur);
+          if (w.length > maxCharsPerLine) {
+            for (let i = 0; i < w.length; i += maxCharsPerLine) lines.push(w.slice(i, i + maxCharsPerLine));
+            cur = "";
+          } else {
+            cur = w;
+          }
+        }
+      }
+      if (cur) lines.push(cur);
+    }
+    const lineH = bodyFs * 1.35;
+    const maxLines = Math.max(0, Math.floor((geom.h - titleH - pad * 0.6) / lineH));
+    const bodyLines = lines.slice(0, maxLines);
+    const tspans = bodyLines.map((ln, i) => React.createElement("tspan", {
+      key: `bl-${i}`, x: geom.x + pad, dy: i === 0 ? 0 : lineH,
+    }, ln || " "));
+    if (bodyLines.length > 0) {
+      nodes.push(React.createElement("text", {
+        key: `${keyPrefix}-bt`,
+        x: geom.x + pad, y: geom.y + titleH + pad * 0.6 + bodyFs * 0.85,
+        fill: a.color, fontSize: bodyFs, fontWeight: 500,
+        style: { fontFamily: '"Manrope", sans-serif' },
+      }, tspans));
+    }
+    return nodes;
+  }
+
 
   if (a.kind === "circleDashed") {
     if (a.points.length < 2) return nodes;
