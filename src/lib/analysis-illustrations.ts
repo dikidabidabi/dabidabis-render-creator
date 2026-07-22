@@ -140,8 +140,9 @@ export function iluNameFor(cfg: IluLayerCfg | undefined, kind: AnnotationKind): 
  */
 export function sortAnnotationsForRender(list: Annotation[]): Annotation[] {
   const order: Record<AnnotationKind, number> = {
-    zone: 0, border: 1, flow: 2, arrow: 3, arrowDashed: 4, circleDashed: 4.5, label: 5, access: 6, node: 7,
+    zone: 0, border: 1, flow: 2, arrow: 3, arrowDashed: 4, circleDashed: 4.5, label: 5, text: 5.5, access: 6, node: 7,
   };
+
   return list.slice().sort((a, b) => (order[a.kind] ?? 0) - (order[b.kind] ?? 0));
 }
 
