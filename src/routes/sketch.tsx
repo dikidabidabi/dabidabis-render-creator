@@ -10869,17 +10869,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 className="h-7 px-2 text-[11px]"
                 onClick={() => {
                   const preset = ANNOTATION_PRESETS[iluKind];
+                  let pts = iluDraft.points.map((p) => ({ x: p.x, y: p.y }));
+                  if (iluKind === "text" && pts.length >= 2) {
+                    const p0 = pts[0], p1 = pts[1];
+                    const cx = (p0.x + p1.x) / 2, cy = (p0.y + p1.y) / 2;
+                    const off = Math.max(40, Math.abs(p1.x - p0.x) * 0.6) / view.s;
+                    pts = [p0, p1, { x: cx, y: cy }, { x: cx - off, y: cy - off }];
+                  }
                   const ann: Annotation = {
                     id: newAnnotationId(),
                     kind: iluKind,
                     style: preset.style,
-                    points: iluDraft.points.map((p) => ({ x: p.x, y: p.y })),
-                    color: iluColor,
+                    points: pts,
+                    color: iluKind === "text" ? iluTextColor : iluColor,
                     strokeWidthPx: iluKind === "arrowDashed" ? iluStrokeArrowDashed : (iluKind === "arrow" ? iluStrokeArrow : (iluKind === "circleDashed" ? iluStrokeCircleDashed : preset.strokeWidthPx)),
-                    text: iluKind === "label" ? (iluText || "Label") : (iluKind === "circleDashed" ? (iluText || undefined) : undefined),
-                    fontScale: iluKind === "label" ? 1 : undefined,
+                    title: iluKind === "text" ? (iluTitle || "JUDUL") : undefined,
+                    text: iluKind === "label" ? (iluText || "Label") : (iluKind === "circleDashed" || iluKind === "text" ? (iluText || undefined) : undefined),
+                    fontScale: iluKind === "label" ? 1 : (iluKind === "text" ? iluBodyFs : undefined),
+                    titleFontScale: iluKind === "text" ? iluTitleFs : undefined,
+                    bgColor: iluKind === "text" ? iluTitleBg : undefined,
+                    bodyBgColor: iluKind === "text" ? iluBodyBg : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
-                    fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
+                    fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : (iluKind === "text" ? iluBodyAlpha : undefined),
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
@@ -10889,6 +10900,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 }}
               >Selesai ({iluDraft.points.length} titik)</Button>
             )}
+
             {iluDraft && (
               <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluDraft(null)}>Batal</Button>
             )}
