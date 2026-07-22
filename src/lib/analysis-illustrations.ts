@@ -296,7 +296,55 @@ function truncatePolylineAtInset(pts: Vec2[], inset: number): Vec2[] {
   return [pts[0]];
 }
 
+/** Bounding box (screen space) untuk kotak teks dari 2 titik diagonal. */
+export function textBoxGeom(a: Annotation, worldToScreen: (p: Vec2) => Vec2) {
+  const p0 = worldToScreen(a.points[0]);
+  const p1 = worldToScreen(a.points[1]);
+  const x = Math.min(p0.x, p1.x);
+  const y = Math.min(p0.y, p1.y);
+  const w = Math.max(24, Math.abs(p1.x - p0.x));
+  const h = Math.max(24, Math.abs(p1.y - p0.y));
+  return { x, y, w, h };
+}
+
+/** Bungkus teks menjadi array baris sesuai lebar maksimum. Menghormati '\n'. */
+export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const out: string[] = [];
+  const paragraphs = (text || "").split(/\n/);
+  for (const para of paragraphs) {
+    if (!para) { out.push(""); continue; }
+    const words = para.split(/\s+/);
+    let cur = "";
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w;
+      if (ctx.measureText(test).width <= maxWidth) {
+        cur = test;
+      } else {
+        if (cur) out.push(cur);
+        // long word: force-break by chars if needed
+        if (ctx.measureText(w).width > maxWidth) {
+          let piece = "";
+          for (const ch of w) {
+            if (ctx.measureText(piece + ch).width > maxWidth) {
+              if (piece) out.push(piece);
+              piece = ch;
+            } else {
+              piece += ch;
+            }
+          }
+          cur = piece;
+        } else {
+          cur = w;
+        }
+      }
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+
 /** Render satu anotasi ke Canvas 2D. worldToScreen di-supply oleh caller. */
+
 export function drawAnnotationCanvas(
   ctx: CanvasRenderingContext2D,
   a: Annotation,
