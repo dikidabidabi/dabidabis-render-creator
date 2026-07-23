@@ -10789,18 +10789,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </>
             )}
             {iluKind === "arrow" && (
-              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
-                <Slider
-                  value={[iluStrokeArrow]}
-                  min={10}
-                  max={200}
-                  step={2}
-                  onValueChange={(v) => setIluStrokeArrow(v[0] ?? 50)}
-                  className="w-32"
-                />
-                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrow)}</span>
-              </div>
+              <>
+                <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
+                  <Slider
+                    value={[iluStrokeArrow]}
+                    min={10}
+                    max={200}
+                    step={2}
+                    onValueChange={(v) => setIluStrokeArrow(v[0] ?? 50)}
+                    className="w-32"
+                  />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrow)}</span>
+                </div>
+                <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked={iluArrowHeadStart} onChange={(e) => setIluArrowHeadStart(e.target.checked)} className="h-3 w-3" />
+                  Panah awal
+                </label>
+                <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked={iluArrowHeadEnd} onChange={(e) => setIluArrowHeadEnd(e.target.checked)} className="h-3 w-3" />
+                  Panah akhir
+                </label>
+              </>
             )}
             {iluKind === "zone" && (
               <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
