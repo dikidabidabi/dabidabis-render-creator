@@ -302,6 +302,24 @@ function truncatePolylineAtInset(pts: Vec2[], inset: number): Vec2[] {
   return [pts[0]];
 }
 
+/** Pangkas polyline sejauh `inset` dari titik pertama (untuk chevron awal). */
+function truncatePolylineAtInsetStart(pts: Vec2[], inset: number): Vec2[] {
+  if (pts.length < 2 || inset <= 0) return pts.slice();
+  let remaining = inset;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const cur = pts[i], next = pts[i + 1];
+    const seg = Math.hypot(next.x - cur.x, next.y - cur.y);
+    if (seg >= remaining) {
+      const t = remaining / seg;
+      const nx = cur.x + (next.x - cur.x) * t;
+      const ny = cur.y + (next.y - cur.y) * t;
+      return [{ x: nx, y: ny }, ...pts.slice(i + 1)];
+    }
+    remaining -= seg;
+  }
+  return [pts[pts.length - 1]];
+}
+
 /** Bounding box (screen space) untuk kotak teks dari 2 titik diagonal. */
 export function textBoxGeom(a: Annotation, worldToScreen: (p: Vec2) => Vec2) {
   const p0 = worldToScreen(a.points[0]);
