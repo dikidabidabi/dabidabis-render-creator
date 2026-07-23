@@ -481,7 +481,7 @@ export function drawAnnotationCanvas(
     const anchor = worldToScreen(a.points[0]);
     const hasSecond = a.points.length >= 2;
     const labelPos = hasSecond ? worldToScreen(a.points[1]) : { x: anchor.x + 10, y: anchor.y };
-    const fs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
+    const fs = 12 * viewScale * (a.fontScale ?? 1);
     ctx.fillStyle = a.color;
     ctx.font = `600 ${fs}px Manrope, sans-serif`;
     ctx.textBaseline = "middle";
