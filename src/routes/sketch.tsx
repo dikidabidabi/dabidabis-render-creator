@@ -10905,6 +10905,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     bodyBgColor: iluKind === "text" ? iluBodyBg : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
                     fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : (iluKind === "text" ? iluBodyAlpha : undefined),
+                    arrowHeadStart: iluKind === "arrow" ? iluArrowHeadStart : undefined,
+                    arrowHeadEnd: iluKind === "arrow" ? iluArrowHeadEnd : undefined,
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
