@@ -186,6 +186,8 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       hatch: r.hatch === true,
       sizeScale: Number.isFinite(Number(r.sizeScale)) ? Math.max(0.3, Math.min(6, Number(r.sizeScale))) : 1,
       fillAlpha: Number.isFinite(Number(r.fillAlpha)) ? Math.max(0, Math.min(1, Number(r.fillAlpha))) : 0,
+      arrowHeadStart: r.arrowHeadStart === true,
+      arrowHeadEnd: r.arrowHeadEnd === false ? false : true,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
 
     });
