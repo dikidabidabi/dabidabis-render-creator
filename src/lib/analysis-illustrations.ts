@@ -913,7 +913,16 @@ export function annotationSvgElements(
   const shaftPts = truncatePolylineAtInset(pts, inset);
   const innerTip = shaftPts[shaftPts.length - 1];
   const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
-  const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
+  const showEnd = a.kind === "arrow" ? (a.arrowHeadEnd !== false) : true;
+  const showStart = a.kind === "arrow" ? (a.arrowHeadStart === true) : false;
+  const startPt = pts[0];
+  let shaftPts2 = showEnd ? shaftPts : pts.slice();
+  if (showStart) shaftPts2 = truncatePolylineAtInsetStart(shaftPts2, inset);
+  const innerStart = shaftPts2[0];
+  const angH2 = showStart
+    ? Math.atan2(startPt.y - innerStart.y, startPt.x - innerStart.x)
+    : 0;
+  const dShaft = "M " + shaftPts2.map((p) => `${p.x} ${p.y}`).join(" L ");
   let strokeDasharray: string | undefined;
   let strokeLinecap: "butt" | "round" = "butt";
   let strokeLinejoin: "miter" | "round" = "miter";
@@ -923,6 +932,7 @@ export function annotationSvgElements(
     key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
     strokeLinecap, strokeLinejoin, ...(strokeDasharray ? { strokeDasharray } : {}),
   }));
-  chevronSvg(tip, angH, a.color, sw, keyPrefix, nodes);
+  if (showEnd) chevronSvg(tip, angH, a.color, sw, keyPrefix, nodes);
+  if (showStart) chevronSvg(startPt, angH2, a.color, sw, `${keyPrefix}-s`, nodes);
   return nodes;
 }
