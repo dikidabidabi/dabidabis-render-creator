@@ -11018,7 +11018,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   </div>
                 </>
               )}
-              {!isCircle && !isText && (<>
+              {!isCircle && !isText && !isArrow && (<>
                 <span className="text-[10px] text-slate-600">Ukuran</span>
                 <Slider
                   value={[Math.round(fs * 100)]}
@@ -11028,6 +11028,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 />
                 <span className="w-10 text-right text-[10px] tabular-nums text-slate-700">{Math.round(fs * 100)}%</span>
               </>)}
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluSelectedId(null)}>Selesai</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
+                onClick={() => {
+                  onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
+                  setIluSelectedId(null);
+                  toast.success(isText ? "Kotak teks dihapus" : isCircle ? "Lingkaran dihapus" : isArrow ? "Panah dihapus" : "Label dihapus");
+                }}
+              >{isText ? "Hapus" : isCircle ? "Hapus lingkaran" : isArrow ? "Hapus panah" : "Hapus label"}</Button>
               <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluSelectedId(null)}>Selesai</Button>
               <Button
                 size="sm"
