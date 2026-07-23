@@ -415,8 +415,8 @@ export function drawAnnotationCanvas(
   if (a.kind === "text") {
     if (a.points.length < 2) { ctx.restore(); return; }
     const geom = textBoxGeom(a, worldToScreen);
-    const bodyFs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
-    const titleFs = 14 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.titleFontScale ?? 1);
+    const bodyFs = 12 * viewScale * (a.fontScale ?? 1);
+    const titleFs = 14 * viewScale * (a.titleFontScale ?? 1);
     const titleBg = a.bgColor || a.color;
     const bodyBg = a.bodyBgColor || "#ffffff";
     const bodyAlpha = Math.max(0, Math.min(1, a.fillAlpha ?? 0.9));
