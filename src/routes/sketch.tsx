@@ -2297,6 +2297,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Ketebalan panah dashed (px world) — bisa diatur user via slider.
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   const [iluStrokeArrow, setIluStrokeArrow] = useState<number>(ANNOTATION_PRESETS.arrow.strokeWidthPx);
+  const [iluArrowHeadStart, setIluArrowHeadStart] = useState<boolean>(false);
+  const [iluArrowHeadEnd, setIluArrowHeadEnd] = useState<boolean>(true);
   const [iluStrokeCircleDashed, setIluStrokeCircleDashed] = useState<number>(ANNOTATION_PRESETS.circleDashed.strokeWidthPx);
   // Transparansi isi solid untuk "lingkaran dashed" — hanya mempengaruhi
   // isi lingkaran, bukan border. Transparansi keseluruhan (border+isi)
