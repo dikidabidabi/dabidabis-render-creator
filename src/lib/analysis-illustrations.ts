@@ -645,6 +645,18 @@ export function drawAnnotationCanvas(
   // pendek pada tangent).
   const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
 
+  // Untuk kind "arrow", pengguna dapat toggle chevron di kedua ujung.
+  // arrowDashed & flow tetap: chevron di end saja.
+  const showEnd = a.kind === "arrow" ? (a.arrowHeadEnd !== false) : true;
+  const showStart = a.kind === "arrow" ? (a.arrowHeadStart === true) : false;
+  const startPt = polyScreen[0];
+  let shaftPts2 = showEnd ? shaftPts : polyScreen.slice();
+  if (showStart) shaftPts2 = truncatePolylineAtInsetStart(shaftPts2, inset);
+  const innerStart = shaftPts2[0];
+  const angH2 = showStart
+    ? Math.atan2(startPt.y - innerStart.y, startPt.x - innerStart.x)
+    : 0;
+
   ctx.lineCap = a.kind === "flow" ? "round" : "butt";
   ctx.lineJoin = a.kind === "flow" ? "round" : "miter";
   if (a.kind === "arrowDashed") ctx.setLineDash([sw * 0.5, sw * 0.3]);
@@ -653,11 +665,12 @@ export function drawAnnotationCanvas(
   ctx.strokeStyle = a.color;
   ctx.lineWidth = sw;
   ctx.beginPath();
-  ctx.moveTo(shaftPts[0].x, shaftPts[0].y);
-  for (let i = 1; i < shaftPts.length; i++) { ctx.lineTo(shaftPts[i].x, shaftPts[i].y); }
+  ctx.moveTo(shaftPts2[0].x, shaftPts2[0].y);
+  for (let i = 1; i < shaftPts2.length; i++) { ctx.lineTo(shaftPts2[i].x, shaftPts2[i].y); }
   ctx.stroke();
   ctx.setLineDash([]);
-  drawChevronCanvas(ctx, tip, angH, a.color, sw);
+  if (showEnd) drawChevronCanvas(ctx, tip, angH, a.color, sw);
+  if (showStart) drawChevronCanvas(ctx, startPt, angH2, a.color, sw);
   ctx.restore();
 }
 
