@@ -6153,6 +6153,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           hatch: iluKind === "zone" ? iluZoneHatch : undefined,
           fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
           sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
+          arrowHeadStart: iluKind === "arrow" ? iluArrowHeadStart : undefined,
+          arrowHeadEnd: iluKind === "arrow" ? iluArrowHeadEnd : undefined,
           createdAt: 0,
         }, worldToScreen, view.s);
         ctx.restore();
