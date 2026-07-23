@@ -11039,17 +11039,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   toast.success(isText ? "Kotak teks dihapus" : isCircle ? "Lingkaran dihapus" : isArrow ? "Panah dihapus" : "Label dihapus");
                 }}
               >{isText ? "Hapus" : isCircle ? "Hapus lingkaran" : isArrow ? "Hapus panah" : "Hapus label"}</Button>
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setIluSelectedId(null)}>Selesai</Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50"
-                onClick={() => {
-                  onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
-                  setIluSelectedId(null);
-                  toast.success(isText ? "Kotak teks dihapus" : isCircle ? "Lingkaran dihapus" : "Label dihapus");
-                }}
-              >{isText ? "Hapus" : isCircle ? "Hapus lingkaran" : "Hapus label"}</Button>
             </div>
           );
         })()}
