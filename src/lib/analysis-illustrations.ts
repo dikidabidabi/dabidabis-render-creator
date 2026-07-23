@@ -42,6 +42,10 @@ export type Annotation = {
   /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Untuk text:
    *  alpha latar isi. Default 0 (tidak ada isi). */
   fillAlpha?: number;
+  /** arrow: tampilkan chevron di ujung awal (start). Default false. */
+  arrowHeadStart?: boolean;
+  /** arrow: tampilkan chevron di ujung akhir (end / tip). Default true. */
+  arrowHeadEnd?: boolean;
   createdAt: number;
 };
 
