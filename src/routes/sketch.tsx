@@ -2297,6 +2297,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Ketebalan panah dashed (px world) — bisa diatur user via slider.
   const [iluStrokeArrowDashed, setIluStrokeArrowDashed] = useState<number>(ANNOTATION_PRESETS.arrowDashed.strokeWidthPx);
   const [iluStrokeArrow, setIluStrokeArrow] = useState<number>(ANNOTATION_PRESETS.arrow.strokeWidthPx);
+  const [iluArrowHeadStart, setIluArrowHeadStart] = useState<boolean>(false);
+  const [iluArrowHeadEnd, setIluArrowHeadEnd] = useState<boolean>(true);
   const [iluStrokeCircleDashed, setIluStrokeCircleDashed] = useState<number>(ANNOTATION_PRESETS.circleDashed.strokeWidthPx);
   // Transparansi isi solid untuk "lingkaran dashed" — hanya mempengaruhi
   // isi lingkaran, bukan border. Transparansi keseluruhan (border+isi)
@@ -6151,6 +6153,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           hatch: iluKind === "zone" ? iluZoneHatch : undefined,
           fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : undefined,
           sizeScale: (iluKind === "node" || iluKind === "access") ? iluNodeSize : undefined,
+          arrowHeadStart: iluKind === "arrow" ? iluArrowHeadStart : undefined,
+          arrowHeadEnd: iluKind === "arrow" ? iluArrowHeadEnd : undefined,
           createdAt: 0,
         }, worldToScreen, view.s);
         ctx.restore();
@@ -10785,18 +10789,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </>
             )}
             {iluKind === "arrow" && (
-              <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
-                <Slider
-                  value={[iluStrokeArrow]}
-                  min={10}
-                  max={200}
-                  step={2}
-                  onValueChange={(v) => setIluStrokeArrow(v[0] ?? 50)}
-                  className="w-32"
-                />
-                <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrow)}</span>
-              </div>
+              <>
+                <div className="flex items-center gap-2 rounded border border-slate-300 bg-white/70 px-2 py-0.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tebal</span>
+                  <Slider
+                    value={[iluStrokeArrow]}
+                    min={10}
+                    max={200}
+                    step={2}
+                    onValueChange={(v) => setIluStrokeArrow(v[0] ?? 50)}
+                    className="w-32"
+                  />
+                  <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrow)}</span>
+                </div>
+                <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked={iluArrowHeadStart} onChange={(e) => setIluArrowHeadStart(e.target.checked)} className="h-3 w-3" />
+                  Panah awal
+                </label>
+                <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked={iluArrowHeadEnd} onChange={(e) => setIluArrowHeadEnd(e.target.checked)} className="h-3 w-3" />
+                  Panah akhir
+                </label>
+              </>
             )}
             {iluKind === "zone" && (
               <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
@@ -10891,6 +10905,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     bodyBgColor: iluKind === "text" ? iluBodyBg : undefined,
                     hatch: iluKind === "zone" ? iluZoneHatch : undefined,
                     fillAlpha: iluKind === "circleDashed" ? iluCircleFillAlpha : (iluKind === "text" ? iluBodyAlpha : undefined),
+                    arrowHeadStart: iluKind === "arrow" ? iluArrowHeadStart : undefined,
+                    arrowHeadEnd: iluKind === "arrow" ? iluArrowHeadEnd : undefined,
                     createdAt: Date.now(),
                   };
                   const nextLayer = ensureIluSub(sketch.illustrationLayer ?? makeIluLayerCfg(), iluKind);
@@ -10917,17 +10933,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {/* Panel edit Label — muncul saat sebuah label terpilih (mode geser). */}
         {tool === "iluanalisa" && mode === "masterplan" && iluSub === "geser" && iluSelectedId && (() => {
           const sel = (sketch.illustrations ?? []).find((x) => x.id === iluSelectedId);
-          if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed" && sel.kind !== "text")) return null;
+          if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed" && sel.kind !== "text" && sel.kind !== "arrow")) return null;
           const fs = sel.fontScale ?? 1;
           const tfs = sel.titleFontScale ?? 1;
           const isCircle = sel.kind === "circleDashed";
           const isText = sel.kind === "text";
+          const isArrow = sel.kind === "arrow";
           const patch = (upd: Partial<Annotation>) =>
             onChange({ illustrations: (sketch.illustrations ?? []).map((x) => x.id === iluSelectedId ? { ...x, ...upd } : x) });
           return (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/10 px-2 py-1.5">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">
-                {isText ? "Edit Teks" : isCircle ? "Edit Lingkaran" : "Edit Label"}
+                {isText ? "Edit Teks" : isCircle ? "Edit Lingkaran" : isArrow ? "Edit Panah" : "Edit Label"}
               </span>
               {isText && (
                 <Input
@@ -10937,12 +10954,36 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   className="h-7 w-32 text-[11px]"
                 />
               )}
-              <Input
-                value={sel.text ?? ""}
-                onChange={(e) => patch({ text: e.target.value })}
-                placeholder={isText ? "Isi teks" : (isCircle ? "Teks lingkaran (opsional)" : "Teks label")}
-                className={`h-7 text-[11px] ${isText ? "w-64" : "w-52"}`}
-              />
+              {!isArrow && (
+                <Input
+                  value={sel.text ?? ""}
+                  onChange={(e) => patch({ text: e.target.value })}
+                  placeholder={isText ? "Isi teks" : (isCircle ? "Teks lingkaran (opsional)" : "Teks label")}
+                  className={`h-7 text-[11px] ${isText ? "w-64" : "w-52"}`}
+                />
+              )}
+              {isArrow && (
+                <>
+                  <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                    <span>Warna</span>
+                    <input type="color" value={sel.color} onChange={(e) => patch({ color: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                  </label>
+                  <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={sel.arrowHeadStart === true} onChange={(e) => patch({ arrowHeadStart: e.target.checked })} className="h-3 w-3" />
+                    Panah awal
+                  </label>
+                  <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={sel.arrowHeadEnd !== false} onChange={(e) => patch({ arrowHeadEnd: e.target.checked })} className="h-3 w-3" />
+                    Panah akhir
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-600">Tebal</span>
+                    <Slider value={[sel.strokeWidthPx ?? 50]} min={10} max={200} step={2}
+                      onValueChange={(v) => patch({ strokeWidthPx: v[0] ?? 50 })} className="w-32" />
+                    <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(sel.strokeWidthPx ?? 50)}</span>
+                  </div>
+                </>
+              )}
               {isText && (
                 <>
                   <label className="flex items-center gap-1 text-[10px] text-slate-700">
@@ -10977,7 +11018,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   </div>
                 </>
               )}
-              {!isCircle && !isText && (<>
+              {!isCircle && !isText && !isArrow && (<>
                 <span className="text-[10px] text-slate-600">Ukuran</span>
                 <Slider
                   value={[Math.round(fs * 100)]}
@@ -10995,9 +11036,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 onClick={() => {
                   onChange({ illustrations: (sketch.illustrations ?? []).filter((x) => x.id !== iluSelectedId) });
                   setIluSelectedId(null);
-                  toast.success(isText ? "Kotak teks dihapus" : isCircle ? "Lingkaran dihapus" : "Label dihapus");
+                  toast.success(isText ? "Kotak teks dihapus" : isCircle ? "Lingkaran dihapus" : isArrow ? "Panah dihapus" : "Label dihapus");
                 }}
-              >{isText ? "Hapus" : isCircle ? "Hapus lingkaran" : "Hapus label"}</Button>
+              >{isText ? "Hapus" : isCircle ? "Hapus lingkaran" : isArrow ? "Hapus panah" : "Hapus label"}</Button>
             </div>
           );
         })()}

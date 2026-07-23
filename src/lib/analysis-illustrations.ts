@@ -42,6 +42,10 @@ export type Annotation = {
   /** circleDashed: alpha isi solid di dalam lingkaran (0..1). Untuk text:
    *  alpha latar isi. Default 0 (tidak ada isi). */
   fillAlpha?: number;
+  /** arrow: tampilkan chevron di ujung awal (start). Default false. */
+  arrowHeadStart?: boolean;
+  /** arrow: tampilkan chevron di ujung akhir (end / tip). Default true. */
+  arrowHeadEnd?: boolean;
   createdAt: number;
 };
 
@@ -182,6 +186,8 @@ export function normalizeAnnotations(raw: unknown): Annotation[] {
       hatch: r.hatch === true,
       sizeScale: Number.isFinite(Number(r.sizeScale)) ? Math.max(0.3, Math.min(6, Number(r.sizeScale))) : 1,
       fillAlpha: Number.isFinite(Number(r.fillAlpha)) ? Math.max(0, Math.min(1, Number(r.fillAlpha))) : 0,
+      arrowHeadStart: r.arrowHeadStart === true,
+      arrowHeadEnd: r.arrowHeadEnd === false ? false : true,
       createdAt: Number.isFinite(Number(r.createdAt)) ? Number(r.createdAt) : Date.now(),
 
     });
@@ -296,6 +302,24 @@ function truncatePolylineAtInset(pts: Vec2[], inset: number): Vec2[] {
   return [pts[0]];
 }
 
+/** Pangkas polyline sejauh `inset` dari titik pertama (untuk chevron awal). */
+function truncatePolylineAtInsetStart(pts: Vec2[], inset: number): Vec2[] {
+  if (pts.length < 2 || inset <= 0) return pts.slice();
+  let remaining = inset;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const cur = pts[i], next = pts[i + 1];
+    const seg = Math.hypot(next.x - cur.x, next.y - cur.y);
+    if (seg >= remaining) {
+      const t = remaining / seg;
+      const nx = cur.x + (next.x - cur.x) * t;
+      const ny = cur.y + (next.y - cur.y) * t;
+      return [{ x: nx, y: ny }, ...pts.slice(i + 1)];
+    }
+    remaining -= seg;
+  }
+  return [pts[pts.length - 1]];
+}
+
 /** Bounding box (screen space) untuk kotak teks dari 2 titik diagonal. */
 export function textBoxGeom(a: Annotation, worldToScreen: (p: Vec2) => Vec2) {
   const p0 = worldToScreen(a.points[0]);
@@ -391,8 +415,8 @@ export function drawAnnotationCanvas(
   if (a.kind === "text") {
     if (a.points.length < 2) { ctx.restore(); return; }
     const geom = textBoxGeom(a, worldToScreen);
-    const bodyFs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
-    const titleFs = 14 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.titleFontScale ?? 1);
+    const bodyFs = 12 * viewScale * (a.fontScale ?? 1);
+    const titleFs = 14 * viewScale * (a.titleFontScale ?? 1);
     const titleBg = a.bgColor || a.color;
     const bodyBg = a.bodyBgColor || "#ffffff";
     const bodyAlpha = Math.max(0, Math.min(1, a.fillAlpha ?? 0.9));
@@ -457,7 +481,7 @@ export function drawAnnotationCanvas(
     const anchor = worldToScreen(a.points[0]);
     const hasSecond = a.points.length >= 2;
     const labelPos = hasSecond ? worldToScreen(a.points[1]) : { x: anchor.x + 10, y: anchor.y };
-    const fs = 12 * Math.max(0.9, Math.min(1.6, viewScale)) * (a.fontScale ?? 1);
+    const fs = 12 * viewScale * (a.fontScale ?? 1);
     ctx.fillStyle = a.color;
     ctx.font = `600 ${fs}px Manrope, sans-serif`;
     ctx.textBaseline = "middle";
@@ -621,6 +645,18 @@ export function drawAnnotationCanvas(
   // pendek pada tangent).
   const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
 
+  // Untuk kind "arrow", pengguna dapat toggle chevron di kedua ujung.
+  // arrowDashed & flow tetap: chevron di end saja.
+  const showEnd = a.kind === "arrow" ? (a.arrowHeadEnd !== false) : true;
+  const showStart = a.kind === "arrow" ? (a.arrowHeadStart === true) : false;
+  const startPt = polyScreen[0];
+  let shaftPts2 = showEnd ? shaftPts : polyScreen.slice();
+  if (showStart) shaftPts2 = truncatePolylineAtInsetStart(shaftPts2, inset);
+  const innerStart = shaftPts2[0];
+  const angH2 = showStart
+    ? Math.atan2(startPt.y - innerStart.y, startPt.x - innerStart.x)
+    : 0;
+
   ctx.lineCap = a.kind === "flow" ? "round" : "butt";
   ctx.lineJoin = a.kind === "flow" ? "round" : "miter";
   if (a.kind === "arrowDashed") ctx.setLineDash([sw * 0.5, sw * 0.3]);
@@ -629,11 +665,12 @@ export function drawAnnotationCanvas(
   ctx.strokeStyle = a.color;
   ctx.lineWidth = sw;
   ctx.beginPath();
-  ctx.moveTo(shaftPts[0].x, shaftPts[0].y);
-  for (let i = 1; i < shaftPts.length; i++) { ctx.lineTo(shaftPts[i].x, shaftPts[i].y); }
+  ctx.moveTo(shaftPts2[0].x, shaftPts2[0].y);
+  for (let i = 1; i < shaftPts2.length; i++) { ctx.lineTo(shaftPts2[i].x, shaftPts2[i].y); }
   ctx.stroke();
   ctx.setLineDash([]);
-  drawChevronCanvas(ctx, tip, angH, a.color, sw);
+  if (showEnd) drawChevronCanvas(ctx, tip, angH, a.color, sw);
+  if (showStart) drawChevronCanvas(ctx, startPt, angH2, a.color, sw);
   ctx.restore();
 }
 
@@ -876,7 +913,16 @@ export function annotationSvgElements(
   const shaftPts = truncatePolylineAtInset(pts, inset);
   const innerTip = shaftPts[shaftPts.length - 1];
   const angH = Math.atan2(tip.y - innerTip.y, tip.x - innerTip.x);
-  const dShaft = "M " + shaftPts.map((p) => `${p.x} ${p.y}`).join(" L ");
+  const showEnd = a.kind === "arrow" ? (a.arrowHeadEnd !== false) : true;
+  const showStart = a.kind === "arrow" ? (a.arrowHeadStart === true) : false;
+  const startPt = pts[0];
+  let shaftPts2 = showEnd ? shaftPts : pts.slice();
+  if (showStart) shaftPts2 = truncatePolylineAtInsetStart(shaftPts2, inset);
+  const innerStart = shaftPts2[0];
+  const angH2 = showStart
+    ? Math.atan2(startPt.y - innerStart.y, startPt.x - innerStart.x)
+    : 0;
+  const dShaft = "M " + shaftPts2.map((p) => `${p.x} ${p.y}`).join(" L ");
   let strokeDasharray: string | undefined;
   let strokeLinecap: "butt" | "round" = "butt";
   let strokeLinejoin: "miter" | "round" = "miter";
@@ -886,6 +932,7 @@ export function annotationSvgElements(
     key: `${keyPrefix}-p`, d: dShaft, fill: "none", stroke: a.color, strokeWidth: sw,
     strokeLinecap, strokeLinejoin, ...(strokeDasharray ? { strokeDasharray } : {}),
   }));
-  chevronSvg(tip, angH, a.color, sw, keyPrefix, nodes);
+  if (showEnd) chevronSvg(tip, angH, a.color, sw, keyPrefix, nodes);
+  if (showStart) chevronSvg(startPt, angH2, a.color, sw, `${keyPrefix}-s`, nodes);
   return nodes;
 }
