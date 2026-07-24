@@ -10929,7 +10929,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           </div>
         )}
         {/* Panel edit Label — muncul saat sebuah label terpilih (mode geser). */}
-        {tool === "iluanalisa" && mode === "masterplan" && iluSub === "geser" && iluSelectedId && (() => {
+        {tool === "iluanalisa" && iluSub === "geser" && iluSelectedId && (() => {
           const sel = (sketch.illustrations ?? []).find((x) => x.id === iluSelectedId);
           if (!sel || (sel.kind !== "label" && sel.kind !== "circleDashed" && sel.kind !== "text" && sel.kind !== "arrow")) return null;
           const fs = sel.fontScale ?? 1;
