@@ -11041,7 +11041,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           );
         })()}
 
-        {tool === "iluanalisa" && mode === "masterplan" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
+        {tool === "iluanalisa" && sketch.illustrationLayer && Object.keys(sketch.illustrationLayer.subs).length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <div className="flex items-center gap-2">
               <input
