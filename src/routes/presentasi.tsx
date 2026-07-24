@@ -1181,7 +1181,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     out.push({ kind: "analisis-kawasan", id: "analisis-kawasan", title: "Analisis Kawasan", sketch: sk, analysis });
   }
   // Slide Analisis Site — muncul jika sketsa memiliki ilustrasi analisa sendiri.
-  if ((sk.illustrations ?? []).length > 0) {
+  if ((((sk as unknown) as { illustrations?: unknown[] }).illustrations ?? []).length > 0) {
     try {
       const siteAnalysis = analyzeSketchForIllustrations(sk);
       if (siteAnalysis.illustrations.length > 0) {
