@@ -10678,19 +10678,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Spline className="mr-1.5 h-4 w-4" /> Jalan
           </Button>
-          {mode === "masterplan" && (
-            <Button
-              variant={tool === "iluanalisa" ? "default" : "outline"}
-              size="sm"
-              onClick={() => { cancelPendingCurve(); setTool("iluanalisa"); setIluDraft(null); }}
-              className={cn(tool === "iluanalisa" && "bg-gradient-primary shadow-primary")}
-              title="Ilustrasi Analisa — panah, zona, alur, node, label untuk framework diagram."
-            >
-              <PenTool className="mr-1.5 h-4 w-4" /> Ilustrasi Analisa
-            </Button>
-          )}
+          <Button
+            variant={tool === "iluanalisa" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("iluanalisa"); setIluDraft(null); }}
+            className={cn(tool === "iluanalisa" && "bg-gradient-primary shadow-primary")}
+            title="Ilustrasi Analisa — panah, zona, alur, node, label untuk framework diagram."
+          >
+            <PenTool className="mr-1.5 h-4 w-4" /> Ilustrasi Analisa
+          </Button>
         </div>
-        {tool === "iluanalisa" && mode === "masterplan" && (
+        {tool === "iluanalisa" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Ilustrasi Analisa</span>
             <div className="flex items-center gap-1 rounded border border-orange-500/30 bg-white/60 px-1 py-0.5">
