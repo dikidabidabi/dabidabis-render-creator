@@ -50,7 +50,7 @@ import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
-import { loadMasterplanAnalysis, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
+import { loadMasterplanAnalysis, analyzeSketchForIllustrations, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
 import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, iluNameFor, type Annotation } from "@/lib/analysis-illustrations";
 import { lonLatToTile, pickTileZoom, metersPerMapPx } from "@/lib/geo";
 import {
