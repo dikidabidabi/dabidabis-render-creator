@@ -9309,7 +9309,7 @@ function TopViewFit({
         })}
         {showIllustrations && sortAnnotationsForRender(a.illustrations).map((an, i) => (
           <g key={an.id || `ill-${i}`}>
-            {annotationSvgElements(an, worldToScreen, `ill-${i}`, Math.max(0.6, Math.min(1.4, illuScale)))}
+            {annotationSvgElements(an, worldToScreen, `ill-${i}`, illuScale)}
           </g>
         ))}
       </svg>
