@@ -715,10 +715,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               />
             </>
           )}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
-            <planeGeometry args={[bound * 6, bound * 6]} />
-            <meshStandardMaterial color={colorMode === "bw" ? "#e5e5e5" : "#e2e8f0"} roughness={1} />
-          </mesh>
+          <gridHelper args={[bound * 6, 60, "#94a3b8", "#cbd5e1"]} position={[0, 0, 0]} />
           {showMap && sketch.geo && geoLocked && (
             <MapGround geo={sketch.geo} origin={origin} mPerPx={mPerPx} bound={bound} />
           )}
