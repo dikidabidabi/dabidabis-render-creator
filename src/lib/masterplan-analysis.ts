@@ -151,6 +151,10 @@ export function loadMasterplanAnalysis(rootLayerId?: string): MasterplanAnalysis
   return analyze(sk);
 }
 
+export function analyzeSketchForIllustrations(sk: unknown): MasterplanAnalysis {
+  return analyze(sk as AnySketch);
+}
+
 function analyze(sk: AnySketch): MasterplanAnalysis {
   const pxm = pxPerMeterOf(sk.scale);
   const layers = (sk.layers || []).filter((l) => !l.hidden);
