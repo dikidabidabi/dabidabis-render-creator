@@ -1132,7 +1132,8 @@ type Slide =
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }
   | { kind: "siteplan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
-  | { kind: "analisis-kawasan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis };
+  | { kind: "analisis-kawasan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
+  | { kind: "analisis-site"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -1178,6 +1179,15 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   }
   if (hasAnalysis && sk.linkedMasterplan && analysis && analysis.illustrations.length > 0) {
     out.push({ kind: "analisis-kawasan", id: "analisis-kawasan", title: "Analisis Kawasan", sketch: sk, analysis });
+  }
+  // Slide Analisis Site — muncul jika sketsa memiliki ilustrasi analisa sendiri.
+  if ((sk.illustrations ?? []).length > 0) {
+    try {
+      const siteAnalysis = analyzeSketchForIllustrations(sk);
+      if (siteAnalysis.illustrations.length > 0) {
+        out.push({ kind: "analisis-site", id: "analisis-site", title: "Analisis Site", sketch: sk, analysis: siteAnalysis });
+      }
+    } catch { /* ignore */ }
   }
   // 4 slide analisa site — selalu ada (pakai koordinat default jika belum dikunci).
   out.push({ kind: "site", id: "site-lokasi", title: "Lokasi & Konteks Tapak", sketch: sk, bounds, view: "lokasi" });
@@ -1343,6 +1353,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "masterplan": return "Master Plan";
       case "siteplan": return "Siteplan Kawasan";
       case "analisis-kawasan": return "Analisis Kawasan";
+      case "analisis-site": return "Analisis Site";
       default: return null;
     }
   };
@@ -1701,6 +1712,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "masterplan" && <MasterPlanBody plan={slide.plan} analysis={slide.analysis} />}
       {slide.kind === "siteplan" && <SiteplanBody analysis={slide.analysis} />}
       {slide.kind === "analisis-kawasan" && <AnalisisKawasanBody analysis={slide.analysis} />}
+      {slide.kind === "analisis-site" && <AnalisisKawasanBody analysis={slide.analysis} scope="site" />}
     </>
   );
   // All non-special slides default to centered fit; users can pan and pinch-to-zoom.
@@ -9646,7 +9658,7 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub?: st
 }
 
 // ---------- Analisis Kawasan slide (Ilustrasi Analisa overlay) ----------
-function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) {
+function AnalisisKawasanBody({ analysis: a, scope = "kawasan" }: { analysis: MasterplanAnalysis; scope?: "kawasan" | "site" }) {
   // Legenda unik: kind + warna. Nama diambil dari Layer Ilustrasi (bila di-rename)
   // atau fallback ke label preset.
   const legendMap = new Map<string, { kind: Annotation["kind"]; color: string; label: string; count: number }>();
@@ -9659,10 +9671,11 @@ function AnalisisKawasanBody({ analysis: a }: { analysis: MasterplanAnalysis }) 
   const legend = Array.from(legendMap.values());
   // Bounds mencakup semua titik ilustrasi supaya tidak terpotong
   const bounds = boundsIncludingIllustrations(a, 0.05);
+  const heading = scope === "site" ? `Ilustrasi Analisa Site · ${a.title}` : `Ilustrasi Analisa Kawasan · ${a.title}`;
   return (
     <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: "1fr 300px", gap: 14 }}>
       <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Ilustrasi Analisa Kawasan · {a.title}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{heading}</div>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <TopViewFit a={a} showLabels={false} showRoads showLahan showIllustrations
             showBuildings={false} showMap mapGrayscale
