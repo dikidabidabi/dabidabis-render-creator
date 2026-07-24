@@ -9209,8 +9209,10 @@ function TopViewFit({
   const vh = Math.max(1, b.maxY - b.minY);
   const sw = Math.max(vw, vh); // sketch-relative stroke ref (mirip Denah)
   const worldToScreen = (p: { x: number; y: number }) => ({ x: p.x, y: p.y });
-  // Approx px→screen scale factor for illustration stroke widths. Slide box ~1300px.
-  const illuScale = 1300 / sw;
+  // Ilustrasi disimpan dalam koordinat dunia (px sketsa). SVG viewBox sudah
+  // menyekala world→screen otomatis bersama lahan/jalan/bangunan, jadi biarkan
+  // scale=1 supaya proporsi ilustrasi identik dengan tampilan di kanvas sketsa.
+  const illuScale = 1;
   // Peta OSM tiles — hanya jika showMap dan geo terkunci.
   const mapTiles: { href: string; x: number; y: number; w: number; h: number }[] = [];
   let mapRotDeg = 0;
@@ -9307,7 +9309,7 @@ function TopViewFit({
         })}
         {showIllustrations && sortAnnotationsForRender(a.illustrations).map((an, i) => (
           <g key={an.id || `ill-${i}`}>
-            {annotationSvgElements(an, worldToScreen, `ill-${i}`, Math.max(0.6, Math.min(1.4, illuScale)))}
+            {annotationSvgElements(an, worldToScreen, `ill-${i}`, illuScale)}
           </g>
         ))}
       </svg>
