@@ -439,9 +439,11 @@ function PresentasiPage() {
   const [loaded, setLoaded] = useState(false);
   const [narasiStore, setNarasiStore] = useState<NarasiStore>({});
   const [perspektifStore, setPerspektifStore] = useState<PerspektifStore>({});
+  const [moodboardStore, setMoodboardStore] = useState<MoodboardStore>({});
   const lastRawRef = useRef<string | null>(null);
   const lastNarasiRawRef = useRef<string | null>(null);
   const lastPerspektifRawRef = useRef<string | null>(null);
+  const lastMoodboardRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
