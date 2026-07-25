@@ -127,6 +127,18 @@ const STORAGE_KEY = "dabidabis_sketch_v2";
 const COST_KEY = "dabidabis_cost_v1";
 const NARASI_KEY = "dabidabis_narasi_v1";
 const PERSPEKTIF_KEY = "dabidabis_perspektif_v1";
+const MOODBOARD_KEY = "dabidabis_moodboard_v1";
+
+type MoodboardEntry = { title: string; prompt: string; image: string; updatedAt: number };
+type MoodboardStore = Record<string, MoodboardEntry>;
+function loadMoodboardStore(): MoodboardStore {
+  try {
+    const raw = localStorage.getItem(MOODBOARD_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? (v as MoodboardStore) : {};
+  } catch { return {}; }
+}
 
 // ---------- Narasi store (sinkron dengan halaman /narasi) ----------
 type NarasiItem = { id: string; text: string; images: (string | null)[] };
