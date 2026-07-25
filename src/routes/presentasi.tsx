@@ -477,6 +477,11 @@ function PresentasiPage() {
         lastPerspektifRawRef.current = praw;
         setPerspektifStore(loadPerspektifStore());
       }
+      const mraw = localStorage.getItem(MOODBOARD_KEY);
+      if (mraw !== lastMoodboardRawRef.current) {
+        lastMoodboardRawRef.current = mraw;
+        setMoodboardStore(loadMoodboardStore());
+      }
     } catch { /* ignore */ }
   };
 
