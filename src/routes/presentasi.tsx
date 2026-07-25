@@ -5282,6 +5282,29 @@ function PerspektifBody({ slide }: { slide: Extract<Slide, { kind: "perspektif" 
 
 
 
+function MoodboardBody({ slide }: { slide: Extract<Slide, { kind: "moodboard" }> }) {
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#0b0b0f" }}>
+      <img
+        src={slide.image}
+        alt={slide.caption}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+      />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, padding: `14px ${PAD}px 10px ${PAD}px`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, color: "#fff" }}>
+        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: "0.08em" }}>
+          MOODBOARD
+        </div>
+        <div style={{ fontSize: 14, opacity: 0.85 }}>{slide.caption}</div>
+      </div>
+      {slide.prompt && (
+        <div style={{ position: "absolute", left: PAD, right: PAD, bottom: 24, padding: "12px 16px", background: "rgba(0,0,0,0.55)", color: "#fff", borderRadius: 8, fontSize: 14, lineHeight: 1.4, maxWidth: 900 }}>
+          {slide.prompt}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
   const { sketch, bounds } = slide;
   const geo = sketch.geo;
