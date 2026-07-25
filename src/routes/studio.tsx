@@ -3238,6 +3238,7 @@ function StudioPage() {
       edit: EditNode,
       upload: UploadNode,
       upscale: (props: NodeProps) => <UpscaleNode {...props} onRun={runUpscale} />,
+      moodboard: MoodboardNode,
     }),
     [runUpscale],
   );
