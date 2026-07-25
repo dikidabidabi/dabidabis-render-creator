@@ -1138,6 +1138,7 @@ type Slide =
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
   | { kind: "perspektif"; id: string; title: string; sketch: Sketch; image: string; caption: string; index: number; total: number }
+  | { kind: "moodboard"; id: string; title: string; sketch: Sketch; image: string; caption: string; prompt: string }
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "shadow-seasonal"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
