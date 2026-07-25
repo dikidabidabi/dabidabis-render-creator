@@ -3012,7 +3012,7 @@ function StudioPage() {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
     const uid = crypto.randomUUID().slice(0, 8);
     const sk = sketchId ? sketches.find((s) => s.id === sketchId) ?? sketches[0] : sketches[0];
-    if ((kind === "input" || kind === "output" || kind === "singleOutput") && !sk) {
+    if ((kind === "input" || kind === "output" || kind === "singleOutput" || kind === "moodboard") && !sk) {
       toast.error("Belum ada sketsa. Buat sketsa dulu.");
       return;
     }
