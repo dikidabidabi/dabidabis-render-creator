@@ -530,6 +530,7 @@ function PresentasiPage() {
               sketch={sk}
               narasi={narasiForSketch(narasiStore, sk.id)}
               perspektif={perspektifForSketch(perspektifStore, sk.id)}
+              moodboard={moodboardStore[sk.id] ?? null}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
             />
