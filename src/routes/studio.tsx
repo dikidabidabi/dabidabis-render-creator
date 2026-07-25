@@ -329,6 +329,7 @@ function NodeShell({
     edit: "border-cyan-500/40 bg-cyan-500/5",
     upload: "border-indigo-500/40 bg-indigo-500/5",
     upscale: "border-fuchsia-500/40 bg-fuchsia-500/5",
+    moodboard: "border-rose-500/40 bg-rose-500/5",
   } as const;
   return (
     <div
