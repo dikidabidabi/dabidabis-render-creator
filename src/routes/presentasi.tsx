@@ -568,8 +568,8 @@ function PrintStyles() {
 
 // ---------- Sketch Box ----------
 function PresentasiBox({
-  sketch, narasi, perspektif, open, onToggle,
-}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
+  sketch, narasi, perspektif, moodboard, open, onToggle,
+}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null; open: boolean; onToggle: () => void }) {
   const [masterPlan, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
   const [mpAnalysis, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
   useEffect(() => {
