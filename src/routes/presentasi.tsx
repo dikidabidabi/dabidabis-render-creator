@@ -489,7 +489,7 @@ function PresentasiPage() {
     load();
     setLoaded(true);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY || e.key === NARASI_KEY || e.key === PERSPEKTIF_KEY) load();
+      if (e.key === STORAGE_KEY || e.key === NARASI_KEY || e.key === PERSPEKTIF_KEY || e.key === MOODBOARD_KEY) load();
     };
     const onVis = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("storage", onStorage);
