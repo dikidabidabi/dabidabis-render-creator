@@ -313,7 +313,7 @@ function NodeShell({
 }: {
   title: string;
   icon: React.ReactNode;
-  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload" | "upscale";
+  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload" | "upscale" | "moodboard";
   children: React.ReactNode;
   hasTarget?: boolean;
   hasSource?: boolean;
