@@ -1290,6 +1290,17 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       total: perspektifList.length,
     });
   });
+  if (moodboard && moodboard.image) {
+    out.push({
+      kind: "moodboard",
+      id: `moodboard-${sk.id}`,
+      title: "Moodboard",
+      sketch: sk,
+      image: moodboard.image,
+      caption: moodboard.title || sk.title,
+      prompt: moodboard.prompt ?? "",
+    });
+  }
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   // Rincian per Level — paginated jika tidak muat satu slide.
   {
