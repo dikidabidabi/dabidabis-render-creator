@@ -127,6 +127,18 @@ const STORAGE_KEY = "dabidabis_sketch_v2";
 const COST_KEY = "dabidabis_cost_v1";
 const NARASI_KEY = "dabidabis_narasi_v1";
 const PERSPEKTIF_KEY = "dabidabis_perspektif_v1";
+const MOODBOARD_KEY = "dabidabis_moodboard_v1";
+
+type MoodboardEntry = { title: string; prompt: string; image: string; updatedAt: number };
+type MoodboardStore = Record<string, MoodboardEntry>;
+function loadMoodboardStore(): MoodboardStore {
+  try {
+    const raw = localStorage.getItem(MOODBOARD_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? (v as MoodboardStore) : {};
+  } catch { return {}; }
+}
 
 // ---------- Narasi store (sinkron dengan halaman /narasi) ----------
 type NarasiItem = { id: string; text: string; images: (string | null)[] };
@@ -427,9 +439,11 @@ function PresentasiPage() {
   const [loaded, setLoaded] = useState(false);
   const [narasiStore, setNarasiStore] = useState<NarasiStore>({});
   const [perspektifStore, setPerspektifStore] = useState<PerspektifStore>({});
+  const [moodboardStore, setMoodboardStore] = useState<MoodboardStore>({});
   const lastRawRef = useRef<string | null>(null);
   const lastNarasiRawRef = useRef<string | null>(null);
   const lastPerspektifRawRef = useRef<string | null>(null);
+  const lastMoodboardRawRef = useRef<string | null>(null);
 
   const load = () => {
     try {
@@ -463,6 +477,11 @@ function PresentasiPage() {
         lastPerspektifRawRef.current = praw;
         setPerspektifStore(loadPerspektifStore());
       }
+      const mraw = localStorage.getItem(MOODBOARD_KEY);
+      if (mraw !== lastMoodboardRawRef.current) {
+        lastMoodboardRawRef.current = mraw;
+        setMoodboardStore(loadMoodboardStore());
+      }
     } catch { /* ignore */ }
   };
 
@@ -470,7 +489,7 @@ function PresentasiPage() {
     load();
     setLoaded(true);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY || e.key === NARASI_KEY || e.key === PERSPEKTIF_KEY) load();
+      if (e.key === STORAGE_KEY || e.key === NARASI_KEY || e.key === PERSPEKTIF_KEY || e.key === MOODBOARD_KEY) load();
     };
     const onVis = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("storage", onStorage);
@@ -511,6 +530,7 @@ function PresentasiPage() {
               sketch={sk}
               narasi={narasiForSketch(narasiStore, sk.id)}
               perspektif={perspektifForSketch(perspektifStore, sk.id)}
+              moodboard={moodboardStore[sk.id] ?? null}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
             />
@@ -548,8 +568,8 @@ function PrintStyles() {
 
 // ---------- Sketch Box ----------
 function PresentasiBox({
-  sketch, narasi, perspektif, open, onToggle,
-}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; open: boolean; onToggle: () => void }) {
+  sketch, narasi, perspektif, moodboard, open, onToggle,
+}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null; open: boolean; onToggle: () => void }) {
   const [masterPlan, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
   const [mpAnalysis, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
   useEffect(() => {
@@ -585,7 +605,7 @@ function PresentasiBox({
     () => (linkedBuildingName ? { ...sketch, title: linkedBuildingName } : sketch),
     [sketch, linkedBuildingName],
   );
-  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle]);
+  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
@@ -1118,6 +1138,7 @@ type Slide =
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
   | { kind: "perspektif"; id: string; title: string; sketch: Sketch; image: string; caption: string; index: number; total: number }
+  | { kind: "moodboard"; id: string; title: string; sketch: Sketch; image: string; caption: string; prompt: string }
   | { kind: "matahari"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "shadow-seasonal"; id: string; title: string; sketch: Sketch; bounds: Bounds }
   | { kind: "facade-zoning"; id: string; title: string; sketch: Sketch; bounds: Bounds }
@@ -1158,7 +1179,7 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null): Slide[] {
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null, moodboard: MoodboardEntry | null = null): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -1269,6 +1290,17 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       total: perspektifList.length,
     });
   });
+  if (moodboard && moodboard.image) {
+    out.push({
+      kind: "moodboard",
+      id: `moodboard-${sk.id}`,
+      title: "Moodboard",
+      sketch: sk,
+      image: moodboard.image,
+      caption: moodboard.title || sk.title,
+      prompt: moodboard.prompt ?? "",
+    });
+  }
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
   // Rincian per Level — paginated jika tidak muat satu slide.
   {
@@ -1697,6 +1729,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
       {slide.kind === "perspektif" && <PerspektifBody slide={slide} />}
+      {slide.kind === "moodboard" && <MoodboardBody slide={slide} />}
       {slide.kind === "matahari" && <MatahariBody slide={slide} />}
       {slide.kind === "shadow-seasonal" && <ShadowSeasonalBody slide={slide} />}
       {slide.kind === "facade-zoning" && <FacadeZoningBody slide={slide} />}
@@ -5248,6 +5281,29 @@ function PerspektifBody({ slide }: { slide: Extract<Slide, { kind: "perspektif" 
 
 
 
+
+function MoodboardBody({ slide }: { slide: Extract<Slide, { kind: "moodboard" }> }) {
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#0b0b0f" }}>
+      <img
+        src={slide.image}
+        alt={slide.caption}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+      />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, padding: `14px ${PAD}px 10px ${PAD}px`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, color: "#fff" }}>
+        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: "0.08em" }}>
+          MOODBOARD
+        </div>
+        <div style={{ fontSize: 14, opacity: 0.85 }}>{slide.caption}</div>
+      </div>
+      {slide.prompt && (
+        <div style={{ position: "absolute", left: PAD, right: PAD, bottom: 24, padding: "12px 16px", background: "rgba(0,0,0,0.55)", color: "#fff", borderRadius: 8, fontSize: 14, lineHeight: 1.4, maxWidth: 900 }}>
+          {slide.prompt}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }) {
   const { sketch, bounds } = slide;

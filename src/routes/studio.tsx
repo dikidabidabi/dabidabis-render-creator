@@ -279,6 +279,14 @@ type UpscaleNodeData = {
   tilesDone?: number;
   tileStatus?: string;
 };
+type MoodboardNodeData = {
+  kind: "moodboard";
+  sketchId: string;
+  sketchTitle: string;
+  prompt: string;
+  collage?: string | null;
+  imageCount?: number;
+};
 
 const EMPTY_OUTPUTS: RenderAngle[] = [];
 
@@ -305,7 +313,7 @@ function NodeShell({
 }: {
   title: string;
   icon: React.ReactNode;
-  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload" | "upscale";
+  tone: "input" | "prompt" | "render" | "output" | "reference" | "edit" | "upload" | "upscale" | "moodboard";
   children: React.ReactNode;
   hasTarget?: boolean;
   hasSource?: boolean;
@@ -321,6 +329,7 @@ function NodeShell({
     edit: "border-cyan-500/40 bg-cyan-500/5",
     upload: "border-indigo-500/40 bg-indigo-500/5",
     upscale: "border-fuchsia-500/40 bg-fuchsia-500/5",
+    moodboard: "border-rose-500/40 bg-rose-500/5",
   } as const;
   return (
     <div
@@ -1483,6 +1492,198 @@ function UpscaleNode({
             </div>
           )}
         </div>
+      </div>
+    </NodeShell>
+  );
+}
+
+// ---------- Moodboard Node ----------
+const MOODBOARD_KEY = "dabidabis_moodboard_v1";
+
+async function buildMoodboardCollage(images: string[]): Promise<string> {
+  const W = 1600;
+  const H = 900;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#0b0b0f";
+  ctx.fillRect(0, 0, W, H);
+  if (images.length === 0) return canvas.toDataURL("image/jpeg", 0.9);
+
+  const n = Math.min(images.length, 8);
+  // Choose grid columns based on count
+  const cols = n <= 2 ? n : n <= 4 ? 2 : n <= 6 ? 3 : 4;
+  const rows = Math.ceil(n / cols);
+  const gap = 10;
+  const cellW = (W - gap * (cols + 1)) / cols;
+  const cellH = (H - gap * (rows + 1)) / rows;
+
+  const loaded = await Promise.all(
+    images.slice(0, n).map(
+      (src) =>
+        new Promise<HTMLImageElement | null>((resolve) => {
+          const im = new Image();
+          im.crossOrigin = "anonymous";
+          im.onload = () => resolve(im);
+          im.onerror = () => resolve(null);
+          im.src = src;
+        }),
+    ),
+  );
+
+  loaded.forEach((im, i) => {
+    if (!im) return;
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    const x = gap + c * (cellW + gap);
+    const y = gap + r * (cellH + gap);
+    // cover fit
+    const ir = im.width / im.height;
+    const cr = cellW / cellH;
+    let sx = 0, sy = 0, sw = im.width, sh = im.height;
+    if (ir > cr) {
+      sw = im.height * cr;
+      sx = (im.width - sw) / 2;
+    } else {
+      sh = im.width / cr;
+      sy = (im.height - sh) / 2;
+    }
+    ctx.drawImage(im, sx, sy, sw, sh, x, y, cellW, cellH);
+  });
+
+  return canvas.toDataURL("image/jpeg", 0.88);
+}
+
+function saveMoodboardToPresentasi(
+  sketchId: string,
+  entry: { title: string; prompt: string; image: string },
+) {
+  try {
+    const raw = localStorage.getItem(MOODBOARD_KEY);
+    const store: Record<string, { title: string; prompt: string; image: string; updatedAt: number }> =
+      raw ? JSON.parse(raw) : {};
+    store[sketchId] = { ...entry, updatedAt: Date.now() };
+    localStorage.setItem(MOODBOARD_KEY, JSON.stringify(store));
+  } catch {
+    /* ignore */
+  }
+}
+
+function MoodboardNode({ id, data }: NodeProps) {
+  const d = data as MoodboardNodeData;
+  const updateNode = useStudioStore((s) => s.updateNode);
+  const removeNode = useStudioStore((s) => s.removeNode);
+  const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
+  const sketches = useSketchList();
+
+  const images = useMemo(
+    () => outputs.filter((o) => !!o.image).map((o) => o.image as string),
+    [outputs],
+  );
+
+  const [building, setBuilding] = useState(false);
+  const extract = async () => {
+    if (images.length === 0) {
+      toast.error("Belum ada hasil render untuk sketsa ini.");
+      return;
+    }
+    setBuilding(true);
+    try {
+      const collage = await buildMoodboardCollage(images);
+      updateNode(id, { collage, imageCount: images.length });
+      toast.success(`Moodboard tersusun dari ${Math.min(images.length, 8)} render`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal membuat moodboard");
+    } finally {
+      setBuilding(false);
+    }
+  };
+
+  const send = () => {
+    if (!d.collage) {
+      toast.error("Ekstrak moodboard terlebih dahulu.");
+      return;
+    }
+    saveMoodboardToPresentasi(d.sketchId, {
+      title: d.sketchTitle,
+      prompt: d.prompt ?? "",
+      image: d.collage,
+    });
+    toast.success("Moodboard dikirim ke Presentasi");
+  };
+
+  return (
+    <NodeShell
+      title={`Moodboard · ${d.sketchTitle}`}
+      icon={<Palette className="h-3.5 w-3.5 text-rose-500" />}
+      tone="moodboard"
+      hasTarget
+      hasSource={!!d.collage}
+      onRemove={() => removeNode(id)}
+    >
+      <div className="space-y-2">
+        <div>
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Judul Proyek
+          </Label>
+          <select
+            value={d.sketchId}
+            onChange={(e) => {
+              const sk = sketches.find((s) => s.id === e.target.value);
+              if (sk) updateNode(id, { sketchId: sk.id, sketchTitle: sk.title, collage: null });
+            }}
+            className="mt-1 w-full rounded border border-border/60 bg-background px-2 py-1 text-[11px] font-medium outline-none focus:border-rose-500"
+          >
+            {sketches.length === 0 && <option value="">(Belum ada sketsa)</option>}
+            {sketches.map((s) => (
+              <option key={s.id} value={s.id}>{s.title}</option>
+            ))}
+            {sketches.length > 0 && !sketches.some((s) => s.id === d.sketchId) && (
+              <option value={d.sketchId}>{d.sketchTitle || "(sketsa terhapus)"}</option>
+            )}
+          </select>
+        </div>
+
+        <div className="rounded border border-border/50 bg-muted/30 p-2">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground">
+              {images.length} render tersedia
+            </span>
+            <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={extract} disabled={building}>
+              {building ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              <span className="ml-1">Ekstrak</span>
+            </Button>
+          </div>
+          {d.collage ? (
+            <img src={d.collage} alt="moodboard" className="w-full rounded border border-border/40" />
+          ) : (
+            <div className="flex h-24 items-center justify-center rounded border border-dashed border-border/50 text-[10px] text-muted-foreground">
+              Belum ada moodboard
+            </div>
+          )}
+        </div>
+
+        <div>
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Prompt / Deskripsi Moodboard
+          </Label>
+          <Textarea
+            value={d.prompt ?? ""}
+            onChange={(e) => updateNode(id, { prompt: e.target.value })}
+            placeholder="Contoh: Palet warna hangat, material kayu & beton ekspos, mood senja yang tenang."
+            className="mt-1 min-h-[64px] max-h-[200px] resize-y text-[11px]"
+          />
+        </div>
+
+        <Button
+          size="sm"
+          className="w-full bg-gradient-primary shadow-primary"
+          onClick={send}
+          disabled={!d.collage}
+        >
+          <Send className="mr-1.5 h-3 w-3" /> Kirim ke Presentasi
+        </Button>
       </div>
     </NodeShell>
   );
@@ -2804,13 +3005,14 @@ function StudioPage() {
       | "edit"
       | "upload"
       | "upscale"
-      | "singleOutput",
+      | "singleOutput"
+      | "moodboard",
     sketchId?: string,
   ) => {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
     const uid = crypto.randomUUID().slice(0, 8);
     const sk = sketchId ? sketches.find((s) => s.id === sketchId) ?? sketches[0] : sketches[0];
-    if ((kind === "input" || kind === "output" || kind === "singleOutput") && !sk) {
+    if ((kind === "input" || kind === "output" || kind === "singleOutput" || kind === "moodboard") && !sk) {
       toast.error("Belum ada sketsa. Buat sketsa dulu.");
       return;
     }
@@ -2912,6 +3114,19 @@ function StudioPage() {
           standaloneStatus: "idle",
           standaloneImage: null,
         } satisfies OutputNodeData,
+      };
+    } else if (kind === "moodboard" && sk) {
+      node = {
+        id: `moodboard-${uid}`,
+        type: "moodboard",
+        position: anchor,
+        data: {
+          kind: "moodboard",
+          sketchId: sk.id,
+          sketchTitle: sk.title,
+          prompt: "",
+          collage: null,
+        } satisfies MoodboardNodeData,
       };
     } else if (kind === "edit") {
       toast.info("Node Edit dibuat dari klik gambar di Output — lalu tekan 'Jadikan Node'.");
@@ -3023,6 +3238,7 @@ function StudioPage() {
       edit: EditNode,
       upload: UploadNode,
       upscale: (props: NodeProps) => <UpscaleNode {...props} onRun={runUpscale} />,
+      moodboard: MoodboardNode,
     }),
     [runUpscale],
   );
@@ -3129,6 +3345,9 @@ function StudioPage() {
               <DropdownMenuLabel>Node Lanjutan</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => spawnNode("reference")}>
                 <Palette className="mr-2 h-3 w-3 text-pink-500" /> Referensi Style
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("moodboard")}>
+                <Palette className="mr-2 h-3 w-3 text-rose-500" /> Moodboard (dari render)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("edit")}>
                 <Pencil className="mr-2 h-3 w-3 text-cyan-500" /> Sketsa Perbaikan (via anotasi)
