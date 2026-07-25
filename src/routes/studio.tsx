@@ -3346,6 +3346,9 @@ function StudioPage() {
               <DropdownMenuItem onClick={() => spawnNode("reference")}>
                 <Palette className="mr-2 h-3 w-3 text-pink-500" /> Referensi Style
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => spawnNode("moodboard")}>
+                <Palette className="mr-2 h-3 w-3 text-rose-500" /> Moodboard (dari render)
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => spawnNode("edit")}>
                 <Pencil className="mr-2 h-3 w-3 text-cyan-500" /> Sketsa Perbaikan (via anotasi)
               </DropdownMenuItem>
