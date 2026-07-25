@@ -279,6 +279,14 @@ type UpscaleNodeData = {
   tilesDone?: number;
   tileStatus?: string;
 };
+type MoodboardNodeData = {
+  kind: "moodboard";
+  sketchId: string;
+  sketchTitle: string;
+  prompt: string;
+  collage?: string | null;
+  imageCount?: number;
+};
 
 const EMPTY_OUTPUTS: RenderAngle[] = [];
 
