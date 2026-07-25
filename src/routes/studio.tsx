@@ -3115,6 +3115,19 @@ function StudioPage() {
           standaloneImage: null,
         } satisfies OutputNodeData,
       };
+    } else if (kind === "moodboard" && sk) {
+      node = {
+        id: `moodboard-${uid}`,
+        type: "moodboard",
+        position: anchor,
+        data: {
+          kind: "moodboard",
+          sketchId: sk.id,
+          sketchTitle: sk.title,
+          prompt: "",
+          collage: null,
+        } satisfies MoodboardNodeData,
+      };
     } else if (kind === "edit") {
       toast.info("Node Edit dibuat dari klik gambar di Output — lalu tekan 'Jadikan Node'.");
       return;
