@@ -3005,7 +3005,8 @@ function StudioPage() {
       | "edit"
       | "upload"
       | "upscale"
-      | "singleOutput",
+      | "singleOutput"
+      | "moodboard",
     sketchId?: string,
   ) => {
     const anchor = { x: 200 + Math.random() * 200, y: 200 + Math.random() * 200 };
