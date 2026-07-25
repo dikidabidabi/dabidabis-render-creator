@@ -605,7 +605,7 @@ function PresentasiBox({
     () => (linkedBuildingName ? { ...sketch, title: linkedBuildingName } : sketch),
     [sketch, linkedBuildingName],
   );
-  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle]);
+  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
