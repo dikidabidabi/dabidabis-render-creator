@@ -33,6 +33,7 @@ import {
   type RoadSegment,
 } from "@/lib/roads";
 import { drawOsmTiles, type Geo } from "@/lib/geo";
+import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
 
 
 type Point = { x: number; y: number };
