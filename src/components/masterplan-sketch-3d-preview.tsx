@@ -33,6 +33,7 @@ import {
   type RoadSegment,
 } from "@/lib/roads";
 import { drawOsmTiles, type Geo } from "@/lib/geo";
+import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
 
 
 type Point = { x: number; y: number };
@@ -718,6 +719,15 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
           <gridHelper args={[bound * 6, 60, "#94a3b8", "#cbd5e1"]} position={[0, 0, 0]} />
           {showMap && sketch.geo && geoLocked && (
             <MapGround geo={sketch.geo} origin={origin} mPerPx={mPerPx} bound={bound} />
+          )}
+          {geoLocked && sketch.geo && (
+            <OsmBuildingsLayer
+              geo={sketch.geo}
+              origin={origin}
+              mPerPx={mPerPx}
+              radiusM={Math.max(200, bound * 1.8)}
+              colorMode={colorMode}
+            />
           )}
           {meshes.map((m) => (
             <ExtrudedMesh
