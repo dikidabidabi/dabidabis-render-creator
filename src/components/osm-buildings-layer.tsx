@@ -77,6 +77,19 @@ export function OsmBuildingsLayer({
       // Match FloorSlab orientation: rotateX(π/2), scale(1,-1,1).
       g.rotateX(Math.PI / 2);
       g.scale(1, -1, 1);
+      // scale with a negative axis flips winding order; restore outward-facing
+      // normals so the extrusion renders as a solid closed volume.
+      const idx = g.getIndex();
+      if (idx) {
+        const arr = idx.array as ArrayLike<number>;
+        const flipped = new Uint32Array(arr.length);
+        for (let i = 0; i < arr.length; i += 3) {
+          flipped[i] = arr[i];
+          flipped[i + 1] = arr[i + 2];
+          flipped[i + 2] = arr[i + 1];
+        }
+        g.setIndex(new THREE.BufferAttribute(flipped, 1));
+      }
       g.computeVertexNormals();
       // Color: warm neutral for sketch mode, grey for B&W.
       const color = colorMode === "bw" ? "#c9c9c9" : b.source === "fallback" ? "#c4b7a4" : "#d6c9b3";
@@ -103,9 +116,11 @@ export function OsmBuildingsLayer({
             opacity={opacity}
             roughness={0.85}
             metalness={0.02}
+            side={THREE.DoubleSide}
           />
         </mesh>
       ))}
     </group>
   );
 }
+

@@ -321,6 +321,8 @@ function MapGround({
     let cancelled = false;
     const redraw = () => {
       if (cancelled) return;
+      ctx.save();
+      (ctx as any).filter = "brightness(1.12) saturate(1.15) contrast(1.05)";
       drawOsmTiles(ctx, {
         lat: geo.lat, lon: geo.lon,
         worldPxPerMeter: wpm,
@@ -328,6 +330,7 @@ function MapGround({
         opacity: 1,
         onTileLoad: () => { tex.needsUpdate = true; },
       });
+      ctx.restore();
       tex.needsUpdate = true;
     };
     redraw();
@@ -344,10 +347,11 @@ function MapGround({
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]} receiveShadow>
       <planeGeometry args={[state.w, state.h]} />
-      <meshBasicMaterial map={state.tex} transparent opacity={Math.max(0.2, Math.min(1, geo.mapOpacity ?? 0.85))} />
+      <meshBasicMaterial map={state.tex} transparent opacity={Math.max(0.9, Math.min(1, (geo.mapOpacity ?? 1) + 0.35))} />
     </mesh>
   );
 }
+
 
 
 export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
