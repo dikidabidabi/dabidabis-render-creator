@@ -742,6 +742,17 @@ function Scene({
         colorMode={colorMode}
         visibleGrids={visibleGrids}
       />
+
+      {sketch.geo && sketch.geo.locked && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon) && (
+        <OsmBuildingsLayer
+          geo={sketch.geo}
+          origin={origin}
+          mPerPx={mPerPx}
+          radiusM={350}
+          groundY={groundY}
+          colorMode={colorMode}
+        />
+      )}
     </>
   );
 }
