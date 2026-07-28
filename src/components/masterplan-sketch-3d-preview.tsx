@@ -719,6 +719,15 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
           {showMap && sketch.geo && geoLocked && (
             <MapGround geo={sketch.geo} origin={origin} mPerPx={mPerPx} bound={bound} />
           )}
+          {geoLocked && sketch.geo && (
+            <OsmBuildingsLayer
+              geo={sketch.geo}
+              origin={origin}
+              mPerPx={mPerPx}
+              radiusM={Math.max(200, bound * 1.8)}
+              colorMode={colorMode}
+            />
+          )}
           {meshes.map((m) => (
             <ExtrudedMesh
               key={m.key}
