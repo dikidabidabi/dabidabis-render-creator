@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
+import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
 import SunCalc from "suncalc";
 import { Slider } from "@/components/ui/slider";
 import {
