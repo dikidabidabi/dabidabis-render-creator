@@ -728,6 +728,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             ref={orbitRef}
             makeDefault
             enableDamping
+            enabled={!editMode}
             target={[0, bound * 0.15, 0]}
             maxPolarAngle={Math.PI / 2 - 0.02}
           />
