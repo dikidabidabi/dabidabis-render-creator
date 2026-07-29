@@ -517,6 +517,10 @@ function Scene({
   noLight,
   visibleLevels,
   visibleGrids,
+  showMap,
+  editMode,
+  osmOverrides,
+  onOsmHeight,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
@@ -525,6 +529,10 @@ function Scene({
   noLight: boolean;
   visibleLevels?: Record<string, boolean>;
   visibleGrids?: Record<number, boolean>;
+  showMap?: boolean;
+  editMode?: boolean;
+  osmOverrides?: Record<string, number>;
+  onOsmHeight?: (id: string, h: number) => void;
 }) {
   const isLevelVisible = (id: string | undefined | null) =>
     !id ? true : visibleLevels?.[id] !== false;
