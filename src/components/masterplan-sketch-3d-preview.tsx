@@ -684,6 +684,9 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               mPerPx={mPerPx}
               radiusM={Math.max(200, bound * 1.8)}
               colorMode={colorMode}
+              editMode={editMode}
+              heightOverrides={osmOverrides}
+              onHeightChange={handleOsmHeight}
             />
           )}
           {meshes.map((m) => (
