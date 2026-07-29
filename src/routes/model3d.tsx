@@ -1454,11 +1454,16 @@ function SketchViewer({
               noLight={noLight}
               visibleLevels={visibleLevels}
               visibleGrids={visibleGrids}
+              showMap={showMap}
+              editMode={editMode}
+              osmOverrides={osmOverrides}
+              onOsmHeight={handleOsmHeight}
             />
             <OrbitControls
               ref={orbitRef}
               enableDamping
               dampingFactor={0.08}
+              enabled={!editMode}
               makeDefault
             />
             {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
