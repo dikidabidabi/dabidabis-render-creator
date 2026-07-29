@@ -32,8 +32,9 @@ import {
   clipRingsByPolygon,
   type RoadSegment,
 } from "@/lib/roads";
-import { drawOsmTiles, type Geo } from "@/lib/geo";
+import { type Geo } from "@/lib/geo";
 import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
+import { MapGround } from "@/components/map-ground";
 
 
 type Point = { x: number; y: number };
