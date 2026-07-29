@@ -23,6 +23,8 @@ import {
   Sun,
   SunDim,
   Move3d,
+  Map as MapIcon,
+  Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
