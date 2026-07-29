@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
+import { MapGround } from "@/components/map-ground";
 import SunCalc from "suncalc";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -22,6 +23,8 @@ import {
   Sun,
   SunDim,
   Move3d,
+  Map as MapIcon,
+  Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -517,6 +520,10 @@ function Scene({
   noLight,
   visibleLevels,
   visibleGrids,
+  showMap,
+  editMode,
+  osmOverrides,
+  onOsmHeight,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
@@ -525,6 +532,10 @@ function Scene({
   noLight: boolean;
   visibleLevels?: Record<string, boolean>;
   visibleGrids?: Record<number, boolean>;
+  showMap?: boolean;
+  editMode?: boolean;
+  osmOverrides?: Record<string, number>;
+  onOsmHeight?: (id: string, h: number) => void;
 }) {
   const isLevelVisible = (id: string | undefined | null) =>
     !id ? true : visibleLevels?.[id] !== false;
@@ -744,14 +755,28 @@ function Scene({
       />
 
       {sketch.geo && sketch.geo.locked && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon) && (
-        <OsmBuildingsLayer
-          geo={sketch.geo}
-          origin={origin}
-          mPerPx={mPerPx}
-          radiusM={350}
-          groundY={groundY}
-          colorMode={colorMode}
-        />
+        <>
+          {showMap && (
+            <MapGround
+              geo={sketch.geo}
+              origin={origin}
+              mPerPx={mPerPx}
+              bound={Math.max(80, 350 * 0.6)}
+              groundY={groundY - 0.02}
+            />
+          )}
+          <OsmBuildingsLayer
+            geo={sketch.geo}
+            origin={origin}
+            mPerPx={mPerPx}
+            radiusM={350}
+            groundY={groundY}
+            colorMode={colorMode}
+            editMode={editMode}
+            heightOverrides={osmOverrides}
+            onHeightChange={onOsmHeight}
+          />
+        </>
       )}
     </>
   );
@@ -882,6 +907,30 @@ function SketchViewer({
   const [hasSavedView, setHasSavedView] = useState(false);
   const [visibleLevels, setVisibleLevels] = useState<Record<string, boolean>>({});
   const [visibleGrids, setVisibleGrids] = useState<Record<number, boolean>>({});
+  const geoLocked = !!(
+    sketch.geo &&
+    sketch.geo.locked &&
+    Number.isFinite(sketch.geo.lat) &&
+    Number.isFinite(sketch.geo.lon)
+  );
+  const [showMap, setShowMap] = useState<boolean>(geoLocked);
+  useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
+  const [editMode, setEditMode] = useState(false);
+  const osmKey = `dabidabis_osmH_${sketch.id}`;
+  const [osmOverrides, setOsmOverrides] = useState<Record<string, number>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(osmKey);
+      setOsmOverrides(raw ? JSON.parse(raw) : {});
+    } catch { setOsmOverrides({}); }
+  }, [osmKey]);
+  const handleOsmHeight = useCallback((id: string, h: number) => {
+    setOsmOverrides((prev) => {
+      const next = { ...prev, [id]: h };
+      try { localStorage.setItem(osmKey, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, [osmKey]);
   // Ensure new levels default to visible (true) without clobbering user toggles.
   useEffect(() => {
     setVisibleLevels((prev) => {
@@ -1407,11 +1456,16 @@ function SketchViewer({
               noLight={noLight}
               visibleLevels={visibleLevels}
               visibleGrids={visibleGrids}
+              showMap={showMap}
+              editMode={editMode}
+              osmOverrides={osmOverrides}
+              onOsmHeight={handleOsmHeight}
             />
             <OrbitControls
               ref={orbitRef}
               enableDamping
               dampingFactor={0.08}
+              enabled={!editMode}
               makeDefault
             />
             {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
@@ -1489,6 +1543,28 @@ function SketchViewer({
             >
               <Download className="h-3 w-3" /> 4K
             </Button>
+            {geoLocked && (
+              <Button
+                variant={showMap ? "default" : "secondary"}
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => setShowMap((v) => !v)}
+                title="Tampilkan peta OSM sesuai koordinat sketsa"
+              >
+                <MapIcon className="h-3 w-3" /> {showMap ? "Peta: On" : "Peta"}
+              </Button>
+            )}
+            {geoLocked && (
+              <Button
+                variant={editMode ? "default" : "secondary"}
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => setEditMode((v) => !v)}
+                title="Press & pull ketinggian bangunan eksisting dari peta"
+              >
+                <Edit3 className="h-3 w-3" /> {editMode ? "Edit: On" : "Edit"}
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
