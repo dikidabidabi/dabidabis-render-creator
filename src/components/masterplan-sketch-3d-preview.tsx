@@ -572,6 +572,17 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             <MapIcon className="mr-1 h-3 w-3" /> {showMap ? "Peta: On" : "Peta"}
           </Button>
         )}
+        {geoLocked && (
+          <Button
+            variant={editMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setEditMode((v) => !v)}
+            title="Press & pull ketinggian bangunan eksisting dari peta"
+            className="h-7 bg-background/80 backdrop-blur"
+          >
+            <Move3d className="mr-1 h-3 w-3" /> {editMode ? "Edit: On" : "Edit"}
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={takeScreenshot} title="Screenshot"
           className="h-7 bg-background/80 backdrop-blur">
           <Camera className="mr-1 h-3 w-3" /> Screenshot
