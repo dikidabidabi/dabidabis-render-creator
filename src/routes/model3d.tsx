@@ -753,14 +753,28 @@ function Scene({
       />
 
       {sketch.geo && sketch.geo.locked && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon) && (
-        <OsmBuildingsLayer
-          geo={sketch.geo}
-          origin={origin}
-          mPerPx={mPerPx}
-          radiusM={350}
-          groundY={groundY}
-          colorMode={colorMode}
-        />
+        <>
+          {showMap && (
+            <MapGround
+              geo={sketch.geo}
+              origin={origin}
+              mPerPx={mPerPx}
+              bound={Math.max(80, 350 * 0.6)}
+              groundY={groundY - 0.02}
+            />
+          )}
+          <OsmBuildingsLayer
+            geo={sketch.geo}
+            origin={origin}
+            mPerPx={mPerPx}
+            radiusM={350}
+            groundY={groundY}
+            colorMode={colorMode}
+            editMode={editMode}
+            heightOverrides={osmOverrides}
+            onHeightChange={onOsmHeight}
+          />
+        </>
       )}
     </>
   );
