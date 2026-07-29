@@ -302,6 +302,22 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const geoLocked = !!(sketch.geo && sketch.geo.locked && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon));
   const [showMap, setShowMap] = useState<boolean>(geoLocked);
   useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
+  const [editMode, setEditMode] = useState(false);
+  const osmKey = `dabidabis_osmH_${sketch.id}`;
+  const [osmOverrides, setOsmOverrides] = useState<Record<string, number>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(osmKey);
+      setOsmOverrides(raw ? JSON.parse(raw) : {});
+    } catch { setOsmOverrides({}); }
+  }, [osmKey]);
+  const handleOsmHeight = useCallback((id: string, h: number) => {
+    setOsmOverrides((prev) => {
+      const next = { ...prev, [id]: h };
+      try { localStorage.setItem(osmKey, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, [osmKey]);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const orbitRef = useRef<any>(null);
