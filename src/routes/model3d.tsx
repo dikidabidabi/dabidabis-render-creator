@@ -1543,6 +1543,28 @@ function SketchViewer({
             >
               <Download className="h-3 w-3" /> 4K
             </Button>
+            {geoLocked && (
+              <Button
+                variant={showMap ? "default" : "secondary"}
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => setShowMap((v) => !v)}
+                title="Tampilkan peta OSM sesuai koordinat sketsa"
+              >
+                <MapIcon className="h-3 w-3" /> {showMap ? "Peta: On" : "Peta"}
+              </Button>
+            )}
+            {geoLocked && (
+              <Button
+                variant={editMode ? "default" : "secondary"}
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => setEditMode((v) => !v)}
+                title="Press & pull ketinggian bangunan eksisting dari peta"
+              >
+                <Edit3 className="h-3 w-3" /> {editMode ? "Edit: On" : "Edit"}
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
