@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
+import { OsmRoadsLayer } from "@/components/osm-roads-layer";
 import { MapGround } from "@/components/map-ground";
 import SunCalc from "suncalc";
 import { Slider } from "@/components/ui/slider";
@@ -24,6 +25,7 @@ import {
   SunDim,
   Move3d,
   Map as MapIcon,
+  Building2,
   Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
