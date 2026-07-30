@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
+import { OsmRoadsLayer } from "@/components/osm-roads-layer";
 import { MapGround } from "@/components/map-ground";
 import SunCalc from "suncalc";
 import { Slider } from "@/components/ui/slider";
@@ -24,6 +25,7 @@ import {
   SunDim,
   Move3d,
   Map as MapIcon,
+  Building2,
   Edit3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -521,6 +523,7 @@ function Scene({
   visibleLevels,
   visibleGrids,
   showMap,
+  showOsm = true,
   editMode,
   osmOverrides,
   onOsmHeight,
@@ -533,6 +536,7 @@ function Scene({
   visibleLevels?: Record<string, boolean>;
   visibleGrids?: Record<number, boolean>;
   showMap?: boolean;
+  showOsm?: boolean;
   editMode?: boolean;
   osmOverrides?: Record<string, number>;
   onOsmHeight?: (id: string, h: number) => void;
@@ -765,6 +769,14 @@ function Scene({
               groundY={groundY - 0.02}
             />
           )}
+          <OsmRoadsLayer
+            geo={sketch.geo}
+            origin={origin}
+            mPerPx={mPerPx}
+            radiusM={350}
+            groundY={groundY}
+            rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
+          />
           <OsmBuildingsLayer
             geo={sketch.geo}
             origin={origin}
@@ -775,7 +787,10 @@ function Scene({
             editMode={editMode}
             heightOverrides={osmOverrides}
             onHeightChange={onOsmHeight}
+            rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
+            visible={showOsm}
           />
+
         </>
       )}
     </>
@@ -915,6 +930,7 @@ function SketchViewer({
   );
   const [showMap, setShowMap] = useState<boolean>(geoLocked);
   useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
+  const [showOsm, setShowOsm] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const osmKey = `dabidabis_osmH_${sketch.id}`;
   const [osmOverrides, setOsmOverrides] = useState<Record<string, number>>({});
@@ -1457,6 +1473,7 @@ function SketchViewer({
               visibleLevels={visibleLevels}
               visibleGrids={visibleGrids}
               showMap={showMap}
+              showOsm={showOsm}
               editMode={editMode}
               osmOverrides={osmOverrides}
               onOsmHeight={handleOsmHeight}
@@ -1555,6 +1572,18 @@ function SketchViewer({
               </Button>
             )}
             {geoLocked && (
+              <Button
+                variant={showOsm ? "default" : "secondary"}
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => setShowOsm((v) => !v)}
+                title="Tampilkan/sembunyikan bangunan eksisting"
+              >
+                <Building2 className="h-3 w-3" />{" "}
+                {showOsm ? "Eksisting: On" : "Eksisting: Off"}
+              </Button>
+            )}
+            {geoLocked && showOsm && (
               <Button
                 variant={editMode ? "default" : "secondary"}
                 size="sm"

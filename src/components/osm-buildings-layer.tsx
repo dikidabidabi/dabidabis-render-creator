@@ -26,6 +26,8 @@ export function OsmBuildingsLayer({
   editMode = false,
   heightOverrides,
   onHeightChange,
+  rotationDeg = 0,
+  visible = true,
 }: {
   geo: OsmGeo;
   origin: { x: number; y: number };
@@ -37,6 +39,8 @@ export function OsmBuildingsLayer({
   editMode?: boolean;
   heightOverrides?: Record<string, number>;
   onHeightChange?: (id: string, height: number) => void;
+  rotationDeg?: number;
+  visible?: boolean;
 }) {
   const [buildings, setBuildings] = useState<OsmBuilding[] | null>(null);
   const reqRef = useRef(0);
@@ -197,10 +201,13 @@ export function OsmBuildingsLayer({
     setDrag(null);
   };
 
-  if (!buildings || meshes.length === 0) return null;
+  if (!visible || !buildings || meshes.length === 0) return null;
+
+  const rotY = (-rotationDeg * Math.PI) / 180;
 
   return (
-    <group position={[anchorX, groundY, anchorZ]}>
+    <group rotation={[0, rotY, 0]}>
+      <group position={[anchorX, groundY, anchorZ]}>
       {meshes.map((m) => {
         const h = currentHeightOf(m.id, m.baseHeight);
         const scaleY = h / Math.max(0.001, m.baseHeight);
@@ -259,6 +266,7 @@ export function OsmBuildingsLayer({
           </group>
         );
       })}
+      </group>
     </group>
   );
 }
