@@ -930,6 +930,7 @@ function SketchViewer({
   );
   const [showMap, setShowMap] = useState<boolean>(geoLocked);
   useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
+  const [showOsm, setShowOsm] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const osmKey = `dabidabis_osmH_${sketch.id}`;
   const [osmOverrides, setOsmOverrides] = useState<Record<string, number>>({});
