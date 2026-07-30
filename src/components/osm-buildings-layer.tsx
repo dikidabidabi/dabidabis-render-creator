@@ -137,11 +137,16 @@ export function OsmBuildingsLayer({
     return out;
   }, [buildings, colorMode]);
 
+  // Dispose only the *previous* geometry set when a new one is built.
+  // (Disposing on unmount cleanup breaks React StrictMode double-mount:
+  // the memoized geometries survive but would already be disposed.)
+  const prevMeshesRef = useRef<typeof meshes | null>(null);
   useEffect(() => {
-    return () => {
-      meshes.forEach((m) => m.geo.dispose());
-    };
+    const prev = prevMeshesRef.current;
+    if (prev && prev !== meshes) prev.forEach((m) => m.geo.dispose());
+    prevMeshesRef.current = meshes;
   }, [meshes]);
+
 
   // ---- drag state (edit mode) ----
   const [drag, setDrag] = useState<
