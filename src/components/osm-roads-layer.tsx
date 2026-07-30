@@ -99,11 +99,14 @@ export function OsmRoadsLayer({
     return g;
   }, [roads]);
 
+  // Dispose only the previous geometry (StrictMode-safe).
+  const prevGeomRef = useRef<THREE.BufferGeometry | null>(null);
   useEffect(() => {
-    return () => {
-      geometry?.dispose();
-    };
+    const prev = prevGeomRef.current;
+    if (prev && prev !== geometry) prev.dispose();
+    prevGeomRef.current = geometry;
   }, [geometry]);
+
 
   if (!visible || !geometry) return null;
 
