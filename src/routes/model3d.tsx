@@ -1473,6 +1473,7 @@ function SketchViewer({
               visibleLevels={visibleLevels}
               visibleGrids={visibleGrids}
               showMap={showMap}
+              showOsm={showOsm}
               editMode={editMode}
               osmOverrides={osmOverrides}
               onOsmHeight={handleOsmHeight}
@@ -1571,6 +1572,18 @@ function SketchViewer({
               </Button>
             )}
             {geoLocked && (
+              <Button
+                variant={showOsm ? "default" : "secondary"}
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => setShowOsm((v) => !v)}
+                title="Tampilkan/sembunyikan bangunan eksisting"
+              >
+                <Building2 className="h-3 w-3" />{" "}
+                {showOsm ? "Eksisting: On" : "Eksisting: Off"}
+              </Button>
+            )}
+            {geoLocked && showOsm && (
               <Button
                 variant={editMode ? "default" : "secondary"}
                 size="sm"
