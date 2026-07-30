@@ -523,6 +523,7 @@ function Scene({
   visibleLevels,
   visibleGrids,
   showMap,
+  showOsm = true,
   editMode,
   osmOverrides,
   onOsmHeight,
@@ -535,6 +536,7 @@ function Scene({
   visibleLevels?: Record<string, boolean>;
   visibleGrids?: Record<number, boolean>;
   showMap?: boolean;
+  showOsm?: boolean;
   editMode?: boolean;
   osmOverrides?: Record<string, number>;
   onOsmHeight?: (id: string, h: number) => void;
