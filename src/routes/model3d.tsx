@@ -769,6 +769,14 @@ function Scene({
               groundY={groundY - 0.02}
             />
           )}
+          <OsmRoadsLayer
+            geo={sketch.geo}
+            origin={origin}
+            mPerPx={mPerPx}
+            radiusM={350}
+            groundY={groundY}
+            rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
+          />
           <OsmBuildingsLayer
             geo={sketch.geo}
             origin={origin}
@@ -779,7 +787,10 @@ function Scene({
             editMode={editMode}
             heightOverrides={osmOverrides}
             onHeightChange={onOsmHeight}
+            rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
+            visible={showOsm}
           />
+
         </>
       )}
     </>
