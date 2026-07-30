@@ -34,6 +34,7 @@ import {
 } from "@/lib/roads";
 import { type Geo } from "@/lib/geo";
 import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
+import { OsmRoadsLayer } from "@/components/osm-roads-layer";
 import { MapGround } from "@/components/map-ground";
 
 
@@ -302,6 +303,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   const geoLocked = !!(sketch.geo && sketch.geo.locked && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon));
   const [showMap, setShowMap] = useState<boolean>(geoLocked);
   useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
+  const [showOsm, setShowOsm] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const osmKey = `dabidabis_osmH_${sketch.id}`;
   const [osmOverrides, setOsmOverrides] = useState<Record<string, number>>({});
@@ -574,6 +576,17 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
         )}
         {geoLocked && (
           <Button
+            variant={showOsm ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowOsm((v) => !v)}
+            title="Tampilkan/sembunyikan bangunan eksisting"
+            className="h-7 bg-background/80 backdrop-blur"
+          >
+            <Building2 className="mr-1 h-3 w-3" /> {showOsm ? "Eksisting: On" : "Eksisting: Off"}
+          </Button>
+        )}
+        {geoLocked && showOsm && (
+          <Button
             variant={editMode ? "default" : "outline"}
             size="sm"
             onClick={() => setEditMode((v) => !v)}
@@ -689,6 +702,16 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             <MapGround geo={sketch.geo} origin={origin} mPerPx={mPerPx} bound={bound} />
           )}
           {geoLocked && sketch.geo && (
+            <OsmRoadsLayer
+              geo={sketch.geo}
+              origin={origin}
+              mPerPx={mPerPx}
+              radiusM={Math.max(200, bound * 1.8)}
+              rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
+              groundY={0}
+            />
+          )}
+          {geoLocked && sketch.geo && (
             <OsmBuildingsLayer
               geo={sketch.geo}
               origin={origin}
@@ -698,6 +721,8 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               editMode={editMode}
               heightOverrides={osmOverrides}
               onHeightChange={handleOsmHeight}
+              rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
+              visible={showOsm}
             />
           )}
           {meshes.map((m) => (
