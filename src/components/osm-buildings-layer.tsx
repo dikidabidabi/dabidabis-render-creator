@@ -26,6 +26,8 @@ export function OsmBuildingsLayer({
   editMode = false,
   heightOverrides,
   onHeightChange,
+  rotationDeg = 0,
+  visible = true,
 }: {
   geo: OsmGeo;
   origin: { x: number; y: number };
@@ -37,6 +39,8 @@ export function OsmBuildingsLayer({
   editMode?: boolean;
   heightOverrides?: Record<string, number>;
   onHeightChange?: (id: string, height: number) => void;
+  rotationDeg?: number;
+  visible?: boolean;
 }) {
   const [buildings, setBuildings] = useState<OsmBuilding[] | null>(null);
   const reqRef = useRef(0);
