@@ -24,6 +24,9 @@ export function OsmBuildingsLayer({
   colorMode = "sketch",
   opacity = 1,
   editMode = false,
+  deleteMode = false,
+  hiddenIds,
+  onDelete,
   heightOverrides,
   onHeightChange,
   rotationDeg = 0,
@@ -37,11 +40,15 @@ export function OsmBuildingsLayer({
   colorMode?: "sketch" | "bw";
   opacity?: number;
   editMode?: boolean;
+  deleteMode?: boolean;
+  hiddenIds?: Record<string, boolean>;
+  onDelete?: (id: string) => void;
   heightOverrides?: Record<string, number>;
   onHeightChange?: (id: string, height: number) => void;
   rotationDeg?: number;
   visible?: boolean;
 }) {
+
   const [buildings, setBuildings] = useState<OsmBuilding[] | null>(null);
   const reqRef = useRef(0);
 
@@ -165,10 +172,17 @@ export function OsmBuildingsLayer({
     return typeof ov === "number" && Number.isFinite(ov) ? ov : baseH;
   };
 
+  const [hoverId, setHoverId] = useState<string | null>(null);
+
   const onPointerDown = (
     e: ThreeEvent<PointerEvent>,
     m: { id: string; baseHeight: number },
   ) => {
+    if (deleteMode) {
+      e.stopPropagation();
+      onDelete?.(m.id);
+      return;
+    }
     if (!editMode) return;
     e.stopPropagation();
     const startH = currentHeightOf(m.id, m.baseHeight);
@@ -214,6 +228,7 @@ export function OsmBuildingsLayer({
     <group rotation={[0, rotY, 0]}>
       <group position={[anchorX, groundY, anchorZ]}>
       {meshes.map((m) => {
+        if (hiddenIds?.[m.id]) return null;
         const h = currentHeightOf(m.id, m.baseHeight);
         const scaleY = h / Math.max(0.001, m.baseHeight);
         return (
@@ -227,15 +242,28 @@ export function OsmBuildingsLayer({
               onPointerMove={onPointerMove}
               onPointerUp={commit}
               onPointerCancel={commit}
+              onPointerOver={
+                deleteMode ? () => setHoverId(m.id) : undefined
+              }
+              onPointerOut={
+                deleteMode
+                  ? () => setHoverId((p) => (p === m.id ? null : p))
+                  : undefined
+              }
             >
               <meshStandardMaterial
                 color={
-                  editMode
-                    ? drag?.id === m.id
-                      ? "#f59e0b"
-                      : "#eab676"
-                    : m.color
+                  deleteMode
+                    ? hoverId === m.id
+                      ? "#ef4444"
+                      : "#f4a3a3"
+                    : editMode
+                      ? drag?.id === m.id
+                        ? "#f59e0b"
+                        : "#eab676"
+                      : m.color
                 }
+
                 transparent={opacity < 1}
                 opacity={opacity}
                 roughness={0.85}

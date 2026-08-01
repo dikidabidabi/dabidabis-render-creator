@@ -306,7 +306,27 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
   useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
   const [showOsm, setShowOsm] = useState(true);
   const [editMode, setEditMode] = useState(false);
+  const [delMode, setDelMode] = useState(false);
   const osmKey = `dabidabis_osmH_${sketch.id}`;
+  const osmDelKey = `dabidabis_osmDel_${sketch.id}`;
+  const [osmHidden, setOsmHidden] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(osmDelKey);
+      setOsmHidden(raw ? JSON.parse(raw) : {});
+    } catch { setOsmHidden({}); }
+  }, [osmDelKey]);
+  const handleOsmDelete = useCallback((id: string) => {
+    setOsmHidden((prev) => {
+      const next = { ...prev, [id]: true };
+      try { localStorage.setItem(osmDelKey, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, [osmDelKey]);
+  const resetOsmDeleted = useCallback(() => {
+    setOsmHidden({});
+    try { localStorage.removeItem(osmDelKey); } catch { /* ignore */ }
+  }, [osmDelKey]);
   const [osmOverrides, setOsmOverrides] = useState<Record<string, number>>({});
   useEffect(() => {
     try {
@@ -590,11 +610,33 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
           <Button
             variant={editMode ? "default" : "outline"}
             size="sm"
-            onClick={() => setEditMode((v) => !v)}
+            onClick={() => { setEditMode((v) => !v); setDelMode(false); }}
             title="Press & pull ketinggian bangunan eksisting dari peta"
             className="h-7 bg-background/80 backdrop-blur"
           >
             <Move3d className="mr-1 h-3 w-3" /> {editMode ? "Edit: On" : "Edit"}
+          </Button>
+        )}
+        {geoLocked && showOsm && (
+          <Button
+            variant={delMode ? "destructive" : "outline"}
+            size="sm"
+            onClick={() => { setDelMode((v) => !v); setEditMode(false); }}
+            title="Klik bangunan eksisting untuk menghapusnya"
+            className="h-7 bg-background/80 backdrop-blur"
+          >
+            <Trash2 className="mr-1 h-3 w-3" /> {delMode ? "Hapus: On" : "Hapus"}
+          </Button>
+        )}
+        {geoLocked && showOsm && Object.keys(osmHidden).length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resetOsmDeleted}
+            title="Tampilkan kembali bangunan eksisting yang dihapus"
+            className="h-7 bg-background/80 backdrop-blur"
+          >
+            <RotateCcw className="mr-1 h-3 w-3" /> Pulihkan
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={takeScreenshot} title="Screenshot"
@@ -720,6 +762,9 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               radiusM={Math.max(200, bound * 1.8)}
               colorMode={colorMode}
               editMode={editMode}
+              deleteMode={delMode}
+              hiddenIds={osmHidden}
+              onDelete={handleOsmDelete}
               heightOverrides={osmOverrides}
               onHeightChange={handleOsmHeight}
               rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
@@ -765,7 +810,7 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
             ref={orbitRef}
             makeDefault
             enableDamping
-            enabled={!editMode}
+            enabled={!editMode && !delMode}
             target={[0, bound * 0.15, 0]}
             maxPolarAngle={Math.PI / 2 - 0.02}
           />

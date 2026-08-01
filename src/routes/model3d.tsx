@@ -525,6 +525,9 @@ function Scene({
   showMap,
   showOsm = true,
   editMode,
+  deleteMode,
+  osmHidden,
+  onOsmDelete,
   osmOverrides,
   onOsmHeight,
 }: {
@@ -538,6 +541,9 @@ function Scene({
   showMap?: boolean;
   showOsm?: boolean;
   editMode?: boolean;
+  deleteMode?: boolean;
+  osmHidden?: Record<string, boolean>;
+  onOsmDelete?: (id: string) => void;
   osmOverrides?: Record<string, number>;
   onOsmHeight?: (id: string, h: number) => void;
 }) {
@@ -785,6 +791,9 @@ function Scene({
             groundY={groundY}
             colorMode={colorMode}
             editMode={editMode}
+            deleteMode={deleteMode}
+            hiddenIds={osmHidden}
+            onDelete={onOsmDelete}
             heightOverrides={osmOverrides}
             onHeightChange={onOsmHeight}
             rotationDeg={Number((sketch.geo as any).mapRotation) || 0}
@@ -932,7 +941,27 @@ function SketchViewer({
   useEffect(() => { setShowMap(geoLocked); }, [geoLocked]);
   const [showOsm, setShowOsm] = useState(true);
   const [editMode, setEditMode] = useState(false);
+  const [delMode, setDelMode] = useState(false);
   const osmKey = `dabidabis_osmH_${sketch.id}`;
+  const osmDelKey = `dabidabis_osmDel_${sketch.id}`;
+  const [osmHidden, setOsmHidden] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(osmDelKey);
+      setOsmHidden(raw ? JSON.parse(raw) : {});
+    } catch { setOsmHidden({}); }
+  }, [osmDelKey]);
+  const handleOsmDelete = useCallback((id: string) => {
+    setOsmHidden((prev) => {
+      const next = { ...prev, [id]: true };
+      try { localStorage.setItem(osmDelKey, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, [osmDelKey]);
+  const resetOsmDeleted = useCallback(() => {
+    setOsmHidden({});
+    try { localStorage.removeItem(osmDelKey); } catch { /* ignore */ }
+  }, [osmDelKey]);
   const [osmOverrides, setOsmOverrides] = useState<Record<string, number>>({});
   useEffect(() => {
     try {
@@ -1475,6 +1504,9 @@ function SketchViewer({
               showMap={showMap}
               showOsm={showOsm}
               editMode={editMode}
+              deleteMode={delMode}
+              osmHidden={osmHidden}
+              onOsmDelete={handleOsmDelete}
               osmOverrides={osmOverrides}
               onOsmHeight={handleOsmHeight}
             />
@@ -1482,7 +1514,7 @@ function SketchViewer({
               ref={orbitRef}
               enableDamping
               dampingFactor={0.08}
-              enabled={!editMode}
+              enabled={!editMode && !delMode}
               makeDefault
             />
             {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
@@ -1588,10 +1620,32 @@ function SketchViewer({
                 variant={editMode ? "default" : "secondary"}
                 size="sm"
                 className="h-7 gap-1 px-2 text-xs"
-                onClick={() => setEditMode((v) => !v)}
+                onClick={() => { setEditMode((v) => !v); setDelMode(false); }}
                 title="Press & pull ketinggian bangunan eksisting dari peta"
               >
                 <Edit3 className="h-3 w-3" /> {editMode ? "Edit: On" : "Edit"}
+              </Button>
+            )}
+            {geoLocked && showOsm && (
+              <Button
+                variant={delMode ? "destructive" : "secondary"}
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => { setDelMode((v) => !v); setEditMode(false); }}
+                title="Klik bangunan eksisting untuk menghapusnya"
+              >
+                <Trash2 className="h-3 w-3" /> {delMode ? "Hapus: On" : "Hapus"}
+              </Button>
+            )}
+            {geoLocked && showOsm && Object.keys(osmHidden).length > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={resetOsmDeleted}
+                title="Pulihkan bangunan eksisting yang dihapus"
+              >
+                <RotateCcw className="h-3 w-3" /> Pulihkan
               </Button>
             )}
             <Button
