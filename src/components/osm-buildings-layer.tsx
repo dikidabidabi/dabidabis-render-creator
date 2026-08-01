@@ -24,6 +24,9 @@ export function OsmBuildingsLayer({
   colorMode = "sketch",
   opacity = 1,
   editMode = false,
+  deleteMode = false,
+  hiddenIds,
+  onDelete,
   heightOverrides,
   onHeightChange,
   rotationDeg = 0,
@@ -37,11 +40,15 @@ export function OsmBuildingsLayer({
   colorMode?: "sketch" | "bw";
   opacity?: number;
   editMode?: boolean;
+  deleteMode?: boolean;
+  hiddenIds?: Record<string, boolean>;
+  onDelete?: (id: string) => void;
   heightOverrides?: Record<string, number>;
   onHeightChange?: (id: string, height: number) => void;
   rotationDeg?: number;
   visible?: boolean;
 }) {
+
   const [buildings, setBuildings] = useState<OsmBuilding[] | null>(null);
   const reqRef = useRef(0);
 
