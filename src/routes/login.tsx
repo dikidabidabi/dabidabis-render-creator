@@ -25,7 +25,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"signin" | "signup">(mode);
+  const [tab, setTab] = useState<"signin" | "signup">(mode ?? "signin");
 
   useEffect(() => {
     if (user) navigate({ to: "/studio" });
