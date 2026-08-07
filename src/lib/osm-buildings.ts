@@ -55,32 +55,18 @@ export async function fetchOsmBuildings(
   const key = cacheKey(lat, lon, radiusM);
   const cached = cache.get(key);
   if (cached && Date.now() - cached.ts < TTL_MS) return cached.data;
-
-  const q = `[out:json][timeout:25];(way["building"](around:${Math.round(radiusM)},${lat},${lon}););out body geom;`;
-  const endpoints = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-  ];
-  let json: any = null;
-  let lastErr: unknown = null;
-  for (const url of endpoints) {
-    try {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: "data=" + encodeURIComponent(q),
-        signal,
-      });
-      if (!r.ok) throw new Error(`Overpass ${r.status}`);
-      json = await r.json();
-      break;
-    } catch (e) {
-      lastErr = e;
-    }
+  const persisted = readPersisted<OsmBuilding[]>("b_" + key);
+  if (persisted) {
+    cache.set(key, { ts: Date.now(), data: persisted });
+    return persisted;
   }
-  if (!json) throw (lastErr instanceof Error ? lastErr : new Error("Overpass unavailable"));
+
+  return dedupe("b_" + key, async () => {
+    const q = `[out:json][timeout:20];way["building"](around:${Math.round(radiusM)},${lat},${lon});out tags geom qt;`;
+    const json = await overpassQuery(q, signal);
 
   const elements: any[] = Array.isArray(json.elements) ? json.elements : [];
+
   const out: OsmBuilding[] = [];
   for (const el of elements) {
     if (el.type !== "way" || !Array.isArray(el.geometry) || el.geometry.length < 3) continue;
