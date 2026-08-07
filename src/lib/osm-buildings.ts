@@ -11,7 +11,10 @@ export type OsmBuilding = {
   source: "height" | "levels" | "fallback";
 };
 
+import { dedupe, overpassQuery, readPersisted, writePersisted } from "./osm-cache";
+
 const R_EARTH = 6378137;
+
 
 function offsetMeters(fromLat: number, fromLon: number, toLat: number, toLon: number) {
   const dLat = ((toLat - fromLat) * Math.PI) / 180;
