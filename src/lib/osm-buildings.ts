@@ -103,7 +103,10 @@ export async function fetchOsmBuildings(
       levels: lvls ?? undefined,
       source,
     });
-  }
-  cache.set(key, { ts: Date.now(), data: out });
-  return out;
+    }
+    cache.set(key, { ts: Date.now(), data: out });
+    writePersisted("b_" + key, out);
+    return out;
+  });
 }
+
