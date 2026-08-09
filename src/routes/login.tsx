@@ -31,7 +31,7 @@ function LoginPage() {
     if (user) navigate({ to: "/studio" });
   }, [user, navigate]);
 
-  useEffect(() => setTab(mode), [mode]);
+  useEffect(() => setTab(mode ?? "signin"), [mode]);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
