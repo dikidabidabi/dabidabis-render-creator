@@ -8,16 +8,7 @@ export type OsmRoad = {
   widthM: number;
 };
 
-import {
-  dedupe,
-  overpassQuery,
-  readPersistedEntry,
-  snapKey,
-  writePersisted,
-} from "./osm-cache";
-
 const R_EARTH = 6378137;
-
 
 function offsetMeters(fromLat: number, fromLon: number, toLat: number, toLon: number) {
   const dLat = ((toLat - fromLat) * Math.PI) / 180;
@@ -37,47 +28,12 @@ const WIDTH_BY_TYPE: Record<string, number> = {
   living_street: 5,
   service: 4,
   pedestrian: 4,
+  footway: 2,
+  path: 2,
 };
 
-// Only driveable / meaningful ways — skips footway, path, steps, track, cycleway
-// and link stubs, which are the bulk of the payload in dense areas.
-const HIGHWAY_FILTER =
-  "motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street|service|pedestrian";
-
 const cache = new Map<string, { ts: number; data: OsmRoad[] }>();
-const TTL_MS = 60 * 60 * 1000;
-
-async function run(
-  key: string,
-  lat: number,
-  lon: number,
-  radiusM: number,
-  signal?: AbortSignal,
-) {
-  return dedupe("r_" + key, async () => {
-    const q = `[out:json][timeout:12];way["highway"~"^(${HIGHWAY_FILTER})$"](around:${radiusM},${lat},${lon});out tags geom qt;`;
-    const json = await overpassQuery(q, signal);
-
-    const elements: any[] = Array.isArray(json.elements) ? json.elements : [];
-    const out: OsmRoad[] = [];
-    for (const el of elements) {
-      if (el.type !== "way" || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
-      const tags = el.tags || {};
-      const type = String(tags.highway || "");
-      let widthM = Number(String(tags.width ?? "").replace(",", "."));
-      if (!Number.isFinite(widthM) || widthM <= 0) {
-        const lanes = Number(tags.lanes);
-        widthM = Number.isFinite(lanes) && lanes > 0 ? lanes * 3.2 : (WIDTH_BY_TYPE[type] ?? 6);
-      }
-      widthM = Math.max(1.5, Math.min(30, widthM));
-      const path = el.geometry.map((g: any) => offsetMeters(lat, lon, Number(g.lat), Number(g.lon)));
-      out.push({ id: String(el.id), path, widthM });
-    }
-    cache.set(key, { ts: Date.now(), data: out });
-    writePersisted("r_" + key, out);
-    return out;
-  });
-}
+const TTL_MS = 15 * 60 * 1000;
 
 export async function fetchOsmRoads(
   lat: number,
@@ -85,21 +41,49 @@ export async function fetchOsmRoads(
   radiusM: number,
   signal?: AbortSignal,
 ): Promise<OsmRoad[]> {
-  const { key, radius } = snapKey(lat, lon, radiusM);
+  const key = `${lat.toFixed(4)}|${lon.toFixed(4)}|${Math.round(radiusM)}`;
   const cached = cache.get(key);
   if (cached && Date.now() - cached.ts < TTL_MS) return cached.data;
 
-  const persisted = readPersistedEntry<OsmRoad[]>("r_" + key);
-  if (persisted) {
-    cache.set(key, { ts: Date.now(), data: persisted.data });
-    if (persisted.stale) void run(key, lat, lon, radius).catch(() => {});
-    return persisted.data;
+  const q = `[out:json][timeout:25];(way["highway"](around:${Math.round(radiusM)},${lat},${lon}););out body geom;`;
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+  ];
+  let json: any = null;
+  let lastErr: unknown = null;
+  for (const url of endpoints) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "data=" + encodeURIComponent(q),
+        signal,
+      });
+      if (!r.ok) throw new Error(`Overpass ${r.status}`);
+      json = await r.json();
+      break;
+    } catch (e) {
+      lastErr = e;
+    }
   }
+  if (!json) throw lastErr instanceof Error ? lastErr : new Error("Overpass unavailable");
 
-  return run(key, lat, lon, radius, signal);
-}
-
-/** Warms the cache without rendering. */
-export function prefetchOsmRoads(lat: number, lon: number, radiusM: number) {
-  void fetchOsmRoads(lat, lon, radiusM).catch(() => {});
+  const elements: any[] = Array.isArray(json.elements) ? json.elements : [];
+  const out: OsmRoad[] = [];
+  for (const el of elements) {
+    if (el.type !== "way" || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+    const tags = el.tags || {};
+    const type = String(tags.highway || "");
+    let widthM = Number(String(tags.width ?? "").replace(",", "."));
+    if (!Number.isFinite(widthM) || widthM <= 0) {
+      const lanes = Number(tags.lanes);
+      widthM = Number.isFinite(lanes) && lanes > 0 ? lanes * 3.2 : (WIDTH_BY_TYPE[type] ?? 6);
+    }
+    widthM = Math.max(1.5, Math.min(30, widthM));
+    const path = el.geometry.map((g: any) => offsetMeters(lat, lon, Number(g.lat), Number(g.lon)));
+    out.push({ id: String(el.id), path, widthM });
+  }
+  cache.set(key, { ts: Date.now(), data: out });
+  return out;
 }

@@ -31,10 +31,11 @@ export function OsmRoadsLayer({
   const reqRef = useRef(0);
 
   useEffect(() => {
-    // Fetch regardless of `visible` so toggling the layer on is instant.
+    if (!visible) return;
     if (!geo || !Number.isFinite(geo.lat) || !Number.isFinite(geo.lon)) return;
     const myReq = ++reqRef.current;
     const ac = new AbortController();
+    setRoads(null);
     fetchOsmRoads(geo.lat, geo.lon, radiusM, ac.signal)
       .then((d) => {
         if (reqRef.current === myReq) setRoads(d);
@@ -43,7 +44,7 @@ export function OsmRoadsLayer({
         if (reqRef.current === myReq) setRoads([]);
       });
     return () => ac.abort();
-  }, [geo?.lat, geo?.lon, radiusM]);
+  }, [geo?.lat, geo?.lon, radiusM, visible]);
 
   const geometry = useMemo(() => {
     if (!roads || roads.length === 0) return null;
