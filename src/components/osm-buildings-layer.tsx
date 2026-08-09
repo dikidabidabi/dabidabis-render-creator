@@ -56,7 +56,7 @@ export function OsmBuildingsLayer({
     if (!geo || !Number.isFinite(geo.lat) || !Number.isFinite(geo.lon)) return;
     const myReq = ++reqRef.current;
     const ac = new AbortController();
-    setBuildings(null);
+    // Keep whatever is on screen while refetching (cache hits resolve instantly).
     fetchOsmBuildings(geo.lat, geo.lon, radiusM, ac.signal)
       .then((data) => {
         if (reqRef.current === myReq) setBuildings(data);
