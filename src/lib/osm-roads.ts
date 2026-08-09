@@ -8,7 +8,13 @@ export type OsmRoad = {
   widthM: number;
 };
 
-import { dedupe, overpassQuery, readPersisted, writePersisted } from "./osm-cache";
+import {
+  dedupe,
+  overpassQuery,
+  readPersistedEntry,
+  snapKey,
+  writePersisted,
+} from "./osm-cache";
 
 const R_EARTH = 6378137;
 
@@ -31,30 +37,25 @@ const WIDTH_BY_TYPE: Record<string, number> = {
   living_street: 5,
   service: 4,
   pedestrian: 4,
-  footway: 2,
-  path: 2,
 };
 
-const cache = new Map<string, { ts: number; data: OsmRoad[] }>();
-const TTL_MS = 15 * 60 * 1000;
+// Only driveable / meaningful ways — skips footway, path, steps, track, cycleway
+// and link stubs, which are the bulk of the payload in dense areas.
+const HIGHWAY_FILTER =
+  "motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street|service|pedestrian";
 
-export async function fetchOsmRoads(
+const cache = new Map<string, { ts: number; data: OsmRoad[] }>();
+const TTL_MS = 60 * 60 * 1000;
+
+async function run(
+  key: string,
   lat: number,
   lon: number,
   radiusM: number,
   signal?: AbortSignal,
-): Promise<OsmRoad[]> {
-  const key = `${lat.toFixed(4)}|${lon.toFixed(4)}|${Math.round(radiusM)}`;
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.ts < TTL_MS) return cached.data;
-  const persisted = readPersisted<OsmRoad[]>("r_" + key);
-  if (persisted) {
-    cache.set(key, { ts: Date.now(), data: persisted });
-    return persisted;
-  }
-
+) {
   return dedupe("r_" + key, async () => {
-    const q = `[out:json][timeout:20];way["highway"](around:${Math.round(radiusM)},${lat},${lon});out tags geom qt;`;
+    const q = `[out:json][timeout:12];way["highway"~"^(${HIGHWAY_FILTER})$"](around:${radiusM},${lat},${lon});out tags geom qt;`;
     const json = await overpassQuery(q, signal);
 
     const elements: any[] = Array.isArray(json.elements) ? json.elements : [];
@@ -78,3 +79,27 @@ export async function fetchOsmRoads(
   });
 }
 
+export async function fetchOsmRoads(
+  lat: number,
+  lon: number,
+  radiusM: number,
+  signal?: AbortSignal,
+): Promise<OsmRoad[]> {
+  const { key, radius } = snapKey(lat, lon, radiusM);
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.ts < TTL_MS) return cached.data;
+
+  const persisted = readPersistedEntry<OsmRoad[]>("r_" + key);
+  if (persisted) {
+    cache.set(key, { ts: Date.now(), data: persisted.data });
+    if (persisted.stale) void run(key, lat, lon, radius).catch(() => {});
+    return persisted.data;
+  }
+
+  return run(key, lat, lon, radius, signal);
+}
+
+/** Warms the cache without rendering. */
+export function prefetchOsmRoads(lat: number, lon: number, radiusM: number) {
+  void fetchOsmRoads(lat, lon, radiusM).catch(() => {});
+}
