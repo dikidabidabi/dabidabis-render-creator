@@ -1,5 +1,7 @@
 // Shared helpers to make Overpass (OSM) fetches feel fast:
 //  - persistent localStorage cache (survives page reloads / route changes)
+//  - stale-while-revalidate: stale data is served instantly, refreshed in bg
+//  - coordinate/radius snapping so masterplan + 3d model share one cache entry
 //  - in-flight de-duplication (masterplan + 3d model asking at once = 1 request)
 //  - endpoints raced in parallel instead of sequential fallback with timeouts
 
@@ -10,15 +12,36 @@ export const OVERPASS_ENDPOINTS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass-api.de/api/interpreter",
   "https://overpass.osm.ch/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
 ];
 
+/**
+ * Snapped cache key: lat/lon to ~110 m and radius bucketed to 100 m steps, so
+ * slightly different anchors/radii (masterplan uses bound*1.8, 3d model 350)
+ * still reuse the same cached payload.
+ */
+export function snapKey(lat: number, lon: number, radiusM: number) {
+  const rl = lat.toFixed(3);
+  const rn = lon.toFixed(3);
+  const rr = Math.max(150, Math.ceil(radiusM / 100) * 100);
+  return { key: `${rl}|${rn}|${rr}`, radius: rr };
+}
+
 export function readPersisted<T>(key: string): T | null {
+  const hit = readPersistedEntry<T>(key);
+  return hit && !hit.stale ? hit.data : null;
+}
+
+/** Returns cached data even when expired, flagged as stale. */
+export function readPersistedEntry<T>(
+  key: string,
+): { data: T; stale: boolean } | null {
   try {
     const raw = localStorage.getItem(PERSIST_PREFIX + key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { ts: number; data: T };
-    if (!parsed || Date.now() - parsed.ts > PERSIST_TTL_MS) return null;
-    return parsed.data;
+    if (!parsed) return null;
+    return { data: parsed.data, stale: Date.now() - parsed.ts > PERSIST_TTL_MS };
   } catch {
     return null;
   }
