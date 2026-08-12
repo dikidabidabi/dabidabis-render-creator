@@ -5935,7 +5935,8 @@ function AxonometricView({
     const dx = b.x - a.x;
     const dz = b.z - a.z;
     const s = ccw ? 1 : -1;
-    return s * dz + -s * -dx > 0 ? true : s * dz - s * dx > 0;
+    // n = (s*dz, -s*dx); kamera ~ (1, 1) di bidang x-z.
+    return s * (dz - dx) > 0;
   };
 
   type Face = {
