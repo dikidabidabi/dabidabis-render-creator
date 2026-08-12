@@ -5981,11 +5981,11 @@ function AxonometricView({
     if (pm.length < 3) continue;
     const yBot = 0;
     const yTop = 0.1;
+    const ccwT = ringCcwXZ(pm);
     for (let i = 0; i < pm.length; i++) {
       const a = pm[i];
       const b = pm[(i + 1) % pm.length];
-      const ex = b.x - a.x;
-      const ez = b.z - a.z;
+      if (!sideFaces(a, b, ccwT)) continue;
       const quad = [
         project(a.x, a.z, yBot),
         project(b.x, b.z, yBot),
@@ -6024,10 +6024,12 @@ function AxonometricView({
       const yTop = yBot + (ov?.height ?? lv.height);
       const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
       const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
-      // Side quads: render semua sisi, lalu painter sorting menempatkan sisi depan di atas top/back face.
+      // Side quads: hanya sisi yang menghadap kamera (backface culling) → massa solid opak.
+      const ccwB = ringCcwXZ(pm);
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
         const b = pm[(i + 1) % pm.length];
+        if (!sideFaces(a, b, ccwB)) continue;
         const quad = [
           project(a.x, a.z, yBot),
           project(b.x, b.z, yBot),
@@ -6068,9 +6070,11 @@ function AxonometricView({
     for (const cp of copies) {
       const topY = cp.mdpl;
       const botY = topY - slabThk;
+      const ccwS = ringCcwXZ(outerPm);
       for (let i = 0; i < outerPm.length; i++) {
         const a = outerPm[i];
         const b = outerPm[(i + 1) % outerPm.length];
+        if (!sideFaces(a, b, ccwS)) continue;
         const quad = [
           project(a.x, a.z, botY),
           project(b.x, b.z, botY),
@@ -6095,8 +6099,10 @@ function AxonometricView({
     }
   }
 
-  const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
-  faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
+  // Painter's algorithm murni: urut dari yang terjauh ke terdekat. Dengan
+  // backface culling di atas, urutan ini menghasilkan massa 3D solid yang benar
+  // (atap bangunan rendah tidak lagi tertimpa dinding bangunan lain).
+  faces.sort((a, b) => a.depth - b.depth);
 
   // Compute viewBox
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
