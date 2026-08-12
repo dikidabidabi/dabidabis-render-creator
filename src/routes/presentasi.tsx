@@ -5915,6 +5915,29 @@ function AxonometricView({
     y: (mx + mz) * SIN - my,
   });
 
+  // --- Solid massing helpers: winding + backface culling ---
+  // Kamera aksonometri melihat dari arah (+x, +z); sisi hanya digambar bila
+  // normal luarnya menghadap kamera → massa terlihat solid & opak (bukan tembus).
+  const ringCcwXZ = (pm: { x: number; z: number }[]) => {
+    let a = 0;
+    for (let i = 0; i < pm.length; i++) {
+      const p = pm[i];
+      const q = pm[(i + 1) % pm.length];
+      a += p.x * q.z - q.x * p.z;
+    }
+    return a > 0;
+  };
+  const sideFaces = (
+    a: { x: number; z: number },
+    b: { x: number; z: number },
+    ccw: boolean,
+  ) => {
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const s = ccw ? 1 : -1;
+    return s * dz + -s * -dx > 0 ? true : s * dz - s * dx > 0;
+  };
+
   type Face = {
     pts: { x: number; y: number }[];
     holes?: { x: number; y: number }[][];
