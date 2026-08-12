@@ -5915,30 +5915,6 @@ function AxonometricView({
     y: (mx + mz) * SIN - my,
   });
 
-  // --- Solid massing helpers: winding + backface culling ---
-  // Kamera aksonometri melihat dari arah (+x, +z); sisi hanya digambar bila
-  // normal luarnya menghadap kamera → massa terlihat solid & opak (bukan tembus).
-  const ringCcwXZ = (pm: { x: number; z: number }[]) => {
-    let a = 0;
-    for (let i = 0; i < pm.length; i++) {
-      const p = pm[i];
-      const q = pm[(i + 1) % pm.length];
-      a += p.x * q.z - q.x * p.z;
-    }
-    return a > 0;
-  };
-  const sideFaces = (
-    a: { x: number; z: number },
-    b: { x: number; z: number },
-    ccw: boolean,
-  ) => {
-    const dx = b.x - a.x;
-    const dz = b.z - a.z;
-    const s = ccw ? 1 : -1;
-    // n = (s*dz, -s*dx); kamera ~ (1, 1) di bidang x-z.
-    return s * (dz - dx) > 0;
-  };
-
   type Face = {
     pts: { x: number; y: number }[];
     holes?: { x: number; y: number }[][];
@@ -5981,11 +5957,11 @@ function AxonometricView({
     if (pm.length < 3) continue;
     const yBot = 0;
     const yTop = 0.1;
-    const ccwT = ringCcwXZ(pm);
     for (let i = 0; i < pm.length; i++) {
       const a = pm[i];
       const b = pm[(i + 1) % pm.length];
-      if (!sideFaces(a, b, ccwT)) continue;
+      const ex = b.x - a.x;
+      const ez = b.z - a.z;
       const quad = [
         project(a.x, a.z, yBot),
         project(b.x, b.z, yBot),
@@ -6024,12 +6000,10 @@ function AxonometricView({
       const yTop = yBot + (ov?.height ?? lv.height);
       const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
       const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
-      // Side quads: hanya sisi yang menghadap kamera (backface culling) → massa solid opak.
-      const ccwB = ringCcwXZ(pm);
+      // Side quads: render semua sisi, lalu painter sorting menempatkan sisi depan di atas top/back face.
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
         const b = pm[(i + 1) % pm.length];
-        if (!sideFaces(a, b, ccwB)) continue;
         const quad = [
           project(a.x, a.z, yBot),
           project(b.x, b.z, yBot),
@@ -6070,11 +6044,9 @@ function AxonometricView({
     for (const cp of copies) {
       const topY = cp.mdpl;
       const botY = topY - slabThk;
-      const ccwS = ringCcwXZ(outerPm);
       for (let i = 0; i < outerPm.length; i++) {
         const a = outerPm[i];
         const b = outerPm[(i + 1) % outerPm.length];
-        if (!sideFaces(a, b, ccwS)) continue;
         const quad = [
           project(a.x, a.z, botY),
           project(b.x, b.z, botY),
@@ -6099,10 +6071,8 @@ function AxonometricView({
     }
   }
 
-  // Painter's algorithm murni: urut dari yang terjauh ke terdekat. Dengan
-  // backface culling di atas, urutan ini menghasilkan massa 3D solid yang benar
-  // (atap bangunan rendah tidak lagi tertimpa dinding bangunan lain).
-  faces.sort((a, b) => a.depth - b.depth);
+  const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
 
   // Compute viewBox
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
@@ -8857,10 +8827,6 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const a = layer.points[i];
       const b = layer.points[(i + 1) % layer.points.length];
       const n = outwardNormal(a, b, ccw);
-      // Backface culling: kamera aksonometri melihat dari arah (+x, +y) pada
-      // koordinat sketsa, jadi hanya sisi dengan normal menghadap kamera digambar
-      // → massa tampil solid opak, bukan tembus pandang.
-      if (n.x + n.y <= 0) continue;
       const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
       const dir = classifyBearing(bearing);
       const col = FACADE_COLORS[dir];
@@ -8886,7 +8852,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
     quads.push({
       pts: topPts,
-      depth: avgDepthForPoints(layer.points, cx, cy) + topRel * 0.01,
+      depth: avgDepthForPoints(layer.points, cx, cy),
       fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
@@ -8902,15 +8868,12 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const copies = expanded.filter((e) => e.sourceId === fl.levelId);
       if (!copies.length) continue;
       if (fl.outer.length < 3) continue;
-      const ccwF = polygonSignedArea(fl.outer) > 0;
       for (const cp of copies) {
         const topRel = cp.mdpl - minExp;
         const botRel = topRel - slabThk;
         for (let i = 0; i < fl.outer.length; i++) {
           const a = fl.outer[i];
           const b = fl.outer[(i + 1) % fl.outer.length];
-          const nf = outwardNormal(a, b, ccwF);
-          if (nf.x + nf.y <= 0) continue;
           const p1 = project(a.x, a.y, botRel);
           const p2 = project(b.x, b.y, botRel);
           const p3 = project(b.x, b.y, topRel);
@@ -8941,9 +8904,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
 
 
 
-  // Painter's algorithm murni (jauh → dekat). Bersama backface culling di atas,
-  // hasilnya massa 3D solid opak dengan oklusi antar-bangunan yang benar.
-  quads.sort((a, b) => a.depth - b.depth);
+  const quadLayer = (kind: Quad["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
+  quads.sort((a, b) => quadLayer(a.kind) - quadLayer(b.kind) || a.depth - b.depth);
 
   // Tentukan bounding viewBox proyeksi.
   const allPts = quads.flatMap((q) => q.pts);
