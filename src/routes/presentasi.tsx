@@ -8857,6 +8857,10 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const a = layer.points[i];
       const b = layer.points[(i + 1) % layer.points.length];
       const n = outwardNormal(a, b, ccw);
+      // Backface culling: kamera aksonometri melihat dari arah (+x, +y) pada
+      // koordinat sketsa, jadi hanya sisi dengan normal menghadap kamera digambar
+      // → massa tampil solid opak, bukan tembus pandang.
+      if (n.x + n.y <= 0) continue;
       const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
       const dir = classifyBearing(bearing);
       const col = FACADE_COLORS[dir];
@@ -8898,12 +8902,15 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const copies = expanded.filter((e) => e.sourceId === fl.levelId);
       if (!copies.length) continue;
       if (fl.outer.length < 3) continue;
+      const ccwF = polygonSignedArea(fl.outer) > 0;
       for (const cp of copies) {
         const topRel = cp.mdpl - minExp;
         const botRel = topRel - slabThk;
         for (let i = 0; i < fl.outer.length; i++) {
           const a = fl.outer[i];
           const b = fl.outer[(i + 1) % fl.outer.length];
+          const nf = outwardNormal(a, b, ccwF);
+          if (nf.x + nf.y <= 0) continue;
           const p1 = project(a.x, a.y, botRel);
           const p2 = project(b.x, b.y, botRel);
           const p3 = project(b.x, b.y, topRel);
@@ -8934,8 +8941,9 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
 
 
 
-  const quadLayer = (kind: Quad["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
-  quads.sort((a, b) => quadLayer(a.kind) - quadLayer(b.kind) || a.depth - b.depth);
+  // Painter's algorithm murni (jauh → dekat). Bersama backface culling di atas,
+  // hasilnya massa 3D solid opak dengan oklusi antar-bangunan yang benar.
+  quads.sort((a, b) => a.depth - b.depth);
 
   // Tentukan bounding viewBox proyeksi.
   const allPts = quads.flatMap((q) => q.pts);
