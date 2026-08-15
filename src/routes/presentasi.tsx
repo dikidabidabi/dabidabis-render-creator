@@ -1,3 +1,4 @@
+import { getFormulaSettings } from "@/lib/formula-settings";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -4010,7 +4011,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           {null /* dimensi ruang dihapus — diganti dimensi bentang grid */}
           {evkRooms.map((l) => {
             const c = centroid(l.points);
-            const rPx = 38 * pxPerM;
+            const rPx = getFormulaSettings().stairRadiusM * pxPerM;
             return (
               <g key={`evk-${l.id}`}>
                 <circle

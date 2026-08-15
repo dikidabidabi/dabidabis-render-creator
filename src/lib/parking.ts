@@ -1,3 +1,4 @@
+import { getFormulaSettings } from "@/lib/formula-settings";
 // Generator lot parkir otomatis (geometris, tanpa AI).
 //
 // Model area:
@@ -107,8 +108,12 @@ export function computeDiffableTotal(totalMobil: number): number {
   if (n <= 300) return 7;
   if (n <= 400) return 8;
   if (n <= 500) return 9;
-  if (n <= 1000) return Math.ceil(n * 0.02);
-  return 20 + Math.ceil((n - 1000) / 100);
+  const f = getFormulaSettings();
+  if (n <= 1000) return Math.ceil((n * f.diffableRatioPct) / 100);
+  return (
+    f.diffableBaseAbove1000 +
+    Math.ceil((n - 1000) / Math.max(1, f.diffableStepAbove1000))
+  );
 }
 
 /**
@@ -152,26 +157,27 @@ export type ParkingSpecs = {
 };
 
 export function specsFor(kind?: ParkingKind): ParkingSpecs {
-  if (kind === "motor") {
-    return {
-      STALL_W: STALL_W_MOTOR,
-      STALL_L: STALL_L_MOTOR,
-      AISLE_W: AISLE_W_MOTOR,
-      MODULE_DOUBLE: MODULE_DOUBLE_MOTOR,
-      MODULE_SINGLE: MODULE_SINGLE_MOTOR,
-      STALL_AREA_M2: STALL_AREA_M2_MOTOR,
-      PATH_BUFFER_M: PARKING_PATH_BUFFER_M_MOTOR,
-    };
-  }
+  // Dimensi mengikuti pengaturan Rumus milik pengguna (halaman Tabulasi → Rumus).
+  const f = getFormulaSettings();
+  const w = kind === "motor" ? f.motorStallW : f.carStallW;
+  const l = kind === "motor" ? f.motorStallL : f.carStallL;
+  const a = kind === "motor" ? f.motorAisleW : f.carAisleW;
+  const buf = kind === "motor" ? f.motorPathBufferM : f.carPathBufferM;
   return {
-    STALL_W,
-    STALL_L,
-    AISLE_W,
-    MODULE_DOUBLE,
-    MODULE_SINGLE,
-    STALL_AREA_M2,
-    PATH_BUFFER_M: PARKING_PATH_BUFFER_M,
+    STALL_W: w,
+    STALL_L: l,
+    AISLE_W: a,
+    MODULE_DOUBLE: l + a + l,
+    MODULE_SINGLE: l + a,
+    STALL_AREA_M2: w * l,
+    PATH_BUFFER_M: buf,
   };
+}
+
+/** Dimensi lot difabel aktif (meter), mengikuti pengaturan Rumus. */
+export function diffableSpecs(): { W: number; L: number; AREA_M2: number } {
+  const f = getFormulaSettings();
+  return { W: f.diffableStallW, L: f.diffableStallL, AREA_M2: f.diffableStallW * f.diffableStallL };
 }
 
 export function genParkingId(): string {
@@ -503,7 +509,7 @@ export function generateStalls(
 
     // Hanya area mobil yang bisa menampung lot diffable.
     const allowDiffable = (area.kind ?? "mobil") === "mobil" && !!diffableKeys && diffableKeys.size > 0;
-    const SW_DIFF = DIFFABLE_STALL_W;
+    const SW_DIFF = diffableSpecs().W;
     const widthAt = (col: number): number => {
       if (!allowDiffable) return SW;
       return diffableKeys!.has(`${ri},${col}`) ? SW_DIFF : SW;
