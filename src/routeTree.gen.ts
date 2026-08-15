@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TabulasiRouteImport } from './routes/tabulasi'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as PresentasiRouteImport } from './routes/presentasi'
@@ -20,12 +19,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as AkunRouteImport } from './routes/akun'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
+import { Route as TabulasiRumusRouteImport } from './routes/tabulasi.rumus'
 
-const TabulasiRoute = TabulasiRouteImport.update({
-  id: '/tabulasi',
-  path: '/tabulasi',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -76,6 +72,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TabulasiIndexRoute = TabulasiIndexRouteImport.update({
+  id: '/tabulasi/',
+  path: '/tabulasi/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TabulasiRumusRoute = TabulasiRumusRouteImport.update({
+  id: '/tabulasi/rumus',
+  path: '/tabulasi/rumus',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -88,7 +94,8 @@ export interface FileRoutesByFullPath {
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
-  '/tabulasi': typeof TabulasiRoute
+  '/tabulasi/rumus': typeof TabulasiRumusRoute
+  '/tabulasi/': typeof TabulasiIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -101,7 +108,8 @@ export interface FileRoutesByTo {
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
-  '/tabulasi': typeof TabulasiRoute
+  '/tabulasi/rumus': typeof TabulasiRumusRoute
+  '/tabulasi': typeof TabulasiIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,7 +123,8 @@ export interface FileRoutesById {
   '/presentasi': typeof PresentasiRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
-  '/tabulasi': typeof TabulasiRoute
+  '/tabulasi/rumus': typeof TabulasiRumusRoute
+  '/tabulasi/': typeof TabulasiIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -130,7 +139,8 @@ export interface FileRouteTypes {
     | '/presentasi'
     | '/sketch'
     | '/studio'
-    | '/tabulasi'
+    | '/tabulasi/rumus'
+    | '/tabulasi/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/presentasi'
     | '/sketch'
     | '/studio'
+    | '/tabulasi/rumus'
     | '/tabulasi'
   id:
     | '__root__'
@@ -156,7 +167,8 @@ export interface FileRouteTypes {
     | '/presentasi'
     | '/sketch'
     | '/studio'
-    | '/tabulasi'
+    | '/tabulasi/rumus'
+    | '/tabulasi/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -170,18 +182,12 @@ export interface RootRouteChildren {
   PresentasiRoute: typeof PresentasiRoute
   SketchRoute: typeof SketchRoute
   StudioRoute: typeof StudioRoute
-  TabulasiRoute: typeof TabulasiRoute
+  TabulasiRumusRoute: typeof TabulasiRumusRoute
+  TabulasiIndexRoute: typeof TabulasiIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/tabulasi': {
-      id: '/tabulasi'
-      path: '/tabulasi'
-      fullPath: '/tabulasi'
-      preLoaderRoute: typeof TabulasiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/studio': {
       id: '/studio'
       path: '/studio'
@@ -252,6 +258,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tabulasi/': {
+      id: '/tabulasi/'
+      path: '/tabulasi'
+      fullPath: '/tabulasi/'
+      preLoaderRoute: typeof TabulasiIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tabulasi/rumus': {
+      id: '/tabulasi/rumus'
+      path: '/tabulasi/rumus'
+      fullPath: '/tabulasi/rumus'
+      preLoaderRoute: typeof TabulasiRumusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -266,8 +286,19 @@ const rootRouteChildren: RootRouteChildren = {
   PresentasiRoute: PresentasiRoute,
   SketchRoute: SketchRoute,
   StudioRoute: StudioRoute,
-  TabulasiRoute: TabulasiRoute,
+  TabulasiRumusRoute: TabulasiRumusRoute,
+  TabulasiIndexRoute: TabulasiIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

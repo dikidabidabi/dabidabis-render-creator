@@ -154,6 +154,7 @@ import {
   computeBordesArcs,
   numBordesForSlope,
 } from "@/lib/ramps";
+import { getFormulaSettings } from "@/lib/formula-settings";
 import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
 import {
   ANNOTATION_PRESETS,
@@ -3985,11 +3986,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.restore();
         }
 
-        // "Tangga EVK" — radius 38 m lingkaran putus-putus + label
+        // "Tangga EVK" — radius sesuai pengaturan Rumus, lingkaran putus-putus + label
         if (layer.name.trim().toLowerCase() === "tangga evk") {
+          const evkR = getFormulaSettings().stairRadiusM;
           const cx = layer.points.reduce((a, p) => a + p.x, 0) / layer.points.length;
           const cy = layer.points.reduce((a, p) => a + p.y, 0) / layer.points.length;
-          const rPx = 38 * pxPerMeter;
+          const rPx = evkR * pxPerMeter;
           ctx.save();
           ctx.strokeStyle = "rgba(232,93,58,0.95)";
           ctx.lineWidth = 1.5 / s;
@@ -4011,7 +4013,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
           ctx.fillStyle = "rgba(0,0,0,1)";
-          ctx.fillText("38 m", cx + rPx / 2, cy - 2 / s);
+          ctx.fillText(`${evkR} m`, cx + rPx / 2, cy - 2 / s);
           ctx.restore();
         }
       });
