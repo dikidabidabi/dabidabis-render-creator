@@ -21,7 +21,7 @@ import {
   distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 
-export const Route = createFileRoute("/tabulasi")({
+export const Route = createFileRoute("/tabulasi/")({
   head: () => ({
     meta: [
       { title: "Tabulasi — Dabidabi's" },
