@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchFormulaSettings, loadFormulaSettings } from "@/lib/formula-settings";
 
 type AuthCtx = {
   user: User | null;
@@ -22,10 +23,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
+      loadFormulaSettings(s?.user?.id ?? null);
+      if (s?.user?.id) void fetchFormulaSettings(s.user.id);
     });
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
+      loadFormulaSettings(data.session?.user?.id ?? null);
+      if (data.session?.user?.id) void fetchFormulaSettings(data.session.user.id);
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();
