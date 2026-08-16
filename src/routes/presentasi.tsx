@@ -2058,6 +2058,7 @@ function loadLatestStudioRender(sketchId: string): string | null {
 }
 
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
+  const theme = useSlideTheme(slide.id);
   const now = useNowOnMount();
   const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
