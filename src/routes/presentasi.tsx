@@ -1828,27 +1828,107 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     : slide.kind === "infografis" ? "Tabulasi · Infografis"
     : slide.kind === "komposisi" ? "Tabulasi · Komposisi"
     : "Tabulasi · Estimasi";
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, borderBottom: "1px solid #111", paddingBottom: 18 }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>
-          {kicker}
+  const titleStyle: React.CSSProperties = {
+    fontFamily: theme.display,
+    fontSize: theme.titleSize,
+    lineHeight: 1.04,
+    letterSpacing: theme.titleSpacing,
+    fontWeight: theme.titleWeight,
+    textTransform: theme.titleTransform,
+  };
+  const kickerStyle: React.CSSProperties = {
+    fontSize: 13,
+    letterSpacing: theme.kickerSpacing,
+    textTransform: "uppercase",
+    color: theme.muted,
+    fontWeight: 600,
+  };
+  const meta = `Skala ${slide.sketch.scale}${slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}`;
+
+  if (theme.header === "band") {
+    return (
+      <div style={{ background: theme.ink, color: "#fff", padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...kickerStyle, color: theme.accent, fontFamily: theme.display }}>{kicker}</div>
+          <div style={{ ...titleStyle, marginTop: 8 }}>{slide.title}</div>
         </div>
-        <div
-          style={{
-            fontFamily: "var(--font-display, Sora, sans-serif)",
-            fontSize: 58, lineHeight: 1.02, letterSpacing: "-0.03em", fontWeight: 600, marginTop: 6,
-          }}
-        >
-          {slide.title}
+        <div style={{ textAlign: "right", flexShrink: 0, fontFamily: theme.display }}>
+          <div style={{ fontSize: 18, fontWeight: 600 }}>{slide.sketch.title}</div>
+          <div style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "#bdbdbd", marginTop: 4 }}>{meta}</div>
         </div>
       </div>
-      <div style={{ textAlign: "right", color: "#111", flexShrink: 0 }}>
-        <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
+    );
+  }
+
+  if (theme.header === "bar") {
+    return (
+      <div style={{ display: "flex", alignItems: "stretch", gap: 22, paddingBottom: 16, borderBottom: theme.rule }}>
+        <div style={{ width: 14, background: theme.accent, flexShrink: 0 }} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={kickerStyle}>{kicker}</div>
+          <div style={{ ...titleStyle, marginTop: 2 }}>{slide.title}</div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0, alignSelf: "flex-end" }}>
+          <div style={{ fontFamily: theme.display, fontSize: 30, letterSpacing: "0.02em", textTransform: "uppercase" }}>{slide.sketch.title}</div>
+          <div style={{ fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", color: theme.muted, marginTop: 2 }}>{meta}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (theme.header === "swiss") {
+    return (
+      <div style={{ borderTop: theme.rule, paddingTop: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 24, ...kickerStyle }}>
+          <span>{kicker}</span>
+          <span>{slide.sketch.title} · {meta}</span>
+        </div>
+        <div style={{ ...titleStyle, marginTop: 10, maxWidth: 1150 }}>{slide.title}</div>
+        <div style={{ width: 96, height: 6, background: theme.accent, marginTop: 14 }} />
+      </div>
+    );
+  }
+
+  if (theme.header === "editorial") {
+    return (
+      <div style={{ borderBottom: theme.rule, paddingBottom: 16 }}>
+        <div style={{ borderBottom: `1px solid ${theme.accent}`, paddingBottom: 8, display: "flex", justifyContent: "space-between", gap: 24, ...kickerStyle }}>
+          <span>{kicker}</span>
+          <span>{slide.sketch.title}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, marginTop: 12 }}>
+          <div style={{ ...titleStyle, fontStyle: "italic", minWidth: 0 }}>{slide.title}</div>
+          <div style={{ fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", color: theme.muted, flexShrink: 0 }}>{meta}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (theme.header === "centered") {
+    return (
+      <div style={{ textAlign: "center", borderBottom: theme.rule, paddingBottom: 18 }}>
+        <div style={kickerStyle}>{kicker}</div>
+        <div style={{ ...titleStyle, marginTop: 8 }}>{slide.title}</div>
+        <div style={{ fontSize: 12, letterSpacing: "0.24em", textTransform: "uppercase", color: theme.muted, marginTop: 10 }}>
+          {slide.sketch.title} · {meta}
+        </div>
+      </div>
+    );
+  }
+
+  // charcoal / default
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, borderBottom: theme.rule, paddingBottom: 18 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ ...kickerStyle, color: "#666" }}>{kicker}</div>
+        <div style={{ ...titleStyle, marginTop: 6 }}>{slide.title}</div>
+      </div>
+      <div style={{ textAlign: "right", color: theme.ink, flexShrink: 0 }}>
+        <div style={{ fontFamily: theme.display, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
           {slide.sketch.title}
         </div>
-        <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", marginTop: 4 }}>
-          Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}
+        <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: theme.muted, marginTop: 4 }}>
+          {meta}
         </div>
       </div>
     </div>
@@ -1870,18 +1950,19 @@ function useNowOnMount() {
   const [now] = useState(() => Date.now());
   return now;
 }
-function SlideFooter({ slide }: { slide: Slide }) {
+function SlideFooter({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Slide; theme?: PresentationTheme }) {
   const now = useNowOnMount();
   const produksi = formatProduksi(slide.sketch.createdAt);
   const cetak = formatCetak(now);
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e5e5e5", paddingTop: 14, fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-      <span style={{ fontWeight: 700, color: "#111" }}>Produksi {produksi}</span>
-      <span>{slide.title}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${theme.muted}55`, paddingTop: 14, fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: theme.muted, fontFamily: theme.body }}>
+      <span style={{ fontWeight: 700, color: theme.ink }}>Produksi {produksi}</span>
+      <span style={{ color: theme.accent, fontWeight: 600 }}>{slide.title}</span>
       <span>Cetak {cetak}</span>
     </div>
   );
 }
+
 
 // Sudut arah Utara nyata pada frame sketsa (CW dari sketsa-atas).
 // Di Sketsa, user merotasi peta CW sebesar mapRotation supaya jalan/garis
