@@ -55,6 +55,18 @@ import { loadMasterplanAnalysis, analyzeSketchForIllustrations, type MasterplanA
 import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, iluNameFor, type Annotation } from "@/lib/analysis-illustrations";
 import { lonLatToTile, pickTileZoom, metersPerMapPx } from "@/lib/geo";
 import {
+  PRESENTATION_THEMES,
+  DEFAULT_THEME_ID,
+  getTheme,
+  getSlideThemeId,
+  setSlideThemeId,
+  setAllSlidesThemeId,
+  subscribeThemeMap,
+  loadThemeMap,
+  type PresentationTheme,
+  type PresentationThemeId,
+} from "@/lib/presentation-theme";
+import {
   type ParkingArea,
   type ParkingObstacle,
   areaPolygonWorld,
