@@ -2200,7 +2200,9 @@ function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
 
 // ---- Closing body ----
 function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
+  const theme = useSlideTheme(slide.id);
   const now = useNowOnMount();
+  const leftAligned = theme.header === "swiss" || theme.header === "bar" || theme.header === "band";
   return (
     <div
       style={{
@@ -2208,30 +2210,34 @@ function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) 
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
+        alignItems: leftAligned ? "flex-start" : "center",
         justifyContent: "center",
-        textAlign: "center",
+        textAlign: leftAligned ? "left" : "center",
         padding: PAD,
-        background: "#0a0a0a",
+        background: theme.ink,
         color: "#ffffff",
+        fontFamily: theme.body,
         position: "relative",
       }}
     >
       <div
         style={{
-          fontFamily: "var(--font-display, Sora, sans-serif)",
-          fontSize: 104,
+          fontFamily: theme.display,
+          fontSize: theme.heroSize,
           lineHeight: 1.05,
-          letterSpacing: "-0.03em",
-          fontWeight: 700,
+          letterSpacing: theme.titleSpacing,
+          fontWeight: theme.titleWeight,
+          textTransform: theme.titleTransform,
+          fontStyle: theme.header === "editorial" ? "italic" : "normal",
         }}
       >
         Terima Kasih
       </div>
-      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 40, marginBottom: 40 }} />
+      <div style={{ width: leftAligned ? 220 : 120, height: leftAligned ? 8 : 4, background: theme.accent, marginTop: 40, marginBottom: 40 }} />
       <div style={{ fontSize: 24, color: "#aaa", letterSpacing: "0.02em", maxWidth: 800 }}>
         Atas perhatian dan kerja samanya dalam pembahasan desain proyek ini.
       </div>
+
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
         <span style={{ fontWeight: 700, color: "#fff" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span style={{ color: "#888" }}>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
