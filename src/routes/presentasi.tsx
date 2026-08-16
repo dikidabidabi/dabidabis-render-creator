@@ -912,14 +912,19 @@ function PresentasiBox({
               ))}
             </div>
 
-            {/* Hide Slide checklist */}
+            {/* Hide Slide checklist + tema per judul */}
             <div className="rounded-lg border border-border bg-background/40">
-              <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-                <div className="text-xs font-semibold">Sembunyikan Slide</div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <div className="text-xs font-semibold">Sembunyikan Slide &amp; Tema</div>
                 <div className="flex items-center gap-3">
                   <div className="text-[10px] text-muted-foreground">
                     {hidden.size} disembunyikan · {visibleSlides.length}/{slides.length} akan dicetak
                   </div>
+                  <ThemeSelect
+                    value={globalTheme}
+                    onChange={(id) => { setAllSlidesThemeId(id); setGlobalTheme(id); }}
+                    label="Tema semua slide"
+                  />
                   <Button
                     type="button"
                     variant="secondary"
@@ -952,12 +957,18 @@ function PresentasiBox({
                         >
                           {i + 1}. {s.title}
                         </label>
+                        <ThemeSelect
+                          value={themeMap[s.id] ?? globalTheme}
+                          onChange={(id) => { setSlideThemeId(s.id, id); }}
+                          label={`Tema slide ${i + 1}`}
+                        />
                       </li>
                     );
                   })}
                 </ul>
               </div>
             </div>
+
           </div>
         </div>
       )}
