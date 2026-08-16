@@ -627,6 +627,18 @@ function PresentasiBox({
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
+  const [themeMap, setThemeMap] = useState<Record<string, PresentationThemeId>>({});
+  const [globalTheme, setGlobalTheme] = useState<PresentationThemeId>(DEFAULT_THEME_ID);
+  useEffect(() => {
+    const sync = () => {
+      const m = loadThemeMap();
+      setThemeMap(m as Record<string, PresentationThemeId>);
+      setGlobalTheme((m["__all"] as PresentationThemeId) ?? DEFAULT_THEME_ID);
+    };
+    sync();
+    return subscribeThemeMap(sync);
+  }, []);
+
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
   const toggleHidden = useCallback((id: string) => {
     setHidden((prev) => {
