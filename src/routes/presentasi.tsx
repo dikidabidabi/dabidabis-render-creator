@@ -2076,9 +2076,10 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
   }, [slide.sketch.id]);
 
   const hasBg = !!bgImage;
-  const titleColor = hasBg ? "#ffffff" : "#0a0a0a";
+  const titleColor = hasBg ? "#ffffff" : theme.ink;
   const subColor = hasBg ? "rgba(255,255,255,0.85)" : "#555";
-  const kickerColor = hasBg ? "rgba(255,255,255,0.75)" : "#888";
+  const kickerColor = hasBg ? "rgba(255,255,255,0.75)" : theme.muted;
+  const leftAligned = theme.header === "swiss" || theme.header === "bar" || theme.header === "band";
   return (
     <div
       style={{
@@ -2086,44 +2087,49 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
+        alignItems: leftAligned ? "flex-start" : "center",
+        justifyContent: leftAligned ? "flex-end" : "center",
+        textAlign: leftAligned ? "left" : "center",
         padding: PAD,
+        paddingBottom: leftAligned ? PAD * 2.4 : PAD,
+        fontFamily: theme.body,
         background: hasBg
           ? `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.55)), url("${bgImage}") center/cover no-repeat`
           : "#ffffff",
         position: "relative",
       }}
     >
-      <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: kickerColor, fontWeight: 600, marginBottom: 28 }}>
+      <div style={{ fontSize: 13, letterSpacing: theme.kickerSpacing, textTransform: "uppercase", color: kickerColor, fontWeight: 600, marginBottom: leftAligned ? 16 : 28 }}>
         Presentasi Proyek
       </div>
       <div
         style={{
-          fontFamily: "var(--font-display, Sora, sans-serif)",
-          fontSize: 92,
+          fontFamily: theme.display,
+          fontSize: theme.heroSize,
           lineHeight: 1.05,
-          letterSpacing: "-0.04em",
-          fontWeight: 700,
+          letterSpacing: theme.titleSpacing,
+          fontWeight: theme.titleWeight,
+          textTransform: theme.titleTransform,
+          fontStyle: theme.header === "editorial" ? "italic" : "normal",
           color: titleColor,
           textShadow: hasBg ? "0 4px 24px rgba(0,0,0,0.45)" : "none",
-          maxWidth: 1100,
+          maxWidth: 1150,
         }}
       >
         {slide.sketch.title || "Proyek"}
       </div>
-      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 36, marginBottom: 36 }} />
+      <div style={{ width: leftAligned ? 220 : 120, height: leftAligned ? 8 : 4, background: theme.accent, marginTop: leftAligned ? 24 : 36, marginBottom: leftAligned ? 20 : 36 }} />
       <div style={{ fontSize: 22, color: subColor, letterSpacing: "0.02em" }}>
         {dateStr}
       </div>
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: kickerColor }}>
-        <span style={{ fontWeight: 700, color: hasBg ? "#fff" : "#111" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
+        <span style={{ fontWeight: 700, color: hasBg ? "#fff" : theme.ink }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
         <span>Cetak {formatCetak(now)}</span>
       </div>
     </div>
   );
+
 }
 
 
