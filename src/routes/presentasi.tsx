@@ -446,6 +446,32 @@ function loadCostMap(): Record<string, number> {
 }
 
 // ---------- Page ----------
+function ThemeSelect({
+  value,
+  onChange,
+  label,
+}: {
+  value: PresentationThemeId;
+  onChange: (id: PresentationThemeId) => void;
+  label: string;
+}) {
+  return (
+    <select
+      aria-label={label}
+      title={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value as PresentationThemeId)}
+      className="h-7 shrink-0 rounded-md border border-border bg-background px-2 text-[10px] text-foreground"
+    >
+      {PRESENTATION_THEMES.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function PresentasiPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
