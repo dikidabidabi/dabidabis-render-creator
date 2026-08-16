@@ -1804,7 +1804,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
   );
 }
 
-function SlideHeader({ slide }: { slide: Slide }) {
+function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Slide; theme?: PresentationTheme }) {
   const kicker =
     slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
