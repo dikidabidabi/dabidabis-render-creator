@@ -1716,7 +1716,19 @@ function ManualScaleBox({
     </div>
   );
 }
+function useSlideTheme(slideId?: string) {
+  const [themeId, setThemeId] = useState<PresentationThemeId>(DEFAULT_THEME_ID);
+  useEffect(() => {
+    if (!slideId) return;
+    const sync = () => setThemeId(getSlideThemeId(slideId));
+    sync();
+    return subscribeThemeMap(sync);
+  }, [slideId]);
+  return getTheme(themeId);
+}
+
 function SlideContent({ slide }: { slide?: Slide }) {
+  const theme = useSlideTheme(slide?.id);
   if (!slide) return null;
   const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif";
   const body = (
@@ -1756,14 +1768,15 @@ function SlideContent({ slide }: { slide?: Slide }) {
         width: A3_W,
         height: A3_H,
         background: "#ffffff",
-        color: "#0a0a0a",
-        fontFamily: "var(--font-sans, Manrope, sans-serif)",
+        color: theme.ink,
+        fontFamily: theme.body,
         padding: isSpecial ? 0 : PAD,
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {!isSpecial && <SlideHeader slide={slide} />}
+      {!isSpecial && <SlideHeader slide={slide} theme={theme} />}
+
       {isSpecial ? (
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {body}
