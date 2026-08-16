@@ -55,6 +55,18 @@ import { loadMasterplanAnalysis, analyzeSketchForIllustrations, type MasterplanA
 import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, iluNameFor, type Annotation } from "@/lib/analysis-illustrations";
 import { lonLatToTile, pickTileZoom, metersPerMapPx } from "@/lib/geo";
 import {
+  PRESENTATION_THEMES,
+  DEFAULT_THEME_ID,
+  getTheme,
+  getSlideThemeId,
+  setSlideThemeId,
+  setAllSlidesThemeId,
+  subscribeThemeMap,
+  loadThemeMap,
+  type PresentationTheme,
+  type PresentationThemeId,
+} from "@/lib/presentation-theme";
+import {
   type ParkingArea,
   type ParkingObstacle,
   areaPolygonWorld,
@@ -434,6 +446,32 @@ function loadCostMap(): Record<string, number> {
 }
 
 // ---------- Page ----------
+function ThemeSelect({
+  value,
+  onChange,
+  label,
+}: {
+  value: PresentationThemeId;
+  onChange: (id: PresentationThemeId) => void;
+  label: string;
+}) {
+  return (
+    <select
+      aria-label={label}
+      title={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value as PresentationThemeId)}
+      className="h-7 shrink-0 rounded-md border border-border bg-background px-2 text-[10px] text-foreground"
+    >
+      {PRESENTATION_THEMES.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function PresentasiPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -614,6 +652,18 @@ function PresentasiBox({
   const [exporting, setExporting] = useState<null | "pptx" | "pdf">(null);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
+
+  const [themeMap, setThemeMap] = useState<Record<string, PresentationThemeId>>({});
+  const [globalTheme, setGlobalTheme] = useState<PresentationThemeId>(DEFAULT_THEME_ID);
+  useEffect(() => {
+    const sync = () => {
+      const m = loadThemeMap();
+      setThemeMap(m as Record<string, PresentationThemeId>);
+      setGlobalTheme((m["__all"] as PresentationThemeId) ?? DEFAULT_THEME_ID);
+    };
+    sync();
+    return subscribeThemeMap(sync);
+  }, []);
 
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
   const toggleHidden = useCallback((id: string) => {
@@ -900,14 +950,19 @@ function PresentasiBox({
               ))}
             </div>
 
-            {/* Hide Slide checklist */}
+            {/* Hide Slide checklist + tema per judul */}
             <div className="rounded-lg border border-border bg-background/40">
-              <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-                <div className="text-xs font-semibold">Sembunyikan Slide</div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <div className="text-xs font-semibold">Sembunyikan Slide &amp; Tema</div>
                 <div className="flex items-center gap-3">
                   <div className="text-[10px] text-muted-foreground">
                     {hidden.size} disembunyikan · {visibleSlides.length}/{slides.length} akan dicetak
                   </div>
+                  <ThemeSelect
+                    value={globalTheme}
+                    onChange={(id) => { setAllSlidesThemeId(id); setGlobalTheme(id); }}
+                    label="Tema semua slide"
+                  />
                   <Button
                     type="button"
                     variant="secondary"
@@ -940,12 +995,18 @@ function PresentasiBox({
                         >
                           {i + 1}. {s.title}
                         </label>
+                        <ThemeSelect
+                          value={themeMap[s.id] ?? globalTheme}
+                          onChange={(id) => { setSlideThemeId(s.id, id); }}
+                          label={`Tema slide ${i + 1}`}
+                        />
                       </li>
                     );
                   })}
                 </ul>
               </div>
             </div>
+
           </div>
         </div>
       )}
@@ -1716,7 +1777,19 @@ function ManualScaleBox({
     </div>
   );
 }
+function useSlideTheme(slideId?: string) {
+  const [themeId, setThemeId] = useState<PresentationThemeId>(DEFAULT_THEME_ID);
+  useEffect(() => {
+    if (!slideId) return;
+    const sync = () => setThemeId(getSlideThemeId(slideId));
+    sync();
+    return subscribeThemeMap(sync);
+  }, [slideId]);
+  return getTheme(themeId);
+}
+
 function SlideContent({ slide }: { slide?: Slide }) {
+  const theme = useSlideTheme(slide?.id);
   if (!slide) return null;
   const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif";
   const body = (
@@ -1756,14 +1829,15 @@ function SlideContent({ slide }: { slide?: Slide }) {
         width: A3_W,
         height: A3_H,
         background: "#ffffff",
-        color: "#0a0a0a",
-        fontFamily: "var(--font-sans, Manrope, sans-serif)",
+        color: theme.ink,
+        fontFamily: theme.body,
         padding: isSpecial ? 0 : PAD,
         display: "flex",
         flexDirection: "column",
       }}
     >
-      {!isSpecial && <SlideHeader slide={slide} />}
+      {!isSpecial && <SlideHeader slide={slide} theme={theme} />}
+
       {isSpecial ? (
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {body}
@@ -1774,12 +1848,12 @@ function SlideContent({ slide }: { slide?: Slide }) {
         </ManualScaleBox>
       )}
 
-      {!isSpecial && <SlideFooter slide={slide} />}
+      {!isSpecial && <SlideFooter slide={slide} theme={theme} />}
     </div>
   );
 }
 
-function SlideHeader({ slide }: { slide: Slide }) {
+function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Slide; theme?: PresentationTheme }) {
   const kicker =
     slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
@@ -1803,27 +1877,107 @@ function SlideHeader({ slide }: { slide: Slide }) {
     : slide.kind === "infografis" ? "Tabulasi · Infografis"
     : slide.kind === "komposisi" ? "Tabulasi · Komposisi"
     : "Tabulasi · Estimasi";
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, borderBottom: "1px solid #111", paddingBottom: 18 }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>
-          {kicker}
+  const titleStyle: React.CSSProperties = {
+    fontFamily: theme.display,
+    fontSize: theme.titleSize,
+    lineHeight: 1.04,
+    letterSpacing: theme.titleSpacing,
+    fontWeight: theme.titleWeight,
+    textTransform: theme.titleTransform,
+  };
+  const kickerStyle: React.CSSProperties = {
+    fontSize: 13,
+    letterSpacing: theme.kickerSpacing,
+    textTransform: "uppercase",
+    color: theme.muted,
+    fontWeight: 600,
+  };
+  const meta = `Skala ${slide.sketch.scale}${slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}`;
+
+  if (theme.header === "band") {
+    return (
+      <div style={{ background: theme.ink, color: "#fff", padding: "18px 22px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...kickerStyle, color: theme.accent, fontFamily: theme.display }}>{kicker}</div>
+          <div style={{ ...titleStyle, marginTop: 8 }}>{slide.title}</div>
         </div>
-        <div
-          style={{
-            fontFamily: "var(--font-display, Sora, sans-serif)",
-            fontSize: 58, lineHeight: 1.02, letterSpacing: "-0.03em", fontWeight: 600, marginTop: 6,
-          }}
-        >
-          {slide.title}
+        <div style={{ textAlign: "right", flexShrink: 0, fontFamily: theme.display }}>
+          <div style={{ fontSize: 18, fontWeight: 600 }}>{slide.sketch.title}</div>
+          <div style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "#bdbdbd", marginTop: 4 }}>{meta}</div>
         </div>
       </div>
-      <div style={{ textAlign: "right", color: "#111", flexShrink: 0 }}>
-        <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
+    );
+  }
+
+  if (theme.header === "bar") {
+    return (
+      <div style={{ display: "flex", alignItems: "stretch", gap: 22, paddingBottom: 16, borderBottom: theme.rule }}>
+        <div style={{ width: 14, background: theme.accent, flexShrink: 0 }} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={kickerStyle}>{kicker}</div>
+          <div style={{ ...titleStyle, marginTop: 2 }}>{slide.title}</div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0, alignSelf: "flex-end" }}>
+          <div style={{ fontFamily: theme.display, fontSize: 30, letterSpacing: "0.02em", textTransform: "uppercase" }}>{slide.sketch.title}</div>
+          <div style={{ fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", color: theme.muted, marginTop: 2 }}>{meta}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (theme.header === "swiss") {
+    return (
+      <div style={{ borderTop: theme.rule, paddingTop: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 24, ...kickerStyle }}>
+          <span>{kicker}</span>
+          <span>{slide.sketch.title} · {meta}</span>
+        </div>
+        <div style={{ ...titleStyle, marginTop: 10, maxWidth: 1150 }}>{slide.title}</div>
+        <div style={{ width: 96, height: 6, background: theme.accent, marginTop: 14 }} />
+      </div>
+    );
+  }
+
+  if (theme.header === "editorial") {
+    return (
+      <div style={{ borderBottom: theme.rule, paddingBottom: 16 }}>
+        <div style={{ borderBottom: `1px solid ${theme.accent}`, paddingBottom: 8, display: "flex", justifyContent: "space-between", gap: 24, ...kickerStyle }}>
+          <span>{kicker}</span>
+          <span>{slide.sketch.title}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, marginTop: 12 }}>
+          <div style={{ ...titleStyle, fontStyle: "italic", minWidth: 0 }}>{slide.title}</div>
+          <div style={{ fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", color: theme.muted, flexShrink: 0 }}>{meta}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (theme.header === "centered") {
+    return (
+      <div style={{ textAlign: "center", borderBottom: theme.rule, paddingBottom: 18 }}>
+        <div style={kickerStyle}>{kicker}</div>
+        <div style={{ ...titleStyle, marginTop: 8 }}>{slide.title}</div>
+        <div style={{ fontSize: 12, letterSpacing: "0.24em", textTransform: "uppercase", color: theme.muted, marginTop: 10 }}>
+          {slide.sketch.title} · {meta}
+        </div>
+      </div>
+    );
+  }
+
+  // charcoal / default
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, borderBottom: theme.rule, paddingBottom: 18 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ ...kickerStyle, color: "#666" }}>{kicker}</div>
+        <div style={{ ...titleStyle, marginTop: 6 }}>{slide.title}</div>
+      </div>
+      <div style={{ textAlign: "right", color: theme.ink, flexShrink: 0 }}>
+        <div style={{ fontFamily: theme.display, fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em" }}>
           {slide.sketch.title}
         </div>
-        <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", marginTop: 4 }}>
-          Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}
+        <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: theme.muted, marginTop: 4 }}>
+          {meta}
         </div>
       </div>
     </div>
@@ -1845,18 +1999,19 @@ function useNowOnMount() {
   const [now] = useState(() => Date.now());
   return now;
 }
-function SlideFooter({ slide }: { slide: Slide }) {
+function SlideFooter({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Slide; theme?: PresentationTheme }) {
   const now = useNowOnMount();
   const produksi = formatProduksi(slide.sketch.createdAt);
   const cetak = formatCetak(now);
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e5e5e5", paddingTop: 14, fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
-      <span style={{ fontWeight: 700, color: "#111" }}>Produksi {produksi}</span>
-      <span>{slide.title}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${theme.muted}55`, paddingTop: 14, fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: theme.muted, fontFamily: theme.body }}>
+      <span style={{ fontWeight: 700, color: theme.ink }}>Produksi {produksi}</span>
+      <span style={{ color: theme.accent, fontWeight: 600 }}>{slide.title}</span>
       <span>Cetak {cetak}</span>
     </div>
   );
 }
+
 
 // Sudut arah Utara nyata pada frame sketsa (CW dari sketsa-atas).
 // Di Sketsa, user merotasi peta CW sebesar mapRotation supaya jalan/garis
@@ -1952,6 +2107,7 @@ function loadLatestStudioRender(sketchId: string): string | null {
 }
 
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
+  const theme = useSlideTheme(slide.id);
   const now = useNowOnMount();
   const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -1969,9 +2125,10 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
   }, [slide.sketch.id]);
 
   const hasBg = !!bgImage;
-  const titleColor = hasBg ? "#ffffff" : "#0a0a0a";
+  const titleColor = hasBg ? "#ffffff" : theme.ink;
   const subColor = hasBg ? "rgba(255,255,255,0.85)" : "#555";
-  const kickerColor = hasBg ? "rgba(255,255,255,0.75)" : "#888";
+  const kickerColor = hasBg ? "rgba(255,255,255,0.75)" : theme.muted;
+  const leftAligned = theme.header === "swiss" || theme.header === "bar" || theme.header === "band";
   return (
     <div
       style={{
@@ -1979,49 +2136,55 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
+        alignItems: leftAligned ? "flex-start" : "center",
+        justifyContent: leftAligned ? "flex-end" : "center",
+        textAlign: leftAligned ? "left" : "center",
         padding: PAD,
+        paddingBottom: leftAligned ? PAD * 2.4 : PAD,
+        fontFamily: theme.body,
         background: hasBg
           ? `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.55)), url("${bgImage}") center/cover no-repeat`
           : "#ffffff",
         position: "relative",
       }}
     >
-      <div style={{ fontSize: 13, letterSpacing: "0.28em", textTransform: "uppercase", color: kickerColor, fontWeight: 600, marginBottom: 28 }}>
+      <div style={{ fontSize: 13, letterSpacing: theme.kickerSpacing, textTransform: "uppercase", color: kickerColor, fontWeight: 600, marginBottom: leftAligned ? 16 : 28 }}>
         Presentasi Proyek
       </div>
       <div
         style={{
-          fontFamily: "var(--font-display, Sora, sans-serif)",
-          fontSize: 92,
+          fontFamily: theme.display,
+          fontSize: theme.heroSize,
           lineHeight: 1.05,
-          letterSpacing: "-0.04em",
-          fontWeight: 700,
+          letterSpacing: theme.titleSpacing,
+          fontWeight: theme.titleWeight,
+          textTransform: theme.titleTransform,
+          fontStyle: theme.header === "editorial" ? "italic" : "normal",
           color: titleColor,
           textShadow: hasBg ? "0 4px 24px rgba(0,0,0,0.45)" : "none",
-          maxWidth: 1100,
+          maxWidth: 1150,
         }}
       >
         {slide.sketch.title || "Proyek"}
       </div>
-      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 36, marginBottom: 36 }} />
+      <div style={{ width: leftAligned ? 220 : 120, height: leftAligned ? 8 : 4, background: theme.accent, marginTop: leftAligned ? 24 : 36, marginBottom: leftAligned ? 20 : 36 }} />
       <div style={{ fontSize: 22, color: subColor, letterSpacing: "0.02em" }}>
         {dateStr}
       </div>
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: kickerColor }}>
-        <span style={{ fontWeight: 700, color: hasBg ? "#fff" : "#111" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
+        <span style={{ fontWeight: 700, color: hasBg ? "#fff" : theme.ink }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
         <span>Cetak {formatCetak(now)}</span>
       </div>
     </div>
   );
+
 }
 
 
 // ---- Table of Contents body ----
 function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
+  const theme = useSlideTheme(slide.id);
   const entries = slide.entries;
   const half = Math.ceil(entries.length / 2);
   const col1 = entries.slice(0, half);
@@ -2031,12 +2194,12 @@ function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
       {items.map((e, i) => (
         <div
           key={`${e.label}-${e.page}-${i}`}
-          style={{ display: "flex", alignItems: "baseline", gap: 12, fontFamily: "var(--font-sans, Manrope, sans-serif)" }}
+          style={{ display: "flex", alignItems: "baseline", gap: 12, fontFamily: theme.body }}
         >
-          <span style={{ fontSize: 13, color: "#888", fontVariantNumeric: "tabular-nums", width: 28, fontWeight: 600 }}>
+          <span style={{ fontSize: 13, color: theme.accent, fontVariantNumeric: "tabular-nums", width: 28, fontWeight: 700 }}>
             {String(startIdx + i + 1).padStart(2, "0")}
           </span>
-          <span style={{ fontSize: 20, color: "#111", fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 20, color: theme.ink, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
             {e.label}
           </span>
           <span style={{ flex: 1, borderBottom: "1px dotted #c8c8c8", transform: "translateY(-4px)" }} />
@@ -2048,29 +2211,32 @@ function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
     </div>
   );
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", fontFamily: theme.body }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase", color: "#888", fontWeight: 700 }}>
+        <div style={{ fontSize: 11, letterSpacing: theme.kickerSpacing, textTransform: "uppercase", color: theme.muted, fontWeight: 700 }}>
           Daftar Isi
         </div>
-        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: theme.muted }}>
           {slide.sketch.title || "Proyek"}
         </div>
       </div>
-      <div style={{ width: 80, height: 3, background: "#e85d3a", marginBottom: 24 }} />
+      <div style={{ width: 80, height: 3, background: theme.accent, marginBottom: 24 }} />
       <div
         style={{
-          fontFamily: "var(--font-display, Sora, sans-serif)",
-          fontSize: 56,
+          fontFamily: theme.display,
+          fontSize: theme.titleSize,
           lineHeight: 1.05,
-          letterSpacing: "-0.03em",
-          fontWeight: 700,
-          color: "#0a0a0a",
+          letterSpacing: theme.titleSpacing,
+          fontWeight: theme.titleWeight,
+          textTransform: theme.titleTransform,
+          fontStyle: theme.header === "editorial" ? "italic" : "normal",
+          color: theme.ink,
           marginBottom: 32,
         }}
       >
         Ikhtisar Presentasi
       </div>
+
       <div style={{ display: "flex", gap: 64, flex: 1, alignItems: "flex-start" }}>
         {renderCol(col1, 0)}
         {col2.length > 0 && renderCol(col2, col1.length)}
@@ -2083,7 +2249,9 @@ function TocBody({ slide }: { slide: Extract<Slide, { kind: "toc" }> }) {
 
 // ---- Closing body ----
 function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) {
+  const theme = useSlideTheme(slide.id);
   const now = useNowOnMount();
+  const leftAligned = theme.header === "swiss" || theme.header === "bar" || theme.header === "band";
   return (
     <div
       style={{
@@ -2091,30 +2259,34 @@ function ClosingBody({ slide }: { slide: Extract<Slide, { kind: "closing" }> }) 
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
+        alignItems: leftAligned ? "flex-start" : "center",
         justifyContent: "center",
-        textAlign: "center",
+        textAlign: leftAligned ? "left" : "center",
         padding: PAD,
-        background: "#0a0a0a",
+        background: theme.ink,
         color: "#ffffff",
+        fontFamily: theme.body,
         position: "relative",
       }}
     >
       <div
         style={{
-          fontFamily: "var(--font-display, Sora, sans-serif)",
-          fontSize: 104,
+          fontFamily: theme.display,
+          fontSize: theme.heroSize,
           lineHeight: 1.05,
-          letterSpacing: "-0.03em",
-          fontWeight: 700,
+          letterSpacing: theme.titleSpacing,
+          fontWeight: theme.titleWeight,
+          textTransform: theme.titleTransform,
+          fontStyle: theme.header === "editorial" ? "italic" : "normal",
         }}
       >
         Terima Kasih
       </div>
-      <div style={{ width: 120, height: 4, background: "#e85d3a", marginTop: 40, marginBottom: 40 }} />
+      <div style={{ width: leftAligned ? 220 : 120, height: leftAligned ? 8 : 4, background: theme.accent, marginTop: 40, marginBottom: 40 }} />
       <div style={{ fontSize: 24, color: "#aaa", letterSpacing: "0.02em", maxWidth: 800 }}>
         Atas perhatian dan kerja samanya dalam pembahasan desain proyek ini.
       </div>
+
       <div style={{ position: "absolute", bottom: PAD, left: PAD, right: PAD, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888" }}>
         <span style={{ fontWeight: 700, color: "#fff" }}>Produksi {formatProduksi(slide.sketch.createdAt)}</span>
         <span style={{ color: "#888" }}>Skala {slide.sketch.scale}{slide.sketch.fungsi ? ` · ${slide.sketch.fungsi}` : ""}</span>
