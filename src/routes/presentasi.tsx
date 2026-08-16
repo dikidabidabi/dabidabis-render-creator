@@ -1799,7 +1799,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
         </ManualScaleBox>
       )}
 
-      {!isSpecial && <SlideFooter slide={slide} />}
+      {!isSpecial && <SlideFooter slide={slide} theme={theme} />}
     </div>
   );
 }
