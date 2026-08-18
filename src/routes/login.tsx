@@ -25,7 +25,7 @@ function LoginPage() {
   const [tab, setTab] = useState<"signin" | "signup">(mode ?? "signin");
 
   useEffect(() => {
-    if (user) navigate({ to: "/studio" });
+    if (user) navigate({ to: "/feed" });
   }, [user, navigate]);
 
   useEffect(() => setTab(mode ?? "signin"), [mode]);
