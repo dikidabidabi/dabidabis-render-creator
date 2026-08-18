@@ -84,9 +84,9 @@ function Landing() {
             <Button
               size="lg"
               className="bg-gradient-primary text-base shadow-primary hover:opacity-90"
-              onClick={() => navigate({ to: user ? "/studio" : "/login", search: user ? undefined : { mode: "signup" } })}
+              onClick={() => navigate({ to: user ? "/feed" : "/login", search: user ? undefined : { mode: "signup" } })}
             >
-              {user ? "Buka Studio" : "Mulai Gratis"}
+              {user ? "Buka Forum Feed" : "Mulai Gratis"}
               <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
             {!user && (

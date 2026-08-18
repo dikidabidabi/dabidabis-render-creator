@@ -11,12 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
+import { Route as ProjectRouteImport } from './routes/project'
 import { Route as PresentasiRouteImport } from './routes/presentasi'
 import { Route as NarasiRouteImport } from './routes/narasi'
 import { Route as Model3dRouteImport } from './routes/model3d'
 import { Route as MasterplanRouteImport } from './routes/masterplan'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
+import { Route as FeedRouteImport } from './routes/feed'
 import { Route as AkunRouteImport } from './routes/akun'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
@@ -30,6 +32,11 @@ const StudioRoute = StudioRouteImport.update({
 const SketchRoute = SketchRouteImport.update({
   id: '/sketch',
   path: '/sketch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectRoute = ProjectRouteImport.update({
+  id: '/project',
+  path: '/project',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PresentasiRoute = PresentasiRouteImport.update({
@@ -62,6 +69,11 @@ const GalleryRoute = GalleryRouteImport.update({
   path: '/gallery',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedRoute = FeedRouteImport.update({
+  id: '/feed',
+  path: '/feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AkunRoute = AkunRouteImport.update({
   id: '/akun',
   path: '/akun',
@@ -86,12 +98,14 @@ const TabulasiRumusRoute = TabulasiRumusRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/akun': typeof AkunRoute
+  '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
+  '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
@@ -100,12 +114,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/akun': typeof AkunRoute
+  '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
+  '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
@@ -115,12 +131,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/akun': typeof AkunRoute
+  '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
   '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
+  '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
@@ -131,12 +149,14 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/akun'
+    | '/feed'
     | '/gallery'
     | '/login'
     | '/masterplan'
     | '/model3d'
     | '/narasi'
     | '/presentasi'
+    | '/project'
     | '/sketch'
     | '/studio'
     | '/tabulasi/rumus'
@@ -145,12 +165,14 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/akun'
+    | '/feed'
     | '/gallery'
     | '/login'
     | '/masterplan'
     | '/model3d'
     | '/narasi'
     | '/presentasi'
+    | '/project'
     | '/sketch'
     | '/studio'
     | '/tabulasi/rumus'
@@ -159,12 +181,14 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/akun'
+    | '/feed'
     | '/gallery'
     | '/login'
     | '/masterplan'
     | '/model3d'
     | '/narasi'
     | '/presentasi'
+    | '/project'
     | '/sketch'
     | '/studio'
     | '/tabulasi/rumus'
@@ -174,12 +198,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AkunRoute: typeof AkunRoute
+  FeedRoute: typeof FeedRoute
   GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
   MasterplanRoute: typeof MasterplanRoute
   Model3dRoute: typeof Model3dRoute
   NarasiRoute: typeof NarasiRoute
   PresentasiRoute: typeof PresentasiRoute
+  ProjectRoute: typeof ProjectRoute
   SketchRoute: typeof SketchRoute
   StudioRoute: typeof StudioRoute
   TabulasiRumusRoute: typeof TabulasiRumusRoute
@@ -200,6 +226,13 @@ declare module '@tanstack/react-router' {
       path: '/sketch'
       fullPath: '/sketch'
       preLoaderRoute: typeof SketchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/project': {
+      id: '/project'
+      path: '/project'
+      fullPath: '/project'
+      preLoaderRoute: typeof ProjectRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/presentasi': {
@@ -244,6 +277,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GalleryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feed': {
+      id: '/feed'
+      path: '/feed'
+      fullPath: '/feed'
+      preLoaderRoute: typeof FeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/akun': {
       id: '/akun'
       path: '/akun'
@@ -278,12 +318,14 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AkunRoute: AkunRoute,
+  FeedRoute: FeedRoute,
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,
   MasterplanRoute: MasterplanRoute,
   Model3dRoute: Model3dRoute,
   NarasiRoute: NarasiRoute,
   PresentasiRoute: PresentasiRoute,
+  ProjectRoute: ProjectRoute,
   SketchRoute: SketchRoute,
   StudioRoute: StudioRoute,
   TabulasiRumusRoute: TabulasiRumusRoute,

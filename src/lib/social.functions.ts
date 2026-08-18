@@ -253,3 +253,69 @@ export const deleteComment = createServerFn({ method: "POST" })
     const { error } = await supabase.from("render_comments").delete().eq("id", data.id);
     return { ok: !error, error: error?.message ?? null };
   });
+
+export type FeedItem = {
+  id: string;
+  prompt: string;
+  created_at: string;
+  result_url: string | null;
+  user_id: string;
+  author_name: string;
+  author_avatar: string | null;
+  author_qualifications: string | null;
+  like_count: number;
+  liked_by_me: boolean;
+  comment_count: number;
+};
+
+export const getFeed = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: rows, error } = await supabase
+      .from("renders")
+      .select("id, prompt, result_url, created_at, user_id")
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(60);
+    if (error) return { items: [] as FeedItem[], error: error.message };
+
+    const ids = (rows ?? []).map((r) => r.id as string);
+    const [{ data: likes }, { data: comments }] = await Promise.all([
+      ids.length
+        ? supabase.from("render_likes").select("render_id, user_id").in("render_id", ids)
+        : Promise.resolve({ data: [] as { render_id: string; user_id: string }[] }),
+      ids.length
+        ? supabase.from("render_comments").select("render_id").in("render_id", ids)
+        : Promise.resolve({ data: [] as { render_id: string }[] }),
+    ]);
+
+    const profiles = await fetchProfileMap(supabase, (rows ?? []).map((r) => r.user_id as string));
+    const avatars = new Map<string, string | null>();
+    for (const [id, p] of profiles) avatars.set(id, await signAvatar(supabase, p.avatar_url));
+
+    const items: FeedItem[] = await Promise.all(
+      (rows ?? []).map(async (r) => {
+        const rid = r.id as string;
+        const owner = r.user_id as string;
+        const p = profiles.get(owner) ?? null;
+        const rowLikes = (likes ?? []).filter((l) => l.render_id === rid);
+        return {
+          id: rid,
+          prompt: r.prompt as string,
+          created_at: r.created_at as string,
+          user_id: owner,
+          author_name: fallbackName(p, owner),
+          author_avatar: avatars.get(owner) ?? null,
+          author_qualifications: p?.qualifications ?? null,
+          result_url: r.result_url
+            ? ((await signRender(supabase, owner, rid)) ?? (r.result_url as string))
+            : null,
+          like_count: rowLikes.length,
+          liked_by_me: rowLikes.some((l) => l.user_id === userId),
+          comment_count: (comments ?? []).filter((c) => c.render_id === rid).length,
+        } satisfies FeedItem;
+      }),
+    );
+    return { items, error: null as string | null };
+  });
