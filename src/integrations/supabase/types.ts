@@ -53,6 +53,94 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          qualifications: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          qualifications?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          qualifications?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      render_comments: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          render_id: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          render_id: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          render_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_comments_render_id_fkey"
+            columns: ["render_id"]
+            isOneToOne: false
+            referencedRelation: "renders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      render_likes: {
+        Row: {
+          created_at: string
+          render_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          render_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          render_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_likes_render_id_fkey"
+            columns: ["render_id"]
+            isOneToOne: false
+            referencedRelation: "renders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       renders: {
         Row: {
           accuracy: number
