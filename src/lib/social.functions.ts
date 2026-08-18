@@ -82,7 +82,7 @@ export const getGallery = createServerFn({ method: "GET" })
           status: r.status as string,
           created_at: r.created_at as string,
           user_id: ownerId,
-          result_url: r.result_url ? await signRender(supabase, ownerId, rid) : null,
+          result_url: r.result_url ? ((await signRender(supabase, ownerId, rid)) ?? (r.result_url as string)) : null,
           like_count: rowLikes.length,
           liked_by_me: rowLikes.some((l) => l.user_id === userId),
           comments: (comments ?? [])
