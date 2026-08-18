@@ -88,8 +88,26 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+const PROJECT_LINKS = [
+  { to: "/studio", label: "Studio" },
+  { to: "/masterplan", label: "Master Plan" },
+  { to: "/sketch", label: "Sketsa" },
+  { to: "/tabulasi", label: "Tabulasi" },
+  { to: "/narasi", label: "Narasi" },
+  { to: "/presentasi", label: "Presentasi" },
+  { to: "/model3d", label: "Model 3D" },
+] as const;
+
+const linkClass =
+  "text-sm text-muted-foreground transition-colors hover:text-foreground";
+
 function Header() {
   const { user, signOut } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const inProject =
+    pathname === "/project" ||
+    PROJECT_LINKS.some((l) => pathname === l.to || pathname.startsWith(`${l.to}/`));
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/40 bg-background/70 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
@@ -99,70 +117,22 @@ function Header() {
           </div>
           <span className="font-display text-lg font-semibold tracking-tight text-ember">Dabidabi's</span>
         </Link>
-        <nav className="flex items-center gap-2 sm:gap-4">
+        <nav className="flex items-center gap-3 sm:gap-5">
           {user ? (
             <>
-              <Link
-                to="/studio"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
-                Studio
+              <Link to="/feed" className={linkClass} activeProps={{ className: "text-foreground font-medium" }}>
+                Forum Feed
               </Link>
-              <Link
-                to="/masterplan"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
-                Master Plan
-              </Link>
-              <Link
-                to="/sketch"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
-                Sketsa
-              </Link>
-              <Link
-                to="/tabulasi"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
-                Tabulasi
-              </Link>
-              <Link
-                to="/narasi"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
-                Narasi
-              </Link>
-              <Link
-                to="/presentasi"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
-                Presentasi
-              </Link>
-              <Link
-                to="/model3d"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
-                Model 3D
-              </Link>
-              <Link
-                to="/gallery"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
-              >
+              <Link to="/gallery" className={linkClass} activeProps={{ className: "text-foreground font-medium" }}>
                 Galeri
               </Link>
               <Link
-                to="/akun"
-                className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
-                activeProps={{ className: "text-foreground font-medium" }}
+                to="/project"
+                className={`${linkClass} ${inProject ? "font-medium text-foreground" : ""}`}
               >
+                Project
+              </Link>
+              <Link to="/akun" className={linkClass} activeProps={{ className: "text-foreground font-medium" }}>
                 Akun
               </Link>
               <Button variant="ghost" size="sm" onClick={() => signOut()}>
@@ -171,10 +141,7 @@ function Header() {
             </>
           ) : (
             <>
-              <Link
-                to="/login"
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
+              <Link to="/login" className={linkClass}>
                 Masuk
               </Link>
               <Button asChild size="sm" className="bg-ember text-white shadow-lg hover:bg-ember/90">
@@ -186,9 +153,27 @@ function Header() {
           )}
         </nav>
       </div>
+
+      {user && inProject && (
+        <div className="border-t border-border/40 bg-surface/40">
+          <div className="mx-auto flex max-w-7xl items-center gap-4 overflow-x-auto px-4 py-2 sm:px-6">
+            {PROJECT_LINKS.map((l) => (
+              <Link
+                key={l.to}
+                to={l.to}
+                className="whitespace-nowrap text-xs text-muted-foreground transition-colors hover:text-foreground"
+                activeProps={{ className: "text-ember font-semibold" }}
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
+
 
 function RootComponent() {
   return (
