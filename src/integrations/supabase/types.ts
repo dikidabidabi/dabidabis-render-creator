@@ -53,31 +53,161 @@ export type Database = {
         }
         Relationships: []
       }
+      post_comments: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_likes: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      posts: {
+        Row: {
+          body: string | null
+          created_at: string
+          data_link: string | null
+          id: string
+          image_url: string | null
+          kind: string
+          project_address: string | null
+          repost_of_post: string | null
+          repost_of_render: string | null
+          tender_deadline: string | null
+          tor_url: string | null
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          data_link?: string | null
+          id?: string
+          image_url?: string | null
+          kind?: string
+          project_address?: string | null
+          repost_of_post?: string | null
+          repost_of_render?: string | null
+          tender_deadline?: string | null
+          tor_url?: string | null
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          data_link?: string | null
+          id?: string
+          image_url?: string | null
+          kind?: string
+          project_address?: string | null
+          repost_of_post?: string | null
+          repost_of_render?: string | null
+          tender_deadline?: string | null
+          tor_url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_repost_of_post_fkey"
+            columns: ["repost_of_post"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_repost_of_render_fkey"
+            columns: ["repost_of_render"]
+            isOneToOne: false
+            referencedRelation: "renders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
+          account_type: string | null
           avatar_url: string | null
           bio: string | null
+          corporate_code: string | null
+          corporate_parent_code: string | null
           created_at: string
           display_name: string | null
           id: string
+          professional_level: string | null
           qualifications: string | null
           updated_at: string
         }
         Insert: {
+          account_type?: string | null
           avatar_url?: string | null
           bio?: string | null
+          corporate_code?: string | null
+          corporate_parent_code?: string | null
           created_at?: string
           display_name?: string | null
           id: string
+          professional_level?: string | null
           qualifications?: string | null
           updated_at?: string
         }
         Update: {
+          account_type?: string | null
           avatar_url?: string | null
           bio?: string | null
+          corporate_code?: string | null
+          corporate_parent_code?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          professional_level?: string | null
           qualifications?: string | null
           updated_at?: string
         }
