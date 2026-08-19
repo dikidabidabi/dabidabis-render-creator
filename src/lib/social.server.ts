@@ -10,7 +10,73 @@ export type ProfileInfo = {
   bio: string | null;
   qualifications: string | null;
   avatar_url: string | null;
+  account_type?: string | null;
+  professional_level?: string | null;
+  corporate_code?: string | null;
+  corporate_parent_code?: string | null;
 };
+
+export const PROFILE_COLS =
+  "id, display_name, bio, qualifications, avatar_url, account_type, professional_level, corporate_code, corporate_parent_code";
+
+export type PostRow = {
+  id: string;
+  user_id: string;
+  kind: string;
+  body: string | null;
+  image_url: string | null;
+  tender_deadline: string | null;
+  tor_url: string | null;
+  data_link: string | null;
+  project_address: string | null;
+  repost_of_post: string | null;
+  repost_of_render: string | null;
+  created_at: string;
+};
+
+export type RepostRef = {
+  kind: "post" | "render";
+  author_name: string;
+  author_id: string;
+  body: string | null;
+  image_url: string | null;
+} | null;
+
+export type FeedEntry = {
+  kind: "render" | "post" | "tender";
+  id: string;
+  created_at: string;
+  user_id: string;
+  author_name: string;
+  author_avatar: string | null;
+  author_qualifications: string | null;
+  body: string;
+  image_url: string | null;
+  like_count: number;
+  liked_by_me: boolean;
+  comment_count: number;
+  tender_deadline: string | null;
+  tor_url: string | null;
+  data_link: string | null;
+  project_address: string | null;
+  repost: RepostRef;
+};
+
+export type HierarchyNode = {
+  id: string;
+  name: string;
+  avatar_signed: string | null;
+  level: string | null;
+  account_type: string | null;
+  is_owner: boolean;
+};
+
+export type Hierarchy = {
+  code: string;
+  corporation: HierarchyNode | null;
+  members: HierarchyNode[];
+} | null;
+
 
 export type CommentInfo = {
   id: string;
