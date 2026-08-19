@@ -207,7 +207,14 @@ function GalleryPage() {
         <ProfileHeader owner={owner} isOwner={isOwner} onChange={setOwner} count={items.length} />
       )}
 
-      {hierarchy && <HierarchyChart hierarchy={hierarchy} ownerId={owner?.id ?? null} />}
+      {owner && (
+        <HierarchySection
+          hierarchy={hierarchy}
+          owner={owner}
+          isOwner={isOwner}
+          onSaved={load}
+        />
+      )}
 
       {isOwner && <PostComposer onCreated={reloadPosts} />}
 
