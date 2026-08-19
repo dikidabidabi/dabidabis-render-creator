@@ -704,3 +704,406 @@ function OtherGalleries({ others, activeId }: { others: GalleryCard[]; activeId:
     </section>
   );
 }
+
+/* ============================ Bagan hierarki korporasi ============================ */
+
+function HierarchyNodeCard({
+  node,
+  highlight,
+  isCorp,
+}: {
+  node: { id: string; name: string; avatar_signed: string | null; level: string | null };
+  highlight: boolean;
+  isCorp?: boolean;
+}) {
+  return (
+    <Link
+      to="/gallery"
+      search={{ u: node.id }}
+      className={`flex min-w-[170px] items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+        highlight
+          ? "border-ember/70 bg-ember/10 shadow-primary"
+          : "border-border/60 bg-surface/50 hover:border-ember/40"
+      }`}
+    >
+      {node.avatar_signed ? (
+        <img
+          src={node.avatar_signed}
+          alt={`Foto profil ${node.name}`}
+          className="h-9 w-9 rounded-full object-cover"
+        />
+      ) : (
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-full ${
+            isCorp ? "bg-ember/20 text-ember" : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {isCorp ? <Building2 className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+        </div>
+      )}
+      <div className="min-w-0">
+        <p
+          className={`truncate text-sm ${highlight ? "font-semibold text-ember" : "font-medium"}`}
+        >
+          {node.name}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">{node.level ?? "Arsitek"}</p>
+      </div>
+    </Link>
+  );
+}
+
+function HierarchyChart({
+  hierarchy,
+  ownerId,
+}: {
+  hierarchy: NonNullable<Hierarchy>;
+  ownerId: string | null;
+}) {
+  return (
+    <section className="mt-8 rounded-2xl border border-border/60 bg-surface/40 p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <Network className="h-4 w-4 text-ember" />
+        <h2 className="font-display text-lg font-semibold tracking-tight">Bagan Hierarki</h2>
+        <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+          {hierarchy.code}
+        </span>
+      </div>
+
+      <div className="flex flex-col items-center">
+        {hierarchy.corporation ? (
+          <HierarchyNodeCard
+            node={hierarchy.corporation}
+            highlight={hierarchy.corporation.id === ownerId}
+            isCorp
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-border/60 px-4 py-2 text-xs text-muted-foreground">
+            Akun korporasi «{hierarchy.code}» belum terdaftar
+          </div>
+        )}
+
+        {hierarchy.members.length > 0 && (
+          <>
+            <div className="h-6 w-px bg-border" />
+            <div className="h-px w-full max-w-3xl bg-border" />
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              {hierarchy.members.map((m) => (
+                <HierarchyNodeCard key={m.id} node={m} highlight={m.id === ownerId} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ============================ Posting & Tender ============================ */
+
+async function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error("Gagal membaca file"));
+    fr.readAsDataURL(file);
+  });
+}
+
+function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) {
+  const uploadFn = useServerFn(uploadPostFile);
+  const createFn = useServerFn(createPost);
+  const [mode, setMode] = useState<"post" | "tender">("post");
+  const [body, setBody] = useState("");
+  const [imagePath, setImagePath] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [torPath, setTorPath] = useState<string | null>(null);
+  const [torName, setTorName] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState("");
+  const [dataLink, setDataLink] = useState("");
+  const [address, setAddress] = useState("");
+  const [busy, setBusy] = useState(false);
+  const imgRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
+
+  const pickImage = async (file: File) => {
+    setBusy(true);
+    const r = await uploadFn({ data: { dataUrl: await fileToDataUrl(file), kind: "image" } });
+    setBusy(false);
+    if (!r.ok) return toast.error(r.error || "Gagal unggah gambar");
+    setImagePath(r.path);
+    setImagePreview(r.url);
+  };
+
+  const pickPdf = async (file: File) => {
+    setBusy(true);
+    const r = await uploadFn({ data: { dataUrl: await fileToDataUrl(file), kind: "pdf" } });
+    setBusy(false);
+    if (!r.ok) return toast.error(r.error || "Gagal unggah PDF");
+    setTorPath(r.path);
+    setTorName(file.name);
+  };
+
+  const reset = () => {
+    setBody("");
+    setImagePath(null);
+    setImagePreview(null);
+    setTorPath(null);
+    setTorName(null);
+    setDeadline("");
+    setDataLink("");
+    setAddress("");
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    const r = await createFn({
+      data: {
+        kind: mode,
+        body: body.trim() || null,
+        image_url: imagePath,
+        tender_deadline: mode === "tender" ? deadline || null : null,
+        tor_url: mode === "tender" ? torPath : null,
+        data_link: mode === "tender" ? dataLink.trim() || null : null,
+        project_address: mode === "tender" ? address.trim() || null : null,
+      },
+    });
+    setBusy(false);
+    if (!r.ok) return toast.error(r.error || "Gagal memposting");
+    toast.success(mode === "tender" ? "Tender diposting ke forum feed" : "Postingan terkirim");
+    reset();
+    await onCreated();
+  };
+
+  return (
+    <section className="mt-8 rounded-2xl border border-border/60 bg-surface/40 p-5">
+      <div className="mb-4 flex gap-2">
+        {(
+          [
+            { k: "post" as const, label: "Posting", icon: PenLine },
+            { k: "tender" as const, label: "Tender", icon: Gavel },
+          ]
+        ).map(({ k, label, icon: Icon }) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setMode(k)}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+              mode === k
+                ? "border-ember/60 bg-ember/10 text-ember"
+                : "border-border/60 text-muted-foreground hover:border-ember/40"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={3}
+        placeholder={
+          mode === "tender"
+            ? "Deskripsi tender: lingkup pekerjaan, syarat peserta, dll."
+            : "Bagikan tulisan atau catatan proyek Anda…"
+        }
+        className="w-full resize-y rounded-xl border border-border/60 bg-background px-3 py-2 text-sm outline-none focus:border-ember/60"
+      />
+
+      {imagePreview && (
+        <div className="relative mt-3 w-fit">
+          <img
+            src={imagePreview}
+            alt="Pratinjau gambar postingan"
+            className="max-h-48 rounded-lg object-cover"
+          />
+          <Button
+            size="icon"
+            variant="secondary"
+            className="absolute right-1 top-1 h-7 w-7"
+            onClick={() => {
+              setImagePath(null);
+              setImagePreview(null);
+            }}
+            aria-label="Hapus gambar"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
+      {mode === "tender" && (
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="deadline">Batas submit</Label>
+            <Input
+              id="deadline"
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="datalink">Link data</Label>
+            <Input
+              id="datalink"
+              value={dataLink}
+              onChange={(e) => setDataLink(e.target.value)}
+              placeholder="https://…"
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="addr">Alamat proyek (memunculkan peta)</Label>
+            <Input
+              id="addr"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Jl. Contoh No. 1, Jakarta"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <input
+          ref={imgRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void pickImage(f);
+            e.target.value = "";
+          }}
+        />
+        <Button variant="outline" size="sm" onClick={() => imgRef.current?.click()} disabled={busy}>
+          <ImageIcon className="mr-2 h-3.5 w-3.5" />
+          Gambar
+        </Button>
+
+        {mode === "tender" && (
+          <>
+            <input
+              ref={pdfRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void pickPdf(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => pdfRef.current?.click()}
+              disabled={busy}
+            >
+              <FileText className="mr-2 h-3.5 w-3.5" />
+              {torName ? "TOR/KAK terunggah" : "TOR/KAK (PDF)"}
+            </Button>
+          </>
+        )}
+
+        <Button
+          size="sm"
+          className="ml-auto bg-gradient-primary shadow-primary hover:opacity-90"
+          onClick={() => void submit()}
+          disabled={busy}
+        >
+          {busy ? (
+            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Send className="mr-2 h-3.5 w-3.5" />
+          )}
+          {mode === "tender" ? "Posting tender" : "Posting"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function PostComments({
+  post,
+  currentUserId,
+  onChange,
+}: {
+  post: PostItem;
+  currentUserId: string | null;
+  onChange: () => void | Promise<void>;
+}) {
+  const addFn = useServerFn(addPostComment);
+  const delFn = useServerFn(deletePostComment);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    const r = await addFn({ data: { postId: post.id, body: text.trim() } });
+    setBusy(false);
+    if (!r.ok) return toast.error(r.error || "Gagal mengirim komentar");
+    setText("");
+    await onChange();
+  };
+
+  return (
+    <div className="space-y-3">
+      {post.comments.map((c) => (
+        <div key={c.id} className="flex items-start gap-2">
+          {c.author_avatar ? (
+            <img
+              src={c.author_avatar}
+              alt={`Foto profil ${c.author_name}`}
+              className="h-7 w-7 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
+              <Users className="h-3 w-3 text-muted-foreground" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1 rounded-lg bg-background/60 px-3 py-2">
+            <p className="text-xs font-semibold">{c.author_name}</p>
+            <p className="whitespace-pre-wrap text-xs text-muted-foreground">{c.body}</p>
+          </div>
+          {c.user_id === currentUserId && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={async () => {
+                const r = await delFn({ data: { id: c.id } });
+                if (r.ok) await onChange();
+                else toast.error(r.error || "Gagal hapus");
+              }}
+              aria-label="Hapus komentar"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      ))}
+
+      <div className="flex items-center gap-2">
+        <Input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void send();
+            }
+          }}
+          placeholder="Tulis komentar…"
+          className="h-9"
+        />
+        <Button size="icon" className="h-9 w-9" onClick={() => void send()} disabled={busy}>
+          <Send className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
