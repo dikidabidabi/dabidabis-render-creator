@@ -455,6 +455,23 @@ function ProfileHeader({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="font-display text-2xl font-semibold tracking-tight">{owner.name}</h2>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {owner.account_type && (
+                      <span className="rounded-md bg-ember/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ember">
+                        {owner.account_type}
+                      </span>
+                    )}
+                    {owner.professional_level && (
+                      <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {owner.professional_level}
+                      </span>
+                    )}
+                    {(owner.corporate_code || owner.corporate_parent_code) && (
+                      <span className="rounded-md border border-border/60 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {owner.corporate_code || owner.corporate_parent_code}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">{count} karya render</p>
                 </div>
                 {isOwner && (
