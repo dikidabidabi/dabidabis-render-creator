@@ -15,14 +15,29 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
+const PERORANGAN_LEVELS = [
+  "Mahasiswa",
+  "Non Arsitek",
+  "Pra Arsitek",
+  "Arsitek Madya",
+  "Arsitek Senior",
+] as const;
+
+const KORPORASI_LEVELS = ["Akun Korporasi", "Arsitek Madya", "Arsitek Senior"] as const;
+
 function LoginPage() {
   const { mode } = Route.useSearch();
   const navigate = useNavigate();
   const { user, signIn, signUp } = useAuth();
+  const setupFn = useServerFn(saveAccountSetup);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"signin" | "signup">(mode ?? "signin");
+
+  const [accountType, setAccountType] = useState<"perorangan" | "korporasi">("perorangan");
+  const [level, setLevel] = useState<string>(PERORANGAN_LEVELS[0]);
+  const [corpCode, setCorpCode] = useState("");
 
   useEffect(() => {
     if (user) navigate({ to: "/feed" });
@@ -30,20 +45,53 @@ function LoginPage() {
 
   useEffect(() => setTab(mode ?? "signin"), [mode]);
 
+  useEffect(() => {
+    setLevel(accountType === "perorangan" ? PERORANGAN_LEVELS[0] : KORPORASI_LEVELS[0]);
+  }, [accountType]);
+
+  const isCorpAccount = accountType === "korporasi" && level === "Akun Korporasi";
+  const needsParentCode = accountType === "korporasi" && !isCorpAccount;
+
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    const fn = tab === "signin" ? signIn : signUp;
-    const { error } = await fn(email, password);
-    setLoading(false);
-    if (error) {
-      toast.error(error);
-    } else if (tab === "signup") {
-      toast.success("Akun dibuat. Cek email untuk konfirmasi (atau langsung masuk).");
-    } else {
-      toast.success("Berhasil masuk.");
+    if (accountType === "korporasi" && !corpCode.trim() && tab === "signup") {
+      toast.error(
+        isCorpAccount
+          ? "Isi kode/nama akun korporasi Anda."
+          : "Isi akun korporasi yang akan dihubungkan.",
+      );
+      return;
     }
+    setLoading(true);
+    if (tab === "signin") {
+      const { error } = await signIn(email, password);
+      setLoading(false);
+      if (error) toast.error(error);
+      else toast.success("Berhasil masuk.");
+      return;
+    }
+
+    const meta = {
+      account_type: accountType,
+      professional_level: level,
+      corporate_code: isCorpAccount ? corpCode.trim() : null,
+      corporate_parent_code: needsParentCode ? corpCode.trim() : null,
+    } as const;
+    const { error, hasSession } = await signUp(email, password, meta);
+    if (!error && hasSession) {
+      const r = await setupFn({ data: { ...meta } });
+      if (!r.ok && r.error) toast.error(r.error);
+    }
+    setLoading(false);
+    if (error) toast.error(error);
+    else
+      toast.success(
+        hasSession
+          ? "Akun dibuat dan jenis akun tersimpan."
+          : "Akun dibuat. Cek email untuk konfirmasi.",
+      );
   };
+
 
   return (
     <main className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
