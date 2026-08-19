@@ -207,6 +207,38 @@ function GalleryPage() {
         <ProfileHeader owner={owner} isOwner={isOwner} onChange={setOwner} count={items.length} />
       )}
 
+      {hierarchy && <HierarchyChart hierarchy={hierarchy} ownerId={owner?.id ?? null} />}
+
+      {isOwner && <PostComposer onCreated={reloadPosts} />}
+
+      {posts.length > 0 && (
+        <section className="mt-10">
+          <div className="mb-4 flex items-center gap-2">
+            <PenLine className="h-4 w-4 text-ember" />
+            <h2 className="font-display text-xl font-semibold tracking-tight">
+              Postingan & Tender
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            {posts.map((p, i) => (
+              <FeedEntryCard
+                key={p.id}
+                item={p}
+                index={i}
+                canDelete={p.is_mine}
+                busyRepost={reposting === p.id}
+                onLike={() => void handleLikePost(p)}
+                onRepost={() => void handleRepost({ postId: p.id })}
+                onDelete={() => void handleDeletePost(p.id)}
+              >
+                <PostComments post={p} currentUserId={user?.id ?? null} onChange={reloadPosts} />
+              </FeedEntryCard>
+            ))}
+          </div>
+        </section>
+      )}
+
+
       <div className="mb-8 mt-10 flex items-end justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
