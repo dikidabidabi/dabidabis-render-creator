@@ -43,6 +43,7 @@ import {
   addPostComment,
   deletePostComment,
   uploadPostFile,
+  saveAccountSetup,
   type GalleryItem,
   type GalleryOwner,
   type Hierarchy,
