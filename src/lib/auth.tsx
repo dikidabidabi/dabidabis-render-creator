@@ -3,14 +3,27 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchFormulaSettings, loadFormulaSettings } from "@/lib/formula-settings";
 
+export type SignUpMeta = {
+  account_type: "perorangan" | "korporasi";
+  professional_level?: string | null;
+  corporate_code?: string | null;
+  corporate_parent_code?: string | null;
+  display_name?: string | null;
+};
+
 type AuthCtx = {
   user: User | null;
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    meta?: SignUpMeta,
+  ) => Promise<{ error: string | null; hasSession: boolean }>;
   signOut: () => Promise<void>;
 };
+
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
