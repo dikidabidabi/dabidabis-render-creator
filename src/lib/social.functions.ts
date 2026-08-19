@@ -2,17 +2,23 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import {
+  buildHierarchy,
   fallbackName,
   fetchProfileMap,
   signAvatar,
+  signPostFile,
   signRender,
   type CommentInfo,
+  type FeedEntry,
   type GalleryItem,
+  type Hierarchy,
+  type PostRow,
   type ProfileInfo,
+  type RepostRef,
 } from "@/lib/social.server";
 
 export type GalleryOwner = ProfileInfo & { name: string; avatar_signed: string | null };
-export type { GalleryItem, CommentInfo };
+export type { GalleryItem, CommentInfo, FeedEntry, Hierarchy };
 
 export const getGallery = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -34,9 +40,15 @@ export const getGallery = createServerFn({ method: "GET" })
       bio: ownerProfile?.bio ?? null,
       qualifications: ownerProfile?.qualifications ?? null,
       avatar_url: ownerProfile?.avatar_url ?? null,
+      account_type: ownerProfile?.account_type ?? null,
+      professional_level: ownerProfile?.professional_level ?? null,
+      corporate_code: ownerProfile?.corporate_code ?? null,
+      corporate_parent_code: ownerProfile?.corporate_parent_code ?? null,
       name: fallbackName(ownerProfile, ownerId),
       avatar_signed: await signAvatar(supabase, ownerProfile?.avatar_url ?? null),
     };
+    const hierarchy = await buildHierarchy(supabase, ownerProfile, ownerId);
+
 
     const { data: rows, error } = await supabase
       .from("renders")
