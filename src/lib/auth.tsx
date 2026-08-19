@@ -54,14 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (email: string, password: string, meta?: SignUpMeta) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/feed` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/feed`,
+        ...(meta ? { data: meta as Record<string, unknown> } : {}),
+      },
     });
-    return { error: error?.message ?? null };
+    return { error: error?.message ?? null, hasSession: Boolean(data.session) };
   };
+
 
   const signOut = async () => {
     await supabase.auth.signOut();
