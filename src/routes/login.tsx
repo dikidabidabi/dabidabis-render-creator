@@ -163,6 +163,70 @@ function LoginPage() {
                 placeholder="Minimal 6 karakter"
               />
             </div>
+
+            {tab === "signup" && (
+              <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-3">
+                <div className="space-y-2">
+                  <Label>Masuk sebagai</Label>
+                  <div className="flex gap-2">
+                    {(["perorangan", "korporasi"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setAccountType(t)}
+                        className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+                          accountType === t
+                            ? "border-ember/60 bg-ember/10 text-ember"
+                            : "border-border/60 text-muted-foreground hover:border-ember/40"
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="level">
+                    {accountType === "perorangan" ? "Kualifikasi" : "Peran dalam korporasi"}
+                  </Label>
+                  <select
+                    id="level"
+                    value={level}
+                    onChange={(e) => setLevel(e.target.value)}
+                    className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm outline-none focus:border-ember/60"
+                  >
+                    {(accountType === "perorangan" ? PERORANGAN_LEVELS : KORPORASI_LEVELS).map(
+                      (l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
+
+                {accountType === "korporasi" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="corp">
+                      {isCorpAccount ? "Kode akun korporasi Anda" : "Akun korporasi yang dihubungkan"}
+                    </Label>
+                    <Input
+                      id="corp"
+                      value={corpCode}
+                      onChange={(e) => setCorpCode(e.target.value)}
+                      placeholder={isCorpAccount ? "cth. studio-dabidabi" : "Ketik kode korporasi"}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      {isCorpAccount
+                        ? "Kode ini dibagikan ke arsitek Anda agar terhubung ke bagan hierarki."
+                        : "Bagan hierarki di galeri akan menghubungkan akun Anda dengan korporasi ini."}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <Button
               type="submit"
               disabled={loading}
