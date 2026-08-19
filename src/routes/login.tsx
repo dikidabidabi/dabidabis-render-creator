@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
+import { saveAccountSetup } from "@/lib/social.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): { mode?: "signin" | "signup" } => ({
