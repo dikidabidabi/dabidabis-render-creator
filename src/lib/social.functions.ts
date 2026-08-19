@@ -123,7 +123,7 @@ export const getGallery = createServerFn({ method: "GET" })
       }),
     );
 
-    return { owner, isOwner: ownerId === userId, items, error: null as string | null };
+    return { owner, hierarchy, isOwner: ownerId === userId, items, error: null as string | null };
   });
 
 export const listGalleries = createServerFn({ method: "GET" })
