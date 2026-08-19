@@ -291,16 +291,17 @@ export const saveAccountSetup = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const payload: Record<string, unknown> = {
+    const payload = {
       id: userId,
       account_type: data.account_type,
       professional_level: data.professional_level?.trim() || null,
       corporate_code: data.corporate_code?.trim() || null,
       corporate_parent_code: data.corporate_parent_code?.trim() || null,
       updated_at: new Date().toISOString(),
+      ...(data.display_name?.trim() ? { display_name: data.display_name.trim() } : {}),
     };
-    if (data.display_name?.trim()) payload["display_name"] = data.display_name.trim();
     const { error } = await supabase.from("profiles").upsert(payload, { onConflict: "id" });
+
     return { ok: !error, error: error?.message ?? null };
   });
 
