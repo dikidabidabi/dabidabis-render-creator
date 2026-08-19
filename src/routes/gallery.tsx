@@ -17,6 +17,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { deleteRender } from "@/lib/render.functions";
 import {
@@ -27,12 +29,23 @@ import {
   toggleLike,
   addComment,
   deleteComment,
+  getPosts,
+  createPost,
+  deletePost,
+  togglePostLike,
+  addPostComment,
+  deletePostComment,
+  uploadPostFile,
   type GalleryItem,
   type GalleryOwner,
+  type Hierarchy,
+  type PostItem,
 } from "@/lib/social.functions";
+import { FeedEntryCard } from "@/components/feed-entry-card";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { z } from "zod";
+
 
 export const Route = createFileRoute("/gallery")({
   validateSearch: z.object({ u: z.string().uuid().optional() }),
