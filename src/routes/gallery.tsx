@@ -92,11 +92,18 @@ function GalleryPage() {
   const galleryFn = useServerFn(getGallery);
   const listFn = useServerFn(listGalleries);
   const delFn = useServerFn(deleteRender);
+  const postsFn = useServerFn(getPosts);
+  const repostFn = useServerFn(createPost);
+  const delPostFn = useServerFn(deletePost);
+  const likePostFn = useServerFn(togglePostLike);
 
   const [owner, setOwner] = useState<GalleryOwner | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [others, setOthers] = useState<GalleryCard[]>([]);
+  const [hierarchy, setHierarchy] = useState<Hierarchy>(null);
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [reposting, setReposting] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
 
   const load = useCallback(async () => {
@@ -106,6 +113,9 @@ function GalleryPage() {
       setOwner(r.owner);
       setIsOwner(r.isOwner);
       setItems(r.items);
+      setHierarchy(r.hierarchy);
+      const p = await postsFn({ data: search.u ? { userId: search.u } : {} });
+      setPosts(p.posts);
       const l = await listFn();
       setOthers(l.galleries);
     } catch (e) {
@@ -113,7 +123,12 @@ function GalleryPage() {
     } finally {
       setFetching(false);
     }
-  }, [galleryFn, listFn, search.u]);
+  }, [galleryFn, listFn, postsFn, search.u]);
+
+  const reloadPosts = useCallback(async () => {
+    const p = await postsFn({ data: search.u ? { userId: search.u } : {} });
+    setPosts(p.posts);
+  }, [postsFn, search.u]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -122,6 +137,50 @@ function GalleryPage() {
     }
     if (user) void load();
   }, [user, loading, navigate, load]);
+
+  const handleLikePost = async (post: PostItem) => {
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id
+          ? { ...p, liked_by_me: !p.liked_by_me, like_count: p.like_count + (p.liked_by_me ? -1 : 1) }
+          : p,
+      ),
+    );
+    const r = await likePostFn({ data: { postId: post.id } });
+    if (!r.ok) {
+      toast.error(r.error || "Gagal menyukai");
+      void reloadPosts();
+    }
+  };
+
+  const handleRepost = async (payload: { renderId?: string; postId?: string }) => {
+    const key = payload.renderId ?? payload.postId ?? "";
+    setReposting(key);
+    const r = await repostFn({
+      data: payload.renderId
+        ? { kind: "post", repost_of_render: payload.renderId }
+        : { kind: "post", repost_of_post: payload.postId! },
+    });
+    setReposting(null);
+    if (r.ok) {
+      toast.success("Berhasil repost ke forum feed");
+      void reloadPosts();
+    } else {
+      toast.error(r.error || "Gagal repost");
+    }
+  };
+
+  const handleDeletePost = async (id: string) => {
+    if (!confirm("Hapus postingan ini?")) return;
+    const r = await delPostFn({ data: { id } });
+    if (r.ok) {
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+      toast.success("Postingan dihapus");
+    } else {
+      toast.error(r.error || "Gagal hapus");
+    }
+  };
+
 
   const handleDelete = async (id: string) => {
     if (!confirm("Hapus render ini?")) return;
