@@ -56,7 +56,15 @@ export const getGallery = createServerFn({ method: "GET" })
       .eq("user_id", ownerId)
       .order("created_at", { ascending: false })
       .limit(60);
-    if (error) return { owner, isOwner: ownerId === userId, items: [] as GalleryItem[], error: error.message };
+    if (error)
+      return {
+        owner,
+        hierarchy,
+        isOwner: ownerId === userId,
+        items: [] as GalleryItem[],
+        error: error.message,
+      };
+
 
     const ids = (rows ?? []).map((r) => r.id as string);
     const [{ data: likes }, { data: comments }] = await Promise.all([
