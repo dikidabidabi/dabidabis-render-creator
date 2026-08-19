@@ -15,7 +15,14 @@ import {
   Users,
   Send,
   X,
+  Building2,
+  FileText,
+  Gavel,
+  Image as ImageIcon,
+  Network,
+  PenLine,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
