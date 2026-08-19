@@ -129,8 +129,53 @@ export async function fetchProfileMap(supabase: DB, ids: string[]) {
   if (unique.length === 0) return map;
   const { data } = await supabase
     .from("profiles")
-    .select("id, display_name, bio, qualifications, avatar_url")
+    .select(PROFILE_COLS)
     .in("id", unique);
   for (const p of data ?? []) map.set(p.id as string, p as ProfileInfo);
   return map;
 }
+
+const POST_TTL = 60 * 60 * 24 * 3;
+
+export async function signPostFile(supabase: DB, path: string | null) {
+  if (!path) return null;
+  if (path.startsWith("http")) return path;
+  const { data } = await supabase.storage.from("posts").createSignedUrl(path, POST_TTL);
+  return data?.signedUrl ?? null;
+}
+
+export async function buildHierarchy(
+  supabase: DB,
+  ownerProfile: ProfileInfo | null,
+  ownerId: string,
+): Promise<Hierarchy> {
+  const code = (ownerProfile?.corporate_code || ownerProfile?.corporate_parent_code || "").trim();
+  if (!code) return null;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select(PROFILE_COLS)
+    .or(`corporate_code.ilike.${code},corporate_parent_code.ilike.${code}`)
+    .limit(200);
+
+  const rows = (data ?? []) as ProfileInfo[];
+  const toNode = async (p: ProfileInfo): Promise<HierarchyNode> => ({
+    id: p.id,
+    name: fallbackName(p, p.id),
+    avatar_signed: await signAvatar(supabase, p.avatar_url),
+    level: p.professional_level ?? null,
+    account_type: p.account_type ?? null,
+    is_owner: p.id === ownerId,
+  });
+
+  const corpRow =
+    rows.find((p) => (p.corporate_code ?? "").toLowerCase() === code.toLowerCase()) ?? null;
+  const memberRows = rows.filter((p) => p.id !== corpRow?.id);
+
+  return {
+    code,
+    corporation: corpRow ? await toNode(corpRow) : null,
+    members: await Promise.all(memberRows.map(toNode)),
+  };
+}
+
