@@ -3,14 +3,27 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchFormulaSettings, loadFormulaSettings } from "@/lib/formula-settings";
 
+export type SignUpMeta = {
+  account_type: "perorangan" | "korporasi";
+  professional_level?: string | null;
+  corporate_code?: string | null;
+  corporate_parent_code?: string | null;
+  display_name?: string | null;
+};
+
 type AuthCtx = {
   user: User | null;
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    meta?: SignUpMeta,
+  ) => Promise<{ error: string | null; hasSession: boolean }>;
   signOut: () => Promise<void>;
 };
+
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
@@ -41,14 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (email: string, password: string, meta?: SignUpMeta) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/feed` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/feed`,
+        ...(meta ? { data: meta as Record<string, unknown> } : {}),
+      },
     });
-    return { error: error?.message ?? null };
+    return { error: error?.message ?? null, hasSession: Boolean(data.session) };
   };
+
 
   const signOut = async () => {
     await supabase.auth.signOut();
