@@ -1080,6 +1080,9 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
     setDeadline("");
     setDataLink("");
     setAddress("");
+    setTitle("");
+    setCoords(null);
+    setSuggests([]);
   };
 
   const submit = async () => {
@@ -1089,10 +1092,13 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
         kind: mode,
         body: body.trim() || null,
         image_url: imagePath,
+        tender_title: mode === "tender" ? title.trim() || null : null,
         tender_deadline: mode === "tender" ? deadline || null : null,
         tor_url: mode === "tender" ? torPath : null,
         data_link: mode === "tender" ? dataLink.trim() || null : null,
         project_address: mode === "tender" ? address.trim() || null : null,
+        project_lat: mode === "tender" ? (coords?.lat ?? null) : null,
+        project_lon: mode === "tender" ? (coords?.lon ?? null) : null,
       },
     });
     setBusy(false);
