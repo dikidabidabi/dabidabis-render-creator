@@ -1018,9 +1018,39 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
   const [deadline, setDeadline] = useState("");
   const [dataLink, setDataLink] = useState("");
   const [address, setAddress] = useState("");
+  const [title, setTitle] = useState("");
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [suggests, setSuggests] = useState<NominatimHit[]>([]);
+  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const imgRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
+
+  // Sugesti alamat (Nominatim) — sama seperti pencarian lokasi di halaman sketsa.
+  useEffect(() => {
+    if (mode !== "tender") return;
+    const q = address.trim();
+    if (q.length < 3) {
+      setSuggests([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const hits = await nominatimSearch(q, 6);
+        if (alive) setSuggests(hits);
+      } catch {
+        if (alive) setSuggests([]);
+      } finally {
+        if (alive) setSearching(false);
+      }
+    }, 450);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [address, mode]);
 
   const pickImage = async (file: File) => {
     setBusy(true);
