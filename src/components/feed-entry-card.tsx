@@ -223,12 +223,45 @@ export function FeedEntryCard({
               <p className="flex items-start gap-2">
                 <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember" />
                 {item.project_address}
+                {hasCoords && (
+                  <span className="ml-1 shrink-0 text-muted-foreground">
+                    ({Number(item.project_lat).toFixed(5)}, {Number(item.project_lon).toFixed(5)})
+                  </span>
+                )}
               </p>
             )}
           </div>
         )}
 
         {isTender && item.project_address && <MapEmbed address={item.project_address} />}
+
+        {isTender && hasCoords && (
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExec((v) => !v)}
+              className="border-ember/50 text-ember hover:bg-ember/10"
+            >
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              Eksekusi
+            </Button>
+            {showExec && (
+              <div className="flex flex-wrap gap-2 rounded-lg border border-ember/30 bg-ember/5 p-3">
+                <p className="w-full text-xs text-muted-foreground">
+                  Kirim peta &amp; koordinat tender ini ke:
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => execute("masterplan")}>
+                  Halaman Master Plan
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => execute("sketch")}>
+                  Halaman Sketsa
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
 
         <div className="flex items-center gap-2">
           <Button
