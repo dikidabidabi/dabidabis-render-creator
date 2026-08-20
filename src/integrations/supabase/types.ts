@@ -120,9 +120,12 @@ export type Database = {
           image_url: string | null
           kind: string
           project_address: string | null
+          project_lat: number | null
+          project_lon: number | null
           repost_of_post: string | null
           repost_of_render: string | null
           tender_deadline: string | null
+          tender_title: string | null
           tor_url: string | null
           user_id: string
         }
@@ -134,9 +137,12 @@ export type Database = {
           image_url?: string | null
           kind?: string
           project_address?: string | null
+          project_lat?: number | null
+          project_lon?: number | null
           repost_of_post?: string | null
           repost_of_render?: string | null
           tender_deadline?: string | null
+          tender_title?: string | null
           tor_url?: string | null
           user_id: string
         }
@@ -148,9 +154,12 @@ export type Database = {
           image_url?: string | null
           kind?: string
           project_address?: string | null
+          project_lat?: number | null
+          project_lon?: number | null
           repost_of_post?: string | null
           repost_of_render?: string | null
           tender_deadline?: string | null
+          tender_title?: string | null
           tor_url?: string | null
           user_id?: string
         }

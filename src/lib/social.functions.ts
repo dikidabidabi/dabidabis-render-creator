@@ -385,10 +385,13 @@ async function mapPosts(
         like_count: rowLikes.length,
         liked_by_me: rowLikes.some((l) => l["user_id"] === userId),
         comment_count: (comments ?? []).filter((c) => c["post_id"] === r.id).length,
+        tender_title: r.tender_title ?? null,
         tender_deadline: r.tender_deadline,
         tor_url: await signPostFile(supabase, r.tor_url),
         data_link: r.data_link,
         project_address: r.project_address,
+        project_lat: r.project_lat ?? null,
+        project_lon: r.project_lon ?? null,
         repost,
         is_mine: r.user_id === userId,
       };
@@ -490,10 +493,13 @@ export const createPost = createServerFn({ method: "POST" })
         kind: z.enum(["post", "tender"]).default("post"),
         body: z.string().max(4000).nullable().optional(),
         image_url: z.string().max(400).nullable().optional(),
+        tender_title: z.string().max(200).nullable().optional(),
         tender_deadline: z.string().max(20).nullable().optional(),
         tor_url: z.string().max(400).nullable().optional(),
         data_link: z.string().max(600).nullable().optional(),
         project_address: z.string().max(400).nullable().optional(),
+        project_lat: z.number().min(-90).max(90).nullable().optional(),
+        project_lon: z.number().min(-180).max(180).nullable().optional(),
         repost_of_post: z.string().uuid().nullable().optional(),
         repost_of_render: z.string().uuid().nullable().optional(),
       })
@@ -503,6 +509,7 @@ export const createPost = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const hasContent =
       (data.body ?? "").trim().length > 0 ||
+      (data.tender_title ?? "").trim().length > 0 ||
       data.image_url ||
       data.repost_of_post ||
       data.repost_of_render;
@@ -515,10 +522,13 @@ export const createPost = createServerFn({ method: "POST" })
         kind: data.kind,
         body: data.body?.trim() || null,
         image_url: data.image_url ?? null,
+        tender_title: data.tender_title?.trim() || null,
         tender_deadline: data.tender_deadline || null,
         tor_url: data.tor_url ?? null,
         data_link: data.data_link?.trim() || null,
         project_address: data.project_address?.trim() || null,
+        project_lat: data.project_lat ?? null,
+        project_lon: data.project_lon ?? null,
         repost_of_post: data.repost_of_post ?? null,
         repost_of_render: data.repost_of_render ?? null,
       })
@@ -652,10 +662,13 @@ export const getFeed = createServerFn({ method: "GET" })
           like_count: rowLikes.length,
           liked_by_me: rowLikes.some((l) => l.user_id === userId),
           comment_count: (comments ?? []).filter((c) => c.render_id === rid).length,
+          tender_title: null,
           tender_deadline: null,
           tor_url: null,
           data_link: null,
           project_address: null,
+          project_lat: null,
+          project_lon: null,
           repost: null as RepostRef,
         };
       }),

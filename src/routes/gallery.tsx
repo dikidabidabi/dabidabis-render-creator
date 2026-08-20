@@ -50,6 +50,7 @@ import {
   type PostItem,
 } from "@/lib/social.functions";
 import { FeedEntryCard } from "@/components/feed-entry-card";
+import { nominatimSearch, type NominatimHit } from "@/lib/geo";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -1018,9 +1019,39 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
   const [deadline, setDeadline] = useState("");
   const [dataLink, setDataLink] = useState("");
   const [address, setAddress] = useState("");
+  const [title, setTitle] = useState("");
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [suggests, setSuggests] = useState<NominatimHit[]>([]);
+  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const imgRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
+
+  // Sugesti alamat (Nominatim) — sama seperti pencarian lokasi di halaman sketsa.
+  useEffect(() => {
+    if (mode !== "tender") return;
+    const q = address.trim();
+    if (q.length < 3) {
+      setSuggests([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const hits = await nominatimSearch(q, 6);
+        if (alive) setSuggests(hits);
+      } catch {
+        if (alive) setSuggests([]);
+      } finally {
+        if (alive) setSearching(false);
+      }
+    }, 450);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [address, mode]);
 
   const pickImage = async (file: File) => {
     setBusy(true);
@@ -1049,6 +1080,9 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
     setDeadline("");
     setDataLink("");
     setAddress("");
+    setTitle("");
+    setCoords(null);
+    setSuggests([]);
   };
 
   const submit = async () => {
@@ -1058,10 +1092,13 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
         kind: mode,
         body: body.trim() || null,
         image_url: imagePath,
+        tender_title: mode === "tender" ? title.trim() || null : null,
         tender_deadline: mode === "tender" ? deadline || null : null,
         tor_url: mode === "tender" ? torPath : null,
         data_link: mode === "tender" ? dataLink.trim() || null : null,
         project_address: mode === "tender" ? address.trim() || null : null,
+        project_lat: mode === "tender" ? (coords?.lat ?? null) : null,
+        project_lon: mode === "tender" ? (coords?.lon ?? null) : null,
       },
     });
     setBusy(false);
@@ -1132,6 +1169,15 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
 
       {mode === "tender" && (
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="tender-title">Judul tender</Label>
+            <Input
+              id="tender-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Sayembara Gedung Kesenian Kota…"
+            />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="deadline">Batas submit</Label>
             <Input
@@ -1150,14 +1196,44 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
               placeholder="https://…"
             />
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="addr">Alamat proyek (memunculkan peta)</Label>
+          <div className="relative space-y-1.5 sm:col-span-2">
+            <Label htmlFor="addr">Alamat proyek (memunculkan peta &amp; koordinat)</Label>
             <Input
               id="addr"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                setCoords(null);
+              }}
               placeholder="Jl. Contoh No. 1, Jakarta"
+              autoComplete="off"
             />
+            {suggests.length > 0 && (
+              <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border/60 bg-background shadow-lg">
+                {suggests.map((h) => (
+                  <li key={`${h.lat},${h.lon},${h.display_name}`}>
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-xs hover:bg-ember/10"
+                      onClick={() => {
+                        setAddress(h.display_name);
+                        setCoords({ lat: Number(h.lat), lon: Number(h.lon) });
+                        setSuggests([]);
+                      }}
+                    >
+                      {h.display_name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {searching
+                ? "Mencari lokasi…"
+                : coords
+                  ? `Koordinat: ${coords.lat.toFixed(6)}, ${coords.lon.toFixed(6)}`
+                  : "Pilih salah satu sugesti alamat untuk mengambil koordinat."}
+            </p>
           </div>
         </div>
       )}

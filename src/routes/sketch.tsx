@@ -89,6 +89,7 @@ import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlock
 import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
+import { takePendingTenderExec } from "@/lib/tender-exec";
 import {
   type StructuralGrid,
   DEFAULT_GRID,
@@ -1463,6 +1464,30 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
       );
     };
   }, [STORAGE_KEY_ACTIVE]);
+
+  // "Eksekusi" dari postingan tender: buat sketsa baru dengan judul tender dan
+  // koordinat alamat proyek yang sudah terisi/terkunci.
+  useEffect(() => {
+    if (!loaded) return;
+    const pending = takePendingTenderExec(mode);
+    if (!pending) return;
+    setSketches((prev) => {
+      const next = normalizeSketch({
+        ...newSketch(prev.length + 1),
+        title: pending.title || `Tender ${prev.length + 1}`,
+        geo: {
+          ...DEFAULT_GEO,
+          lat: pending.lat,
+          lon: pending.lon,
+          locked: true,
+          label: pending.label ?? "",
+        },
+      });
+      setOpenId(next.id);
+      return [...prev, next];
+    });
+    toast.success(`Sketsa "${pending.title}" dibuat dari tender`);
+  }, [loaded, mode]);
 
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) =>

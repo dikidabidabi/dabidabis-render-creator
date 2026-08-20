@@ -1,6 +1,7 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import {
   CalendarClock,
   ExternalLink,
@@ -9,11 +10,13 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  Play,
   Repeat2,
   Trash2,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { setPendingTenderExec } from "@/lib/tender-exec";
 import type { FeedEntry } from "@/lib/social.functions";
 
 export function timeAgo(iso: string) {
@@ -61,7 +64,30 @@ export function FeedEntryCard({
   children?: React.ReactNode;
 }) {
   const [showComments, setShowComments] = useState(false);
+  const [showExec, setShowExec] = useState(false);
+  const navigate = useNavigate();
   const isTender = item.kind === "tender";
+  const hasCoords =
+    Number.isFinite(Number(item.project_lat)) && Number.isFinite(Number(item.project_lon));
+
+  const execute = (target: "sketch" | "masterplan") => {
+    if (!hasCoords) {
+      toast.error("Tender ini belum punya koordinat alamat proyek.");
+      return;
+    }
+    setPendingTenderExec({
+      target,
+      title: (item.tender_title || item.body || "Tender").slice(0, 80),
+      lat: Number(item.project_lat),
+      lon: Number(item.project_lon),
+      label: item.project_address ?? "",
+    });
+    setShowExec(false);
+    toast.success(
+      target === "masterplan" ? "Peta dikirim ke Master Plan" : "Peta dikirim ke Sketsa",
+    );
+    void navigate({ to: target === "masterplan" ? "/masterplan" : "/sketch" });
+  };
 
   return (
     <motion.article
@@ -129,6 +155,11 @@ export function FeedEntryCard({
       )}
 
       <div className="space-y-3 p-4">
+        {isTender && item.tender_title && (
+          <h3 className="font-display text-base font-semibold tracking-tight">
+            {item.tender_title}
+          </h3>
+        )}
         {item.body && <p className="whitespace-pre-wrap text-sm text-foreground/85">{item.body}</p>}
 
         {item.repost && (
@@ -192,12 +223,45 @@ export function FeedEntryCard({
               <p className="flex items-start gap-2">
                 <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember" />
                 {item.project_address}
+                {hasCoords && (
+                  <span className="ml-1 shrink-0 text-muted-foreground">
+                    ({Number(item.project_lat).toFixed(5)}, {Number(item.project_lon).toFixed(5)})
+                  </span>
+                )}
               </p>
             )}
           </div>
         )}
 
         {isTender && item.project_address && <MapEmbed address={item.project_address} />}
+
+        {isTender && hasCoords && (
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExec((v) => !v)}
+              className="border-ember/50 text-ember hover:bg-ember/10"
+            >
+              <Play className="mr-1.5 h-3.5 w-3.5" />
+              Eksekusi
+            </Button>
+            {showExec && (
+              <div className="flex flex-wrap gap-2 rounded-lg border border-ember/30 bg-ember/5 p-3">
+                <p className="w-full text-xs text-muted-foreground">
+                  Kirim peta &amp; koordinat tender ini ke:
+                </p>
+                <Button size="sm" variant="secondary" onClick={() => execute("masterplan")}>
+                  Halaman Master Plan
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => execute("sketch")}>
+                  Halaman Sketsa
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
 
         <div className="flex items-center gap-2">
           <Button
