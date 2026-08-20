@@ -522,10 +522,13 @@ export const createPost = createServerFn({ method: "POST" })
         kind: data.kind,
         body: data.body?.trim() || null,
         image_url: data.image_url ?? null,
+        tender_title: data.tender_title?.trim() || null,
         tender_deadline: data.tender_deadline || null,
         tor_url: data.tor_url ?? null,
         data_link: data.data_link?.trim() || null,
         project_address: data.project_address?.trim() || null,
+        project_lat: data.project_lat ?? null,
+        project_lon: data.project_lon ?? null,
         repost_of_post: data.repost_of_post ?? null,
         repost_of_render: data.repost_of_render ?? null,
       })
