@@ -493,10 +493,13 @@ export const createPost = createServerFn({ method: "POST" })
         kind: z.enum(["post", "tender"]).default("post"),
         body: z.string().max(4000).nullable().optional(),
         image_url: z.string().max(400).nullable().optional(),
+        tender_title: z.string().max(200).nullable().optional(),
         tender_deadline: z.string().max(20).nullable().optional(),
         tor_url: z.string().max(400).nullable().optional(),
         data_link: z.string().max(600).nullable().optional(),
         project_address: z.string().max(400).nullable().optional(),
+        project_lat: z.number().min(-90).max(90).nullable().optional(),
+        project_lon: z.number().min(-180).max(180).nullable().optional(),
         repost_of_post: z.string().uuid().nullable().optional(),
         repost_of_render: z.string().uuid().nullable().optional(),
       })
