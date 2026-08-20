@@ -25,10 +25,13 @@ export type PostRow = {
   kind: string;
   body: string | null;
   image_url: string | null;
+  tender_title: string | null;
   tender_deadline: string | null;
   tor_url: string | null;
   data_link: string | null;
   project_address: string | null;
+  project_lat: number | null;
+  project_lon: number | null;
   repost_of_post: string | null;
   repost_of_render: string | null;
   created_at: string;
