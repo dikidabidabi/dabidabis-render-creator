@@ -58,10 +58,13 @@ export type FeedEntry = {
   like_count: number;
   liked_by_me: boolean;
   comment_count: number;
+  tender_title: string | null;
   tender_deadline: string | null;
   tor_url: string | null;
   data_link: string | null;
   project_address: string | null;
+  project_lat: number | null;
+  project_lon: number | null;
   repost: RepostRef;
 };
 
