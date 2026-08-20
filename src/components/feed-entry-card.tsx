@@ -1,6 +1,7 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import {
   CalendarClock,
   ExternalLink,
@@ -9,11 +10,13 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  Play,
   Repeat2,
   Trash2,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { setPendingTenderExec } from "@/lib/tender-exec";
 import type { FeedEntry } from "@/lib/social.functions";
 
 export function timeAgo(iso: string) {
