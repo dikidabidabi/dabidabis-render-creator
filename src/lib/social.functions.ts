@@ -655,10 +655,13 @@ export const getFeed = createServerFn({ method: "GET" })
           like_count: rowLikes.length,
           liked_by_me: rowLikes.some((l) => l.user_id === userId),
           comment_count: (comments ?? []).filter((c) => c.render_id === rid).length,
+          tender_title: null,
           tender_deadline: null,
           tor_url: null,
           data_link: null,
           project_address: null,
+          project_lat: null,
+          project_lon: null,
           repost: null as RepostRef,
         };
       }),
