@@ -509,6 +509,7 @@ export const createPost = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const hasContent =
       (data.body ?? "").trim().length > 0 ||
+      (data.tender_title ?? "").trim().length > 0 ||
       data.image_url ||
       data.repost_of_post ||
       data.repost_of_render;
