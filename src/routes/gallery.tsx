@@ -1169,6 +1169,15 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
 
       {mode === "tender" && (
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="tender-title">Judul tender</Label>
+            <Input
+              id="tender-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Sayembara Gedung Kesenian Kota…"
+            />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="deadline">Batas submit</Label>
             <Input
@@ -1187,14 +1196,44 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
               placeholder="https://…"
             />
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="addr">Alamat proyek (memunculkan peta)</Label>
+          <div className="relative space-y-1.5 sm:col-span-2">
+            <Label htmlFor="addr">Alamat proyek (memunculkan peta &amp; koordinat)</Label>
             <Input
               id="addr"
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                setCoords(null);
+              }}
               placeholder="Jl. Contoh No. 1, Jakarta"
+              autoComplete="off"
             />
+            {suggests.length > 0 && (
+              <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border/60 bg-background shadow-lg">
+                {suggests.map((h) => (
+                  <li key={`${h.lat},${h.lon},${h.display_name}`}>
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-xs hover:bg-ember/10"
+                      onClick={() => {
+                        setAddress(h.display_name);
+                        setCoords({ lat: Number(h.lat), lon: Number(h.lon) });
+                        setSuggests([]);
+                      }}
+                    >
+                      {h.display_name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {searching
+                ? "Mencari lokasi…"
+                : coords
+                  ? `Koordinat: ${coords.lat.toFixed(6)}, ${coords.lon.toFixed(6)}`
+                  : "Pilih salah satu sugesti alamat untuk mengambil koordinat."}
+            </p>
           </div>
         </div>
       )}
