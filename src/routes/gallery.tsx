@@ -50,6 +50,7 @@ import {
   type PostItem,
 } from "@/lib/social.functions";
 import { FeedEntryCard } from "@/components/feed-entry-card";
+import { nominatimSearch, type NominatimHit } from "@/lib/geo";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { z } from "zod";
