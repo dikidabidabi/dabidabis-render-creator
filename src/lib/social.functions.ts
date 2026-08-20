@@ -385,10 +385,13 @@ async function mapPosts(
         like_count: rowLikes.length,
         liked_by_me: rowLikes.some((l) => l["user_id"] === userId),
         comment_count: (comments ?? []).filter((c) => c["post_id"] === r.id).length,
+        tender_title: r.tender_title ?? null,
         tender_deadline: r.tender_deadline,
         tor_url: await signPostFile(supabase, r.tor_url),
         data_link: r.data_link,
         project_address: r.project_address,
+        project_lat: r.project_lat ?? null,
+        project_lon: r.project_lon ?? null,
         repost,
         is_mine: r.user_id === userId,
       };
