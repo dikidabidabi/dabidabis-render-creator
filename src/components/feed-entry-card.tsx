@@ -64,7 +64,30 @@ export function FeedEntryCard({
   children?: React.ReactNode;
 }) {
   const [showComments, setShowComments] = useState(false);
+  const [showExec, setShowExec] = useState(false);
+  const navigate = useNavigate();
   const isTender = item.kind === "tender";
+  const hasCoords =
+    Number.isFinite(Number(item.project_lat)) && Number.isFinite(Number(item.project_lon));
+
+  const execute = (target: "sketch" | "masterplan") => {
+    if (!hasCoords) {
+      toast.error("Tender ini belum punya koordinat alamat proyek.");
+      return;
+    }
+    setPendingTenderExec({
+      target,
+      title: (item.tender_title || item.body || "Tender").slice(0, 80),
+      lat: Number(item.project_lat),
+      lon: Number(item.project_lon),
+      label: item.project_address ?? "",
+    });
+    setShowExec(false);
+    toast.success(
+      target === "masterplan" ? "Peta dikirim ke Master Plan" : "Peta dikirim ke Sketsa",
+    );
+    void navigate({ to: target === "masterplan" ? "/masterplan" : "/sketch" });
+  };
 
   return (
     <motion.article
