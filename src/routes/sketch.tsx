@@ -89,6 +89,7 @@ import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlock
 import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
+import { takePendingTenderExec } from "@/lib/tender-exec";
 import {
   type StructuralGrid,
   DEFAULT_GRID,
