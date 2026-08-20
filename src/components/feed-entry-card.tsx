@@ -155,6 +155,11 @@ export function FeedEntryCard({
       )}
 
       <div className="space-y-3 p-4">
+        {isTender && item.tender_title && (
+          <h3 className="font-display text-base font-semibold tracking-tight">
+            {item.tender_title}
+          </h3>
+        )}
         {item.body && <p className="whitespace-pre-wrap text-sm text-foreground/85">{item.body}</p>}
 
         {item.repost && (
