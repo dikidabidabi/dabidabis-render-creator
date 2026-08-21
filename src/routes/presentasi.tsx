@@ -844,22 +844,39 @@ function PresentasiBox({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface/60 shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{effectiveSketch.title}</div>
-            <div className="truncate text-xs text-muted-foreground">
-              {slides.length} slide · {effectiveSketch.levels.length} level · A3 lanskap
+      <div className="flex w-full items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{effectiveSketch.title}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {slides.length} slide · {effectiveSketch.levels.length} level · A3 lanskap
+              </div>
             </div>
           </div>
-        </div>
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-      </button>
+          {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {!hideShare && (
+          <SharePresentationDialog
+            title={effectiveSketch.title || "Presentasi"}
+            buildPayload={() => ({
+              version: 1,
+              sketch: effectiveSketch,
+              narasi,
+              perspektif,
+              moodboard,
+              plan: masterPlan,
+              analysis: mpAnalysis,
+            })}
+          />
+        )}
+      </div>
+
 
       {open && (
         <div className="border-t border-border p-4">
