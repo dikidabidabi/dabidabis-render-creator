@@ -23,6 +23,9 @@ import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SharePresentationDialog } from "@/components/share-presentation-dialog";
+import { Link } from "@tanstack/react-router";
+
 import SunCalc from "suncalc";
 import * as THREE from "three";
 import { drawOsmTiles } from "@/lib/geo";
