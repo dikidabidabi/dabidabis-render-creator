@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LogoDabidabi } from "@/components/logo";
 import { ProjectHydrationGate } from "@/components/project-hydration-gate";
+import { PrivateRouteGate } from "@/components/private-route-gate";
 
 import appCss from "../styles.css?url";
 
@@ -188,7 +189,9 @@ function RootComponent() {
       <ProjectHydrationGate>
         <div className="grain min-h-screen">
           <Header />
-          <Outlet />
+          <PrivateRouteGate>
+            <Outlet />
+          </PrivateRouteGate>
           <Toaster theme="light" position="top-center" richColors />
         </div>
       </ProjectHydrationGate>
