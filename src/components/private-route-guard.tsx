@@ -13,6 +13,7 @@ const PRIVATE_PREFIXES = [
   "/tabulasi",
   "/narasi",
   "/presentasi",
+  "/presentasi-kiriman",
   "/model3d",
   "/akun",
 ];
