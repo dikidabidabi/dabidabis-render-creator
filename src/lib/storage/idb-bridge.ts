@@ -226,9 +226,62 @@ function patchLocalStorage() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// One-time repair: karya milik akun dikidabidabi@gmail.com sempat teradopsi ke
+// akun azizahsinyo02@gmail.com saat migrasi multi-akun (klaim data legacy jatuh
+// ke akun yang login lebih dulu). Pindahkan kembali ke pemilik aslinya.
+const RECLAIM_OWNER = "68a21707-5f16-4f39-95f0-820481de3946"; // dikidabidabi@gmail.com
+const RECLAIM_FROM = ["9965c9d5-d79c-4018-8e94-0ca4b0d5a9b6"]; // azizahsinyo02@gmail.com
+const RECLAIM_FLAG = "__dabidabis_reclaim_v1__";
+
+async function reclaimMisattributed(owner: string, db: LocalForage) {
+  if (owner !== RECLAIM_OWNER) return;
+  try {
+    if (localStorage.getItem(RECLAIM_FLAG) === "1") return;
+  } catch {
+    /* ignore */
+  }
+
+  for (const wrongOwner of RECLAIM_FROM) {
+    const wrong = instanceFor(storeNameFor(wrongOwner));
+    const entries: Record<string, string> = {};
+    try {
+      await wrong.iterate<string, void>((value, key) => {
+        if (typeof key === "string" && key.startsWith(PREFIX) && typeof value === "string") {
+          entries[key] = value;
+        }
+      });
+    } catch {
+      continue;
+    }
+    if (Object.keys(entries).length === 0) continue;
+
+    for (const [k, v] of Object.entries(entries)) {
+      try {
+        await db.setItem(k, v);
+      } catch {
+        /* ignore individual key errors */
+      }
+    }
+    try {
+      await wrong.clear();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  try {
+    localStorage.setItem(RECLAIM_FLAG, "1");
+    localStorage.setItem(LEGACY_CLAIM_KEY, owner);
+  } catch {
+    /* ignore */
+  }
+}
+
 // One-time adoption of pre-multi-account data: the very first signed-in
 // account on this browser inherits the legacy store; nobody else does.
 async function adoptLegacyIfEligible(owner: string, db: LocalForage) {
+
   if (owner === GUEST_OWNER) return;
   let claimed: string | null = null;
   try {
@@ -286,10 +339,12 @@ export function hydrateFromIndexedDB(owner: string = GUEST_OWNER): Promise<void>
     currentOwner = owner;
 
     const db = getStore();
+    await reclaimMisattributed(owner, db);
     const idbKeys: string[] = [];
     await db.iterate<string, void>((_value, key) => {
       if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
     });
+
 
     if (idbKeys.length === 0) {
       await adoptLegacyIfEligible(owner, db);
