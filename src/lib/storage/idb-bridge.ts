@@ -3,30 +3,32 @@
 // All existing page components keep reading/writing `localStorage` with the
 // `dabidabis_*` prefix. This module makes IndexedDB the durable source of
 // truth so we are immune to localStorage's ~5MB quota and to component
-// unmounting:
+// unmounting.
 //
-//   1. On boot we copy every `dabidabis_*` entry from IndexedDB into
-//      localStorage synchronously after an async load, then resolve the
-//      hydration promise. The UI is gated behind this promise so pages only
-//      mount once the full project is available in memory.
-//   2. We monkey-patch `localStorage.setItem` / `removeItem` so every write
-//      to a `dabidabis_*` key is mirrored to IndexedDB with a 1s debounce.
-//      No page-level refactor is required: drawing a line, typing in
-//      narasi, or editing tabulasi all auto-save universally.
-//   3. Reads stay synchronous because the in-memory localStorage cache is
-//      already pre-populated.
+// IMPORTANT — PRIVACY / OWNERSHIP:
+// Project data is scoped per account. Each signed-in user gets its own
+// IndexedDB object store (`project_<userId>`), and switching accounts wipes
+// the shared localStorage cache before hydrating the new owner's data. That
+// guarantees karya (sketsa, masterplan, tabulasi, narasi, presentasi, model
+// 3D, rumus) never leak between accounts on the same browser, and that all
+// pages inside one account stay consistently linked to each other.
 //
-// IndexedDB layout: one entry per `dabidabis_*` key in a single object store
-// managed by localforage. This keeps individual values small and avoids
-// rewriting one giant blob on every keystroke.
+// IndexedDB layout: one entry per `dabidabis_*` key per owner store. This
+// keeps individual values small and avoids rewriting one giant blob on every
+// keystroke.
 
 import localforage from "localforage";
 
 const PREFIX = "dabidabis_";
 const HYDRATE_FLAG = "__dabidabis_hydrated__";
+const LEGACY_STORE = "project_v1";
+const LEGACY_CLAIM_KEY = "__dabidabis_legacy_owner__";
 
-let store: LocalForage | null = null;
-let hydratePromise: Promise<void> | null = null;
+export const GUEST_OWNER = "guest";
+
+const stores = new Map<string, LocalForage>();
+let currentOwner: string | null = null;
+const hydratePromises = new Map<string, Promise<void>>();
 let patched = false;
 const debounceTimers = new Map<string, number>();
 const memoryCache = new Map<string, string>();
@@ -41,14 +43,28 @@ function isQuotaError(error: unknown): boolean {
   );
 }
 
-function getStore(): LocalForage {
-  if (store) return store;
-  store = localforage.createInstance({
+function storeNameFor(owner: string): string {
+  return owner === GUEST_OWNER ? "project_guest" : `project_${owner}`;
+}
+
+function instanceFor(storeName: string): LocalForage {
+  const existing = stores.get(storeName);
+  if (existing) return existing;
+  const inst = localforage.createInstance({
     name: "dabidabis",
-    storeName: "project_v1",
-    description: "Dabidabi's universal project state",
+    storeName,
+    description: "Dabidabi's project state",
   });
-  return store;
+  stores.set(storeName, inst);
+  return inst;
+}
+
+function getStore(): LocalForage {
+  return instanceFor(storeNameFor(currentOwner ?? GUEST_OWNER));
+}
+
+export function getStorageOwner(): string | null {
+  return currentOwner;
 }
 
 function scheduleWrite(key: string, value: string | null) {
@@ -85,6 +101,52 @@ function flushPending(): Promise<void> {
   }
   debounceTimers.clear();
   return Promise.all(tasks).then(() => void 0);
+}
+
+function rawStorage(): Storage {
+  return Object.getPrototypeOf(localStorage) as Storage;
+}
+
+function rawSet(key: string, value: string) {
+  const proto = rawStorage();
+  try {
+    proto.setItem.call(localStorage, key, value);
+  } catch (e) {
+    if (!isQuotaError(e)) throw e;
+    try {
+      proto.removeItem.call(localStorage, key);
+    } catch {
+      /* ignore cache cleanup */
+    }
+  }
+}
+
+function projectKeysInLocalStorage(): string[] {
+  const proto = rawStorage();
+  const lengthGetter = Object.getOwnPropertyDescriptor(proto, "length")?.get;
+  const len = lengthGetter?.call(localStorage) ?? 0;
+  const keys: string[] = [];
+  for (let i = 0; i < len; i++) {
+    const k = proto.key.call(localStorage, i);
+    if (k && k.startsWith(PREFIX)) keys.push(k);
+  }
+  return keys;
+}
+
+// Drops the in-memory + localStorage caches without touching IndexedDB, so a
+// different account never sees the previous account's karya.
+function dropCaches() {
+  for (const t of debounceTimers.values()) window.clearTimeout(t);
+  debounceTimers.clear();
+  memoryCache.clear();
+  const proto = rawStorage();
+  for (const k of projectKeysInLocalStorage()) {
+    try {
+      proto.removeItem.call(localStorage, k);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function patchLocalStorage() {
@@ -164,53 +226,87 @@ function patchLocalStorage() {
   });
 }
 
-export function hydrateFromIndexedDB(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (hydratePromise) return hydratePromise;
+// One-time adoption of pre-multi-account data: the very first signed-in
+// account on this browser inherits the legacy store; nobody else does.
+async function adoptLegacyIfEligible(owner: string, db: LocalForage) {
+  if (owner === GUEST_OWNER) return;
+  let claimed: string | null = null;
+  try {
+    claimed = localStorage.getItem(LEGACY_CLAIM_KEY);
+  } catch {
+    /* ignore */
+  }
+  if (claimed && claimed !== owner) return;
 
-  hydratePromise = (async () => {
+  const legacy = instanceFor(LEGACY_STORE);
+  const entries: Record<string, string> = {};
+  try {
+    await legacy.iterate<string, void>((value, key) => {
+      if (typeof key === "string" && key.startsWith(PREFIX) && typeof value === "string") {
+        entries[key] = value;
+      }
+    });
+  } catch {
+    return;
+  }
+  if (Object.keys(entries).length === 0) {
+    // Nothing in the legacy IDB store, but the browser may still hold the
+    // pre-migration localStorage copy.
+    for (const k of projectKeysInLocalStorage()) {
+      const v = rawStorage().getItem.call(localStorage, k);
+      if (v != null) entries[k] = v;
+    }
+  }
+  if (Object.keys(entries).length === 0) return;
+
+  for (const [k, v] of Object.entries(entries)) await db.setItem(k, v);
+  try {
+    localStorage.setItem(LEGACY_CLAIM_KEY, owner);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function hydrateFromIndexedDB(owner: string = GUEST_OWNER): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const existing = hydratePromises.get(owner);
+  if (existing && currentOwner === owner) return existing;
+
+  const promise = (async () => {
+    // Switching account: persist whatever is pending for the previous owner,
+    // then wipe caches so no karya crosses over.
+    if (currentOwner !== null && currentOwner !== owner) {
+      try {
+        await flushPending();
+      } catch {
+        /* ignore */
+      }
+    }
+    dropCaches();
+    currentOwner = owner;
+
     const db = getStore();
     const idbKeys: string[] = [];
     await db.iterate<string, void>((_value, key) => {
       if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
     });
 
-    // First-run migration: if IndexedDB is empty but localStorage already
-    // holds project data, seed IndexedDB from it.
     if (idbKeys.length === 0) {
-      const lsKeys: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith(PREFIX)) lsKeys.push(k);
-      }
-      for (const k of lsKeys) {
-        const v = localStorage.getItem(k);
-        if (v != null) await db.setItem(k, v);
-      }
-    } else {
-      // Re-hydrate localStorage cache from IndexedDB (source of truth).
-      for (const k of idbKeys) {
-        try {
-          const v = await db.getItem<string>(k);
-          if (typeof v === "string") {
-            memoryCache.set(k, v);
-            // bypass patched setItem to avoid scheduling a redundant write;
-            // large values may intentionally live only in memory + IndexedDB.
-            const proto = Object.getPrototypeOf(localStorage) as Storage;
-            try {
-              proto.setItem.call(localStorage, k, v);
-            } catch (e) {
-              if (!isQuotaError(e)) throw e;
-              try {
-                proto.removeItem.call(localStorage, k);
-              } catch {
-                /* ignore cache cleanup */
-              }
-            }
-          }
-        } catch {
-          /* ignore individual key errors */
+      await adoptLegacyIfEligible(owner, db);
+      await db.iterate<string, void>((_value, key) => {
+        if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
+      });
+    }
+
+    for (const k of idbKeys) {
+      try {
+        const v = await db.getItem<string>(k);
+        if (typeof v === "string") {
+          memoryCache.set(k, v);
+          rawSet(k, v);
         }
+      } catch {
+        /* ignore individual key errors */
       }
     }
 
@@ -222,7 +318,8 @@ export function hydrateFromIndexedDB(): Promise<void> {
     }
   })();
 
-  return hydratePromise;
+  hydratePromises.set(owner, promise);
+  return promise;
 }
 
 export async function flushIndexedDB(): Promise<void> {
@@ -236,34 +333,14 @@ export async function setProjectItem(key: string, value: string): Promise<void> 
   }
   memoryCache.set(key, value);
   await writeNow(key, value);
-  try {
-    const proto = Object.getPrototypeOf(localStorage) as Storage;
-    proto.setItem.call(localStorage, key, value);
-  } catch (e) {
-    if (!isQuotaError(e)) throw e;
-    const proto = Object.getPrototypeOf(localStorage) as Storage;
-    try {
-      proto.removeItem.call(localStorage, key);
-    } catch {
-      /* ignore cache cleanup */
-    }
-  }
+  rawSet(key, value);
 }
 
 export async function clearProjectStorage(): Promise<void> {
   await flushPending();
   const db = getStore();
   await db.clear();
-  memoryCache.clear();
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith(PREFIX)) keys.push(k);
-  }
-  for (const k of keys) {
-    const proto = Object.getPrototypeOf(localStorage) as Storage;
-    proto.removeItem.call(localStorage, k);
-  }
+  dropCaches();
 }
 
 export async function snapshotIndexedDB(): Promise<Record<string, string>> {
@@ -285,12 +362,6 @@ export async function bulkWriteIndexedDB(entries: Record<string, string>): Promi
     if (!k.startsWith(PREFIX)) continue;
     await db.setItem(k, v);
     memoryCache.set(k, v);
-    const proto = Object.getPrototypeOf(localStorage) as Storage;
-    try {
-      proto.setItem.call(localStorage, k, v);
-    } catch (e) {
-      if (!isQuotaError(e)) throw e;
-      proto.removeItem.call(localStorage, k);
-    }
+    rawSet(k, v);
   }
 }
