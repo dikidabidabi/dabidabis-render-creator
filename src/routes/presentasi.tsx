@@ -550,12 +550,21 @@ function PresentasiPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <PrintStyles />
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Presentasi</h1>
-        <p className="text-sm text-muted-foreground">
-          Slide A3 lanskap putih, modern dan siap cetak. Tersinkron otomatis dengan Sketsa & Tabulasi.
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Presentasi</h1>
+          <p className="text-sm text-muted-foreground">
+            Slide A3 lanskap putih, modern dan siap cetak. Tersinkron otomatis dengan Sketsa & Tabulasi.
+          </p>
+        </div>
+        <Link
+          to="/presentasi-kiriman"
+          className="rounded-md border border-border bg-background/60 px-3 py-2 text-xs font-medium hover:border-primary hover:text-primary"
+        >
+          Presentasi Kiriman
+        </Link>
       </div>
+
 
       {loaded && sketches.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-surface/40 p-10 text-center">
