@@ -339,10 +339,12 @@ export function hydrateFromIndexedDB(owner: string = GUEST_OWNER): Promise<void>
     currentOwner = owner;
 
     const db = getStore();
+    await reclaimMisattributed(owner, db);
     const idbKeys: string[] = [];
     await db.iterate<string, void>((_value, key) => {
       if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
     });
+
 
     if (idbKeys.length === 0) {
       await adoptLegacyIfEligible(owner, db);
