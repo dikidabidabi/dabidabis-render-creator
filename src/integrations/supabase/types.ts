@@ -325,6 +325,33 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_presentations: {
+        Row: {
+          created_at: string
+          from_user: string
+          id: string
+          payload: Json
+          title: string
+          to_user: string
+        }
+        Insert: {
+          created_at?: string
+          from_user: string
+          id?: string
+          payload?: Json
+          title: string
+          to_user: string
+        }
+        Update: {
+          created_at?: string
+          from_user?: string
+          id?: string
+          payload?: Json
+          title?: string
+          to_user?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
