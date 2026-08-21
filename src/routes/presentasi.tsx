@@ -593,7 +593,7 @@ function PresentasiPage() {
   );
 }
 
-function PrintStyles() {
+export function PrintStyles() {
   // Print rules: A3 landscape, no margins, render only the active print container.
   return (
     <style>{`
