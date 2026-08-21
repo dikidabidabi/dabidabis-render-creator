@@ -23,6 +23,9 @@ import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SharePresentationDialog } from "@/components/share-presentation-dialog";
+import { Link } from "@tanstack/react-router";
+
 import SunCalc from "suncalc";
 import * as THREE from "three";
 import { drawOsmTiles } from "@/lib/geo";
@@ -547,12 +550,21 @@ function PresentasiPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
       <PrintStyles />
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Presentasi</h1>
-        <p className="text-sm text-muted-foreground">
-          Slide A3 lanskap putih, modern dan siap cetak. Tersinkron otomatis dengan Sketsa & Tabulasi.
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Presentasi</h1>
+          <p className="text-sm text-muted-foreground">
+            Slide A3 lanskap putih, modern dan siap cetak. Tersinkron otomatis dengan Sketsa & Tabulasi.
+          </p>
+        </div>
+        <Link
+          to="/presentasi-kiriman"
+          className="rounded-md border border-border bg-background/60 px-3 py-2 text-xs font-medium hover:border-primary hover:text-primary"
+        >
+          Presentasi Kiriman
+        </Link>
       </div>
+
 
       {loaded && sketches.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-surface/40 p-10 text-center">
@@ -581,7 +593,7 @@ function PresentasiPage() {
   );
 }
 
-function PrintStyles() {
+export function PrintStyles() {
   // Print rules: A3 landscape, no margins, render only the active print container.
   return (
     <style>{`
@@ -606,12 +618,22 @@ function PrintStyles() {
 }
 
 // ---------- Sketch Box ----------
-function PresentasiBox({
-  sketch, narasi, perspektif, moodboard, open, onToggle,
-}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null; open: boolean; onToggle: () => void }) {
-  const [masterPlan, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
-  const [mpAnalysis, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
+export function PresentasiBox({
+  sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
+}: {
+  sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
+  open: boolean; onToggle: () => void;
+  hideShare?: boolean;
+  planOverride?: import("@/lib/masterplan").MasterPlan | null;
+  analysisOverride?: MasterplanAnalysis | null;
+}) {
+  const external = planOverride !== undefined || analysisOverride !== undefined;
+  const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
+  const [mpAnalysisLocal, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
+  const masterPlan = external ? (planOverride ?? null) : masterPlanLocal;
+  const mpAnalysis = external ? (analysisOverride ?? null) : mpAnalysisLocal;
   useEffect(() => {
+    if (external) return;
     let mounted = true;
     const rootId = sketch.linkedMasterplan?.rootLayerId;
     const refreshAnalysis = () => setMpAnalysis(loadMasterplanAnalysis(rootId));
@@ -628,7 +650,8 @@ function PresentasiBox({
       };
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
-  }, [sketch.linkedMasterplan?.rootLayerId]);
+  }, [sketch.linkedMasterplan?.rootLayerId, external]);
+
   // Nama bangunan pada masterplan yang terhubung dengan sketsa ini.
   // Dipakai untuk sinkron judul di halaman Presentasi ↔ Sketsa ↔ Masterplan
   // (tanpa crossing: satu bangunan → satu judul).
@@ -844,22 +867,39 @@ function PresentasiBox({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface/60 shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium">{effectiveSketch.title}</div>
-            <div className="truncate text-xs text-muted-foreground">
-              {slides.length} slide · {effectiveSketch.levels.length} level · A3 lanskap
+      <div className="flex w-full items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{effectiveSketch.title}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {slides.length} slide · {effectiveSketch.levels.length} level · A3 lanskap
+              </div>
             </div>
           </div>
-        </div>
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-      </button>
+          {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {!hideShare && (
+          <SharePresentationDialog
+            title={effectiveSketch.title || "Presentasi"}
+            buildPayload={() => ({
+              version: 1,
+              sketch: effectiveSketch,
+              narasi,
+              perspektif,
+              moodboard,
+              plan: masterPlan,
+              analysis: mpAnalysis,
+            })}
+          />
+        )}
+      </div>
+
 
       {open && (
         <div className="border-t border-border p-4">
