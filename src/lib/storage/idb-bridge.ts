@@ -24,12 +24,7 @@ import localforage from "localforage";
 
 const PREFIX = "dabidabis_";
 const HYDRATE_FLAG = "__dabidabis_hydrated__";
-const LEGACY_STORE = "project_v1";
-const LEGACY_CLAIM_KEY = "__dabidabis_legacy_owner__";
 
-// Data proyek diisolasi per akun: satu object store per user id sehingga akun
-// lain di perangkat yang sama tidak dapat membaca karya pemilik akun.
-let ownerId: string | null = null;
 let store: LocalForage | null = null;
 let hydratePromise: Promise<void> | null = null;
 let patched = false;
@@ -46,92 +41,11 @@ function isQuotaError(error: unknown): boolean {
   );
 }
 
-function storeNameFor(owner: string | null): string {
-  return owner ? `project_u_${owner.replace(/[^a-zA-Z0-9]/g, "")}` : "project_guest";
-}
-
-function rawRemoveLocal(key: string) {
-  const proto = Object.getPrototypeOf(localStorage) as Storage;
-  try {
-    proto.removeItem.call(localStorage, key);
-  } catch {
-    /* ignore */
-  }
-}
-
-function wipeLocalCache() {
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith(PREFIX)) keys.push(k);
-  }
-  memoryCache.clear();
-  keys.forEach(rawRemoveLocal);
-}
-
-// Dipanggil saat status login berubah. Mengosongkan cache lokal milik akun
-// sebelumnya lalu menyiapkan store milik akun aktif.
-export async function setStorageOwner(nextOwner: string | null): Promise<boolean> {
-  if (typeof window === "undefined") return false;
-  if (ownerId === nextOwner && hydratePromise) return false;
-  if (hydratePromise) {
-    try {
-      await flushPending();
-    } catch {
-      /* ignore */
-    }
-  }
-  for (const t of debounceTimers.values()) window.clearTimeout(t);
-  debounceTimers.clear();
-  wipeLocalCache();
-  ownerId = nextOwner;
-  store = null;
-  hydratePromise = null;
-  return true;
-}
-
-// Data lama (sebelum isolasi per akun) diklaim satu kali oleh akun pertama
-// yang login di perangkat ini.
-async function migrateLegacyStore(db: LocalForage): Promise<void> {
-  if (!ownerId) return;
-  let claimed: string | null = null;
-  try {
-    claimed = localStorage.getItem(LEGACY_CLAIM_KEY);
-  } catch {
-    return;
-  }
-  if (claimed && claimed !== ownerId) return;
-  const legacy = localforage.createInstance({ name: "dabidabis", storeName: LEGACY_STORE });
-  const entries: Record<string, string> = {};
-  try {
-    await legacy.iterate<string, void>((value, key) => {
-      if (typeof key === "string" && key.startsWith(PREFIX) && typeof value === "string") {
-        entries[key] = value;
-      }
-    });
-  } catch {
-    return;
-  }
-  if (Object.keys(entries).length === 0) return;
-  for (const [k, v] of Object.entries(entries)) {
-    try {
-      await db.setItem(k, v);
-    } catch {
-      /* ignore */
-    }
-  }
-  try {
-    localStorage.setItem(LEGACY_CLAIM_KEY, ownerId);
-  } catch {
-    /* ignore */
-  }
-}
-
 function getStore(): LocalForage {
   if (store) return store;
   store = localforage.createInstance({
     name: "dabidabis",
-    storeName: storeNameFor(ownerId),
+    storeName: "project_v1",
     description: "Dabidabi's universal project state",
   });
   return store;
@@ -256,7 +170,6 @@ export function hydrateFromIndexedDB(): Promise<void> {
 
   hydratePromise = (async () => {
     const db = getStore();
-    await migrateLegacyStore(db);
     const idbKeys: string[] = [];
     await db.iterate<string, void>((_value, key) => {
       if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
@@ -265,8 +178,6 @@ export function hydrateFromIndexedDB(): Promise<void> {
     // First-run migration: if IndexedDB is empty but localStorage already
     // holds project data, seed IndexedDB from it.
     if (idbKeys.length === 0) {
-      // Tidak ada data akun ini: pastikan cache lokal bersih dari akun lain.
-      wipeLocalCache();
       const lsKeys: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);

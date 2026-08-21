@@ -1,18 +1,15 @@
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useProjectStore } from "@/store/project-store";
-import { useAuth } from "@/lib/auth";
 
 export function ProjectHydrationGate({ children }: { children: React.ReactNode }) {
   const hydrated = useProjectStore((s) => s.hydrated);
   const hydrate = useProjectStore((s) => s.hydrate);
   const error = useProjectStore((s) => s.error);
-  const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (loading) return;
-    void hydrate(user?.id ?? null);
-  }, [hydrate, loading, user?.id]);
+    void hydrate();
+  }, [hydrate]);
 
   if (!hydrated) {
     return (
