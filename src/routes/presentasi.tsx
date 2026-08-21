@@ -606,12 +606,22 @@ function PrintStyles() {
 }
 
 // ---------- Sketch Box ----------
-function PresentasiBox({
-  sketch, narasi, perspektif, moodboard, open, onToggle,
-}: { sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null; open: boolean; onToggle: () => void }) {
-  const [masterPlan, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
-  const [mpAnalysis, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
+export function PresentasiBox({
+  sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
+}: {
+  sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
+  open: boolean; onToggle: () => void;
+  hideShare?: boolean;
+  planOverride?: import("@/lib/masterplan").MasterPlan | null;
+  analysisOverride?: MasterplanAnalysis | null;
+}) {
+  const external = planOverride !== undefined || analysisOverride !== undefined;
+  const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
+  const [mpAnalysisLocal, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
+  const masterPlan = external ? (planOverride ?? null) : masterPlanLocal;
+  const mpAnalysis = external ? (analysisOverride ?? null) : mpAnalysisLocal;
   useEffect(() => {
+    if (external) return;
     let mounted = true;
     const rootId = sketch.linkedMasterplan?.rootLayerId;
     const refreshAnalysis = () => setMpAnalysis(loadMasterplanAnalysis(rootId));
@@ -628,7 +638,8 @@ function PresentasiBox({
       };
     });
     return () => { mounted = false; (window as any).__mpCleanup?.(); };
-  }, [sketch.linkedMasterplan?.rootLayerId]);
+  }, [sketch.linkedMasterplan?.rootLayerId, external]);
+
   // Nama bangunan pada masterplan yang terhubung dengan sketsa ini.
   // Dipakai untuk sinkron judul di halaman Presentasi ↔ Sketsa ↔ Masterplan
   // (tanpa crossing: satu bangunan → satu judul).
