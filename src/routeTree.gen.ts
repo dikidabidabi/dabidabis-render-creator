@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as ProjectRouteImport } from './routes/project'
+import { Route as PresentasiKirimanRouteImport } from './routes/presentasi-kiriman'
 import { Route as PresentasiRouteImport } from './routes/presentasi'
 import { Route as NarasiRouteImport } from './routes/narasi'
 import { Route as Model3dRouteImport } from './routes/model3d'
@@ -37,6 +38,11 @@ const SketchRoute = SketchRouteImport.update({
 const ProjectRoute = ProjectRouteImport.update({
   id: '/project',
   path: '/project',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PresentasiKirimanRoute = PresentasiKirimanRouteImport.update({
+  id: '/presentasi-kiriman',
+  path: '/presentasi-kiriman',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PresentasiRoute = PresentasiRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
+  '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
+  '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/model3d': typeof Model3dRoute
   '/narasi': typeof NarasiRoute
   '/presentasi': typeof PresentasiRoute
+  '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio': typeof StudioRoute
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/model3d'
     | '/narasi'
     | '/presentasi'
+    | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
     | '/studio'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/model3d'
     | '/narasi'
     | '/presentasi'
+    | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
     | '/studio'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/model3d'
     | '/narasi'
     | '/presentasi'
+    | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
     | '/studio'
@@ -205,6 +217,7 @@ export interface RootRouteChildren {
   Model3dRoute: typeof Model3dRoute
   NarasiRoute: typeof NarasiRoute
   PresentasiRoute: typeof PresentasiRoute
+  PresentasiKirimanRoute: typeof PresentasiKirimanRoute
   ProjectRoute: typeof ProjectRoute
   SketchRoute: typeof SketchRoute
   StudioRoute: typeof StudioRoute
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/project'
       fullPath: '/project'
       preLoaderRoute: typeof ProjectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/presentasi-kiriman': {
+      id: '/presentasi-kiriman'
+      path: '/presentasi-kiriman'
+      fullPath: '/presentasi-kiriman'
+      preLoaderRoute: typeof PresentasiKirimanRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/presentasi': {
@@ -325,6 +345,7 @@ const rootRouteChildren: RootRouteChildren = {
   Model3dRoute: Model3dRoute,
   NarasiRoute: NarasiRoute,
   PresentasiRoute: PresentasiRoute,
+  PresentasiKirimanRoute: PresentasiKirimanRoute,
   ProjectRoute: ProjectRoute,
   SketchRoute: SketchRoute,
   StudioRoute: StudioRoute,
