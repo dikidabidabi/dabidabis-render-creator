@@ -6136,8 +6136,13 @@ function AxonometricView({
     depth: number;
     sw: number;
     kind: "base" | "top" | "side";
+    // Urutan tumpuk (painter): elevasi dasar elemen, lalu sub-order
+    // (0 = slab lantai, 1 = dinding/massa di atas slab tsb).
+    elev: number;
+    sub: number;
   };
   const faces: Face[] = [];
+
 
   const groundLevel = findMdplZeroLevel(ascLevels) ?? ascLevels[0];
   const groundLevelId = groundLevel?.id;
