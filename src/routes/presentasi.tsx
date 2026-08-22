@@ -8991,6 +8991,34 @@ function outwardNormal(a: Point, b: Point, ccw: boolean): { x: number; y: number
   const L = Math.hypot(nx, ny) || 1;
   return { x: (sign * nx) / L, y: (sign * ny) / L };
 }
+// Jarak titik ke segmen (koordinat sketsa).
+function ptSegDist(p: Point, a: Point, b: Point): number {
+  const vx = b.x - a.x, vy = b.y - a.y;
+  const len2 = vx * vx + vy * vy;
+  if (len2 <= 1e-9) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
+}
+// Apakah sisi (a,b) berada di perimeter luar lantai? Dipakai agar zonasi fasad /
+// perhitungan WWR hanya menghitung dinding di tepi luar lantai, bukan dinding
+// partisi di tengah bangunan.
+function isPerimeterEdge(a: Point, b: Point, perims: Point[][], tol: number): boolean {
+  if (!perims.length) return true; // tanpa data lantai → anggap semua sisi perimeter
+  const samples: Point[] = [
+    { x: a.x + (b.x - a.x) * 0.25, y: a.y + (b.y - a.y) * 0.25 },
+    { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+    { x: a.x + (b.x - a.x) * 0.75, y: a.y + (b.y - a.y) * 0.75 },
+  ];
+  return samples.every((s) => {
+    for (const poly of perims) {
+      for (let i = 0; i < poly.length; i++) {
+        if (ptSegDist(s, poly[i], poly[(i + 1) % poly.length], ) <= tol) return true;
+      }
+    }
+    return false;
+  });
+}
 // Bearing kompas (0=Utara, CW) dari vektor sketsa diberi northDeg (mapRotation).
 function bearingFromSketchVec(vx: number, vy: number, northDeg: number): number {
   // Sudut vektor dari sketsa-atas, CW: atan2(vx, -vy)
