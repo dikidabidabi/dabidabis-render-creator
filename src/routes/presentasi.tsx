@@ -9020,13 +9020,17 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
   const cy = (bounds.minY + bounds.maxY) / 2;
   const cos30 = Math.cos(Math.PI / 6);
   const sin30 = Math.sin(Math.PI / 6);
-  // zScale: tinggi (m) → px sketsa; gunakan pxPerM langsung agar konsisten skala.
+  // Orientasi identik dengan slide Stacking Diagram: sumbu sketsa dibalik
+  // (x→-x, y→-z) sebelum diproyeksikan isometrik, sehingga arah pandang sama.
   const project = (x: number, y: number, zMeters: number) => {
-    const dx = x - cx;
-    const dy = y - cy;
+    const dx = -(x - cx);
+    const dy = -(y - cy);
     const zPx = zMeters * pxPerM;
     return { x: (dx - dy) * cos30, y: (dx + dy) * sin30 - zPx };
   };
+  // Depth kamera pada orientasi terbalik.
+  const depthAt = (px: number, py: number) => -((px - cx) + (py - cy));
+
 
   // Kumpulkan semua bidang, lalu render atap sebelum dinding agar sisi yang menghadap kamera tetap terlihat penuh.
   type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall"; dir?: FacadeDir; elev: number; sub: number };
