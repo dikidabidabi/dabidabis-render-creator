@@ -7629,7 +7629,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
           project(a.x, a.z, topY),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + baseY * 0.01;
-        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side", elev: yBot, sub: 1 });
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
       }
       const topPts = pm.map((p) => project(p.x, p.z, topY));
       const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
