@@ -9020,13 +9020,17 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
   const cy = (bounds.minY + bounds.maxY) / 2;
   const cos30 = Math.cos(Math.PI / 6);
   const sin30 = Math.sin(Math.PI / 6);
-  // zScale: tinggi (m) → px sketsa; gunakan pxPerM langsung agar konsisten skala.
+  // Orientasi identik dengan slide Stacking Diagram: sumbu sketsa dibalik
+  // (x→-x, y→-z) sebelum diproyeksikan isometrik, sehingga arah pandang sama.
   const project = (x: number, y: number, zMeters: number) => {
-    const dx = x - cx;
-    const dy = y - cy;
+    const dx = -(x - cx);
+    const dy = -(y - cy);
     const zPx = zMeters * pxPerM;
     return { x: (dx - dy) * cos30, y: (dx + dy) * sin30 - zPx };
   };
+  // Depth kamera pada orientasi terbalik.
+  const depthAt = (px: number, py: number) => -((px - cx) + (py - cy));
+
 
   // Kumpulkan semua bidang, lalu render atap sebelum dinding agar sisi yang menghadap kamera tetap terlihat penuh.
   type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall"; dir?: FacadeDir; elev: number; sub: number };
@@ -9071,10 +9075,9 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const p2 = project(b.x, b.y, baseRel);
       const p3 = project(b.x, b.y, topRel);
       const p4 = project(a.x, a.y, topRel);
-      // Depth: midpoint of edge in world (a+b)/2 → (x+y). Lebih besar = lebih dekat ke kamera.
-      const mx = (a.x + b.x) / 2 - cx;
-      const my = (a.y + b.y) / 2 - cy;
-      const depth = mx + my;
+      // Depth: midpoint sisi pada orientasi terbalik (searah Stacking Diagram).
+      const depth = depthAt((a.x + b.x) / 2, (a.y + b.y) / 2);
+
       quads.push({
         pts: [p1, p2, p3, p4],
         depth,
@@ -9091,7 +9094,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
     quads.push({
       pts: topPts,
-      depth: avgDepthForPoints(layer.points, cx, cy),
+      depth: -avgDepthForPoints(layer.points, cx, cy),
       fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
@@ -9119,11 +9122,10 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
           const p2 = project(b.x, b.y, botRel);
           const p3 = project(b.x, b.y, topRel);
           const p4 = project(a.x, a.y, topRel);
-          const mxv = (a.x + b.x) / 2 - cx;
-          const myv = (a.y + b.y) / 2 - cy;
           quads.push({
             pts: [p1, p2, p3, p4],
-            depth: mxv + myv + botRel * 0.01,
+            depth: depthAt((a.x + b.x) / 2, (a.y + b.y) / 2) + botRel * 0.01,
+
             fill: "#9c9c9c",
             stroke: "rgba(0,0,0,0.45)",
             sw: 1.0,
@@ -9135,7 +9137,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
         quads.push({
           pts: topPts,
-          depth: avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
+          depth: -avgDepthForPoints(fl.outer, cx, cy) + topRel * 0.01 - 0.001,
           fill: "#cfcfcf",
           stroke: "rgba(0,0,0,0.5)",
           sw: 1.0,
