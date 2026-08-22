@@ -9094,7 +9094,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
     quads.push({
       pts: topPts,
-      depth: avgDepthForPoints(layer.points, cx, cy),
+      depth: -avgDepthForPoints(layer.points, cx, cy),
       fill: "#3a3a3a",
       stroke: "#0a0a0a",
       sw: 1.4,
