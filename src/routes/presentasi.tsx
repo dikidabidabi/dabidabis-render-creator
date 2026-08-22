@@ -9051,58 +9051,61 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     });
   }
 
-  for (const layer of buildLayers) {
-    const own = expanded.filter((e) => e.sourceId === layer.levelId);
-    if (own.length === 0) continue;
-    const baseMdpl = Math.min(...own.map((e) => e.mdpl));
-    const topMdplFloor = Math.max(...own.map((e) => e.mdpl + e.height));
-    // Override: Atap/Balkon/Atap Hijau pakai tinggi & shift sesuai Model 3D.
-    const ov = roomExtrudeOverride(layer.name);
-    const minExp = Math.min(...expanded.map((e) => e.mdpl));
-    const baseRel = (ov ? baseMdpl + ov.baseDelta : baseMdpl) - minExp;
-    const topRel = (ov ? baseMdpl + ov.baseDelta + ov.height : topMdplFloor) - minExp;
+  // Iterasi per SALINAN level (termasuk level tipikal yang diulang), sama seperti
+  // slide Stacking Diagram — supaya tiap lantai tipikal punya band elevasi sendiri
+  // dan urutan render lantai → dinding berlaku di setiap level.
+  const minExp = expanded.length ? Math.min(...expanded.map((e) => e.mdpl)) : 0;
+  for (const cp of expanded) {
+    const own = buildLayers.filter((l) => l.levelId === cp.sourceId);
+    for (const layer of own) {
+      // Override: Atap/Balkon/Atap Hijau pakai tinggi & shift sesuai Model 3D.
+      const ov = roomExtrudeOverride(layer.name);
+      const baseRel = cp.mdpl - minExp + (ov?.baseDelta ?? 0);
+      const topRel = baseRel + (ov?.height ?? cp.height);
 
-    const ccw = polygonSignedArea(layer.points) > 0;
-    // Wall quads per edge.
-    for (let i = 0; i < layer.points.length; i++) {
-      const a = layer.points[i];
-      const b = layer.points[(i + 1) % layer.points.length];
-      const n = outwardNormal(a, b, ccw);
-      const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
-      const dir = classifyBearing(bearing);
-      const col = FACADE_COLORS[dir];
-      const p1 = project(a.x, a.y, baseRel);
-      const p2 = project(b.x, b.y, baseRel);
-      const p3 = project(b.x, b.y, topRel);
-      const p4 = project(a.x, a.y, topRel);
-      // Depth: midpoint sisi pada orientasi terbalik (searah Stacking Diagram).
-      const depth = depthAt((a.x + b.x) / 2, (a.y + b.y) / 2);
+      const ccw = polygonSignedArea(layer.points) > 0;
+      // Wall quads per edge.
+      for (let i = 0; i < layer.points.length; i++) {
+        const a = layer.points[i];
+        const b = layer.points[(i + 1) % layer.points.length];
+        const n = outwardNormal(a, b, ccw);
+        const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
+        const dir = classifyBearing(bearing);
+        const col = FACADE_COLORS[dir];
+        const p1 = project(a.x, a.y, baseRel);
+        const p2 = project(b.x, b.y, baseRel);
+        const p3 = project(b.x, b.y, topRel);
+        const p4 = project(a.x, a.y, topRel);
+        // Depth: midpoint sisi pada orientasi terbalik (searah Stacking Diagram).
+        const depth = depthAt((a.x + b.x) / 2, (a.y + b.y) / 2) + baseRel * 0.01;
 
+        quads.push({
+          pts: [p1, p2, p3, p4],
+          depth,
+          fill: col.fill,
+          stroke: col.stroke,
+          sw: 1.4,
+          kind: "wall",
+          elev: baseRel,
+          sub: 1,
+          dir,
+        });
+      }
+      // Top face polygon (atap rata per level).
+      const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
       quads.push({
-        pts: [p1, p2, p3, p4],
-        depth,
-        fill: col.fill,
-        stroke: col.stroke,
+        pts: topPts,
+        depth: -avgDepthForPoints(layer.points, cx, cy) + topRel * 0.01,
+        fill: "#3a3a3a",
+        stroke: "#0a0a0a",
         sw: 1.4,
-        kind: "wall",
+        kind: "top",
         elev: baseRel,
         sub: 1,
-        dir,
       });
     }
-    // Top face polygon (atap rata).
-    const topPts = layer.points.map((p) => project(p.x, p.y, topRel));
-    quads.push({
-      pts: topPts,
-      depth: -avgDepthForPoints(layer.points, cx, cy),
-      fill: "#3a3a3a",
-      stroke: "#0a0a0a",
-      sw: 1.4,
-      kind: "top",
-      elev: baseRel,
-      sub: 1,
-    });
   }
+
 
   // Slab lantai (entitas Floor) — 150mm di bawah MDPL level. Konsisten dgn Model 3D.
   {
