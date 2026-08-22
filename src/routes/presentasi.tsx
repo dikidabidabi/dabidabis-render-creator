@@ -9233,8 +9233,10 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const topMdpl = Math.max(...own.map((e) => e.mdpl + e.height));
     const topRel = topMdpl - Math.min(...expanded.map((e) => e.mdpl));
     const ccw = polygonSignedArea(layer.points) > 0;
+    const perims = perimsForLevel(layer.levelId);
     for (let i = 0; i < layer.points.length; i++) {
       const a = layer.points[i], b = layer.points[(i + 1) % layer.points.length];
+      if (!isPerimeterEdge(a, b, perims, perimTol)) continue;
       const n = outwardNormal(a, b, ccw);
       const dir = classifyBearing(bearingFromSketchVec(n.x, n.y, northDeg));
       const lenPx = Math.hypot(b.x - a.x, b.y - a.y);
