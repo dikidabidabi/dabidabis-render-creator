@@ -9075,10 +9075,9 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       const p2 = project(b.x, b.y, baseRel);
       const p3 = project(b.x, b.y, topRel);
       const p4 = project(a.x, a.y, topRel);
-      // Depth: midpoint of edge in world (a+b)/2 → (x+y). Lebih besar = lebih dekat ke kamera.
-      const mx = (a.x + b.x) / 2 - cx;
-      const my = (a.y + b.y) / 2 - cy;
-      const depth = mx + my;
+      // Depth: midpoint sisi pada orientasi terbalik (searah Stacking Diagram).
+      const depth = depthAt((a.x + b.x) / 2, (a.y + b.y) / 2);
+
       quads.push({
         pts: [p1, p2, p3, p4],
         depth,
