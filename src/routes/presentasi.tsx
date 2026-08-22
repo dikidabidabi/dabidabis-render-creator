@@ -9122,11 +9122,10 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
           const p2 = project(b.x, b.y, botRel);
           const p3 = project(b.x, b.y, topRel);
           const p4 = project(a.x, a.y, topRel);
-          const mxv = (a.x + b.x) / 2 - cx;
-          const myv = (a.y + b.y) / 2 - cy;
           quads.push({
             pts: [p1, p2, p3, p4],
-            depth: mxv + myv + botRel * 0.01,
+            depth: depthAt((a.x + b.x) / 2, (a.y + b.y) / 2) + botRel * 0.01,
+
             fill: "#9c9c9c",
             stroke: "rgba(0,0,0,0.45)",
             sw: 1.0,
