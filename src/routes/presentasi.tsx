@@ -8991,6 +8991,34 @@ function outwardNormal(a: Point, b: Point, ccw: boolean): { x: number; y: number
   const L = Math.hypot(nx, ny) || 1;
   return { x: (sign * nx) / L, y: (sign * ny) / L };
 }
+// Jarak titik ke segmen (koordinat sketsa).
+function ptSegDist(p: Point, a: Point, b: Point): number {
+  const vx = b.x - a.x, vy = b.y - a.y;
+  const len2 = vx * vx + vy * vy;
+  if (len2 <= 1e-9) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
+}
+// Apakah sisi (a,b) berada di perimeter luar lantai? Dipakai agar zonasi fasad /
+// perhitungan WWR hanya menghitung dinding di tepi luar lantai, bukan dinding
+// partisi di tengah bangunan.
+function isPerimeterEdge(a: Point, b: Point, perims: Point[][], tol: number): boolean {
+  if (!perims.length) return true; // tanpa data lantai → anggap semua sisi perimeter
+  const samples: Point[] = [
+    { x: a.x + (b.x - a.x) * 0.25, y: a.y + (b.y - a.y) * 0.25 },
+    { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+    { x: a.x + (b.x - a.x) * 0.75, y: a.y + (b.y - a.y) * 0.75 },
+  ];
+  return samples.every((s) => {
+    for (const poly of perims) {
+      for (let i = 0; i < poly.length; i++) {
+        if (ptSegDist(s, poly[i], poly[(i + 1) % poly.length], ) <= tol) return true;
+      }
+    }
+    return false;
+  });
+}
 // Bearing kompas (0=Utara, CW) dari vektor sketsa diberi northDeg (mapRotation).
 function bearingFromSketchVec(vx: number, vy: number, northDeg: number): number {
   // Sudut vektor dari sketsa-atas, CW: atan2(vx, -vy)
@@ -9055,8 +9083,19 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
   // slide Stacking Diagram — supaya tiap lantai tipikal punya band elevasi sendiri
   // dan urutan render lantai → dinding berlaku di setiap level.
   const minExp = expanded.length ? Math.min(...expanded.map((e) => e.mdpl)) : 0;
+  // Perimeter luar lantai per level (entitas Floor). Zonasi fasad & WWR hanya
+  // dihitung untuk dinding yang berada di perimeter ini.
+  const allFloors = sketch.floors ?? [];
+  const perimTol = pxPerM * 0.6; // toleransi ±60 cm dari tepi lantai
+  const perimsForLevel = (levelId: string): Point[][] => {
+    const own = allFloors.filter((f) => f.levelId === levelId && f.outer.length >= 3).map((f) => f.outer);
+    if (own.length) return own;
+    return allFloors.filter((f) => f.outer.length >= 3).map((f) => f.outer);
+  };
+  const NEUTRAL_WALL = { fill: "#8e8e8e", stroke: "#3a3a3a" };
   for (const cp of expanded) {
     const own = buildLayers.filter((l) => l.levelId === cp.sourceId);
+    const perims = perimsForLevel(cp.sourceId);
     for (const layer of own) {
       // Override: Atap/Balkon/Atap Hijau pakai tinggi & shift sesuai Model 3D.
       const ov = roomExtrudeOverride(layer.name);
@@ -9072,6 +9111,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
         const dir = classifyBearing(bearing);
         const col = FACADE_COLORS[dir];
+        const onPerim = isPerimeterEdge(a, b, perims, perimTol);
         const p1 = project(a.x, a.y, baseRel);
         const p2 = project(b.x, b.y, baseRel);
         const p3 = project(b.x, b.y, topRel);
@@ -9082,13 +9122,13 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         quads.push({
           pts: [p1, p2, p3, p4],
           depth,
-          fill: col.fill,
-          stroke: col.stroke,
+          fill: onPerim ? col.fill : NEUTRAL_WALL.fill,
+          stroke: onPerim ? col.stroke : NEUTRAL_WALL.stroke,
           sw: 1.4,
           kind: "wall",
           elev: baseRel,
           sub: 1,
-          dir,
+          ...(onPerim ? { dir } : {}),
         });
       }
       // Top face polygon (atap rata per level).
@@ -9193,8 +9233,10 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
     const topMdpl = Math.max(...own.map((e) => e.mdpl + e.height));
     const topRel = topMdpl - Math.min(...expanded.map((e) => e.mdpl));
     const ccw = polygonSignedArea(layer.points) > 0;
+    const perims = perimsForLevel(layer.levelId ?? "");
     for (let i = 0; i < layer.points.length; i++) {
       const a = layer.points[i], b = layer.points[(i + 1) % layer.points.length];
+      if (!isPerimeterEdge(a, b, perims, perimTol)) continue;
       const n = outwardNormal(a, b, ccw);
       const dir = classifyBearing(bearingFromSketchVec(n.x, n.y, northDeg));
       const lenPx = Math.hypot(b.x - a.x, b.y - a.y);
