@@ -6164,7 +6164,7 @@ function AxonometricView({
     const pm = toPm(ly);
     const top = pm.map((p) => project(p.x, p.z, 0));
     const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / Math.max(1, pm.length);
-    faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4, kind: "base" });
+    faces.push({ pts: top, fill: "#efeae1", stroke: "#a8a195", depth: avg - 100000, sw: 0.4, kind: "base", elev: -1e6, sub: 0 });
   }
 
   // Taman: thin green slab at MDPL 0, 0.1 m tall (matches Model 3D)
@@ -6187,7 +6187,7 @@ function AxonometricView({
         project(a.x, a.z, yTop),
       ];
       const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-      faces.push({ pts: quad, fill: TAMAN_SIDE, stroke: "rgba(0,0,0,0.35)", depth, sw: 0.4, kind: "side" });
+      faces.push({ pts: quad, fill: TAMAN_SIDE, stroke: "rgba(0,0,0,0.35)", depth, sw: 0.4, kind: "side", elev: yBot, sub: 1 });
     }
     const topPts = pm.map((p) => project(p.x, p.z, yTop));
     const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
@@ -6198,6 +6198,8 @@ function AxonometricView({
       depth: avg + yTop * 0.01,
       sw: 0.5,
       kind: "top",
+      elev: yBot,
+      sub: 1,
     });
   }
 
@@ -6229,7 +6231,7 @@ function AxonometricView({
           project(a.x, a.z, yTop),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + yBot * 0.01;
-        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side", elev: yBot, sub: 1 });
       }
       // Top face
       const topPts = pm.map((p) => project(p.x, p.z, yTop));
@@ -6241,6 +6243,8 @@ function AxonometricView({
         depth: avg + yTop * 0.01,
         sw: 0.7,
         kind: "top",
+        elev: yBot,
+        sub: 1,
       });
     }
   }
@@ -6272,7 +6276,7 @@ function AxonometricView({
           project(a.x, a.z, topY),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + botY * 0.01;
-        faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side" });
+        faces.push({ pts: quad, fill: SLAB_SIDE, stroke: "rgba(0,0,0,0.4)", depth, sw: 0.4, kind: "side", elev: topY, sub: 0 });
       }
       const topPts = outerPm.map((p) => project(p.x, p.z, topY));
       const holesTop = holesPm.map((h) => h.map((p) => project(p.x, p.z, topY)));
@@ -6285,12 +6289,25 @@ function AxonometricView({
         depth: avg + topY * 0.01 - 0.001,
         sw: 0.5,
         kind: "top",
+        elev: topY,
+        sub: 0,
       });
     }
   }
 
-  const faceLayer = (kind: Face["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
-  faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
+  // Painter order: alas lahan dulu, lalu naik per elevasi — slab lantai (sub 0)
+  // digambar sebelum dinding/massa di level tsb (sub 1), sehingga bangunan
+  // tampak solid: LT B2 → dinding B2 → LT B1 → dinding B1 → ... → atap.
+  const faceLayer = (kind: Face["kind"]) => (kind === "base" ? 0 : 1);
+  const kindRank = (kind: Face["kind"]) => (kind === "side" ? 0 : 1);
+  faces.sort(
+    (a, b) =>
+      faceLayer(a.kind) - faceLayer(b.kind) ||
+      a.elev - b.elev ||
+      a.sub - b.sub ||
+      a.depth - b.depth ||
+      kindRank(a.kind) - kindRank(b.kind),
+  );
 
   // Compute viewBox
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
@@ -7612,7 +7629,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
           project(a.x, a.z, topY),
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + baseY * 0.01;
-        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
+        faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side", elev: yBot, sub: 1 });
       }
       const topPts = pm.map((p) => project(p.x, p.z, topY));
       const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
