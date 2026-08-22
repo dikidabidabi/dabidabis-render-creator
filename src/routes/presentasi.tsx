@@ -9029,7 +9029,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
   };
 
   // Kumpulkan semua bidang, lalu render atap sebelum dinding agar sisi yang menghadap kamera tetap terlihat penuh.
-  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall"; dir?: FacadeDir };
+  type Quad = { pts: { x: number; y: number }[]; depth: number; fill: string; stroke: string; sw: number; kind: "base" | "top" | "wall"; dir?: FacadeDir; elev: number; sub: number };
   const quads: Quad[] = [];
 
   // Lahan (ground polygon, tipis di z=0).
@@ -9042,6 +9042,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       stroke: "rgba(0,0,0,0.35)",
       sw: 1.2,
       kind: "base",
+      elev: -1e6,
+      sub: 0,
     });
   }
 
@@ -9080,6 +9082,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         stroke: col.stroke,
         sw: 1.4,
         kind: "wall",
+        elev: baseRel,
+        sub: 1,
         dir,
       });
     }
@@ -9092,6 +9096,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
       stroke: "#0a0a0a",
       sw: 1.4,
       kind: "top",
+      elev: baseRel,
+      sub: 1,
     });
   }
 
@@ -9122,6 +9128,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
             stroke: "rgba(0,0,0,0.45)",
             sw: 1.0,
             kind: "wall",
+            elev: topRel,
+            sub: 0,
           });
         }
         const topPts = fl.outer.map((p) => project(p.x, p.y, topRel));
@@ -9132,6 +9140,8 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
           stroke: "rgba(0,0,0,0.5)",
           sw: 1.0,
           kind: "top",
+          elev: topRel,
+          sub: 0,
         });
       }
     }
@@ -9139,8 +9149,19 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
 
 
 
-  const quadLayer = (kind: Quad["kind"]) => kind === "base" ? 0 : kind === "top" ? 1 : 2;
-  quads.sort((a, b) => quadLayer(a.kind) - quadLayer(b.kind) || a.depth - b.depth);
+  // Painter order sama dengan slide Stacking Diagram: alas dulu, lalu naik per
+  // elevasi — slab lantai (sub 0) sebelum dinding/massa level tsb (sub 1),
+  // sehingga bangunan tampak solid dari bawah ke atas hingga atap.
+  const quadLayer = (kind: Quad["kind"]) => (kind === "base" ? 0 : 1);
+  const quadKindRank = (kind: Quad["kind"]) => (kind === "wall" ? 0 : 1);
+  quads.sort(
+    (a, b) =>
+      quadLayer(a.kind) - quadLayer(b.kind) ||
+      a.elev - b.elev ||
+      a.sub - b.sub ||
+      a.depth - b.depth ||
+      quadKindRank(a.kind) - quadKindRank(b.kind),
+  );
 
   // Tentukan bounding viewBox proyeksi.
   const allPts = quads.flatMap((q) => q.pts);
