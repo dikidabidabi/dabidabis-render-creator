@@ -9083,8 +9083,19 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
   // slide Stacking Diagram — supaya tiap lantai tipikal punya band elevasi sendiri
   // dan urutan render lantai → dinding berlaku di setiap level.
   const minExp = expanded.length ? Math.min(...expanded.map((e) => e.mdpl)) : 0;
+  // Perimeter luar lantai per level (entitas Floor). Zonasi fasad & WWR hanya
+  // dihitung untuk dinding yang berada di perimeter ini.
+  const allFloors = sketch.floors ?? [];
+  const perimTol = pxPerM * 0.6; // toleransi ±60 cm dari tepi lantai
+  const perimsForLevel = (levelId: string): Point[][] => {
+    const own = allFloors.filter((f) => f.levelId === levelId && f.outer.length >= 3).map((f) => f.outer);
+    if (own.length) return own;
+    return allFloors.filter((f) => f.outer.length >= 3).map((f) => f.outer);
+  };
+  const NEUTRAL_WALL = { fill: "#8e8e8e", stroke: "#3a3a3a" };
   for (const cp of expanded) {
     const own = buildLayers.filter((l) => l.levelId === cp.sourceId);
+    const perims = perimsForLevel(cp.sourceId);
     for (const layer of own) {
       // Override: Atap/Balkon/Atap Hijau pakai tinggi & shift sesuai Model 3D.
       const ov = roomExtrudeOverride(layer.name);
@@ -9100,6 +9111,7 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         const bearing = bearingFromSketchVec(n.x, n.y, northDeg);
         const dir = classifyBearing(bearing);
         const col = FACADE_COLORS[dir];
+        const onPerim = isPerimeterEdge(a, b, perims, perimTol);
         const p1 = project(a.x, a.y, baseRel);
         const p2 = project(b.x, b.y, baseRel);
         const p3 = project(b.x, b.y, topRel);
@@ -9110,13 +9122,13 @@ function FacadeZoningBody({ slide }: { slide: Extract<Slide, { kind: "facade-zon
         quads.push({
           pts: [p1, p2, p3, p4],
           depth,
-          fill: col.fill,
-          stroke: col.stroke,
+          fill: onPerim ? col.fill : NEUTRAL_WALL.fill,
+          stroke: onPerim ? col.stroke : NEUTRAL_WALL.stroke,
           sw: 1.4,
           kind: "wall",
           elev: baseRel,
           sub: 1,
-          dir,
+          ...(onPerim ? { dir } : {}),
         });
       }
       // Top face polygon (atap rata per level).
