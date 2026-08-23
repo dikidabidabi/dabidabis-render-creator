@@ -9352,6 +9352,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (pinDrag) {
+      const g0 = sketch.geo;
+      if (g0) {
+        const next = worldToGeo(
+          Number(g0.lat),
+          Number(g0.lon),
+          pinDrag,
+          pxPerMeter,
+          Number(g0.mapRotation) || 0,
+        );
+        onChange({
+          geo: {
+            ...g0,
+            lat: Number(next.lat.toFixed(7)),
+            lon: Number(next.lon.toFixed(7)),
+          },
+        });
+        toast.success(`Pin map dipindah → ${next.lat.toFixed(6)}, ${next.lon.toFixed(6)}`);
+      }
+      setPinDrag(null);
+      endPointer(e);
+      return;
+    }
     if (sectionEndpointDrag) {
       setSectionEndpointDrag(null);
       endPointer(e);
