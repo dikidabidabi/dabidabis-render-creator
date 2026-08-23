@@ -2360,15 +2360,18 @@ function useStudioExecute() {
       }
 
 
-      // Output count = input count. Each output uses its own input image so the
-      // camera angle mirrors the source screenshot. Naming: view 1, view 2, ...
-      const angles: RenderAngle[] = pool.map((_, i) => ({
+      // Output count = input count. Output #i ALWAYS mirrors input image #i
+      // (screenshot 1 → view 1, screenshot 2 → view 2, ...).
+      const angles: RenderAngle[] = pool.map((p, i) => ({
         id: crypto.randomUUID(),
         angle: `view ${i + 1}`,
         image: null,
         status: "processing",
         progress: 5,
+        sourceId: p.id,
+        sourceIndex: i,
       }));
+
       // For Upload flow the Output node may have no sketchId; inherit from input
       // so outputs are stored/rendered under a consistent key.
       if (!outData.sketchId && inData.sketchId) {
