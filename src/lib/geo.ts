@@ -59,6 +59,31 @@ export function geoOffsetToWorld(
   return { x: dx * worldPxPerMeter, y: dy * worldPxPerMeter };
 }
 
+// Inverse of geoOffsetToWorld: given a world point (canvas px, anchored so that
+// geo(lat,lon) = world(0,0)) return the lat/lon of that point. `mapRotationDeg`
+// is the sketch map rotation (peta diputar searah jarum jam terhadap sketsa).
+export function worldToGeo(
+  lat: number,
+  lon: number,
+  world: { x: number; y: number },
+  worldPxPerMeter: number,
+  mapRotationDeg = 0,
+) {
+  const R = 6378137;
+  // Map is drawn rotated by +rot around origin → inverse-rotate to map frame.
+  const rot = (-(mapRotationDeg || 0) * Math.PI) / 180;
+  const cos = Math.cos(rot), sin = Math.sin(rot);
+  const mx = world.x * cos - world.y * sin;
+  const my = world.x * sin + world.y * cos;
+  const dxM = mx / worldPxPerMeter;
+  const dyM = my / worldPxPerMeter;
+  const dLat = (-dyM / R) * (180 / Math.PI);
+  const newLat = lat + dLat;
+  const meanLat = (((lat + newLat) / 2) * Math.PI) / 180;
+  const dLon = (dxM / (R * Math.cos(meanLat))) * (180 / Math.PI);
+  return { lat: newLat, lon: lon + dLon };
+}
+
 // Pick best integer tile zoom so that meters-per-tile-pixel ≈ desired.
 // Tiles will then be scaled by `k` when drawn to compensate residuals.
 export function pickTileZoom(lat: number, worldPxPerMeter: number) {
