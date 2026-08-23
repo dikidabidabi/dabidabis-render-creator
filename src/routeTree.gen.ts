@@ -24,6 +24,7 @@ import { Route as AkunRouteImport } from './routes/akun'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
 import { Route as TabulasiRumusRouteImport } from './routes/tabulasi.rumus'
+import { Route as StudioPustakaPromptRouteImport } from './routes/studio.pustaka-prompt'
 
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
@@ -100,6 +101,11 @@ const TabulasiRumusRoute = TabulasiRumusRouteImport.update({
   path: '/tabulasi/rumus',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StudioPustakaPromptRoute = StudioPustakaPromptRouteImport.update({
+  id: '/pustaka-prompt',
+  path: '/pustaka-prompt',
+  getParentRoute: () => StudioRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -114,7 +120,8 @@ export interface FileRoutesByFullPath {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
-  '/studio': typeof StudioRoute
+  '/studio': typeof StudioRouteWithChildren
+  '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
   '/tabulasi/': typeof TabulasiIndexRoute
 }
@@ -131,7 +138,8 @@ export interface FileRoutesByTo {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
-  '/studio': typeof StudioRoute
+  '/studio': typeof StudioRouteWithChildren
+  '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
   '/tabulasi': typeof TabulasiIndexRoute
 }
@@ -149,7 +157,8 @@ export interface FileRoutesById {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
-  '/studio': typeof StudioRoute
+  '/studio': typeof StudioRouteWithChildren
+  '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
   '/tabulasi/': typeof TabulasiIndexRoute
 }
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/project'
     | '/sketch'
     | '/studio'
+    | '/studio/pustaka-prompt'
     | '/tabulasi/rumus'
     | '/tabulasi/'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/project'
     | '/sketch'
     | '/studio'
+    | '/studio/pustaka-prompt'
     | '/tabulasi/rumus'
     | '/tabulasi'
   id:
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/project'
     | '/sketch'
     | '/studio'
+    | '/studio/pustaka-prompt'
     | '/tabulasi/rumus'
     | '/tabulasi/'
   fileRoutesById: FileRoutesById
@@ -220,7 +232,7 @@ export interface RootRouteChildren {
   PresentasiKirimanRoute: typeof PresentasiKirimanRoute
   ProjectRoute: typeof ProjectRoute
   SketchRoute: typeof SketchRoute
-  StudioRoute: typeof StudioRoute
+  StudioRoute: typeof StudioRouteWithChildren
   TabulasiRumusRoute: typeof TabulasiRumusRoute
   TabulasiIndexRoute: typeof TabulasiIndexRoute
 }
@@ -332,8 +344,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabulasiRumusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/studio/pustaka-prompt': {
+      id: '/studio/pustaka-prompt'
+      path: '/pustaka-prompt'
+      fullPath: '/studio/pustaka-prompt'
+      preLoaderRoute: typeof StudioPustakaPromptRouteImport
+      parentRoute: typeof StudioRoute
+    }
   }
 }
+
+interface StudioRouteChildren {
+  StudioPustakaPromptRoute: typeof StudioPustakaPromptRoute
+}
+
+const StudioRouteChildren: StudioRouteChildren = {
+  StudioPustakaPromptRoute: StudioPustakaPromptRoute,
+}
+
+const StudioRouteWithChildren =
+  StudioRoute._addFileChildren(StudioRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -348,7 +378,7 @@ const rootRouteChildren: RootRouteChildren = {
   PresentasiKirimanRoute: PresentasiKirimanRoute,
   ProjectRoute: ProjectRoute,
   SketchRoute: SketchRoute,
-  StudioRoute: StudioRoute,
+  StudioRoute: StudioRouteWithChildren,
   TabulasiRumusRoute: TabulasiRumusRoute,
   TabulasiIndexRoute: TabulasiIndexRoute,
 }
