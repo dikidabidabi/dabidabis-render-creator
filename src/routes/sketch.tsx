@@ -88,7 +88,7 @@ import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog"
 import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlockPolygon, FUNCTION_META as MP_FN_META } from "@/lib/masterplan";
 import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
-import { drawOsmTiles, nominatimSearch, type Geo, DEFAULT_GEO } from "@/lib/geo";
+import { drawOsmTiles, nominatimSearch, worldToGeo, type Geo, DEFAULT_GEO } from "@/lib/geo";
 import { takePendingTenderExec } from "@/lib/tender-exec";
 import {
   type StructuralGrid,
@@ -2310,6 +2310,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
+
+  // ----- Pin map (koordinat) -----
+  // Pin selalu menandai geo(lat,lon) yang ter-anchor di world (0,0). Saat mode
+  // "geser pin map" aktif, pengguna bisa men-drag pin; saat dilepas koordinat
+  // dihitung ulang dari posisi pin sehingga lat/lon otomatis berubah.
+  const [pinMoveMode, setPinMoveMode] = useState(false);
+  const [pinDrag, setPinDrag] = useState<Point | null>(null);
+  const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
@@ -6146,6 +6154,59 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
+    // ----- Pin map: menandai koordinat geo (anchor world 0,0) -----
+    if (sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon))) {
+      const pw = pinDrag ?? { x: 0, y: 0 };
+      const sp = worldToScreen(pw);
+      const active = pinMoveMode;
+      ctx.save();
+      const H = 34; // tinggi pin (screen px)
+      const R = 10;
+      const cx = sp.x;
+      const cy = sp.y - H + R;
+      // tail
+      ctx.beginPath();
+      ctx.moveTo(cx, sp.y);
+      ctx.lineTo(cx - R * 0.62, cy + R * 0.72);
+      ctx.lineTo(cx + R * 0.62, cy + R * 0.72);
+      ctx.closePath();
+      ctx.fillStyle = active ? "#f59e0b" : "#dc2626";
+      ctx.fill();
+      // head
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = active ? "#f59e0b" : "#dc2626";
+      ctx.fill();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 0.36, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      // ground dot
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(15,23,42,0.85)";
+      ctx.fill();
+      if (pinDrag) {
+        const g = worldToGeo(
+          Number(sketch.geo.lat),
+          Number(sketch.geo.lon),
+          pinDrag,
+          pxPerMeter,
+          Number(sketch.geo.mapRotation) || 0,
+        );
+        const label = `${g.lat.toFixed(6)}, ${g.lon.toFixed(6)}`;
+        ctx.font = "600 11px ui-sans-serif, system-ui";
+        const w = ctx.measureText(label).width + 10;
+        ctx.fillStyle = "rgba(15,23,42,0.92)";
+        ctx.fillRect(sp.x + 12, sp.y - H - 6, w, 18);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, sp.x + 17, sp.y - H + 7);
+      }
+      ctx.restore();
+    }
     // Ilustrasi Analisa — di atas layer, di bawah handle. Setiap kind di-render
     // dengan alpha efektif dari Layer Ilustrasi (visible + opacity per sub-layer).
     const illos: Annotation[] = sortAnnotationsForRender(sketch.illustrations ?? []);
@@ -6447,7 +6508,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput, pinMoveMode, pinDrag]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -7198,6 +7259,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       startGesture();
       return;
     }
+
+    // Geser pin map — prioritas paling atas saat mode aktif.
+    if (pinMoveMode && hasGeoPin) {
+      setPinDrag(getWorldPosRaw(e));
+      return;
+    }
+
 
     // Pending bezier handle drag has top priority
     if (pendingCurve) {
@@ -8885,6 +8953,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (pinDrag && pinMoveMode) {
+      setPinDrag(getWorldPosRaw(e));
+      return;
+    }
     // Ramp vertex drag
     if (roadVertexDrag) {
       const wp = getWorldPos(e);
@@ -9280,6 +9352,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (pinDrag) {
+      const g0 = sketch.geo;
+      if (g0) {
+        const next = worldToGeo(
+          Number(g0.lat),
+          Number(g0.lon),
+          pinDrag,
+          pxPerMeter,
+          Number(g0.mapRotation) || 0,
+        );
+        onChange({
+          geo: {
+            ...g0,
+            lat: Number(next.lat.toFixed(7)),
+            lon: Number(next.lon.toFixed(7)),
+          },
+        });
+        toast.success(`Pin map dipindah → ${next.lat.toFixed(6)}, ${next.lon.toFixed(6)}`);
+      }
+      setPinDrag(null);
+      endPointer(e);
+      return;
+    }
     if (sectionEndpointDrag) {
       setSectionEndpointDrag(null);
       endPointer(e);
@@ -9807,6 +9902,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
   const onPointerCancel = (e: React.PointerEvent) => {
     endPointer(e);
+    setPinDrag(null);
     setDrawing(null);
     setDraggingHandle(null);
     setEditDrag(null);
@@ -13425,6 +13521,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <CompassMarker rotation={northRotation} size={64} />
             </div>
           </div>
+          {hasGeoPin && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background/40 px-3 py-2">
+              <Button
+                size="sm"
+                variant={pinMoveMode ? "default" : "outline"}
+                className={cn("h-8 text-xs", pinMoveMode && "bg-gradient-primary shadow-primary")}
+                onClick={() => { setPinDrag(null); setPinMoveMode((v) => !v); }}
+                title="Geser pin map — drag pin di dalam sketsa, koordinat dihitung otomatis."
+              >
+                <MapPin className="mr-1.5 h-4 w-4" /> {pinMoveMode ? "Selesai geser pin" : "Geser pin map"}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                Pin: {Number(sketch.geo!.lat).toFixed(6)}, {Number(sketch.geo!.lon).toFixed(6)}
+                {pinMoveMode ? " — drag pin di kanvas untuk mengubah koordinat." : ""}
+              </span>
+            </div>
+          )}
           {mode === "masterplan" && <MasterplanSketch3DPreview sketch={sketch as any} />}
         </div>
         {SidePanel}
