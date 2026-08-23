@@ -7260,6 +7260,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    // Geser pin map — prioritas paling atas saat mode aktif.
+    if (pinMoveMode && hasGeoPin) {
+      setPinDrag(getWorldPosRaw(e));
+      return;
+    }
+
+
     // Pending bezier handle drag has top priority
     if (pendingCurve) {
       const wp = getWorldPosRaw(e);
