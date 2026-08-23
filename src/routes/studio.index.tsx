@@ -3571,8 +3571,13 @@ function StudioPage() {
       prompt: PromptNode,
       render: RenderNode,
       output: (props: NodeProps) => (
-        <OutputNode {...props} onAnnotate={setAnnotationTarget} />
+        <OutputNode
+          {...props}
+          onAnnotate={setAnnotationTarget}
+          onRegenerate={regenerateAngle}
+        />
       ),
+
       reference: ReferenceNode,
       edit: EditNode,
       upload: UploadNode,
