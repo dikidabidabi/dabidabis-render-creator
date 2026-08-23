@@ -22,7 +22,7 @@ const ALLOWED_MODELS = [
 const InputSchema = z.object({
   sketchBase64: z.string().min(10),
   referenceBase64: z.string().nullable().optional(),
-  prompt: z.string().min(1).max(2000),
+  prompt: z.string().min(1).max(12000),
   renderType: z.enum(["exterior", "interior", "night", "watercolor"]),
   accuracy: z.number().int().min(1).max(10),
   consistency: z.number().int().min(1).max(10),
