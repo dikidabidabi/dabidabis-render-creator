@@ -60,7 +60,7 @@ import { useStudioStore, type RenderAngle } from "@/store/studio-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/studio")({
+export const Route = createFileRoute("/studio/")({
   component: StudioPage,
 });
 

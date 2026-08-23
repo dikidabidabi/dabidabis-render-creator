@@ -9,7 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as ProjectRouteImport } from './routes/project'
 import { Route as PresentasiKirimanRouteImport } from './routes/presentasi-kiriman'
@@ -23,14 +22,10 @@ import { Route as FeedRouteImport } from './routes/feed'
 import { Route as AkunRouteImport } from './routes/akun'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
+import { Route as StudioIndexRouteImport } from './routes/studio.index'
 import { Route as TabulasiRumusRouteImport } from './routes/tabulasi.rumus'
 import { Route as StudioPustakaPromptRouteImport } from './routes/studio.pustaka-prompt'
 
-const StudioRoute = StudioRouteImport.update({
-  id: '/studio',
-  path: '/studio',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SketchRoute = SketchRouteImport.update({
   id: '/sketch',
   path: '/sketch',
@@ -96,15 +91,20 @@ const TabulasiIndexRoute = TabulasiIndexRouteImport.update({
   path: '/tabulasi/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StudioIndexRoute = StudioIndexRouteImport.update({
+  id: '/studio/',
+  path: '/studio/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TabulasiRumusRoute = TabulasiRumusRouteImport.update({
   id: '/tabulasi/rumus',
   path: '/tabulasi/rumus',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudioPustakaPromptRoute = StudioPustakaPromptRouteImport.update({
-  id: '/pustaka-prompt',
-  path: '/pustaka-prompt',
-  getParentRoute: () => StudioRoute,
+  id: '/studio/pustaka-prompt',
+  path: '/studio/pustaka-prompt',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -120,9 +120,9 @@ export interface FileRoutesByFullPath {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
-  '/studio': typeof StudioRouteWithChildren
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
+  '/studio/': typeof StudioIndexRoute
   '/tabulasi/': typeof TabulasiIndexRoute
 }
 export interface FileRoutesByTo {
@@ -138,9 +138,9 @@ export interface FileRoutesByTo {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
-  '/studio': typeof StudioRouteWithChildren
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
+  '/studio': typeof StudioIndexRoute
   '/tabulasi': typeof TabulasiIndexRoute
 }
 export interface FileRoutesById {
@@ -157,9 +157,9 @@ export interface FileRoutesById {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
-  '/studio': typeof StudioRouteWithChildren
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
+  '/studio/': typeof StudioIndexRoute
   '/tabulasi/': typeof TabulasiIndexRoute
 }
 export interface FileRouteTypes {
@@ -177,9 +177,9 @@ export interface FileRouteTypes {
     | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
-    | '/studio'
     | '/studio/pustaka-prompt'
     | '/tabulasi/rumus'
+    | '/studio/'
     | '/tabulasi/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -195,9 +195,9 @@ export interface FileRouteTypes {
     | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
-    | '/studio'
     | '/studio/pustaka-prompt'
     | '/tabulasi/rumus'
+    | '/studio'
     | '/tabulasi'
   id:
     | '__root__'
@@ -213,9 +213,9 @@ export interface FileRouteTypes {
     | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
-    | '/studio'
     | '/studio/pustaka-prompt'
     | '/tabulasi/rumus'
+    | '/studio/'
     | '/tabulasi/'
   fileRoutesById: FileRoutesById
 }
@@ -232,20 +232,14 @@ export interface RootRouteChildren {
   PresentasiKirimanRoute: typeof PresentasiKirimanRoute
   ProjectRoute: typeof ProjectRoute
   SketchRoute: typeof SketchRoute
-  StudioRoute: typeof StudioRouteWithChildren
+  StudioPustakaPromptRoute: typeof StudioPustakaPromptRoute
   TabulasiRumusRoute: typeof TabulasiRumusRoute
+  StudioIndexRoute: typeof StudioIndexRoute
   TabulasiIndexRoute: typeof TabulasiIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/studio': {
-      id: '/studio'
-      path: '/studio'
-      fullPath: '/studio'
-      preLoaderRoute: typeof StudioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/sketch': {
       id: '/sketch'
       path: '/sketch'
@@ -337,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabulasiIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/studio/': {
+      id: '/studio/'
+      path: '/studio'
+      fullPath: '/studio/'
+      preLoaderRoute: typeof StudioIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tabulasi/rumus': {
       id: '/tabulasi/rumus'
       path: '/tabulasi/rumus'
@@ -346,24 +347,13 @@ declare module '@tanstack/react-router' {
     }
     '/studio/pustaka-prompt': {
       id: '/studio/pustaka-prompt'
-      path: '/pustaka-prompt'
+      path: '/studio/pustaka-prompt'
       fullPath: '/studio/pustaka-prompt'
       preLoaderRoute: typeof StudioPustakaPromptRouteImport
-      parentRoute: typeof StudioRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
-
-interface StudioRouteChildren {
-  StudioPustakaPromptRoute: typeof StudioPustakaPromptRoute
-}
-
-const StudioRouteChildren: StudioRouteChildren = {
-  StudioPustakaPromptRoute: StudioPustakaPromptRoute,
-}
-
-const StudioRouteWithChildren =
-  StudioRoute._addFileChildren(StudioRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -378,8 +368,9 @@ const rootRouteChildren: RootRouteChildren = {
   PresentasiKirimanRoute: PresentasiKirimanRoute,
   ProjectRoute: ProjectRoute,
   SketchRoute: SketchRoute,
-  StudioRoute: StudioRouteWithChildren,
+  StudioPustakaPromptRoute: StudioPustakaPromptRoute,
   TabulasiRumusRoute: TabulasiRumusRoute,
+  StudioIndexRoute: StudioIndexRoute,
   TabulasiIndexRoute: TabulasiIndexRoute,
 }
 export const routeTree = rootRouteImport
