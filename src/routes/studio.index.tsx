@@ -650,6 +650,40 @@ function PromptNode({ id, data }: NodeProps) {
   const addNode = useStudioStore((s) => s.addNode);
   const addEdgeStore = useStudioStore((s) => s.addEdge);
   const nodes = useStudioStore((s) => s.graph.nodes);
+  const outputs = useStudioStore((s) => s.graph.outputs);
+  const [showLoad, setShowLoad] = useState(false);
+  const [library, setLibrary] = useState<PromptLibraryEntry[]>([]);
+
+  // Contoh satu hasil output: render terbaru yang tersedia di kanvas.
+  const latestOutputImage = useMemo(() => {
+    let best: { image: string; ts: number } | null = null;
+    for (const list of Object.values(outputs ?? {})) {
+      for (const o of list) {
+        if (!o.image) continue;
+        const ts = o.progress ?? 0;
+        if (!best) best = { image: o.image, ts };
+      }
+    }
+    return best?.image ?? null;
+  }, [outputs]);
+
+  const handleSavePrompt = () => {
+    const style = (d.style ?? "").trim();
+    const detail = (d.detail ?? "").trim();
+    if (!style && !detail) {
+      toast.error("Isi gaya arsitektur atau detail prompt dahulu");
+      return;
+    }
+    const saved = savePromptToLibrary({
+      style,
+      detail,
+      geometryConsistency: d.geometryConsistency ?? 70,
+      sampleImage: latestOutputImage,
+    });
+    toast.success(
+      `Prompt #${saved.no} tersimpan di Pustaka Prompt${saved.sampleImage ? " dengan contoh output" : ""}`,
+    );
+  };
 
   const presets = [
     "bare finish concrete",
