@@ -1090,7 +1090,11 @@ function OutputNode({
   id,
   data,
   onAnnotate,
-}: NodeProps & { onAnnotate?: (t: AnnotationTarget) => void }) {
+  onRegenerate,
+}: NodeProps & {
+  onAnnotate?: (t: AnnotationTarget) => void;
+  onRegenerate?: (outputNodeId: string, angleId: string) => void;
+}) {
   const d = data as OutputNodeData;
   const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
   const sync = useStudioStore((s) => s.syncToPresentasi);
