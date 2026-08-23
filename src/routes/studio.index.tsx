@@ -2483,6 +2483,170 @@ function useStudioExecute() {
   );
 }
 
+// ---------- Regenerate one view (per image) ----------
+// Re-renders a single view of the Multi-Angle Output using the SAME input image
+// (matched by sourceId, fallback: index / view number) and the existing prompt.
+function useStudioRegenerateAngle() {
+  const graph = useStudioStore((s) => s.graph);
+  const updateNode = useStudioStore((s) => s.updateNode);
+  const updateOutput = useStudioStore((s) => s.updateOutput);
+  const syncToPresentasi = useStudioStore((s) => s.syncToPresentasi);
+  const callRender = useServerFn(generateRender);
+
+  return useCallback(
+    async (outputNodeId: string, angleId: string) => {
+      const outputNode = graph.nodes.find((n) => n.id === outputNodeId);
+      if (!outputNode) return;
+      const outData = outputNode.data as OutputNodeData;
+      const angleList = useStudioStore.getState().graph.outputs[outData.sketchId] ?? [];
+      const angleIdx = angleList.findIndex((o) => o.id === angleId);
+      const angle = angleList[angleIdx];
+      if (!angle) return;
+
+      const renderNode = graph.nodes
+        .filter((n) => n.type === "render")
+        .find((n) => graph.edges.some((e) => e.source === n.id && e.target === outputNodeId));
+      if (!renderNode) return toast.error("Sambungkan Render → Output");
+      const selectedModel =
+        (renderNode.data as RenderNodeData).model ?? "google/gemini-2.5-flash-image";
+
+      const promptNode = graph.edges
+        .filter((e) => e.target === renderNode.id)
+        .map((e) => graph.nodes.find((n) => n.id === e.source))
+        .find((n) => n?.type === "prompt");
+      if (!promptNode) return toast.error("Sambungkan Prompt ke Render Engine");
+      const prData = promptNode.data as PromptNodeData;
+
+      const referenceNode = graph.edges
+        .filter((e) => e.target === promptNode.id)
+        .map((e) => graph.nodes.find((n) => n.id === e.source))
+        .find((n) => n?.type === "reference");
+      const refImage = referenceNode
+        ? (referenceNode.data as ReferenceNodeData).image ?? null
+        : null;
+
+      const inputNode = graph.edges
+        .filter((e) => e.target === promptNode.id)
+        .map((e) => graph.nodes.find((n) => n.id === e.source))
+        .find((n) => n?.type === "input" || n?.type === "upload");
+      if (!inputNode) return toast.error("Sambungkan Input / Unggah ke Prompt");
+      const inData = inputNode.data as InputNodeData;
+
+      const shots = loadShots(inData.sketchId);
+      const uploads = inData.uploads ?? [];
+      const pool: { id: string; dataUrl: string }[] = [
+        ...shots.map((s) => ({ id: s.id, dataUrl: s.dataUrl })),
+        ...uploads.map((u) => ({ id: u.id, dataUrl: u.dataUrl })),
+      ];
+      if (pool.length === 0) return toast.error("Belum ada screenshot / unggahan di node input");
+
+      const viewNo = Number(angle.angle.replace(/[^0-9]/g, "")) || angleIdx + 1;
+      const src =
+        (angle.sourceId ? pool.find((p) => p.id === angle.sourceId) : undefined) ??
+        pool[angle.sourceIndex ?? viewNo - 1] ??
+        pool[Math.min(angleIdx, pool.length - 1)];
+      if (!src) return toast.error("Gambar input untuk view ini tidak ditemukan");
+
+      const finalPrompt = [
+        prData.style,
+        prData.detail,
+        refImage
+          ? "Gunakan gambar referensi HANYA sebagai panduan gaya visual (palet, material, mood, pencahayaan). GEOMETRY tetap mengikuti sketsa input — jangan meniru bentuk atau komposisi dari referensi."
+          : "",
+        "arsitektur fotorealistis, kualitas tinggi",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      if (!finalPrompt.trim()) return toast.error("Isi gaya atau detail prompt");
+
+      const promptGeom = Math.max(0, Math.min(100, prData.geometryConsistency ?? 70));
+      const outputGeom = Math.max(0, Math.min(100, outData.geometryConsistency ?? 80));
+      const accuracyLevel = Math.max(1, Math.min(10, Math.round((promptGeom / 100) * 9) + 1));
+      const angleConsistencyText =
+        outputGeom >= 90
+          ? "KRITIS: Pertahankan geometry PERSIS SAMA dari sketsa input."
+          : outputGeom >= 60
+            ? `Jaga konsistensi bentuk ${outputGeom}% dari sketsa input.`
+            : outputGeom >= 30
+              ? `Boleh variasi bentuk ~${100 - outputGeom}% dari sketsa input.`
+              : "Bebas variasi bentuk.";
+
+      updateOutput(outData.sketchId, angleId, {
+        status: "processing",
+        progress: 5,
+        error: undefined,
+        sourceId: src.id,
+        sourceIndex: pool.findIndex((p) => p.id === src.id),
+      });
+      const timer = setInterval(() => {
+        const cur = useStudioStore
+          .getState()
+          .graph.outputs[outData.sketchId]?.find((o) => o.id === angleId);
+        if (!cur || cur.status !== "processing") return;
+        updateOutput(outData.sketchId, angleId, {
+          progress: Math.min(cur.progress + 3 + Math.random() * 4, 90),
+        });
+      }, 400);
+
+      try {
+        const res = await callRender({
+          data: {
+            sketchBase64: src.dataUrl,
+            referenceBase64: refImage,
+            prompt: `${finalPrompt}. Ikuti sudut pandang & komposisi persis dari sketsa input (${angle.angle}). ${angleConsistencyText}`,
+            renderType: "exterior",
+            accuracy: accuracyLevel,
+            consistency: Math.max(1, Math.min(10, Math.round((outputGeom / 100) * 9) + 1)),
+            model: selectedModel,
+          },
+        });
+        if (res.ok && res.resultUrl) {
+          let dataUrl: string = res.resultUrl;
+          try {
+            const r = await fetch(res.resultUrl);
+            const blob = await r.blob();
+            dataUrl = await new Promise<string>((resolve, reject) => {
+              const fr = new FileReader();
+              fr.onload = () => resolve(fr.result as string);
+              fr.onerror = () => reject(fr.error);
+              fr.readAsDataURL(blob);
+            });
+          } catch {
+            /* fallback to url */
+          }
+          updateOutput(outData.sketchId, angleId, {
+            image: dataUrl,
+            status: "done",
+            progress: 100,
+            credits: estimateCredits(res.modelUsed),
+            model: res.modelUsed,
+          });
+          if (res.fallbackFrom) updateNode(renderNode.id, { model: res.modelUsed });
+          syncToPresentasi(outData.sketchId, outData.sketchTitle);
+          toast.success(`${angle.angle} diregenerate`);
+        } else {
+          const msg = res.ok ? "Tidak ada URL" : res.error;
+          updateOutput(outData.sketchId, angleId, {
+            status: "error",
+            progress: 100,
+            error: msg,
+          });
+          toast.error(msg ?? "Regenerate gagal");
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Error";
+        updateOutput(outData.sketchId, angleId, { status: "error", progress: 100, error: msg });
+        toast.error(msg);
+      } finally {
+        clearInterval(timer);
+      }
+    },
+    [graph, callRender, updateNode, updateOutput, syncToPresentasi],
+  );
+}
+
+
+
 // ---------- Upscale execute hook ----------
 // Resize dataURL image to target long-edge (in px) using high-quality canvas.
 // Gemini image models return a fixed ~1024–1344 px image regardless of the
