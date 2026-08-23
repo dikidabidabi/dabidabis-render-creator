@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -40,6 +40,8 @@ import {
   X,
   Trash2,
   Copy,
+  BookMarked,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +61,11 @@ import { upscaleTile } from "@/lib/upscale-tile.functions";
 import { useStudioStore, type RenderAngle } from "@/store/studio-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  loadPromptLibrary,
+  savePromptToLibrary,
+  type PromptLibraryEntry,
+} from "@/lib/prompt-library";
 
 export const Route = createFileRoute("/studio/")({
   component: StudioPage,
@@ -3520,6 +3527,11 @@ function StudioPage() {
             disabled={graph.nodes.length === 0}
           >
             Bersihkan
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/studio/pustaka-prompt">
+              <BookMarked className="mr-1.5 h-3.5 w-3.5" /> Pustaka Prompt
+            </Link>
           </Button>
           <Button size="sm" onClick={loadPreset} className="bg-gradient-primary shadow-primary">
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
