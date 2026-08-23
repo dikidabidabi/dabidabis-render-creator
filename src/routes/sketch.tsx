@@ -6154,6 +6154,59 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     if (drawing && tool === "aksis" && aksisSub === "garis") {
       drawAxisPath([drawing.a, drawing.b], "rgba(79,70,229,0.85)", [6, 5], 1.6);
     }
+    // ----- Pin map: menandai koordinat geo (anchor world 0,0) -----
+    if (sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon))) {
+      const pw = pinDrag ?? { x: 0, y: 0 };
+      const sp = worldToScreen(pw);
+      const active = pinMoveMode;
+      ctx.save();
+      const H = 34; // tinggi pin (screen px)
+      const R = 10;
+      const cx = sp.x;
+      const cy = sp.y - H + R;
+      // tail
+      ctx.beginPath();
+      ctx.moveTo(cx, sp.y);
+      ctx.lineTo(cx - R * 0.62, cy + R * 0.72);
+      ctx.lineTo(cx + R * 0.62, cy + R * 0.72);
+      ctx.closePath();
+      ctx.fillStyle = active ? "#f59e0b" : "#dc2626";
+      ctx.fill();
+      // head
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = active ? "#f59e0b" : "#dc2626";
+      ctx.fill();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = "rgba(255,255,255,0.95)";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 0.36, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      // ground dot
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(15,23,42,0.85)";
+      ctx.fill();
+      if (pinDrag) {
+        const g = worldToGeo(
+          Number(sketch.geo.lat),
+          Number(sketch.geo.lon),
+          pinDrag,
+          pxPerMeter,
+          Number(sketch.geo.mapRotation) || 0,
+        );
+        const label = `${g.lat.toFixed(6)}, ${g.lon.toFixed(6)}`;
+        ctx.font = "600 11px ui-sans-serif, system-ui";
+        const w = ctx.measureText(label).width + 10;
+        ctx.fillStyle = "rgba(15,23,42,0.92)";
+        ctx.fillRect(sp.x + 12, sp.y - H - 6, w, 18);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(label, sp.x + 17, sp.y - H + 7);
+      }
+      ctx.restore();
+    }
     // Ilustrasi Analisa — di atas layer, di bawah handle. Setiap kind di-render
     // dengan alpha efektif dari Layer Ilustrasi (visible + opacity per sub-layer).
     const illos: Annotation[] = sortAnnotationsForRender(sketch.illustrations ?? []);
