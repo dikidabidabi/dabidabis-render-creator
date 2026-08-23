@@ -2311,6 +2311,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
 
+  // ----- Pin map (koordinat) -----
+  // Pin selalu menandai geo(lat,lon) yang ter-anchor di world (0,0). Saat mode
+  // "geser pin map" aktif, pengguna bisa men-drag pin; saat dilepas koordinat
+  // dihitung ulang dari posisi pin sehingga lat/lon otomatis berubah.
+  const [pinMoveMode, setPinMoveMode] = useState(false);
+  const [pinDrag, setPinDrag] = useState<Point | null>(null);
+  const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
+
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
