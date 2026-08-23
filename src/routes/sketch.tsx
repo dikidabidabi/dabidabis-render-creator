@@ -9902,6 +9902,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
   const onPointerCancel = (e: React.PointerEvent) => {
     endPointer(e);
+    setPinDrag(null);
     setDrawing(null);
     setDraggingHandle(null);
     setEditDrag(null);
