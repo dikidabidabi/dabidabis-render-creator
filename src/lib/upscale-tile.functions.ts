@@ -10,7 +10,7 @@ const ALLOWED_MODELS = [
 
 const InputSchema = z.object({
   tileBase64: z.string().min(10),
-  prompt: z.string().min(1).max(2000),
+  prompt: z.string().min(1).max(12000),
   model: z.enum(ALLOWED_MODELS).optional(),
 });
 
