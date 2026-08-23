@@ -802,8 +802,121 @@ function PromptNode({ id, data }: NodeProps) {
         >
           <Palette className="h-3 w-3" /> Unggah Referensi Style
         </button>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={handleSavePrompt}
+            className="flex flex-1 items-center justify-center gap-1 rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1.5 text-[11px] font-medium text-violet-600 hover:bg-violet-500/20"
+            title="Simpan prompt & style ke Pustaka Prompt"
+          >
+            <BookMarked className="h-3 w-3" /> Save Prompt
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLibrary(loadPromptLibrary());
+              setShowLoad(true);
+            }}
+            className="flex flex-1 items-center justify-center gap-1 rounded border border-violet-500/40 bg-violet-500/10 px-2 py-1.5 text-[11px] font-medium text-violet-600 hover:bg-violet-500/20"
+            title="Muat prompt dari Pustaka Prompt"
+          >
+            <FolderOpen className="h-3 w-3" /> Load Prompt
+          </button>
+        </div>
       </div>
+      {showLoad && (
+        <PromptLibraryPicker
+          items={library}
+          onClose={() => setShowLoad(false)}
+          onPick={(e) => {
+            updateNode(id, {
+              style: e.style,
+              detail: e.detail,
+              geometryConsistency: e.geometryConsistency,
+            });
+            setShowLoad(false);
+            toast.success(`Prompt #${e.no} dimuat`);
+          }}
+        />
+      )}
     </NodeShell>
+  );
+}
+
+// Kotak mengambang pilihan prompt dari Pustaka Prompt (dengan contoh output).
+function PromptLibraryPicker({
+  items,
+  onPick,
+  onClose,
+}: {
+  items: PromptLibraryEntry[];
+  onPick: (e: PromptLibraryEntry) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+      <div className="max-h-[80vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-border/60 bg-surface shadow-soft">
+        <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+          <div>
+            <h3 className="font-display text-base font-semibold">Pustaka Prompt</h3>
+            <p className="text-[11px] text-muted-foreground">
+              {items.length} prompt tersimpan · klik untuk memuat ke node ini
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-border/60 p-1 hover:border-ember"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="max-h-[65vh] overflow-y-auto p-4">
+          {items.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Belum ada prompt tersimpan. Tekan <b>Save Prompt</b> terlebih dahulu.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {items.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => onPick(e)}
+                  className="overflow-hidden rounded-xl border border-border/60 bg-background/60 text-left transition hover:border-ember"
+                >
+                  <div className="relative aspect-[4/3] w-full bg-muted/40">
+                    {e.sampleImage ? (
+                      <img
+                        src={e.sampleImage}
+                        alt={e.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+                        Tanpa contoh output
+                      </div>
+                    )}
+                    <span className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      #{e.no}
+                    </span>
+                  </div>
+                  <div className="space-y-1 p-2">
+                    <p className="truncate text-xs font-medium">{e.name}</p>
+                    <p className="line-clamp-2 text-[10px] text-muted-foreground">
+                      {e.style || "—"}
+                    </p>
+                    <p className="line-clamp-2 text-[10px] text-muted-foreground">
+                      {e.detail || "—"}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
