@@ -1347,7 +1347,21 @@ function OutputNode({
                   <div className="truncate text-destructive" title={o.error}>Gagal</div>
                 )}
               </div>
+              {onRegenerate && !o.id.startsWith("ph-") && (
+                <button
+                  type="button"
+                  disabled={o.status === "processing"}
+                  onClick={() => onRegenerate(id, o.id)}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                  title={`Regenerate ${o.angle} (pakai input & prompt yang sama)`}
+                >
+                  <RefreshCcw
+                    className={cn("h-3 w-3", o.status === "processing" && "animate-spin")}
+                  />
+                </button>
+              )}
               {o.image && (
+
                 <a
                   href={o.image}
                   download={`${d.sketchTitle}-${o.angle}.png`}
