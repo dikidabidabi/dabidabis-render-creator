@@ -13520,6 +13520,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <CompassMarker rotation={northRotation} size={64} />
             </div>
           </div>
+          {hasGeoPin && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background/40 px-3 py-2">
+              <Button
+                size="sm"
+                variant={pinMoveMode ? "default" : "outline"}
+                className={cn("h-8 text-xs", pinMoveMode && "bg-gradient-primary shadow-primary")}
+                onClick={() => { setPinDrag(null); setPinMoveMode((v) => !v); }}
+                title="Geser pin map — drag pin di dalam sketsa, koordinat dihitung otomatis."
+              >
+                <MapPin className="mr-1.5 h-4 w-4" /> {pinMoveMode ? "Selesai geser pin" : "Geser pin map"}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                Pin: {Number(sketch.geo!.lat).toFixed(6)}, {Number(sketch.geo!.lon).toFixed(6)}
+                {pinMoveMode ? " — drag pin di kanvas untuk mengubah koordinat." : ""}
+              </span>
+            </div>
+          )}
           {mode === "masterplan" && <MasterplanSketch3DPreview sketch={sketch as any} />}
         </div>
         {SidePanel}
