@@ -3563,6 +3563,7 @@ function StudioPage() {
   };
 
   const runUpscale = useUpscaleExecute();
+  const regenerateAngle = useStudioRegenerateAngle();
 
   // Node types with annotation callback baked in
   const nodeTypes = useMemo(
@@ -3584,8 +3585,9 @@ function StudioPage() {
       upscale: (props: NodeProps) => <UpscaleNode {...props} onRun={runUpscale} />,
       moodboard: MoodboardNode,
     }),
-    [runUpscale],
+    [runUpscale, regenerateAngle],
   );
+
 
   const loadPreset = () => {
     const fresh = loadSketches();
