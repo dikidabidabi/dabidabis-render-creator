@@ -16,7 +16,10 @@ export type RenderAngle = {
   error?: string;
   credits?: number; // Lovable credits used for this angle
   model?: string; // model id used
+  sourceId?: string; // id of the input screenshot/upload this view mirrors
+  sourceIndex?: number; // position of that input image in the input node
 };
+
 
 export type StudioGraph = {
   nodes: Node[];
