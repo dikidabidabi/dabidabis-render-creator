@@ -8953,6 +8953,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (pinDrag && pinMoveMode) {
+      setPinDrag(getWorldPosRaw(e));
+      return;
+    }
     // Ramp vertex drag
     if (roadVertexDrag) {
       const wp = getWorldPos(e);
