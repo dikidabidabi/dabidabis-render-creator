@@ -2033,6 +2033,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const activeLvlId = activeLevelId ?? levels[0]?.id ?? null;
   const [rekapMinimized, setRekapMinimized] = useState(false);
   const [sideMinimized, setSideMinimized] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(true);
   const [clusterOpen, setClusterOpen] = useState(false);
 
   const [sideOffset, setSideOffset] = useState({ x: 0, y: 0 });
@@ -10370,9 +10371,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           </div>
         </div>
 
-        <div className="mt-3">
-          <GeoPanel geo={sketch.geo} onChange={(g) => onChange({ geo: g })} />
-        </div>
       </div>
     );
   })();
@@ -10606,8 +10604,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
 
       <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
-        <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-between"
+          onClick={() => setToolsOpen((v) => !v)}
+        >
+          <span className="text-xs uppercase tracking-wider">Alat</span>
+          {toolsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
+        <div className={cn("space-y-2", !toolsOpen && "hidden")}>
+          <div className="grid grid-cols-2 gap-2">
           <Button
             variant={tool === "line" ? "default" : "outline"}
             size="sm"
@@ -13016,6 +13023,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Tablet: cubit 2 jari untuk zoom, putar 2 jari untuk rotasi kanvas.
         </p>
+        </div>
       </div>
 
       {!hideSideExtras && (
