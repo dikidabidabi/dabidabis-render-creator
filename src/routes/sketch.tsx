@@ -46,6 +46,7 @@ import {
   RotateCw,
   SplitSquareHorizontal,
   ArrowRight,
+  Settings,
 } from "lucide-react";
 import {
   type Floor,
