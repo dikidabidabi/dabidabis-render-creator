@@ -10371,9 +10371,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           </div>
         </div>
 
-        <div className="mt-3">
-          <GeoPanel geo={sketch.geo} onChange={(g) => onChange({ geo: g })} />
-        </div>
       </div>
     );
   })();
