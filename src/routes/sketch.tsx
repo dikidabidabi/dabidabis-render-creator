@@ -13285,9 +13285,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           {sketch.title} · Skala {scale} · 1 kotak besar = {METERS_PER_MAJOR[scale]} m
         </div>
 
+        {/* Floating tools toolbar on the top-right of the sketch box */}
+        <div className="absolute right-4 top-4 z-20">
+          <ToolsToolbar
+            tool={tool}
+            mode={mode}
+            open={toolsOpen}
+            onToggle={() => setToolsOpen((v) => !v)}
+            onSelect={handleSelectTool}
+            onClusterOpen={() => setClusterOpen(true)}
+          />
+        </div>
+
         {/* Floating draggable side panel on the right */}
         <div
-          className="absolute right-4 top-4 z-10 w-[400px] max-w-[90vw]"
+          className="absolute right-4 top-16 z-10 w-[400px] max-w-[90vw]"
           style={{ transform: `translate(${sideOffset.x}px, ${sideOffset.y}px)` }}
         >
           {SidePanel}
