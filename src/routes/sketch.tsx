@@ -6737,6 +6737,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setDraggingHandle(null);
   }, []);
 
+  const handleSelectTool = useCallback((nextTool: typeof tool, opts?: { parkingKind?: "mobil" | "motor" }) => {
+    cancelPendingCurve();
+    if (nextTool === "parking" && opts?.parkingKind) {
+      setTool("parking");
+      setParkingKind(opts.parkingKind);
+      setParkingSubTool("draw");
+      setParkingSelectedId(null);
+    } else if (nextTool === "grid") {
+      setTool("grid");
+      if (!grid.enabled) updateGrid({ enabled: true });
+    } else if (nextTool === "iluanalisa") {
+      setTool("iluanalisa");
+      setIluDraft(null);
+      setIluVertexDrag(null);
+    } else if (nextTool === "aksis") {
+      setTool("aksis");
+      setAksisDraft(null);
+    } else if (nextTool === "jalan") {
+      setTool("jalan");
+      setJalanDraft(null);
+    } else if (nextTool === "floor") {
+      setTool("floor");
+      setFloorDraft(null);
+    } else if (nextTool === "ramp") {
+      setTool("ramp");
+      setRampSub("tarik");
+      setRampDraft(null);
+      setRampSelectedId(null);
+    } else if (nextTool === "polyline") {
+      setPolyDraft(null);
+      setTool("polyline");
+    } else {
+      setTool(nextTool);
+    }
+  }, [cancelPendingCurve, grid.enabled, updateGrid]);
+
   // Commit a rectangle from two diagonal corners
   const commitRect = useCallback(
     (a: Point, b: Point) => {
