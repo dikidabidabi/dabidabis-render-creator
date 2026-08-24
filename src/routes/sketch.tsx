@@ -46,7 +46,6 @@ import {
   RotateCw,
   SplitSquareHorizontal,
   ArrowRight,
-  Settings,
 } from "lucide-react";
 import {
   type Floor,
@@ -1966,131 +1965,6 @@ function GeoPanel({
   );
 }
 
-type ToolKind = "line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa";
-
-type ToolsToolbarProps = {
-  tool: ToolKind;
-  mode: "sketch" | "masterplan";
-  parkingKind: "mobil" | "motor";
-  open: boolean;
-  onToggle: () => void;
-  onSelect: (tool: ToolKind, opts?: { parkingKind?: "mobil" | "motor" }) => void;
-  onClusterOpen: () => void;
-};
-
-function ToolsToolbar({ tool, mode, parkingKind, open, onToggle, onSelect, onClusterOpen }: ToolsToolbarProps) {
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <Button
-        variant={open ? "default" : "outline"}
-        size="sm"
-        onClick={onToggle}
-        className={cn(
-          "h-9 gap-1.5 px-3 text-xs font-semibold uppercase tracking-wider shadow-soft",
-          open && "bg-gradient-primary shadow-primary"
-        )}
-        title={open ? "Sembunyikan alat" : "Tampilkan alat"}
-      >
-        <Pencil className="h-4 w-4" /> ALAT
-      </Button>
-      {open && (
-        <div className="max-h-[calc(100vh-180px)] w-[220px] overflow-y-auto rounded-2xl border border-border/60 bg-surface/90 p-2.5 shadow-elevated backdrop-blur">
-          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Gambar</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Button variant={tool === "line" ? "default" : "outline"} size="sm" onClick={() => onSelect("line")} className={cn(tool === "line" && "bg-gradient-primary shadow-primary")}>
-              <Pencil className="mr-1 h-3.5 w-3.5" /> Garis
-            </Button>
-            <Button variant={tool === "rect" ? "default" : "outline"} size="sm" onClick={() => onSelect("rect")} className={cn(tool === "rect" && "bg-gradient-primary shadow-primary")}>
-              <Square className="mr-1 h-3.5 w-3.5" /> Persegi
-            </Button>
-            <Button variant={tool === "polyline" ? "default" : "outline"} size="sm" onClick={() => onSelect("polyline")} className={cn(tool === "polyline" && "bg-gradient-primary shadow-primary")}>
-              <Waypoints className="mr-1 h-3.5 w-3.5" /> Polyline
-            </Button>
-            <Button variant={tool === "circle" ? "default" : "outline"} size="sm" onClick={() => onSelect("circle")} className={cn(tool === "circle" && "bg-gradient-primary shadow-primary")}>
-              <CircleIcon className="mr-1 h-3.5 w-3.5" /> Lingkaran
-            </Button>
-          </div>
-          <div className="my-2 h-px bg-border/40" />
-          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Ubah</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Button variant={tool === "edit" ? "default" : "outline"} size="sm" onClick={() => onSelect("edit")} className={cn(tool === "edit" && "bg-gradient-primary shadow-primary")}>
-              <Move className="mr-1 h-3.5 w-3.5" /> Edit Titik
-            </Button>
-            <Button variant={tool === "move" ? "default" : "outline"} size="sm" onClick={() => onSelect("move")} className={cn(tool === "move" && "bg-gradient-primary shadow-primary")} title="Move — pilih satu/banyak objek lalu drag (snap mm) atau geser numerik ΔX/ΔY mm.">
-              <GripHorizontal className="mr-1 h-3.5 w-3.5" /> Move
-            </Button>
-            <Button variant={tool === "mirror" ? "default" : "outline"} size="sm" onClick={() => onSelect("mirror")} className={cn(tool === "mirror" && "bg-gradient-primary shadow-primary")} title="Mirror — pilih objek lewat Move, lalu tarik sumbu (snap 0/45/90/135°) untuk menduplikasi cerminan.">
-              <FlipHorizontal className="mr-1 h-3.5 w-3.5" /> Mirror
-            </Button>
-            <Button variant={tool === "erase" ? "default" : "outline"} size="sm" onClick={() => onSelect("erase")}>
-              <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus
-            </Button>
-            <Button variant={tool === "trim" ? "default" : "outline"} size="sm" onClick={() => onSelect("trim")} className={cn(tool === "trim" && "bg-gradient-primary shadow-primary")} title="Trim / Extend — tap garis dekat ujung yang ingin disesuaikan.">
-              <Crop className="mr-1 h-3.5 w-3.5" /> Trim/Ext
-            </Button>
-            <Button variant={tool === "offset" ? "default" : "outline"} size="sm" onClick={() => onSelect("offset")} className={cn(tool === "offset" && "bg-gradient-primary shadow-primary")} title="Offset — tap garis pada sisi yang diinginkan; jarak diatur di panel kanan.">
-              <MoveHorizontal className="mr-1 h-3.5 w-3.5" /> Offset
-            </Button>
-          </div>
-          <div className="my-2 h-px bg-border/40" />
-          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Bangunan & Lahan</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Button variant={tool === "section" ? "default" : "outline"} size="sm" onClick={() => onSelect("section")} className={cn(tool === "section" && "bg-gradient-primary shadow-primary")} title="Garis Potong — tarik garis lurus di kanvas untuk bidang irisan; slide potongan otomatis dibuat.">
-              <Scissors className="mr-1 h-3.5 w-3.5" /> Garis Potong
-            </Button>
-            <Button variant={tool === "separasi" ? "default" : "outline"} size="sm" onClick={() => onSelect("separasi")} className={cn(tool === "separasi" && "bg-gradient-primary shadow-primary")} title="Separasi Ruang — tarik garis dari tepi ruang ke tepi lain; ruang terbelah dua.">
-              <SplitSquareHorizontal className="mr-1 h-3.5 w-3.5" /> Separasi
-            </Button>
-            <Button variant={tool === "floor" ? "default" : "outline"} size="sm" onClick={() => onSelect("floor")} className={cn(tool === "floor" && "bg-gradient-primary shadow-primary")} title="Alat Lantai — slab 150mm di bawah MDPL level aktif.">
-              <BoxIcon className="mr-1 h-3.5 w-3.5" /> Lantai
-            </Button>
-            <Button variant={tool === "door" ? "default" : "outline"} size="sm" onClick={() => onSelect("door")} className={cn(tool === "door" && "bg-gradient-primary shadow-primary")} title="Pintu — tap di dinding, geser searah dinding, lalu tegak lurus untuk arah ayun.">
-              <DoorOpen className="mr-1 h-3.5 w-3.5" /> Pintu
-            </Button>
-            <Button variant={tool === "pick" ? "default" : "outline"} size="sm" onClick={() => onSelect("pick")} className={cn(tool === "pick" && "bg-gradient-primary shadow-primary")} title="Pick Material — klik segmen garis untuk menandai jenis selubung.">
-              <Paintbrush className="mr-1 h-3.5 w-3.5" /> Material
-            </Button>
-            <Button variant={tool === "grid" ? "default" : "outline"} size="sm" onClick={() => onSelect("grid")} className={cn(tool === "grid" && "bg-gradient-primary shadow-primary")} title="Modul Struktur — grid as + kolom parametric.">
-              <Grid3x3 className="mr-1 h-3.5 w-3.5" /> Grid Struktur
-            </Button>
-          </div>
-          <div className="my-2 h-px bg-border/40" />
-          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Master Plan</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {mode === "masterplan" && (
-              <Button variant={tool === "aksis" ? "default" : "outline"} size="sm" onClick={() => onSelect("aksis")} className={cn(tool === "aksis" && "bg-gradient-primary shadow-primary")} title="Aksis — sumbu rancangan yang dihindari Cluster Generator.">
-                <Waypoints className="mr-1 h-3.5 w-3.5" /> Aksis
-              </Button>
-            )}
-            <Button variant={tool === "jalan" ? "default" : "outline"} size="sm" onClick={() => onSelect("jalan")} className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")} title="Jalan — koridor dengan lebar & fillet.">
-              <Spline className="mr-1 h-3.5 w-3.5" /> Jalan
-            </Button>
-            <Button variant={tool === "iluanalisa" ? "default" : "outline"} size="sm" onClick={() => onSelect("iluanalisa")} className={cn(tool === "iluanalisa" && "bg-gradient-primary shadow-primary")} title="Ilustrasi Analisa — panah, zona, alur, node, label.">
-              <PenTool className="mr-1 h-3.5 w-3.5" /> Ilustrasi
-            </Button>
-            <Button variant="outline" size="sm" onClick={onClusterOpen} title="Buka Node Editor untuk relasi antar ruang dan generate cluster polygon.">
-              <Waypoints className="mr-1 h-3.5 w-3.5" /> Cluster Gen
-            </Button>
-          </div>
-          <div className="my-2 h-px bg-border/40" />
-          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Parkir & Ramp</div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <Button variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"} size="sm" onClick={() => onSelect("parking", { parkingKind: "mobil" })} className={cn(tool === "parking" && parkingKind === "mobil" && "bg-gradient-primary shadow-primary")} title="Lot Parkir Mobil — 2.4 × 5 m.">
-              <Car className="mr-1 h-3.5 w-3.5" /> Mobil
-            </Button>
-            <Button variant={tool === "parking" && parkingKind === "motor" ? "default" : "outline"} size="sm" onClick={() => onSelect("parking", { parkingKind: "motor" })} className={cn(tool === "parking" && parkingKind === "motor" && "bg-gradient-primary shadow-primary")} title="Lot Parkir Motor — 0.75 × 2 m.">
-              <Car className="mr-1 h-3.5 w-3.5" /> Motor
-            </Button>
-            <Button variant={tool === "ramp" ? "default" : "outline"} size="sm" onClick={() => onSelect("ramp")} className={cn(tool === "ramp" && "bg-gradient-primary shadow-primary")} title="Ramp — polyline acuan + offset.">
-              <BoxIcon className="mr-1 h-3.5 w-3.5" /> Ramp
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 type EditorProps = {
   sketch: Sketch;
   onChange: (patch: Partial<Sketch>) => void;
@@ -2446,7 +2320,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
-  const [toolsOpen, setToolsOpen] = useState(true);
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
@@ -6863,42 +6736,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setDraggingHandle(null);
   }, []);
 
-  const handleSelectTool = useCallback((nextTool: typeof tool, opts?: { parkingKind?: "mobil" | "motor" }) => {
-    cancelPendingCurve();
-    if (nextTool === "parking" && opts?.parkingKind) {
-      setTool("parking");
-      setParkingKind(opts.parkingKind);
-      setParkingSubTool("draw");
-      setParkingSelectedId(null);
-    } else if (nextTool === "grid") {
-      setTool("grid");
-      if (!grid.enabled) updateGrid({ enabled: true });
-    } else if (nextTool === "iluanalisa") {
-      setTool("iluanalisa");
-      setIluDraft(null);
-      setIluVertexDrag(null);
-    } else if (nextTool === "aksis") {
-      setTool("aksis");
-      setAksisDraft(null);
-    } else if (nextTool === "jalan") {
-      setTool("jalan");
-      setJalanDraft(null);
-    } else if (nextTool === "floor") {
-      setTool("floor");
-      setFloorDraft(null);
-    } else if (nextTool === "ramp") {
-      setTool("ramp");
-      setRampSub("tarik");
-      setRampDraft(null);
-      setRampSelectedId(null);
-    } else if (nextTool === "polyline") {
-      setPolyDraft(null);
-      setTool("polyline");
-    } else {
-      setTool(nextTool);
-    }
-  }, [cancelPendingCurve, grid.enabled, updateGrid]);
-
   // Commit a rectangle from two diagonal corners
   const commitRect = useCallback(
     (a: Point, b: Point) => {
@@ -10572,112 +10409,408 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       )}
       <div className={cn("space-y-5", fullscreen ? "overflow-y-auto p-4" : "p-5")}>
 
-      <div className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-3">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-          <Settings className="h-3.5 w-3.5" /> Pengaturan Gambar
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Ekspor CAD</Label>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => {
+            try {
+              const activeLayers = layers.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+              const activeLines = lines.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+              const activeDoors = (sketch.doors ?? []).filter((d) => !activeLvlId || d.levelId === activeLvlId);
+              const activeAreas = (sketch.parkingAreas ?? []).filter((a) => !activeLvlId || a.levelId === activeLvlId);
+              const dxf = buildDxf({
+                pxPerMeter,
+                wallThicknessM: 0.15,
+                lines: activeLines,
+                layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
+                doors: activeDoors,
+                parkingStallsByArea: parkingStallsActive,
+                parkingAreas: activeAreas,
+                mmGridRotRad,
+              });
+              const safe = (sketch.title || "Konsep_Denah").replace(/[^\w\-]+/g, "_");
+              downloadDxf(`${safe}.dxf`, dxf);
+              toast.success("DXF terunduh — buka di AutoCAD/CAD favoritmu");
+            } catch (err) {
+              console.error(err);
+              toast.error("Gagal mengekspor DXF");
+            }
+          }}
+          title="Unduh denah aktif sebagai file .dxf (skala asli 1:1, satuan meter)"
+        >
+          <Download className="mr-1.5 h-4 w-4" /> Download as CAD (DXF)
+        </Button>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          Skala asli 1:1 dalam meter. Dinding diekspor sebagai 2 garis sejajar (tebal 150 mm), pintu sebagai ARC + LINE, lot parkir sebagai POLYLINE tertutup.
+        </p>
+      </div>
+
+
+
+
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Skala</Label>
+        <Select value={scale} onValueChange={(v) => onChange({ scale: v as Scale })}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1:100">1 : 100 (1 kotak besar = 1 m)</SelectItem>
+            <SelectItem value="1:200">1 : 200 (1 kotak besar = 2 m)</SelectItem>
+            <SelectItem value="1:500">1 : 500 (1 kotak besar = 5 m)</SelectItem>
+            <SelectItem value="1:1000">1 : 1000 (1 kotak besar = 10 m)</SelectItem>
+            <SelectItem value="1:1200">1 : 1200 (1 kotak besar = 12 m)</SelectItem>
+            <SelectItem value="1:1500">1 : 1500 (1 kotak besar = 15 m)</SelectItem>
+            <SelectItem value="1:2000">1 : 2000 (1 kotak besar = 20 m)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fungsi</Label>
+        <Select value={fungsi ?? ""} onValueChange={(v) => onChange({ fungsi: v || undefined })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Pilih fungsi bangunan" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Hotel">Hotel</SelectItem>
+            <SelectItem value="Apartment">Apartment</SelectItem>
+            <SelectItem value="Komersil">Komersil</SelectItem>
+            <SelectItem value="Rumah Sakit">Rumah Sakit</SelectItem>
+            <SelectItem value="Bandara">Bandara</SelectItem>
+            <SelectItem value="Bangunan Khusus">Bangunan Khusus</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Arah Utara</Label>
+        <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background/40 p-2.5">
+          <CompassMarker rotation={northRotation} size={56} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                step="1"
+                value={Number.isFinite(northRotation) ? northRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onChange({ northRotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-8 text-sm"
+              />
+              <span className="text-xs text-muted-foreground">°</span>
+            </div>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: ((northRotation - 15) % 360 + 360) % 360 })}>−15°</Button>
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: 0 })}>0°</Button>
+              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
+                onClick={() => onChange({ northRotation: ((northRotation + 15) % 360 + 360) % 360 })}>+15°</Button>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-[11px]"
-            onClick={() => {
-              try {
-                const activeLayers = layers.filter((l) => !activeLvlId || l.levelId === activeLvlId);
-                const activeLines = lines.filter((l) => !activeLvlId || l.levelId === activeLvlId);
-                const activeDoors = (sketch.doors ?? []).filter((d) => !activeLvlId || d.levelId === activeLvlId);
-                const activeAreas = (sketch.parkingAreas ?? []).filter((a) => !activeLvlId || a.levelId === activeLvlId);
-                const dxf = buildDxf({
-                  pxPerMeter,
-                  wallThicknessM: 0.15,
-                  lines: activeLines,
-                  layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
-                  doors: activeDoors,
-                  parkingStallsByArea: parkingStallsActive,
-                  parkingAreas: activeAreas,
-                  mmGridRotRad,
-                });
-                const safe = (sketch.title || "Konsep_Denah").replace(/[^\w\-]+/g, "_");
-                downloadDxf(`${safe}.dxf`, dxf);
-                toast.success("DXF terunduh — buka di AutoCAD/CAD favoritmu");
-              } catch (err) {
-                console.error(err);
-                toast.error("Gagal mengekspor DXF");
-              }
-            }}
-            title="Unduh denah aktif sebagai file .dxf (skala asli 1:1, satuan meter)"
-          >
-            <Download className="h-3.5 w-3.5" /> CAD
-          </Button>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          0° = utara ke atas. Rotasi searah jarum jam. Muncul di kanan bawah tiap denah pada slide.
+        </p>
+      </div>
 
-          <Select value={scale} onValueChange={(v) => onChange({ scale: v as Scale })}>
-            <SelectTrigger className="h-8 w-[110px] text-[11px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1:100">1:100</SelectItem>
-              <SelectItem value="1:200">1:200</SelectItem>
-              <SelectItem value="1:500">1:500</SelectItem>
-              <SelectItem value="1:1000">1:1000</SelectItem>
-              <SelectItem value="1:1200">1:1200</SelectItem>
-              <SelectItem value="1:1500">1:1500</SelectItem>
-              <SelectItem value="1:2000">1:2000</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={fungsi ?? ""} onValueChange={(v) => onChange({ fungsi: v || undefined })}>
-            <SelectTrigger className="h-8 w-[130px] text-[11px]">
-              <SelectValue placeholder="Fungsi" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Hotel">Hotel</SelectItem>
-              <SelectItem value="Apartment">Apartment</SelectItem>
-              <SelectItem value="Komersil">Komersil</SelectItem>
-              <SelectItem value="Rumah Sakit">Rumah Sakit</SelectItem>
-              <SelectItem value="Bandara">Bandara</SelectItem>
-              <SelectItem value="Bangunan Khusus">Bangunan Khusus</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2 py-1">
-            <CompassMarker rotation={northRotation} size={28} />
-            <Input
-              type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-              step="1"
-              value={Number.isFinite(northRotation) ? northRotation : 0}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                onChange({ northRotation: Number.isFinite(v) ? v : 0 });
-              }}
-              className="h-7 w-14 text-xs"
-            />
-            <span className="text-[10px] text-muted-foreground">°</span>
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Rotasi Grid</Label>
+        <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
+          {/* Grid milimeter block (display-only) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Milimeter Block</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {mmGridRotation.toFixed(1)}°
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                step="1"
+                value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onChange({ mmGridRotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-7 text-xs"
+              />
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => onChange({ mmGridRotation: 0 })}
+                disabled={mmGridRotation === 0}
+                title="Kembalikan ke 0° tanpa memindahkan sketsa"
+              >
+                Reset
+              </Button>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Memutar tampilan kertas milimeter block saja. Tidak mengubah koordinat sketsa, dapat dikembalikan ke 0° tanpa pergeseran.
+            </p>
           </div>
 
-          <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2 py-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Grid</span>
-            <Input
-              type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-              step="1"
-              value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                onChange({ mmGridRotation: Number.isFinite(v) ? v : 0 });
-              }}
-              className="h-7 w-14 text-xs"
-            />
-            <Button
-              variant="outline" size="sm" className="h-7 px-2 text-[10px]"
-              onClick={() => onChange({ mmGridRotation: 0 })}
-              disabled={mmGridRotation === 0}
-              title="Kembalikan ke 0°"
-            >
-              Reset
-            </Button>
+          {/* Grid struktur (per grid aktif) */}
+          <div className="space-y-1 border-t border-border/40 pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Grid Struktur {editGridIdx === 0 ? "(Primer)" : `(Extra ${editGridIdx})`}
+              </span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {structGridRotation.toFixed(1)}°
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                step="1"
+                value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
+                }}
+                className="h-7 text-xs"
+              />
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => updateGrid({ rotation: 0 })}
+                disabled={structGridRotation === 0}
+                title="Kembalikan rotasi grid struktur ke 0°"
+              >
+                Reset
+              </Button>
+              <Button
+                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                onClick={() => updateGrid({ rotation: mmGridRotation })}
+                disabled={structGridRotation === mmGridRotation}
+                title="Samakan dengan rotasi milimeter block agar paralel"
+              >
+                = mm
+              </Button>
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              {gridsParallel
+                ? "Paralel dengan milimeter block → snap to grid aktif saat menggeser titik nol grid struktur."
+                : "Tidak paralel dengan milimeter block → snap to grid dimatikan untuk menggeser grid struktur."}
+            </p>
           </div>
         </div>
       </div>
 
+
+
+
+
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant={tool === "line" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("line"); }}
+            className={cn(tool === "line" && "bg-gradient-primary shadow-primary")}
+          >
+            <Pencil className="mr-1.5 h-4 w-4" /> Garis
+          </Button>
+          <Button
+            variant={tool === "rect" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("rect"); }}
+            className={cn(tool === "rect" && "bg-gradient-primary shadow-primary")}
+          >
+            <Square className="mr-1.5 h-4 w-4" /> Persegi
+          </Button>
+          <Button
+            variant={tool === "polyline" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setPolyDraft(null); setTool("polyline"); }}
+            className={cn(tool === "polyline" && "bg-gradient-primary shadow-primary")}
+          >
+            <Waypoints className="mr-1.5 h-4 w-4" /> Polyline
+          </Button>
+          <Button
+            variant={tool === "edit" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("edit"); }}
+            className={cn(tool === "edit" && "bg-gradient-primary shadow-primary")}
+          >
+            <Move className="mr-1.5 h-4 w-4" /> Edit Titik
+          </Button>
+          <Button
+            variant={tool === "move" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("move"); }}
+            className={cn(tool === "move" && "bg-gradient-primary shadow-primary")}
+            title="Move — pilih satu/banyak objek lalu drag (snap mm) atau geser numerik ΔX/ΔY mm."
+          >
+            <GripHorizontal className="mr-1.5 h-4 w-4" /> Move
+          </Button>
+          <Button
+            variant={tool === "mirror" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("mirror"); }}
+            className={cn(tool === "mirror" && "bg-gradient-primary shadow-primary")}
+            title="Mirror — pilih objek lewat Move, lalu tarik sumbu (snap 0/45/90/135°) untuk menduplikasi cerminan."
+          >
+            <FlipHorizontal className="mr-1.5 h-4 w-4" /> Mirror
+          </Button>
+          <Button
+            variant={tool === "erase" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("erase"); }}
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" /> Hapus
+          </Button>
+          <Button
+            variant={tool === "section" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("section"); }}
+            className={cn(tool === "section" && "bg-gradient-primary shadow-primary")}
+            title="Tarik satu garis lurus di kanvas untuk menentukan bidang irisan. Slide potongan akan otomatis dibuat."
+          >
+            <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
+          </Button>
+          <Button
+            variant={tool === "separasi" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
+            className={cn(tool === "separasi" && "bg-gradient-primary shadow-primary")}
+            title="Separasi Ruang — tarik garis dari satu tepi ruang ke tepi lain; ruang otomatis terbelah dua dengan luas terpisah."
+          >
+            <SplitSquareHorizontal className="mr-1.5 h-4 w-4" /> Separasi Ruang
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setClusterOpen(true)}
+            title="Buka Node Editor (Grasshopper-style) untuk merancang relasi antar ruang, lalu generate cluster polygon otomatis."
+          >
+            <Waypoints className="mr-1.5 h-4 w-4" /> Cluster Generator
+          </Button>
+          <Button
+            variant={tool === "grid" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("grid"); if (!grid.enabled) updateGrid({ enabled: true }); }}
+            className={cn(tool === "grid" && "bg-gradient-primary shadow-primary")}
+            title="Modul Struktur — grid as + kolom parametric"
+          >
+            <Grid3x3 className="mr-1.5 h-4 w-4" /> Grid Struktur
+          </Button>
+          <Button
+            variant={tool === "pick" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("pick"); }}
+            className={cn(tool === "pick" && "bg-gradient-primary shadow-primary")}
+            title="Pick Material — klik segmen garis untuk menandai jenis selubung (Solid/Curtain/Window). Alt-klik untuk hapus."
+          >
+            <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
+          </Button>
+          <Button
+            variant={tool === "door" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("door"); }}
+            className={cn(tool === "door" && "bg-gradient-primary shadow-primary")}
+            title="Pintu — tap di dinding (engsel A), geser searah dinding (lebar), lalu tegak lurus untuk arah ayun."
+          >
+            <DoorOpen className="mr-1.5 h-4 w-4" /> Pintu
+          </Button>
+          <Button
+            variant={tool === "circle" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("circle"); }}
+            className={cn(tool === "circle" && "bg-gradient-primary shadow-primary")}
+            title="Lingkaran — tap di pusat, geser untuk menentukan radius."
+          >
+            <CircleIcon className="mr-1.5 h-4 w-4" /> Lingkaran
+          </Button>
+          <Button
+            variant={tool === "trim" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("trim"); }}
+            className={cn(tool === "trim" && "bg-gradient-primary shadow-primary")}
+            title="Trim / Extend — tap di garis dekat ujung yang ingin disesuaikan, gunakan garis lain sebagai batas."
+          >
+            <Crop className="mr-1.5 h-4 w-4" /> Trim / Extend
+          </Button>
+          <Button
+            variant={tool === "offset" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("offset"); }}
+            className={cn(tool === "offset" && "bg-gradient-primary shadow-primary")}
+            title="Offset — tap garis pada sisi yang diinginkan; jarak diatur di bawah."
+          >
+            <MoveHorizontal className="mr-1.5 h-4 w-4" /> Offset
+          </Button>
+          <Button
+            variant={tool === "floor" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setFloorDraft(null); setTool("floor"); }}
+            className={cn(tool === "floor" && "bg-gradient-primary shadow-primary")}
+            title="Alat Lantai — slab 150mm di bawah MDPL level aktif (Persegi / Garis / Polyline / Attach Garis)"
+          >
+            <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
+          </Button>
+          <Button
+            variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("mobil"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "mobil" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Mobil — 2.4 × 5 m, aisle 5.5 m, buffer jalur 1.75 m."
+          >
+            <Car className="mr-1.5 h-4 w-4" /> Mobil
+          </Button>
+          <Button
+            variant={tool === "parking" && parkingKind === "motor" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("motor"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
+            className={cn(tool === "parking" && parkingKind === "motor" && "bg-gradient-primary shadow-primary")}
+            title="Lot Parkir Motor — 0.75 × 2 m, aisle 1.5 m, buffer jalur 0.5 m."
+          >
+            <Car className="mr-1.5 h-4 w-4" /> Motor
+          </Button>
+          <Button
+            variant={tool === "ramp" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("ramp"); setRampSub("tarik"); setRampDraft(null); setRampSelectedId(null); }}
+            className={cn(tool === "ramp" && "bg-gradient-primary shadow-primary")}
+            title="Ramp — polyline acuan + offset; berakhir di level di atas (puncak ramp)."
+          >
+            <BoxIcon className="mr-1.5 h-4 w-4" /> Ramp
+          </Button>
+          {mode === "masterplan" && (
+            <Button
+              variant={tool === "aksis" ? "default" : "outline"}
+              size="sm"
+              onClick={() => { cancelPendingCurve(); setTool("aksis"); setAksisDraft(null); }}
+              className={cn(tool === "aksis" && "bg-gradient-primary shadow-primary")}
+              title="Aksis — sumbu rancangan yang dihindari oleh Cluster Generator."
+            >
+              <Waypoints className="mr-1.5 h-4 w-4" /> Aksis
+            </Button>
+          )}
+          <Button
+            variant={tool === "jalan" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("jalan"); setJalanDraft(null); }}
+            className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")}
+            title="Jalan — koridor dengan lebar & fillet."
+          >
+            <Spline className="mr-1.5 h-4 w-4" /> Jalan
+          </Button>
+          <Button
+            variant={tool === "iluanalisa" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("iluanalisa"); setIluDraft(null); }}
+            className={cn(tool === "iluanalisa" && "bg-gradient-primary shadow-primary")}
+            title="Ilustrasi Analisa — panah, zona, alur, node, label untuk framework diagram."
+          >
+            <PenTool className="mr-1.5 h-4 w-4" /> Ilustrasi Analisa
+          </Button>
+        </div>
         {tool === "iluanalisa" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Ilustrasi Analisa</span>
@@ -12949,15 +13082,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
               <Ruler className="h-3.5 w-3.5" /> Garis
             </div>
-            <div className="space-y-2">
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm text-muted-foreground">Jumlah</span>
-                <span className="font-display text-base font-semibold">{lines.length}</span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm text-muted-foreground">Panjang</span>
-                <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
-              </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Jumlah</span>
+              <span className="font-display text-base font-semibold">{lines.length}</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">Panjang</span>
+              <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
             </div>
           </div>
 
@@ -12967,6 +13098,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           </p>
         </>
       )}
+      
+      </div>
     </aside>
   );
 
@@ -13286,22 +13419,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           {sketch.title} · Skala {scale} · 1 kotak besar = {METERS_PER_MAJOR[scale]} m
         </div>
 
-        {/* Floating tools toolbar on the top-right of the sketch box */}
-        <div className="absolute right-4 top-4 z-20">
-          <ToolsToolbar
-            tool={tool}
-            mode={mode}
-            parkingKind={parkingKind}
-            open={toolsOpen}
-            onToggle={() => setToolsOpen((v) => !v)}
-            onSelect={handleSelectTool}
-            onClusterOpen={() => setClusterOpen(true)}
-          />
-        </div>
-
         {/* Floating draggable side panel on the right */}
         <div
-          className="absolute right-4 top-16 z-10 w-[400px] max-w-[90vw]"
+          className="absolute right-4 top-4 z-10 w-[400px] max-w-[90vw]"
           style={{ transform: `translate(${sideOffset.x}px, ${sideOffset.y}px)` }}
         >
           {SidePanel}
@@ -13399,19 +13519,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             </div>
             <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
               <CompassMarker rotation={northRotation} size={64} />
-            </div>
-
-            {/* Floating tools toolbar on the top-right of the sketch box */}
-            <div className="absolute right-4 top-4 z-20">
-              <ToolsToolbar
-                tool={tool}
-                mode={mode}
-                parkingKind={parkingKind}
-                open={toolsOpen}
-                onToggle={() => setToolsOpen((v) => !v)}
-                onSelect={handleSelectTool}
-                onClusterOpen={() => setClusterOpen(true)}
-              />
             </div>
           </div>
           {hasGeoPin && (
