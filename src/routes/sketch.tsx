@@ -10790,18 +10790,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   <span className="w-8 text-right text-[10px] tabular-nums text-slate-700">{Math.round(iluStrokeArrow)}</span>
                 </div>
                 <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
-                  <input type="checkbox" checked={iluArrowHeadStart} onChange={(e) => setIluArrowHeadStart(e.target.checked)} className="h-3 w-3" />
+                  <input type="checkbox" checked={iluArrowHeadStart} onChange={(e) =/> setIluArrowHeadStart(e.target.checked)} className="h-3 w-3" />
                   Panah awal
                 </label>
                 <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
-                  <input type="checkbox" checked={iluArrowHeadEnd} onChange={(e) => setIluArrowHeadEnd(e.target.checked)} className="h-3 w-3" />
+                  <input type="checkbox" checked={iluArrowHeadEnd} onChange={(e) =/> setIluArrowHeadEnd(e.target.checked)} className="h-3 w-3" />
                   Panah akhir
                 </label>
               </>
             )}
             {iluKind === "zone" && (
               <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
-                <input type="checkbox" checked={iluZoneHatch} onChange={(e) => setIluZoneHatch(e.target.checked)} className="h-3 w-3" />
+                <input type="checkbox" checked={iluZoneHatch} onChange={(e) =/> setIluZoneHatch(e.target.checked)} className="h-3 w-3" />
                 Arsir 45° (tanpa border)
               </label>
             )}
@@ -10835,15 +10835,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 />
                 <label className="flex items-center gap-1 text-[10px] text-slate-700">
                   <span>Latar judul</span>
-                  <input type="color" value={iluTitleBg} onChange={(e) => setIluTitleBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                  <input type="color" value={iluTitleBg} onChange={(e) =/> setIluTitleBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
                 </label>
                 <label className="flex items-center gap-1 text-[10px] text-slate-700">
                   <span>Latar isi</span>
-                  <input type="color" value={iluBodyBg} onChange={(e) => setIluBodyBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                  <input type="color" value={iluBodyBg} onChange={(e) =/> setIluBodyBg(e.target.value)} className="h-5 w-6 cursor-pointer" />
                 </label>
                 <label className="flex items-center gap-1 text-[10px] text-slate-700">
                   <span>Warna teks</span>
-                  <input type="color" value={iluTextColor} onChange={(e) => setIluTextColor(e.target.value)} className="h-5 w-6 cursor-pointer" />
+                  <input type="color" value={iluTextColor} onChange={(e) =/> setIluTextColor(e.target.value)} className="h-5 w-6 cursor-pointer" />
                 </label>
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-slate-600">Alpha isi</span>
@@ -10953,14 +10953,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <>
                   <label className="flex items-center gap-1 text-[10px] text-slate-700">
                     <span>Warna</span>
-                    <input type="color" value={sel.color} onChange={(e) => patch({ color: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                    <input type="color" value={sel.color} onChange={(e) =/> patch({ color: e.target.value })} className="h-5 w-6 cursor-pointer" />
                   </label>
                   <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
-                    <input type="checkbox" checked={sel.arrowHeadStart === true} onChange={(e) => patch({ arrowHeadStart: e.target.checked })} className="h-3 w-3" />
+                    <input type="checkbox" checked={sel.arrowHeadStart === true} onChange={(e) =/> patch({ arrowHeadStart: e.target.checked })} className="h-3 w-3" />
                     Panah awal
                   </label>
                   <label className="flex items-center gap-1.5 rounded border border-slate-300 bg-white/70 px-2 py-0.5 text-[11px] text-slate-700 cursor-pointer">
-                    <input type="checkbox" checked={sel.arrowHeadEnd !== false} onChange={(e) => patch({ arrowHeadEnd: e.target.checked })} className="h-3 w-3" />
+                    <input type="checkbox" checked={sel.arrowHeadEnd !== false} onChange={(e) =/> patch({ arrowHeadEnd: e.target.checked })} className="h-3 w-3" />
                     Panah akhir
                   </label>
                   <div className="flex items-center gap-1">
@@ -10975,15 +10975,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <>
                   <label className="flex items-center gap-1 text-[10px] text-slate-700">
                     <span>Latar judul</span>
-                    <input type="color" value={sel.bgColor || "#0f172a"} onChange={(e) => patch({ bgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                    <input type="color" value={sel.bgColor || "#0f172a"} onChange={(e) =/> patch({ bgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
                   </label>
                   <label className="flex items-center gap-1 text-[10px] text-slate-700">
                     <span>Latar isi</span>
-                    <input type="color" value={sel.bodyBgColor || "#ffffff"} onChange={(e) => patch({ bodyBgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                    <input type="color" value={sel.bodyBgColor || "#ffffff"} onChange={(e) =/> patch({ bodyBgColor: e.target.value })} className="h-5 w-6 cursor-pointer" />
                   </label>
                   <label className="flex items-center gap-1 text-[10px] text-slate-700">
                     <span>Warna teks</span>
-                    <input type="color" value={sel.color} onChange={(e) => patch({ color: e.target.value })} className="h-5 w-6 cursor-pointer" />
+                    <input type="color" value={sel.color} onChange={(e) =/> patch({ color: e.target.value })} className="h-5 w-6 cursor-pointer" />
                   </label>
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-slate-600">Alpha isi</span>
@@ -11036,7 +11036,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <input
                 type="checkbox"
                 checked={sketch.illustrationLayer.visible}
-                onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, visible: e.target.checked } })}
+                onChange={(e) =/> onChange({ illustrationLayer: { ...sketch.illustrationLayer!, visible: e.target.checked } })}
                 className="h-3.5 w-3.5"
                 title="Tampilkan / sembunyikan Layer Ilustrasi"
               />
@@ -11058,7 +11058,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     <input
                       type="checkbox"
                       checked={sub.visible}
-                      onChange={(e) => onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, visible: e.target.checked } } } })}
+                      onChange={(e) =/> onChange({ illustrationLayer: { ...sketch.illustrationLayer!, subs: { ...sketch.illustrationLayer!.subs, [k]: { ...sub, visible: e.target.checked } } } })}
                       className="h-3.5 w-3.5"
                     />
                     <Input
@@ -11210,7 +11210,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <input
                 type="checkbox"
                 checked={jalanOffsetEnabled}
-                onChange={(e) => setJalanOffsetEnabled(e.target.checked)}
+                onChange={(e) =/> setJalanOffsetEnabled(e.target.checked)}
                 className="h-3.5 w-3.5 accent-rose-600"
               />
               <span>Offset (½ lebar)</span>
@@ -11438,7 +11438,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   <input
                     type="checkbox"
                     checked={rampBordesOn}
-                    onChange={(e) => setRampBordesOn(e.target.checked)}
+                    onChange={(e) =/> setRampBordesOn(e.target.checked)}
                   />
                   Bordes
                 </label>
@@ -11456,7 +11456,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                       <input
                         type="checkbox"
                         checked={rampBordesBelokan}
-                        onChange={(e) => setRampBordesBelokan(e.target.checked)}
+                        onChange={(e) =/> setRampBordesBelokan(e.target.checked)}
                       />
                       Bordes Belokan
                     </label>
@@ -11710,7 +11710,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 max={200}
                 step={1}
                 value={doorWidthCm}
-                onChange={(e) => setDoorWidthCm(Number(e.target.value))}
+                onChange={(e) =/> setDoorWidthCm(Number(e.target.value))}
                 className="w-full accent-primary"
               />
             </div>
@@ -12215,7 +12215,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                             <div className="flex items-center gap-1.5">
                               <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung awal">
                                 <input type="checkbox" checked={!!el.hideStart}
-                                  onChange={(e) => {
+                                  onChange={(e) =/> {
                                     const next = (grid.extraLines ?? []).map((x, k) =>
                                       k === i ? { ...x, hideStart: e.target.checked } : x);
                                     updateGrid({ extraLines: next });
@@ -12224,7 +12224,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                               </label>
                               <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung akhir">
                                 <input type="checkbox" checked={!!el.hideEnd}
-                                  onChange={(e) => {
+                                  onChange={(e) =/> {
                                     const next = (grid.extraLines ?? []).map((x, k) =>
                                       k === i ? { ...x, hideEnd: e.target.checked } : x);
                                     updateGrid({ extraLines: next });
@@ -12400,12 +12400,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <div className="grid grid-cols-2 gap-1.5">
                   <label className="flex items-center gap-1.5 text-[11px]">
                     <input type="checkbox" checked={!!grid.hideBubbleStartX}
-                      onChange={(e) => updateGrid({ hideBubbleStartX: e.target.checked })} />
+                      onChange={(e) =/> updateGrid({ hideBubbleStartX: e.target.checked })} />
                     Ujung Awal
                   </label>
                   <label className="flex items-center gap-1.5 text-[11px]">
                     <input type="checkbox" checked={!!grid.hideBubbleEndX}
-                      onChange={(e) => updateGrid({ hideBubbleEndX: e.target.checked })} />
+                      onChange={(e) =/> updateGrid({ hideBubbleEndX: e.target.checked })} />
                     Ujung Akhir
                   </label>
                 </div>
@@ -12413,22 +12413,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <div className="grid grid-cols-2 gap-x-1.5 gap-y-1">
                   <label className="flex items-center gap-1.5 text-[11px]">
                     <input type="checkbox" checked={!!grid.hideBubbleStartY}
-                      onChange={(e) => updateGrid({ hideBubbleStartY: e.target.checked })} />
+                      onChange={(e) =/> updateGrid({ hideBubbleStartY: e.target.checked })} />
                     X · Atas
                   </label>
                   <label className="flex items-center gap-1.5 text-[11px]">
                     <input type="checkbox" checked={!!grid.hideBubbleEndY}
-                      onChange={(e) => updateGrid({ hideBubbleEndY: e.target.checked })} />
+                      onChange={(e) =/> updateGrid({ hideBubbleEndY: e.target.checked })} />
                     X · Bawah
                   </label>
                   <label className="flex items-center gap-1.5 text-[11px]">
                     <input type="checkbox" checked={!!grid.hideBubbleStartX}
-                      onChange={(e) => updateGrid({ hideBubbleStartX: e.target.checked })} />
+                      onChange={(e) =/> updateGrid({ hideBubbleStartX: e.target.checked })} />
                     Y · Kiri
                   </label>
                   <label className="flex items-center gap-1.5 text-[11px]">
                     <input type="checkbox" checked={!!grid.hideBubbleEndX}
-                      onChange={(e) => updateGrid({ hideBubbleEndX: e.target.checked })} />
+                      onChange={(e) =/> updateGrid({ hideBubbleEndX: e.target.checked })} />
                     Y · Kanan
                   </label>
                 </div>
@@ -13613,7 +13613,7 @@ function LevelsPanel({
             max={1400}
             step={20}
             value={listMaxH}
-            onChange={(e) => setListMaxH(Number(e.target.value))}
+            onChange={(e) =/> setListMaxH(Number(e.target.value))}
             className="flex-1 accent-ember"
             aria-label="Atur tinggi area daftar level"
           />
