@@ -12948,13 +12948,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
               <Ruler className="h-3.5 w-3.5" /> Garis
             </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Jumlah</span>
-              <span className="font-display text-base font-semibold">{lines.length}</span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Panjang</span>
-              <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-muted-foreground">Jumlah</span>
+                <span className="font-display text-base font-semibold">{lines.length}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-muted-foreground">Panjang</span>
+                <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
+              </div>
             </div>
           </div>
 
