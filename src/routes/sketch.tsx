@@ -13406,6 +13406,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <ToolsToolbar
                 tool={tool}
                 mode={mode}
+                parkingKind={parkingKind}
                 open={toolsOpen}
                 onToggle={() => setToolsOpen((v) => !v)}
                 onSelect={handleSelectTool}
