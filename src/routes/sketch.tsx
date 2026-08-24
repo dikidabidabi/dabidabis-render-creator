@@ -13398,6 +13398,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
               <CompassMarker rotation={northRotation} size={64} />
             </div>
+
+            {/* Floating tools toolbar on the top-right of the sketch box */}
+            <div className="absolute right-4 top-4 z-20">
+              <ToolsToolbar
+                tool={tool}
+                mode={mode}
+                open={toolsOpen}
+                onToggle={() => setToolsOpen((v) => !v)}
+                onSelect={handleSelectTool}
+                onClusterOpen={() => setClusterOpen(true)}
+              />
+            </div>
           </div>
           {hasGeoPin && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background/40 px-3 py-2">
