@@ -12966,8 +12966,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           </p>
         </>
       )}
-      
-      </div>
     </aside>
   );
 
