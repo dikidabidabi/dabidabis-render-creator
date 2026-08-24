@@ -13023,6 +13023,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Tablet: cubit 2 jari untuk zoom, putar 2 jari untuk rotasi kanvas.
         </p>
+        </div>
       </div>
 
       {!hideSideExtras && (
