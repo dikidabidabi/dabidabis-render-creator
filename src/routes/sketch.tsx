@@ -12948,13 +12948,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
               <Ruler className="h-3.5 w-3.5" /> Garis
             </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Jumlah</span>
-              <span className="font-display text-base font-semibold">{lines.length}</span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Panjang</span>
-              <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-muted-foreground">Jumlah</span>
+                <span className="font-display text-base font-semibold">{lines.length}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-muted-foreground">Panjang</span>
+                <span className="font-display text-base font-semibold">{totalLengthM.toFixed(2)} m</span>
+              </div>
             </div>
           </div>
 
@@ -13397,6 +13399,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             </div>
             <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
               <CompassMarker rotation={northRotation} size={64} />
+            </div>
+
+            {/* Floating tools toolbar on the top-right of the sketch box */}
+            <div className="absolute right-4 top-4 z-20">
+              <ToolsToolbar
+                tool={tool}
+                mode={mode}
+                open={toolsOpen}
+                onToggle={() => setToolsOpen((v) => !v)}
+                onSelect={handleSelectTool}
+                onClusterOpen={() => setClusterOpen(true)}
+              />
             </div>
           </div>
           {hasGeoPin && (
