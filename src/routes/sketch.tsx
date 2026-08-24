@@ -10604,8 +10604,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
 
       <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Alat</Label>
-        <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-between"
+          onClick={() => setToolsOpen((v) => !v)}
+        >
+          <span className="text-xs uppercase tracking-wider">Alat</span>
+          {toolsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
+        <div className={cn("space-y-2", !toolsOpen && "hidden")}>
+          <div className="grid grid-cols-2 gap-2">
           <Button
             variant={tool === "line" ? "default" : "outline"}
             size="sm"
