@@ -2320,6 +2320,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  const [toolsOpen, setToolsOpen] = useState(true);
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
