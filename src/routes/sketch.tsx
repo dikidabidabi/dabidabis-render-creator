@@ -1965,6 +1965,130 @@ function GeoPanel({
   );
 }
 
+type ToolKind = "line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa";
+
+type ToolsToolbarProps = {
+  tool: ToolKind;
+  mode: "sketch" | "masterplan";
+  open: boolean;
+  onToggle: () => void;
+  onSelect: (tool: ToolKind, opts?: { parkingKind?: "mobil" | "motor" }) => void;
+  onClusterOpen: () => void;
+};
+
+function ToolsToolbar({ tool, mode, open, onToggle, onSelect, onClusterOpen }: ToolsToolbarProps) {
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <Button
+        variant={open ? "default" : "outline"}
+        size="sm"
+        onClick={onToggle}
+        className={cn(
+          "h-9 gap-1.5 px-3 text-xs font-semibold uppercase tracking-wider shadow-soft",
+          open && "bg-gradient-primary shadow-primary"
+        )}
+        title={open ? "Sembunyikan alat" : "Tampilkan alat"}
+      >
+        <Pencil className="h-4 w-4" /> ALAT
+      </Button>
+      {open && (
+        <div className="max-h-[calc(100vh-180px)] w-[220px] overflow-y-auto rounded-2xl border border-border/60 bg-surface/90 p-2.5 shadow-elevated backdrop-blur">
+          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Gambar</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button variant={tool === "line" ? "default" : "outline"} size="sm" onClick={() => onSelect("line")} className={cn(tool === "line" && "bg-gradient-primary shadow-primary")}>
+              <Pencil className="mr-1 h-3.5 w-3.5" /> Garis
+            </Button>
+            <Button variant={tool === "rect" ? "default" : "outline"} size="sm" onClick={() => onSelect("rect")} className={cn(tool === "rect" && "bg-gradient-primary shadow-primary")}>
+              <Square className="mr-1 h-3.5 w-3.5" /> Persegi
+            </Button>
+            <Button variant={tool === "polyline" ? "default" : "outline"} size="sm" onClick={() => onSelect("polyline")} className={cn(tool === "polyline" && "bg-gradient-primary shadow-primary")}>
+              <Waypoints className="mr-1 h-3.5 w-3.5" /> Polyline
+            </Button>
+            <Button variant={tool === "circle" ? "default" : "outline"} size="sm" onClick={() => onSelect("circle")} className={cn(tool === "circle" && "bg-gradient-primary shadow-primary")}>
+              <CircleIcon className="mr-1 h-3.5 w-3.5" /> Lingkaran
+            </Button>
+          </div>
+          <div className="my-2 h-px bg-border/40" />
+          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Ubah</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button variant={tool === "edit" ? "default" : "outline"} size="sm" onClick={() => onSelect("edit")} className={cn(tool === "edit" && "bg-gradient-primary shadow-primary")}>
+              <Move className="mr-1 h-3.5 w-3.5" /> Edit Titik
+            </Button>
+            <Button variant={tool === "move" ? "default" : "outline"} size="sm" onClick={() => onSelect("move")} className={cn(tool === "move" && "bg-gradient-primary shadow-primary")} title="Move — pilih satu/banyak objek lalu drag (snap mm) atau geser numerik ΔX/ΔY mm.">
+              <GripHorizontal className="mr-1 h-3.5 w-3.5" /> Move
+            </Button>
+            <Button variant={tool === "mirror" ? "default" : "outline"} size="sm" onClick={() => onSelect("mirror")} className={cn(tool === "mirror" && "bg-gradient-primary shadow-primary")} title="Mirror — pilih objek lewat Move, lalu tarik sumbu (snap 0/45/90/135°) untuk menduplikasi cerminan.">
+              <FlipHorizontal className="mr-1 h-3.5 w-3.5" /> Mirror
+            </Button>
+            <Button variant={tool === "erase" ? "default" : "outline"} size="sm" onClick={() => onSelect("erase")}>
+              <Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus
+            </Button>
+            <Button variant={tool === "trim" ? "default" : "outline"} size="sm" onClick={() => onSelect("trim")} className={cn(tool === "trim" && "bg-gradient-primary shadow-primary")} title="Trim / Extend — tap garis dekat ujung yang ingin disesuaikan.">
+              <Crop className="mr-1 h-3.5 w-3.5" /> Trim/Ext
+            </Button>
+            <Button variant={tool === "offset" ? "default" : "outline"} size="sm" onClick={() => onSelect("offset")} className={cn(tool === "offset" && "bg-gradient-primary shadow-primary")} title="Offset — tap garis pada sisi yang diinginkan; jarak diatur di panel kanan.">
+              <MoveHorizontal className="mr-1 h-3.5 w-3.5" /> Offset
+            </Button>
+          </div>
+          <div className="my-2 h-px bg-border/40" />
+          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Bangunan & Lahan</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button variant={tool === "section" ? "default" : "outline"} size="sm" onClick={() => onSelect("section")} className={cn(tool === "section" && "bg-gradient-primary shadow-primary")} title="Garis Potong — tarik garis lurus di kanvas untuk bidang irisan; slide potongan otomatis dibuat.">
+              <Scissors className="mr-1 h-3.5 w-3.5" /> Garis Potong
+            </Button>
+            <Button variant={tool === "separasi" ? "default" : "outline"} size="sm" onClick={() => onSelect("separasi")} className={cn(tool === "separasi" && "bg-gradient-primary shadow-primary")} title="Separasi Ruang — tarik garis dari tepi ruang ke tepi lain; ruang terbelah dua.">
+              <SplitSquareHorizontal className="mr-1 h-3.5 w-3.5" /> Separasi
+            </Button>
+            <Button variant={tool === "floor" ? "default" : "outline"} size="sm" onClick={() => onSelect("floor")} className={cn(tool === "floor" && "bg-gradient-primary shadow-primary")} title="Alat Lantai — slab 150mm di bawah MDPL level aktif.">
+              <BoxIcon className="mr-1 h-3.5 w-3.5" /> Lantai
+            </Button>
+            <Button variant={tool === "door" ? "default" : "outline"} size="sm" onClick={() => onSelect("door")} className={cn(tool === "door" && "bg-gradient-primary shadow-primary")} title="Pintu — tap di dinding, geser searah dinding, lalu tegak lurus untuk arah ayun.">
+              <DoorOpen className="mr-1 h-3.5 w-3.5" /> Pintu
+            </Button>
+            <Button variant={tool === "pick" ? "default" : "outline"} size="sm" onClick={() => onSelect("pick")} className={cn(tool === "pick" && "bg-gradient-primary shadow-primary")} title="Pick Material — klik segmen garis untuk menandai jenis selubung.">
+              <Paintbrush className="mr-1 h-3.5 w-3.5" /> Material
+            </Button>
+            <Button variant={tool === "grid" ? "default" : "outline"} size="sm" onClick={() => onSelect("grid")} className={cn(tool === "grid" && "bg-gradient-primary shadow-primary")} title="Modul Struktur — grid as + kolom parametric.">
+              <Grid3x3 className="mr-1 h-3.5 w-3.5" /> Grid Struktur
+            </Button>
+          </div>
+          <div className="my-2 h-px bg-border/40" />
+          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Master Plan</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {mode === "masterplan" && (
+              <Button variant={tool === "aksis" ? "default" : "outline"} size="sm" onClick={() => onSelect("aksis")} className={cn(tool === "aksis" && "bg-gradient-primary shadow-primary")} title="Aksis — sumbu rancangan yang dihindari Cluster Generator.">
+                <Waypoints className="mr-1 h-3.5 w-3.5" /> Aksis
+              </Button>
+            )}
+            <Button variant={tool === "jalan" ? "default" : "outline"} size="sm" onClick={() => onSelect("jalan")} className={cn(tool === "jalan" && "bg-gradient-primary shadow-primary")} title="Jalan — koridor dengan lebar & fillet.">
+              <Spline className="mr-1 h-3.5 w-3.5" /> Jalan
+            </Button>
+            <Button variant={tool === "iluanalisa" ? "default" : "outline"} size="sm" onClick={() => onSelect("iluanalisa")} className={cn(tool === "iluanalisa" && "bg-gradient-primary shadow-primary")} title="Ilustrasi Analisa — panah, zona, alur, node, label.">
+              <PenTool className="mr-1 h-3.5 w-3.5" /> Ilustrasi
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClusterOpen} title="Buka Node Editor untuk relasi antar ruang dan generate cluster polygon.">
+              <Waypoints className="mr-1 h-3.5 w-3.5" /> Cluster Gen
+            </Button>
+          </div>
+          <div className="my-2 h-px bg-border/40" />
+          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground">Parkir & Ramp</div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"} size="sm" onClick={() => onSelect("parking", { parkingKind: "mobil" })} className={cn(tool === "parking" && parkingKind === "mobil" && "bg-gradient-primary shadow-primary")} title="Lot Parkir Mobil — 2.4 × 5 m.">
+              <Car className="mr-1 h-3.5 w-3.5" /> Mobil
+            </Button>
+            <Button variant={tool === "parking" && parkingKind === "motor" ? "default" : "outline"} size="sm" onClick={() => onSelect("parking", { parkingKind: "motor" })} className={cn(tool === "parking" && parkingKind === "motor" && "bg-gradient-primary shadow-primary")} title="Lot Parkir Motor — 0.75 × 2 m.">
+              <Car className="mr-1 h-3.5 w-3.5" /> Motor
+            </Button>
+            <Button variant={tool === "ramp" ? "default" : "outline"} size="sm" onClick={() => onSelect("ramp")} className={cn(tool === "ramp" && "bg-gradient-primary shadow-primary")} title="Ramp — polyline acuan + offset.">
+              <BoxIcon className="mr-1 h-3.5 w-3.5" /> Ramp
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type EditorProps = {
   sketch: Sketch;
   onChange: (patch: Partial<Sketch>) => void;
