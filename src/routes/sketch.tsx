@@ -1971,13 +1971,14 @@ type ToolKind = "line" | "rect" | "polyline" | "erase" | "edit" | "section" | "s
 type ToolsToolbarProps = {
   tool: ToolKind;
   mode: "sketch" | "masterplan";
+  parkingKind: "mobil" | "motor";
   open: boolean;
   onToggle: () => void;
   onSelect: (tool: ToolKind, opts?: { parkingKind?: "mobil" | "motor" }) => void;
   onClusterOpen: () => void;
 };
 
-function ToolsToolbar({ tool, mode, open, onToggle, onSelect, onClusterOpen }: ToolsToolbarProps) {
+function ToolsToolbar({ tool, mode, parkingKind, open, onToggle, onSelect, onClusterOpen }: ToolsToolbarProps) {
   return (
     <div className="flex flex-col items-end gap-2">
       <Button
