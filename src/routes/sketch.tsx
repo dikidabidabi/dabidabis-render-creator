@@ -10407,197 +10407,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       )}
       <div className={cn("space-y-5", fullscreen ? "overflow-y-auto p-4" : "p-5")}>
 
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Ekspor CAD</Label>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full justify-start"
-          onClick={() => {
-            try {
-              const activeLayers = layers.filter((l) => !activeLvlId || l.levelId === activeLvlId);
-              const activeLines = lines.filter((l) => !activeLvlId || l.levelId === activeLvlId);
-              const activeDoors = (sketch.doors ?? []).filter((d) => !activeLvlId || d.levelId === activeLvlId);
-              const activeAreas = (sketch.parkingAreas ?? []).filter((a) => !activeLvlId || a.levelId === activeLvlId);
-              const dxf = buildDxf({
-                pxPerMeter,
-                wallThicknessM: 0.15,
-                lines: activeLines,
-                layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
-                doors: activeDoors,
-                parkingStallsByArea: parkingStallsActive,
-                parkingAreas: activeAreas,
-                mmGridRotRad,
-              });
-              const safe = (sketch.title || "Konsep_Denah").replace(/[^\w\-]+/g, "_");
-              downloadDxf(`${safe}.dxf`, dxf);
-              toast.success("DXF terunduh — buka di AutoCAD/CAD favoritmu");
-            } catch (err) {
-              console.error(err);
-              toast.error("Gagal mengekspor DXF");
-            }
-          }}
-          title="Unduh denah aktif sebagai file .dxf (skala asli 1:1, satuan meter)"
-        >
-          <Download className="mr-1.5 h-4 w-4" /> Download as CAD (DXF)
-        </Button>
-        <p className="text-[10px] leading-snug text-muted-foreground">
-          Skala asli 1:1 dalam meter. Dinding diekspor sebagai 2 garis sejajar (tebal 150 mm), pintu sebagai ARC + LINE, lot parkir sebagai POLYLINE tertutup.
-        </p>
-      </div>
-
-
-
-
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Skala</Label>
-        <Select value={scale} onValueChange={(v) => onChange({ scale: v as Scale })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1:100">1 : 100 (1 kotak besar = 1 m)</SelectItem>
-            <SelectItem value="1:200">1 : 200 (1 kotak besar = 2 m)</SelectItem>
-            <SelectItem value="1:500">1 : 500 (1 kotak besar = 5 m)</SelectItem>
-            <SelectItem value="1:1000">1 : 1000 (1 kotak besar = 10 m)</SelectItem>
-            <SelectItem value="1:1200">1 : 1200 (1 kotak besar = 12 m)</SelectItem>
-            <SelectItem value="1:1500">1 : 1500 (1 kotak besar = 15 m)</SelectItem>
-            <SelectItem value="1:2000">1 : 2000 (1 kotak besar = 20 m)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Fungsi</Label>
-        <Select value={fungsi ?? ""} onValueChange={(v) => onChange({ fungsi: v || undefined })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Pilih fungsi bangunan" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Hotel">Hotel</SelectItem>
-            <SelectItem value="Apartment">Apartment</SelectItem>
-            <SelectItem value="Komersil">Komersil</SelectItem>
-            <SelectItem value="Rumah Sakit">Rumah Sakit</SelectItem>
-            <SelectItem value="Bandara">Bandara</SelectItem>
-            <SelectItem value="Bangunan Khusus">Bangunan Khusus</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Arah Utara</Label>
-        <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background/40 p-2.5">
-          <CompassMarker rotation={northRotation} size={56} />
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                step="1"
-                value={Number.isFinite(northRotation) ? northRotation : 0}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  onChange({ northRotation: Number.isFinite(v) ? v : 0 });
-                }}
-                className="h-8 text-sm"
-              />
-              <span className="text-xs text-muted-foreground">°</span>
-            </div>
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
-                onClick={() => onChange({ northRotation: ((northRotation - 15) % 360 + 360) % 360 })}>−15°</Button>
-              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
-                onClick={() => onChange({ northRotation: 0 })}>0°</Button>
-              <Button variant="outline" size="sm" className="h-6 flex-1 px-1 text-[10px]"
-                onClick={() => onChange({ northRotation: ((northRotation + 15) % 360 + 360) % 360 })}>+15°</Button>
-            </div>
-          </div>
-        </div>
-        <p className="text-[10px] leading-snug text-muted-foreground">
-          0° = utara ke atas. Rotasi searah jarum jam. Muncul di kanan bawah tiap denah pada slide.
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wider text-muted-foreground">Rotasi Grid</Label>
-        <div className="space-y-2 rounded-md border border-border/60 bg-background/40 p-2.5">
-          {/* Grid milimeter block (display-only) */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Milimeter Block</span>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {mmGridRotation.toFixed(1)}°
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                step="1"
-                value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  onChange({ mmGridRotation: Number.isFinite(v) ? v : 0 });
-                }}
-                className="h-7 text-xs"
-              />
-              <Button
-                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
-                onClick={() => onChange({ mmGridRotation: 0 })}
-                disabled={mmGridRotation === 0}
-                title="Kembalikan ke 0° tanpa memindahkan sketsa"
-              >
-                Reset
-              </Button>
-            </div>
-            <p className="text-[10px] leading-snug text-muted-foreground">
-              Memutar tampilan kertas milimeter block saja. Tidak mengubah koordinat sketsa, dapat dikembalikan ke 0° tanpa pergeseran.
-            </p>
-          </div>
-
-          {/* Grid struktur (per grid aktif) */}
-          <div className="space-y-1 border-t border-border/40 pt-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Grid Struktur {editGridIdx === 0 ? "(Primer)" : `(Extra ${editGridIdx})`}
-              </span>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {structGridRotation.toFixed(1)}°
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                step="1"
-                value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
-                }}
-                className="h-7 text-xs"
-              />
-              <Button
-                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
-                onClick={() => updateGrid({ rotation: 0 })}
-                disabled={structGridRotation === 0}
-                title="Kembalikan rotasi grid struktur ke 0°"
-              >
-                Reset
-              </Button>
-              <Button
-                variant="outline" size="sm" className="h-7 px-2 text-[10px]"
-                onClick={() => updateGrid({ rotation: mmGridRotation })}
-                disabled={structGridRotation === mmGridRotation}
-                title="Samakan dengan rotasi milimeter block agar paralel"
-              >
-                = mm
-              </Button>
-            </div>
-            <p className="text-[10px] leading-snug text-muted-foreground">
-              {gridsParallel
-                ? "Paralel dengan milimeter block → snap to grid aktif saat menggeser titik nol grid struktur."
-                : "Tidak paralel dengan milimeter block → snap to grid dimatikan untuk menggeser grid struktur."}
-            </p>
-          </div>
-        </div>
-      </div>
 
 
 
@@ -13025,6 +12834,160 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         </p>
         </div>
       </div>
+
+      {!hideSideExtras && (
+        <>
+          <GeoPanel geo={sketch.geo} onChange={(g) => onChange({ geo: g })} />
+
+          <div className="rounded-lg border border-border/60 bg-background/40 p-2.5 space-y-3">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Pengaturan Denah</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start"
+                onClick={() => {
+                  try {
+                    const activeLayers = layers.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+                    const activeLines = lines.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+                    const activeDoors = (sketch.doors ?? []).filter((d) => !activeLvlId || d.levelId === activeLvlId);
+                    const activeAreas = (sketch.parkingAreas ?? []).filter((a) => !activeLvlId || a.levelId === activeLvlId);
+                    const dxf = buildDxf({
+                      pxPerMeter,
+                      wallThicknessM: 0.15,
+                      lines: activeLines,
+                      layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
+                      doors: activeDoors,
+                      parkingStallsByArea: parkingStallsActive,
+                      parkingAreas: activeAreas,
+                      mmGridRotRad,
+                    });
+                    const safe = (sketch.title || "Konsep_Denah").replace(/[^\w\-]+/g, "_");
+                    downloadDxf(`${safe}.dxf`, dxf);
+                    toast.success("DXF terunduh — buka di AutoCAD/CAD favoritmu");
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Gagal mengekspor DXF");
+                  }
+                }}
+                title="Unduh denah aktif sebagai file .dxf (skala asli 1:1, satuan meter)"
+              >
+                <Download className="mr-1.5 h-4 w-4" /> DXF
+              </Button>
+
+              <Select value={scale} onValueChange={(v) => onChange({ scale: v as Scale })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1:100">1 : 100</SelectItem>
+                  <SelectItem value="1:200">1 : 200</SelectItem>
+                  <SelectItem value="1:500">1 : 500</SelectItem>
+                  <SelectItem value="1:1000">1 : 1000</SelectItem>
+                  <SelectItem value="1:1200">1 : 1200</SelectItem>
+                  <SelectItem value="1:1500">1 : 1500</SelectItem>
+                  <SelectItem value="1:2000">1 : 2000</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={fungsi ?? ""} onValueChange={(v) => onChange({ fungsi: v || undefined })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Fungsi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Hotel">Hotel</SelectItem>
+                  <SelectItem value="Apartment">Apartment</SelectItem>
+                  <SelectItem value="Komersil">Komersil</SelectItem>
+                  <SelectItem value="Rumah Sakit">Rumah Sakit</SelectItem>
+                  <SelectItem value="Bandara">Bandara</SelectItem>
+                  <SelectItem value="Bangunan Khusus">Bangunan Khusus</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/60 p-1.5">
+                <CompassMarker rotation={northRotation} size={28} />
+                <Input
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                  step="1"
+                  value={Number.isFinite(northRotation) ? northRotation : 0}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    onChange({ northRotation: Number.isFinite(v) ? v : 0 });
+                  }}
+                  className="h-7 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">°</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1 rounded-md border border-border/60 bg-background/60 p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Milimeter Block</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{mmGridRotation.toFixed(1)}°</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                    step="1"
+                    value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      onChange({ mmGridRotation: Number.isFinite(v) ? v : 0 });
+                    }}
+                    className="h-7 text-xs"
+                  />
+                  <Button
+                    variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                    onClick={() => onChange({ mmGridRotation: 0 })}
+                    disabled={mmGridRotation === 0}
+                    title="Kembalikan ke 0° tanpa memindahkan sketsa"
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1 rounded-md border border-border/60 bg-background/60 p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Grid Struktur {editGridIdx === 0 ? "(Primer)" : `(Extra ${editGridIdx})`}
+                  </span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{structGridRotation.toFixed(1)}°</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                    step="1"
+                    value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
+                    }}
+                    className="h-7 text-xs"
+                  />
+                  <Button
+                    variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
+                    onClick={() => updateGrid({ rotation: 0 })}
+                    disabled={structGridRotation === 0}
+                    title="Kembalikan rotasi grid struktur ke 0°"
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
+                    onClick={() => updateGrid({ rotation: mmGridRotation })}
+                    disabled={structGridRotation === mmGridRotation}
+                    title="Samakan dengan rotasi milimeter block agar paralel"
+                  >
+                    = mm
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {!hideSideExtras && (
         <>
