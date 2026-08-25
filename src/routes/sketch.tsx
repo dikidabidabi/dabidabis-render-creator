@@ -12837,6 +12837,160 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
       {!hideSideExtras && (
         <>
+          <GeoPanel geo={sketch.geo} onChange={(g) => onChange({ geo: g })} />
+
+          <div className="rounded-lg border border-border/60 bg-background/40 p-2.5 space-y-3">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Pengaturan Denah</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start"
+                onClick={() => {
+                  try {
+                    const activeLayers = layers.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+                    const activeLines = lines.filter((l) => !activeLvlId || l.levelId === activeLvlId);
+                    const activeDoors = (sketch.doors ?? []).filter((d) => !activeLvlId || d.levelId === activeLvlId);
+                    const activeAreas = (sketch.parkingAreas ?? []).filter((a) => !activeLvlId || a.levelId === activeLvlId);
+                    const dxf = buildDxf({
+                      pxPerMeter,
+                      wallThicknessM: 0.15,
+                      lines: activeLines,
+                      layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
+                      doors: activeDoors,
+                      parkingStallsByArea: parkingStallsActive,
+                      parkingAreas: activeAreas,
+                      mmGridRotRad,
+                    });
+                    const safe = (sketch.title || "Konsep_Denah").replace(/[^\w\-]+/g, "_");
+                    downloadDxf(`${safe}.dxf`, dxf);
+                    toast.success("DXF terunduh — buka di AutoCAD/CAD favoritmu");
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Gagal mengekspor DXF");
+                  }
+                }}
+                title="Unduh denah aktif sebagai file .dxf (skala asli 1:1, satuan meter)"
+              >
+                <Download className="mr-1.5 h-4 w-4" /> DXF
+              </Button>
+
+              <Select value={scale} onValueChange={(v) => onChange({ scale: v as Scale })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1:100">1 : 100</SelectItem>
+                  <SelectItem value="1:200">1 : 200</SelectItem>
+                  <SelectItem value="1:500">1 : 500</SelectItem>
+                  <SelectItem value="1:1000">1 : 1000</SelectItem>
+                  <SelectItem value="1:1200">1 : 1200</SelectItem>
+                  <SelectItem value="1:1500">1 : 1500</SelectItem>
+                  <SelectItem value="1:2000">1 : 2000</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={fungsi ?? ""} onValueChange={(v) => onChange({ fungsi: v || undefined })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Fungsi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Hotel">Hotel</SelectItem>
+                  <SelectItem value="Apartment">Apartment</SelectItem>
+                  <SelectItem value="Komersil">Komersil</SelectItem>
+                  <SelectItem value="Rumah Sakit">Rumah Sakit</SelectItem>
+                  <SelectItem value="Bandara">Bandara</SelectItem>
+                  <SelectItem value="Bangunan Khusus">Bangunan Khusus</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/60 p-1.5">
+                <CompassMarker rotation={northRotation} size={28} />
+                <Input
+                  type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                  step="1"
+                  value={Number.isFinite(northRotation) ? northRotation : 0}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    onChange({ northRotation: Number.isFinite(v) ? v : 0 });
+                  }}
+                  className="h-7 text-xs"
+                />
+                <span className="text-xs text-muted-foreground">°</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1 rounded-md border border-border/60 bg-background/60 p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Milimeter Block</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{mmGridRotation.toFixed(1)}°</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                    step="1"
+                    value={Number.isFinite(mmGridRotation) ? mmGridRotation : 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      onChange({ mmGridRotation: Number.isFinite(v) ? v : 0 });
+                    }}
+                    className="h-7 text-xs"
+                  />
+                  <Button
+                    variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                    onClick={() => onChange({ mmGridRotation: 0 })}
+                    disabled={mmGridRotation === 0}
+                    title="Kembalikan ke 0° tanpa memindahkan sketsa"
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1 rounded-md border border-border/60 bg-background/60 p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Grid Struktur {editGridIdx === 0 ? "(Primer)" : `(Extra ${editGridIdx})`}
+                  </span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{structGridRotation.toFixed(1)}°</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
+                    step="1"
+                    value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
+                    }}
+                    className="h-7 text-xs"
+                  />
+                  <Button
+                    variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
+                    onClick={() => updateGrid({ rotation: 0 })}
+                    disabled={structGridRotation === 0}
+                    title="Kembalikan rotasi grid struktur ke 0°"
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
+                    onClick={() => updateGrid({ rotation: mmGridRotation })}
+                    disabled={structGridRotation === mmGridRotation}
+                    title="Samakan dengan rotasi milimeter block agar paralel"
+                  >
+                    = mm
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {!hideSideExtras && (
+        <>
           <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2.5 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
