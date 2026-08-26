@@ -513,6 +513,178 @@ function ProfileHeader({
   );
 }
 
+const REACTION_EMOJIS = ["\ud83d\udc4d", "\u2764\ufe0f", "\ud83d\udd25", "\ud83d\udc4f", "\ud83d\udca1", "\ud83d\ude2e"];
+
+type SortMode = "baru" | "lama" | "populer";
+
+type GalleryComment = GalleryItem["comments"][number];
+
+function commentScore(c: GalleryComment, replies: GalleryComment[]) {
+  const reactions = (c.reactions ?? []).reduce((n, r) => n + r.count, 0);
+  return reactions * 2 + replies.length;
+}
+
+function CommentRow({
+  comment,
+  replies,
+  currentUserId,
+  depth,
+  onReply,
+  onEdit,
+  onDelete,
+  onReact,
+  children,
+}: {
+  comment: GalleryComment;
+  replies: GalleryComment[];
+  currentUserId: string | null;
+  depth: number;
+  onReply: (c: GalleryComment) => void;
+  onEdit: (id: string, body: string) => Promise<void>;
+  onDelete: (id: string) => void;
+  onReact: (id: string, emoji: string) => void;
+  children?: React.ReactNode;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(comment.body);
+  const [saving, setSaving] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const mine = comment.user_id === currentUserId;
+  const edited = comment.updated_at && comment.updated_at !== comment.created_at;
+
+  const save = async () => {
+    const body = draft.trim();
+    if (!body || body === comment.body) {
+      setEditing(false);
+      setDraft(comment.body);
+      return;
+    }
+    setSaving(true);
+    await onEdit(comment.id, body);
+    setSaving(false);
+    setEditing(false);
+  };
+
+  return (
+    <div className={depth > 0 ? "ml-5 border-l border-border/50 pl-2" : ""}>
+      <div className="flex gap-2 rounded-lg bg-background/50 p-2">
+        <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-surface">
+          {comment.author_avatar ? (
+            <img src={comment.author_avatar} alt={comment.author_name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+              {comment.author_name.charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium">
+            {comment.author_name}
+            <span className="ml-2 font-normal text-muted-foreground">
+              {new Date(comment.created_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}
+              {edited ? " · diedit" : ""}
+            </span>
+          </p>
+
+          {editing ? (
+            <div className="mt-1 flex gap-1">
+              <input
+                value={draft}
+                autoFocus
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void save();
+                  }
+                  if (e.key === "Escape") {
+                    setEditing(false);
+                    setDraft(comment.body);
+                  }
+                }}
+                className="min-w-0 flex-1 rounded-md border border-border/60 bg-background px-2 py-1 text-xs outline-none focus:border-ember/60"
+              />
+              <Button size="icon" className="h-7 w-7" disabled={saving} onClick={save} aria-label="Simpan komentar">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap break-words text-xs text-foreground/80">{comment.body}</p>
+          )}
+
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {(comment.reactions ?? []).map((r) => (
+              <button
+                key={r.emoji}
+                onClick={() => onReact(comment.id, r.emoji)}
+                className={`rounded-full border px-1.5 py-0.5 text-[10px] transition-colors ${
+                  r.mine ? "border-ember/60 bg-ember/10 text-ember" : "border-border/60 text-muted-foreground hover:border-ember/40"
+                }`}
+              >
+                {r.emoji} {r.count}
+              </button>
+            ))}
+            <div className="relative">
+              <button
+                onClick={() => setPickerOpen((v) => !v)}
+                className="rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:border-ember/40"
+                aria-label="Tambah reaksi"
+              >
+                + 😊
+              </button>
+              {pickerOpen && (
+                <div className="absolute bottom-full left-0 z-10 mb-1 flex gap-1 rounded-lg border border-border/60 bg-surface p-1 shadow-soft">
+                  {REACTION_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      className="rounded px-1 text-sm hover:bg-ember/10"
+                      onClick={() => {
+                        setPickerOpen(false);
+                        onReact(comment.id, e);
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => onReply(comment)}
+              className="ml-1 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-ember"
+            >
+              <Reply className="h-3 w-3" /> Balas
+              {replies.length > 0 ? ` (${replies.length})` : ""}
+            </button>
+          </div>
+        </div>
+        {mine && !editing && (
+          <div className="flex shrink-0 flex-col gap-1">
+            <button
+              className="text-muted-foreground hover:text-ember"
+              onClick={() => {
+                setDraft(comment.body);
+                setEditing(true);
+              }}
+              aria-label="Edit komentar"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => onDelete(comment.id)}
+              aria-label="Hapus komentar"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+      {children ? <div className="mt-1 space-y-1">{children}</div> : null}
+    </div>
+  );
+}
+
 function RenderCard({
   item,
   index,
@@ -531,9 +703,14 @@ function RenderCard({
   const likeFn = useServerFn(toggleLike);
   const commentFn = useServerFn(addComment);
   const delCommentFn = useServerFn(deleteComment);
+  const editCommentFn = useServerFn(editComment);
+  const reactFn = useServerFn(toggleCommentReaction);
+  const seenFn = useServerFn(markRenderCommentsSeen);
   const [lightbox, setLightbox] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sort, setSort] = useState<SortMode>("baru");
+  const [replyTo, setReplyTo] = useState<GalleryComment | null>(null);
 
   useEffect(() => {
     if (!lightbox) return;
@@ -549,6 +726,14 @@ function RenderCard({
     };
   }, [lightbox]);
 
+  const openLightbox = () => {
+    setLightbox(true);
+    if (item.new_comment_count > 0) {
+      onPatch({ new_comment_count: 0 });
+    }
+    void seenFn({ data: { renderId: item.id } }).catch(() => {});
+  };
+
   const like = async () => {
     const optimistic = !item.liked_by_me;
     onPatch({ liked_by_me: optimistic, like_count: item.like_count + (optimistic ? 1 : -1) });
@@ -563,11 +748,14 @@ function RenderCard({
     const body = text.trim();
     if (!body) return;
     setBusy(true);
-    const r = await commentFn({ data: { renderId: item.id, body } });
+    const r = await commentFn({
+      data: { renderId: item.id, body, parentId: replyTo?.id ?? null },
+    });
     setBusy(false);
     if (r.ok && r.comment) {
       onPatch({ comments: [...item.comments, r.comment] });
       setText("");
+      setReplyTo(null);
     } else {
       toast.error(r.error || "Gagal mengirim komentar");
     }
@@ -575,8 +763,72 @@ function RenderCard({
 
   const removeComment = async (id: string) => {
     const r = await delCommentFn({ data: { id } });
-    if (r.ok) onPatch({ comments: item.comments.filter((c) => c.id !== id) });
+    if (r.ok)
+      onPatch({ comments: item.comments.filter((c) => c.id !== id && c.parent_id !== id) });
     else toast.error(r.error || "Gagal hapus komentar");
+  };
+
+  const updateComment = async (id: string, body: string) => {
+    const r = await editCommentFn({ data: { id, body } });
+    if (r.ok)
+      onPatch({
+        comments: item.comments.map((c) =>
+          c.id === id ? { ...c, body: r.body ?? body, updated_at: r.updated_at ?? c.updated_at } : c,
+        ),
+      });
+    else toast.error(r.error || "Gagal memperbarui komentar");
+  };
+
+  const react = async (id: string, emoji: string) => {
+    const target = item.comments.find((c) => c.id === id);
+    if (!target) return;
+    const list = [...(target.reactions ?? [])];
+    const idx = list.findIndex((r) => r.emoji === emoji);
+    const wasMine = idx >= 0 ? list[idx].mine : false;
+    if (idx >= 0) {
+      const next = { ...list[idx], mine: !wasMine, count: list[idx].count + (wasMine ? -1 : 1) };
+      if (next.count <= 0) list.splice(idx, 1);
+      else list[idx] = next;
+    } else {
+      list.push({ emoji, count: 1, mine: true });
+    }
+    onPatch({
+      comments: item.comments.map((c) => (c.id === id ? { ...c, reactions: list } : c)),
+    });
+    const r = await reactFn({ data: { commentId: id, emoji } });
+    if (!r.ok) toast.error(r.error || "Gagal memberi reaksi");
+  };
+
+  const repliesOf = (id: string) =>
+    item.comments
+      .filter((c) => c.parent_id === id)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const roots = item.comments.filter((c) => !c.parent_id);
+  const sortedRoots = [...roots].sort((a, b) => {
+    if (sort === "populer") return commentScore(b, repliesOf(b.id)) - commentScore(a, repliesOf(a.id));
+    const da = new Date(a.created_at).getTime();
+    const db = new Date(b.created_at).getTime();
+    return sort === "baru" ? db - da : da - db;
+  });
+
+  const renderTree = (c: GalleryComment, depth: number): React.ReactNode => {
+    const kids = repliesOf(c.id);
+    return (
+      <CommentRow
+        key={c.id}
+        comment={c}
+        replies={kids}
+        currentUserId={currentUserId}
+        depth={depth}
+        onReply={(target) => setReplyTo(target)}
+        onEdit={updateComment}
+        onDelete={removeComment}
+        onReact={react}
+      >
+        {kids.map((k) => renderTree(k, depth + 1))}
+      </CommentRow>
+    );
   };
 
   return (
@@ -591,7 +843,7 @@ function RenderCard({
           item.result_url && item.status === "completed" ? "cursor-zoom-in" : ""
         }`}
         onClick={() => {
-          if (item.result_url && item.status === "completed") setLightbox(true);
+          if (item.result_url && item.status === "completed") openLightbox();
         }}
         role={item.result_url && item.status === "completed" ? "button" : undefined}
         aria-label="Perbesar gambar"
@@ -607,6 +859,12 @@ function RenderCard({
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             {item.status === "failed" ? "Gagal" : "Belum selesai"}
           </div>
+        )}
+        {item.new_comment_count > 0 && (
+          <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-ember px-2 py-0.5 text-[10px] font-semibold text-white shadow-soft">
+            <MessageCircle className="h-3 w-3" />
+            {item.new_comment_count} baru
+          </span>
         )}
         <div
           className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
@@ -659,14 +917,12 @@ function RenderCard({
             <Heart className={`mr-1.5 h-4 w-4 ${item.liked_by_me ? "fill-current" : ""}`} />
             {item.like_count}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-muted-foreground"
-            onClick={() => setLightbox(true)}
-          >
+          <Button size="sm" variant="ghost" className="relative text-muted-foreground" onClick={openLightbox}>
             <MessageCircle className="mr-1.5 h-4 w-4" />
             {item.comments.length}
+            {item.new_comment_count > 0 && (
+              <span className="ml-1.5 h-2 w-2 rounded-full bg-ember" aria-label="Komentar baru" />
+            )}
           </Button>
         </div>
       </div>
@@ -698,7 +954,7 @@ function RenderCard({
 
           {/* Panel komentar mengambang */}
           <div
-            className="absolute bottom-3 left-3 right-3 flex max-h-[55vh] flex-col rounded-2xl border border-border/60 bg-surface/95 p-4 shadow-soft backdrop-blur sm:bottom-6 sm:left-auto sm:right-6 sm:top-6 sm:w-96 sm:max-h-none"
+            className="absolute bottom-3 left-3 right-3 flex max-h-[55vh] flex-col rounded-2xl border border-border/60 bg-surface/95 p-4 shadow-soft backdrop-blur sm:bottom-6 sm:left-auto sm:right-6 sm:top-6 sm:max-h-none sm:w-96"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center gap-2 border-b border-border/50 pb-3">
@@ -724,37 +980,35 @@ function RenderCard({
               )}
             </div>
 
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-              {item.comments.length === 0 && (
-                <p className="text-xs text-muted-foreground">Belum ada komentar.</p>
-              )}
-              {item.comments.map((c) => (
-                <div key={c.id} className="flex gap-2 rounded-lg bg-background/50 p-2">
-                  <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-surface">
-                    {c.author_avatar ? (
-                      <img src={c.author_avatar} alt={c.author_name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-                        {c.author_name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-medium">{c.author_name}</p>
-                    <p className="whitespace-pre-wrap break-words text-xs text-foreground/80">{c.body}</p>
-                  </div>
-                  {c.user_id === currentUserId && (
-                    <button
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => removeComment(c.id)}
-                      aria-label="Hapus komentar"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
+            <div className="mb-2 flex items-center gap-1">
+              <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+              {(["baru", "lama", "populer"] as SortMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setSort(m)}
+                  className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide transition-colors ${
+                    sort === m ? "bg-ember/15 text-ember" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m === "baru" ? "Terbaru" : m === "lama" ? "Terlama" : "Populer"}
+                </button>
               ))}
             </div>
+
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+              {roots.length === 0 && <p className="text-xs text-muted-foreground">Belum ada komentar.</p>}
+              {sortedRoots.map((c) => renderTree(c, 0))}
+            </div>
+
+            {replyTo && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-ember/10 px-2 py-1 text-[11px] text-ember">
+                <Reply className="h-3 w-3" />
+                Membalas {replyTo.author_name}
+                <button className="ml-auto" onClick={() => setReplyTo(null)} aria-label="Batal balas">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
 
             <div className="mt-3 flex gap-2 border-t border-border/50 pt-3">
               <input
@@ -766,7 +1020,7 @@ function RenderCard({
                     void send();
                   }
                 }}
-                placeholder="Tulis komentar…"
+                placeholder={replyTo ? `Balas ${replyTo.author_name}…` : "Tulis komentar…"}
                 autoFocus
                 className="min-w-0 flex-1 rounded-lg border border-border/60 bg-background px-3 py-2 text-sm outline-none focus:border-ember/60"
               />
