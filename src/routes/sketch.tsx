@@ -46,6 +46,9 @@ import {
   RotateCw,
   SplitSquareHorizontal,
   ArrowRight,
+  Upload,
+  Combine,
+
 } from "lucide-react";
 import {
   type Floor,
@@ -83,6 +86,22 @@ import {
 import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
+import {
+  downloadSketchFile,
+  parseSketchFile,
+  mergeSketches,
+  SKETCH_FILE_EXT,
+  type AnySketch,
+} from "@/lib/sketch-file";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
 import { ClusterGeneratorDialog, type ClusterGraph, type GenerateResult } from "@/components/cluster-generator-dialog";
 import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog";
 import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlockPolygon, FUNCTION_META as MP_FN_META } from "@/lib/masterplan";
@@ -1394,6 +1413,10 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSel, setMergeSel] = useState<string[]>([]);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
   const latestStoreRef = useRef<{ sketches: Sketch[]; openId: string | null; loaded: boolean }>({
     sketches: [],
     openId: null,
@@ -1551,18 +1574,96 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
     toast.success("Sketsa dihapus");
   };
 
+  const pxPerMeterFor = (s: Sketch) =>
+    (MINOR_PX * MAJOR_EVERY) / (METERS_PER_MAJOR[s.scale] ?? 1);
+
+  const importSketchFromFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const raw = parseSketchFile(text);
+      const imported = normalizeSketch({
+        ...raw,
+        id: `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        title: raw.title || file.name.replace(/\.(dabidabi\.)?json$/i, ""),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      setSketches((prev) => [...prev, imported]);
+      setOpenId(imported.id);
+      toast.success(`"${imported.title}" berhasil diunggah`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal membaca file sketsa");
+    }
+  };
+
+  const runMerge = () => {
+    const picked = mergeSel
+      .map((id) => sketches.find((s) => s.id === id))
+      .filter((s): s is Sketch => !!s);
+    if (picked.length < 2) {
+      toast.error("Pilih minimal 2 sketsa untuk digabung");
+      return;
+    }
+    try {
+      const res = mergeSketches(picked as unknown as AnySketch[], {
+        pxPerMeter: pxPerMeterFor(picked[0]),
+        id: `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        title: `Merge — ${picked.map((s) => s.title).join(" + ")}`,
+      });
+      const merged = normalizeSketch(res.sketch);
+      setSketches((prev) => [...prev, merged]);
+      setOpenId(merged.id);
+      setMergeOpen(false);
+      setMergeSel([]);
+      toast.success(
+        `Sketsa digabung — ${res.mergedLevels} elevasi disatukan, ${res.newLevels} elevasi baru`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menggabungkan sketsa");
+    }
+  };
+
   const fullscreenSketch = fullscreenId ? sketches.find((s) => s.id === fullscreenId) : null;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="mb-4">
-        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-          Sketsa Konseptual
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Kertas milimeter block digital — multi-tab, tersimpan otomatis di perangkat ini.
-        </p>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            {mode === "masterplan" ? "Master Plan" : "Sketsa Konseptual"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Kertas milimeter block digital — multi-tab, tersimpan otomatis di perangkat ini.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void importSketchFromFile(f);
+              e.currentTarget.value = "";
+            }}
+          />
+          <Button variant="outline" size="sm" onClick={() => importInputRef.current?.click()}>
+            <Upload className="mr-1.5 h-4 w-4" /> Unggah Sketsa
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setMergeSel(sketches.slice(0, 2).map((s) => s.id));
+              setMergeOpen(true);
+            }}
+          >
+            <Combine className="mr-1.5 h-4 w-4" /> Merge Sketsa
+          </Button>
+        </div>
       </div>
+
 
       <div className="space-y-4">
         {sketches.map((s) => (
@@ -1576,6 +1677,11 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
             onChange={(patch) => updateSketch(s.id, patch)}
             onRequestDelete={() => setConfirmDeleteId(s.id)}
             onDuplicate={() => duplicateSketch(s.id)}
+            onDownload={() => {
+              downloadSketchFile(s as unknown as AnySketch);
+              toast.success(`"${s.title}" diunduh (${SKETCH_FILE_EXT})`);
+            }}
+
             onEnterFullscreen={() => {
               setOpenId(s.id);
               setFullscreenId(s.id);
@@ -1602,7 +1708,54 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         />
       )}
 
+      <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Merge Sketsa</DialogTitle>
+            <DialogDescription>
+              Pilih 2 sketsa atau lebih. Sketsa pertama yang dipilih menjadi acuan koordinat;
+              sketsa lain diletakkan sesuai selisih koordinat peta masing-masing. Level dengan
+              MDPL sama disatukan, MDPL berbeda otomatis menjadi elevasi baru.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 space-y-1 overflow-auto rounded-lg border border-border/60 p-2">
+            {sketches.map((s) => {
+              const idx = mergeSel.indexOf(s.id);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() =>
+                    setMergeSel((prev) =>
+                      prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id],
+                    )
+                  }
+                  className={cn(
+                    "flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition",
+                    idx >= 0 ? "bg-ember/10 text-ember" : "hover:bg-surface/60",
+                  )}
+                >
+                  <span className="min-w-0 truncate">{s.title}</span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {s.levels.length} elevasi · {s.geo ? "berkoordinat" : "tanpa koordinat"}
+                    {idx >= 0 ? ` · #${idx + 1}` : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMergeOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={runMerge} disabled={mergeSel.length < 2}>
+              <Combine className="mr-1.5 h-4 w-4" /> Gabungkan ({mergeSel.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!confirmDeleteId} onOpenChange={(v) => !v && setConfirmDeleteId(null)}>
+
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus sketsa ini?</AlertDialogTitle>
@@ -1639,13 +1792,15 @@ type SketchCardProps = {
   onChange: (patch: Partial<Sketch>) => void;
   onRequestDelete: () => void;
   onDuplicate: () => void;
+  onDownload: () => void;
+
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
   mode?: "sketch" | "masterplan";
 };
 
 function SketchCard(props: SketchCardProps) {
-  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onEnterFullscreen, mode } = props;
+  const { sketch, isOpen, onOpen, onMinimize, onChange, onRequestDelete, onDuplicate, onDownload, onEnterFullscreen, mode } = props;
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(sketch.title);
 
@@ -1744,6 +1899,15 @@ function SketchCard(props: SketchCardProps) {
           >
             <Copy className="mr-1.5 h-4 w-4" /> Salin
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDownload}
+            title="Unduh sketsa sebagai file — bisa diunggah kembali ke sketsa kosong lengkap dengan semua penggambaran"
+          >
+            <Download className="mr-1.5 h-4 w-4" /> Unduh
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
