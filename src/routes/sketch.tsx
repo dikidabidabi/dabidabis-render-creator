@@ -83,6 +83,22 @@ import {
 import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
+import {
+  downloadSketchFile,
+  parseSketchFile,
+  mergeSketches,
+  SKETCH_FILE_EXT,
+  type AnySketch,
+} from "@/lib/sketch-file";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
 import { ClusterGeneratorDialog, type ClusterGraph, type GenerateResult } from "@/components/cluster-generator-dialog";
 import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog";
 import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlockPolygon, FUNCTION_META as MP_FN_META } from "@/lib/masterplan";
