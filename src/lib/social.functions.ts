@@ -287,14 +287,25 @@ export const toggleLike = createServerFn({ method: "POST" })
 export const addComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ renderId: z.string().uuid(), body: z.string().min(1).max(1000) }).parse(input),
+    z
+      .object({
+        renderId: z.string().uuid(),
+        body: z.string().min(1).max(1000),
+        parentId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: row, error } = await supabase
       .from("render_comments")
-      .insert({ render_id: data.renderId, user_id: userId, body: data.body.trim() })
-      .select("id, body, created_at, user_id")
+      .insert({
+        render_id: data.renderId,
+        user_id: userId,
+        body: data.body.trim(),
+        parent_id: data.parentId ?? null,
+      })
+      .select("id, body, created_at, updated_at, parent_id, user_id")
       .single();
     if (error || !row) return { ok: false as const, error: error?.message ?? "Gagal", comment: null };
 
@@ -304,11 +315,81 @@ export const addComment = createServerFn({ method: "POST" })
       id: row.id as string,
       body: row.body as string,
       created_at: row.created_at as string,
+      updated_at: (row.updated_at as string) ?? null,
+      parent_id: (row.parent_id as string) ?? null,
       user_id: userId,
       author_name: fallbackName(p, userId),
       author_avatar: await signAvatar(supabase, p?.avatar_url ?? null),
+      reactions: [],
     };
     return { ok: true as const, error: null, comment };
+  });
+
+export const editComment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), body: z.string().min(1).max(1000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error } = await supabase
+      .from("render_comments")
+      .update({ body: data.body.trim(), updated_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .eq("user_id", userId)
+      .select("id, body, updated_at")
+      .maybeSingle();
+    if (error || !row)
+      return { ok: false as const, error: error?.message ?? "Komentar tidak ditemukan", body: null, updated_at: null };
+    return {
+      ok: true as const,
+      error: null,
+      body: row.body as string,
+      updated_at: (row.updated_at as string) ?? null,
+    };
+  });
+
+export const toggleCommentReaction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ commentId: z.string().uuid(), emoji: z.string().min(1).max(8) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: existing } = await supabase
+      .from("render_comment_reactions")
+      .select("comment_id")
+      .eq("comment_id", data.commentId)
+      .eq("user_id", userId)
+      .eq("emoji", data.emoji)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from("render_comment_reactions")
+        .delete()
+        .eq("comment_id", data.commentId)
+        .eq("user_id", userId)
+        .eq("emoji", data.emoji);
+      return { ok: !error, active: false, error: error?.message ?? null };
+    }
+    const { error } = await supabase
+      .from("render_comment_reactions")
+      .insert({ comment_id: data.commentId, user_id: userId, emoji: data.emoji });
+    return { ok: !error, active: true, error: error?.message ?? null };
+  });
+
+export const markRenderCommentsSeen = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ renderId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("render_comment_seen").upsert(
+      { user_id: userId, render_id: data.renderId, last_seen_at: now, updated_at: now },
+      { onConflict: "user_id,render_id" },
+    );
+    return { ok: !error, error: error?.message ?? null };
   });
 
 export const deleteComment = createServerFn({ method: "POST" })
@@ -319,6 +400,7 @@ export const deleteComment = createServerFn({ method: "POST" })
     const { error } = await supabase.from("render_comments").delete().eq("id", data.id);
     return { ok: !error, error: error?.message ?? null };
   });
+
 
 /* ============================ Akun: jenis & hierarki ============================ */
 
