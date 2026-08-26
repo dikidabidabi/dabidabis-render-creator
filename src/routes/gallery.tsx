@@ -1281,6 +1281,16 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
                   ? `Koordinat: ${coords.lat.toFixed(6)}, ${coords.lon.toFixed(6)}`
                   : "Pilih salah satu sugesti alamat untuk mengambil koordinat."}
             </p>
+            {coords && (
+              <div className="overflow-hidden rounded-lg border border-border/60">
+                <iframe
+                  title="Peta lokasi proyek tender"
+                  loading="lazy"
+                  className="h-48 w-full"
+                  src={`https://maps.google.com/maps?q=${coords.lat},${coords.lon}&z=16&output=embed`}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

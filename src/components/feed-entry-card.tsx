@@ -10,6 +10,7 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  Paperclip,
   Play,
   Repeat2,
   Trash2,
@@ -29,14 +30,27 @@ export function timeAgo(iso: string) {
   return `${Math.floor(h / 24)} hari lalu`;
 }
 
-function MapEmbed({ address }: { address: string }) {
+function MapEmbed({
+  address,
+  lat,
+  lon,
+}: {
+  address: string;
+  lat?: number | null;
+  lon?: number | null;
+}) {
+  // Koordinat (mis. dari lampiran sketsa) lebih presisi daripada teks alamat.
+  const q =
+    Number.isFinite(Number(lat)) && Number.isFinite(Number(lon))
+      ? `${Number(lat)},${Number(lon)}`
+      : encodeURIComponent(address);
   return (
     <div className="overflow-hidden rounded-lg border border-border/60">
       <iframe
         title={`Peta lokasi ${address}`}
         loading="lazy"
         className="h-56 w-full"
-        src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=15&output=embed`}
+        src={`https://maps.google.com/maps?q=${q}&z=16&output=embed`}
       />
     </div>
   );
@@ -81,10 +95,16 @@ export function FeedEntryCard({
       lat: Number(item.project_lat),
       lon: Number(item.project_lon),
       label: item.project_address ?? "",
+      sketchUrl: item.sketch_url ?? null,
+      sketchTitle: item.sketch_title ?? null,
     });
     setShowExec(false);
     toast.success(
-      target === "masterplan" ? "Peta dikirim ke Master Plan" : "Peta dikirim ke Sketsa",
+      item.sketch_url
+        ? "Sketsa tender disalin ke akun Anda"
+        : target === "masterplan"
+          ? "Peta dikirim ke Master Plan"
+          : "Peta dikirim ke Sketsa",
     );
     void navigate({ to: target === "masterplan" ? "/masterplan" : "/sketch" });
   };
@@ -233,7 +253,24 @@ export function FeedEntryCard({
           </div>
         )}
 
-        {isTender && item.project_address && <MapEmbed address={item.project_address} />}
+        {isTender && item.sketch_title && (
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Paperclip className="h-3.5 w-3.5 shrink-0 text-ember" />
+            Lampiran sketsa:{" "}
+            <span className="font-medium text-foreground">{item.sketch_title}</span>
+            <span className="text-muted-foreground">
+              ({item.sketch_source === "masterplan" ? "Master Plan" : "Sketsa"})
+            </span>
+          </p>
+        )}
+
+        {isTender && (item.project_address || hasCoords) && (
+          <MapEmbed
+            address={item.project_address ?? ""}
+            lat={item.project_lat}
+            lon={item.project_lon}
+          />
+        )}
 
         {isTender && hasCoords && (
           <div className="space-y-2">
@@ -249,7 +286,9 @@ export function FeedEntryCard({
             {showExec && (
               <div className="flex flex-wrap gap-2 rounded-lg border border-ember/30 bg-ember/5 p-3">
                 <p className="w-full text-xs text-muted-foreground">
-                  Kirim peta &amp; koordinat tender ini ke:
+                  {item.sketch_url
+                    ? "Salin sketsa & koordinat tender ini ke:"
+                    : "Kirim peta & koordinat tender ini ke:"}
                 </p>
                 <Button size="sm" variant="secondary" onClick={() => execute("masterplan")}>
                   Halaman Master Plan
