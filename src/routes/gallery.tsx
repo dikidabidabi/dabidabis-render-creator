@@ -22,6 +22,9 @@ import {
   Network,
   PenLine,
   Paperclip,
+  Reply,
+  Check,
+  ArrowUpDown,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -37,6 +40,9 @@ import {
   toggleLike,
   addComment,
   deleteComment,
+  editComment,
+  toggleCommentReaction,
+  markRenderCommentsSeen,
   getPosts,
   createPost,
   deletePost,
