@@ -581,7 +581,16 @@ function RenderCard({
       transition={{ duration: 0.3, delay: index * 0.04 }}
       className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface/60 shadow-soft transition-all hover:border-ember/40"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-background">
+      <div
+        className={`relative aspect-[4/3] overflow-hidden bg-background ${
+          item.result_url && item.status === "completed" ? "cursor-zoom-in" : ""
+        }`}
+        onClick={() => {
+          if (item.result_url && item.status === "completed") setLightbox(true);
+        }}
+        role={item.result_url && item.status === "completed" ? "button" : undefined}
+        aria-label="Perbesar gambar"
+      >
         {item.result_url && item.status === "completed" ? (
           <img
             src={item.result_url}
