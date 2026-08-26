@@ -89,6 +89,10 @@ import { toast } from "sonner";
 import {
   downloadSketchFile,
   parseSketchFile,
+  parseSketchCompanions,
+  applyCompanions,
+  collectCompanions,
+  mergeCompanions,
   mergeSketches,
   SKETCH_FILE_EXT,
   type AnySketch,
