@@ -603,7 +603,10 @@ function RenderCard({
             {item.status === "failed" ? "Gagal" : "Belum selesai"}
           </div>
         )}
-        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div
+          className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
           {item.result_url && (
             <Button asChild size="icon" variant="secondary" className="h-8 w-8">
               <a href={item.result_url} target="_blank" rel="noreferrer" download>
