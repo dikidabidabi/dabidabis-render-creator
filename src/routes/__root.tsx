@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { LogoDabidabi } from "@/components/logo";
 import { ProjectHydrationGate } from "@/components/project-hydration-gate";
 import { PrivateRouteGate } from "@/components/private-route-gate";
+import { NotificationProvider, useNotifications } from "@/lib/notifications";
+
 
 import appCss from "../styles.css?url";
 
