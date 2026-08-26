@@ -124,6 +124,9 @@ export type Database = {
           project_lon: number | null
           repost_of_post: string | null
           repost_of_render: string | null
+          sketch_source: string | null
+          sketch_title: string | null
+          sketch_url: string | null
           tender_deadline: string | null
           tender_title: string | null
           tor_url: string | null
@@ -141,6 +144,9 @@ export type Database = {
           project_lon?: number | null
           repost_of_post?: string | null
           repost_of_render?: string | null
+          sketch_source?: string | null
+          sketch_title?: string | null
+          sketch_url?: string | null
           tender_deadline?: string | null
           tender_title?: string | null
           tor_url?: string | null
@@ -158,6 +164,9 @@ export type Database = {
           project_lon?: number | null
           repost_of_post?: string | null
           repost_of_render?: string | null
+          sketch_source?: string | null
+          sketch_title?: string | null
+          sketch_url?: string | null
           tender_deadline?: string | null
           tender_title?: string | null
           tor_url?: string | null
