@@ -1792,6 +1792,8 @@ type SketchCardProps = {
   onChange: (patch: Partial<Sketch>) => void;
   onRequestDelete: () => void;
   onDuplicate: () => void;
+  onDownload: () => void;
+
   onEnterFullscreen: () => void;
   onExitFullscreen: () => void;
   mode?: "sketch" | "masterplan";
