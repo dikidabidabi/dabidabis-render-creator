@@ -1585,6 +1585,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
     try {
       const text = await file.text();
       const raw = parseSketchFile(text);
+      const companions = parseSketchCompanions(text);
       const imported = normalizeSketch({
         ...raw,
         id: `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1592,6 +1593,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+      applyCompanions(companions, imported.id);
       setSketches((prev) => [...prev, imported]);
       setOpenId(imported.id);
       toast.success(`"${imported.title}" berhasil diunggah`);
@@ -1599,6 +1601,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
       toast.error(e instanceof Error ? e.message : "Gagal membaca file sketsa");
     }
   };
+
 
   const runMerge = () => {
     const picked = mergeSel
