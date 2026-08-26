@@ -8,6 +8,9 @@ export type TenderExecPayload = {
   lat: number;
   lon: number;
   label?: string;
+  /** URL file lampiran sketsa (.dabidabi.json) bila tender menyertakan sketsa. */
+  sketchUrl?: string | null;
+  sketchTitle?: string | null;
 };
 
 const KEY = "dabidabis_tender_exec_v1";

@@ -392,6 +392,9 @@ async function mapPosts(
         project_address: r.project_address,
         project_lat: r.project_lat ?? null,
         project_lon: r.project_lon ?? null,
+        sketch_url: await signPostFile(supabase, r.sketch_url),
+        sketch_title: r.sketch_title ?? null,
+        sketch_source: r.sketch_source ?? null,
         repost,
         is_mine: r.user_id === userId,
       };
@@ -461,7 +464,7 @@ export const uploadPostFile = createServerFn({ method: "POST" })
     z
       .object({
         dataUrl: z.string().min(20).max(12_000_000),
-        kind: z.enum(["image", "pdf"]),
+        kind: z.enum(["image", "pdf", "sketch"]),
       })
       .parse(input),
   )
@@ -474,8 +477,11 @@ export const uploadPostFile = createServerFn({ method: "POST" })
       return { ok: false as const, error: "File harus berupa gambar.", path: null, url: null };
     if (data.kind === "pdf" && mime !== "application/pdf")
       return { ok: false as const, error: "TOR/KAK harus berformat PDF.", path: null, url: null };
+    if (data.kind === "sketch" && mime !== "application/json")
+      return { ok: false as const, error: "Lampiran sketsa tidak valid.", path: null, url: null };
 
-    const ext = data.kind === "pdf" ? "pdf" : (mime.split("/")[1] ?? "png");
+    const ext =
+      data.kind === "pdf" ? "pdf" : data.kind === "sketch" ? "json" : (mime.split("/")[1] ?? "png");
     const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
     const path = `${userId}/${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage
@@ -500,6 +506,9 @@ export const createPost = createServerFn({ method: "POST" })
         project_address: z.string().max(400).nullable().optional(),
         project_lat: z.number().min(-90).max(90).nullable().optional(),
         project_lon: z.number().min(-180).max(180).nullable().optional(),
+        sketch_url: z.string().max(400).nullable().optional(),
+        sketch_title: z.string().max(200).nullable().optional(),
+        sketch_source: z.enum(["sketch", "masterplan"]).nullable().optional(),
         repost_of_post: z.string().uuid().nullable().optional(),
         repost_of_render: z.string().uuid().nullable().optional(),
       })
@@ -529,6 +538,9 @@ export const createPost = createServerFn({ method: "POST" })
         project_address: data.project_address?.trim() || null,
         project_lat: data.project_lat ?? null,
         project_lon: data.project_lon ?? null,
+        sketch_url: data.sketch_url ?? null,
+        sketch_title: data.sketch_title?.trim() || null,
+        sketch_source: data.sketch_source ?? null,
         repost_of_post: data.repost_of_post ?? null,
         repost_of_render: data.repost_of_render ?? null,
       })
@@ -663,6 +675,9 @@ export const getFeed = createServerFn({ method: "GET" })
           liked_by_me: rowLikes.some((l) => l.user_id === userId),
           comment_count: (comments ?? []).filter((c) => c.render_id === rid).length,
           tender_title: null,
+          sketch_url: null,
+          sketch_title: null,
+          sketch_source: null,
           tender_deadline: null,
           tor_url: null,
           data_link: null,
