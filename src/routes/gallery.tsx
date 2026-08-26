@@ -526,8 +526,23 @@ function RenderCard({
   const commentFn = useServerFn(addComment);
   const delCommentFn = useServerFn(deleteComment);
   const [open, setOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [lightbox]);
 
   const like = async () => {
     const optimistic = !item.liked_by_me;
