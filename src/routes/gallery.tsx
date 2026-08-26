@@ -525,9 +525,23 @@ function RenderCard({
   const likeFn = useServerFn(toggleLike);
   const commentFn = useServerFn(addComment);
   const delCommentFn = useServerFn(deleteComment);
-  const [open, setOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [lightbox]);
 
   const like = async () => {
     const optimistic = !item.liked_by_me;
@@ -566,7 +580,16 @@ function RenderCard({
       transition={{ duration: 0.3, delay: index * 0.04 }}
       className="group flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface/60 shadow-soft transition-all hover:border-ember/40"
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-background">
+      <div
+        className={`relative aspect-[4/3] overflow-hidden bg-background ${
+          item.result_url && item.status === "completed" ? "cursor-zoom-in" : ""
+        }`}
+        onClick={() => {
+          if (item.result_url && item.status === "completed") setLightbox(true);
+        }}
+        role={item.result_url && item.status === "completed" ? "button" : undefined}
+        aria-label="Perbesar gambar"
+      >
         {item.result_url && item.status === "completed" ? (
           <img
             src={item.result_url}
@@ -579,7 +602,10 @@ function RenderCard({
             {item.status === "failed" ? "Gagal" : "Belum selesai"}
           </div>
         )}
-        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div
+          className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
           {item.result_url && (
             <Button asChild size="icon" variant="secondary" className="h-8 w-8">
               <a href={item.result_url} target="_blank" rel="noreferrer" download>
@@ -631,16 +657,68 @@ function RenderCard({
             size="sm"
             variant="ghost"
             className="text-muted-foreground"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setLightbox(true)}
           >
             <MessageCircle className="mr-1.5 h-4 w-4" />
             {item.comments.length}
           </Button>
         </div>
+      </div>
 
-        {open && (
-          <div className="mt-3 space-y-3">
-            <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+          onClick={() => setLightbox(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pratinjau gambar"
+        >
+          <Button
+            size="icon"
+            variant="secondary"
+            className="absolute right-3 top-3 z-10 h-10 w-10 rounded-full"
+            onClick={() => setLightbox(false)}
+            aria-label="Tutup"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+
+          <img
+            src={item.result_url ?? ""}
+            alt={item.prompt}
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+
+          {/* Panel komentar mengambang */}
+          <div
+            className="absolute bottom-3 left-3 right-3 flex max-h-[55vh] flex-col rounded-2xl border border-border/60 bg-surface/95 p-4 shadow-soft backdrop-blur sm:bottom-6 sm:left-auto sm:right-6 sm:top-6 sm:w-96 sm:max-h-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center gap-2 border-b border-border/50 pb-3">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={like}
+                className={item.liked_by_me ? "text-ember" : "text-muted-foreground"}
+              >
+                <Heart className={`mr-1.5 h-4 w-4 ${item.liked_by_me ? "fill-current" : ""}`} />
+                {item.like_count}
+              </Button>
+              <span className="flex items-center text-xs text-muted-foreground">
+                <MessageCircle className="mr-1.5 h-4 w-4" />
+                {item.comments.length} komentar
+              </span>
+              {item.result_url && (
+                <Button asChild size="icon" variant="ghost" className="ml-auto h-8 w-8">
+                  <a href={item.result_url} target="_blank" rel="noreferrer" download aria-label="Unduh gambar">
+                    <Download className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {item.comments.length === 0 && (
                 <p className="text-xs text-muted-foreground">Belum ada komentar.</p>
               )}
@@ -671,7 +749,8 @@ function RenderCard({
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
+
+            <div className="mt-3 flex gap-2 border-t border-border/50 pt-3">
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -682,15 +761,16 @@ function RenderCard({
                   }
                 }}
                 placeholder="Tulis komentar…"
-                className="min-w-0 flex-1 rounded-lg border border-border/60 bg-background px-3 py-1.5 text-xs outline-none focus:border-ember/60"
+                autoFocus
+                className="min-w-0 flex-1 rounded-lg border border-border/60 bg-background px-3 py-2 text-sm outline-none focus:border-ember/60"
               />
-              <Button size="icon" className="h-8 w-8" disabled={busy} onClick={send} aria-label="Kirim komentar">
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              <Button size="icon" className="h-9 w-9" disabled={busy} onClick={send} aria-label="Kirim komentar">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </motion.article>
   );
 }
