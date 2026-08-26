@@ -277,11 +277,42 @@ export const getNotifications = createServerFn({ method: "GET" })
         .gt("created_at", since),
     ]);
 
+    // Komentar baru pada gambar milik saya / yang saya komentari
+    const [{ data: myRenders }, { data: myComments }, { data: seenRows }] = await Promise.all([
+      supabase.from("renders").select("id").eq("user_id", userId).limit(500),
+      supabase.from("render_comments").select("render_id").eq("user_id", userId).limit(1000),
+      supabase.from("render_comment_seen").select("render_id, last_seen_at").eq("user_id", userId),
+    ]);
+    const watched = Array.from(
+      new Set([
+        ...(myRenders ?? []).map((r) => r.id as string),
+        ...(myComments ?? []).map((c) => c.render_id as string),
+      ]),
+    );
+    let galleryComments = 0;
+    if (watched.length) {
+      const seenMap = new Map<string, string>();
+      for (const s of seenRows ?? [])
+        seenMap.set(s.render_id as string, s.last_seen_at as string);
+      const { data: rows } = await supabase
+        .from("render_comments")
+        .select("render_id, created_at, user_id")
+        .in("render_id", watched)
+        .neq("user_id", userId)
+        .limit(2000);
+      galleryComments = (rows ?? []).filter((c) => {
+        const seenAt = seenMap.get(c.render_id as string);
+        return !seenAt || new Date(c.created_at as string) > new Date(seenAt);
+      }).length;
+    }
+
     return {
       unreadMessages: unreadMessages ?? 0,
       feedUpdates: (newPosts ?? 0) + (newRenders ?? 0),
+      galleryComments,
     };
   });
+
 
 export const markFeedSeen = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

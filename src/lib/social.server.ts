@@ -90,13 +90,20 @@ export type Hierarchy = {
 } | null;
 
 
+export type ReactionInfo = { emoji: string; count: number; mine: boolean };
+
+export const REACTION_EMOJIS = ["👍", "❤️", "🔥", "👏", "💡", "😮"] as const;
+
 export type CommentInfo = {
   id: string;
   body: string;
   created_at: string;
+  updated_at?: string | null;
+  parent_id?: string | null;
   user_id: string;
   author_name: string;
   author_avatar: string | null;
+  reactions?: ReactionInfo[];
 };
 
 export type GalleryItem = {
@@ -111,8 +118,10 @@ export type GalleryItem = {
   user_id: string;
   like_count: number;
   liked_by_me: boolean;
+  new_comment_count: number;
   comments: CommentInfo[];
 };
+
 
 const AVATAR_TTL = 60 * 60 * 24 * 7;
 const RENDER_TTL = 60 * 60 * 24;

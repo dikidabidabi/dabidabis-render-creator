@@ -14,11 +14,13 @@ import {
   type Hierarchy,
   type PostRow,
   type ProfileInfo,
+  type ReactionInfo,
   type RepostRef,
 } from "@/lib/social.server";
 
 export type GalleryOwner = ProfileInfo & { name: string; avatar_signed: string | null };
-export type { GalleryItem, CommentInfo, FeedEntry, Hierarchy };
+export type { GalleryItem, CommentInfo, FeedEntry, Hierarchy, ReactionInfo };
+
 
 export const getGallery = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -67,18 +69,50 @@ export const getGallery = createServerFn({ method: "GET" })
 
 
     const ids = (rows ?? []).map((r) => r.id as string);
-    const [{ data: likes }, { data: comments }] = await Promise.all([
+    const [{ data: likes }, { data: comments }, { data: seenRows }] = await Promise.all([
       ids.length
         ? supabase.from("render_likes").select("render_id, user_id").in("render_id", ids)
         : Promise.resolve({ data: [] as { render_id: string; user_id: string }[] }),
       ids.length
         ? supabase
             .from("render_comments")
-            .select("id, render_id, user_id, body, created_at")
+            .select("id, render_id, user_id, body, created_at, updated_at, parent_id")
             .in("render_id", ids)
             .order("created_at", { ascending: true })
         : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+      ids.length
+        ? supabase
+            .from("render_comment_seen")
+            .select("render_id, last_seen_at")
+            .eq("user_id", userId)
+            .in("render_id", ids)
+        : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
     ]);
+
+    const commentIds = (comments ?? []).map((c) => c["id"] as string);
+    const { data: reactionRows } = commentIds.length
+      ? await supabase
+          .from("render_comment_reactions")
+          .select("comment_id, user_id, emoji")
+          .in("comment_id", commentIds)
+      : { data: [] as Array<Record<string, unknown>> };
+
+    const reactionsFor = (commentId: string): ReactionInfo[] => {
+      const rows2 = (reactionRows ?? []).filter((r) => r["comment_id"] === commentId);
+      const grouped = new Map<string, ReactionInfo>();
+      for (const r of rows2) {
+        const emoji = r["emoji"] as string;
+        const cur = grouped.get(emoji) ?? { emoji, count: 0, mine: false };
+        cur.count += 1;
+        if (r["user_id"] === userId) cur.mine = true;
+        grouped.set(emoji, cur);
+      }
+      return Array.from(grouped.values()).sort((a, b) => b.count - a.count);
+    };
+
+    const seenMap = new Map<string, string>();
+    for (const s of seenRows ?? [])
+      seenMap.set(s["render_id"] as string, s["last_seen_at"] as string);
 
     const commenterMap = await fetchProfileMap(
       supabase,
@@ -93,6 +127,16 @@ export const getGallery = createServerFn({ method: "GET" })
       (rows ?? []).map(async (r) => {
         const rid = r.id as string;
         const rowLikes = (likes ?? []).filter((l) => l.render_id === rid);
+        const rowComments = (comments ?? []).filter((c) => c["render_id"] === rid);
+        const seenAt = seenMap.get(rid);
+        const iParticipate = ownerId === userId || rowComments.some((c) => c["user_id"] === userId);
+        const newComments = iParticipate
+          ? rowComments.filter(
+              (c) =>
+                c["user_id"] !== userId &&
+                (!seenAt || new Date(c["created_at"] as string) > new Date(seenAt)),
+            ).length
+          : 0;
         return {
           id: rid,
           prompt: r.prompt as string,
@@ -105,26 +149,30 @@ export const getGallery = createServerFn({ method: "GET" })
           result_url: r.result_url ? ((await signRender(supabase, ownerId, rid)) ?? (r.result_url as string)) : null,
           like_count: rowLikes.length,
           liked_by_me: rowLikes.some((l) => l.user_id === userId),
-          comments: (comments ?? [])
-            .filter((c) => c["render_id"] === rid)
-            .map((c) => {
-              const cu = c["user_id"] as string;
-              const p = commenterMap.get(cu) ?? null;
-              return {
-                id: c["id"] as string,
-                body: c["body"] as string,
-                created_at: c["created_at"] as string,
-                user_id: cu,
-                author_name: fallbackName(p, cu),
-                author_avatar: commenterAvatars.get(cu) ?? null,
-              } satisfies CommentInfo;
-            }),
+          new_comment_count: newComments,
+          comments: rowComments.map((c) => {
+            const cu = c["user_id"] as string;
+            const p = commenterMap.get(cu) ?? null;
+            const cid = c["id"] as string;
+            return {
+              id: cid,
+              body: c["body"] as string,
+              created_at: c["created_at"] as string,
+              updated_at: (c["updated_at"] as string) ?? null,
+              parent_id: (c["parent_id"] as string) ?? null,
+              user_id: cu,
+              author_name: fallbackName(p, cu),
+              author_avatar: commenterAvatars.get(cu) ?? null,
+              reactions: reactionsFor(cid),
+            } satisfies CommentInfo;
+          }),
         } satisfies GalleryItem;
       }),
     );
 
     return { owner, hierarchy, isOwner: ownerId === userId, items, error: null as string | null };
   });
+
 
 export const listGalleries = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -241,14 +289,25 @@ export const toggleLike = createServerFn({ method: "POST" })
 export const addComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ renderId: z.string().uuid(), body: z.string().min(1).max(1000) }).parse(input),
+    z
+      .object({
+        renderId: z.string().uuid(),
+        body: z.string().min(1).max(1000),
+        parentId: z.string().uuid().nullable().optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: row, error } = await supabase
       .from("render_comments")
-      .insert({ render_id: data.renderId, user_id: userId, body: data.body.trim() })
-      .select("id, body, created_at, user_id")
+      .insert({
+        render_id: data.renderId,
+        user_id: userId,
+        body: data.body.trim(),
+        parent_id: data.parentId ?? null,
+      })
+      .select("id, body, created_at, updated_at, parent_id, user_id")
       .single();
     if (error || !row) return { ok: false as const, error: error?.message ?? "Gagal", comment: null };
 
@@ -258,11 +317,81 @@ export const addComment = createServerFn({ method: "POST" })
       id: row.id as string,
       body: row.body as string,
       created_at: row.created_at as string,
+      updated_at: (row.updated_at as string) ?? null,
+      parent_id: (row.parent_id as string) ?? null,
       user_id: userId,
       author_name: fallbackName(p, userId),
       author_avatar: await signAvatar(supabase, p?.avatar_url ?? null),
+      reactions: [],
     };
     return { ok: true as const, error: null, comment };
+  });
+
+export const editComment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ id: z.string().uuid(), body: z.string().min(1).max(1000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: row, error } = await supabase
+      .from("render_comments")
+      .update({ body: data.body.trim(), updated_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .eq("user_id", userId)
+      .select("id, body, updated_at")
+      .maybeSingle();
+    if (error || !row)
+      return { ok: false as const, error: error?.message ?? "Komentar tidak ditemukan", body: null, updated_at: null };
+    return {
+      ok: true as const,
+      error: null,
+      body: row.body as string,
+      updated_at: (row.updated_at as string) ?? null,
+    };
+  });
+
+export const toggleCommentReaction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ commentId: z.string().uuid(), emoji: z.string().min(1).max(8) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: existing } = await supabase
+      .from("render_comment_reactions")
+      .select("comment_id")
+      .eq("comment_id", data.commentId)
+      .eq("user_id", userId)
+      .eq("emoji", data.emoji)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from("render_comment_reactions")
+        .delete()
+        .eq("comment_id", data.commentId)
+        .eq("user_id", userId)
+        .eq("emoji", data.emoji);
+      return { ok: !error, active: false, error: error?.message ?? null };
+    }
+    const { error } = await supabase
+      .from("render_comment_reactions")
+      .insert({ comment_id: data.commentId, user_id: userId, emoji: data.emoji });
+    return { ok: !error, active: true, error: error?.message ?? null };
+  });
+
+export const markRenderCommentsSeen = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ renderId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("render_comment_seen").upsert(
+      { user_id: userId, render_id: data.renderId, last_seen_at: now, updated_at: now },
+      { onConflict: "user_id,render_id" },
+    );
+    return { ok: !error, error: error?.message ?? null };
   });
 
 export const deleteComment = createServerFn({ method: "POST" })
@@ -273,6 +402,7 @@ export const deleteComment = createServerFn({ method: "POST" })
     const { error } = await supabase.from("render_comments").delete().eq("id", data.id);
     return { ok: !error, error: error?.message ?? null };
   });
+
 
 /* ============================ Akun: jenis & hierarki ============================ */
 

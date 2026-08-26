@@ -122,7 +122,7 @@ function NotifDot({ count }: { count: number }) {
 
 function Header() {
   const { user, signOut } = useAuth();
-  const { unreadMessages, feedUpdates } = useNotifications();
+  const { unreadMessages, feedUpdates, galleryComments } = useNotifications();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const inProject =
     pathname === "/project" ||
@@ -156,9 +156,15 @@ function Header() {
                 Pesan
                 <NotifDot count={unreadMessages} />
               </Link>
-              <Link to="/gallery" className={linkClass} activeProps={{ className: "text-foreground font-medium" }}>
+              <Link
+                to="/gallery"
+                className={`relative ${linkClass}`}
+                activeProps={{ className: "text-foreground font-medium relative" }}
+              >
                 Galeri
+                <NotifDot count={galleryComments} />
               </Link>
+
               <Link
                 to="/project"
                 className={`${linkClass} ${inProject ? "font-medium text-foreground" : ""}`}

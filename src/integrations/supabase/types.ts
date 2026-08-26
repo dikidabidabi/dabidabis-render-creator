@@ -297,29 +297,100 @@ export type Database = {
         }
         Relationships: []
       }
+      render_comment_reactions: {
+        Row: {
+          comment_id: string
+          created_at: string
+          emoji: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          emoji: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          emoji?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_comment_reactions_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "render_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      render_comment_seen: {
+        Row: {
+          last_seen_at: string
+          render_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_seen_at?: string
+          render_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_seen_at?: string
+          render_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_comment_seen_render_id_fkey"
+            columns: ["render_id"]
+            isOneToOne: false
+            referencedRelation: "renders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       render_comments: {
         Row: {
           body: string
           created_at: string
           id: string
+          parent_id: string | null
           render_id: string
+          updated_at: string
           user_id: string
         }
         Insert: {
           body: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           render_id: string
+          updated_at?: string
           user_id: string
         }
         Update: {
           body?: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           render_id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "render_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "render_comments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "render_comments_render_id_fkey"
             columns: ["render_id"]
