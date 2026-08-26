@@ -65,6 +65,7 @@ export function FeedEntryCard({
   busyRepost = false,
   onLike,
   onRepost,
+  onShare,
   onDelete,
   onComment,
   children,
@@ -75,10 +76,12 @@ export function FeedEntryCard({
   busyRepost?: boolean;
   onLike: () => void;
   onRepost: () => void;
+  onShare?: () => void;
   onDelete?: () => void;
   onComment?: () => void;
   children?: React.ReactNode;
 }) {
+
   const [showComments, setShowComments] = useState(false);
   const [showExec, setShowExec] = useState(false);
   const navigate = useNavigate();
