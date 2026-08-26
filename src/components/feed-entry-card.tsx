@@ -354,6 +354,14 @@ export function FeedEntryCard({
             )}
             Repost
           </Button>
+
+          {onShare && (
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onShare}>
+              <Share2 className="mr-1.5 h-4 w-4" />
+              Bagikan
+            </Button>
+          )}
+
         </div>
 
         {showComments && children}
