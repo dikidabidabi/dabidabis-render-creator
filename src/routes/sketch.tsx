@@ -1902,6 +1902,15 @@ function SketchCard(props: SketchCardProps) {
           <Button
             variant="outline"
             size="sm"
+            onClick={onDownload}
+            title="Unduh sketsa sebagai file — bisa diunggah kembali ke sketsa kosong lengkap dengan semua penggambaran"
+          >
+            <Download className="mr-1.5 h-4 w-4" /> Unduh
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onRequestDelete}
             className="border-ember/40 text-ember hover:bg-ember/10 hover:text-ember"
           >
