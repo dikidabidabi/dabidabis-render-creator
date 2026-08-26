@@ -1708,7 +1708,54 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         />
       )}
 
+      <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Merge Sketsa</DialogTitle>
+            <DialogDescription>
+              Pilih 2 sketsa atau lebih. Sketsa pertama yang dipilih menjadi acuan koordinat;
+              sketsa lain diletakkan sesuai selisih koordinat peta masing-masing. Level dengan
+              MDPL sama disatukan, MDPL berbeda otomatis menjadi elevasi baru.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 space-y-1 overflow-auto rounded-lg border border-border/60 p-2">
+            {sketches.map((s) => {
+              const idx = mergeSel.indexOf(s.id);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() =>
+                    setMergeSel((prev) =>
+                      prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id],
+                    )
+                  }
+                  className={cn(
+                    "flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition",
+                    idx >= 0 ? "bg-ember/10 text-ember" : "hover:bg-surface/60",
+                  )}
+                >
+                  <span className="min-w-0 truncate">{s.title}</span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {s.levels.length} elevasi · {s.geo ? "berkoordinat" : "tanpa koordinat"}
+                    {idx >= 0 ? ` · #${idx + 1}` : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMergeOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={runMerge} disabled={mergeSel.length < 2}>
+              <Combine className="mr-1.5 h-4 w-4" /> Gabungkan ({mergeSel.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!confirmDeleteId} onOpenChange={(v) => !v && setConfirmDeleteId(null)}>
+
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus sketsa ini?</AlertDialogTitle>
