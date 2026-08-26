@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
   Network,
   PenLine,
+  Paperclip,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,12 @@ import {
 } from "@/lib/social.functions";
 import { FeedEntryCard } from "@/components/feed-entry-card";
 import { nominatimSearch, type NominatimHit } from "@/lib/geo";
+import {
+  listAttachableSketches,
+  buildAttachmentText,
+  attachmentDataUrl,
+  type AttachableSketch,
+} from "@/lib/tender-sketch";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -1023,6 +1030,10 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [suggests, setSuggests] = useState<NominatimHit[]>([]);
   const [searching, setSearching] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [attachables, setAttachables] = useState<AttachableSketch[]>([]);
+  const [attached, setAttached] = useState<AttachableSketch | null>(null);
+  const [attachPath, setAttachPath] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const imgRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -1083,6 +1094,39 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
     setTitle("");
     setCoords(null);
     setSuggests([]);
+    setAttached(null);
+    setAttachPath(null);
+    setAttachOpen(false);
+  };
+
+  const openAttach = () => {
+    setAttachables(listAttachableSketches());
+    setAttachOpen((v) => !v);
+  };
+
+  // Lampirkan sketsa: unggah snapshot lengkap (.dabidabi.json) lalu isi otomatis
+  // alamat/koordinat proyek dari geo sketsa agar peta langsung muncul.
+  const attachSketch = async (item: AttachableSketch) => {
+    const text = buildAttachmentText(item.id, item.source);
+    if (!text) return toast.error("Data sketsa tidak ditemukan di perangkat ini.");
+    setBusy(true);
+    const r = await uploadFn({ data: { dataUrl: attachmentDataUrl(text), kind: "sketch" } });
+    setBusy(false);
+    if (!r.ok) return toast.error(r.error || "Gagal melampirkan sketsa");
+    setAttached(item);
+    setAttachPath(r.path);
+    setAttachOpen(false);
+    if (!title.trim()) setTitle(item.title);
+    if (item.lat != null && item.lon != null) {
+      setCoords({ lat: item.lat, lon: item.lon });
+      setAddress(
+        item.label?.trim() || `${item.lat.toFixed(6)}, ${item.lon.toFixed(6)}`,
+      );
+      setSuggests([]);
+      toast.success("Sketsa dilampirkan — peta lokasi diambil dari koordinat sketsa");
+    } else {
+      toast.success("Sketsa dilampirkan (belum memuat koordinat)");
+    }
   };
 
   const submit = async () => {
@@ -1099,6 +1143,9 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
         project_address: mode === "tender" ? address.trim() || null : null,
         project_lat: mode === "tender" ? (coords?.lat ?? null) : null,
         project_lon: mode === "tender" ? (coords?.lon ?? null) : null,
+        sketch_url: mode === "tender" ? attachPath : null,
+        sketch_title: mode === "tender" ? (attached?.title ?? null) : null,
+        sketch_source: mode === "tender" ? (attached?.source ?? null) : null,
       },
     });
     setBusy(false);
@@ -1234,6 +1281,16 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
                   ? `Koordinat: ${coords.lat.toFixed(6)}, ${coords.lon.toFixed(6)}`
                   : "Pilih salah satu sugesti alamat untuk mengambil koordinat."}
             </p>
+            {coords && (
+              <div className="overflow-hidden rounded-lg border border-border/60">
+                <iframe
+                  title="Peta lokasi proyek tender"
+                  loading="lazy"
+                  className="h-48 w-full"
+                  src={`https://maps.google.com/maps?q=${coords.lat},${coords.lon}&z=16&output=embed`}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1280,6 +1337,13 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
           </>
         )}
 
+        {mode === "tender" && (
+          <Button variant="outline" size="sm" onClick={openAttach} disabled={busy}>
+            <Paperclip className="mr-2 h-3.5 w-3.5" />
+            {attached ? `Sketsa: ${attached.title}` : "Attach sketsa"}
+          </Button>
+        )}
+
         <Button
           size="sm"
           className="ml-auto bg-gradient-primary shadow-primary hover:opacity-90"
@@ -1294,6 +1358,60 @@ function PostComposer({ onCreated }: { onCreated: () => void | Promise<void> }) 
           {mode === "tender" ? "Posting tender" : "Posting"}
         </Button>
       </div>
+
+      {mode === "tender" && attachOpen && (
+        <div className="mt-3 rounded-xl border border-border/60 bg-background/60 p-3">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Pilih sketsa dari halaman Sketsa atau Master Plan. Seluruh data (geometri, level,
+            tabulasi, narasi, presentasi) dilampirkan sebagai salinan.
+          </p>
+          {attachables.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Belum ada sketsa di akun ini.</p>
+          ) : (
+            <ul className="max-h-60 space-y-1 overflow-auto">
+              {attachables.map((a) => (
+                <li key={`${a.source}-${a.id}`}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void attachSketch(a)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-ember/10"
+                  >
+                    <span className="rounded bg-ember/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ember">
+                      {a.source === "masterplan" ? "Master Plan" : "Sketsa"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-medium">{a.title}</span>
+                    <span className="shrink-0 text-muted-foreground">
+                      {a.lat != null && a.lon != null
+                        ? `${a.lat.toFixed(4)}, ${a.lon.toFixed(4)}`
+                        : "tanpa koordinat"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {mode === "tender" && attached && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Paperclip className="h-3.5 w-3.5 text-ember" />
+          Lampiran sketsa: <span className="font-medium text-foreground">{attached.title}</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={() => {
+              setAttached(null);
+              setAttachPath(null);
+            }}
+            aria-label="Hapus lampiran sketsa"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
     </section>
   );
 }

@@ -32,6 +32,9 @@ export type PostRow = {
   project_address: string | null;
   project_lat: number | null;
   project_lon: number | null;
+  sketch_url: string | null;
+  sketch_title: string | null;
+  sketch_source: string | null;
   repost_of_post: string | null;
   repost_of_render: string | null;
   created_at: string;
@@ -65,6 +68,9 @@ export type FeedEntry = {
   project_address: string | null;
   project_lat: number | null;
   project_lon: number | null;
+  sketch_url: string | null;
+  sketch_title: string | null;
+  sketch_source: string | null;
   repost: RepostRef;
 };
 
