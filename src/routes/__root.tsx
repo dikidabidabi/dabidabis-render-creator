@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { LogoDabidabi } from "@/components/logo";
 import { ProjectHydrationGate } from "@/components/project-hydration-gate";
 import { PrivateRouteGate } from "@/components/private-route-gate";
+import { NotificationProvider, useNotifications } from "@/lib/notifications";
+
 
 import appCss from "../styles.css?url";
 
@@ -109,8 +111,18 @@ const PROJECT_LINKS = [
 const linkClass =
   "text-sm text-muted-foreground transition-colors hover:text-foreground";
 
+function NotifDot({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[10px] font-bold leading-none text-white shadow">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 function Header() {
   const { user, signOut } = useAuth();
+  const { unreadMessages, feedUpdates } = useNotifications();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const inProject =
     pathname === "/project" ||
@@ -128,8 +140,21 @@ function Header() {
         <nav className="flex items-center gap-3 sm:gap-5">
           {user ? (
             <>
-              <Link to="/feed" className={linkClass} activeProps={{ className: "text-foreground font-medium" }}>
+              <Link
+                to="/feed"
+                className={`relative ${linkClass}`}
+                activeProps={{ className: "text-foreground font-medium relative" }}
+              >
                 Forum Feed
+                <NotifDot count={feedUpdates} />
+              </Link>
+              <Link
+                to="/pesan"
+                className={`relative ${linkClass}`}
+                activeProps={{ className: "text-foreground font-medium relative" }}
+              >
+                Pesan
+                <NotifDot count={unreadMessages} />
               </Link>
               <Link to="/gallery" className={linkClass} activeProps={{ className: "text-foreground font-medium" }}>
                 Galeri
@@ -143,6 +168,7 @@ function Header() {
               <Link to="/akun" className={linkClass} activeProps={{ className: "text-foreground font-medium" }}>
                 Akun
               </Link>
+
               <Button variant="ghost" size="sm" onClick={() => signOut()}>
                 Keluar
               </Button>
@@ -186,15 +212,18 @@ function Header() {
 function RootComponent() {
   return (
     <AuthProvider>
-      <ProjectHydrationGate>
-        <div className="grain min-h-screen">
-          <Header />
-          <PrivateRouteGate>
-            <Outlet />
-          </PrivateRouteGate>
-          <Toaster theme="light" position="top-center" richColors />
-        </div>
-      </ProjectHydrationGate>
+      <NotificationProvider>
+        <ProjectHydrationGate>
+          <div className="grain min-h-screen">
+            <Header />
+            <PrivateRouteGate>
+              <Outlet />
+            </PrivateRouteGate>
+            <Toaster theme="light" position="top-center" richColors />
+          </div>
+        </ProjectHydrationGate>
+      </NotificationProvider>
     </AuthProvider>
   );
+
 }

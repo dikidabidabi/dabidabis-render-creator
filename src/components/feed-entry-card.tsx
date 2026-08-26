@@ -13,12 +13,14 @@ import {
   Paperclip,
   Play,
   Repeat2,
+  Share2,
   Trash2,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setPendingTenderExec } from "@/lib/tender-exec";
 import type { FeedEntry } from "@/lib/social.functions";
+
 
 export function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -63,6 +65,7 @@ export function FeedEntryCard({
   busyRepost = false,
   onLike,
   onRepost,
+  onShare,
   onDelete,
   onComment,
   children,
@@ -73,10 +76,12 @@ export function FeedEntryCard({
   busyRepost?: boolean;
   onLike: () => void;
   onRepost: () => void;
+  onShare?: () => void;
   onDelete?: () => void;
   onComment?: () => void;
   children?: React.ReactNode;
 }) {
+
   const [showComments, setShowComments] = useState(false);
   const [showExec, setShowExec] = useState(false);
   const navigate = useNavigate();
@@ -349,6 +354,14 @@ export function FeedEntryCard({
             )}
             Repost
           </Button>
+
+          {onShare && (
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onShare}>
+              <Share2 className="mr-1.5 h-4 w-4" />
+              Bagikan
+            </Button>
+          )}
+
         </div>
 
         {showComments && children}

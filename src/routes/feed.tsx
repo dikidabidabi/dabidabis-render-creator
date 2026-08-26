@@ -10,8 +10,11 @@ import {
   type FeedItem,
 } from "@/lib/social.functions";
 import { FeedEntryCard } from "@/components/feed-entry-card";
+import { SharePostDialog, type SharePayload } from "@/components/share-post-dialog";
+import { useNotifications } from "@/lib/notifications";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+
 
 export const Route = createFileRoute("/feed")({
   component: FeedPage,
@@ -41,9 +44,11 @@ function FeedPage() {
   const likeRender = useServerFn(toggleLike);
   const likePost = useServerFn(togglePostLike);
   const postFn = useServerFn(createPost);
+  const { clearFeed } = useNotifications();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [busy, setBusy] = useState(true);
   const [reposting, setReposting] = useState<string | null>(null);
+  const [shareTarget, setShareTarget] = useState<SharePayload | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -63,8 +68,12 @@ function FeedPage() {
       navigate({ to: "/login" });
       return;
     }
-    if (user) void load();
-  }, [user, loading, navigate, load]);
+    if (user) {
+      void load();
+      void clearFeed();
+    }
+  }, [user, loading, navigate, load, clearFeed]);
+
 
   const onLike = async (item: FeedItem) => {
     setItems((prev) =>
@@ -101,6 +110,21 @@ function FeedPage() {
     }
   };
 
+  const shareToFeed = async (target: SharePayload, note: string) => {
+    const res = await postFn({
+      data:
+        target.kind === "render"
+          ? { kind: "post", body: note || null, repost_of_render: target.id }
+          : { kind: "post", body: note || null, repost_of_post: target.id },
+    });
+    if (res.ok) {
+      toast.success("Postingan dibagikan ke forum feed Anda");
+      void load();
+    } else {
+      toast.error(res.error ?? "Gagal membagikan");
+    }
+  };
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <header className="mb-8">
@@ -132,10 +156,24 @@ function FeedPage() {
               busyRepost={reposting === it.id}
               onLike={() => void onLike(it)}
               onRepost={() => void onRepost(it)}
+              onShare={() =>
+                setShareTarget({
+                  kind: it.kind,
+                  id: it.id,
+                  title: it.tender_title || it.body || "Postingan",
+                })
+              }
             />
           ))}
         </div>
       )}
+
+      <SharePostDialog
+        target={shareTarget}
+        onClose={() => setShareTarget(null)}
+        onShareToFeed={shareToFeed}
+      />
     </main>
+
   );
 }

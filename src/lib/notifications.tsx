@@ -1,0 +1,68 @@
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useAuth } from "@/lib/auth";
+import { getNotifications, markFeedSeen } from "@/lib/messages.functions";
+
+type NotifCtx = {
+  unreadMessages: number;
+  feedUpdates: number;
+  refresh: () => Promise<void>;
+  clearFeed: () => Promise<void>;
+};
+
+const NotificationContext = createContext<NotifCtx>({
+  unreadMessages: 0,
+  feedUpdates: 0,
+  refresh: async () => {},
+  clearFeed: async () => {},
+});
+
+export function NotificationProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const fetchNotif = useServerFn(getNotifications);
+  const seenFn = useServerFn(markFeedSeen);
+  const [unreadMessages, setUnread] = useState(0);
+  const [feedUpdates, setFeed] = useState(0);
+
+  const refresh = useCallback(async () => {
+    if (!user) {
+      setUnread(0);
+      setFeed(0);
+      return;
+    }
+    try {
+      const res = await fetchNotif({});
+      setUnread(res.unreadMessages);
+      setFeed(res.feedUpdates);
+    } catch {
+      /* diam saja: notifikasi tidak kritis */
+    }
+  }, [user, fetchNotif]);
+
+  const clearFeed = useCallback(async () => {
+    if (!user) return;
+    setFeed(0);
+    try {
+      await seenFn({});
+    } catch {
+      /* ignore */
+    }
+  }, [user, seenFn]);
+
+  useEffect(() => {
+    void refresh();
+    if (!user) return;
+    const t = setInterval(() => void refresh(), 30_000);
+    return () => clearInterval(t);
+  }, [user, refresh]);
+
+  return (
+    <NotificationContext.Provider value={{ unreadMessages, feedUpdates, refresh, clearFeed }}>
+      {children}
+    </NotificationContext.Provider>
+  );
+}
+
+export function useNotifications() {
+  return useContext(NotificationContext);
+}
