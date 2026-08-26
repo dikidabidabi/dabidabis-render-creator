@@ -100,6 +100,12 @@ export function collectCompanions(sketchId: string): SketchCompanions {
     const raw = localStorage.getItem(`${prefix}${sketchId}`);
     if (raw != null) scoped[prefix] = raw;
   }
+  for (const { key, field } of NESTED_MAP_STORES) {
+    const store = safeParse(localStorage.getItem(key));
+    const bucket = store && typeof store === "object" ? (store as any)[field] : undefined;
+    const val = bucket && typeof bucket === "object" ? bucket[sketchId] : undefined;
+    if (val !== undefined) maps[nestedTag(key, field)] = val;
+  }
   return { maps, scoped };
 }
 
