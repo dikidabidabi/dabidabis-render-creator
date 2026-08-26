@@ -22,15 +22,129 @@ export type AnySketch = Record<string, any> & {
   geo?: Geo;
 };
 
+/**
+ * Data pendamping per-sketsa yang tersimpan di store lain (tabulasi, narasi,
+ * perspektif, moodboard, screenshot 3D, dsb). Disertakan di file unduhan agar
+ * seluruh isian ikut terbawa hingga ke halaman presentasi.
+ */
+export type SketchCompanions = {
+  /** Store berbentuk map { [sketchId]: value } — nilai untuk sketsa ini. */
+  maps: Record<string, unknown>;
+  /** Store berbentuk key per sketsa (`prefix_<sketchId>`) — nilai mentah. */
+  scoped: Record<string, string>;
+};
+
 export type SketchFile = {
   app: "dabidabis";
   kind: "sketch";
   version: 1;
   exportedAt: string;
   sketch: AnySketch;
+  companions?: SketchCompanions;
 };
 
 export const SKETCH_FILE_EXT = ".dabidabi.json";
+
+/** Store localStorage berbentuk map { [sketchId]: data }. */
+const MAP_STORE_KEYS = [
+  "dabidabis_narasi_v1", // Halaman Narasi
+  "dabidabis_perspektif_v1", // Perspektif / render studio
+  "dabidabis_cost_v1", // Halaman Tabulasi (biaya)
+  "dabidabis_moodboard_v1", // Moodboard studio
+  "dabidabis_slideview_v3", // Tata letak slide presentasi
+  "dabidabis_compass_view_v1", // Posisi kompas pada slide
+] as const;
+
+/** Prefix localStorage dengan satu key per sketsa: `<prefix><sketchId>`. */
+const SCOPED_KEY_PREFIXES = [
+  "dabidabis_model3d_shots_", // Library screenshot 3D
+  "dabidabis_model3d_view_",
+  "dabidabis_masterplan3d_view_",
+  "dabidabis_osmH_", // Tinggi bangunan eksisting (press & pull)
+  "dabidabis_osmDel_",
+] as const;
+
+function safeParse(raw: string | null): any {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** Kumpulkan seluruh data pendamping sebuah sketsa dari localStorage. */
+export function collectCompanions(sketchId: string): SketchCompanions {
+  const maps: Record<string, unknown> = {};
+  const scoped: Record<string, string> = {};
+  if (typeof localStorage === "undefined") return { maps, scoped };
+  for (const key of MAP_STORE_KEYS) {
+    const store = safeParse(localStorage.getItem(key));
+    const val = store && typeof store === "object" ? store[sketchId] : undefined;
+    if (val !== undefined) maps[key] = val;
+  }
+  for (const prefix of SCOPED_KEY_PREFIXES) {
+    const raw = localStorage.getItem(`${prefix}${sketchId}`);
+    if (raw != null) scoped[prefix] = raw;
+  }
+  return { maps, scoped };
+}
+
+/** Tulis kembali data pendamping ke localStorage untuk id sketsa baru. */
+export function applyCompanions(
+  companions: SketchCompanions | undefined,
+  sketchId: string,
+): void {
+  if (!companions || typeof localStorage === "undefined") return;
+  const notify = (key: string, value: string) => {
+    try {
+      window.dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
+    } catch {
+      /* ignore */
+    }
+  };
+  for (const [key, val] of Object.entries(companions.maps ?? {})) {
+    if (val === undefined) continue;
+    const store = safeParse(localStorage.getItem(key)) ?? {};
+    if (typeof store !== "object") continue;
+    (store as any)[sketchId] = val;
+    const next = JSON.stringify(store);
+    try {
+      localStorage.setItem(key, next);
+      notify(key, next);
+    } catch {
+      /* kuota penuh — lewati */
+    }
+  }
+  for (const [prefix, raw] of Object.entries(companions.scoped ?? {})) {
+    const key = `${prefix}${sketchId}`;
+    try {
+      localStorage.setItem(key, raw);
+      notify(key, raw);
+    } catch {
+      /* kuota penuh — lewati */
+    }
+  }
+}
+
+/** Gabungkan beberapa set companions (dipakai saat merge sketsa). */
+export function mergeCompanions(list: (SketchCompanions | undefined)[]): SketchCompanions {
+  const out: SketchCompanions = { maps: {}, scoped: {} };
+  for (const c of list) {
+    if (!c) continue;
+    for (const [k, v] of Object.entries(c.maps ?? {})) {
+      const prev = out.maps[k];
+      if (Array.isArray(prev) && Array.isArray(v)) out.maps[k] = [...prev, ...v];
+      else if (prev && typeof prev === "object" && v && typeof v === "object")
+        out.maps[k] = { ...(prev as object), ...(v as object) };
+      else if (prev === undefined) out.maps[k] = v;
+    }
+    for (const [k, v] of Object.entries(c.scoped ?? {})) {
+      if (out.scoped[k] === undefined) out.scoped[k] = v;
+    }
+  }
+  return out;
+}
 
 // ---------- Ekspor ----------
 
@@ -41,6 +155,7 @@ export function buildSketchFile(sketch: AnySketch): SketchFile {
     version: 1,
     exportedAt: new Date().toISOString(),
     sketch: JSON.parse(JSON.stringify(sketch)),
+    companions: collectCompanions(sketch.id),
   };
 }
 
@@ -67,9 +182,19 @@ export function downloadSketchFile(sketch: AnySketch) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+
 // ---------- Impor ----------
 
+/** Ambil data pendamping (tabulasi/narasi/dll) dari file unduhan, bila ada. */
+export function parseSketchCompanions(text: string): SketchCompanions | undefined {
+  const data = safeParse(text);
+  const c = data?.companions;
+  if (!c || typeof c !== "object") return undefined;
+  return { maps: c.maps ?? {}, scoped: c.scoped ?? {} };
+}
+
 export function parseSketchFile(text: string): AnySketch {
+
   let data: any;
   try {
     data = JSON.parse(text);

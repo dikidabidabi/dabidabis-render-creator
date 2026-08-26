@@ -89,6 +89,10 @@ import { toast } from "sonner";
 import {
   downloadSketchFile,
   parseSketchFile,
+  parseSketchCompanions,
+  applyCompanions,
+  collectCompanions,
+  mergeCompanions,
   mergeSketches,
   SKETCH_FILE_EXT,
   type AnySketch,
@@ -1581,6 +1585,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
     try {
       const text = await file.text();
       const raw = parseSketchFile(text);
+      const companions = parseSketchCompanions(text);
       const imported = normalizeSketch({
         ...raw,
         id: `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1588,6 +1593,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+      applyCompanions(companions, imported.id);
       setSketches((prev) => [...prev, imported]);
       setOpenId(imported.id);
       toast.success(`"${imported.title}" berhasil diunggah`);
@@ -1595,6 +1601,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
       toast.error(e instanceof Error ? e.message : "Gagal membaca file sketsa");
     }
   };
+
 
   const runMerge = () => {
     const picked = mergeSel
@@ -1611,6 +1618,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         title: `Merge — ${picked.map((s) => s.title).join(" + ")}`,
       });
       const merged = normalizeSketch(res.sketch);
+      applyCompanions(mergeCompanions(picked.map((s) => collectCompanions(s.id))), merged.id);
       setSketches((prev) => [...prev, merged]);
       setOpenId(merged.id);
       setMergeOpen(false);
