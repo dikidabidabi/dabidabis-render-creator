@@ -1410,6 +1410,10 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSel, setMergeSel] = useState<string[]>([]);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
   const latestStoreRef = useRef<{ sketches: Sketch[]; openId: string | null; loaded: boolean }>({
     sketches: [],
     openId: null,
