@@ -35,6 +35,72 @@ export type Database = {
         }
         Relationships: []
       }
+      direct_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          from_user: string
+          id: string
+          read_at: string | null
+          shared_post_id: string | null
+          shared_render_id: string | null
+          to_user: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          from_user: string
+          id?: string
+          read_at?: string | null
+          shared_post_id?: string | null
+          shared_render_id?: string | null
+          to_user: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          from_user?: string
+          id?: string
+          read_at?: string | null
+          shared_post_id?: string | null
+          shared_render_id?: string | null
+          to_user?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_shared_post_id_fkey"
+            columns: ["shared_post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_shared_render_id_fkey"
+            columns: ["shared_render_id"]
+            isOneToOne: false
+            referencedRelation: "renders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feed_seen: {
+        Row: {
+          last_seen_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_seen_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_seen_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       formula_settings: {
         Row: {
           data: Json
