@@ -14,11 +14,13 @@ import {
   type Hierarchy,
   type PostRow,
   type ProfileInfo,
+  type ReactionInfo,
   type RepostRef,
 } from "@/lib/social.server";
 
 export type GalleryOwner = ProfileInfo & { name: string; avatar_signed: string | null };
-export type { GalleryItem, CommentInfo, FeedEntry, Hierarchy };
+export type { GalleryItem, CommentInfo, FeedEntry, Hierarchy, ReactionInfo };
+
 
 export const getGallery = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
