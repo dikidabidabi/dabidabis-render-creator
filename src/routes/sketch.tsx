@@ -1571,18 +1571,96 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
     toast.success("Sketsa dihapus");
   };
 
+  const pxPerMeterFor = (s: Sketch) =>
+    (MINOR_PX * MAJOR_EVERY) / (METERS_PER_MAJOR[s.scale] ?? 1);
+
+  const importSketchFromFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const raw = parseSketchFile(text);
+      const imported = normalizeSketch({
+        ...raw,
+        id: `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        title: raw.title || file.name.replace(/\.(dabidabi\.)?json$/i, ""),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      setSketches((prev) => [...prev, imported]);
+      setOpenId(imported.id);
+      toast.success(`"${imported.title}" berhasil diunggah`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal membaca file sketsa");
+    }
+  };
+
+  const runMerge = () => {
+    const picked = mergeSel
+      .map((id) => sketches.find((s) => s.id === id))
+      .filter((s): s is Sketch => !!s);
+    if (picked.length < 2) {
+      toast.error("Pilih minimal 2 sketsa untuk digabung");
+      return;
+    }
+    try {
+      const res = mergeSketches(picked as unknown as AnySketch[], {
+        pxPerMeter: pxPerMeterFor(picked[0]),
+        id: `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        title: `Merge — ${picked.map((s) => s.title).join(" + ")}`,
+      });
+      const merged = normalizeSketch(res.sketch);
+      setSketches((prev) => [...prev, merged]);
+      setOpenId(merged.id);
+      setMergeOpen(false);
+      setMergeSel([]);
+      toast.success(
+        `Sketsa digabung — ${res.mergedLevels} elevasi disatukan, ${res.newLevels} elevasi baru`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menggabungkan sketsa");
+    }
+  };
+
   const fullscreenSketch = fullscreenId ? sketches.find((s) => s.id === fullscreenId) : null;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="mb-4">
-        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-          Sketsa Konseptual
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Kertas milimeter block digital — multi-tab, tersimpan otomatis di perangkat ini.
-        </p>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            {mode === "masterplan" ? "Master Plan" : "Sketsa Konseptual"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Kertas milimeter block digital — multi-tab, tersimpan otomatis di perangkat ini.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void importSketchFromFile(f);
+              e.currentTarget.value = "";
+            }}
+          />
+          <Button variant="outline" size="sm" onClick={() => importInputRef.current?.click()}>
+            <Upload className="mr-1.5 h-4 w-4" /> Unggah Sketsa
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setMergeSel(sketches.slice(0, 2).map((s) => s.id));
+              setMergeOpen(true);
+            }}
+          >
+            <Combine className="mr-1.5 h-4 w-4" /> Merge Sketsa
+          </Button>
+        </div>
       </div>
+
 
       <div className="space-y-4">
         {sketches.map((s) => (
