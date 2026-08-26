@@ -212,15 +212,18 @@ function Header() {
 function RootComponent() {
   return (
     <AuthProvider>
-      <ProjectHydrationGate>
-        <div className="grain min-h-screen">
-          <Header />
-          <PrivateRouteGate>
-            <Outlet />
-          </PrivateRouteGate>
-          <Toaster theme="light" position="top-center" richColors />
-        </div>
-      </ProjectHydrationGate>
+      <NotificationProvider>
+        <ProjectHydrationGate>
+          <div className="grain min-h-screen">
+            <Header />
+            <PrivateRouteGate>
+              <Outlet />
+            </PrivateRouteGate>
+            <Toaster theme="light" position="top-center" richColors />
+          </div>
+        </ProjectHydrationGate>
+      </NotificationProvider>
     </AuthProvider>
   );
+
 }
