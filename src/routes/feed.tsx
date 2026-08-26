@@ -44,9 +44,11 @@ function FeedPage() {
   const likeRender = useServerFn(toggleLike);
   const likePost = useServerFn(togglePostLike);
   const postFn = useServerFn(createPost);
+  const { clearFeed } = useNotifications();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [busy, setBusy] = useState(true);
   const [reposting, setReposting] = useState<string | null>(null);
+  const [shareTarget, setShareTarget] = useState<SharePayload | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -66,8 +68,12 @@ function FeedPage() {
       navigate({ to: "/login" });
       return;
     }
-    if (user) void load();
-  }, [user, loading, navigate, load]);
+    if (user) {
+      void load();
+      void clearFeed();
+    }
+  }, [user, loading, navigate, load, clearFeed]);
+
 
   const onLike = async (item: FeedItem) => {
     setItems((prev) =>
