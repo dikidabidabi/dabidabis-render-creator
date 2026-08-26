@@ -1618,6 +1618,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         title: `Merge — ${picked.map((s) => s.title).join(" + ")}`,
       });
       const merged = normalizeSketch(res.sketch);
+      applyCompanions(mergeCompanions(picked.map((s) => collectCompanions(s.id))), merged.id);
       setSketches((prev) => [...prev, merged]);
       setOpenId(merged.id);
       setMergeOpen(false);
