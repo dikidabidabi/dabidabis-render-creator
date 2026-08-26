@@ -1493,28 +1493,76 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
   }, [STORAGE_KEY_ACTIVE]);
 
   // "Eksekusi" dari postingan tender: buat sketsa baru dengan judul tender dan
-  // koordinat alamat proyek yang sudah terisi/terkunci.
+  // koordinat alamat proyek yang sudah terisi/terkunci. Bila tender menyertakan
+  // lampiran sketsa, seluruh data sketsa (geometri, level, tabulasi, narasi,
+  // presentasi, screenshot 3D) diduplikasi ke akun eksekutor dengan id baru —
+  // sketsa sumber milik pemosting tender tidak tersentuh.
   useEffect(() => {
     if (!loaded) return;
     const pending = takePendingTenderExec(mode);
     if (!pending) return;
-    setSketches((prev) => {
-      const next = normalizeSketch({
-        ...newSketch(prev.length + 1),
-        title: pending.title || `Tender ${prev.length + 1}`,
-        geo: {
-          ...DEFAULT_GEO,
-          lat: pending.lat,
-          lon: pending.lon,
-          locked: true,
-          label: pending.label ?? "",
-        },
+
+    const blank = () => {
+      setSketches((prev) => {
+        const next = normalizeSketch({
+          ...newSketch(prev.length + 1),
+          title: pending.title || `Tender ${prev.length + 1}`,
+          geo: {
+            ...DEFAULT_GEO,
+            lat: pending.lat,
+            lon: pending.lon,
+            locked: true,
+            label: pending.label ?? "",
+          },
+        });
+        setOpenId(next.id);
+        return [...prev, next];
       });
-      setOpenId(next.id);
-      return [...prev, next];
-    });
-    toast.success(`Sketsa "${pending.title}" dibuat dari tender`);
+      toast.success(`Sketsa "${pending.title}" dibuat dari tender`);
+    };
+
+    if (!pending.sketchUrl) {
+      blank();
+      return;
+    }
+
+    void (async () => {
+      try {
+        const res = await fetch(pending.sketchUrl!);
+        if (!res.ok) throw new Error("Lampiran sketsa tidak dapat diunduh");
+        const text = await res.text();
+        const raw = parseSketchFile(text);
+        const companions = parseSketchCompanions(text);
+        const clone = normalizeSketch({
+          ...JSON.parse(JSON.stringify(raw)),
+          id: `S${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          title: pending.title || raw.title || "Tender",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          geo: {
+            ...DEFAULT_GEO,
+            ...(raw.geo ?? {}),
+            lat: pending.lat,
+            lon: pending.lon,
+            locked: true,
+            label: pending.label ?? (raw.geo as any)?.label ?? "",
+          },
+        });
+        applyCompanions(companions, clone.id);
+        setSketches((prev) => [...prev, clone]);
+        setOpenId(clone.id);
+        toast.success(`Sketsa tender "${clone.title}" disalin ke akun Anda`);
+      } catch (e) {
+        toast.error(
+          e instanceof Error
+            ? `${e.message} — sketsa kosong dibuat sebagai gantinya`
+            : "Gagal menyalin lampiran sketsa",
+        );
+        blank();
+      }
+    })();
   }, [loaded, mode]);
+
 
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
     setSketches((prev) =>
