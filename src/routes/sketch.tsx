@@ -46,6 +46,9 @@ import {
   RotateCw,
   SplitSquareHorizontal,
   ArrowRight,
+  Upload,
+  Combine,
+
 } from "lucide-react";
 import {
   type Floor,
