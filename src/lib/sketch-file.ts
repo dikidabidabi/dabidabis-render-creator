@@ -185,7 +185,16 @@ export function downloadSketchFile(sketch: AnySketch) {
 
 // ---------- Impor ----------
 
+/** Ambil data pendamping (tabulasi/narasi/dll) dari file unduhan, bila ada. */
+export function parseSketchCompanions(text: string): SketchCompanions | undefined {
+  const data = safeParse(text);
+  const c = data?.companions;
+  if (!c || typeof c !== "object") return undefined;
+  return { maps: c.maps ?? {}, scoped: c.scoped ?? {} };
+}
+
 export function parseSketchFile(text: string): AnySketch {
+
   let data: any;
   try {
     data = JSON.parse(text);
