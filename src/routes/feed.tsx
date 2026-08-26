@@ -10,8 +10,11 @@ import {
   type FeedItem,
 } from "@/lib/social.functions";
 import { FeedEntryCard } from "@/components/feed-entry-card";
+import { SharePostDialog, type SharePayload } from "@/components/share-post-dialog";
+import { useNotifications } from "@/lib/notifications";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+
 
 export const Route = createFileRoute("/feed")({
   component: FeedPage,
