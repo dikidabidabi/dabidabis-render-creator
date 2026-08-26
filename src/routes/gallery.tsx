@@ -525,7 +525,6 @@ function RenderCard({
   const likeFn = useServerFn(toggleLike);
   const commentFn = useServerFn(addComment);
   const delCommentFn = useServerFn(deleteComment);
-  const [open, setOpen] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
