@@ -122,11 +122,22 @@ export function applyCompanions(
       /* ignore */
     }
   };
-  for (const [key, val] of Object.entries(companions.maps ?? {})) {
+  for (const [rawKey, val] of Object.entries(companions.maps ?? {})) {
     if (val === undefined) continue;
+    const [key, field] = rawKey.split("#");
     const store = safeParse(localStorage.getItem(key)) ?? {};
     if (typeof store !== "object") continue;
-    (store as any)[sketchId] = val;
+    if (field) {
+      // Store bersarang (mis. graph Studio → outputs[sketchId]).
+      const bucket =
+        (store as any)[field] && typeof (store as any)[field] === "object"
+          ? (store as any)[field]
+          : {};
+      bucket[sketchId] = val;
+      (store as any)[field] = bucket;
+    } else {
+      (store as any)[sketchId] = val;
+    }
     const next = JSON.stringify(store);
     try {
       localStorage.setItem(key, next);
