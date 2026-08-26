@@ -2146,16 +2146,24 @@ function loadLatestStudioRender(sketchId: string): string | null {
   }
 }
 
+/** Cover halaman judul juga bersumber dari view perspektif di presentasi. */
+function loadCoverImage(sketchId: string): string | null {
+  const fromStudio = loadLatestStudioRender(sketchId);
+  if (fromStudio) return fromStudio;
+  const persp = perspektifForSketch(loadPerspektifStore(), sketchId);
+  return persp[0]?.image ?? null;
+}
+
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
   const theme = useSlideTheme(slide.id);
   const now = useNowOnMount();
   const dateStr = new Date(slide.sketch.createdAt || Date.now()).toLocaleDateString("id-ID", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
-  const [bgImage, setBgImage] = useState<string | null>(() => loadLatestStudioRender(slide.sketch.id));
+  const [bgImage, setBgImage] = useState<string | null>(() => loadCoverImage(slide.sketch.id));
   useEffect(() => {
-    setBgImage(loadLatestStudioRender(slide.sketch.id));
-    const reload = () => setBgImage(loadLatestStudioRender(slide.sketch.id));
+    setBgImage(loadCoverImage(slide.sketch.id));
+    const reload = () => setBgImage(loadCoverImage(slide.sketch.id));
     window.addEventListener("storage", reload);
     window.addEventListener("focus", reload);
     return () => {

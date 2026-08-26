@@ -64,6 +64,19 @@ const SCOPED_KEY_PREFIXES = [
   "dabidabis_osmDel_",
 ] as const;
 
+/**
+ * Store bersarang: nilai per-sketsa berada di dalam sebuah field objek.
+ * Dipakai untuk graph Studio — `outputs[sketchId]` adalah sumber cover
+ * (background) halaman judul presentasi & view perspektif, jadi harus ikut
+ * terunduh agar cover tetap sinkron setelah file diunggah kembali.
+ */
+const NESTED_MAP_STORES: { key: string; field: string }[] = [
+  { key: "dabidabis_studio_graph_v1", field: "outputs" },
+];
+
+const nestedTag = (key: string, field: string) => `${key}#${field}`;
+
+
 function safeParse(raw: string | null): any {
   if (!raw) return null;
   try {
@@ -87,6 +100,12 @@ export function collectCompanions(sketchId: string): SketchCompanions {
     const raw = localStorage.getItem(`${prefix}${sketchId}`);
     if (raw != null) scoped[prefix] = raw;
   }
+  for (const { key, field } of NESTED_MAP_STORES) {
+    const store = safeParse(localStorage.getItem(key));
+    const bucket = store && typeof store === "object" ? (store as any)[field] : undefined;
+    const val = bucket && typeof bucket === "object" ? bucket[sketchId] : undefined;
+    if (val !== undefined) maps[nestedTag(key, field)] = val;
+  }
   return { maps, scoped };
 }
 
@@ -103,11 +122,22 @@ export function applyCompanions(
       /* ignore */
     }
   };
-  for (const [key, val] of Object.entries(companions.maps ?? {})) {
+  for (const [rawKey, val] of Object.entries(companions.maps ?? {})) {
     if (val === undefined) continue;
+    const [key, field] = rawKey.split("#");
     const store = safeParse(localStorage.getItem(key)) ?? {};
     if (typeof store !== "object") continue;
-    (store as any)[sketchId] = val;
+    if (field) {
+      // Store bersarang (mis. graph Studio → outputs[sketchId]).
+      const bucket =
+        (store as any)[field] && typeof (store as any)[field] === "object"
+          ? (store as any)[field]
+          : {};
+      bucket[sketchId] = val;
+      (store as any)[field] = bucket;
+    } else {
+      (store as any)[sketchId] = val;
+    }
     const next = JSON.stringify(store);
     try {
       localStorage.setItem(key, next);
