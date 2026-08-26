@@ -6,6 +6,7 @@ import { getNotifications, markFeedSeen } from "@/lib/messages.functions";
 type NotifCtx = {
   unreadMessages: number;
   feedUpdates: number;
+  galleryComments: number;
   refresh: () => Promise<void>;
   clearFeed: () => Promise<void>;
 };
@@ -13,6 +14,7 @@ type NotifCtx = {
 const NotificationContext = createContext<NotifCtx>({
   unreadMessages: 0,
   feedUpdates: 0,
+  galleryComments: 0,
   refresh: async () => {},
   clearFeed: async () => {},
 });
@@ -23,17 +25,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const seenFn = useServerFn(markFeedSeen);
   const [unreadMessages, setUnread] = useState(0);
   const [feedUpdates, setFeed] = useState(0);
+  const [galleryComments, setGallery] = useState(0);
 
   const refresh = useCallback(async () => {
     if (!user) {
       setUnread(0);
       setFeed(0);
+      setGallery(0);
       return;
     }
     try {
       const res = await fetchNotif({});
       setUnread(res.unreadMessages);
       setFeed(res.feedUpdates);
+      setGallery(res.galleryComments ?? 0);
     } catch {
       /* diam saja: notifikasi tidak kritis */
     }
@@ -57,7 +62,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [user, refresh]);
 
   return (
-    <NotificationContext.Provider value={{ unreadMessages, feedUpdates, refresh, clearFeed }}>
+    <NotificationContext.Provider value={{ unreadMessages, feedUpdates, galleryComments, refresh, clearFeed }}>
       {children}
     </NotificationContext.Provider>
   );
