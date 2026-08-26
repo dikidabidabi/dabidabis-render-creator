@@ -110,6 +110,21 @@ function FeedPage() {
     }
   };
 
+  const shareToFeed = async (target: SharePayload, note: string) => {
+    const res = await postFn({
+      data:
+        target.kind === "render"
+          ? { kind: "post", body: note || null, repost_of_render: target.id }
+          : { kind: "post", body: note || null, repost_of_post: target.id },
+    });
+    if (res.ok) {
+      toast.success("Postingan dibagikan ke forum feed Anda");
+      void load();
+    } else {
+      toast.error(res.error ?? "Gagal membagikan");
+    }
+  };
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <header className="mb-8">
@@ -141,10 +156,24 @@ function FeedPage() {
               busyRepost={reposting === it.id}
               onLike={() => void onLike(it)}
               onRepost={() => void onRepost(it)}
+              onShare={() =>
+                setShareTarget({
+                  kind: it.kind,
+                  id: it.id,
+                  title: it.tender_title || it.body || "Postingan",
+                })
+              }
             />
           ))}
         </div>
       )}
+
+      <SharePostDialog
+        target={shareTarget}
+        onClose={() => setShareTarget(null)}
+        onShareToFeed={shareToFeed}
+      />
     </main>
+
   );
 }
