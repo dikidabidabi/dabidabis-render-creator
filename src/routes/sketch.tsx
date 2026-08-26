@@ -1677,6 +1677,11 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
             onChange={(patch) => updateSketch(s.id, patch)}
             onRequestDelete={() => setConfirmDeleteId(s.id)}
             onDuplicate={() => duplicateSketch(s.id)}
+            onDownload={() => {
+              downloadSketchFile(s as unknown as AnySketch);
+              toast.success(`"${s.title}" diunduh (${SKETCH_FILE_EXT})`);
+            }}
+
             onEnterFullscreen={() => {
               setOpenId(s.id);
               setFullscreenId(s.id);
