@@ -67,18 +67,50 @@ export const getGallery = createServerFn({ method: "GET" })
 
 
     const ids = (rows ?? []).map((r) => r.id as string);
-    const [{ data: likes }, { data: comments }] = await Promise.all([
+    const [{ data: likes }, { data: comments }, { data: seenRows }] = await Promise.all([
       ids.length
         ? supabase.from("render_likes").select("render_id, user_id").in("render_id", ids)
         : Promise.resolve({ data: [] as { render_id: string; user_id: string }[] }),
       ids.length
         ? supabase
             .from("render_comments")
-            .select("id, render_id, user_id, body, created_at")
+            .select("id, render_id, user_id, body, created_at, updated_at, parent_id")
             .in("render_id", ids)
             .order("created_at", { ascending: true })
         : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+      ids.length
+        ? supabase
+            .from("render_comment_seen")
+            .select("render_id, last_seen_at")
+            .eq("user_id", userId)
+            .in("render_id", ids)
+        : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
     ]);
+
+    const commentIds = (comments ?? []).map((c) => c["id"] as string);
+    const { data: reactionRows } = commentIds.length
+      ? await supabase
+          .from("render_comment_reactions")
+          .select("comment_id, user_id, emoji")
+          .in("comment_id", commentIds)
+      : { data: [] as Array<Record<string, unknown>> };
+
+    const reactionsFor = (commentId: string): ReactionInfo[] => {
+      const rows2 = (reactionRows ?? []).filter((r) => r["comment_id"] === commentId);
+      const grouped = new Map<string, ReactionInfo>();
+      for (const r of rows2) {
+        const emoji = r["emoji"] as string;
+        const cur = grouped.get(emoji) ?? { emoji, count: 0, mine: false };
+        cur.count += 1;
+        if (r["user_id"] === userId) cur.mine = true;
+        grouped.set(emoji, cur);
+      }
+      return Array.from(grouped.values()).sort((a, b) => b.count - a.count);
+    };
+
+    const seenMap = new Map<string, string>();
+    for (const s of seenRows ?? [])
+      seenMap.set(s["render_id"] as string, s["last_seen_at"] as string);
 
     const commenterMap = await fetchProfileMap(
       supabase,
@@ -93,6 +125,16 @@ export const getGallery = createServerFn({ method: "GET" })
       (rows ?? []).map(async (r) => {
         const rid = r.id as string;
         const rowLikes = (likes ?? []).filter((l) => l.render_id === rid);
+        const rowComments = (comments ?? []).filter((c) => c["render_id"] === rid);
+        const seenAt = seenMap.get(rid);
+        const iParticipate = ownerId === userId || rowComments.some((c) => c["user_id"] === userId);
+        const newComments = iParticipate
+          ? rowComments.filter(
+              (c) =>
+                c["user_id"] !== userId &&
+                (!seenAt || new Date(c["created_at"] as string) > new Date(seenAt)),
+            ).length
+          : 0;
         return {
           id: rid,
           prompt: r.prompt as string,
@@ -105,26 +147,30 @@ export const getGallery = createServerFn({ method: "GET" })
           result_url: r.result_url ? ((await signRender(supabase, ownerId, rid)) ?? (r.result_url as string)) : null,
           like_count: rowLikes.length,
           liked_by_me: rowLikes.some((l) => l.user_id === userId),
-          comments: (comments ?? [])
-            .filter((c) => c["render_id"] === rid)
-            .map((c) => {
-              const cu = c["user_id"] as string;
-              const p = commenterMap.get(cu) ?? null;
-              return {
-                id: c["id"] as string,
-                body: c["body"] as string,
-                created_at: c["created_at"] as string,
-                user_id: cu,
-                author_name: fallbackName(p, cu),
-                author_avatar: commenterAvatars.get(cu) ?? null,
-              } satisfies CommentInfo;
-            }),
+          new_comment_count: newComments,
+          comments: rowComments.map((c) => {
+            const cu = c["user_id"] as string;
+            const p = commenterMap.get(cu) ?? null;
+            const cid = c["id"] as string;
+            return {
+              id: cid,
+              body: c["body"] as string,
+              created_at: c["created_at"] as string,
+              updated_at: (c["updated_at"] as string) ?? null,
+              parent_id: (c["parent_id"] as string) ?? null,
+              user_id: cu,
+              author_name: fallbackName(p, cu),
+              author_avatar: commenterAvatars.get(cu) ?? null,
+              reactions: reactionsFor(cid),
+            } satisfies CommentInfo;
+          }),
         } satisfies GalleryItem;
       }),
     );
 
     return { owner, hierarchy, isOwner: ownerId === userId, items, error: null as string | null };
   });
+
 
 export const listGalleries = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
