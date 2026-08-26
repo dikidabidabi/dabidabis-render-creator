@@ -13,12 +13,14 @@ import {
   Paperclip,
   Play,
   Repeat2,
+  Share2,
   Trash2,
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { setPendingTenderExec } from "@/lib/tender-exec";
 import type { FeedEntry } from "@/lib/social.functions";
+
 
 export function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
