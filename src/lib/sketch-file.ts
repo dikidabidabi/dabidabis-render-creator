@@ -64,6 +64,19 @@ const SCOPED_KEY_PREFIXES = [
   "dabidabis_osmDel_",
 ] as const;
 
+/**
+ * Store bersarang: nilai per-sketsa berada di dalam sebuah field objek.
+ * Dipakai untuk graph Studio — `outputs[sketchId]` adalah sumber cover
+ * (background) halaman judul presentasi & view perspektif, jadi harus ikut
+ * terunduh agar cover tetap sinkron setelah file diunggah kembali.
+ */
+const NESTED_MAP_STORES: { key: string; field: string }[] = [
+  { key: "dabidabis_studio_graph_v1", field: "outputs" },
+];
+
+const nestedTag = (key: string, field: string) => `${key}#${field}`;
+
+
 function safeParse(raw: string | null): any {
   if (!raw) return null;
   try {
