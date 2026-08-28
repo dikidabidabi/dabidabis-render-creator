@@ -3,10 +3,15 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { getNotifications, markFeedSeen } from "@/lib/messages.functions";
 
+export type GalleryTarget = { renderId: string; commentId: string; ownerId: string | null };
+export type FeedTarget = { kind: "post" | "render"; id: string };
+
 type NotifCtx = {
   unreadMessages: number;
   feedUpdates: number;
   galleryComments: number;
+  galleryTarget: GalleryTarget | null;
+  feedTarget: FeedTarget | null;
   refresh: () => Promise<void>;
   clearFeed: () => Promise<void>;
 };
@@ -15,6 +20,8 @@ const NotificationContext = createContext<NotifCtx>({
   unreadMessages: 0,
   feedUpdates: 0,
   galleryComments: 0,
+  galleryTarget: null,
+  feedTarget: null,
   refresh: async () => {},
   clearFeed: async () => {},
 });
@@ -26,12 +33,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [unreadMessages, setUnread] = useState(0);
   const [feedUpdates, setFeed] = useState(0);
   const [galleryComments, setGallery] = useState(0);
+  const [galleryTarget, setGalleryTarget] = useState<GalleryTarget | null>(null);
+  const [feedTarget, setFeedTarget] = useState<FeedTarget | null>(null);
 
   const refresh = useCallback(async () => {
     if (!user) {
       setUnread(0);
       setFeed(0);
       setGallery(0);
+      setGalleryTarget(null);
+      setFeedTarget(null);
       return;
     }
     try {
@@ -39,10 +50,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setUnread(res.unreadMessages);
       setFeed(res.feedUpdates);
       setGallery(res.galleryComments ?? 0);
+      setGalleryTarget((res.galleryTarget as GalleryTarget | null) ?? null);
+      setFeedTarget((res.feedTarget as FeedTarget | null) ?? null);
     } catch {
       /* diam saja: notifikasi tidak kritis */
     }
   }, [user, fetchNotif]);
+
 
   const clearFeed = useCallback(async () => {
     if (!user) return;
