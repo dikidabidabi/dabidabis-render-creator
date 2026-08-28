@@ -17,7 +17,9 @@ import { toast } from "sonner";
 
 
 export const Route = createFileRoute("/feed")({
+  validateSearch: z.object({ focus: z.string().optional() }),
   component: FeedPage,
+
   head: () => ({
     meta: [
       { title: "Forum Feed — Dabidabi's" },
