@@ -122,7 +122,9 @@ function NotifDot({ count }: { count: number }) {
 
 function Header() {
   const { user, signOut } = useAuth();
-  const { unreadMessages, feedUpdates, galleryComments } = useNotifications();
+  const { unreadMessages, feedUpdates, galleryComments, galleryTarget, feedTarget } =
+    useNotifications();
+
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const inProject =
     pathname === "/project" ||
