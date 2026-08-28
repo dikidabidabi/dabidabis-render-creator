@@ -70,7 +70,12 @@ import { z } from "zod";
 
 
 export const Route = createFileRoute("/gallery")({
-  validateSearch: z.object({ u: z.string().uuid().optional() }),
+  validateSearch: z.object({
+    u: z.string().uuid().optional(),
+    r: z.string().uuid().optional(),
+    c: z.string().uuid().optional(),
+  }),
+
   component: GalleryPage,
   head: () => ({
     meta: [
