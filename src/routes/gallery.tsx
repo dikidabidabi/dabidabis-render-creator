@@ -537,6 +537,7 @@ function CommentRow({
   replies,
   currentUserId,
   depth,
+  highlight = false,
   onReply,
   onEdit,
   onDelete,
@@ -547,6 +548,7 @@ function CommentRow({
   replies: GalleryComment[];
   currentUserId: string | null;
   depth: number;
+  highlight?: boolean;
   onReply: (c: GalleryComment) => void;
   onEdit: (id: string, body: string) => Promise<void>;
   onDelete: (id: string) => void;
@@ -557,8 +559,19 @@ function CommentRow({
   const [draft, setDraft] = useState(comment.body);
   const [saving, setSaving] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const mine = comment.user_id === currentUserId;
   const edited = comment.updated_at && comment.updated_at !== comment.created_at;
+
+  useEffect(() => {
+    if (!highlight) return;
+    const t = setTimeout(
+      () => rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      250,
+    );
+    return () => clearTimeout(t);
+  }, [highlight]);
+
 
   const save = async () => {
     const body = draft.trim();
