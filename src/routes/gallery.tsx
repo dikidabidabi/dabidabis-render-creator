@@ -309,7 +309,10 @@ function GalleryPage() {
               index={i}
               canDelete={isOwner}
               currentUserId={user?.id ?? null}
+              autoOpen={search.r === item.id}
+              focusCommentId={search.r === item.id ? (search.c ?? null) : null}
               onDelete={() => handleDelete(item.id)}
+
               onPatch={(patch) =>
                 setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, ...patch } : x)))
               }
