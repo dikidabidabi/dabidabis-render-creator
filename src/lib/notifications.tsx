@@ -76,7 +76,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [user, refresh]);
 
   return (
-    <NotificationContext.Provider value={{ unreadMessages, feedUpdates, galleryComments, refresh, clearFeed }}>
+    <NotificationContext.Provider
+      value={{
+        unreadMessages,
+        feedUpdates,
+        galleryComments,
+        galleryTarget,
+        feedTarget,
+        refresh,
+        clearFeed,
+      }}
+    >
+
       {children}
     </NotificationContext.Provider>
   );
