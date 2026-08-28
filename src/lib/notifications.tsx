@@ -61,6 +61,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const clearFeed = useCallback(async () => {
     if (!user) return;
     setFeed(0);
+    setFeedTarget(null);
+
     try {
       await seenFn({});
     } catch {
