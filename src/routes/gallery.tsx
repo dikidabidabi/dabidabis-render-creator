@@ -587,8 +587,13 @@ function CommentRow({
   };
 
   return (
-    <div className={depth > 0 ? "ml-5 border-l border-border/50 pl-2" : ""}>
-      <div className="flex gap-2 rounded-lg bg-background/50 p-2">
+    <div ref={rowRef} className={depth > 0 ? "ml-5 border-l border-border/50 pl-2" : ""}>
+      <div
+        className={`flex gap-2 rounded-lg p-2 ${
+          highlight ? "bg-ember/10 ring-1 ring-ember/60" : "bg-background/50"
+        }`}
+      >
+
         <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-surface">
           {comment.author_avatar ? (
             <img src={comment.author_avatar} alt={comment.author_name} className="h-full w-full object-cover" />
