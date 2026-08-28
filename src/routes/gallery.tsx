@@ -844,6 +844,8 @@ function RenderCard({
         replies={kids}
         currentUserId={currentUserId}
         depth={depth}
+        highlight={focusCommentId === c.id}
+
         onReply={(target) => setReplyTo(target)}
         onEdit={updateComment}
         onDelete={removeComment}
