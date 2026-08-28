@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
@@ -14,6 +14,7 @@ import { SharePostDialog, type SharePayload } from "@/components/share-post-dial
 import { useNotifications } from "@/lib/notifications";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { z } from "zod";
 
 
 export const Route = createFileRoute("/feed")({
@@ -47,10 +48,13 @@ function FeedPage() {
   const likePost = useServerFn(togglePostLike);
   const postFn = useServerFn(createPost);
   const { clearFeed } = useNotifications();
+  const search = Route.useSearch();
+  const focusId = search.focus ?? null;
   const [items, setItems] = useState<FeedItem[]>([]);
   const [busy, setBusy] = useState(true);
   const [reposting, setReposting] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<SharePayload | null>(null);
+  const focusRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -64,6 +68,15 @@ function FeedPage() {
       setBusy(false);
     }
   }, [fetchFeed]);
+
+  useEffect(() => {
+    if (!focusId || busy) return;
+    const t = setTimeout(
+      () => focusRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      200,
+    );
+    return () => clearTimeout(t);
+  }, [focusId, busy, items.length]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -151,8 +164,16 @@ function FeedPage() {
       ) : (
         <div className="space-y-6">
           {items.map((it, i) => (
-            <FeedEntryCard
+            <div
               key={`${it.kind}-${it.id}`}
+              ref={focusId === `${it.kind}-${it.id}` ? focusRef : undefined}
+              className={
+                focusId === `${it.kind}-${it.id}`
+                  ? "rounded-xl ring-2 ring-ember/70 ring-offset-2 ring-offset-background"
+                  : undefined
+              }
+            >
+            <FeedEntryCard
               item={it}
               index={i}
               busyRepost={reposting === it.id}
@@ -166,6 +187,7 @@ function FeedPage() {
                 })
               }
             />
+            </div>
           ))}
         </div>
       )}
