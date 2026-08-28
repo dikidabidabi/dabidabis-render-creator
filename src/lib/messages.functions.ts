@@ -263,19 +263,35 @@ export const getNotifications = createServerFn({ method: "GET" })
     ]);
 
     const since = (seen?.last_seen_at as string | null) ?? new Date(0).toISOString();
-    const [{ count: newPosts }, { count: newRenders }] = await Promise.all([
-      supabase
-        .from("posts")
-        .select("id", { count: "exact", head: true })
-        .neq("user_id", userId)
-        .gt("created_at", since),
-      supabase
-        .from("renders")
-        .select("id", { count: "exact", head: true })
-        .neq("user_id", userId)
-        .eq("status", "completed")
-        .gt("created_at", since),
-    ]);
+    const [{ data: newPostRows, count: newPosts }, { data: newRenderRows, count: newRenders }] =
+      await Promise.all([
+        supabase
+          .from("posts")
+          .select("id, created_at", { count: "exact" })
+          .neq("user_id", userId)
+          .gt("created_at", since)
+          .order("created_at", { ascending: false })
+          .limit(1),
+        supabase
+          .from("renders")
+          .select("id, created_at", { count: "exact" })
+          .neq("user_id", userId)
+          .eq("status", "completed")
+          .gt("created_at", since)
+          .order("created_at", { ascending: false })
+          .limit(1),
+      ]);
+
+    const newestPost = (newPostRows ?? [])[0] ?? null;
+    const newestRender = (newRenderRows ?? [])[0] ?? null;
+    let feedTarget: { kind: "post" | "render"; id: string } | null = null;
+    if (newestPost && newestRender) {
+      feedTarget =
+        new Date(newestPost.created_at as string) >= new Date(newestRender.created_at as string)
+          ? { kind: "post", id: newestPost.id as string }
+          : { kind: "render", id: newestRender.id as string };
+    } else if (newestPost) feedTarget = { kind: "post", id: newestPost.id as string };
+    else if (newestRender) feedTarget = { kind: "render", id: newestRender.id as string };
 
     // Komentar baru pada gambar milik saya / yang saya komentari
     const [{ data: myRenders }, { data: myComments }, { data: seenRows }] = await Promise.all([
@@ -290,28 +306,51 @@ export const getNotifications = createServerFn({ method: "GET" })
       ]),
     );
     let galleryComments = 0;
+    let galleryTarget: {
+      renderId: string;
+      commentId: string;
+      ownerId: string | null;
+    } | null = null;
     if (watched.length) {
       const seenMap = new Map<string, string>();
       for (const s of seenRows ?? [])
         seenMap.set(s.render_id as string, s.last_seen_at as string);
       const { data: rows } = await supabase
         .from("render_comments")
-        .select("render_id, created_at, user_id")
+        .select("id, render_id, created_at, user_id")
         .in("render_id", watched)
         .neq("user_id", userId)
+        .order("created_at", { ascending: false })
         .limit(2000);
-      galleryComments = (rows ?? []).filter((c) => {
+      const unseen = (rows ?? []).filter((c) => {
         const seenAt = seenMap.get(c.render_id as string);
         return !seenAt || new Date(c.created_at as string) > new Date(seenAt);
-      }).length;
+      });
+      galleryComments = unseen.length;
+      const newest = unseen[0];
+      if (newest) {
+        const { data: owner } = await supabase
+          .from("renders")
+          .select("user_id")
+          .eq("id", newest.render_id as string)
+          .maybeSingle();
+        galleryTarget = {
+          renderId: newest.render_id as string,
+          commentId: newest.id as string,
+          ownerId: (owner?.user_id as string) ?? null,
+        };
+      }
     }
 
     return {
       unreadMessages: unreadMessages ?? 0,
       feedUpdates: (newPosts ?? 0) + (newRenders ?? 0),
       galleryComments,
+      galleryTarget,
+      feedTarget,
     };
   });
+
 
 
 export const markFeedSeen = createServerFn({ method: "POST" })

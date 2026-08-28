@@ -122,7 +122,9 @@ function NotifDot({ count }: { count: number }) {
 
 function Header() {
   const { user, signOut } = useAuth();
-  const { unreadMessages, feedUpdates, galleryComments } = useNotifications();
+  const { unreadMessages, feedUpdates, galleryComments, galleryTarget, feedTarget } =
+    useNotifications();
+
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const inProject =
     pathname === "/project" ||
@@ -142,8 +144,10 @@ function Header() {
             <>
               <Link
                 to="/feed"
+                search={feedTarget ? { focus: `${feedTarget.kind}-${feedTarget.id}` } : {}}
                 className={`relative ${linkClass}`}
                 activeProps={{ className: "text-foreground font-medium relative" }}
+                title={feedTarget ? "Lihat pembaruan feed terbaru" : undefined}
               >
                 Forum Feed
                 <NotifDot count={feedUpdates} />
@@ -158,12 +162,23 @@ function Header() {
               </Link>
               <Link
                 to="/gallery"
+                search={
+                  galleryTarget
+                    ? {
+                        ...(galleryTarget.ownerId ? { u: galleryTarget.ownerId } : {}),
+                        r: galleryTarget.renderId,
+                        c: galleryTarget.commentId,
+                      }
+                    : {}
+                }
                 className={`relative ${linkClass}`}
                 activeProps={{ className: "text-foreground font-medium relative" }}
+                title={galleryTarget ? "Buka komentar baru" : undefined}
               >
                 Galeri
                 <NotifDot count={galleryComments} />
               </Link>
+
 
               <Link
                 to="/project"

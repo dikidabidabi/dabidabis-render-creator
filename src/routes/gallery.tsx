@@ -70,7 +70,12 @@ import { z } from "zod";
 
 
 export const Route = createFileRoute("/gallery")({
-  validateSearch: z.object({ u: z.string().uuid().optional() }),
+  validateSearch: z.object({
+    u: z.string().uuid().optional(),
+    r: z.string().uuid().optional(),
+    c: z.string().uuid().optional(),
+  }),
+
   component: GalleryPage,
   head: () => ({
     meta: [
@@ -304,7 +309,10 @@ function GalleryPage() {
               index={i}
               canDelete={isOwner}
               currentUserId={user?.id ?? null}
+              autoOpen={search.r === item.id}
+              focusCommentId={search.r === item.id ? (search.c ?? null) : null}
               onDelete={() => handleDelete(item.id)}
+
               onPatch={(patch) =>
                 setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, ...patch } : x)))
               }
@@ -529,6 +537,7 @@ function CommentRow({
   replies,
   currentUserId,
   depth,
+  highlight = false,
   onReply,
   onEdit,
   onDelete,
@@ -539,6 +548,7 @@ function CommentRow({
   replies: GalleryComment[];
   currentUserId: string | null;
   depth: number;
+  highlight?: boolean;
   onReply: (c: GalleryComment) => void;
   onEdit: (id: string, body: string) => Promise<void>;
   onDelete: (id: string) => void;
@@ -549,8 +559,19 @@ function CommentRow({
   const [draft, setDraft] = useState(comment.body);
   const [saving, setSaving] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement | null>(null);
   const mine = comment.user_id === currentUserId;
   const edited = comment.updated_at && comment.updated_at !== comment.created_at;
+
+  useEffect(() => {
+    if (!highlight) return;
+    const t = setTimeout(
+      () => rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      250,
+    );
+    return () => clearTimeout(t);
+  }, [highlight]);
+
 
   const save = async () => {
     const body = draft.trim();
@@ -566,8 +587,13 @@ function CommentRow({
   };
 
   return (
-    <div className={depth > 0 ? "ml-5 border-l border-border/50 pl-2" : ""}>
-      <div className="flex gap-2 rounded-lg bg-background/50 p-2">
+    <div ref={rowRef} className={depth > 0 ? "ml-5 border-l border-border/50 pl-2" : ""}>
+      <div
+        className={`flex gap-2 rounded-lg p-2 ${
+          highlight ? "bg-ember/10 ring-1 ring-ember/60" : "bg-background/50"
+        }`}
+      >
+
         <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-surface">
           {comment.author_avatar ? (
             <img src={comment.author_avatar} alt={comment.author_name} className="h-full w-full object-cover" />
@@ -690,6 +716,8 @@ function RenderCard({
   index,
   canDelete,
   currentUserId,
+  autoOpen = false,
+  focusCommentId = null,
   onDelete,
   onPatch,
 }: {
@@ -697,6 +725,8 @@ function RenderCard({
   index: number;
   canDelete: boolean;
   currentUserId: string | null;
+  autoOpen?: boolean;
+  focusCommentId?: string | null;
   onDelete: () => void;
   onPatch: (patch: Partial<GalleryItem>) => void;
 }) {
@@ -711,6 +741,7 @@ function RenderCard({
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<SortMode>("baru");
   const [replyTo, setReplyTo] = useState<GalleryComment | null>(null);
+  const autoOpened = useRef(false);
 
   useEffect(() => {
     if (!lightbox) return;
@@ -733,6 +764,16 @@ function RenderCard({
     }
     void seenFn({ data: { renderId: item.id } }).catch(() => {});
   };
+
+  // Dibuka langsung dari notifikasi oranye (?r=<render>&c=<komentar>)
+  useEffect(() => {
+    if (!autoOpen || autoOpened.current) return;
+    if (!item.result_url || item.status !== "completed") return;
+    autoOpened.current = true;
+    openLightbox();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen, item.result_url, item.status]);
+
 
   const like = async () => {
     const optimistic = !item.liked_by_me;
@@ -821,6 +862,8 @@ function RenderCard({
         replies={kids}
         currentUserId={currentUserId}
         depth={depth}
+        highlight={focusCommentId === c.id}
+
         onReply={(target) => setReplyTo(target)}
         onEdit={updateComment}
         onDelete={removeComment}
