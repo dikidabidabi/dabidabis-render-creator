@@ -698,6 +698,8 @@ function RenderCard({
   index,
   canDelete,
   currentUserId,
+  autoOpen = false,
+  focusCommentId = null,
   onDelete,
   onPatch,
 }: {
@@ -705,6 +707,8 @@ function RenderCard({
   index: number;
   canDelete: boolean;
   currentUserId: string | null;
+  autoOpen?: boolean;
+  focusCommentId?: string | null;
   onDelete: () => void;
   onPatch: (patch: Partial<GalleryItem>) => void;
 }) {
@@ -719,6 +723,7 @@ function RenderCard({
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<SortMode>("baru");
   const [replyTo, setReplyTo] = useState<GalleryComment | null>(null);
+  const autoOpened = useRef(false);
 
   useEffect(() => {
     if (!lightbox) return;
@@ -741,6 +746,16 @@ function RenderCard({
     }
     void seenFn({ data: { renderId: item.id } }).catch(() => {});
   };
+
+  // Dibuka langsung dari notifikasi oranye (?r=<render>&c=<komentar>)
+  useEffect(() => {
+    if (!autoOpen || autoOpened.current) return;
+    if (!item.result_url || item.status !== "completed") return;
+    autoOpened.current = true;
+    openLightbox();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen, item.result_url, item.status]);
+
 
   const like = async () => {
     const optimistic = !item.liked_by_me;
