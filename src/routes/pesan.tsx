@@ -2,10 +2,16 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, MessageSquare, Search, Send, Users } from "lucide-react";
+import { Loader2, MessageSquare, Search, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
 import { useNotifications } from "@/lib/notifications";
 import { timeAgo } from "@/components/feed-entry-card";
@@ -17,6 +23,7 @@ import {
   type Conversation,
   type DirectMessage,
   type MessageAccount,
+  type SharedPreview,
 } from "@/lib/messages.functions";
 
 export const Route = createFileRoute("/pesan")({
