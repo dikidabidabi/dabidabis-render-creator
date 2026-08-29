@@ -1205,6 +1205,7 @@ function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: R
       >
         <div
         style={{
+          position: "relative",
           width: A3_W,
           height: A3_H,
           transform: `scale(${frame.scale})`,
@@ -1212,6 +1213,7 @@ function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: R
         }}
       >
         {children}
+        {overlay}
       </div>
       </div>
     </div>
