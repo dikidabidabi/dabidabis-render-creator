@@ -150,6 +150,7 @@ function PresentasiKirimanPage() {
                   planOverride={(p.plan ?? null) as never}
                   analysisOverride={(p.analysis ?? null) as never}
                   hideShare
+                  annotateShareId={r.id}
                   open={openId === r.id}
                   onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
                 />
