@@ -317,6 +317,38 @@ function MessagesPage() {
           )}
         </section>
       </div>
+
+      <Dialog open={Boolean(sharedPreview)} onOpenChange={(o) => !o && setSharedPreview(null)}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto p-0">
+          <DialogTitle className="sr-only">Postingan yang dibagikan</DialogTitle>
+          <DialogDescription className="sr-only">
+            Pratinjau postingan yang dibagikan lewat pesan
+          </DialogDescription>
+          <button
+            type="button"
+            onClick={() => setSharedPreview(null)}
+            aria-label="Tutup"
+            className="absolute right-3 top-3 z-10 rounded-full bg-background/80 p-1.5 text-foreground shadow hover:bg-background"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          {sharedPreview?.image_url && (
+            <img
+              src={sharedPreview.image_url}
+              alt="Postingan yang dibagikan"
+              className="w-full object-contain"
+            />
+          )}
+          <div className="space-y-1 p-4">
+            <p className="text-sm font-semibold">{sharedPreview?.author_name}</p>
+            {sharedPreview?.body && (
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {sharedPreview.body}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
