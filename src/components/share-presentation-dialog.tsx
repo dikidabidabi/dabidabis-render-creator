@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { MAX_SHARE_RECIPIENTS, countShareRecipients } from "@/lib/presentation-notes";
 
 type Candidate = { id: string; display_name: string | null };
 
