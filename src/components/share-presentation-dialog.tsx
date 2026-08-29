@@ -91,8 +91,9 @@ export function SharePresentationDialog({
         <DialogHeader>
           <DialogTitle>Bagikan kepada</DialogTitle>
           <DialogDescription>
-            Kirim presentasi “{title}” ke akun lain. Penerima dapat membuka dan mencetaknya di sub
-            halaman Presentasi Kiriman.
+            Kirim presentasi “{title}” ke akun lain (maksimal {MAX_SHARE_RECIPIENTS} akun). Penerima
+            dapat membuka, mencetak, dan memberi komentar coretan/teks per halaman di sub halaman
+            Presentasi Kiriman.
           </DialogDescription>
         </DialogHeader>
 
