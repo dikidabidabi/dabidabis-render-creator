@@ -40,6 +40,7 @@ type ShareRow = {
     moodboard?: unknown;
     plan?: unknown;
     analysis?: unknown;
+    views?: Record<string, { scale: number; tx: number; ty: number }>;
   } | null;
 };
 
@@ -77,7 +78,13 @@ function PresentasiKirimanPage() {
     setBusy(false);
   }, [user]);
 
-  useEffect(() => { if (!loading) void refresh(); }, [loading, refresh]);
+  useEffect(() => {
+    if (loading) return;
+    void refresh();
+    // Presentasi sumber bisa berubah kapan saja — segarkan berkala.
+    const iv = window.setInterval(() => void refresh(), 20000);
+    return () => window.clearInterval(iv);
+  }, [loading, refresh]);
 
   const remove = async (id: string) => {
     const { error } = await supabase.from("shared_presentations").delete().eq("id", id);
@@ -151,6 +158,7 @@ function PresentasiKirimanPage() {
                   analysisOverride={(p.analysis ?? null) as never}
                   hideShare
                   annotateShareId={r.id}
+                  viewsOverride={p.views ?? null}
                   open={openId === r.id}
                   onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
                 />
