@@ -36,7 +36,7 @@ export type NoteRow = {
   updated_at: string;
 };
 
-export type NoteLayer = NoteRow & { author_name: string };
+export type NoteLayer = NoteRow & { author_name: string; author_avatar: string | null };
 
 function normalize(row: Record<string, unknown>): NoteRow {
   return {
@@ -121,18 +121,24 @@ export async function fetchIncomingNotes(fromUser: string, title: string): Promi
   const authors = Array.from(new Set(rows.map((r) => r.author)));
   const { data: profs } = await supabase
     .from("profiles")
-    .select("id, display_name")
+    .select("id, display_name, avatar_url")
     .in("id", authors);
   const nameOf = new Map<string, string>();
+  const avatarOf = new Map<string, string | null>();
   for (const p of profs ?? []) {
     const id = p.id as string;
     nameOf.set(
       id,
       ((p as { display_name: string | null }).display_name || "").trim() || `Arsitek ${id.slice(0, 6)}`,
     );
+    avatarOf.set(id, (p as { avatar_url: string | null }).avatar_url ?? null);
   }
 
-  return rows.map((r) => ({ ...r, author_name: nameOf.get(r.author) ?? "Akun" }));
+  return rows.map((r) => ({
+    ...r,
+    author_name: nameOf.get(r.author) ?? "Akun",
+    author_avatar: avatarOf.get(r.author) ?? null,
+  }));
 }
 
 export function strokePath(s: NoteStroke): string {
