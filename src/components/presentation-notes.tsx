@@ -148,10 +148,31 @@ export function useSlideNoteEditor(args: {
     }
   }, [shareId, slideId, slideTitle, author, current]);
 
+  // Coretan aktif digambar lewat ref + rAF agar tidak memicu re-render per titik.
+  const liveRef = useRef<SVGPathElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef(false);
+
+  const flushLive = useCallback(() => {
+    rafRef.current = null;
+    pendingRef.current = false;
+    const s = drawing.current;
+    if (s && liveRef.current) liveRef.current.setAttribute("d", strokePath(s));
+  }, []);
+
+  const scheduleLive = useCallback(() => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    rafRef.current = requestAnimationFrame(flushLive);
+  }, [flushLive]);
+
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (tool === "none" || !svgRef.current || !slideId) return;
     const p = svgPoint(svgRef.current, e.clientX, e.clientY);
     if (tool === "draw") {
+      e.preventDefault();
       e.currentTarget.setPointerCapture(e.pointerId);
       drawing.current = {
         id: `s${Date.now()}`,
@@ -159,7 +180,11 @@ export function useSlideNoteEditor(args: {
         color,
         width,
       };
-      patch({ ...current, strokes: [...current.strokes, drawing.current] });
+      if (liveRef.current) {
+        liveRef.current.setAttribute("stroke", color);
+        liveRef.current.setAttribute("stroke-width", String(width));
+        liveRef.current.setAttribute("d", "");
+      }
       return;
     }
     if (tool === "text") {
@@ -177,17 +202,31 @@ export function useSlideNoteEditor(args: {
 
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!drawing.current || !svgRef.current) return;
-    const p = svgPoint(svgRef.current, e.clientX, e.clientY);
-    drawing.current.points.push(Math.round(p.x), Math.round(p.y));
-    const stroke = { ...drawing.current, points: [...drawing.current.points] };
-    patch({
-      ...current,
-      strokes: [...current.strokes.slice(0, -1), stroke],
-    });
+    e.preventDefault();
+    const events =
+      typeof e.nativeEvent.getCoalescedEvents === "function"
+        ? e.nativeEvent.getCoalescedEvents()
+        : [];
+    const pts = events.length > 0 ? events : [e.nativeEvent];
+    for (const ev of pts) {
+      const p = svgPoint(svgRef.current, ev.clientX, ev.clientY);
+      const arr = drawing.current.points;
+      const x = Math.round(p.x);
+      const y = Math.round(p.y);
+      // Lewati titik yang terlalu dekat agar path tetap ringan.
+      if (arr.length >= 2 && Math.abs(arr[arr.length - 2] - x) < 2 && Math.abs(arr[arr.length - 1] - y) < 2) continue;
+      arr.push(x, y);
+    }
+    scheduleLive();
   };
 
   const onPointerUp = () => {
+    const s = drawing.current;
     drawing.current = null;
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    pendingRef.current = false;
+    if (liveRef.current) liveRef.current.setAttribute("d", "");
+    if (s && s.points.length >= 4) patch({ ...current, strokes: [...current.strokes, s] });
   };
 
   const eraseStroke = (id: string) => {
@@ -199,58 +238,66 @@ export function useSlideNoteEditor(args: {
     patch({ ...current, texts: current.texts.filter((t) => t.id !== id) });
   };
 
-  const overlay = useMemo(
-    () => (
-      <svg
-        ref={svgRef}
-        width={NOTE_W}
-        height={NOTE_H}
-        viewBox={`0 0 ${NOTE_W} ${NOTE_H}`}
-        className={cn(
-          "absolute inset-0",
-          tool === "none" ? "pointer-events-none" : "cursor-crosshair",
-        )}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={onPointerUp}
-      >
-        {current.strokes.map((s) => (
-          <path
-            key={s.id}
-            d={strokePath(s)}
-            fill="none"
-            stroke={s.color}
-            strokeWidth={s.width}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            onClick={() => eraseStroke(s.id)}
-            style={{ pointerEvents: tool === "erase" ? "stroke" : "none", cursor: tool === "erase" ? "pointer" : undefined }}
-          />
-        ))}
-        {current.texts.map((t) => (
-          <text
-            key={t.id}
-            x={t.x}
-            y={t.y}
-            fill={t.color}
-            fontSize={t.size}
-            fontWeight={600}
-            style={{
-              fontFamily: "Manrope, system-ui, sans-serif",
-              pointerEvents: tool === "erase" ? "auto" : "none",
-              cursor: tool === "erase" ? "pointer" : undefined,
-            }}
-            onClick={() => eraseText(t.id)}
-          >
-            {t.text}
-          </text>
-        ))}
-      </svg>
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [current, tool, color, width, fontSize, slideId],
+  const overlay = (
+    <svg
+      ref={svgRef}
+      width={NOTE_W}
+      height={NOTE_H}
+      viewBox={`0 0 ${NOTE_W} ${NOTE_H}`}
+      className={cn(
+        "absolute inset-0 touch-none select-none",
+        tool === "none" ? "pointer-events-none" : "cursor-crosshair",
+      )}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onPointerLeave={onPointerUp}
+    >
+      {current.strokes.map((s) => (
+        <path
+          key={s.id}
+          d={strokePath(s)}
+          fill="none"
+          stroke={s.color}
+          strokeWidth={s.width}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          onClick={() => eraseStroke(s.id)}
+          style={{ pointerEvents: tool === "erase" ? "stroke" : "none", cursor: tool === "erase" ? "pointer" : undefined }}
+        />
+      ))}
+      <path
+        ref={liveRef}
+        d=""
+        fill="none"
+        stroke={color}
+        strokeWidth={width}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ pointerEvents: "none" }}
+      />
+      {current.texts.map((t) => (
+        <text
+          key={t.id}
+          x={t.x}
+          y={t.y}
+          fill={t.color}
+          fontSize={t.size}
+          fontWeight={600}
+          style={{
+            fontFamily: "Manrope, system-ui, sans-serif",
+            pointerEvents: tool === "erase" ? "auto" : "none",
+            cursor: tool === "erase" ? "pointer" : undefined,
+          }}
+          onClick={() => eraseText(t.id)}
+        >
+          {t.text}
+        </text>
+      ))}
+    </svg>
   );
+
 
   const toolbar = (
     <div className="no-print flex flex-wrap items-center gap-2 rounded-md border border-border bg-background/60 px-2 py-1.5">
