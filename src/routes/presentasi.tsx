@@ -1173,7 +1173,7 @@ function FullscreenSlideshow({
 }
 
 // ---------- A3 Frame: maintains aspect, scales internal 1414x1000 canvas ----------
-function A3Frame({ children }: { children: React.ReactNode }) {
+function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: React.ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ scale: 0.5, w: A3_W * 0.5, h: A3_H * 0.5 });
   useLayoutEffect(() => {
