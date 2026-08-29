@@ -639,6 +639,12 @@ export function PresentasiBox({
 }) {
 
   const external = planOverride !== undefined || analysisOverride !== undefined;
+  useEffect(() => {
+    if (coverOverride === undefined) return;
+    registerCoverOverride(sketch.id, coverOverride);
+    return () => registerCoverOverride(sketch.id, null);
+  }, [sketch.id, coverOverride]);
+
   const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
   const [mpAnalysisLocal, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
   const masterPlan = external ? (planOverride ?? null) : masterPlanLocal;
