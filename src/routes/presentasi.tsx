@@ -844,8 +844,10 @@ export function PresentasiBox({
       moodboard,
       plan: masterPlan,
       analysis: mpAnalysis,
+      cover: loadCoverImage(effectiveSketch.id),
       views: collectSlideViews(slideIdsKey ? slideIdsKey.split("|") : []),
     }),
+
     [effectiveSketch, narasi, perspektif, moodboard, masterPlan, mpAnalysis, slideIdsKey, viewsTick],
   );
   useEffect(() => {
