@@ -51,15 +51,15 @@ function PresentasiKirimanPage() {
   const [busy, setBusy] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
     if (!user) { setRows([]); setBusy(false); return; }
-    setBusy(true);
+    if (!silent) setBusy(true);
     const { data, error } = await supabase
       .from("shared_presentations")
       .select("id, title, created_at, from_user, payload")
       .eq("to_user", user.id)
       .order("created_at", { ascending: false });
-    if (error) toast.error("Gagal memuat presentasi kiriman.");
+    if (error && !silent) toast.error("Gagal memuat presentasi kiriman.");
     const list = (data ?? []) as unknown as ShareRow[];
     setRows(list);
     const ids = Array.from(new Set(list.map((r) => r.from_user)));
@@ -82,7 +82,7 @@ function PresentasiKirimanPage() {
     if (loading) return;
     void refresh();
     // Presentasi sumber bisa berubah kapan saja — segarkan berkala.
-    const iv = window.setInterval(() => void refresh(), 20000);
+    const iv = window.setInterval(() => void refresh(true), 20000);
     return () => window.clearInterval(iv);
   }, [loading, refresh]);
 
