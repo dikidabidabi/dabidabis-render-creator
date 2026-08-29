@@ -2417,11 +2417,14 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
     const reload = () => setBgImage(loadCoverImage(slide.sketch.id));
     window.addEventListener("storage", reload);
     window.addEventListener("focus", reload);
+    window.addEventListener("presentasi:cover", reload);
     return () => {
       window.removeEventListener("storage", reload);
       window.removeEventListener("focus", reload);
+      window.removeEventListener("presentasi:cover", reload);
     };
   }, [slide.sketch.id]);
+
 
   const hasBg = !!bgImage;
   const titleColor = hasBg ? "#ffffff" : theme.ink;
