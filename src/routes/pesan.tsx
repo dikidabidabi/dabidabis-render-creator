@@ -74,6 +74,7 @@ function MessagesPage() {
   const [draft, setDraft] = useState("");
   const [q, setQ] = useState("");
   const [accounts, setAccounts] = useState<MessageAccount[]>([]);
+  const [sharedPreview, setSharedPreview] = useState<SharedPreview | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const reloadConvos = useCallback(async () => {
