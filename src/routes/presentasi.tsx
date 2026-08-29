@@ -623,7 +623,7 @@ export function PrintStyles() {
 // ---------- Sketch Box ----------
 export function PresentasiBox({
   sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
-  annotateShareId, viewsOverride,
+  annotateShareId, viewsOverride, coverOverride,
 }: {
   sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
   open: boolean; onToggle: () => void;
@@ -634,7 +634,10 @@ export function PresentasiBox({
   annotateShareId?: string;
   /** Zoom/pan gambar dari presentasi sumber (dikunci untuk presentasi kiriman). */
   viewsOverride?: Record<string, { scale: number; tx: number; ty: number }> | null;
+  /** Cover halaman judul dari presentasi sumber (untuk presentasi kiriman). */
+  coverOverride?: string | null;
 }) {
+
   const external = planOverride !== undefined || analysisOverride !== undefined;
   const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
   const [mpAnalysisLocal, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
