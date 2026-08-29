@@ -623,7 +623,7 @@ export function PrintStyles() {
 // ---------- Sketch Box ----------
 export function PresentasiBox({
   sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
-  annotateShareId,
+  annotateShareId, viewsOverride,
 }: {
   sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
   open: boolean; onToggle: () => void;
@@ -632,6 +632,8 @@ export function PresentasiBox({
   analysisOverride?: MasterplanAnalysis | null;
   /** Jika diisi (halaman Presentasi Kiriman), slide dapat dikomentari. */
   annotateShareId?: string;
+  /** Zoom/pan gambar dari presentasi sumber (dikunci untuk presentasi kiriman). */
+  viewsOverride?: Record<string, { scale: number; tx: number; ty: number }> | null;
 }) {
   const external = planOverride !== undefined || analysisOverride !== undefined;
   const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
@@ -731,11 +733,48 @@ export function PresentasiBox({
   // ---- Komentar coretan/teks per halaman ----
   const { user: noteUser } = useAuth();
   const currentSlide = slides[idx];
+
+  // Registry kotak gambar slide: dipakai agar layer komentar mengikuti
+  // zoom/pan manual gambar di presentasi sumber.
+  const a3InnerRef = useRef<HTMLDivElement | null>(null);
+  const [boxInfo, setBoxInfo] = useState<Record<string, SlideBoxInfo>>({});
+  const registerBox = useCallback((id: string, info: SlideBoxInfo | null) => {
+    setBoxInfo((prev) => {
+      if (!info) {
+        if (!(id in prev)) return prev;
+        const n = { ...prev };
+        delete n[id];
+        return n;
+      }
+      const p = prev[id];
+      if (p && p.cx === info.cx && p.cy === info.cy && p.scale === info.scale && p.tx === info.tx && p.ty === info.ty) {
+        return prev;
+      }
+      return { ...prev, [id]: info };
+    });
+  }, []);
+  const getRootRect = useCallback(() => a3InnerRef.current?.getBoundingClientRect() ?? null, []);
+  const slideBoxCtx = useMemo(
+    () => ({ register: registerBox, getRootRect, forcedViews: viewsOverride ?? null }),
+    [registerBox, getRootRect, viewsOverride],
+  );
+
+  const activeBox = currentSlide ? boxInfo[currentSlide.id] : undefined;
+  const activeView = useMemo(
+    () => (activeBox ? { scale: activeBox.scale, tx: activeBox.tx, ty: activeBox.ty } : null),
+    [activeBox?.scale, activeBox?.tx, activeBox?.ty],
+  );
+  const activeAnchor = useMemo(
+    () => (activeBox ? { cx: activeBox.cx, cy: activeBox.cy } : null),
+    [activeBox?.cx, activeBox?.cy],
+  );
+
   const noteEditor = useSlideNoteEditor({
     shareId: annotateShareId ?? "",
     slideId: currentSlide?.id,
     slideTitle: currentSlide?.title ?? "",
     author: noteUser?.id,
+    view: activeView,
   });
   // Sisi pengirim: tarik komentar yang masuk untuk judul presentasi ini.
   const [incoming, setIncoming] = useState<NoteLayer[]>([]);
@@ -784,6 +823,35 @@ export function PresentasiBox({
       ),
     [incoming, currentSlide?.id, offAuthors],
   );
+
+  // ---- Sinkronisasi otomatis presentasi sumber → presentasi kiriman ----
+  const [viewsTick, setViewsTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setViewsTick((n) => n + 1);
+    window.addEventListener("slideview:update", bump);
+    return () => window.removeEventListener("slideview:update", bump);
+  }, []);
+  const slideIdsKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
+  const buildSharePayload = useCallback(
+    () => ({
+      version: 1,
+      sketch: effectiveSketch,
+      narasi,
+      perspektif,
+      moodboard,
+      plan: masterPlan,
+      analysis: mpAnalysis,
+      views: collectSlideViews(slideIdsKey ? slideIdsKey.split("|") : []),
+    }),
+    [effectiveSketch, narasi, perspektif, moodboard, masterPlan, mpAnalysis, slideIdsKey, viewsTick],
+  );
+  useEffect(() => {
+    if (!sourceMode || !noteUser) return;
+    const t = window.setTimeout(() => {
+      void syncSharedPayload(noteUser.id, effectiveSketch.title || "Presentasi", buildSharePayload());
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [sourceMode, noteUser, effectiveSketch.title, buildSharePayload]);
 
   useEffect(() => {
     if (!full) return;
@@ -950,15 +1018,7 @@ export function PresentasiBox({
         {!hideShare && (
           <SharePresentationDialog
             title={effectiveSketch.title || "Presentasi"}
-            buildPayload={() => ({
-              version: 1,
-              sketch: effectiveSketch,
-              narasi,
-              perspektif,
-              moodboard,
-              plan: masterPlan,
-              analysis: mpAnalysis,
-            })}
+            buildPayload={buildSharePayload}
           />
         )}
       </div>
@@ -968,15 +1028,22 @@ export function PresentasiBox({
         <div className="border-t border-border p-4">
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-lg bg-neutral-200/40 p-4 shadow-inner">
-              <A3Frame
-                overlay={
-                  annotateShareId ? noteEditor.overlay : layersForSlide.length > 0 ? (
-                    <NoteLayerView layers={layersForSlide} />
-                  ) : null
-                }
-              >
-                <SlideContent slide={slides[idx]} />
-              </A3Frame>
+              <SlideBoxCtx.Provider value={slideBoxCtx}>
+                <A3Frame
+                  innerRef={a3InnerRef}
+                  overlay={
+                    annotateShareId ? noteEditor.overlay : layersForSlide.length > 0 ? (
+                      <NoteLayerView
+                        layers={layersForSlide}
+                        currentView={activeView}
+                        anchor={activeAnchor}
+                      />
+                    ) : null
+                  }
+                >
+                  <SlideContent slide={slides[idx]} />
+                </A3Frame>
+              </SlideBoxCtx.Provider>
               {annotateShareId && <div className="mt-3">{noteEditor.toolbar}</div>}
               {sourceMode && reviewers.length > 0 && (
                 <div className="no-print mt-3 space-y-1 rounded-md border border-border bg-background/60 px-3 py-2">
