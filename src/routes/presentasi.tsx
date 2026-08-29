@@ -755,16 +755,27 @@ export function PresentasiBox({
   }, [sourceMode, noteUser, effectiveSketch.title]);
 
   const reviewers = useMemo(() => {
-    const map = new Map<string, { name: string; updated: string; pages: number }>();
+    const map = new Map<
+      string,
+      { name: string; avatar: string | null; updated: string; pages: number[] }
+    >();
     for (const n of incoming) {
       const prevEntry = map.get(n.author);
-      const pages = (prevEntry?.pages ?? 0) + 1;
+      const pageNo = slides.findIndex((s) => s.id === n.slide_id) + 1;
+      const pages = prevEntry ? [...prevEntry.pages] : [];
+      if (pageNo > 0 && !pages.includes(pageNo)) pages.push(pageNo);
       const updated =
         prevEntry && new Date(prevEntry.updated) > new Date(n.updated_at) ? prevEntry.updated : n.updated_at;
-      map.set(n.author, { name: n.author_name, updated, pages });
+      map.set(n.author, {
+        name: n.author_name,
+        avatar: n.author_avatar,
+        updated,
+        pages: pages.sort((a, b) => a - b),
+      });
     }
     return Array.from(map.entries()).map(([id, v]) => ({ id, ...v }));
-  }, [incoming]);
+  }, [incoming, slides]);
+
 
   const layersForSlide = useMemo(
     () =>
@@ -988,15 +999,33 @@ export function PresentasiBox({
                             })
                           }
                           className={cn(
-                            "rounded-md border px-2 py-1 text-left text-[11px] transition",
+                            "flex items-center gap-2 rounded-md border px-2 py-1 text-left text-[11px] transition",
                             on
                               ? "border-primary bg-primary/10 text-foreground"
                               : "border-border text-muted-foreground",
                           )}
                         >
-                          <span className="font-semibold">{r.name}</span> · {r.pages} halaman ·{" "}
-                          {formatNoteTime(r.updated)}
+                          {r.avatar ? (
+                            <img
+                              src={r.avatar}
+                              alt={`Foto profil ${r.name}`}
+                              className="h-6 w-6 shrink-0 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
+                              {r.name.slice(0, 2)}
+                            </span>
+                          )}
+                          <span>
+                            <span className="font-semibold">{r.name}</span>
+                            {" · hlm "}
+                            {r.pages.length > 0 ? r.pages.join(", ") : "-"}
+                            {" · "}
+                            {formatNoteTime(r.updated)}
+                          </span>
                         </button>
+
                       );
                     })}
                   </div>
