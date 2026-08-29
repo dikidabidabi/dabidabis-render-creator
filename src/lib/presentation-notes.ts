@@ -86,7 +86,7 @@ function normalize(row: Record<string, unknown>): NoteRow {
 export async function fetchShareNotes(shareId: string): Promise<NoteRow[]> {
   const { data, error } = await supabase
     .from("presentation_notes")
-    .select("id, share_id, slide_id, slide_title, author, strokes, texts, updated_at")
+    .select(NOTE_COLS)
     .eq("share_id", shareId);
   if (error) throw error;
   return (data ?? []).map((r) => normalize(r as Record<string, unknown>));
@@ -100,6 +100,7 @@ export async function saveNote(args: {
   author: string;
   strokes: NoteStroke[];
   texts: NoteText[];
+  view?: NoteView | null;
 }): Promise<void> {
   const { error } = await supabase
     .from("presentation_notes")
@@ -111,11 +112,31 @@ export async function saveNote(args: {
         author: args.author,
         strokes: args.strokes as never,
         texts: args.texts as never,
+        view: (args.view ?? null) as never,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "share_id,slide_id,author" },
     );
   if (error) throw error;
+}
+
+/**
+ * Perbarui payload semua kiriman untuk satu judul presentasi milik saya,
+ * sehingga presentasi kiriman di akun penerima otomatis ikut berubah.
+ */
+export async function syncSharedPayload(
+  fromUser: string,
+  title: string,
+  payload: unknown,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("shared_presentations")
+    .update({ payload: payload as never })
+    .eq("from_user", fromUser)
+    .eq("title", title)
+    .select("id");
+  if (error) return 0;
+  return (data ?? []).length;
 }
 
 /** Jumlah akun berbeda yang sudah menerima judul presentasi ini dari saya. */
@@ -144,7 +165,7 @@ export async function fetchIncomingNotes(fromUser: string, title: string): Promi
 
   const { data: notes } = await supabase
     .from("presentation_notes")
-    .select("id, share_id, slide_id, slide_title, author, strokes, texts, updated_at")
+    .select(NOTE_COLS)
     .in("share_id", ids);
   const rows = (notes ?? []).map((r) => normalize(r as Record<string, unknown>));
   if (rows.length === 0) return [];
