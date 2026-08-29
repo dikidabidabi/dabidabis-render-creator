@@ -10,12 +10,14 @@ import {
   NOTE_H,
   NOTE_W,
   fetchShareNotes,
+  noteTransform,
   saveNote,
   strokePath,
   type NoteLayer,
   type NoteRow,
   type NoteStroke,
   type NoteText,
+  type NoteView,
 } from "@/lib/presentation-notes";
 
 const COLORS = ["#e2571e", "#1d4ed8", "#16a34a", "#111827"];
@@ -33,7 +35,17 @@ function svgPoint(el: SVGSVGElement, clientX: number, clientY: number) {
 }
 
 /** Render satu atau beberapa layer komentar (read-only). */
-export function NoteLayerView({ layers }: { layers: Array<Pick<NoteLayer, "id" | "strokes" | "texts">> }) {
+export function NoteLayerView({
+  layers,
+  currentView,
+  anchor,
+}: {
+  layers: Array<Pick<NoteLayer, "id" | "strokes" | "texts" | "view">>;
+  /** Zoom/pan gambar slide saat ini (sisi pemilik presentasi). */
+  currentView?: NoteView | null;
+  /** Pusat kotak gambar dalam ruang A3. */
+  anchor?: { cx: number; cy: number } | null;
+}) {
   return (
     <svg
       className="pointer-events-none absolute inset-0"
@@ -42,7 +54,7 @@ export function NoteLayerView({ layers }: { layers: Array<Pick<NoteLayer, "id" |
       viewBox={`0 0 ${NOTE_W} ${NOTE_H}`}
     >
       {layers.map((l) => (
-        <g key={l.id}>
+        <g key={l.id} transform={noteTransform(l.view ?? null, currentView ?? null, anchor ?? null)}>
           {l.strokes.map((s) => (
             <path
               key={s.id}
@@ -82,8 +94,10 @@ export function useSlideNoteEditor(args: {
   slideId: string | undefined;
   slideTitle: string;
   author: string | undefined;
+  /** Zoom/pan gambar slide dari presentasi sumber, disimpan bersama komentar. */
+  view?: NoteView | null;
 }) {
-  const { shareId, slideId, slideTitle, author } = args;
+  const { shareId, slideId, slideTitle, author, view } = args;
   const [tool, setTool] = useState<"none" | "draw" | "text" | "erase">("none");
   const [color, setColor] = useState(COLORS[0]);
   const [width, setWidth] = useState(4);
@@ -138,6 +152,7 @@ export function useSlideNoteEditor(args: {
         author,
         strokes: current.strokes,
         texts: current.texts,
+        view: view ?? null,
       });
       setDirty(false);
       toast.success("Komentar halaman tersimpan dan terkirim ke pemilik presentasi.");
@@ -146,7 +161,7 @@ export function useSlideNoteEditor(args: {
     } finally {
       setSaving(false);
     }
-  }, [shareId, slideId, slideTitle, author, current]);
+  }, [shareId, slideId, slideTitle, author, current, view]);
 
   // Coretan aktif digambar lewat ref + rAF agar tidak memicu re-render per titik.
   const liveRef = useRef<SVGPathElement>(null);
