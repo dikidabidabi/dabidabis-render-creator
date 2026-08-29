@@ -620,12 +620,15 @@ export function PrintStyles() {
 // ---------- Sketch Box ----------
 export function PresentasiBox({
   sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
+  annotateShareId,
 }: {
   sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
   open: boolean; onToggle: () => void;
   hideShare?: boolean;
   planOverride?: import("@/lib/masterplan").MasterPlan | null;
   analysisOverride?: MasterplanAnalysis | null;
+  /** Jika diisi (halaman Presentasi Kiriman), slide dapat dikomentari. */
+  annotateShareId?: string;
 }) {
   const external = planOverride !== undefined || analysisOverride !== undefined;
   const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
