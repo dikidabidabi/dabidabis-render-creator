@@ -725,6 +725,52 @@ export function PresentasiBox({
   const prev = useCallback(() => setIdx((i) => (i - 1 + slides.length) % slides.length), [slides.length]);
   const next = useCallback(() => setIdx((i) => (i + 1) % slides.length), [slides.length]);
 
+  // ---- Komentar coretan/teks per halaman ----
+  const { user: noteUser } = useAuth();
+  const currentSlide = slides[idx];
+  const noteEditor = useSlideNoteEditor({
+    shareId: annotateShareId ?? "",
+    slideId: currentSlide?.id,
+    slideTitle: currentSlide?.title ?? "",
+    author: noteUser?.id,
+  });
+  // Sisi pengirim: tarik komentar yang masuk untuk judul presentasi ini.
+  const [incoming, setIncoming] = useState<NoteLayer[]>([]);
+  const [offAuthors, setOffAuthors] = useState<Set<string>>(new Set());
+  const sourceMode = !annotateShareId && !hideShare;
+  useEffect(() => {
+    if (!sourceMode || !noteUser) { setIncoming([]); return; }
+    let alive = true;
+    const load = () => {
+      fetchIncomingNotes(noteUser.id, effectiveSketch.title || "Presentasi")
+        .then((rows) => { if (alive) setIncoming(rows); })
+        .catch(() => void 0);
+    };
+    load();
+    const iv = window.setInterval(load, 30000);
+    return () => { alive = false; window.clearInterval(iv); };
+  }, [sourceMode, noteUser, effectiveSketch.title]);
+
+  const reviewers = useMemo(() => {
+    const map = new Map<string, { name: string; updated: string; pages: number }>();
+    for (const n of incoming) {
+      const prevEntry = map.get(n.author);
+      const pages = (prevEntry?.pages ?? 0) + 1;
+      const updated =
+        prevEntry && new Date(prevEntry.updated) > new Date(n.updated_at) ? prevEntry.updated : n.updated_at;
+      map.set(n.author, { name: n.author_name, updated, pages });
+    }
+    return Array.from(map.entries()).map(([id, v]) => ({ id, ...v }));
+  }, [incoming]);
+
+  const layersForSlide = useMemo(
+    () =>
+      incoming.filter(
+        (n) => n.slide_id === currentSlide?.id && !offAuthors.has(n.author),
+      ),
+    [incoming, currentSlide?.id, offAuthors],
+  );
+
   useEffect(() => {
     if (!full) return;
     const onKey = (e: KeyboardEvent) => {
