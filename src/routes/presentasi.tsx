@@ -623,7 +623,7 @@ export function PrintStyles() {
 // ---------- Sketch Box ----------
 export function PresentasiBox({
   sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
-  annotateShareId, viewsOverride,
+  annotateShareId, viewsOverride, coverOverride,
 }: {
   sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
   open: boolean; onToggle: () => void;
@@ -634,8 +634,17 @@ export function PresentasiBox({
   annotateShareId?: string;
   /** Zoom/pan gambar dari presentasi sumber (dikunci untuk presentasi kiriman). */
   viewsOverride?: Record<string, { scale: number; tx: number; ty: number }> | null;
+  /** Cover halaman judul dari presentasi sumber (untuk presentasi kiriman). */
+  coverOverride?: string | null;
 }) {
+
   const external = planOverride !== undefined || analysisOverride !== undefined;
+  useEffect(() => {
+    if (coverOverride === undefined) return;
+    registerCoverOverride(sketch.id, coverOverride);
+    return () => registerCoverOverride(sketch.id, null);
+  }, [sketch.id, coverOverride]);
+
   const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
   const [mpAnalysisLocal, setMpAnalysis] = useState<MasterplanAnalysis | null>(null);
   const masterPlan = external ? (planOverride ?? null) : masterPlanLocal;
@@ -841,8 +850,10 @@ export function PresentasiBox({
       moodboard,
       plan: masterPlan,
       analysis: mpAnalysis,
+      cover: loadCoverImage(effectiveSketch.id),
       views: collectSlideViews(slideIdsKey ? slideIdsKey.split("|") : []),
     }),
+
     [effectiveSketch, narasi, perspektif, moodboard, masterPlan, mpAnalysis, slideIdsKey, viewsTick],
   );
   useEffect(() => {
@@ -2382,13 +2393,28 @@ function loadLatestStudioRender(sketchId: string): string | null {
   }
 }
 
+/**
+ * Cover kiriman: presentasi kiriman tidak punya akses ke penyimpanan lokal
+ * pengirim, jadi cover ikut dikirim di payload dan didaftarkan di sini.
+ */
+const coverOverrides = new Map<string, string>();
+export function registerCoverOverride(sketchId: string, url: string | null) {
+  if (!sketchId) return;
+  if (url) coverOverrides.set(sketchId, url);
+  else coverOverrides.delete(sketchId);
+  window.dispatchEvent(new Event("presentasi:cover"));
+}
+
 /** Cover halaman judul juga bersumber dari view perspektif di presentasi. */
 function loadCoverImage(sketchId: string): string | null {
+  const override = coverOverrides.get(sketchId);
+  if (override) return override;
   const fromStudio = loadLatestStudioRender(sketchId);
   if (fromStudio) return fromStudio;
   const persp = perspektifForSketch(loadPerspektifStore(), sketchId);
   return persp[0]?.image ?? null;
 }
+
 
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
   const theme = useSlideTheme(slide.id);
@@ -2402,11 +2428,14 @@ function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
     const reload = () => setBgImage(loadCoverImage(slide.sketch.id));
     window.addEventListener("storage", reload);
     window.addEventListener("focus", reload);
+    window.addEventListener("presentasi:cover", reload);
     return () => {
       window.removeEventListener("storage", reload);
       window.removeEventListener("focus", reload);
+      window.removeEventListener("presentasi:cover", reload);
     };
   }, [slide.sketch.id]);
+
 
   const hasBg = !!bgImage;
   const titleColor = hasBg ? "#ffffff" : theme.ink;

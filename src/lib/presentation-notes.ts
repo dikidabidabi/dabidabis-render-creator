@@ -171,19 +171,27 @@ export async function fetchIncomingNotes(fromUser: string, title: string): Promi
   if (rows.length === 0) return [];
 
   const authors = Array.from(new Set(rows.map((r) => r.author)));
-  const { data: profs } = await supabase
-    .from("profiles")
-    .select("id, display_name, avatar_url")
-    .in("id", authors);
   const nameOf = new Map<string, string>();
   const avatarOf = new Map<string, string | null>();
-  for (const p of profs ?? []) {
-    const id = p.id as string;
-    nameOf.set(
-      id,
-      ((p as { display_name: string | null }).display_name || "").trim() || `Arsitek ${id.slice(0, 6)}`,
-    );
-    avatarOf.set(id, (p as { avatar_url: string | null }).avatar_url ?? null);
+  try {
+    const { getNoteAuthors } = await import("@/lib/presentation-notes.functions");
+    const infos = await getNoteAuthors({ data: { ids: authors } });
+    for (const i of infos) {
+      nameOf.set(i.id, i.name);
+      avatarOf.set(i.id, i.avatar);
+    }
+  } catch {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", authors);
+    for (const p of profs ?? []) {
+      const id = p.id as string;
+      nameOf.set(
+        id,
+        ((p as { display_name: string | null }).display_name || "").trim() || `Arsitek ${id.slice(0, 6)}`,
+      );
+    }
   }
 
   return rows.map((r) => ({
@@ -192,6 +200,7 @@ export async function fetchIncomingNotes(fromUser: string, title: string): Promi
     author_avatar: avatarOf.get(r.author) ?? null,
   }));
 }
+
 
 export function strokePath(s: NoteStroke): string {
   const p = s.points;
