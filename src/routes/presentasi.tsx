@@ -755,16 +755,27 @@ export function PresentasiBox({
   }, [sourceMode, noteUser, effectiveSketch.title]);
 
   const reviewers = useMemo(() => {
-    const map = new Map<string, { name: string; updated: string; pages: number }>();
+    const map = new Map<
+      string,
+      { name: string; avatar: string | null; updated: string; pages: number[] }
+    >();
     for (const n of incoming) {
       const prevEntry = map.get(n.author);
-      const pages = (prevEntry?.pages ?? 0) + 1;
+      const pageNo = slides.findIndex((s) => s.id === n.slide_id) + 1;
+      const pages = prevEntry ? [...prevEntry.pages] : [];
+      if (pageNo > 0 && !pages.includes(pageNo)) pages.push(pageNo);
       const updated =
         prevEntry && new Date(prevEntry.updated) > new Date(n.updated_at) ? prevEntry.updated : n.updated_at;
-      map.set(n.author, { name: n.author_name, updated, pages });
+      map.set(n.author, {
+        name: n.author_name,
+        avatar: n.author_avatar,
+        updated,
+        pages: pages.sort((a, b) => a - b),
+      });
     }
     return Array.from(map.entries()).map(([id, v]) => ({ id, ...v }));
-  }, [incoming]);
+  }, [incoming, slides]);
+
 
   const layersForSlide = useMemo(
     () =>
