@@ -252,8 +252,11 @@ function MessagesPage() {
                         }`}
                       >
                         {m.shared && (
-                          <div
-                            className={`overflow-hidden rounded-lg border ${
+                          <button
+                            type="button"
+                            onClick={() => setSharedPreview(m.shared)}
+                            title="Klik untuk membuka postingan"
+                            className={`block w-full overflow-hidden rounded-lg border text-left transition-opacity hover:opacity-90 ${
                               m.mine ? "border-white/30 bg-white/10" : "border-border/60 bg-surface/60"
                             }`}
                           >
@@ -271,7 +274,7 @@ function MessagesPage() {
                                 <p className="line-clamp-3 opacity-80">{m.shared.body}</p>
                               )}
                             </div>
-                          </div>
+                          </button>
                         )}
                         {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
                         <p className={`text-[10px] ${m.mine ? "text-white/70" : "text-muted-foreground"}`}>
