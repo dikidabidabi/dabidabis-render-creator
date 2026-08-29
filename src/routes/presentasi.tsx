@@ -2382,13 +2382,28 @@ function loadLatestStudioRender(sketchId: string): string | null {
   }
 }
 
+/**
+ * Cover kiriman: presentasi kiriman tidak punya akses ke penyimpanan lokal
+ * pengirim, jadi cover ikut dikirim di payload dan didaftarkan di sini.
+ */
+const coverOverrides = new Map<string, string>();
+export function registerCoverOverride(sketchId: string, url: string | null) {
+  if (!sketchId) return;
+  if (url) coverOverrides.set(sketchId, url);
+  else coverOverrides.delete(sketchId);
+  window.dispatchEvent(new Event("presentasi:cover"));
+}
+
 /** Cover halaman judul juga bersumber dari view perspektif di presentasi. */
 function loadCoverImage(sketchId: string): string | null {
+  const override = coverOverrides.get(sketchId);
+  if (override) return override;
   const fromStudio = loadLatestStudioRender(sketchId);
   if (fromStudio) return fromStudio;
   const persp = perspektifForSketch(loadPerspektifStore(), sketchId);
   return persp[0]?.image ?? null;
 }
+
 
 function TitleBody({ slide }: { slide: Extract<Slide, { kind: "title" }> }) {
   const theme = useSlideTheme(slide.id);
