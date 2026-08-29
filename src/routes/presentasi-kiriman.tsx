@@ -40,6 +40,7 @@ type ShareRow = {
     moodboard?: unknown;
     plan?: unknown;
     analysis?: unknown;
+    cover?: string | null;
     views?: Record<string, { scale: number; tx: number; ty: number }>;
   } | null;
 };
@@ -159,6 +160,7 @@ function PresentasiKirimanPage() {
                   hideShare
                   annotateShareId={r.id}
                   viewsOverride={p.views ?? null}
+                  coverOverride={p.cover ?? null}
                   open={openId === r.id}
                   onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
                 />
