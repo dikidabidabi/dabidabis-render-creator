@@ -999,15 +999,33 @@ export function PresentasiBox({
                             })
                           }
                           className={cn(
-                            "rounded-md border px-2 py-1 text-left text-[11px] transition",
+                            "flex items-center gap-2 rounded-md border px-2 py-1 text-left text-[11px] transition",
                             on
                               ? "border-primary bg-primary/10 text-foreground"
                               : "border-border text-muted-foreground",
                           )}
                         >
-                          <span className="font-semibold">{r.name}</span> · {r.pages} halaman ·{" "}
-                          {formatNoteTime(r.updated)}
+                          {r.avatar ? (
+                            <img
+                              src={r.avatar}
+                              alt={`Foto profil ${r.name}`}
+                              className="h-6 w-6 shrink-0 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
+                              {r.name.slice(0, 2)}
+                            </span>
+                          )}
+                          <span>
+                            <span className="font-semibold">{r.name}</span>
+                            {" · hlm "}
+                            {r.pages.length > 0 ? r.pages.join(", ") : "-"}
+                            {" · "}
+                            {formatNoteTime(r.updated)}
+                          </span>
                         </button>
+
                       );
                     })}
                   </div>
