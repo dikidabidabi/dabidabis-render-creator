@@ -53,6 +53,11 @@ export function SharePresentationDialog({
     if (!target) { toast.error("Pilih nama akun tujuan terlebih dahulu."); return; }
     setSending(true);
     try {
+      const used = await countShareRecipients(user.id, title);
+      if (used >= MAX_SHARE_RECIPIENTS) {
+        toast.error(`Presentasi ini sudah dibagikan ke ${MAX_SHARE_RECIPIENTS} akun (batas maksimal).`);
+        return;
+      }
       const payload = buildPayload();
       const { error } = await supabase.from("shared_presentations").insert({
         from_user: user.id,
