@@ -8,6 +8,13 @@
       "when": 1787999868485,
       "tag": "0000_presentation_notes_and_share_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788003677914,
+      "tag": "0001_share_live_sync_and_note_view",
+      "breakpoints": true
     }
   ]
 }
