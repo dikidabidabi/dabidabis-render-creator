@@ -25,6 +25,9 @@ export type NoteText = {
   size: number;
 };
 
+/** Snapshot zoom/pan gambar slide saat komentar dibuat. */
+export type NoteView = { scale: number; tx: number; ty: number };
+
 export type NoteRow = {
   id: string;
   share_id: string;
@@ -33,10 +36,36 @@ export type NoteRow = {
   author: string;
   strokes: NoteStroke[];
   texts: NoteText[];
+  view: NoteView | null;
   updated_at: string;
 };
 
 export type NoteLayer = NoteRow & { author_name: string; author_avatar: string | null };
+
+const NOTE_COLS = "id, share_id, slide_id, slide_title, author, strokes, texts, view, updated_at";
+
+function normalizeView(v: unknown): NoteView | null {
+  const o = v as { scale?: unknown; tx?: unknown; ty?: unknown } | null;
+  if (!o || typeof o.scale !== "number" || typeof o.tx !== "number" || typeof o.ty !== "number") return null;
+  return { scale: o.scale, tx: o.tx, ty: o.ty };
+}
+
+/**
+ * Transform SVG agar layer komentar tetap menempel pada gambar slide ketika
+ * pemilik presentasi mengubah zoom/pan gambar tersebut.
+ */
+export function noteTransform(
+  stored: NoteView | null,
+  current: NoteView | null,
+  anchor: { cx: number; cy: number } | null,
+): string | undefined {
+  if (!stored || !current || !anchor || !stored.scale || !current.scale) return undefined;
+  const k = current.scale / stored.scale;
+  const tx = anchor.cx + current.tx - k * (anchor.cx + stored.tx);
+  const ty = anchor.cy + current.ty - k * (anchor.cy + stored.ty);
+  if (Math.abs(k - 1) < 1e-4 && Math.abs(tx) < 0.01 && Math.abs(ty) < 0.01) return undefined;
+  return `translate(${tx} ${ty}) scale(${k})`;
+}
 
 function normalize(row: Record<string, unknown>): NoteRow {
   return {
@@ -47,15 +76,17 @@ function normalize(row: Record<string, unknown>): NoteRow {
     author: row.author as string,
     strokes: Array.isArray(row.strokes) ? (row.strokes as NoteStroke[]) : [],
     texts: Array.isArray(row.texts) ? (row.texts as NoteText[]) : [],
+    view: normalizeView(row.view),
     updated_at: row.updated_at as string,
   };
 }
+
 
 /** Semua catatan pada satu kiriman (untuk penerima). */
 export async function fetchShareNotes(shareId: string): Promise<NoteRow[]> {
   const { data, error } = await supabase
     .from("presentation_notes")
-    .select("id, share_id, slide_id, slide_title, author, strokes, texts, updated_at")
+    .select(NOTE_COLS)
     .eq("share_id", shareId);
   if (error) throw error;
   return (data ?? []).map((r) => normalize(r as Record<string, unknown>));
@@ -69,6 +100,7 @@ export async function saveNote(args: {
   author: string;
   strokes: NoteStroke[];
   texts: NoteText[];
+  view?: NoteView | null;
 }): Promise<void> {
   const { error } = await supabase
     .from("presentation_notes")
@@ -80,11 +112,31 @@ export async function saveNote(args: {
         author: args.author,
         strokes: args.strokes as never,
         texts: args.texts as never,
+        view: (args.view ?? null) as never,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "share_id,slide_id,author" },
     );
   if (error) throw error;
+}
+
+/**
+ * Perbarui payload semua kiriman untuk satu judul presentasi milik saya,
+ * sehingga presentasi kiriman di akun penerima otomatis ikut berubah.
+ */
+export async function syncSharedPayload(
+  fromUser: string,
+  title: string,
+  payload: unknown,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("shared_presentations")
+    .update({ payload: payload as never })
+    .eq("from_user", fromUser)
+    .eq("title", title)
+    .select("id");
+  if (error) return 0;
+  return (data ?? []).length;
 }
 
 /** Jumlah akun berbeda yang sudah menerima judul presentasi ini dari saya. */
@@ -113,7 +165,7 @@ export async function fetchIncomingNotes(fromUser: string, title: string): Promi
 
   const { data: notes } = await supabase
     .from("presentation_notes")
-    .select("id, share_id, slide_id, slide_title, author, strokes, texts, updated_at")
+    .select(NOTE_COLS)
     .in("share_id", ids);
   const rows = (notes ?? []).map((r) => normalize(r as Record<string, unknown>));
   if (rows.length === 0) return [];

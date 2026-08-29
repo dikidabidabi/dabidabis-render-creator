@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
 import { NoteLayerView, useSlideNoteEditor } from "@/components/presentation-notes";
-import { fetchIncomingNotes, formatNoteTime, type NoteLayer } from "@/lib/presentation-notes";
+import { fetchIncomingNotes, formatNoteTime, syncSharedPayload, type NoteLayer } from "@/lib/presentation-notes";
 import { useAuth } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
 
@@ -623,7 +623,7 @@ export function PrintStyles() {
 // ---------- Sketch Box ----------
 export function PresentasiBox({
   sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
-  annotateShareId,
+  annotateShareId, viewsOverride,
 }: {
   sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
   open: boolean; onToggle: () => void;
@@ -632,6 +632,8 @@ export function PresentasiBox({
   analysisOverride?: MasterplanAnalysis | null;
   /** Jika diisi (halaman Presentasi Kiriman), slide dapat dikomentari. */
   annotateShareId?: string;
+  /** Zoom/pan gambar dari presentasi sumber (dikunci untuk presentasi kiriman). */
+  viewsOverride?: Record<string, { scale: number; tx: number; ty: number }> | null;
 }) {
   const external = planOverride !== undefined || analysisOverride !== undefined;
   const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
@@ -731,11 +733,48 @@ export function PresentasiBox({
   // ---- Komentar coretan/teks per halaman ----
   const { user: noteUser } = useAuth();
   const currentSlide = slides[idx];
+
+  // Registry kotak gambar slide: dipakai agar layer komentar mengikuti
+  // zoom/pan manual gambar di presentasi sumber.
+  const a3InnerRef = useRef<HTMLDivElement | null>(null);
+  const [boxInfo, setBoxInfo] = useState<Record<string, SlideBoxInfo>>({});
+  const registerBox = useCallback((id: string, info: SlideBoxInfo | null) => {
+    setBoxInfo((prev) => {
+      if (!info) {
+        if (!(id in prev)) return prev;
+        const n = { ...prev };
+        delete n[id];
+        return n;
+      }
+      const p = prev[id];
+      if (p && p.cx === info.cx && p.cy === info.cy && p.scale === info.scale && p.tx === info.tx && p.ty === info.ty) {
+        return prev;
+      }
+      return { ...prev, [id]: info };
+    });
+  }, []);
+  const getRootRect = useCallback(() => a3InnerRef.current?.getBoundingClientRect() ?? null, []);
+  const slideBoxCtx = useMemo(
+    () => ({ register: registerBox, getRootRect, forcedViews: viewsOverride ?? null }),
+    [registerBox, getRootRect, viewsOverride],
+  );
+
+  const activeBox = currentSlide ? boxInfo[currentSlide.id] : undefined;
+  const activeView = useMemo(
+    () => (activeBox ? { scale: activeBox.scale, tx: activeBox.tx, ty: activeBox.ty } : null),
+    [activeBox?.scale, activeBox?.tx, activeBox?.ty],
+  );
+  const activeAnchor = useMemo(
+    () => (activeBox ? { cx: activeBox.cx, cy: activeBox.cy } : null),
+    [activeBox?.cx, activeBox?.cy],
+  );
+
   const noteEditor = useSlideNoteEditor({
     shareId: annotateShareId ?? "",
     slideId: currentSlide?.id,
     slideTitle: currentSlide?.title ?? "",
     author: noteUser?.id,
+    view: activeView,
   });
   // Sisi pengirim: tarik komentar yang masuk untuk judul presentasi ini.
   const [incoming, setIncoming] = useState<NoteLayer[]>([]);
@@ -784,6 +823,35 @@ export function PresentasiBox({
       ),
     [incoming, currentSlide?.id, offAuthors],
   );
+
+  // ---- Sinkronisasi otomatis presentasi sumber → presentasi kiriman ----
+  const [viewsTick, setViewsTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setViewsTick((n) => n + 1);
+    window.addEventListener("slideview:update", bump);
+    return () => window.removeEventListener("slideview:update", bump);
+  }, []);
+  const slideIdsKey = useMemo(() => slides.map((s) => s.id).join("|"), [slides]);
+  const buildSharePayload = useCallback(
+    () => ({
+      version: 1,
+      sketch: effectiveSketch,
+      narasi,
+      perspektif,
+      moodboard,
+      plan: masterPlan,
+      analysis: mpAnalysis,
+      views: collectSlideViews(slideIdsKey ? slideIdsKey.split("|") : []),
+    }),
+    [effectiveSketch, narasi, perspektif, moodboard, masterPlan, mpAnalysis, slideIdsKey, viewsTick],
+  );
+  useEffect(() => {
+    if (!sourceMode || !noteUser) return;
+    const t = window.setTimeout(() => {
+      void syncSharedPayload(noteUser.id, effectiveSketch.title || "Presentasi", buildSharePayload());
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [sourceMode, noteUser, effectiveSketch.title, buildSharePayload]);
 
   useEffect(() => {
     if (!full) return;
@@ -950,15 +1018,7 @@ export function PresentasiBox({
         {!hideShare && (
           <SharePresentationDialog
             title={effectiveSketch.title || "Presentasi"}
-            buildPayload={() => ({
-              version: 1,
-              sketch: effectiveSketch,
-              narasi,
-              perspektif,
-              moodboard,
-              plan: masterPlan,
-              analysis: mpAnalysis,
-            })}
+            buildPayload={buildSharePayload}
           />
         )}
       </div>
@@ -968,15 +1028,22 @@ export function PresentasiBox({
         <div className="border-t border-border p-4">
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-lg bg-neutral-200/40 p-4 shadow-inner">
-              <A3Frame
-                overlay={
-                  annotateShareId ? noteEditor.overlay : layersForSlide.length > 0 ? (
-                    <NoteLayerView layers={layersForSlide} />
-                  ) : null
-                }
-              >
-                <SlideContent slide={slides[idx]} />
-              </A3Frame>
+              <SlideBoxCtx.Provider value={slideBoxCtx}>
+                <A3Frame
+                  innerRef={a3InnerRef}
+                  overlay={
+                    annotateShareId ? noteEditor.overlay : layersForSlide.length > 0 ? (
+                      <NoteLayerView
+                        layers={layersForSlide}
+                        currentView={activeView}
+                        anchor={activeAnchor}
+                      />
+                    ) : null
+                  }
+                >
+                  <SlideContent slide={slides[idx]} />
+                </A3Frame>
+              </SlideBoxCtx.Provider>
               {annotateShareId && <div className="mt-3">{noteEditor.toolbar}</div>}
               {sourceMode && reviewers.length > 0 && (
                 <div className="no-print mt-3 space-y-1 rounded-md border border-border bg-background/60 px-3 py-2">
@@ -1296,7 +1363,7 @@ function FullscreenSlideshow({
 }
 
 // ---------- A3 Frame: maintains aspect, scales internal 1414x1000 canvas ----------
-function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: React.ReactNode }) {
+function A3Frame({ children, overlay, innerRef }: { children: React.ReactNode; overlay?: React.ReactNode; innerRef?: React.RefObject<HTMLDivElement | null> }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ scale: 0.5, w: A3_W * 0.5, h: A3_H * 0.5 });
   useLayoutEffect(() => {
@@ -1327,6 +1394,7 @@ function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: R
         style={{ width: frame.w, height: frame.h }}
       >
         <div
+        ref={innerRef}
         style={{
           position: "relative",
           width: A3_W,
@@ -1735,8 +1803,27 @@ function saveSlideView(id: string, view: SlideView | null) {
     const v = raw ? JSON.parse(raw) : {};
     if (view == null) delete v[id]; else v[id] = view;
     localStorage.setItem(SLIDE_VIEW_KEY, JSON.stringify(v));
+    window.dispatchEvent(new Event("slideview:update"));
   } catch { /* ignore */ }
 }
+
+/** Kumpulan zoom/pan gambar untuk sekumpulan slide (dikirim ke penerima). */
+function collectSlideViews(ids: string[]): Record<string, SlideView> {
+  const out: Record<string, SlideView> = {};
+  for (const id of ids) {
+    const v = loadSlideView(id);
+    if (v) out[id] = v;
+  }
+  return out;
+}
+
+/** Info kotak gambar slide: pusat dalam ruang A3 + zoom/pan aktif. */
+export type SlideBoxInfo = { cx: number; cy: number; scale: number; tx: number; ty: number };
+const SlideBoxCtx = React.createContext<{
+  register: (slideId: string, info: SlideBoxInfo | null) => void;
+  getRootRect: () => DOMRect | null;
+  forcedViews: Record<string, SlideView> | null;
+} | null>(null);
 function loadCompassView(id: string): CompassView | null {
   try {
     const raw = localStorage.getItem(COMPASS_VIEW_KEY);
@@ -1762,13 +1849,19 @@ function ManualScaleBox({
 }: { slideId: string; children: React.ReactNode; style?: React.CSSProperties }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
+  const ctx = React.useContext(SlideBoxCtx);
+  // Presentasi kiriman: zoom/pan dikunci mengikuti presentasi sumber agar
+  // coretan komentar tetap presisi pada gambar.
+  const locked = ctx?.forcedViews ?? null;
+  const forced = locked?.[slideId] ?? null;
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [fitScale, setFitScale] = useState(1);
-  const [view, setView] = useState<SlideView | null>(() => loadSlideView(slideId));
+  const [view, setView] = useState<SlideView | null>(() => forced ?? loadSlideView(slideId));
   const viewRef = useRef<SlideView | null>(view);
   viewRef.current = view;
 
-  useEffect(() => { setView(loadSlideView(slideId)); }, [slideId]);
+  useEffect(() => { setView(forced ?? loadSlideView(slideId)); },
+    [slideId, forced?.scale, forced?.tx, forced?.ty]);
 
   useEffect(() => {
     if (!boxRef.current || !innerRef.current) return;
@@ -1795,6 +1888,23 @@ function ManualScaleBox({
   const scale = view?.scale ?? fitScale;
   const tx = view?.tx ?? 0;
   const ty = view?.ty ?? 0;
+
+  // Laporkan posisi kotak + zoom aktif ke presentasi induk (untuk layer komentar).
+  const register = ctx?.register;
+  const getRootRect = ctx?.getRootRect;
+  useEffect(() => {
+    if (!register || !getRootRect) return;
+    const rect = boxRef.current?.getBoundingClientRect();
+    const root = getRootRect();
+    if (!rect || !root || !root.width) return;
+    const f = root.width / A3_W;
+    register(slideId, {
+      cx: (rect.left + rect.width / 2 - root.left) / f,
+      cy: (rect.top + rect.height / 2 - root.top) / f,
+      scale, tx, ty,
+    });
+    return () => register(slideId, null);
+  }, [register, getRootRect, slideId, scale, tx, ty, natural]);
 
   // Pointer-based pan + pinch
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -1866,7 +1976,7 @@ function ManualScaleBox({
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size === 0) {
       gestureRef.current = null;
-      saveSlideView(slideId, viewRef.current);
+      if (!locked) saveSlideView(slideId, viewRef.current);
     } else {
       // Recalibrate remaining gesture
       const pts = Array.from(pointersRef.current.values());
@@ -1893,15 +2003,16 @@ function ManualScaleBox({
     const next = { scale: newScale, tx, ty };
     setView(next);
     viewRef.current = next;
-    saveSlideView(slideId, next);
+    if (!locked) saveSlideView(slideId, next);
   };
 
   const reset = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setView(null);
-    viewRef.current = null;
-    saveSlideView(slideId, null);
+    const back = forced ?? null;
+    setView(back);
+    viewRef.current = back;
+    if (!locked) saveSlideView(slideId, null);
   };
 
   return (

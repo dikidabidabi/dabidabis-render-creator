@@ -266,6 +266,7 @@ export type Database = {
           strokes: Json
           texts: Json
           updated_at: string
+          view: Json | null
         }
         Insert: {
           author: string
@@ -277,6 +278,7 @@ export type Database = {
           strokes?: Json
           texts?: Json
           updated_at?: string
+          view?: Json | null
         }
         Update: {
           author?: string
@@ -288,6 +290,7 @@ export type Database = {
           strokes?: Json
           texts?: Json
           updated_at?: string
+          view?: Json | null
         }
         Relationships: [
           {
