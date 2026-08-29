@@ -1,7 +1,7 @@
 // Overlay komentar (coretan + teks) untuk slide presentasi.
 // Dipakai penerima kiriman untuk mencoret/menulis, dan pemilik presentasi
 // sumber untuk menampilkan layer komentar tersebut.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Eraser, Pencil, Type, MousePointer2, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
