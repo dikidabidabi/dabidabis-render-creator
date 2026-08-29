@@ -255,6 +255,50 @@ export type Database = {
           },
         ]
       }
+      presentation_notes: {
+        Row: {
+          author: string
+          created_at: string
+          id: string
+          share_id: string
+          slide_id: string
+          slide_title: string | null
+          strokes: Json
+          texts: Json
+          updated_at: string
+        }
+        Insert: {
+          author: string
+          created_at?: string
+          id?: string
+          share_id: string
+          slide_id: string
+          slide_title?: string | null
+          strokes?: Json
+          texts?: Json
+          updated_at?: string
+        }
+        Update: {
+          author?: string
+          created_at?: string
+          id?: string
+          share_id?: string
+          slide_id?: string
+          slide_title?: string | null
+          strokes?: Json
+          texts?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presentation_notes_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "shared_presentations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           account_type: string | null
@@ -503,7 +547,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_access_share: {
+        Args: { _share_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
