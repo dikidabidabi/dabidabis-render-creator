@@ -2,10 +2,16 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, MessageSquare, Search, Send, Users } from "lucide-react";
+import { Loader2, MessageSquare, Search, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
 import { useNotifications } from "@/lib/notifications";
 import { timeAgo } from "@/components/feed-entry-card";
@@ -17,6 +23,7 @@ import {
   type Conversation,
   type DirectMessage,
   type MessageAccount,
+  type SharedPreview,
 } from "@/lib/messages.functions";
 
 export const Route = createFileRoute("/pesan")({
@@ -67,6 +74,7 @@ function MessagesPage() {
   const [draft, setDraft] = useState("");
   const [q, setQ] = useState("");
   const [accounts, setAccounts] = useState<MessageAccount[]>([]);
+  const [sharedPreview, setSharedPreview] = useState<SharedPreview | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const reloadConvos = useCallback(async () => {
@@ -244,8 +252,11 @@ function MessagesPage() {
                         }`}
                       >
                         {m.shared && (
-                          <div
-                            className={`overflow-hidden rounded-lg border ${
+                          <button
+                            type="button"
+                            onClick={() => setSharedPreview(m.shared)}
+                            title="Klik untuk membuka postingan"
+                            className={`block w-full overflow-hidden rounded-lg border text-left transition-opacity hover:opacity-90 ${
                               m.mine ? "border-white/30 bg-white/10" : "border-border/60 bg-surface/60"
                             }`}
                           >
@@ -263,7 +274,7 @@ function MessagesPage() {
                                 <p className="line-clamp-3 opacity-80">{m.shared.body}</p>
                               )}
                             </div>
-                          </div>
+                          </button>
                         )}
                         {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
                         <p className={`text-[10px] ${m.mine ? "text-white/70" : "text-muted-foreground"}`}>
@@ -306,6 +317,38 @@ function MessagesPage() {
           )}
         </section>
       </div>
+
+      <Dialog open={Boolean(sharedPreview)} onOpenChange={(o) => !o && setSharedPreview(null)}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto p-0">
+          <DialogTitle className="sr-only">Postingan yang dibagikan</DialogTitle>
+          <DialogDescription className="sr-only">
+            Pratinjau postingan yang dibagikan lewat pesan
+          </DialogDescription>
+          <button
+            type="button"
+            onClick={() => setSharedPreview(null)}
+            aria-label="Tutup"
+            className="absolute right-3 top-3 z-10 rounded-full bg-background/80 p-1.5 text-foreground shadow hover:bg-background"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          {sharedPreview?.image_url && (
+            <img
+              src={sharedPreview.image_url}
+              alt="Postingan yang dibagikan"
+              className="w-full object-contain"
+            />
+          )}
+          <div className="space-y-1 p-4">
+            <p className="text-sm font-semibold">{sharedPreview?.author_name}</p>
+            {sharedPreview?.body && (
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {sharedPreview.body}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
