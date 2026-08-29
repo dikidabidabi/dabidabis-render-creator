@@ -954,9 +954,51 @@ export function PresentasiBox({
         <div className="border-t border-border p-4">
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-lg bg-neutral-200/40 p-4 shadow-inner">
-              <A3Frame>
+              <A3Frame
+                overlay={
+                  annotateShareId ? noteEditor.overlay : layersForSlide.length > 0 ? (
+                    <NoteLayerView layers={layersForSlide} />
+                  ) : null
+                }
+              >
                 <SlideContent slide={slides[idx]} />
               </A3Frame>
+              {annotateShareId && <div className="mt-3">{noteEditor.toolbar}</div>}
+              {sourceMode && reviewers.length > 0 && (
+                <div className="no-print mt-3 space-y-1 rounded-md border border-border bg-background/60 px-3 py-2">
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    Layer komentar dari penerima (klik untuk sembunyikan/tampilkan):
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {reviewers.map((r) => {
+                      const on = !offAuthors.has(r.id);
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() =>
+                            setOffAuthors((prevSet) => {
+                              const n = new Set(prevSet);
+                              if (n.has(r.id)) n.delete(r.id);
+                              else n.add(r.id);
+                              return n;
+                            })
+                          }
+                          className={cn(
+                            "rounded-md border px-2 py-1 text-left text-[11px] transition",
+                            on
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground",
+                          )}
+                        >
+                          <span className="font-semibold">{r.name}</span> · {r.pages} halaman ·{" "}
+                          {formatNoteTime(r.updated)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {/* Controls overlay */}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1">
