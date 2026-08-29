@@ -97,6 +97,7 @@ export function useSlideNoteEditor(args: {
 
   useEffect(() => {
     let alive = true;
+    if (!shareId) { setLoading(false); return; }
     setLoading(true);
     fetchShareNotes(shareId)
       .then((rows: NoteRow[]) => {
