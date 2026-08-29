@@ -24,6 +24,9 @@ import { colorForRoomName } from "@/lib/room-color";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
+import { NoteLayerView, useSlideNoteEditor } from "@/components/presentation-notes";
+import { fetchIncomingNotes, formatNoteTime, type NoteLayer } from "@/lib/presentation-notes";
+import { useAuth } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
 
 import SunCalc from "suncalc";
