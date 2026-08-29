@@ -24,6 +24,9 @@ import { colorForRoomName } from "@/lib/room-color";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
+import { NoteLayerView, useSlideNoteEditor } from "@/components/presentation-notes";
+import { fetchIncomingNotes, formatNoteTime, type NoteLayer } from "@/lib/presentation-notes";
+import { useAuth } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
 
 import SunCalc from "suncalc";
@@ -620,12 +623,15 @@ export function PrintStyles() {
 // ---------- Sketch Box ----------
 export function PresentasiBox({
   sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
+  annotateShareId,
 }: {
   sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
   open: boolean; onToggle: () => void;
   hideShare?: boolean;
   planOverride?: import("@/lib/masterplan").MasterPlan | null;
   analysisOverride?: MasterplanAnalysis | null;
+  /** Jika diisi (halaman Presentasi Kiriman), slide dapat dikomentari. */
+  annotateShareId?: string;
 }) {
   const external = planOverride !== undefined || analysisOverride !== undefined;
   const [masterPlanLocal, setMasterPlan] = useState<import("@/lib/masterplan").MasterPlan | null>(null);
@@ -721,6 +727,52 @@ export function PresentasiBox({
 
   const prev = useCallback(() => setIdx((i) => (i - 1 + slides.length) % slides.length), [slides.length]);
   const next = useCallback(() => setIdx((i) => (i + 1) % slides.length), [slides.length]);
+
+  // ---- Komentar coretan/teks per halaman ----
+  const { user: noteUser } = useAuth();
+  const currentSlide = slides[idx];
+  const noteEditor = useSlideNoteEditor({
+    shareId: annotateShareId ?? "",
+    slideId: currentSlide?.id,
+    slideTitle: currentSlide?.title ?? "",
+    author: noteUser?.id,
+  });
+  // Sisi pengirim: tarik komentar yang masuk untuk judul presentasi ini.
+  const [incoming, setIncoming] = useState<NoteLayer[]>([]);
+  const [offAuthors, setOffAuthors] = useState<Set<string>>(new Set());
+  const sourceMode = !annotateShareId && !hideShare;
+  useEffect(() => {
+    if (!sourceMode || !noteUser) { setIncoming([]); return; }
+    let alive = true;
+    const load = () => {
+      fetchIncomingNotes(noteUser.id, effectiveSketch.title || "Presentasi")
+        .then((rows) => { if (alive) setIncoming(rows); })
+        .catch(() => void 0);
+    };
+    load();
+    const iv = window.setInterval(load, 30000);
+    return () => { alive = false; window.clearInterval(iv); };
+  }, [sourceMode, noteUser, effectiveSketch.title]);
+
+  const reviewers = useMemo(() => {
+    const map = new Map<string, { name: string; updated: string; pages: number }>();
+    for (const n of incoming) {
+      const prevEntry = map.get(n.author);
+      const pages = (prevEntry?.pages ?? 0) + 1;
+      const updated =
+        prevEntry && new Date(prevEntry.updated) > new Date(n.updated_at) ? prevEntry.updated : n.updated_at;
+      map.set(n.author, { name: n.author_name, updated, pages });
+    }
+    return Array.from(map.entries()).map(([id, v]) => ({ id, ...v }));
+  }, [incoming]);
+
+  const layersForSlide = useMemo(
+    () =>
+      incoming.filter(
+        (n) => n.slide_id === currentSlide?.id && !offAuthors.has(n.author),
+      ),
+    [incoming, currentSlide?.id, offAuthors],
+  );
 
   useEffect(() => {
     if (!full) return;
@@ -905,9 +957,51 @@ export function PresentasiBox({
         <div className="border-t border-border p-4">
           <div className="space-y-3">
             <div className="relative overflow-hidden rounded-lg bg-neutral-200/40 p-4 shadow-inner">
-              <A3Frame>
+              <A3Frame
+                overlay={
+                  annotateShareId ? noteEditor.overlay : layersForSlide.length > 0 ? (
+                    <NoteLayerView layers={layersForSlide} />
+                  ) : null
+                }
+              >
                 <SlideContent slide={slides[idx]} />
               </A3Frame>
+              {annotateShareId && <div className="mt-3">{noteEditor.toolbar}</div>}
+              {sourceMode && reviewers.length > 0 && (
+                <div className="no-print mt-3 space-y-1 rounded-md border border-border bg-background/60 px-3 py-2">
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    Layer komentar dari penerima (klik untuk sembunyikan/tampilkan):
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {reviewers.map((r) => {
+                      const on = !offAuthors.has(r.id);
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() =>
+                            setOffAuthors((prevSet) => {
+                              const n = new Set(prevSet);
+                              if (n.has(r.id)) n.delete(r.id);
+                              else n.add(r.id);
+                              return n;
+                            })
+                          }
+                          className={cn(
+                            "rounded-md border px-2 py-1 text-left text-[11px] transition",
+                            on
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground",
+                          )}
+                        >
+                          <span className="font-semibold">{r.name}</span> · {r.pages} halaman ·{" "}
+                          {formatNoteTime(r.updated)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {/* Controls overlay */}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1">
@@ -1173,7 +1267,7 @@ function FullscreenSlideshow({
 }
 
 // ---------- A3 Frame: maintains aspect, scales internal 1414x1000 canvas ----------
-function A3Frame({ children }: { children: React.ReactNode }) {
+function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: React.ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ scale: 0.5, w: A3_W * 0.5, h: A3_H * 0.5 });
   useLayoutEffect(() => {
@@ -1205,6 +1299,7 @@ function A3Frame({ children }: { children: React.ReactNode }) {
       >
         <div
         style={{
+          position: "relative",
           width: A3_W,
           height: A3_H,
           transform: `scale(${frame.scale})`,
@@ -1212,6 +1307,7 @@ function A3Frame({ children }: { children: React.ReactNode }) {
         }}
       >
         {children}
+        {overlay}
       </div>
       </div>
     </div>

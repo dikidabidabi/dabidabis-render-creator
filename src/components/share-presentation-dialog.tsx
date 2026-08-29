@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { MAX_SHARE_RECIPIENTS, countShareRecipients } from "@/lib/presentation-notes";
 
 type Candidate = { id: string; display_name: string | null };
 
@@ -53,6 +54,11 @@ export function SharePresentationDialog({
     if (!target) { toast.error("Pilih nama akun tujuan terlebih dahulu."); return; }
     setSending(true);
     try {
+      const used = await countShareRecipients(user.id, title);
+      if (used >= MAX_SHARE_RECIPIENTS) {
+        toast.error(`Presentasi ini sudah dibagikan ke ${MAX_SHARE_RECIPIENTS} akun (batas maksimal).`);
+        return;
+      }
       const payload = buildPayload();
       const { error } = await supabase.from("shared_presentations").insert({
         from_user: user.id,
@@ -85,8 +91,9 @@ export function SharePresentationDialog({
         <DialogHeader>
           <DialogTitle>Bagikan kepada</DialogTitle>
           <DialogDescription>
-            Kirim presentasi “{title}” ke akun lain. Penerima dapat membuka dan mencetaknya di sub
-            halaman Presentasi Kiriman.
+            Kirim presentasi “{title}” ke akun lain (maksimal {MAX_SHARE_RECIPIENTS} akun). Penerima
+            dapat membuka, mencetak, dan memberi komentar coretan/teks per halaman di sub halaman
+            Presentasi Kiriman.
           </DialogDescription>
         </DialogHeader>
 
