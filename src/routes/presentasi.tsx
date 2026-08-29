@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
 import { NoteLayerView, useSlideNoteEditor } from "@/components/presentation-notes";
-import { fetchIncomingNotes, formatNoteTime, type NoteLayer } from "@/lib/presentation-notes";
+import { fetchIncomingNotes, formatNoteTime, syncSharedPayload, type NoteLayer } from "@/lib/presentation-notes";
 import { useAuth } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
 
@@ -1296,7 +1296,7 @@ function FullscreenSlideshow({
 }
 
 // ---------- A3 Frame: maintains aspect, scales internal 1414x1000 canvas ----------
-function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: React.ReactNode }) {
+function A3Frame({ children, overlay, innerRef }: { children: React.ReactNode; overlay?: React.ReactNode; innerRef?: React.RefObject<HTMLDivElement | null> }) {
   const wrap = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ scale: 0.5, w: A3_W * 0.5, h: A3_H * 0.5 });
   useLayoutEffect(() => {
@@ -1327,6 +1327,7 @@ function A3Frame({ children, overlay }: { children: React.ReactNode; overlay?: R
         style={{ width: frame.w, height: frame.h }}
       >
         <div
+        ref={innerRef}
         style={{
           position: "relative",
           width: A3_W,
@@ -1735,8 +1736,27 @@ function saveSlideView(id: string, view: SlideView | null) {
     const v = raw ? JSON.parse(raw) : {};
     if (view == null) delete v[id]; else v[id] = view;
     localStorage.setItem(SLIDE_VIEW_KEY, JSON.stringify(v));
+    window.dispatchEvent(new Event("slideview:update"));
   } catch { /* ignore */ }
 }
+
+/** Kumpulan zoom/pan gambar untuk sekumpulan slide (dikirim ke penerima). */
+function collectSlideViews(ids: string[]): Record<string, SlideView> {
+  const out: Record<string, SlideView> = {};
+  for (const id of ids) {
+    const v = loadSlideView(id);
+    if (v) out[id] = v;
+  }
+  return out;
+}
+
+/** Info kotak gambar slide: pusat dalam ruang A3 + zoom/pan aktif. */
+export type SlideBoxInfo = { cx: number; cy: number; scale: number; tx: number; ty: number };
+const SlideBoxCtx = React.createContext<{
+  register: (slideId: string, info: SlideBoxInfo | null) => void;
+  getRootRect: () => DOMRect | null;
+  forcedViews: Record<string, SlideView> | null;
+} | null>(null);
 function loadCompassView(id: string): CompassView | null {
   try {
     const raw = localStorage.getItem(COMPASS_VIEW_KEY);
@@ -1762,13 +1782,19 @@ function ManualScaleBox({
 }: { slideId: string; children: React.ReactNode; style?: React.CSSProperties }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
+  const ctx = React.useContext(SlideBoxCtx);
+  // Presentasi kiriman: zoom/pan dikunci mengikuti presentasi sumber agar
+  // coretan komentar tetap presisi pada gambar.
+  const locked = ctx?.forcedViews ?? null;
+  const forced = locked?.[slideId] ?? null;
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [fitScale, setFitScale] = useState(1);
-  const [view, setView] = useState<SlideView | null>(() => loadSlideView(slideId));
+  const [view, setView] = useState<SlideView | null>(() => forced ?? loadSlideView(slideId));
   const viewRef = useRef<SlideView | null>(view);
   viewRef.current = view;
 
-  useEffect(() => { setView(loadSlideView(slideId)); }, [slideId]);
+  useEffect(() => { setView(forced ?? loadSlideView(slideId)); },
+    [slideId, forced?.scale, forced?.tx, forced?.ty]);
 
   useEffect(() => {
     if (!boxRef.current || !innerRef.current) return;
@@ -1795,6 +1821,23 @@ function ManualScaleBox({
   const scale = view?.scale ?? fitScale;
   const tx = view?.tx ?? 0;
   const ty = view?.ty ?? 0;
+
+  // Laporkan posisi kotak + zoom aktif ke presentasi induk (untuk layer komentar).
+  const register = ctx?.register;
+  const getRootRect = ctx?.getRootRect;
+  useEffect(() => {
+    if (!register || !getRootRect) return;
+    const rect = boxRef.current?.getBoundingClientRect();
+    const root = getRootRect();
+    if (!rect || !root || !root.width) return;
+    const f = root.width / A3_W;
+    register(slideId, {
+      cx: (rect.left + rect.width / 2 - root.left) / f,
+      cy: (rect.top + rect.height / 2 - root.top) / f,
+      scale, tx, ty,
+    });
+    return () => register(slideId, null);
+  }, [register, getRootRect, slideId, scale, tx, ty, natural]);
 
   // Pointer-based pan + pinch
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -1866,7 +1909,7 @@ function ManualScaleBox({
     pointersRef.current.delete(e.pointerId);
     if (pointersRef.current.size === 0) {
       gestureRef.current = null;
-      saveSlideView(slideId, viewRef.current);
+      if (!locked) saveSlideView(slideId, viewRef.current);
     } else {
       // Recalibrate remaining gesture
       const pts = Array.from(pointersRef.current.values());
@@ -1893,15 +1936,16 @@ function ManualScaleBox({
     const next = { scale: newScale, tx, ty };
     setView(next);
     viewRef.current = next;
-    saveSlideView(slideId, next);
+    if (!locked) saveSlideView(slideId, next);
   };
 
   const reset = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setView(null);
-    viewRef.current = null;
-    saveSlideView(slideId, null);
+    const back = forced ?? null;
+    setView(back);
+    viewRef.current = back;
+    if (!locked) saveSlideView(slideId, null);
   };
 
   return (
