@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
 import { NoteLayerView, useSlideNoteEditor } from "@/components/presentation-notes";
+import { PresentationDiscussion } from "@/components/presentation-discussion";
 import { fetchIncomingNotes, formatNoteTime, syncSharedPayload, type NoteLayer } from "@/lib/presentation-notes";
 import { useAuth } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
@@ -1250,6 +1251,14 @@ export function PresentasiBox({
 
           </div>
         </div>
+      )}
+
+      {noteUser && (annotateShareId || sourceMode) && (
+        <PresentationDiscussion
+          me={noteUser.id}
+          shareId={annotateShareId}
+          title={annotateShareId ? undefined : effectiveSketch.title || "Presentasi"}
+        />
       )}
 
       {full && (
