@@ -1,15 +1,19 @@
-// Kotak diskusi mengapung di kanan bawah presentasi (sumber & kiriman).
+// Kotak diskusi menempel di bawah tiap presentasi (sumber & kiriman).
+// Realtime antar akun + lencana jumlah chat baru.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, MessageSquare, Send, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 import {
+  countUnread,
   fetchDiscussion,
   fetchOwnerThreads,
   fetchRecipientThread,
   formatChatTime,
   sendDiscussion,
+  setSeenAt,
   type DiscussionMsg,
   type ShareThread,
 } from "@/lib/presentation-discussion";
@@ -30,12 +34,13 @@ export function PresentationDiscussion({
   const [threads, setThreads] = useState<ShareThread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(shareId ?? null);
   const [msgs, setMsgs] = useState<DiscussionMsg[]>([]);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Kumpulkan utas yang tersedia.
+  // Kumpulkan utas yang tersedia (hanya akun yang dibagikan presentasi ini).
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -57,6 +62,30 @@ export function PresentationDiscussion({
     };
   }, [me, title, shareId]);
 
+  const threadIds = useMemo(() => threads.map((t) => t.id), [threads]);
+  const idsKey = threadIds.join(",");
+
+  // Hitung awal chat baru pada semua utas.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const next: Record<string, number> = {};
+      for (const id of threadIds) {
+        try {
+          const rows = await fetchDiscussion(id);
+          next[id] = countUnread(rows, me, id);
+        } catch {
+          next[id] = 0;
+        }
+      }
+      if (alive) setUnread(next);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey, me]);
+
   const load = useCallback(
     async (silent = false) => {
       if (!activeId) return;
@@ -74,11 +103,46 @@ export function PresentationDiscussion({
   );
 
   useEffect(() => {
-    if (!open || !activeId) return;
+    if (!activeId) return;
     void load();
-    const iv = window.setInterval(() => void load(true), 10000);
-    return () => window.clearInterval(iv);
-  }, [open, activeId, load]);
+  }, [activeId, load]);
+
+  // Realtime: pesan baru masuk seketika untuk semua utas presentasi ini.
+  useEffect(() => {
+    if (threadIds.length === 0) return;
+    const set = new Set(threadIds);
+    const channel = supabase
+      .channel(`presentation-discussions-${threadIds[0]}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "presentation_discussions" },
+        (payload) => {
+          const row = payload.new as DiscussionMsg;
+          if (!row?.share_id || !set.has(row.share_id)) return;
+          if (row.share_id === activeId) {
+            setMsgs((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+          }
+          if (row.user_id === me) return;
+          if (row.share_id === activeId && open) {
+            setSeenAt(row.share_id, row.created_at);
+            return;
+          }
+          setUnread((prev) => ({ ...prev, [row.share_id]: (prev[row.share_id] ?? 0) + 1 }));
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey, activeId, open, me]);
+
+  // Tandai terbaca saat utas aktif dibuka.
+  useEffect(() => {
+    if (!open || !activeId) return;
+    setSeenAt(activeId);
+    setUnread((prev) => (prev[activeId] ? { ...prev, [activeId]: 0 } : prev));
+  }, [open, activeId, msgs.length]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -86,6 +150,11 @@ export function PresentationDiscussion({
   }, [msgs, open]);
 
   const active = useMemo(() => threads.find((t) => t.id === activeId) ?? null, [threads, activeId]);
+  const totalUnread = useMemo(
+    () => threadIds.reduce((s, id) => s + (unread[id] ?? 0), 0),
+    [threadIds, unread],
+  );
+  const heading = active?.title || title || "Presentasi";
 
   const submit = async () => {
     if (!activeId || !draft.trim()) return;
@@ -101,20 +170,31 @@ export function PresentationDiscussion({
     }
   };
 
-  if (threads.length === 0 && !shareId) return null;
+  if (threads.length === 0) return null;
 
   return (
-    <div className="no-print fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
-      {open && (
-        <div className="flex h-[22rem] w-[19rem] flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl sm:w-[21rem]">
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            <span className="flex-1 truncate text-xs font-semibold">Diskusi presentasi</span>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Tutup diskusi">
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </div>
+    <div className="no-print mt-3 overflow-hidden rounded-xl border border-border bg-background/60">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+      >
+        <MessageSquare className="h-4 w-4 text-primary" />
+        <span className="flex-1 truncate text-xs font-semibold">Diskusi — {heading}</span>
+        {totalUnread > 0 && (
+          <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
+            {totalUnread}
+          </span>
+        )}
+        {open ? (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+        )}
+      </button>
 
+      {open && (
+        <div className="flex h-[20rem] flex-col border-t border-border">
           {threads.length > 1 && (
             <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-1.5">
               {threads.map((t) => (
@@ -123,13 +203,18 @@ export function PresentationDiscussion({
                   type="button"
                   onClick={() => setActiveId(t.id)}
                   className={cn(
-                    "shrink-0 rounded-md border px-2 py-1 text-[10px] transition",
+                    "flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] transition",
                     t.id === activeId
                       ? "border-primary bg-primary/10 text-foreground"
                       : "border-border text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {t.peerName}
+                  {(unread[t.id] ?? 0) > 0 && (
+                    <span className="rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                      {unread[t.id]}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -206,11 +291,6 @@ export function PresentationDiscussion({
           </div>
         </div>
       )}
-
-      <Button size="sm" className="gap-1.5 shadow-lg" onClick={() => setOpen((o) => !o)}>
-        <MessageSquare className="h-4 w-4" />
-        Diskusi
-      </Button>
     </div>
   );
 }
