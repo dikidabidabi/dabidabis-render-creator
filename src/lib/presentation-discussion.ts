@@ -14,6 +14,8 @@ export type ShareThread = {
   id: string;
   fromUser: string;
   toUser: string;
+  /** Judul presentasi pada kiriman ini. */
+  title: string;
   /** Akun lawan bicara pada utas ini (dilihat dari sisi saya). */
   peer: string;
   peerName: string;
