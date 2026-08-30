@@ -1257,7 +1257,7 @@ export function PresentasiBox({
         <PresentationDiscussion
           me={noteUser.id}
           shareId={annotateShareId}
-          title={annotateShareId ? undefined : effectiveSketch.title || "Presentasi"}
+          title={effectiveSketch.title || "Presentasi"}
         />
       )}
 
