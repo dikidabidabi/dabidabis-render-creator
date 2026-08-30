@@ -2,13 +2,14 @@
 // Dipakai penerima kiriman untuk mencoret/menulis, dan pemilik presentasi
 // sumber untuk menampilkan layer komentar tersebut.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Eraser, Pencil, Type, MousePointer2, Loader2, Check } from "lucide-react";
+import { Eraser, Pencil, Type, MousePointer2, Loader2, Check, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   NOTE_H,
   NOTE_W,
+  deleteSlideNote,
   fetchShareNotes,
   noteTransform,
   saveNote,
@@ -162,6 +163,27 @@ export function useSlideNoteEditor(args: {
       setSaving(false);
     }
   }, [shareId, slideId, slideTitle, author, current, view]);
+
+  /** Hapus seluruh komentar pada halaman aktif (bukan per coretan). */
+  const clearPage = useCallback(async () => {
+    if (!slideId || !author) return;
+    if (!window.confirm("Hapus semua komentar dan coretan pada halaman ini?")) return;
+    setSaving(true);
+    try {
+      await deleteSlideNote({ shareId, slideId, author });
+      setNotes((prev) => {
+        const n = { ...prev };
+        delete n[slideId];
+        return n;
+      });
+      setDirty(false);
+      toast.success("Komentar halaman ini dihapus.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus komentar halaman.");
+    } finally {
+      setSaving(false);
+    }
+  }, [shareId, slideId, author]);
 
   // Coretan aktif digambar lewat ref + rAF agar tidak memicu re-render per titik.
   const liveRef = useRef<SVGPathElement>(null);
@@ -382,6 +404,17 @@ export function useSlideNoteEditor(args: {
       >
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
         Simpan
+      </Button>
+      <Button
+        size="sm"
+        variant="destructive"
+        className="h-7 gap-1.5 px-2 text-[11px]"
+        onClick={() => void clearPage()}
+        disabled={saving || loading || !author || (current.strokes.length === 0 && current.texts.length === 0)}
+        title="Hapus seluruh komentar pada halaman ini"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Hapus halaman
       </Button>
       {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
     </div>

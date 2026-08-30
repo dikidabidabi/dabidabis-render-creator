@@ -255,6 +255,38 @@ export type Database = {
           },
         ]
       }
+      presentation_discussions: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          share_id: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          share_id: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          share_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presentation_discussions_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "shared_presentations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       presentation_notes: {
         Row: {
           author: string

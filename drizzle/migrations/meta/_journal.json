@@ -15,6 +15,13 @@
       "when": 1788003677914,
       "tag": "0001_share_live_sync_and_note_view",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788051998858,
+      "tag": "0002_create_presentation_discussions",
+      "breakpoints": true
     }
   ]
 }

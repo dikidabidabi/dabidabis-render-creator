@@ -120,6 +120,21 @@ export async function saveNote(args: {
   if (error) throw error;
 }
 
+/** Hapus seluruh komentar (coretan + teks) penulis pada satu halaman. */
+export async function deleteSlideNote(args: {
+  shareId: string;
+  slideId: string;
+  author: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from("presentation_notes")
+    .delete()
+    .eq("share_id", args.shareId)
+    .eq("slide_id", args.slideId)
+    .eq("author", args.author);
+  if (error) throw error;
+}
+
 /**
  * Perbarui payload semua kiriman untuk satu judul presentasi milik saya,
  * sehingga presentasi kiriman di akun penerima otomatis ikut berubah.
