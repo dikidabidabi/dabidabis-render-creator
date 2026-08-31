@@ -10,11 +10,13 @@ import {
   countUnread,
   fetchDiscussion,
   fetchOwnerThreads,
+  fetchParticipants,
   fetchRecipientThread,
   formatChatTime,
   sendDiscussion,
   setSeenAt,
   type DiscussionMsg,
+  type Person,
   type ShareThread,
 } from "@/lib/presentation-discussion";
 
@@ -34,6 +36,7 @@ export function PresentationDiscussion({
   const [threads, setThreads] = useState<ShareThread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(shareId ?? null);
   const [msgs, setMsgs] = useState<DiscussionMsg[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -107,6 +110,19 @@ export function PresentationDiscussion({
     void load();
   }, [activeId, load]);
 
+  // Semua akun peserta diskusi (pemilik + penerima presentasi).
+  useEffect(() => {
+    if (!activeId) return;
+    let alive = true;
+    (async () => {
+      const list = await fetchParticipants(activeId);
+      if (alive) setPeople(list);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [activeId]);
+
   // Realtime: pesan baru masuk seketika untuk semua utas presentasi ini.
   useEffect(() => {
     if (threadIds.length === 0) return;
@@ -155,6 +171,16 @@ export function PresentationDiscussion({
     [threadIds, unread],
   );
   const heading = active?.title || title || "Presentasi";
+  const nameOf = useCallback(
+    (id: string) => {
+      if (id === me) return "Saya";
+      const p = people.find((x) => x.id === id);
+      if (p) return p.name;
+      if (active && id === active.peer) return active.peerName;
+      return `Arsitek ${id.slice(0, 6)}`;
+    },
+    [people, me, active],
+  );
 
   const submit = async () => {
     if (!activeId || !draft.trim()) return;
@@ -220,21 +246,29 @@ export function PresentationDiscussion({
             </div>
           )}
 
-          {active && (
+          {people.length > 0 && (
             <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-              {active.peerAvatar ? (
-                <img
-                  src={active.peerAvatar}
-                  alt={`Foto profil ${active.peerName}`}
-                  className="h-6 w-6 rounded-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
-                  {active.peerName.slice(0, 2)}
-                </span>
-              )}
-              <span className="truncate text-[11px] text-muted-foreground">{active.peerName}</span>
+              <div className="flex items-center">
+                {people.map((p) => (
+                  <span key={p.id} className="-ml-1.5 first:ml-0" title={p.id === me ? `${p.name} (saya)` : p.name}>
+                    {p.avatar ? (
+                      <img
+                        src={p.avatar}
+                        alt={`Foto profil ${p.name}`}
+                        className="h-6 w-6 rounded-full border border-background object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full border border-background bg-muted text-[9px] font-semibold uppercase text-muted-foreground">
+                        {p.name.slice(0, 2)}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+              <span className="truncate text-[10px] text-muted-foreground">
+                {people.length} peserta diskusi
+              </span>
             </div>
           )}
 
@@ -255,6 +289,9 @@ export function PresentationDiscussion({
                       mine ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
                     )}
                   >
+                    <p className={cn("mb-0.5 text-[9px] font-bold", mine ? "opacity-80" : "text-primary")}>
+                      {nameOf(m.user_id)}
+                    </p>
                     <p className="whitespace-pre-wrap break-words">{m.body}</p>
                     <p className={cn("mt-0.5 text-[9px]", mine ? "opacity-70" : "text-muted-foreground")}>
                       {formatChatTime(m.created_at)}
