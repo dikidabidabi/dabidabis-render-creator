@@ -36,6 +36,7 @@ export function PresentationDiscussion({
   const [threads, setThreads] = useState<ShareThread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(shareId ?? null);
   const [msgs, setMsgs] = useState<DiscussionMsg[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
