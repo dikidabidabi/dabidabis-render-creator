@@ -110,6 +110,19 @@ export function PresentationDiscussion({
     void load();
   }, [activeId, load]);
 
+  // Semua akun peserta diskusi (pemilik + penerima presentasi).
+  useEffect(() => {
+    if (!activeId) return;
+    let alive = true;
+    (async () => {
+      const list = await fetchParticipants(activeId);
+      if (alive) setPeople(list);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [activeId]);
+
   // Realtime: pesan baru masuk seketika untuk semua utas presentasi ini.
   useEffect(() => {
     if (threadIds.length === 0) return;
