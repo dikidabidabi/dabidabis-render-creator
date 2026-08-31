@@ -102,6 +102,33 @@ export async function fetchRecipientThread(shareId: string, me: string): Promise
   return t ?? null;
 }
 
+export type Person = { id: string; name: string; avatar: string | null };
+
+/** Semua akun yang boleh mengisi diskusi (pemilik presentasi + semua penerima). */
+export async function fetchParticipants(shareId: string): Promise<Person[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("share_participants", { _share_id: shareId });
+  if (error || !data) return [];
+  const ids = Array.from(
+    new Set((data as Array<string | { uid?: string; share_participants?: string }>).map((r) =>
+      typeof r === "string" ? r : (r.uid ?? r.share_participants ?? ""),
+    )),
+  ).filter(Boolean);
+  if (ids.length === 0) return [];
+  try {
+    const { getNoteAuthors } = await import("@/lib/presentation-notes.functions");
+    const infos = await getNoteAuthors({ data: { ids } });
+    return infos.map((i) => ({ id: i.id, name: i.name, avatar: i.avatar }));
+  } catch {
+    const { data: profs } = await supabase.from("profiles").select("id, display_name").in("id", ids);
+    return ids.map((id) => {
+      const p = (profs ?? []).find((x) => (x.id as string) === id);
+      const name = ((p?.display_name as string | null) || "").trim() || `Arsitek ${id.slice(0, 6)}`;
+      return { id, name, avatar: null };
+    });
+  }
+}
+
 const SEEN_KEY = "dabidabi:discussion-seen";
 
 function seenMap(): Record<string, string> {
