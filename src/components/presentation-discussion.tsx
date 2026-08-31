@@ -10,11 +10,13 @@ import {
   countUnread,
   fetchDiscussion,
   fetchOwnerThreads,
+  fetchParticipants,
   fetchRecipientThread,
   formatChatTime,
   sendDiscussion,
   setSeenAt,
   type DiscussionMsg,
+  type Person,
   type ShareThread,
 } from "@/lib/presentation-discussion";
 
