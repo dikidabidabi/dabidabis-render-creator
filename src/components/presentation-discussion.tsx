@@ -246,21 +246,29 @@ export function PresentationDiscussion({
             </div>
           )}
 
-          {active && (
+          {people.length > 0 && (
             <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-              {active.peerAvatar ? (
-                <img
-                  src={active.peerAvatar}
-                  alt={`Foto profil ${active.peerName}`}
-                  className="h-6 w-6 rounded-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
-                  {active.peerName.slice(0, 2)}
-                </span>
-              )}
-              <span className="truncate text-[11px] text-muted-foreground">{active.peerName}</span>
+              <div className="flex items-center">
+                {people.map((p) => (
+                  <span key={p.id} className="-ml-1.5 first:ml-0" title={p.id === me ? `${p.name} (saya)` : p.name}>
+                    {p.avatar ? (
+                      <img
+                        src={p.avatar}
+                        alt={`Foto profil ${p.name}`}
+                        className="h-6 w-6 rounded-full border border-background object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full border border-background bg-muted text-[9px] font-semibold uppercase text-muted-foreground">
+                        {p.name.slice(0, 2)}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+              <span className="truncate text-[10px] text-muted-foreground">
+                {people.length} peserta diskusi
+              </span>
             </div>
           )}
 
@@ -281,6 +289,9 @@ export function PresentationDiscussion({
                       mine ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
                     )}
                   >
+                    <p className={cn("mb-0.5 text-[9px] font-bold", mine ? "opacity-80" : "text-primary")}>
+                      {nameOf(m.user_id)}
+                    </p>
                     <p className="whitespace-pre-wrap break-words">{m.body}</p>
                     <p className={cn("mt-0.5 text-[9px]", mine ? "opacity-70" : "text-muted-foreground")}>
                       {formatChatTime(m.created_at)}
