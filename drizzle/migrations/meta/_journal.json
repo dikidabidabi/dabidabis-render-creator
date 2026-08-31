@@ -29,6 +29,13 @@
       "when": 1788053393030,
       "tag": "0003_realtime_presentation_discussions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788135852190,
+      "tag": "0004_share_participants_fn",
+      "breakpoints": true
     }
   ]
 }

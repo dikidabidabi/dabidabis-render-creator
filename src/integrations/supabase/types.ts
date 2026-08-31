@@ -586,6 +586,7 @@ export type Database = {
         Args: { _share_id: string; _user_id: string }
         Returns: boolean
       }
+      share_participants: { Args: { _share_id: string }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never
