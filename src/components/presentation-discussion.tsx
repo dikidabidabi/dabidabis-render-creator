@@ -171,6 +171,16 @@ export function PresentationDiscussion({
     [threadIds, unread],
   );
   const heading = active?.title || title || "Presentasi";
+  const nameOf = useCallback(
+    (id: string) => {
+      if (id === me) return "Saya";
+      const p = people.find((x) => x.id === id);
+      if (p) return p.name;
+      if (active && id === active.peer) return active.peerName;
+      return `Arsitek ${id.slice(0, 6)}`;
+    },
+    [people, me, active],
+  );
 
   const submit = async () => {
     if (!activeId || !draft.trim()) return;
