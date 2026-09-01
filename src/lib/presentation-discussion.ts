@@ -164,3 +164,99 @@ export function countUnread(msgs: DiscussionMsg[], me: string, shareId: string):
 export function formatChatTime(iso: string): string {
   return new Date(iso).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" });
 }
+
+/* ── Task dari pesan diskusi ───────────────────────────────────────────── */
+
+export type DiscussionTask = {
+  id: string;
+  share_id: string;
+  message_id: string | null;
+  body: string;
+  creator: string;
+  owner: string;
+  created_at: string;
+  owner_done_at: string | null;
+  creator_done_at: string | null;
+};
+
+/** Semua task pada satu utas diskusi, terurut waktu pembuatan. */
+export async function fetchTasks(shareId: string): Promise<DiscussionTask[]> {
+  const { data, error } = await supabase
+    .from("presentation_tasks")
+    .select("id, share_id, message_id, body, creator, owner, created_at, owner_done_at, creator_done_at")
+    .eq("share_id", shareId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as DiscussionTask[];
+}
+
+/** Tandai satu pesan sebagai task dengan pemilik task tertentu. */
+export async function createTask(args: {
+  shareId: string;
+  messageId: string;
+  body: string;
+  creator: string;
+  owner: string;
+}): Promise<DiscussionTask> {
+  const { data, error } = await supabase
+    .from("presentation_tasks")
+    .insert({
+      share_id: args.shareId,
+      message_id: args.messageId,
+      body: args.body.trim(),
+      creator: args.creator,
+      owner: args.owner,
+    })
+    .select("id, share_id, message_id, body, creator, owner, created_at, owner_done_at, creator_done_at")
+    .single();
+  if (error) throw error;
+  return data as DiscussionTask;
+}
+
+/** Ceklis / batalkan ceklis sebagai pemilik task atau pembuat task. */
+export async function toggleTaskCheck(
+  task: DiscussionTask,
+  role: "owner" | "creator",
+  done: boolean,
+): Promise<DiscussionTask> {
+  const patch =
+    role === "owner"
+      ? { owner_done_at: done ? new Date().toISOString() : null }
+      : { creator_done_at: done ? new Date().toISOString() : null };
+  const { data, error } = await supabase
+    .from("presentation_tasks")
+    .update(patch)
+    .eq("id", task.id)
+    .select("id, share_id, message_id, body, creator, owner, created_at, owner_done_at, creator_done_at")
+    .single();
+  if (error) throw error;
+  return data as DiscussionTask;
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const { error } = await supabase.from("presentation_tasks").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** Task dianggap "closed" bila pemilik task dan pembuat task sudah menceklis. */
+export function isTaskClosed(t: DiscussionTask): boolean {
+  return Boolean(t.owner_done_at && t.creator_done_at);
+}
+
+/** Durasi penyelesaian: sejak task dibuat sampai ceklis pembuat task. */
+export function taskDuration(t: DiscussionTask): string | null {
+  if (!isTaskClosed(t) || !t.creator_done_at) return null;
+  const ms = new Date(t.creator_done_at).getTime() - new Date(t.created_at).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m} menit`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} jam ${m % 60} menit`;
+  const d = Math.floor(h / 24);
+  return `${d} hari ${h % 24} jam`;
+}
+
+export function formatTaskDate(iso: string): string {
+  return new Date(iso).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
