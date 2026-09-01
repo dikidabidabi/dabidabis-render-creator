@@ -132,6 +132,36 @@ export function PresentationDiscussion({
     void load();
   }, [activeId, load]);
 
+  // Daftar task pada utas aktif + realtime.
+  const loadTasks = useCallback(async () => {
+    if (!activeId) return;
+    try {
+      setTasks(await fetchTasks(activeId));
+    } catch {
+      /* abaikan */
+    }
+  }, [activeId]);
+
+  useEffect(() => {
+    void loadTasks();
+  }, [loadTasks]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    const channel = supabase
+      .channel(`presentation-tasks-${activeId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "presentation_tasks", filter: `share_id=eq.${activeId}` },
+        () => void loadTasks(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeId, loadTasks]);
+
+
   // Semua akun peserta diskusi (pemilik + penerima presentasi).
   useEffect(() => {
     if (!activeId) return;
