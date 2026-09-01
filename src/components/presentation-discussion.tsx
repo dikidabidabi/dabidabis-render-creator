@@ -60,6 +60,9 @@ export function PresentationDiscussion({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
+  const [tasks, setTasks] = useState<DiscussionTask[]>([]);
+  const [taskFor, setTaskFor] = useState<DiscussionMsg | null>(null);
+
   const listRef = useRef<HTMLDivElement>(null);
 
   // Kumpulkan utas yang tersedia (hanya akun yang dibagikan presentasi ini).
