@@ -376,13 +376,45 @@ export function PresentationDiscussion({
                       {nameOf(m.user_id)}
                     </p>
                     <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                    <p className={cn("mt-0.5 text-[9px]", mine ? "opacity-70" : "text-muted-foreground")}>
-                      {formatChatTime(m.created_at)}
-                    </p>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <p className={cn("text-[9px]", mine ? "opacity-70" : "text-muted-foreground")}>
+                        {formatChatTime(m.created_at)}
+                      </p>
+                      {tasks.some((t) => t.message_id === m.id) ? (
+                        <span className="text-[9px] font-bold opacity-80">• task</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setTaskFor((prev) => (prev?.id === m.id ? null : m))}
+                          className="flex items-center gap-0.5 text-[9px] font-semibold underline decoration-dotted"
+                          title="Tandai sebagai task"
+                        >
+                          <ListChecks className="h-3 w-3" /> task
+                        </button>
+                      )}
+                    </div>
+                    {taskFor?.id === m.id && (
+                      <div className="mt-1 rounded-md border border-border/60 bg-background/90 p-1.5 text-foreground">
+                        <p className="mb-1 text-[9px] font-semibold">Pilih task owner:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {people.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => void addTask(m, p.id)}
+                              className="rounded border border-border px-1.5 py-0.5 text-[9px] hover:border-primary hover:text-primary"
+                            >
+                              {p.id === me ? `${p.name} (saya)` : p.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })}
+
           </div>
 
           <div className="flex items-end gap-1.5 border-t border-border px-2 py-2">
