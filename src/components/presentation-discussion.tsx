@@ -248,6 +248,37 @@ export function PresentationDiscussion({
     }
   };
 
+  const addTask = async (msg: DiscussionMsg, owner: string) => {
+    if (!activeId) return;
+    try {
+      const t = await createTask({ shareId: activeId, messageId: msg.id, body: msg.body, creator: me, owner });
+      setTasks((prev) => (prev.some((x) => x.id === t.id) ? prev : [...prev, t]));
+      setTaskFor(null);
+      toast.success("Pesan ditandai sebagai task.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal membuat task.");
+    }
+  };
+
+  const check = async (t: DiscussionTask, role: "owner" | "creator", done: boolean) => {
+    try {
+      const next = await toggleTaskCheck(t, role, done);
+      setTasks((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memperbarui task.");
+    }
+  };
+
+  const removeTask = async (t: DiscussionTask) => {
+    try {
+      await deleteTask(t.id);
+      setTasks((prev) => prev.filter((x) => x.id !== t.id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus task.");
+    }
+  };
+
+
   if (threads.length === 0) return null;
 
   return (
