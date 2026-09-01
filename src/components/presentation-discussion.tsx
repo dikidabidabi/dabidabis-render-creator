@@ -443,6 +443,86 @@ export function PresentationDiscussion({
           </div>
         </div>
       )}
+
+      {open && (
+        <div className="border-t border-border px-3 py-2">
+          <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            <ListChecks className="h-3.5 w-3.5 text-primary" /> Daftar Task ({tasks.length})
+          </p>
+          {tasks.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">
+              Belum ada task. Tandai salah satu pesan diskusi sebagai task.
+            </p>
+          ) : (
+            <ul className="max-h-48 space-y-1.5 overflow-y-auto">
+              {tasks.map((t) => {
+                const closed = isTaskClosed(t);
+                const dur = taskDuration(t);
+                return (
+                  <li key={t.id} className="rounded-md border border-border bg-background/70 px-2 py-1.5">
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={cn(
+                          "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
+                          closed ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {closed ? "closed" : "open"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-[11px]">{t.body}</p>
+                        <p className="mt-0.5 text-[9px] text-muted-foreground">
+                          {formatTaskDate(t.created_at)} • owner: {nameOf(t.owner)} • dibuat: {nameOf(t.creator)}
+                          {dur ? ` • selesai dalam ${dur}` : ""}
+                        </p>
+                      </div>
+                      {t.creator === me && (
+                        <button
+                          type="button"
+                          onClick={() => void removeTask(t)}
+                          className="text-muted-foreground hover:text-destructive"
+                          title="Hapus task"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-3">
+                      {(
+                        [
+                          { role: "owner" as const, uid: t.owner, at: t.owner_done_at, label: "Task owner" },
+                          { role: "creator" as const, uid: t.creator, at: t.creator_done_at, label: "Pembuat task" },
+                        ]
+                      ).map((c) => {
+                        const can = c.uid === me;
+                        const done = Boolean(c.at);
+                        return (
+                          <button
+                            key={c.role}
+                            type="button"
+                            disabled={!can}
+                            onClick={() => void check(t, c.role, !done)}
+                            className={cn(
+                              "flex items-center gap-1 text-[10px]",
+                              done ? "text-primary" : "text-muted-foreground",
+                              can ? "hover:text-foreground" : "cursor-not-allowed opacity-70",
+                            )}
+                            title={can ? "Ceklis penyelesaian" : "Hanya akun terkait yang dapat menceklis"}
+                          >
+                            {done ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                            {c.label} — {nameOf(c.uid)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
