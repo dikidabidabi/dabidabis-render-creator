@@ -1,24 +1,43 @@
 // Kotak diskusi menempel di bawah tiap presentasi (sumber & kiriman).
-// Realtime antar akun + lencana jumlah chat baru.
+// Realtime antar akun + lencana jumlah chat baru + daftar task.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, MessageSquare, Send } from "lucide-react";
+import {
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  Send,
+  Square,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import {
   countUnread,
+  createTask,
+  deleteTask,
   fetchDiscussion,
   fetchOwnerThreads,
   fetchParticipants,
   fetchRecipientThread,
+  fetchTasks,
   formatChatTime,
+  formatTaskDate,
+  isTaskClosed,
   sendDiscussion,
   setSeenAt,
+  taskDuration,
+  toggleTaskCheck,
   type DiscussionMsg,
+  type DiscussionTask,
   type Person,
   type ShareThread,
 } from "@/lib/presentation-discussion";
+
 
 export function PresentationDiscussion({
   me,
