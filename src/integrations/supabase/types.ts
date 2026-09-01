@@ -334,6 +334,60 @@ export type Database = {
           },
         ]
       }
+      presentation_tasks: {
+        Row: {
+          body: string
+          created_at: string
+          creator: string
+          creator_done_at: string | null
+          id: string
+          message_id: string | null
+          owner: string
+          owner_done_at: string | null
+          share_id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          creator: string
+          creator_done_at?: string | null
+          id?: string
+          message_id?: string | null
+          owner: string
+          owner_done_at?: string | null
+          share_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          creator?: string
+          creator_done_at?: string | null
+          id?: string
+          message_id?: string | null
+          owner?: string
+          owner_done_at?: string | null
+          share_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presentation_tasks_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "presentation_discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presentation_tasks_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "shared_presentations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           account_type: string | null

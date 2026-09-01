@@ -1,24 +1,43 @@
 // Kotak diskusi menempel di bawah tiap presentasi (sumber & kiriman).
-// Realtime antar akun + lencana jumlah chat baru.
+// Realtime antar akun + lencana jumlah chat baru + daftar task.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, MessageSquare, Send } from "lucide-react";
+import {
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  Send,
+  Square,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import {
   countUnread,
+  createTask,
+  deleteTask,
   fetchDiscussion,
   fetchOwnerThreads,
   fetchParticipants,
   fetchRecipientThread,
+  fetchTasks,
   formatChatTime,
+  formatTaskDate,
+  isTaskClosed,
   sendDiscussion,
   setSeenAt,
+  taskDuration,
+  toggleTaskCheck,
   type DiscussionMsg,
+  type DiscussionTask,
   type Person,
   type ShareThread,
 } from "@/lib/presentation-discussion";
+
 
 export function PresentationDiscussion({
   me,
@@ -41,6 +60,9 @@ export function PresentationDiscussion({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
+  const [tasks, setTasks] = useState<DiscussionTask[]>([]);
+  const [taskFor, setTaskFor] = useState<DiscussionMsg | null>(null);
+
   const listRef = useRef<HTMLDivElement>(null);
 
   // Kumpulkan utas yang tersedia (hanya akun yang dibagikan presentasi ini).
@@ -109,6 +131,36 @@ export function PresentationDiscussion({
     if (!activeId) return;
     void load();
   }, [activeId, load]);
+
+  // Daftar task pada utas aktif + realtime.
+  const loadTasks = useCallback(async () => {
+    if (!activeId) return;
+    try {
+      setTasks(await fetchTasks(activeId));
+    } catch {
+      /* abaikan */
+    }
+  }, [activeId]);
+
+  useEffect(() => {
+    void loadTasks();
+  }, [loadTasks]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    const channel = supabase
+      .channel(`presentation-tasks-${activeId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "presentation_tasks", filter: `share_id=eq.${activeId}` },
+        () => void loadTasks(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeId, loadTasks]);
+
 
   // Semua akun peserta diskusi (pemilik + penerima presentasi).
   useEffect(() => {
@@ -195,6 +247,37 @@ export function PresentationDiscussion({
       setSending(false);
     }
   };
+
+  const addTask = async (msg: DiscussionMsg, owner: string) => {
+    if (!activeId) return;
+    try {
+      const t = await createTask({ shareId: activeId, messageId: msg.id, body: msg.body, creator: me, owner });
+      setTasks((prev) => (prev.some((x) => x.id === t.id) ? prev : [...prev, t]));
+      setTaskFor(null);
+      toast.success("Pesan ditandai sebagai task.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal membuat task.");
+    }
+  };
+
+  const check = async (t: DiscussionTask, role: "owner" | "creator", done: boolean) => {
+    try {
+      const next = await toggleTaskCheck(t, role, done);
+      setTasks((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal memperbarui task.");
+    }
+  };
+
+  const removeTask = async (t: DiscussionTask) => {
+    try {
+      await deleteTask(t.id);
+      setTasks((prev) => prev.filter((x) => x.id !== t.id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus task.");
+    }
+  };
+
 
   if (threads.length === 0) return null;
 
@@ -293,13 +376,45 @@ export function PresentationDiscussion({
                       {nameOf(m.user_id)}
                     </p>
                     <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                    <p className={cn("mt-0.5 text-[9px]", mine ? "opacity-70" : "text-muted-foreground")}>
-                      {formatChatTime(m.created_at)}
-                    </p>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <p className={cn("text-[9px]", mine ? "opacity-70" : "text-muted-foreground")}>
+                        {formatChatTime(m.created_at)}
+                      </p>
+                      {tasks.some((t) => t.message_id === m.id) ? (
+                        <span className="text-[9px] font-bold opacity-80">• task</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setTaskFor((prev) => (prev?.id === m.id ? null : m))}
+                          className="flex items-center gap-0.5 text-[9px] font-semibold underline decoration-dotted"
+                          title="Tandai sebagai task"
+                        >
+                          <ListChecks className="h-3 w-3" /> task
+                        </button>
+                      )}
+                    </div>
+                    {taskFor?.id === m.id && (
+                      <div className="mt-1 rounded-md border border-border/60 bg-background/90 p-1.5 text-foreground">
+                        <p className="mb-1 text-[9px] font-semibold">Pilih task owner:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {people.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => void addTask(m, p.id)}
+                              className="rounded border border-border px-1.5 py-0.5 text-[9px] hover:border-primary hover:text-primary"
+                            >
+                              {p.id === me ? `${p.name} (saya)` : p.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })}
+
           </div>
 
           <div className="flex items-end gap-1.5 border-t border-border px-2 py-2">
@@ -328,6 +443,86 @@ export function PresentationDiscussion({
           </div>
         </div>
       )}
+
+      {open && (
+        <div className="border-t border-border px-3 py-2">
+          <p className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            <ListChecks className="h-3.5 w-3.5 text-primary" /> Daftar Task ({tasks.length})
+          </p>
+          {tasks.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground">
+              Belum ada task. Tandai salah satu pesan diskusi sebagai task.
+            </p>
+          ) : (
+            <ul className="max-h-48 space-y-1.5 overflow-y-auto">
+              {tasks.map((t) => {
+                const closed = isTaskClosed(t);
+                const dur = taskDuration(t);
+                return (
+                  <li key={t.id} className="rounded-md border border-border bg-background/70 px-2 py-1.5">
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={cn(
+                          "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
+                          closed ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {closed ? "closed" : "open"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-[11px]">{t.body}</p>
+                        <p className="mt-0.5 text-[9px] text-muted-foreground">
+                          {formatTaskDate(t.created_at)} • owner: {nameOf(t.owner)} • dibuat: {nameOf(t.creator)}
+                          {dur ? ` • selesai dalam ${dur}` : ""}
+                        </p>
+                      </div>
+                      {t.creator === me && (
+                        <button
+                          type="button"
+                          onClick={() => void removeTask(t)}
+                          className="text-muted-foreground hover:text-destructive"
+                          title="Hapus task"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-3">
+                      {(
+                        [
+                          { role: "owner" as const, uid: t.owner, at: t.owner_done_at, label: "Task owner" },
+                          { role: "creator" as const, uid: t.creator, at: t.creator_done_at, label: "Pembuat task" },
+                        ]
+                      ).map((c) => {
+                        const can = c.uid === me;
+                        const done = Boolean(c.at);
+                        return (
+                          <button
+                            key={c.role}
+                            type="button"
+                            disabled={!can}
+                            onClick={() => void check(t, c.role, !done)}
+                            className={cn(
+                              "flex items-center gap-1 text-[10px]",
+                              done ? "text-primary" : "text-muted-foreground",
+                              can ? "hover:text-foreground" : "cursor-not-allowed opacity-70",
+                            )}
+                            title={can ? "Ceklis penyelesaian" : "Hanya akun terkait yang dapat menceklis"}
+                          >
+                            {done ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+                            {c.label} — {nameOf(c.uid)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }
