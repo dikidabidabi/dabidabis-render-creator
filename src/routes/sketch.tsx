@@ -8109,6 +8109,74 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       updateGrid({ origin: snapped });
       return;
     }
+    if (tool === "atap") {
+      const rawWp = getWorldPosRaw(e);
+      const tol = 12 / view.s;
+      const roofsHere = (sketch.roofs ?? []).filter((r) => !activeLvlId || r.levelId === activeLvlId);
+      if (roofSub === "gambar") {
+        setDrawing({ a: p, b: p });
+        return;
+      }
+      if (roofSub === "geser") {
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          const rf = roofsHere[i];
+          for (let k = 0; k < rf.points.length; k++) {
+            if (dist(rawWp, rf.points[k]) <= tol) {
+              pushHistory();
+              setRoofSelectedId(rf.id);
+              setRoofVertexDrag({ id: rf.id, idx: k });
+              return;
+            }
+          }
+        }
+        // klik di dalam footprint → pilih atap
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          if (pointInPolygon(rawWp, roofsHere[i].points)) {
+            const rf = roofsHere[i];
+            setRoofSelectedId(rf.id);
+            setRoofKind(rf.kind);
+            setRoofHeightInput(String(rf.baseHeightM));
+            setRoofSlopeInput(String(rf.slopeDeg));
+            return;
+          }
+        }
+        return;
+      }
+      if (roofSub === "addpt") {
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          const rf = roofsHere[i];
+          const pts = rf.points;
+          for (let k = 0; k < pts.length; k++) {
+            const a2 = pts[k], b2 = pts[(k + 1) % pts.length];
+            if (pointToSegmentDist(rawWp, a2, b2) <= tol) {
+              pushHistory();
+              const next = pts.slice();
+              next.splice(k + 1, 0, p);
+              onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === rf.id ? { ...r, points: next } : r)) });
+              setRoofSelectedId(rf.id);
+              toast.success("Titik atap ditambahkan");
+              return;
+            }
+          }
+        }
+        toast.error("Klik tepat pada sisi atap");
+        return;
+      }
+      if (roofSub === "hapus") {
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          const rf = roofsHere[i];
+          if (pointInPolygon(rawWp, rf.points)) {
+            pushHistory();
+            onChange({ roofs: (sketch.roofs ?? []).filter((r) => r.id !== rf.id) });
+            if (roofSelectedId === rf.id) setRoofSelectedId(null);
+            toast.success("Atap dihapus");
+            return;
+          }
+        }
+        return;
+      }
+      return;
+    }
     if (tool === "floor") {
       if (floorMode === "rect") {
         setDrawing({ a: p, b: p });
