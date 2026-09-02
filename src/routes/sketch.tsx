@@ -2552,7 +2552,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  // ===== Alat Atap (pelana / limasan) =====
+  const [roofKind, setRoofKind] = useState<RoofKind>("pelana");
+  const [roofSub, setRoofSub] = useState<"gambar" | "geser" | "addpt" | "hapus">("gambar");
+  const [roofHeightInput, setRoofHeightInput] = useState<string>(String(DEFAULT_ROOF_HEIGHT_M));
+  const [roofSlopeInput, setRoofSlopeInput] = useState<string>(String(DEFAULT_ROOF_SLOPE_DEG));
+  const [roofSelectedId, setRoofSelectedId] = useState<string | null>(null);
+  const [roofVertexDrag, setRoofVertexDrag] = useState<{ id: string; idx: number } | null>(null);
+  const roofHeightM = Math.max(0, Number(roofHeightInput) || 0);
+  const roofSlopeDeg = Math.min(80, Math.max(3, Number(roofSlopeInput) || DEFAULT_ROOF_SLOPE_DEG));
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
