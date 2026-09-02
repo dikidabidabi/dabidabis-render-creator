@@ -61,6 +61,16 @@ import {
   polygonCentroid as floorPolyCentroid,
   pointInPolygon as floorPointInPolygon,
 } from "@/lib/floors";
+import {
+  type Roof,
+  type RoofKind,
+  DEFAULT_ROOF_HEIGHT_M,
+  DEFAULT_ROOF_SLOPE_DEG,
+  genRoofId,
+  normalizeRoofs,
+  roofPlanLines,
+  roofRidgeHeightM,
+} from "@/lib/roofs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
