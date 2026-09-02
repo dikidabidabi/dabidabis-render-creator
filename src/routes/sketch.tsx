@@ -61,6 +61,16 @@ import {
   polygonCentroid as floorPolyCentroid,
   pointInPolygon as floorPointInPolygon,
 } from "@/lib/floors";
+import {
+  type Roof,
+  type RoofKind,
+  DEFAULT_ROOF_HEIGHT_M,
+  DEFAULT_ROOF_SLOPE_DEG,
+  genRoofId,
+  normalizeRoofs,
+  roofPlanLines,
+  roofRidgeHeightM,
+} from "@/lib/roofs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -400,6 +410,7 @@ type Sketch = {
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
+  roofs?: Roof[]; // Atap (pelana/limasan) — di-extrude otomatis di Model 3D
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
   ramps?: Ramp[]; // Ramp antar level
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
@@ -1053,6 +1064,7 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    roofs: normalizeRoofs(s?.roofs, new Set(levels.map((l) => l.id)), fallback),
     parkingAreas: (() => {
       const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
       const mmRotRad = (mmRotDeg * Math.PI) / 180;
@@ -2540,7 +2552,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  // ===== Alat Atap (pelana / limasan) =====
+  const [roofKind, setRoofKind] = useState<RoofKind>("pelana");
+  const [roofSub, setRoofSub] = useState<"gambar" | "geser" | "addpt" | "hapus">("gambar");
+  const [roofHeightInput, setRoofHeightInput] = useState<string>(String(DEFAULT_ROOF_HEIGHT_M));
+  const [roofSlopeInput, setRoofSlopeInput] = useState<string>(String(DEFAULT_ROOF_SLOPE_DEG));
+  const [roofSelectedId, setRoofSelectedId] = useState<string | null>(null);
+  const [roofVertexDrag, setRoofVertexDrag] = useState<{ id: string; idx: number } | null>(null);
+  const roofHeightM = Math.max(0, Number(roofHeightInput) || 0);
+  const roofSlopeDeg = Math.min(80, Math.max(3, Number(roofSlopeInput) || DEFAULT_ROOF_SLOPE_DEG));
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
@@ -8088,6 +8109,74 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       updateGrid({ origin: snapped });
       return;
     }
+    if (tool === "atap") {
+      const rawWp = getWorldPosRaw(e);
+      const tol = 12 / view.s;
+      const roofsHere = (sketch.roofs ?? []).filter((r) => !activeLvlId || r.levelId === activeLvlId);
+      if (roofSub === "gambar") {
+        setDrawing({ a: p, b: p });
+        return;
+      }
+      if (roofSub === "geser") {
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          const rf = roofsHere[i];
+          for (let k = 0; k < rf.points.length; k++) {
+            if (dist(rawWp, rf.points[k]) <= tol) {
+              pushHistory();
+              setRoofSelectedId(rf.id);
+              setRoofVertexDrag({ id: rf.id, idx: k });
+              return;
+            }
+          }
+        }
+        // klik di dalam footprint → pilih atap
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          if (pointInPolygon(rawWp, roofsHere[i].points)) {
+            const rf = roofsHere[i];
+            setRoofSelectedId(rf.id);
+            setRoofKind(rf.kind);
+            setRoofHeightInput(String(rf.baseHeightM));
+            setRoofSlopeInput(String(rf.slopeDeg));
+            return;
+          }
+        }
+        return;
+      }
+      if (roofSub === "addpt") {
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          const rf = roofsHere[i];
+          const pts = rf.points;
+          for (let k = 0; k < pts.length; k++) {
+            const a2 = pts[k], b2 = pts[(k + 1) % pts.length];
+            if (pointToSegmentDist(rawWp, a2, b2) <= tol) {
+              pushHistory();
+              const next = pts.slice();
+              next.splice(k + 1, 0, p);
+              onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === rf.id ? { ...r, points: next } : r)) });
+              setRoofSelectedId(rf.id);
+              toast.success("Titik atap ditambahkan");
+              return;
+            }
+          }
+        }
+        toast.error("Klik tepat pada sisi atap");
+        return;
+      }
+      if (roofSub === "hapus") {
+        for (let i = roofsHere.length - 1; i >= 0; i--) {
+          const rf = roofsHere[i];
+          if (pointInPolygon(rawWp, rf.points)) {
+            pushHistory();
+            onChange({ roofs: (sketch.roofs ?? []).filter((r) => r.id !== rf.id) });
+            if (roofSelectedId === rf.id) setRoofSelectedId(null);
+            toast.success("Atap dihapus");
+            return;
+          }
+        }
+        return;
+      }
+      return;
+    }
     if (tool === "floor") {
       if (floorMode === "rect") {
         setDrawing({ a: p, b: p });
@@ -9477,6 +9566,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (roofVertexDrag) {
+      const newPos = getWorldPos(e);
+      const rd = roofVertexDrag;
+      onChange({
+        roofs: (sketch.roofs ?? []).map((r) => {
+          if (r.id !== rd.id) return r;
+          const next = r.points.slice();
+          if (rd.idx < next.length) next[rd.idx] = newPos;
+          return { ...r, points: next };
+        }),
+      });
+      return;
+    }
     if (floorVertexDrag) {
       const newPos = getWorldPos(e);
       const fd = floorVertexDrag;
