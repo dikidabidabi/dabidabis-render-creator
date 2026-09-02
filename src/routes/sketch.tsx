@@ -1064,6 +1064,7 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    roofs: normalizeRoofs(s?.roofs, new Set(levels.map((l) => l.id)), fallback),
     parkingAreas: (() => {
       const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
       const mmRotRad = (mmRotDeg * Math.PI) / 180;
