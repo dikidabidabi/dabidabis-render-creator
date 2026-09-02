@@ -9566,6 +9566,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (roofVertexDrag) {
+      const newPos = getWorldPos(e);
+      const rd = roofVertexDrag;
+      onChange({
+        roofs: (sketch.roofs ?? []).map((r) => {
+          if (r.id !== rd.id) return r;
+          const next = r.points.slice();
+          if (rd.idx < next.length) next[rd.idx] = newPos;
+          return { ...r, points: next };
+        }),
+      });
+      return;
+    }
     if (floorVertexDrag) {
       const newPos = getWorldPos(e);
       const fd = floorVertexDrag;
