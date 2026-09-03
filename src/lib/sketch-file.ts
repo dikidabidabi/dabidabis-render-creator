@@ -289,6 +289,8 @@ const ENTITY_ARRAYS = [
   "doors",
   "structuralGridExtras",
   "sectionCuts",
+  "roofs",
+
 ] as const;
 
 export type MergeOptions = {

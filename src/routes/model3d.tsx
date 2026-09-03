@@ -106,8 +106,11 @@ type Sketch = {
     thicknessMm: number;
     createdAt: number;
   }[];
+  roofs?: Roof[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
+
+import { buildRoofPositions, type Roof } from "@/lib/roofs";
 
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const MINOR_PX = 8;
@@ -307,6 +310,54 @@ function ExtrudedFloor({
         <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#1a1a1a"} />
       </mesh>
     </group>
+  );
+}
+
+// Atap (pelana/limasan) — extrude otomatis dari footprint sketsa.
+function RoofMesh({
+  roof,
+  origin,
+  mPerPx,
+  baseY,
+  color,
+  highlighted,
+}: {
+  roof: Roof;
+  origin: Point;
+  mPerPx: number;
+  baseY: number;
+  color: string;
+  highlighted: boolean;
+}) {
+  const geometry = useMemo(() => {
+    const pos = buildRoofPositions({
+      points: roof.points,
+      origin,
+      mPerPx,
+      baseY,
+      slopeDeg: roof.slopeDeg,
+      kind: roof.kind,
+    });
+    if (!pos) return null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }, [roof.points, roof.slopeDeg, roof.kind, origin.x, origin.y, mPerPx, baseY]);
+
+  if (!geometry) return null;
+  return (
+    <mesh geometry={geometry} castShadow receiveShadow>
+      <meshStandardMaterial
+        color={color}
+        roughness={0.75}
+        metalness={0.05}
+        side={THREE.DoubleSide}
+        emissive={highlighted ? color : "#000000"}
+        emissiveIntensity={highlighted ? 0.18 : 0}
+      />
+      <Edges threshold={20} color={highlighted ? "#0a0a0a" : "#1a1a1a"} />
+    </mesh>
   );
 }
 
@@ -754,6 +805,28 @@ function Scene({
       })}
 
 
+
+      {(sketch.roofs ?? []).map((rf) => {
+        const lvl = sketch.levels.find((l) => l.id === rf.levelId);
+        const lvlMdpl = lvl ? lvl.mdpl : baseMdpl;
+        const baseY = lvlMdpl - baseMdpl + (rf.baseHeightM ?? 0);
+        return (
+          <group
+            key={`roofgrp_${rf.id}`}
+            name={`levelGroupRoof_${rf.levelId}`}
+            visible={isLevelVisible(rf.levelId)}
+          >
+            <RoofMesh
+              roof={rf}
+              origin={origin}
+              mPerPx={mPerPx}
+              baseY={baseY}
+              color={colorMode === "bw" ? "#bdbdbd" : "#8d6e63"}
+              highlighted={highlightLevelId === rf.levelId}
+            />
+          </group>
+        );
+      })}
 
       <StructuralColumns
         sketch={sketch}

@@ -4513,6 +4513,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     // Active drawing preview (during drag)
     if (drawing) {
       const isFloorRect = tool === "floor" && floorMode === "rect";
+      const isRoofRect = tool === "atap" && roofSub === "gambar";
       if (isFloorRect) {
         ctx.strokeStyle = "#1a1a1a";
         ctx.lineWidth = 2 / s;
@@ -4523,7 +4524,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.setLineDash([6 / s, 4 / s]);
       }
       ctx.beginPath();
-      const isRectPreview = tool === "rect" || isFloorRect;
+      const isRectPreview = tool === "rect" || isFloorRect || isRoofRect;
       if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
@@ -4533,7 +4534,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
         const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
         // Floor rect: a/b sudah ter-snap (vertex/midpoint/grid) — jangan re-snap mm grid.
-        const sx = (v: number) => (isFloorRect ? v : snapL(v));
+        const sx = (v: number) => (isFloorRect || isRoofRect ? v : snapL(v));
+
         const lx1 = sx(Math.min(la.x, lb.x));
         const lx2 = sx(Math.max(la.x, lb.x));
         const ly1 = sx(Math.min(la.y, lb.y));
@@ -5624,6 +5626,79 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.stroke();
       ctx.restore();
     }
+
+    // ===== Atap (pelana / limasan): footprint + bubungan & jurai =====
+    {
+      const roofList = (sketch.roofs ?? []).filter((r) => !activeLvlId || r.levelId === activeLvlId);
+      if (roofList.length > 0) {
+        ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        for (const rf of roofList) {
+          const isSel = rf.id === roofSelectedId && tool === "atap";
+          ctx.beginPath();
+          rf.points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+          ctx.closePath();
+          ctx.fillStyle = isSel ? "rgba(232,93,58,0.16)" : "rgba(120,120,120,0.10)";
+          ctx.fill();
+          ctx.setLineDash([]);
+          ctx.lineWidth = (isSel ? 2.4 : 1.6) / view.s;
+          ctx.strokeStyle = isSel ? "#e85d3a" : "#6b6b6b";
+          ctx.stroke();
+          const pl = roofPlanLines(rf.points, rf.kind);
+          if (pl) {
+            ctx.lineWidth = 1.4 / view.s;
+            ctx.strokeStyle = isSel ? "rgba(232,93,58,0.9)" : "rgba(90,90,90,0.8)";
+            ctx.beginPath();
+            ctx.moveTo(pl.ridge[0].x, pl.ridge[0].y);
+            ctx.lineTo(pl.ridge[1].x, pl.ridge[1].y);
+            ctx.stroke();
+            ctx.setLineDash([5 / view.s, 4 / view.s]);
+            ctx.beginPath();
+            for (const [h1, h2] of pl.hips) {
+              ctx.moveTo(h1.x, h1.y);
+              ctx.lineTo(h2.x, h2.y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          if (tool === "atap" && (roofSub === "geser" || roofSub === "addpt")) {
+            for (const p of rf.points) {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 4 / view.s, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.lineWidth = 1.5 / view.s;
+              ctx.strokeStyle = "#e85d3a";
+              ctx.stroke();
+            }
+          }
+        }
+        ctx.restore();
+        // Label tinggi puncak untuk atap terpilih
+        if (tool === "atap" && roofSelectedId) {
+          const rf = roofList.find((r) => r.id === roofSelectedId);
+          if (rf) {
+            const cx = rf.points.reduce((s2, p) => s2 + p.x, 0) / rf.points.length;
+            const cy = rf.points.reduce((s2, p) => s2 + p.y, 0) / rf.points.length;
+            const sp = worldToScreen({ x: cx, y: cy });
+            const ridge = roofRidgeHeightM(rf.points, rf.slopeDeg, rf.baseHeightM, 1 / pxPerMeter);
+            const label = `${rf.kind} · ${rf.slopeDeg}° · puncak ${ridge.toFixed(2)} m`;
+            ctx.font = "600 11px Manrope, sans-serif";
+            const w = ctx.measureText(label).width + 12;
+            ctx.fillStyle = "rgba(26,26,26,0.9)";
+            ctx.fillRect(sp.x - w / 2, sp.y - 10, w, 19);
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "center";
+            ctx.fillText(label, sp.x, sp.y + 3);
+            ctx.textAlign = "start";
+          }
+        }
+      }
+    }
+
+
 
     // Vertex handles untuk Edit Titik Lantai
     if (tool === "floor" && floorMode === "edit") {
@@ -6750,7 +6825,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput, pinMoveMode, pinDrag]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -9879,10 +9954,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setEditDrag(null);
       return;
     }
+    if (roofVertexDrag) {
+      setRoofVertexDrag(null);
+      return;
+    }
     if (floorVertexDrag) {
       setFloorVertexDrag(null);
       return;
     }
+
     if (editVertexMarquee) {
       const mm = editVertexMarquee;
       setEditVertexMarquee(null);
@@ -10044,10 +10124,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (curTool === "atap") {
+      if (roofSub !== "gambar") return;
+      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
+      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
+      const lminX = Math.min(la.x, lb.x), lmaxX = Math.max(la.x, lb.x);
+      const lminY = Math.min(la.y, lb.y), lmaxY = Math.max(la.y, lb.y);
+      if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
+      const pts = [
+        { x: lminX, y: lminY },
+        { x: lmaxX, y: lminY },
+        { x: lmaxX, y: lmaxY },
+        { x: lminX, y: lmaxY },
+      ].map((q) => rotateAround(q, { x: 0, y: 0 }, mmGridRotRad));
+      const { activeId } = ensureLevels();
+      pushHistory();
+      const roof: Roof = {
+        id: genRoofId(),
+        levelId: activeId,
+        points: pts,
+        kind: roofKind,
+        baseHeightM: roofHeightM,
+        slopeDeg: roofSlopeDeg,
+        createdAt: Date.now(),
+      };
+      onChange({ roofs: [...(sketch.roofs ?? []), roof] });
+      setRoofSelectedId(roof.id);
+      const ridge = roofRidgeHeightM(pts, roofSlopeDeg, roofHeightM, 1 / pxPerMeter);
+      toast.success(`Atap ${roofKind} — puncak ${ridge.toFixed(2)} m`);
+      return;
+    }
+
     if (curTool === "rect") {
       commitRect(a, b);
       return;
     }
+
 
     if (curTool === "parking") {
       // Hanya draw mode yang membuat area baru.
@@ -10892,6 +11004,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
           </Button>
+          <Button
+            variant={tool === "atap" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setDrawing(null); setRoofSub("gambar"); setTool("atap"); }}
+            className={cn(tool === "atap" && "bg-gradient-primary shadow-primary")}
+            title="Alat Atap — pelana / limasan, digambar dengan kotak lalu di-extrude di Model 3D"
+          >
+            <Square className="mr-1.5 h-4 w-4" /> Atap
+          </Button>
+
           <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
             size="sm"
@@ -11800,7 +11922,91 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
+        {tool === "atap" && (
+          <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Alat Atap</div>
+            <div className="grid grid-cols-2 gap-2">
+              {(["pelana", "limasan"] as RoofKind[]).map((k) => (
+                <Button
+                  key={k}
+                  size="sm"
+                  variant={roofKind === k ? "default" : "outline"}
+                  onClick={() => {
+                    setRoofKind(k);
+                    if (roofSelectedId) {
+                      pushHistory();
+                      onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === roofSelectedId ? { ...r, kind: k } : r)) });
+                    }
+                  }}
+                >
+                  {k === "pelana" ? "Pelana" : "Limasan"}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {([
+                ["gambar", "Gambar"],
+                ["geser", "Geser"],
+                ["addpt", "+Titik"],
+                ["hapus", "Hapus"],
+              ] as const).map(([k, label]) => (
+                <Button
+                  key={k}
+                  size="sm"
+                  variant={roofSub === k ? "default" : "outline"}
+                  className="px-1 text-[11px]"
+                  onClick={() => { setRoofSub(k); setDrawing(null); setRoofVertexDrag(null); }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[11px]">Tinggi tumpuan (m)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={roofHeightInput}
+                  onChange={(e) => {
+                    setRoofHeightInput(e.target.value);
+                    const v = Math.max(0, Number(e.target.value) || 0);
+                    if (roofSelectedId) onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === roofSelectedId ? { ...r, baseHeightM: v } : r)) });
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Kemiringan (°)</Label>
+                <Input
+                  type="number"
+                  step="1"
+                  value={roofSlopeInput}
+                  onChange={(e) => {
+                    setRoofSlopeInput(e.target.value);
+                    const v = Math.min(80, Math.max(3, Number(e.target.value) || DEFAULT_ROOF_SLOPE_DEG));
+                    if (roofSelectedId) onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === roofSelectedId ? { ...r, slopeDeg: v } : r)) });
+                  }}
+                  className="h-8"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Gambar footprint atap dengan drag (kotak). Puncak ≈{" "}
+              {roofSelectedId
+                ? roofRidgeHeightM(
+                    (sketch.roofs ?? []).find((r) => r.id === roofSelectedId)?.points ?? [],
+                    roofSlopeDeg,
+                    roofHeightM,
+                    1 / pxPerMeter,
+                  ).toFixed(2)
+                : "—"}{" "}
+              m. Otomatis di-extrude di halaman Model 3D.
+            </p>
+          </div>
+        )}
         {tool === "floor" && (
+
           <FloorToolPanel
             mode={floorMode}
             onMode={(m) => {
