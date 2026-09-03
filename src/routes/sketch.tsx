@@ -4513,6 +4513,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     // Active drawing preview (during drag)
     if (drawing) {
       const isFloorRect = tool === "floor" && floorMode === "rect";
+      const isRoofRect = tool === "atap" && roofSub === "gambar";
       if (isFloorRect) {
         ctx.strokeStyle = "#1a1a1a";
         ctx.lineWidth = 2 / s;
@@ -4523,7 +4524,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.setLineDash([6 / s, 4 / s]);
       }
       ctx.beginPath();
-      const isRectPreview = tool === "rect" || isFloorRect;
+      const isRectPreview = tool === "rect" || isFloorRect || isRoofRect;
       if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
@@ -4533,7 +4534,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
         const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
         // Floor rect: a/b sudah ter-snap (vertex/midpoint/grid) — jangan re-snap mm grid.
-        const sx = (v: number) => (isFloorRect ? v : snapL(v));
+        const sx = (v: number) => (isFloorRect || isRoofRect ? v : snapL(v));
+
         const lx1 = sx(Math.min(la.x, lb.x));
         const lx2 = sx(Math.max(la.x, lb.x));
         const ly1 = sx(Math.min(la.y, lb.y));
