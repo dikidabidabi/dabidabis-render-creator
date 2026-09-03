@@ -10893,6 +10893,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <BoxIcon className="mr-1.5 h-4 w-4" /> Lantai
           </Button>
           <Button
+            variant={tool === "atap" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setDrawing(null); setRoofSub("gambar"); setTool("atap"); }}
+            className={cn(tool === "atap" && "bg-gradient-primary shadow-primary")}
+            title="Alat Atap — pelana / limasan, digambar dengan kotak lalu di-extrude di Model 3D"
+          >
+            <Square className="mr-1.5 h-4 w-4" /> Atap
+          </Button>
+
+          <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("mobil"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
