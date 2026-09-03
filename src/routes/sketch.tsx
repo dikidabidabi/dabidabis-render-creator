@@ -11800,7 +11800,91 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             )}
           </div>
         )}
+        {tool === "atap" && (
+          <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Alat Atap</div>
+            <div className="grid grid-cols-2 gap-2">
+              {(["pelana", "limasan"] as RoofKind[]).map((k) => (
+                <Button
+                  key={k}
+                  size="sm"
+                  variant={roofKind === k ? "default" : "outline"}
+                  onClick={() => {
+                    setRoofKind(k);
+                    if (roofSelectedId) {
+                      pushHistory();
+                      onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === roofSelectedId ? { ...r, kind: k } : r)) });
+                    }
+                  }}
+                >
+                  {k === "pelana" ? "Pelana" : "Limasan"}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {([
+                ["gambar", "Gambar"],
+                ["geser", "Geser"],
+                ["addpt", "+Titik"],
+                ["hapus", "Hapus"],
+              ] as const).map(([k, label]) => (
+                <Button
+                  key={k}
+                  size="sm"
+                  variant={roofSub === k ? "default" : "outline"}
+                  className="px-1 text-[11px]"
+                  onClick={() => { setRoofSub(k); setDrawing(null); setRoofVertexDrag(null); }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[11px]">Tinggi tumpuan (m)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={roofHeightInput}
+                  onChange={(e) => {
+                    setRoofHeightInput(e.target.value);
+                    const v = Math.max(0, Number(e.target.value) || 0);
+                    if (roofSelectedId) onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === roofSelectedId ? { ...r, baseHeightM: v } : r)) });
+                  }}
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px]">Kemiringan (°)</Label>
+                <Input
+                  type="number"
+                  step="1"
+                  value={roofSlopeInput}
+                  onChange={(e) => {
+                    setRoofSlopeInput(e.target.value);
+                    const v = Math.min(80, Math.max(3, Number(e.target.value) || DEFAULT_ROOF_SLOPE_DEG));
+                    if (roofSelectedId) onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === roofSelectedId ? { ...r, slopeDeg: v } : r)) });
+                  }}
+                  className="h-8"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Gambar footprint atap dengan drag (kotak). Puncak ≈{" "}
+              {roofSelectedId
+                ? roofRidgeHeightM(
+                    (sketch.roofs ?? []).find((r) => r.id === roofSelectedId)?.points ?? [],
+                    roofSlopeDeg,
+                    roofHeightM,
+                    1 / pxPerMeter,
+                  ).toFixed(2)
+                : "—"}{" "}
+              m. Otomatis di-extrude di halaman Model 3D.
+            </p>
+          </div>
+        )}
         {tool === "floor" && (
+
           <FloorToolPanel
             mode={floorMode}
             onMode={(m) => {
