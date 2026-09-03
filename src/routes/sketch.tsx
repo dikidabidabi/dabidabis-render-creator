@@ -5625,6 +5625,79 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.restore();
     }
 
+    // ===== Atap (pelana / limasan): footprint + bubungan & jurai =====
+    {
+      const roofList = (sketch.roofs ?? []).filter((r) => !activeLvlId || r.levelId === activeLvlId);
+      if (roofList.length > 0) {
+        ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        for (const rf of roofList) {
+          const isSel = rf.id === roofSelectedId && tool === "atap";
+          ctx.beginPath();
+          rf.points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+          ctx.closePath();
+          ctx.fillStyle = isSel ? "rgba(232,93,58,0.16)" : "rgba(120,120,120,0.10)";
+          ctx.fill();
+          ctx.setLineDash([]);
+          ctx.lineWidth = (isSel ? 2.4 : 1.6) / view.s;
+          ctx.strokeStyle = isSel ? "#e85d3a" : "#6b6b6b";
+          ctx.stroke();
+          const pl = roofPlanLines(rf.points, rf.kind);
+          if (pl) {
+            ctx.lineWidth = 1.4 / view.s;
+            ctx.strokeStyle = isSel ? "rgba(232,93,58,0.9)" : "rgba(90,90,90,0.8)";
+            ctx.beginPath();
+            ctx.moveTo(pl.ridge[0].x, pl.ridge[0].y);
+            ctx.lineTo(pl.ridge[1].x, pl.ridge[1].y);
+            ctx.stroke();
+            ctx.setLineDash([5 / view.s, 4 / view.s]);
+            ctx.beginPath();
+            for (const [h1, h2] of pl.hips) {
+              ctx.moveTo(h1.x, h1.y);
+              ctx.lineTo(h2.x, h2.y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          if (tool === "atap" && (roofSub === "geser" || roofSub === "addpt")) {
+            for (const p of rf.points) {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 4 / view.s, 0, Math.PI * 2);
+              ctx.fillStyle = "#fff";
+              ctx.fill();
+              ctx.lineWidth = 1.5 / view.s;
+              ctx.strokeStyle = "#e85d3a";
+              ctx.stroke();
+            }
+          }
+        }
+        ctx.restore();
+        // Label tinggi puncak untuk atap terpilih
+        if (tool === "atap" && roofSelectedId) {
+          const rf = roofList.find((r) => r.id === roofSelectedId);
+          if (rf) {
+            const cx = rf.points.reduce((s2, p) => s2 + p.x, 0) / rf.points.length;
+            const cy = rf.points.reduce((s2, p) => s2 + p.y, 0) / rf.points.length;
+            const sp = worldToScreen({ x: cx, y: cy });
+            const ridge = roofRidgeHeightM(rf.points, rf.slopeDeg, rf.baseHeightM, 1 / pxPerMeter);
+            const label = `${rf.kind} · ${rf.slopeDeg}° · puncak ${ridge.toFixed(2)} m`;
+            ctx.font = "600 11px Manrope, sans-serif";
+            const w = ctx.measureText(label).width + 12;
+            ctx.fillStyle = "rgba(26,26,26,0.9)";
+            ctx.fillRect(sp.x - w / 2, sp.y - 10, w, 19);
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "center";
+            ctx.fillText(label, sp.x, sp.y + 3);
+            ctx.textAlign = "start";
+          }
+        }
+      }
+    }
+
+
+
     // Vertex handles untuk Edit Titik Lantai
     if (tool === "floor" && floorMode === "edit") {
       ctx.save();
