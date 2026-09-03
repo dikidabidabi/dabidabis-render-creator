@@ -9879,10 +9879,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setEditDrag(null);
       return;
     }
+    if (roofVertexDrag) {
+      setRoofVertexDrag(null);
+      return;
+    }
     if (floorVertexDrag) {
       setFloorVertexDrag(null);
       return;
     }
+
     if (editVertexMarquee) {
       const mm = editVertexMarquee;
       setEditVertexMarquee(null);
