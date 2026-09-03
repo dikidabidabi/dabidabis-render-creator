@@ -10044,10 +10044,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (curTool === "atap") {
+      if (roofSub !== "gambar") return;
+      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
+      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
+      const lminX = Math.min(la.x, lb.x), lmaxX = Math.max(la.x, lb.x);
+      const lminY = Math.min(la.y, lb.y), lmaxY = Math.max(la.y, lb.y);
+      if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
+      const pts = [
+        { x: lminX, y: lminY },
+        { x: lmaxX, y: lminY },
+        { x: lmaxX, y: lmaxY },
+        { x: lminX, y: lmaxY },
+      ].map((q) => rotateAround(q, { x: 0, y: 0 }, mmGridRotRad));
+      const { activeId } = ensureLevels();
+      pushHistory();
+      const roof: Roof = {
+        id: genRoofId(),
+        levelId: activeId,
+        points: pts,
+        kind: roofKind,
+        baseHeightM: roofHeightM,
+        slopeDeg: roofSlopeDeg,
+        createdAt: Date.now(),
+      };
+      onChange({ roofs: [...(sketch.roofs ?? []), roof] });
+      setRoofSelectedId(roof.id);
+      const ridge = roofRidgeHeightM(pts, roofSlopeDeg, roofHeightM, 1 / pxPerMeter);
+      toast.success(`Atap ${roofKind} — puncak ${ridge.toFixed(2)} m`);
+      return;
+    }
+
     if (curTool === "rect") {
       commitRect(a, b);
       return;
     }
+
 
     if (curTool === "parking") {
       // Hanya draw mode yang membuat area baru.
