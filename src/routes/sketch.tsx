@@ -4530,7 +4530,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.setLineDash([6 / s, 4 / s]);
       }
       ctx.beginPath();
-      const isRectPreview = tool === "rect" || isFloorRect || isRoofRect;
+      const isRectPreview = tool === "rect" || isFloorRect;
       if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
