@@ -11996,6 +11996,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 </Button>
               ))}
             </div>
+            <div className="space-y-1">
+              <Label className="text-[11px]">Lebar atap (m) — offset dari garis tengah</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0.5"
+                value={roofWidthInput}
+                onChange={(e) => {
+                  setRoofWidthInput(e.target.value);
+                  const v = Math.max(0.5, Number(e.target.value) || DEFAULT_ROOF_WIDTH_M);
+                  if (roofSelectedId) {
+                    onChange({
+                      roofs: (sketch.roofs ?? []).map((r) => {
+                        if (r.id !== roofSelectedId) return r;
+                        const g = roofGeom(r, pxPerMeter);
+                        const next: Roof = { ...r, spine: r.spine ?? g?.spine, widthM: v };
+                        return { ...next, points: roofFootprint(next, pxPerMeter) };
+                      }),
+                    });
+                  }
+                }}
+                className="h-8"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-[11px]">Tinggi tumpuan (m)</Label>
@@ -12027,16 +12051,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Gambar footprint atap dengan drag (kotak). Puncak ≈{" "}
-              {roofSelectedId
-                ? roofRidgeHeightM(
-                    (sketch.roofs ?? []).find((r) => r.id === roofSelectedId)?.points ?? [],
-                    roofSlopeDeg,
-                    roofHeightM,
-                    1 / pxPerMeter,
-                  ).toFixed(2)
-                : "—"}{" "}
-              m. Otomatis di-extrude di halaman Model 3D.
+              Drag untuk menggambar <b>garis tengah</b> atap; lebar atap di-offset simetris dari garis
+              itu. Pakai <b>+Titik</b> lalu <b>Geser</b> pada garis tengah untuk membelokkan atap
+              (mis. bentuk L) — lebar tetap konsisten. Puncak ≈{" "}
+              {(() => {
+                const rf = (sketch.roofs ?? []).find((r) => r.id === roofSelectedId);
+                return rf ? roofRidgeHeightOf(rf, pxPerMeter).toFixed(2) : "—";
+              })()}{" "}
+              m. Otomatis di-extrude di Model 3D dan muncul di slide denah & potongan.
             </p>
           </div>
         )}
