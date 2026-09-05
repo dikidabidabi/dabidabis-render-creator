@@ -9683,9 +9683,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       onChange({
         roofs: (sketch.roofs ?? []).map((r) => {
           if (r.id !== rd.id) return r;
-          const next = r.points.slice();
-          if (rd.idx < next.length) next[rd.idx] = newPos;
-          return { ...r, points: next };
+          const g = roofGeom(r, pxPerMeter);
+          const spine = (r.spine ?? g?.spine ?? []).slice();
+          if (rd.idx < spine.length) spine[rd.idx] = newPos;
+          const widthM = r.widthM ?? (g ? (g.halfPx * 2) / pxPerMeter : roofWidthM);
+          const next: Roof = { ...r, spine, widthM };
+          return { ...next, points: roofFootprint(next, pxPerMeter) };
         }),
       });
       return;
