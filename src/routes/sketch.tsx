@@ -5643,8 +5643,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.scale(view.s, view.s);
         for (const rf of roofList) {
           const isSel = rf.id === roofSelectedId && tool === "atap";
+          const geo = roofGeom(rf, pxPerMeter);
+          const fp = geo?.footprint ?? rf.points;
+          if (fp.length < 3) continue;
           ctx.beginPath();
-          rf.points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+          fp.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
           ctx.closePath();
           ctx.fillStyle = isSel ? "rgba(232,93,58,0.16)" : "rgba(120,120,120,0.10)";
           ctx.fill();
@@ -5652,13 +5655,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.lineWidth = (isSel ? 2.4 : 1.6) / view.s;
           ctx.strokeStyle = isSel ? "#e85d3a" : "#6b6b6b";
           ctx.stroke();
-          const pl = roofPlanLines(rf.points, rf.kind);
+          const pl = roofPlanGeometry(rf, pxPerMeter);
           if (pl) {
-            ctx.lineWidth = 1.4 / view.s;
-            ctx.strokeStyle = isSel ? "rgba(232,93,58,0.9)" : "rgba(90,90,90,0.8)";
+            // Bubungan (garis tengah) — polyline, bisa berbelok (L)
+            ctx.lineWidth = 1.6 / view.s;
+            ctx.strokeStyle = isSel ? "rgba(232,93,58,0.95)" : "rgba(90,90,90,0.85)";
             ctx.beginPath();
-            ctx.moveTo(pl.ridge[0].x, pl.ridge[0].y);
-            ctx.lineTo(pl.ridge[1].x, pl.ridge[1].y);
+            pl.ridge.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
             ctx.stroke();
             ctx.setLineDash([5 / view.s, 4 / view.s]);
             ctx.beginPath();
@@ -5669,13 +5672,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             ctx.stroke();
             ctx.setLineDash([]);
           }
-          if (tool === "atap" && (roofSub === "geser" || roofSub === "addpt")) {
-            for (const p of rf.points) {
+          // Handle titik pada GARIS TENGAH (acuan edit)
+          if (tool === "atap" && (roofSub === "geser" || roofSub === "addpt") && geo) {
+            for (const p of geo.spine) {
               ctx.beginPath();
-              ctx.arc(p.x, p.y, 4 / view.s, 0, Math.PI * 2);
+              ctx.arc(p.x, p.y, 4.5 / view.s, 0, Math.PI * 2);
               ctx.fillStyle = "#fff";
               ctx.fill();
-              ctx.lineWidth = 1.5 / view.s;
+              ctx.lineWidth = 1.6 / view.s;
               ctx.strokeStyle = "#e85d3a";
               ctx.stroke();
             }
@@ -5685,12 +5689,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         // Label tinggi puncak untuk atap terpilih
         if (tool === "atap" && roofSelectedId) {
           const rf = roofList.find((r) => r.id === roofSelectedId);
-          if (rf) {
-            const cx = rf.points.reduce((s2, p) => s2 + p.x, 0) / rf.points.length;
-            const cy = rf.points.reduce((s2, p) => s2 + p.y, 0) / rf.points.length;
+          const geo = rf ? roofGeom(rf, pxPerMeter) : null;
+          if (rf && geo) {
+            const fp = geo.footprint;
+            const cx = fp.reduce((s2, p) => s2 + p.x, 0) / fp.length;
+            const cy = fp.reduce((s2, p) => s2 + p.y, 0) / fp.length;
             const sp = worldToScreen({ x: cx, y: cy });
-            const ridge = roofRidgeHeightM(rf.points, rf.slopeDeg, rf.baseHeightM, 1 / pxPerMeter);
-            const label = `${rf.kind} · ${rf.slopeDeg}° · puncak ${ridge.toFixed(2)} m`;
+            const ridge = roofRidgeHeightOf(rf, pxPerMeter);
+            const wM = (geo.halfPx * 2) / pxPerMeter;
+            const label = `${rf.kind} · lebar ${wM.toFixed(2)} m · ${rf.slopeDeg}° · puncak ${ridge.toFixed(2)} m`;
             ctx.font = "600 11px Manrope, sans-serif";
             const w = ctx.measureText(label).width + 12;
             ctx.fillStyle = "rgba(26,26,26,0.9)";
