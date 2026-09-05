@@ -10165,34 +10165,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     if (curTool === "atap") {
       if (roofSub !== "gambar") return;
-      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
-      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
-      const lminX = Math.min(la.x, lb.x), lmaxX = Math.max(la.x, lb.x);
-      const lminY = Math.min(la.y, lb.y), lmaxY = Math.max(la.y, lb.y);
-      if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
-      const pts = [
-        { x: lminX, y: lminY },
-        { x: lmaxX, y: lminY },
-        { x: lmaxX, y: lmaxY },
-        { x: lminX, y: lmaxY },
-      ].map((q) => rotateAround(q, { x: 0, y: 0 }, mmGridRotRad));
+      // Drag = GARIS TENGAH atap (a → b). Lebar atap di-offset dari garis ini.
+      if (Math.hypot(b.x - a.x, b.y - a.y) < MINOR_PX * 0.75) return;
       const { activeId } = ensureLevels();
       pushHistory();
-      const roof: Roof = {
+      const base: Roof = {
         id: genRoofId(),
         levelId: activeId,
-        points: pts,
+        points: [],
+        spine: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }],
+        widthM: roofWidthM,
         kind: roofKind,
         baseHeightM: roofHeightM,
         slopeDeg: roofSlopeDeg,
         createdAt: Date.now(),
       };
+      const roof: Roof = { ...base, points: roofFootprint(base, pxPerMeter) };
       onChange({ roofs: [...(sketch.roofs ?? []), roof] });
       setRoofSelectedId(roof.id);
-      const ridge = roofRidgeHeightM(pts, roofSlopeDeg, roofHeightM, 1 / pxPerMeter);
-      toast.success(`Atap ${roofKind} — puncak ${ridge.toFixed(2)} m`);
+      const ridge = roofRidgeHeightOf(roof, pxPerMeter);
+      toast.success(`Atap ${roofKind} — lebar ${roofWidthM} m · puncak ${ridge.toFixed(2)} m`);
       return;
     }
+
+
 
     if (curTool === "rect") {
       commitRect(a, b);
