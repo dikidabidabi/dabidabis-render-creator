@@ -3366,6 +3366,43 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             return out;
           })}
 
+          {/* ===== Atap pada potongan — profil permukaan atap sepanjang garis irisan ===== */}
+          {(() => {
+            const roofs = sketch.roofs ?? [];
+            if (!roofs.length) return null;
+            const N = 320;
+            const out: React.ReactNode[] = [];
+            roofs.forEach((rf) => {
+              const box = boxes.find((b) => b.id === rf.levelId);
+              const baseMdpl = box ? box.baseM : 0;
+              type Run = { xs: number[]; ys: number[] };
+              const runs: Run[] = [];
+              let cur: Run | null = null;
+              for (let i = 0; i <= N; i++) {
+                const t = i / N;
+                const px = { x: cut.p1.x + (cut.p2.x - cut.p1.x) * t, y: cut.p1.y + (cut.p2.y - cut.p1.y) * t };
+                const h = roofSurfaceHeightAt(rf, px, pxPerMeter);
+                if (h == null) { cur = null; continue; }
+                if (!cur) { cur = { xs: [], ys: [] }; runs.push(cur); }
+                cur.xs.push(t * cutLenM);
+                cur.ys.push(baseMdpl + h);
+              }
+              runs.forEach((r, ri) => {
+                if (r.xs.length < 2) return;
+                const eaveMdpl = baseMdpl + rf.baseHeightM;
+                const top = r.xs.map((x, i) => `${mx(x)},${my(r.ys[i])}`).join(" ");
+                const poly = `${top} ${mx(r.xs[r.xs.length - 1])},${my(eaveMdpl)} ${mx(r.xs[0])},${my(eaveMdpl)}`;
+                out.push(
+                  <g key={`sec-roof-${rf.id}-${ri}`}>
+                    <polygon points={poly} fill={`url(#hatch45-sec-${slide.id})`} fillOpacity={0.55}
+                      stroke="#1a1a1a" strokeWidth={1.2} />
+                    <polyline points={top} fill="none" stroke="#0a0a0a" strokeWidth={1.6} />
+                  </g>,
+                );
+              });
+            });
+            return out;
+          })()}
           {/* Nama Level di sisi paling kanan potongan */}
           {boxes.map((b) => {
             const cy = (my(b.topM) + my(b.baseM)) / 2;
@@ -4085,6 +4122,32 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
+              </g>
+            );
+          })}
+          {/* ===== Atap (pelana/limasan) — footprint, bubungan & jurai ===== */}
+          {(sketch.roofs ?? []).filter((rf) => rf.levelId === level.id).map((rf) => {
+            const g = roofPlanGeometry(rf, pxPerM);
+            if (!g) return null;
+            return (
+              <g key={`roof-${rf.id}`} pointerEvents="none">
+                <polygon
+                  points={g.footprint.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="rgba(120,90,70,0.10)"
+                  stroke="rgba(60,45,35,0.85)"
+                  strokeWidth={sw * 0.0016}
+                />
+                <polyline
+                  points={g.ridge.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="none"
+                  stroke="rgba(40,30,25,0.95)"
+                  strokeWidth={sw * 0.0018}
+                />
+                {g.hips.map(([h1, h2], hi) => (
+                  <line key={`hp-${hi}`} x1={h1.x} y1={h1.y} x2={h2.x} y2={h2.y}
+                    stroke="rgba(60,45,35,0.8)" strokeWidth={sw * 0.0012}
+                    strokeDasharray={`${sw * 0.005} ${sw * 0.0035}`} />
+                ))}
               </g>
             );
           })}
