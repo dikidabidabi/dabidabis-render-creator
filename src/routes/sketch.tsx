@@ -2562,10 +2562,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [roofSub, setRoofSub] = useState<"gambar" | "geser" | "addpt" | "hapus">("gambar");
   const [roofHeightInput, setRoofHeightInput] = useState<string>(String(DEFAULT_ROOF_HEIGHT_M));
   const [roofSlopeInput, setRoofSlopeInput] = useState<string>(String(DEFAULT_ROOF_SLOPE_DEG));
+  const [roofWidthInput, setRoofWidthInput] = useState<string>(String(DEFAULT_ROOF_WIDTH_M));
   const [roofSelectedId, setRoofSelectedId] = useState<string | null>(null);
   const [roofVertexDrag, setRoofVertexDrag] = useState<{ id: string; idx: number } | null>(null);
   const roofHeightM = Math.max(0, Number(roofHeightInput) || 0);
   const roofSlopeDeg = Math.min(80, Math.max(3, Number(roofSlopeInput) || DEFAULT_ROOF_SLOPE_DEG));
+  const roofWidthM = Math.max(0.5, Number(roofWidthInput) || DEFAULT_ROOF_WIDTH_M);
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
