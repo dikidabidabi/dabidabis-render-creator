@@ -109,7 +109,7 @@ export const Route = createFileRoute("/presentasi")({
   component: PresentasiPage,
 });
 
-import { roofPlanGeometry, roofSurfaceHeightAt, roofRidgeHeightOf, type Roof } from "@/lib/roofs";
+import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
