@@ -66,10 +66,13 @@ import {
   type RoofKind,
   DEFAULT_ROOF_HEIGHT_M,
   DEFAULT_ROOF_SLOPE_DEG,
+  DEFAULT_ROOF_WIDTH_M,
   genRoofId,
   normalizeRoofs,
-  roofPlanLines,
-  roofRidgeHeightM,
+  roofFootprint,
+  roofGeom,
+  roofPlanGeometry,
+  roofRidgeHeightOf,
 } from "@/lib/roofs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2558,10 +2561,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [roofSub, setRoofSub] = useState<"gambar" | "geser" | "addpt" | "hapus">("gambar");
   const [roofHeightInput, setRoofHeightInput] = useState<string>(String(DEFAULT_ROOF_HEIGHT_M));
   const [roofSlopeInput, setRoofSlopeInput] = useState<string>(String(DEFAULT_ROOF_SLOPE_DEG));
+  const [roofWidthInput, setRoofWidthInput] = useState<string>(String(DEFAULT_ROOF_WIDTH_M));
   const [roofSelectedId, setRoofSelectedId] = useState<string | null>(null);
   const [roofVertexDrag, setRoofVertexDrag] = useState<{ id: string; idx: number } | null>(null);
   const roofHeightM = Math.max(0, Number(roofHeightInput) || 0);
   const roofSlopeDeg = Math.min(80, Math.max(3, Number(roofSlopeInput) || DEFAULT_ROOF_SLOPE_DEG));
+  const roofWidthM = Math.max(0.5, Number(roofWidthInput) || DEFAULT_ROOF_WIDTH_M);
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
@@ -4524,7 +4529,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.setLineDash([6 / s, 4 / s]);
       }
       ctx.beginPath();
-      const isRectPreview = tool === "rect" || isFloorRect || isRoofRect;
+      const isRectPreview = tool === "rect" || isFloorRect;
       if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
@@ -5637,8 +5642,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.scale(view.s, view.s);
         for (const rf of roofList) {
           const isSel = rf.id === roofSelectedId && tool === "atap";
+          const geo = roofGeom(rf, pxPerMeter);
+          const fp = geo?.footprint ?? rf.points;
+          if (fp.length < 3) continue;
           ctx.beginPath();
-          rf.points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+          fp.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
           ctx.closePath();
           ctx.fillStyle = isSel ? "rgba(232,93,58,0.16)" : "rgba(120,120,120,0.10)";
           ctx.fill();
@@ -5646,13 +5654,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.lineWidth = (isSel ? 2.4 : 1.6) / view.s;
           ctx.strokeStyle = isSel ? "#e85d3a" : "#6b6b6b";
           ctx.stroke();
-          const pl = roofPlanLines(rf.points, rf.kind);
+          const pl = roofPlanGeometry(rf, pxPerMeter);
           if (pl) {
-            ctx.lineWidth = 1.4 / view.s;
-            ctx.strokeStyle = isSel ? "rgba(232,93,58,0.9)" : "rgba(90,90,90,0.8)";
+            // Bubungan (garis tengah) — polyline, bisa berbelok (L)
+            ctx.lineWidth = 1.6 / view.s;
+            ctx.strokeStyle = isSel ? "rgba(232,93,58,0.95)" : "rgba(90,90,90,0.85)";
             ctx.beginPath();
-            ctx.moveTo(pl.ridge[0].x, pl.ridge[0].y);
-            ctx.lineTo(pl.ridge[1].x, pl.ridge[1].y);
+            pl.ridge.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
             ctx.stroke();
             ctx.setLineDash([5 / view.s, 4 / view.s]);
             ctx.beginPath();
@@ -5663,13 +5671,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             ctx.stroke();
             ctx.setLineDash([]);
           }
-          if (tool === "atap" && (roofSub === "geser" || roofSub === "addpt")) {
-            for (const p of rf.points) {
+          // Handle titik pada GARIS TENGAH (acuan edit)
+          if (tool === "atap" && (roofSub === "geser" || roofSub === "addpt") && geo) {
+            for (const p of geo.spine) {
               ctx.beginPath();
-              ctx.arc(p.x, p.y, 4 / view.s, 0, Math.PI * 2);
+              ctx.arc(p.x, p.y, 4.5 / view.s, 0, Math.PI * 2);
               ctx.fillStyle = "#fff";
               ctx.fill();
-              ctx.lineWidth = 1.5 / view.s;
+              ctx.lineWidth = 1.6 / view.s;
               ctx.strokeStyle = "#e85d3a";
               ctx.stroke();
             }
@@ -5679,12 +5688,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         // Label tinggi puncak untuk atap terpilih
         if (tool === "atap" && roofSelectedId) {
           const rf = roofList.find((r) => r.id === roofSelectedId);
-          if (rf) {
-            const cx = rf.points.reduce((s2, p) => s2 + p.x, 0) / rf.points.length;
-            const cy = rf.points.reduce((s2, p) => s2 + p.y, 0) / rf.points.length;
+          const geo = rf ? roofGeom(rf, pxPerMeter) : null;
+          if (rf && geo) {
+            const fp = geo.footprint;
+            const cx = fp.reduce((s2, p) => s2 + p.x, 0) / fp.length;
+            const cy = fp.reduce((s2, p) => s2 + p.y, 0) / fp.length;
             const sp = worldToScreen({ x: cx, y: cy });
-            const ridge = roofRidgeHeightM(rf.points, rf.slopeDeg, rf.baseHeightM, 1 / pxPerMeter);
-            const label = `${rf.kind} · ${rf.slopeDeg}° · puncak ${ridge.toFixed(2)} m`;
+            const ridge = roofRidgeHeightOf(rf, pxPerMeter);
+            const wM = (geo.halfPx * 2) / pxPerMeter;
+            const label = `${rf.kind} · lebar ${wM.toFixed(2)} m · ${rf.slopeDeg}° · puncak ${ridge.toFixed(2)} m`;
             ctx.font = "600 11px Manrope, sans-serif";
             const w = ctx.measureText(label).width + 12;
             ctx.fillStyle = "rgba(26,26,26,0.9)";
@@ -8192,12 +8204,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         setDrawing({ a: p, b: p });
         return;
       }
+      // Helper: garis tengah atap (spine) — dibuatkan bila atap lama masih kotak.
+      const spineOf = (rf: Roof): Point[] => {
+        const g = roofGeom(rf, pxPerMeter);
+        return g ? g.spine : [];
+      };
+      const fpOf = (rf: Roof): Point[] => {
+        const g = roofGeom(rf, pxPerMeter);
+        return g ? g.footprint : rf.points;
+      };
+      const writeSpine = (rf: Roof, spine: Point[]) => {
+        const widthM = rf.widthM ?? (roofGeom(rf, pxPerMeter) ? ((roofGeom(rf, pxPerMeter)!.halfPx * 2) / pxPerMeter) : roofWidthM);
+        const next: Roof = { ...rf, spine, widthM };
+        onChange({
+          roofs: (sketch.roofs ?? []).map((r) =>
+            r.id === rf.id ? { ...next, points: roofFootprint(next, pxPerMeter) } : r,
+          ),
+        });
+      };
       if (roofSub === "geser") {
         for (let i = roofsHere.length - 1; i >= 0; i--) {
           const rf = roofsHere[i];
-          for (let k = 0; k < rf.points.length; k++) {
-            if (dist(rawWp, rf.points[k]) <= tol) {
+          const sp = spineOf(rf);
+          for (let k = 0; k < sp.length; k++) {
+            if (dist(rawWp, sp[k]) <= tol) {
               pushHistory();
+              // Pastikan atap sudah berbasis spine sebelum digeser
+              if (!rf.spine) writeSpine(rf, sp);
               setRoofSelectedId(rf.id);
               setRoofVertexDrag({ id: rf.id, idx: k });
               return;
@@ -8206,41 +8239,43 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
         // klik di dalam footprint → pilih atap
         for (let i = roofsHere.length - 1; i >= 0; i--) {
-          if (pointInPolygon(rawWp, roofsHere[i].points)) {
-            const rf = roofsHere[i];
+          const rf = roofsHere[i];
+          if (pointInPolygon(rawWp, fpOf(rf))) {
+            const g = roofGeom(rf, pxPerMeter);
             setRoofSelectedId(rf.id);
             setRoofKind(rf.kind);
             setRoofHeightInput(String(rf.baseHeightM));
             setRoofSlopeInput(String(rf.slopeDeg));
+            setRoofWidthInput(String(rf.widthM ?? (g ? ((g.halfPx * 2) / pxPerMeter).toFixed(2) : roofWidthM)));
             return;
           }
         }
         return;
       }
       if (roofSub === "addpt") {
+        // Tambah titik belok PADA GARIS TENGAH → atap bisa jadi bentuk L
         for (let i = roofsHere.length - 1; i >= 0; i--) {
           const rf = roofsHere[i];
-          const pts = rf.points;
-          for (let k = 0; k < pts.length; k++) {
-            const a2 = pts[k], b2 = pts[(k + 1) % pts.length];
-            if (pointToSegmentDist(rawWp, a2, b2) <= tol) {
+          const sp = spineOf(rf);
+          for (let k = 0; k < sp.length - 1; k++) {
+            if (pointToSegmentDist(rawWp, sp[k], sp[k + 1]) <= tol) {
               pushHistory();
-              const next = pts.slice();
+              const next = sp.slice();
               next.splice(k + 1, 0, p);
-              onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === rf.id ? { ...r, points: next } : r)) });
+              writeSpine(rf, next);
               setRoofSelectedId(rf.id);
-              toast.success("Titik atap ditambahkan");
+              toast.success("Titik belok garis tengah ditambahkan");
               return;
             }
           }
         }
-        toast.error("Klik tepat pada sisi atap");
+        toast.error("Klik tepat pada garis tengah atap");
         return;
       }
       if (roofSub === "hapus") {
         for (let i = roofsHere.length - 1; i >= 0; i--) {
           const rf = roofsHere[i];
-          if (pointInPolygon(rawWp, rf.points)) {
+          if (pointInPolygon(rawWp, fpOf(rf))) {
             pushHistory();
             onChange({ roofs: (sketch.roofs ?? []).filter((r) => r.id !== rf.id) });
             if (roofSelectedId === rf.id) setRoofSelectedId(null);
@@ -9647,9 +9682,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       onChange({
         roofs: (sketch.roofs ?? []).map((r) => {
           if (r.id !== rd.id) return r;
-          const next = r.points.slice();
-          if (rd.idx < next.length) next[rd.idx] = newPos;
-          return { ...r, points: next };
+          const g = roofGeom(r, pxPerMeter);
+          const spine = (r.spine ?? g?.spine ?? []).slice();
+          if (rd.idx < spine.length) spine[rd.idx] = newPos;
+          const widthM = r.widthM ?? (g ? (g.halfPx * 2) / pxPerMeter : roofWidthM);
+          const next: Roof = { ...r, spine, widthM };
+          return { ...next, points: roofFootprint(next, pxPerMeter) };
         }),
       });
       return;
@@ -10126,34 +10164,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     if (curTool === "atap") {
       if (roofSub !== "gambar") return;
-      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
-      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
-      const lminX = Math.min(la.x, lb.x), lmaxX = Math.max(la.x, lb.x);
-      const lminY = Math.min(la.y, lb.y), lmaxY = Math.max(la.y, lb.y);
-      if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
-      const pts = [
-        { x: lminX, y: lminY },
-        { x: lmaxX, y: lminY },
-        { x: lmaxX, y: lmaxY },
-        { x: lminX, y: lmaxY },
-      ].map((q) => rotateAround(q, { x: 0, y: 0 }, mmGridRotRad));
+      // Drag = GARIS TENGAH atap (a → b). Lebar atap di-offset dari garis ini.
+      if (Math.hypot(b.x - a.x, b.y - a.y) < MINOR_PX * 0.75) return;
       const { activeId } = ensureLevels();
       pushHistory();
-      const roof: Roof = {
+      const base: Roof = {
         id: genRoofId(),
         levelId: activeId,
-        points: pts,
+        points: [],
+        spine: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }],
+        widthM: roofWidthM,
         kind: roofKind,
         baseHeightM: roofHeightM,
         slopeDeg: roofSlopeDeg,
         createdAt: Date.now(),
       };
+      const roof: Roof = { ...base, points: roofFootprint(base, pxPerMeter) };
       onChange({ roofs: [...(sketch.roofs ?? []), roof] });
       setRoofSelectedId(roof.id);
-      const ridge = roofRidgeHeightM(pts, roofSlopeDeg, roofHeightM, 1 / pxPerMeter);
-      toast.success(`Atap ${roofKind} — puncak ${ridge.toFixed(2)} m`);
+      const ridge = roofRidgeHeightOf(roof, pxPerMeter);
+      toast.success(`Atap ${roofKind} — lebar ${roofWidthM} m · puncak ${ridge.toFixed(2)} m`);
       return;
     }
+
+
 
     if (curTool === "rect") {
       commitRect(a, b);
@@ -11961,6 +11995,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 </Button>
               ))}
             </div>
+            <div className="space-y-1">
+              <Label className="text-[11px]">Lebar atap (m) — offset dari garis tengah</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0.5"
+                value={roofWidthInput}
+                onChange={(e) => {
+                  setRoofWidthInput(e.target.value);
+                  const v = Math.max(0.5, Number(e.target.value) || DEFAULT_ROOF_WIDTH_M);
+                  if (roofSelectedId) {
+                    onChange({
+                      roofs: (sketch.roofs ?? []).map((r) => {
+                        if (r.id !== roofSelectedId) return r;
+                        const g = roofGeom(r, pxPerMeter);
+                        const next: Roof = { ...r, spine: r.spine ?? g?.spine, widthM: v };
+                        return { ...next, points: roofFootprint(next, pxPerMeter) };
+                      }),
+                    });
+                  }
+                }}
+                className="h-8"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-[11px]">Tinggi tumpuan (m)</Label>
@@ -11992,16 +12050,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Gambar footprint atap dengan drag (kotak). Puncak ≈{" "}
-              {roofSelectedId
-                ? roofRidgeHeightM(
-                    (sketch.roofs ?? []).find((r) => r.id === roofSelectedId)?.points ?? [],
-                    roofSlopeDeg,
-                    roofHeightM,
-                    1 / pxPerMeter,
-                  ).toFixed(2)
-                : "—"}{" "}
-              m. Otomatis di-extrude di halaman Model 3D.
+              Drag untuk menggambar <b>garis tengah</b> atap; lebar atap di-offset simetris dari garis
+              itu. Pakai <b>+Titik</b> lalu <b>Geser</b> pada garis tengah untuk membelokkan atap
+              (mis. bentuk L) — lebar tetap konsisten. Puncak ≈{" "}
+              {(() => {
+                const rf = (sketch.roofs ?? []).find((r) => r.id === roofSelectedId);
+                return rf ? roofRidgeHeightOf(rf, pxPerMeter).toFixed(2) : "—";
+              })()}{" "}
+              m. Otomatis di-extrude di Model 3D dan muncul di slide denah & potongan.
             </p>
           </div>
         )}
