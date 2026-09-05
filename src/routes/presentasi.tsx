@@ -109,6 +109,8 @@ export const Route = createFileRoute("/presentasi")({
   component: PresentasiPage,
 });
 
+import { roofPlanGeometry, roofSurfaceHeightAt, roofRidgeHeightOf, type Roof } from "@/lib/roofs";
+
 // ---------- Types ----------
 type Point = { x: number; y: number };
 type LineKind = "straight" | "arc" | "bezier";
@@ -138,6 +140,7 @@ type Sketch = {
   floors?: Floor[];
   parkingAreas?: ParkingArea[];
   ramps?: Ramp[];
+  roofs?: Roof[];
   mmGridRotation?: number;
   linkedMasterplan?: { rootLayerId: string };
 };
