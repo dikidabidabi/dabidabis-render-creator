@@ -66,10 +66,14 @@ import {
   type RoofKind,
   DEFAULT_ROOF_HEIGHT_M,
   DEFAULT_ROOF_SLOPE_DEG,
+  DEFAULT_ROOF_WIDTH_M,
   genRoofId,
   normalizeRoofs,
-  roofPlanLines,
+  roofFootprint,
+  roofGeom,
+  roofPlanGeometry,
   roofRidgeHeightM,
+  roofRidgeHeightOf,
 } from "@/lib/roofs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
