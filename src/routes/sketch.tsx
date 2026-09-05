@@ -8205,12 +8205,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         setDrawing({ a: p, b: p });
         return;
       }
+      // Helper: garis tengah atap (spine) — dibuatkan bila atap lama masih kotak.
+      const spineOf = (rf: Roof): Point[] => {
+        const g = roofGeom(rf, pxPerMeter);
+        return g ? g.spine : [];
+      };
+      const fpOf = (rf: Roof): Point[] => {
+        const g = roofGeom(rf, pxPerMeter);
+        return g ? g.footprint : rf.points;
+      };
+      const writeSpine = (rf: Roof, spine: Point[]) => {
+        const widthM = rf.widthM ?? (roofGeom(rf, pxPerMeter) ? ((roofGeom(rf, pxPerMeter)!.halfPx * 2) / pxPerMeter) : roofWidthM);
+        const next: Roof = { ...rf, spine, widthM };
+        onChange({
+          roofs: (sketch.roofs ?? []).map((r) =>
+            r.id === rf.id ? { ...next, points: roofFootprint(next, pxPerMeter) } : r,
+          ),
+        });
+      };
       if (roofSub === "geser") {
         for (let i = roofsHere.length - 1; i >= 0; i--) {
           const rf = roofsHere[i];
-          for (let k = 0; k < rf.points.length; k++) {
-            if (dist(rawWp, rf.points[k]) <= tol) {
+          const sp = spineOf(rf);
+          for (let k = 0; k < sp.length; k++) {
+            if (dist(rawWp, sp[k]) <= tol) {
               pushHistory();
+              // Pastikan atap sudah berbasis spine sebelum digeser
+              if (!rf.spine) writeSpine(rf, sp);
               setRoofSelectedId(rf.id);
               setRoofVertexDrag({ id: rf.id, idx: k });
               return;
@@ -8219,41 +8240,43 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
         // klik di dalam footprint → pilih atap
         for (let i = roofsHere.length - 1; i >= 0; i--) {
-          if (pointInPolygon(rawWp, roofsHere[i].points)) {
-            const rf = roofsHere[i];
+          const rf = roofsHere[i];
+          if (pointInPolygon(rawWp, fpOf(rf))) {
+            const g = roofGeom(rf, pxPerMeter);
             setRoofSelectedId(rf.id);
             setRoofKind(rf.kind);
             setRoofHeightInput(String(rf.baseHeightM));
             setRoofSlopeInput(String(rf.slopeDeg));
+            setRoofWidthInput(String(rf.widthM ?? (g ? ((g.halfPx * 2) / pxPerMeter).toFixed(2) : roofWidthM)));
             return;
           }
         }
         return;
       }
       if (roofSub === "addpt") {
+        // Tambah titik belok PADA GARIS TENGAH → atap bisa jadi bentuk L
         for (let i = roofsHere.length - 1; i >= 0; i--) {
           const rf = roofsHere[i];
-          const pts = rf.points;
-          for (let k = 0; k < pts.length; k++) {
-            const a2 = pts[k], b2 = pts[(k + 1) % pts.length];
-            if (pointToSegmentDist(rawWp, a2, b2) <= tol) {
+          const sp = spineOf(rf);
+          for (let k = 0; k < sp.length - 1; k++) {
+            if (pointToSegmentDist(rawWp, sp[k], sp[k + 1]) <= tol) {
               pushHistory();
-              const next = pts.slice();
+              const next = sp.slice();
               next.splice(k + 1, 0, p);
-              onChange({ roofs: (sketch.roofs ?? []).map((r) => (r.id === rf.id ? { ...r, points: next } : r)) });
+              writeSpine(rf, next);
               setRoofSelectedId(rf.id);
-              toast.success("Titik atap ditambahkan");
+              toast.success("Titik belok garis tengah ditambahkan");
               return;
             }
           }
         }
-        toast.error("Klik tepat pada sisi atap");
+        toast.error("Klik tepat pada garis tengah atap");
         return;
       }
       if (roofSub === "hapus") {
         for (let i = roofsHere.length - 1; i >= 0; i--) {
           const rf = roofsHere[i];
-          if (pointInPolygon(rawWp, rf.points)) {
+          if (pointInPolygon(rawWp, fpOf(rf))) {
             pushHistory();
             onChange({ roofs: (sketch.roofs ?? []).filter((r) => r.id !== rf.id) });
             if (roofSelectedId === rf.id) setRoofSelectedId(null);
