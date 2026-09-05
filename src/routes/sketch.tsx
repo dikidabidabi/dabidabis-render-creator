@@ -73,7 +73,6 @@ import {
   roofGeom,
   roofPlanGeometry,
   roofRidgeHeightOf,
-  roofRidgeHeightOf,
 } from "@/lib/roofs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
