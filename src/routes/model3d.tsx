@@ -110,7 +110,7 @@ type Sketch = {
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
-import { buildRoofPositions, type Roof } from "@/lib/roofs";
+import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
 
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const MINOR_PX = 8;
@@ -330,20 +330,13 @@ function RoofMesh({
   highlighted: boolean;
 }) {
   const geometry = useMemo(() => {
-    const pos = buildRoofPositions({
-      points: roof.points,
-      origin,
-      mPerPx,
-      baseY,
-      slopeDeg: roof.slopeDeg,
-      kind: roof.kind,
-    });
+    const pos = buildRoofMeshPositions({ roof, origin, mPerPx, baseY });
     if (!pos) return null;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.computeVertexNormals();
     return geo;
-  }, [roof.points, roof.slopeDeg, roof.kind, origin.x, origin.y, mPerPx, baseY]);
+  }, [roof, origin.x, origin.y, mPerPx, baseY]);
 
   if (!geometry) return null;
   return (
