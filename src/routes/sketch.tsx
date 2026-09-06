@@ -5675,8 +5675,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             ctx.stroke();
             ctx.setLineDash([]);
           }
-          // Handle titik pada GARIS TENGAH (acuan edit)
-          if (tool === "atap" && (roofSub === "geser" || roofSub === "addpt") && geo) {
+          // Handle titik pada GARIS TENGAH (acuan edit) — hanya atap level aktif
+          if (own && tool === "atap" && (roofSub === "geser" || roofSub === "addpt") && geo) {
             for (const p of geo.spine) {
               ctx.beginPath();
               ctx.arc(p.x, p.y, 4.5 / view.s, 0, Math.PI * 2);
@@ -5687,6 +5687,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               ctx.stroke();
             }
           }
+          ctx.globalAlpha = 1;
         }
         ctx.restore();
         // Label tinggi puncak untuk atap terpilih
