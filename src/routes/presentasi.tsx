@@ -4125,23 +4125,29 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
-          {/* ===== Atap (pelana/limasan) — footprint, bubungan & jurai ===== */}
-          {(sketch.roofs ?? []).filter((rf) => rf.levelId === level.id).map((rf) => {
+          {/* ===== Atap (pelana/limasan) — footprint, bubungan & jurai =====
+              Atap milik level ini digambar penuh; atap level lain digambar samar
+              sebagai referensi agar denah tiap level tetap menunjukkan atap. */}
+          {(sketch.roofs ?? []).map((rf) => {
             const g = roofPlanGeometry(rf, pxPerM);
             if (!g) return null;
+            const own = rf.levelId === level.id;
+            const k = own ? 1 : 0.45;
             return (
-              <g key={`roof-${rf.id}`} pointerEvents="none">
+              <g key={`roof-${rf.id}`} pointerEvents="none" opacity={own ? 1 : 0.5}>
                 <polygon
                   points={g.footprint.map((p) => `${p.x},${p.y}`).join(" ")}
-                  fill="rgba(120,90,70,0.10)"
+                  fill={`rgba(120,90,70,${0.10 * k})`}
                   stroke="rgba(60,45,35,0.85)"
-                  strokeWidth={sw * 0.0016}
+                  strokeWidth={sw * 0.0016 * (own ? 1 : 0.8)}
+                  strokeDasharray={own ? undefined : `${sw * 0.006} ${sw * 0.004}`}
                 />
                 <polyline
                   points={g.ridge.map((p) => `${p.x},${p.y}`).join(" ")}
                   fill="none"
                   stroke="rgba(40,30,25,0.95)"
-                  strokeWidth={sw * 0.0018}
+                  strokeWidth={sw * 0.0018 * (own ? 1 : 0.8)}
+                  strokeDasharray={own ? undefined : `${sw * 0.006} ${sw * 0.004}`}
                 />
                 {g.hips.map(([h1, h2], hi) => (
                   <line key={`hp-${hi}`} x1={h1.x} y1={h1.y} x2={h2.x} y2={h2.y}
