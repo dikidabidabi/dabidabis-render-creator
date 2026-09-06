@@ -39,6 +39,8 @@ import { OsmRoadsLayer } from "@/components/osm-roads-layer";
 import { MapGround } from "@/components/map-ground";
 
 
+import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
+
 type Point = { x: number; y: number };
 type Layer = {
   id: string;
@@ -64,6 +66,7 @@ type Sketch = {
   layers: Layer[];
   levels: Level[];
   roads?: RoadSegment[];
+  roofs?: Roof[];
   geo?: Geo;
 };
 
@@ -116,6 +119,27 @@ function expandLevels(levels: Level[]): Expanded[] {
     }
   }
   return out;
+}
+
+function RoofMesh({
+  roof, origin, mPerPx, baseY, color,
+}: {
+  roof: Roof; origin: Point; mPerPx: number; baseY: number; color: string;
+}) {
+  const geometry = useMemo(() => {
+    const pos = buildRoofMeshPositions({ roof, origin, mPerPx, baseY });
+    if (!pos) return null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    return geo;
+  }, [roof, origin.x, origin.y, mPerPx, baseY]);
+  if (!geometry) return null;
+  return (
+    <mesh geometry={geometry} castShadow receiveShadow>
+      <meshStandardMaterial color={color} roughness={0.8} metalness={0.05} side={THREE.DoubleSide} />
+    </mesh>
+  );
 }
 
 function ExtrudedMesh({
@@ -771,6 +795,19 @@ export function MasterplanSketch3DPreview({ sketch }: { sketch: Sketch }) {
               visible={showOsm}
             />
           )}
+          {(sketch.roofs ?? []).map((rf) => {
+            const lv = rf.levelId ? levelMap.get(rf.levelId) : undefined;
+            return (
+              <RoofMesh
+                key={`roof-${rf.id}`}
+                roof={rf}
+                origin={origin}
+                mPerPx={mPerPx}
+                baseY={(lv?.baseMdpl ?? 0) + rf.baseHeightM}
+                color={colorMode === "bw" ? toBW("#9a6a4f") : "#9a6a4f"}
+              />
+            );
+          })}
           {meshes.map((m) => (
             <ExtrudedMesh
               key={m.key}

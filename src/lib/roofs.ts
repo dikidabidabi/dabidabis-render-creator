@@ -230,12 +230,16 @@ export function roofPlanGeometry(
   const n = g.spine.length;
   const r0 = g.ridge[0];
   const r1 = g.ridge[g.ridge.length - 1];
-  const hips: [Point, Point][] = [
-    [g.left[0], r0],
-    [g.right[0], r0],
-    [g.left[n - 1], r1],
-    [g.right[n - 1], r1],
-  ];
+  // Pelana: ujung berupa gable (dinding sopi-sopi) → tanpa garis jurai.
+  const hips: [Point, Point][] =
+    roof.kind === "limasan"
+      ? [
+          [g.left[0], r0],
+          [g.right[0], r0],
+          [g.left[n - 1], r1],
+          [g.right[n - 1], r1],
+        ]
+      : [];
   return { footprint: g.footprint, ridge: g.ridge, hips };
 }
 
