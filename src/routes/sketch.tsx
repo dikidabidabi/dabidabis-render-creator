@@ -5634,7 +5634,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     // ===== Atap (pelana / limasan): footprint + bubungan & jurai =====
     {
-      const roofList = (sketch.roofs ?? []).filter((r) => !activeLvlId || r.levelId === activeLvlId);
+      // Semua atap tampil di setiap level; atap milik level lain digambar samar.
+      const roofList = sketch.roofs ?? [];
       if (roofList.length > 0) {
         ctx.save();
         ctx.translate(view.tx, view.ty);
