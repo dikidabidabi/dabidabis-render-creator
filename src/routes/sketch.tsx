@@ -5642,19 +5642,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.rotate(view.r);
         ctx.scale(view.s, view.s);
         for (const rf of roofList) {
+          const own = !activeLvlId || rf.levelId === activeLvlId;
           const isSel = rf.id === roofSelectedId && tool === "atap";
           const geo = roofGeom(rf, pxPerMeter);
           const fp = geo?.footprint ?? rf.points;
           if (fp.length < 3) continue;
+          ctx.globalAlpha = own ? 1 : 0.45;
           ctx.beginPath();
           fp.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
           ctx.closePath();
           ctx.fillStyle = isSel ? "rgba(232,93,58,0.16)" : "rgba(120,120,120,0.10)";
           ctx.fill();
-          ctx.setLineDash([]);
+          ctx.setLineDash(own ? [] : [6 / view.s, 4 / view.s]);
           ctx.lineWidth = (isSel ? 2.4 : 1.6) / view.s;
           ctx.strokeStyle = isSel ? "#e85d3a" : "#6b6b6b";
           ctx.stroke();
+          ctx.setLineDash([]);
           const pl = roofPlanGeometry(rf, pxPerMeter);
           if (pl) {
             // Bubungan (garis tengah) — polyline, bisa berbelok (L)
