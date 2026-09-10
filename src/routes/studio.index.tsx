@@ -1086,6 +1086,10 @@ function RenderNode({ id, data }: NodeProps) {
 }
 
 // ---------- Output Node ----------
+// Token pembatalan render per output node. true = pengguna menekan Stop;
+// promise yang masih berjalan akan mengabaikan hasilnya.
+const renderCancelTokens = new Map<string, boolean>();
+
 function OutputNode({
   id,
   data,
