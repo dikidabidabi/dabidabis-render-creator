@@ -2488,6 +2488,7 @@ function useStudioExecute() {
                 },
               });
               clearInterval(timers[a.id]);
+              if (renderCancelTokens.get(outputNode.id)) return "stopped";
               if (res.ok && res.resultUrl) {
                 let dataUrl: string | null = null;
                 try {
