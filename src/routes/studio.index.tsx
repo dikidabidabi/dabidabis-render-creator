@@ -1133,6 +1133,16 @@ function OutputNode({
     const isSingle = !!d.singleOutput;
     const shots = isSingle ? loadShots(d.sketchId) : [];
     const selectedShotId = d.selectedShotId ?? shots[0]?.id ?? null;
+    const stopBtn = status === "processing" ? (
+      <Button
+        size="sm"
+        variant="destructive"
+        onClick={stopRender}
+        className="w-full text-xs"
+      >
+        <Square className="mr-1 h-3 w-3" /> Stop Render
+      </Button>
+    ) : null;
     return (
       <NodeShell
         title={isSingle ? `Single Output · ${d.sketchTitle}` : `Output Perbaikan · ${d.sketchTitle}`}
