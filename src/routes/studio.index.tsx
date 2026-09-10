@@ -1211,6 +1211,7 @@ function OutputNode({
               </div>
             )}
           </div>
+          {stopBtn}
           {status === "error" && (
             <p className="text-[10px] text-destructive">
               {d.standaloneError ?? "Render gagal."}
