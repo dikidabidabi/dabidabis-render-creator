@@ -1103,8 +1103,28 @@ function OutputNode({
   const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
   const sync = useStudioStore((s) => s.syncToPresentasi);
   const updateNode = useStudioStore((s) => s.updateNode);
+  const updateOutput = useStudioStore((s) => s.updateOutput);
   const removeNode = useStudioStore((s) => s.removeNode);
+  const edges = useStudioStore((s) => s.graph.edges);
   const sketches = useSketchesWithShots();
+
+  const stopRender = () => {
+    renderCancelTokens.set(id, true);
+    // reset semua output yang masih processing
+    const list = useStudioStore.getState().graph.outputs[d.sketchId] ?? [];
+    for (const o of list) {
+      if (o.status === "processing") {
+        updateOutput(d.sketchId, o.id, { status: "idle", progress: 0 });
+      }
+    }
+    if (d.standaloneStatus === "processing") {
+      updateNode(id, { standaloneStatus: "idle", standaloneProgress: 0 });
+    }
+    // reset node render engine yang menyuplai output ini
+    const srcEdge = edges.find((e) => e.target === id);
+    if (srcEdge) updateNode(srcEdge.source, { status: "idle", progress: 0 });
+    toast.info("Render dihentikan");
+  };
 
 
   // Standalone output (from edit node) OR single-output pick
