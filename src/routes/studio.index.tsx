@@ -2523,6 +2523,7 @@ function useStudioExecute() {
                 return res.ok ? "AI tidak menghasilkan URL gambar." : res.error;
             } catch (e) {
               clearInterval(timers[a.id]);
+              if (renderCancelTokens.get(outputNode.id)) return "stopped";
               updateOutput(outData.sketchId, a.id, {
                 status: "error",
                 progress: 100,
