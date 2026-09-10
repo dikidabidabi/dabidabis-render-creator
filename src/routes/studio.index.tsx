@@ -2451,6 +2451,7 @@ function useStudioExecute() {
         outData.sketchId = inData.sketchId;
         outData.sketchTitle = inData.sketchTitle;
       }
+      renderCancelTokens.set(outputNode.id, false);
       setOutputs(outData.sketchId, angles);
       updateNode(renderNodeId, { status: "processing", progress: 0, error: undefined });
 
