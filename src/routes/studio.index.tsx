@@ -23,6 +23,7 @@ import "@xyflow/react/dist/style.css";
 import {
   Sparkles,
   Loader2,
+  Square,
   Play,
   Image as ImageIcon,
   Wand2,
@@ -1311,6 +1312,16 @@ function OutputNode({
             style={{ width: `${avgProgress}%` }}
           />
         </div>
+        {anyProcessing && (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={stopRender}
+            className="w-full text-xs"
+          >
+            <Square className="mr-1 h-3 w-3" /> Stop Render
+          </Button>
+        )}
         <div className="rounded border border-border/60 bg-background/60 p-2">
           <div className="flex items-center justify-between">
             <Label className="text-[10px]">Geometry Consistency</Label>
