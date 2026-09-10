@@ -2515,6 +2515,7 @@ function useStudioExecute() {
                 }
                 return true;
               }
+              if (renderCancelTokens.get(outputNode.id)) return "stopped";
               updateOutput(outData.sketchId, a.id, {
                 status: "error",
                 progress: 100,
