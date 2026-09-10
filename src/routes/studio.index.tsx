@@ -23,6 +23,7 @@ import "@xyflow/react/dist/style.css";
 import {
   Sparkles,
   Loader2,
+  Square,
   Play,
   Image as ImageIcon,
   Wand2,
@@ -1086,6 +1087,10 @@ function RenderNode({ id, data }: NodeProps) {
 }
 
 // ---------- Output Node ----------
+// Token pembatalan render per output node. true = pengguna menekan Stop;
+// promise yang masih berjalan akan mengabaikan hasilnya.
+const renderCancelTokens = new Map<string, boolean>();
+
 function OutputNode({
   id,
   data,
@@ -1099,8 +1104,28 @@ function OutputNode({
   const outputs = useStudioStore((s) => s.graph.outputs[d.sketchId]) ?? EMPTY_OUTPUTS;
   const sync = useStudioStore((s) => s.syncToPresentasi);
   const updateNode = useStudioStore((s) => s.updateNode);
+  const updateOutput = useStudioStore((s) => s.updateOutput);
   const removeNode = useStudioStore((s) => s.removeNode);
+  const edges = useStudioStore((s) => s.graph.edges);
   const sketches = useSketchesWithShots();
+
+  const stopRender = () => {
+    renderCancelTokens.set(id, true);
+    // reset semua output yang masih processing
+    const list = useStudioStore.getState().graph.outputs[d.sketchId] ?? [];
+    for (const o of list) {
+      if (o.status === "processing") {
+        updateOutput(d.sketchId, o.id, { status: "idle", progress: 0 });
+      }
+    }
+    if (d.standaloneStatus === "processing") {
+      updateNode(id, { standaloneStatus: "idle", standaloneProgress: 0 });
+    }
+    // reset node render engine yang menyuplai output ini
+    const srcEdge = edges.find((e) => e.target === id);
+    if (srcEdge) updateNode(srcEdge.source, { status: "idle", progress: 0 });
+    toast.info("Render dihentikan");
+  };
 
 
   // Standalone output (from edit node) OR single-output pick
@@ -1109,6 +1134,16 @@ function OutputNode({
     const isSingle = !!d.singleOutput;
     const shots = isSingle ? loadShots(d.sketchId) : [];
     const selectedShotId = d.selectedShotId ?? shots[0]?.id ?? null;
+    const stopBtn = status === "processing" ? (
+      <Button
+        size="sm"
+        variant="destructive"
+        onClick={stopRender}
+        className="w-full text-xs"
+      >
+        <Square className="mr-1 h-3 w-3" /> Stop Render
+      </Button>
+    ) : null;
     return (
       <NodeShell
         title={isSingle ? `Single Output · ${d.sketchTitle}` : `Output Perbaikan · ${d.sketchTitle}`}
@@ -1177,6 +1212,7 @@ function OutputNode({
               </div>
             )}
           </div>
+          {stopBtn}
           {status === "error" && (
             <p className="text-[10px] text-destructive">
               {d.standaloneError ?? "Render gagal."}
@@ -1276,6 +1312,16 @@ function OutputNode({
             style={{ width: `${avgProgress}%` }}
           />
         </div>
+        {anyProcessing && (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={stopRender}
+            className="w-full text-xs"
+          >
+            <Square className="mr-1 h-3 w-3" /> Stop Render
+          </Button>
+        )}
         <div className="rounded border border-border/60 bg-background/60 p-2">
           <div className="flex items-center justify-between">
             <Label className="text-[10px]">Geometry Consistency</Label>
@@ -2320,6 +2366,7 @@ function useStudioExecute() {
           standaloneImage: null,
         });
         updateNode(renderNodeId, { status: "processing", progress: 0 });
+        renderCancelTokens.set(outputNode.id, false);
         try {
           const res = await callRender({
             data: {
@@ -2332,6 +2379,10 @@ function useStudioExecute() {
               model: selectedModel,
             },
           });
+          if (renderCancelTokens.get(outputNode.id)) {
+            updateNode(renderNodeId, { status: "idle", progress: 0 });
+            return;
+          }
           if (res.ok && res.resultUrl) {
             let dataUrl = res.resultUrl;
             try {
@@ -2400,6 +2451,7 @@ function useStudioExecute() {
         outData.sketchId = inData.sketchId;
         outData.sketchTitle = inData.sketchTitle;
       }
+      renderCancelTokens.set(outputNode.id, false);
       setOutputs(outData.sketchId, angles);
       updateNode(renderNodeId, { status: "processing", progress: 0, error: undefined });
 
@@ -2436,6 +2488,7 @@ function useStudioExecute() {
                 },
               });
               clearInterval(timers[a.id]);
+              if (renderCancelTokens.get(outputNode.id)) return "stopped";
               if (res.ok && res.resultUrl) {
                 let dataUrl: string | null = null;
                 try {
@@ -2462,6 +2515,7 @@ function useStudioExecute() {
                 }
                 return true;
               }
+              if (renderCancelTokens.get(outputNode.id)) return "stopped";
               updateOutput(outData.sketchId, a.id, {
                 status: "error",
                 progress: 100,
@@ -2470,6 +2524,7 @@ function useStudioExecute() {
                 return res.ok ? "AI tidak menghasilkan URL gambar." : res.error;
             } catch (e) {
               clearInterval(timers[a.id]);
+              if (renderCancelTokens.get(outputNode.id)) return "stopped";
               updateOutput(outData.sketchId, a.id, {
                 status: "error",
                 progress: 100,
@@ -2480,6 +2535,10 @@ function useStudioExecute() {
           }),
         );
 
+        if (renderCancelTokens.get(outputNode.id)) {
+          updateNode(renderNodeId, { status: "idle", progress: 0 });
+          return;
+        }
         const success = results.filter((result) => result === true).length;
         const firstError = results.find((result): result is string => typeof result === "string");
         updateNode(renderNodeId, {
