@@ -2533,6 +2533,10 @@ function useStudioExecute() {
           }),
         );
 
+        if (renderCancelTokens.get(outputNode.id)) {
+          updateNode(renderNodeId, { status: "idle", progress: 0 });
+          return;
+        }
         const success = results.filter((result) => result === true).length;
         const firstError = results.find((result): result is string => typeof result === "string");
         updateNode(renderNodeId, {
