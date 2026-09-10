@@ -2379,6 +2379,10 @@ function useStudioExecute() {
               model: selectedModel,
             },
           });
+          if (renderCancelTokens.get(outputNode.id)) {
+            updateNode(renderNodeId, { status: "idle", progress: 0 });
+            return;
+          }
           if (res.ok && res.resultUrl) {
             let dataUrl = res.resultUrl;
             try {
