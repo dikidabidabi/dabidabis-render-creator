@@ -2366,6 +2366,7 @@ function useStudioExecute() {
           standaloneImage: null,
         });
         updateNode(renderNodeId, { status: "processing", progress: 0 });
+        renderCancelTokens.set(outputNode.id, false);
         try {
           const res = await callRender({
             data: {
