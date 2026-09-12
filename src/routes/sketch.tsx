@@ -2485,10 +2485,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         activeLevelId: activeLvlId === lvlId ? (bound.levels[0]?.id ?? fallback) : activeLvlId,
         lines: nextLines,
         layers: bound.layers,
+        stairs: (sketch.stairs ?? []).filter((stair) => stair.levelId !== lvlId && stair.toLevelId !== lvlId),
       });
       toast.success("Level dihapus");
     },
-    [levels, lines, layers, activeLvlId, onChange],
+    [levels, lines, layers, activeLvlId, onChange, sketch.stairs],
   );
 
   const duplicateLevel = useCallback(
@@ -3249,6 +3250,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ...r,
       anchors: r.anchors.map((a) => ({ ...sp(a), filletR: a.filletR })),
     }));
+    const nextStairs = (sketch.stairs || []).map((stair) => ({
+      ...stair,
+      a: sp(stair.a),
+      b: sp(stair.b),
+    }));
 
     const nextRoads = (sketch.roads || []).map((r) => ({
       ...r,
@@ -3263,6 +3269,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       circles: nextCircles,
       parkingAreas: nextParking,
       ramps: nextRamps,
+      stairs: nextStairs,
       roads: nextRoads,
       sectionCuts: nextSectionCuts,
       sectionCut: nextSectionCut,
