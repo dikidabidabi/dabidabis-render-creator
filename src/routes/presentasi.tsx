@@ -3556,7 +3556,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             });
             return out;
           })()}
-          {/* Tangga pada potongan — tiap bidang anak tangga diuji terhadap garis potong. */}
+          {/* Tangga pada potongan — bidang terpotong, pelat tangga 15 cm, dan railing 1,1 m. */}
           {(() => {
             const out: React.ReactNode[] = [];
             for (const stair of sketch.stairs ?? []) {
@@ -3572,14 +3572,40 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 }
               }
               hits.sort((a, b) => a.x0 - b.x0 || a.x1 - b.x1);
-              hits.forEach((hit, index) => {
-                const y = my(hit.elevation);
+              const groups: typeof hits[] = [];
+              for (const hit of hits) {
+                const group = groups[groups.length - 1];
+                if (!group || hit.x0 - group[group.length - 1].x1 > 0.08) groups.push([hit]);
+                else group.push(hit);
+              }
+              groups.forEach((group, groupIndex) => {
+                const top: Array<{ x: number; z: number }> = [];
+                group.forEach((hit, index) => {
+                  if (index > 0) top.push({ x: hit.x0, z: group[index - 1].elevation });
+                  top.push({ x: hit.x0, z: hit.elevation }, { x: hit.x1, z: hit.elevation });
+                });
+                const first = group[0];
+                const last = group[group.length - 1];
+                const thicknessM = 0.15;
+                const slabPoints = [
+                  ...top.map((point) => `${mx(point.x)},${my(point.z)}`),
+                  `${mx(last.x1)},${my(last.elevation - thicknessM)}`,
+                  `${mx(first.x0)},${my(first.elevation - thicknessM)}`,
+                ].join(" ");
+                const railPoints = group.map((hit) => ({
+                  x: (hit.x0 + hit.x1) / 2,
+                  z: hit.elevation + 1.1,
+                }));
+                const railPolyline = railPoints.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ");
                 out.push(
-                  <g key={`stair-sec-${stair.id}-${index}`}>
-                    <line x1={mx(hit.x0)} y1={y} x2={mx(hit.x1)} y2={y} stroke="#1f2937" strokeWidth={hit.kind === "landing" ? 2 : 1.5} />
-                    {index > 0 && Math.abs(hits[index - 1].x1 - hit.x0) < 0.03 && (
-                      <line x1={mx(hit.x0)} y1={my(hits[index - 1].elevation)} x2={mx(hit.x0)} y2={y} stroke="#1f2937" strokeWidth={1.5} />
-                    )}
+                  <g key={`stair-sec-${stair.id}-${groupIndex}`}>
+                    <polygon points={slabPoints} fill={`url(#concrete-dot-${slide.id})`} stroke="#1f2937" strokeWidth={0.8} />
+                    <polyline points={top.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ")} fill="none" stroke="#1f2937" strokeWidth={1.2} />
+                    {railPoints.length > 1 && <polyline points={railPolyline} fill="none" stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />}
+                    {railPoints.map((point, index) => (
+                      (index === 0 || index === railPoints.length - 1 || index % 3 === 0) &&
+                      <line key={index} x1={mx(point.x)} y1={my(point.z)} x2={mx(point.x)} y2={my(point.z - 1.1)} stroke="#1f2937" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+                    ))}
                   </g>,
                 );
               });

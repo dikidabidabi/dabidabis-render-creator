@@ -8,6 +8,7 @@
 import { create } from "zustand";
 import { GUEST_OWNER, hydrateFromIndexedDB } from "@/lib/storage/idb-bridge";
 import type { ParkingArea } from "@/lib/parking";
+import type { Stair } from "@/lib/stairs";
 
 type ProjectStore = {
   hydrated: boolean;
@@ -18,6 +19,8 @@ type ProjectStore = {
   // Clipboard area parkir (tanpa levelId — diisi saat paste).
   parkingClipboard: ParkingArea[] | null;
   setParkingClipboard: (areas: ParkingArea[] | null) => void;
+  stairClipboard: Stair | null;
+  setStairClipboard: (stair: Stair | null) => void;
 };
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -43,4 +46,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
   parkingClipboard: null,
   setParkingClipboard: (areas) => set({ parkingClipboard: areas }),
+  stairClipboard: null,
+  setStairClipboard: (stair) => set({ stairClipboard: stair }),
 }));

@@ -2602,6 +2602,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const stairOffsetM = Math.max(0, Number(stairOffsetInput) || 0);
   const stairInnerRadiusM = Math.max(0.1, Number(stairRadiusInput) || DEFAULT_STAIR_INNER_RADIUS_M);
   const stairRotationDeg = stairRotationInput.trim() !== "" && Number.isFinite(Number(stairRotationInput)) ? Number(stairRotationInput) : null;
+  const stairClipboard = useProjectStore((state) => state.stairClipboard);
+  const setStairClipboard = useProjectStore((state) => state.setStairClipboard);
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
@@ -12179,6 +12181,47 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <div><Label className="text-xs">Rotasi (°)</Label><Input type="number" step="1" placeholder="Ikuti arah drag" value={stairRotationInput} onChange={(e) => setStairRotationInput(e.target.value)} /></div>
             </div>
             {stairKind !== "lingkar" && <label className="flex items-center gap-2 text-xs"><Switch checked={stairLanding} onCheckedChange={setStairLanding} /> Aktifkan bordes</label>}
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" variant="outline" disabled={!stairSelectedId} onClick={() => {
+                const selected = (sketch.stairs ?? []).find((stair) => stair.id === stairSelectedId);
+                if (!selected) return;
+                setStairClipboard({ ...selected, a: { ...selected.a }, b: { ...selected.b } });
+                toast.success("Tangga disalin");
+              }} title="Salin tangga terpilih">
+                <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
+              </Button>
+              <Button size="sm" variant="outline" disabled={!stairClipboard || !activeLvlId} onClick={() => {
+                if (!stairClipboard || !activeLvlId) return;
+                const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+                const targetIndex = sorted.findIndex((level) => level.id === activeLvlId);
+                const above = targetIndex >= 0 ? sorted[targetIndex + 1] : undefined;
+                if (!above) { toast.error("Tangga membutuhkan level lantai di atasnya"); return; }
+                const sameLevel = stairClipboard.levelId === activeLvlId;
+                const offset = sameLevel ? pxPerMeter : 0;
+                const pasted: Stair = translateStair({
+                  ...stairClipboard,
+                  id: genStairId(),
+                  levelId: activeLvlId,
+                  toLevelId: above.id,
+                  createdAt: Date.now(),
+                  a: { ...stairClipboard.a },
+                  b: { ...stairClipboard.b },
+                }, offset, offset);
+                pushHistory();
+                onChange({ stairs: [...(sketch.stairs ?? []), pasted] });
+                setStairSelectedId(pasted.id);
+                setStairKind(pasted.kind);
+                setStairWidthInput(String(pasted.widthM));
+                setStairStepsInput(String(pasted.stepCount));
+                setStairOffsetInput(String(pasted.offsetM));
+                setStairRadiusInput(String(pasted.innerRadiusM));
+                setStairRotationInput(String(pasted.rotationDeg));
+                setStairLanding(pasted.landing);
+                toast.success(sameLevel ? "Tangga ditempel bergeser 1 m pada X dan Y" : "Tangga ditempel pada koordinat yang sama");
+              }} title="Tempel tangga ke level aktif">
+                <ClipboardPaste className="mr-1.5 h-3.5 w-3.5" /> Paste
+              </Button>
+            </div>
             {(() => {
               const selected = (sketch.stairs ?? []).find((stair) => stair.id === stairSelectedId);
               if (!selected) return <p className="text-[11px] text-muted-foreground">Drag stylus dari kaki tangga menuju arah naik. Pilih Edit atau Geser untuk mengubah tangga.</p>;
