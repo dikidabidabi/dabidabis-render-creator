@@ -203,6 +203,7 @@ import {
   stairContains,
   stairMetrics,
   stairPlanGeometry,
+  rotateStair,
   translateStair,
 } from "@/lib/stairs";
 import { getFormulaSettings } from "@/lib/formula-settings";
@@ -2591,6 +2592,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [stairStepsInput, setStairStepsInput] = useState(String(DEFAULT_STAIR_STEPS));
   const [stairOffsetInput, setStairOffsetInput] = useState(String(DEFAULT_STAIR_OFFSET_M));
   const [stairRadiusInput, setStairRadiusInput] = useState(String(DEFAULT_STAIR_INNER_RADIUS_M));
+  const [stairRotationInput, setStairRotationInput] = useState("0");
   const [stairLanding, setStairLanding] = useState(true);
   const [stairSelectedId, setStairSelectedId] = useState<string | null>(null);
   const [stairEndpointDrag, setStairEndpointDrag] = useState<{ id: string; endpoint: "a" | "b" } | null>(null);
@@ -2599,6 +2601,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const stairSteps = Math.max(2, Math.round(Number(stairStepsInput) || DEFAULT_STAIR_STEPS));
   const stairOffsetM = Math.max(0, Number(stairOffsetInput) || 0);
   const stairInnerRadiusM = Math.max(0.1, Number(stairRadiusInput) || DEFAULT_STAIR_INNER_RADIUS_M);
+  const stairRotationDeg = Number.isFinite(Number(stairRotationInput)) ? Number(stairRotationInput) : 0;
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
@@ -6133,12 +6136,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       if (drawing && tool === "tangga" && stairSub === "gambar" && activeLvlId) {
         const i = sortedLv.findIndex((l) => l.id === activeLvlId);
         const above = i >= 0 ? sortedLv[i + 1] : undefined;
-        if (above) stairs.push({
+        if (above) stairs.push(rotateStair({
           id: "__stair_draft__", levelId: activeLvlId, toLevelId: above.id,
           kind: stairKind, a: drawing.a, b: drawing.b, widthM: stairWidthM,
           stepCount: stairSteps, landing: stairLanding, offsetM: stairOffsetM,
-          innerRadiusM: stairInnerRadiusM, createdAt: 0,
-        });
+          innerRadiusM: stairInnerRadiusM, rotationDeg: stairRotationDeg, createdAt: 0,
+        }, stairRotationDeg));
       }
       ctx.save();
       ctx.translate(view.tx, view.ty);
@@ -6162,6 +6165,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         for (const [a, b] of plan.stepLines) {
           ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
+        ctx.save();
+        ctx.strokeStyle = selected ? "#e85d3a" : "#6b4f3a";
+        ctx.lineWidth = (selected ? 2 : 1.6) / view.s;
+        for (const line of plan.innerLines) {
+          if (line.length < 2) continue;
+          ctx.beginPath();
+          line.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+          ctx.stroke();
+        }
+        ctx.restore();
         ctx.setLineDash([]);
         for (const landing of plan.landings) {
           ctx.beginPath(); landing.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
@@ -8080,6 +8093,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setStairSelectedId(hit.id);
       setStairKind(hit.kind); setStairWidthInput(String(hit.widthM)); setStairStepsInput(String(hit.stepCount));
       setStairLanding(hit.landing); setStairOffsetInput(String(hit.offsetM)); setStairRadiusInput(String(hit.innerRadiusM));
+      setStairRotationInput(String(Math.round((hit.rotationDeg ?? Math.atan2(hit.b.y - hit.a.y, hit.b.x - hit.a.x) * 180 / Math.PI) * 10) / 10));
       if (stairSub === "hapus") {
         pushHistory(); onChange({ stairs: (sketch.stairs ?? []).filter((stair) => stair.id !== hit.id) });
         setStairSelectedId(null); toast.success("Tangga dihapus"); return;
@@ -9511,7 +9525,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     if (stairEndpointDrag) {
       const p = getWorldPos(e);
-      onChange({ stairs: (sketch.stairs ?? []).map((stair) => stair.id === stairEndpointDrag.id ? { ...stair, [stairEndpointDrag.endpoint]: p } : stair) });
+  onChange({ stairs: (sketch.stairs ?? []).map((stair) => {
+    if (stair.id !== stairEndpointDrag.id) return stair;
+    const next = { ...stair, [stairEndpointDrag.endpoint]: p };
+    return { ...next, rotationDeg: Math.atan2(next.b.y - next.a.y, next.b.x - next.a.x) * 180 / Math.PI };
+  }) });
       return;
     }
     if (stairMoveDrag) {
@@ -10337,11 +10355,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const i = sorted.findIndex((level) => level.id === activeLvlId);
       const above = i >= 0 ? sorted[i + 1] : undefined;
       if (!activeLvlId || !above) { toast.error("Tangga membutuhkan level lantai di atasnya"); return; }
-      const stair: Stair = {
+      const stair = rotateStair({
         id: genStairId(), levelId: activeLvlId, toLevelId: above.id, kind: stairKind,
         a, b, widthM: stairWidthM, stepCount: stairSteps, landing: stairLanding,
-        offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM, createdAt: Date.now(),
-      };
+        offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM, rotationDeg: stairRotationDeg, createdAt: Date.now(),
+      }, stairRotationDeg);
       pushHistory(); onChange({ stairs: [...(sketch.stairs ?? []), stair] }); setStairSelectedId(stair.id);
       const metrics = stairMetrics(stair, levels, pxPerMeter);
       toast.success(`Tangga ${stairKind} · tinggi anak tangga ${(metrics.riserM * 100).toFixed(1)} cm · pijakan ${(metrics.treadM * 100).toFixed(1)} cm`);
@@ -12148,12 +12166,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <div><Label className="text-xs">Jumlah anak tangga</Label><Input type="number" min="2" step="1" value={stairStepsInput} onChange={(e) => setStairStepsInput(e.target.value)} /></div>
               {stairKind === "u" && <div><Label className="text-xs">Offset sisi dalam (m)</Label><Input type="number" min="0" step="0.05" value={stairOffsetInput} onChange={(e) => setStairOffsetInput(e.target.value)} /></div>}
               {stairKind === "lingkar" && <div><Label className="text-xs">Radius dalam (m)</Label><Input type="number" min="0.1" step="0.1" value={stairRadiusInput} onChange={(e) => setStairRadiusInput(e.target.value)} /></div>}
+              <div><Label className="text-xs">Rotasi (°)</Label><Input type="number" step="1" value={stairRotationInput} onChange={(e) => setStairRotationInput(e.target.value)} /></div>
             </div>
             {stairKind !== "lingkar" && <label className="flex items-center gap-2 text-xs"><Switch checked={stairLanding} onCheckedChange={setStairLanding} /> Aktifkan bordes</label>}
             {(() => {
               const selected = (sketch.stairs ?? []).find((stair) => stair.id === stairSelectedId);
               if (!selected) return <p className="text-[11px] text-muted-foreground">Drag stylus dari kaki tangga menuju arah naik. Pilih Edit atau Geser untuk mengubah tangga.</p>;
-              const preview = { ...selected, kind: stairKind, widthM: stairWidthM, stepCount: stairSteps, landing: stairLanding, offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM };
+              const preview = rotateStair({ ...selected, kind: stairKind, widthM: stairWidthM, stepCount: stairSteps, landing: stairLanding, offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM }, stairRotationDeg);
               const metrics = stairMetrics(preview, levels, pxPerMeter);
               return <div className="space-y-2">
                 <p className="text-[11px] text-muted-foreground">Naik {metrics.heightM.toFixed(2)} m · tinggi anak tangga {(metrics.riserM * 100).toFixed(1)} cm · pijakan {(metrics.treadM * 100).toFixed(1)} cm</p>

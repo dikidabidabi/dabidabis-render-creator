@@ -114,7 +114,9 @@ export function stairPlanGeometry(stair: Stair, pxPerMeter: number): StairPlan {
     }
     const path: Point[] = [];
     for (let i = 0; i <= count; i++) path.push(point((inner + outer) / 2, angle0 + (Math.PI * 2 * i) / count));
-    return { footprint, stepLines, innerLines: [], path, landings: [], sectionSurfaces, totalRunM: (Math.PI * (inner + outer)) / pxPerMeter };
+    const innerLine: Point[] = [];
+    for (let i = 0; i <= segs; i++) innerLine.push(point(inner, angle0 + (Math.PI * 2 * i) / segs));
+    return { footprint, stepLines, innerLines: [innerLine], path, landings: [], sectionSurfaces, totalRunM: (Math.PI * (inner + outer)) / pxPerMeter };
   }
   if (stair.kind === "u") {
     const gap = stair.offsetM * pxPerMeter;
