@@ -283,6 +283,7 @@ const ENTITY_ARRAYS = [
   "circles",
   "parkingAreas",
   "ramps",
+  "stairs",
   "axes",
   "roads",
   "illustrations",

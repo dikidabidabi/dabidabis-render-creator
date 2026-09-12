@@ -191,6 +191,20 @@ import {
   computeBordesArcs,
   numBordesForSlope,
 } from "@/lib/ramps";
+import {
+  type Stair,
+  type StairKind,
+  DEFAULT_STAIR_INNER_RADIUS_M,
+  DEFAULT_STAIR_OFFSET_M,
+  DEFAULT_STAIR_STEPS,
+  DEFAULT_STAIR_WIDTH_M,
+  genStairId,
+  normalizeStairs,
+  stairContains,
+  stairMetrics,
+  stairPlanGeometry,
+  translateStair,
+} from "@/lib/stairs";
 import { getFormulaSettings } from "@/lib/formula-settings";
 import { axisPolyline as sampleAxisPolyline, newAxisId, type AxisSegment } from "@/lib/axes";
 import {
@@ -416,6 +430,7 @@ type Sketch = {
   roofs?: Roof[]; // Atap (pelana/limasan) — di-extrude otomatis di Model 3D
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
   ramps?: Ramp[]; // Ramp antar level
+  stairs?: Stair[]; // Tangga antar level
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   illustrations?: Annotation[]; // Ilustrasi Analisa (panah, zona, node, dsb) — Master Plan
@@ -1068,6 +1083,7 @@ function normalizeSketch(s: any): Sketch {
       return out;
     })(),
     roofs: normalizeRoofs(s?.roofs, new Set(levels.map((l) => l.id)), fallback),
+    stairs: normalizeStairs(s?.stairs, new Set(levels.map((l) => l.id))),
     parkingAreas: (() => {
       const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
       const mmRotRad = (mmRotDeg * Math.PI) / 180;
@@ -2555,7 +2571,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
   // ===== Alat Atap (pelana / limasan) =====
   const [roofKind, setRoofKind] = useState<RoofKind>("pelana");
   const [roofSub, setRoofSub] = useState<"gambar" | "geser" | "addpt" | "hapus">("gambar");
@@ -2567,6 +2583,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const roofHeightM = Math.max(0, Number(roofHeightInput) || 0);
   const roofSlopeDeg = Math.min(80, Math.max(3, Number(roofSlopeInput) || DEFAULT_ROOF_SLOPE_DEG));
   const roofWidthM = Math.max(0.5, Number(roofWidthInput) || DEFAULT_ROOF_WIDTH_M);
+  // ===== Alat Tangga =====
+  const [stairKind, setStairKind] = useState<StairKind>("lurus");
+  const [stairSub, setStairSub] = useState<"gambar" | "edit" | "geser" | "hapus">("gambar");
+  const [stairWidthInput, setStairWidthInput] = useState(String(DEFAULT_STAIR_WIDTH_M));
+  const [stairStepsInput, setStairStepsInput] = useState(String(DEFAULT_STAIR_STEPS));
+  const [stairOffsetInput, setStairOffsetInput] = useState(String(DEFAULT_STAIR_OFFSET_M));
+  const [stairRadiusInput, setStairRadiusInput] = useState(String(DEFAULT_STAIR_INNER_RADIUS_M));
+  const [stairLanding, setStairLanding] = useState(true);
+  const [stairSelectedId, setStairSelectedId] = useState<string | null>(null);
+  const [stairEndpointDrag, setStairEndpointDrag] = useState<{ id: string; endpoint: "a" | "b" } | null>(null);
+  const [stairMoveDrag, setStairMoveDrag] = useState<{ id: string; start: Point; original: Stair } | null>(null);
+  const stairWidthM = Math.max(0.6, Number(stairWidthInput) || DEFAULT_STAIR_WIDTH_M);
+  const stairSteps = Math.max(2, Math.round(Number(stairStepsInput) || DEFAULT_STAIR_STEPS));
+  const stairOffsetM = Math.max(0, Number(stairOffsetInput) || 0);
+  const stairInnerRadiusM = Math.max(0.1, Number(stairRadiusInput) || DEFAULT_STAIR_INNER_RADIUS_M);
   // Ilustrasi Analisa — notasi urban design (panah, zona, alur, node, dsb) — Master Plan only
   const [iluKind, setIluKind] = useState<AnnotationKind>("arrow");
   const [iluColor, setIluColor] = useState<string>(ANNOTATION_PRESETS.arrow.color);
