@@ -9609,9 +9609,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
       return;
     }
-    if (stairEndpointDrag || stairMoveDrag) {
-      setStairEndpointDrag(null); setStairMoveDrag(null); endPointer(e); return;
-    }
     // Parking drag (vertex / rotate / area)
     if (parkingDrag) {
       const rawWp = getWorldPosRaw(e);
@@ -9954,6 +9951,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (stairEndpointDrag || stairMoveDrag) {
+      setStairEndpointDrag(null);
+      setStairMoveDrag(null);
+      endPointer(e);
+      return;
+    }
     if (pinDrag) {
       const g0 = sketch.geo;
       if (g0) {
@@ -10556,6 +10559,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const onPointerCancel = (e: React.PointerEvent) => {
     endPointer(e);
     setPinDrag(null);
+    setStairEndpointDrag(null);
+    setStairMoveDrag(null);
     setDrawing(null);
     setDraggingHandle(null);
     setEditDrag(null);
@@ -12185,8 +12190,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <Button size="sm" className="w-full" onClick={() => {
                   pushHistory();
                   onChange({ stairs: (sketch.stairs ?? []).map((stair) => stair.id === selected.id ? preview : stair) });
-                  toast.success("Pengaturan tangga diperbarui");
-                }}>Terapkan ke Tangga</Button>
+                  setStairEndpointDrag(null);
+                  setStairMoveDrag(null);
+                  setDrawing(null);
+                  setStairSelectedId(null);
+                  toast.success("Tangga disimpan dan dikunci");
+                }}><Save className="mr-1.5 h-4 w-4" /> Simpan Tangga</Button>
               </div>;
             })()}
           </div>
