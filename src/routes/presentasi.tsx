@@ -3627,22 +3627,59 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 const baseRuns: Array<{ kind: "tread" | "landing"; hits: typeof group }> = [];
                 for (const hit of group) {
                   const run = baseRuns[baseRuns.length - 1];
-                  if (!run || run.kind !== hit.kind) baseRuns.push({ kind: hit.kind, hits: [hit] });
+                  const previousHit = run?.hits[run.hits.length - 1];
+                  const previousDelta = run && run.hits.length > 1
+                    ? previousHit.elevation - run.hits[run.hits.length - 2].elevation
+                    : 0;
+                  const nextDelta = previousHit ? hit.elevation - previousHit.elevation : 0;
+                  const changesFlightDirection = run?.kind === "tread"
+                    && Math.abs(previousDelta) > 1e-6
+                    && Math.abs(nextDelta) > 1e-6
+                    && Math.sign(previousDelta) !== Math.sign(nextDelta);
+                  if (!run || run.kind !== hit.kind || changesFlightDirection) baseRuns.push({ kind: hit.kind, hits: [hit] });
                   else run.hits.push(hit);
                 }
-                const underside: Array<{ x: number; z: number }> = [];
-                for (const run of baseRuns) {
+                const riserFor = (run: (typeof baseRuns)[number]) => {
+                  const deltas = run.hits.slice(1)
+                    .map((hit, index) => Math.abs(hit.elevation - run.hits[index].elevation))
+                    .filter((delta) => delta > 1e-6);
+                  return deltas.length ? deltas.reduce((sum, delta) => sum + delta, 0) / deltas.length : Math.abs(height) / Math.max(1, stair.stepCount);
+                };
+                const runSurface = (run: (typeof baseRuns)[number]) => {
                   const first = run.hits[0];
                   const last = run.hits[run.hits.length - 1];
-                  if (!first || !last) continue;
-                  const start = { x: first.x0, z: first.elevation - thicknessM };
-                  const end = {
-                    x: last.x1,
-                    z: (run.kind === "landing" ? first.elevation : last.elevation) - thicknessM,
+                  if (!first || !last) return null;
+                  if (run.kind === "landing") return {
+                    start: { x: first.x0, z: first.elevation },
+                    end: { x: last.x1, z: first.elevation },
                   };
-                  const previous = underside[underside.length - 1];
-                  if (!previous || Math.abs(previous.x - start.x) > 1e-5 || Math.abs(previous.z - start.z) > 1e-5) underside.push(start);
-                  underside.push(end);
+                  const rising = last.elevation >= first.elevation;
+                  const riser = riserFor(run);
+                  return {
+                    start: { x: first.x0, z: rising ? first.elevation - riser : first.elevation },
+                    end: { x: last.x1, z: rising ? last.elevation : last.elevation - riser },
+                  };
+                };
+                const appendConnected = (points: Array<{ x: number; z: number }>, start: { x: number; z: number }, end: { x: number; z: number }) => {
+                  const previous = points[points.length - 1];
+                  if (previous && Math.abs(previous.x - start.x) < 1e-5) {
+                    // The landing datum governs the common junction, keeping the
+                    // inclined waist and horizontal landing slab truly continuous.
+                    previous.z = start.z;
+                  } else if (previous && (Math.abs(previous.x - start.x) > 1e-5 || Math.abs(previous.z - start.z) > 1e-5)) {
+                    points.push(start);
+                  } else if (!previous) points.push(start);
+                  points.push(end);
+                };
+                const underside: Array<{ x: number; z: number }> = [];
+                for (const run of baseRuns) {
+                  const surface = runSurface(run);
+                  if (!surface) continue;
+                  appendConnected(
+                    underside,
+                    { x: surface.start.x, z: surface.start.z - thicknessM },
+                    { x: surface.end.x, z: surface.end.z - thicknessM },
+                  );
                 }
                 const slabPoints = [
                   ...top.map((point) => `${mx(point.x)},${my(point.z)}`),
@@ -3650,15 +3687,15 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 ].join(" ");
                 const railPoints: Array<{ x: number; z: number; surfaceZ: number }> = [];
                 for (const run of baseRuns) {
-                  const first = run.hits[0];
-                  const last = run.hits[run.hits.length - 1];
-                  if (!first || !last) continue;
-                  const startSurface = first.elevation;
-                  const endSurface = run.kind === "landing" ? first.elevation : last.elevation;
-                  const start = { x: first.x0, z: startSurface + 1.1, surfaceZ: startSurface };
-                  const end = { x: last.x1, z: endSurface + 1.1, surfaceZ: endSurface };
+                  const surface = runSurface(run);
+                  if (!surface) continue;
+                  const start = { x: surface.start.x, z: surface.start.z + 1.1, surfaceZ: surface.start.z };
+                  const end = { x: surface.end.x, z: surface.end.z + 1.1, surfaceZ: surface.end.z };
                   const previous = railPoints[railPoints.length - 1];
-                  if (!previous || Math.abs(previous.x - start.x) > 1e-5 || Math.abs(previous.z - start.z) > 1e-5) railPoints.push(start);
+                  if (previous && Math.abs(previous.x - start.x) < 1e-5) {
+                    previous.z = start.z;
+                    previous.surfaceZ = start.surfaceZ;
+                  } else if (!previous || Math.abs(previous.x - start.x) > 1e-5 || Math.abs(previous.z - start.z) > 1e-5) railPoints.push(start);
                   railPoints.push(end);
                 }
                 const railPolyline = railPoints.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ");
