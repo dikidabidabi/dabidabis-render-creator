@@ -56,6 +56,7 @@ import {
 import { type Door } from "@/lib/doors";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
+import { type Stair, stairPlanGeometry } from "@/lib/stairs";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
 import { loadMasterplanAnalysis, analyzeSketchForIllustrations, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
@@ -140,6 +141,7 @@ type Sketch = {
   floors?: Floor[];
   parkingAreas?: ParkingArea[];
   ramps?: Ramp[];
+  stairs?: Stair[];
   roofs?: Roof[];
   mmGridRotation?: number;
   linkedMasterplan?: { rootLayerId: string };
@@ -3403,6 +3405,30 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             });
             return out;
           })()}
+          {/* Tangga pada potongan — hanya saat footprint dipotong garis irisan. */}
+          {(() => {
+            const out: React.ReactNode[] = [];
+            for (const stair of sketch.stairs ?? []) {
+              const intervals = cutPolygonIntervals(cut.p1, cut.p2, stairPlanGeometry(stair, pxPerMeter).footprint);
+              if (!intervals.length) continue;
+              const from = boxes.find((box) => box.id === stair.levelId);
+              const to = boxes.find((box) => box.id === stair.toLevelId);
+              if (!from || !to) continue;
+              for (const [t0, t1] of intervals) {
+                const x0 = t0 * cutLenM, x1 = t1 * cutLenM;
+                const count = Math.max(2, stair.stepCount);
+                const points: string[] = [`${mx(x0)},${my(from.baseM)}`];
+                for (let i = 1; i <= count; i++) {
+                  const xa = x0 + ((x1 - x0) * (i - 1)) / count;
+                  const xb = x0 + ((x1 - x0) * i) / count;
+                  const y = from.baseM + ((to.baseM - from.baseM) * i) / count;
+                  points.push(`${mx(xa)},${my(y)}`, `${mx(xb)},${my(y)}`);
+                }
+                out.push(<polyline key={`stair-sec-${stair.id}-${t0}`} points={points.join(" ")} fill="none" stroke="#1f2937" strokeWidth={1.5} />);
+              }
+            }
+            return out;
+          })()}
           {/* Nama Level di sisi paling kanan potongan */}
           {boxes.map((b) => {
             const cy = (my(b.topM) + my(b.baseM)) / 2;
@@ -4341,6 +4367,19 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               );
             });
           })()}
+          {/* Tangga tampil pada level asal dan level tujuan. */}
+          {(sketch.stairs ?? []).filter((stair) => stair.levelId === level.id || stair.toLevelId === level.id).map((stair) => {
+            const plan = stairPlanGeometry(stair, pxPerM);
+            const top = stair.toLevelId === level.id;
+            const strokeWidth = sw * 0.0014;
+            const path = plan.path.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+            return <g key={`stair-${stair.id}`} pointerEvents="none" opacity={top ? 0.75 : 1}>
+              <polygon points={plan.footprint.map((p) => `${p.x},${p.y}`).join(" ")} fill="rgba(214,198,174,0.22)" stroke="#27231f" strokeWidth={strokeWidth} strokeDasharray={top ? `${sw * 0.006} ${sw * 0.004}` : undefined} />
+              {plan.stepLines.map(([a, b], i) => <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#27231f" strokeWidth={strokeWidth * 0.75} />)}
+              {plan.landings.map((landing, i) => <polygon key={i} points={landing.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#27231f" strokeWidth={strokeWidth} />)}
+              <path d={path} fill="none" stroke="#e85d3a" strokeWidth={strokeWidth} strokeDasharray={top ? `${sw * 0.005} ${sw * 0.003}` : undefined} />
+            </g>;
+          })}
           <MaterialEdges
             lines={lines}
             edgeAttrs={sketch.edgeAttrs ?? {}}

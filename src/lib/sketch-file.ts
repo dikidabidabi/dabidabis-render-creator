@@ -283,6 +283,7 @@ const ENTITY_ARRAYS = [
   "circles",
   "parkingAreas",
   "ramps",
+  "stairs",
   "axes",
   "roads",
   "illustrations",
@@ -404,6 +405,7 @@ export function mergeSketches(sources: AnySketch[], opts: MergeOptions): MergeRe
         }
         if (typeof item.id === "string") item.id = `${tag}${item.id}`;
         if ("levelId" in item) item.levelId = mapLevel(item.levelId);
+        if ("toLevelId" in item) item.toLevelId = mapLevel(item.toLevelId);
         if (item.parentLayerId) item.parentLayerId = mapLayer(item.parentLayerId) ?? undefined;
         if (item.layerId) item.layerId = mapLayer(item.layerId) ?? item.layerId;
         base[arr].push(item);
