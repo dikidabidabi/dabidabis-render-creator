@@ -11201,6 +11201,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Square className="mr-1.5 h-4 w-4" /> Atap
           </Button>
+          <Button
+            variant={tool === "tangga" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setDrawing(null); setStairSub("gambar"); setStairSelectedId(null); setTool("tangga"); }}
+            className={cn(tool === "tangga" && "bg-gradient-primary shadow-primary")}
+            title="Tangga — drag dari kaki menuju arah naik, otomatis terhubung ke level di atas"
+          >
+            <Waypoints className="mr-1.5 h-4 w-4" /> Tangga
+          </Button>
 
           <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
@@ -12108,6 +12117,46 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 toast.success("Ramp dihapus");
               }}>Hapus</Button>
             )}
+          </div>
+        )}
+        {tool === "tangga" && (
+          <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-3">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Alat Tangga</div>
+            <div className="grid grid-cols-3 gap-1">
+              {(["lurus", "u", "lingkar"] as StairKind[]).map((kind) => (
+                <Button key={kind} size="sm" variant={stairKind === kind ? "default" : "outline"}
+                  onClick={() => setStairKind(kind)} className="capitalize">{kind === "u" ? "U" : kind}</Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {(["gambar", "edit", "geser", "hapus"] as const).map((mode) => (
+                <Button key={mode} size="sm" variant={stairSub === mode ? "default" : "outline"}
+                  className="px-1 text-[11px] capitalize" onClick={() => { setStairSub(mode); setDrawing(null); }}>
+                  {mode}
+                </Button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {stairKind !== "lingkar" && <div><Label className="text-xs">Lebar (m)</Label><Input type="number" min="0.6" step="0.1" value={stairWidthInput} onChange={(e) => setStairWidthInput(e.target.value)} /></div>}
+              <div><Label className="text-xs">Jumlah anak tangga</Label><Input type="number" min="2" step="1" value={stairStepsInput} onChange={(e) => setStairStepsInput(e.target.value)} /></div>
+              {stairKind === "u" && <div><Label className="text-xs">Offset sisi dalam (m)</Label><Input type="number" min="0" step="0.05" value={stairOffsetInput} onChange={(e) => setStairOffsetInput(e.target.value)} /></div>}
+              {stairKind === "lingkar" && <div><Label className="text-xs">Radius dalam (m)</Label><Input type="number" min="0.1" step="0.1" value={stairRadiusInput} onChange={(e) => setStairRadiusInput(e.target.value)} /></div>}
+            </div>
+            {stairKind !== "lingkar" && <label className="flex items-center gap-2 text-xs"><Switch checked={stairLanding} onCheckedChange={setStairLanding} /> Aktifkan bordes</label>}
+            {(() => {
+              const selected = (sketch.stairs ?? []).find((stair) => stair.id === stairSelectedId);
+              if (!selected) return <p className="text-[11px] text-muted-foreground">Drag stylus dari kaki tangga menuju arah naik. Pilih Edit atau Geser untuk mengubah tangga.</p>;
+              const preview = { ...selected, kind: stairKind, widthM: stairWidthM, stepCount: stairSteps, landing: stairLanding, offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM };
+              const metrics = stairMetrics(preview, levels, pxPerMeter);
+              return <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground">Naik {metrics.heightM.toFixed(2)} m · tinggi anak tangga {(metrics.riserM * 100).toFixed(1)} cm · pijakan {(metrics.treadM * 100).toFixed(1)} cm</p>
+                <Button size="sm" className="w-full" onClick={() => {
+                  pushHistory();
+                  onChange({ stairs: (sketch.stairs ?? []).map((stair) => stair.id === selected.id ? preview : stair) });
+                  toast.success("Pengaturan tangga diperbarui");
+                }}>Terapkan ke Tangga</Button>
+              </div>;
+            })()}
           </div>
         )}
         {tool === "atap" && (
