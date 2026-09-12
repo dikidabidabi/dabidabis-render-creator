@@ -3572,10 +3572,49 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 }
               }
               hits.sort((a, b) => a.x0 - b.x0 || a.x1 - b.x1);
+              const stairDx = stair.b.x - stair.a.x;
+              const stairDy = stair.b.y - stair.a.y;
+              const stairLength = Math.hypot(stairDx, stairDy);
+              const cutDx = cut.p2.x - cut.p1.x;
+              const cutDy = cut.p2.y - cut.p1.y;
+              const cutLength = Math.hypot(cutDx, cutDy);
+              const alignment = stairLength > 1e-6 && cutLength > 1e-6
+                ? Math.abs((stairDx * cutDx + stairDy * cutDy) / (stairLength * cutLength))
+                : 1;
+              const transverse = stair.kind !== "lingkar" && alignment < Math.SQRT1_2;
+
+              if (transverse) {
+                const thicknessM = 0.15;
+                for (const [hitIndex, hit] of hits.entries()) {
+                  const width = Math.max(0, hit.x1 - hit.x0);
+                  if (width < 0.01) continue;
+                  const x0 = mx(hit.x0);
+                  const x1 = mx(hit.x1);
+                  const topY = my(hit.elevation);
+                  const bottomY = my(hit.elevation - thicknessM);
+                  const railTopY = my(hit.elevation + 1.1);
+                  out.push(
+                    <g key={`stair-sec-transverse-${stair.id}-${hitIndex}`}>
+                      <rect
+                        x={Math.min(x0, x1)} y={Math.min(topY, bottomY)}
+                        width={Math.abs(x1 - x0)} height={Math.abs(bottomY - topY)}
+                        fill={`url(#concrete-dot-${slide.id})`} stroke="#1f2937" strokeWidth={0.8}
+                      />
+                      {/* Potongan melintang: railing berada pada kedua tepi tangga. */}
+                      <line x1={x0} y1={topY} x2={x0} y2={railTopY} stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                      <line x1={x1} y1={topY} x2={x1} y2={railTopY} stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                      <line x1={x0 - 3} y1={railTopY} x2={x0 + 3} y2={railTopY} stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                      <line x1={x1 - 3} y1={railTopY} x2={x1 + 3} y2={railTopY} stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                    </g>,
+                  );
+                }
+                continue;
+              }
+
               const groups: typeof hits[] = [];
               for (const hit of hits) {
                 const group = groups[groups.length - 1];
-                if (!group || hit.x0 - group[group.length - 1].x1 > 0.08) groups.push([hit]);
+                if (!group || hit.x0 - group[group.length - 1].x1 > 0.15) groups.push([hit]);
                 else group.push(hit);
               }
               groups.forEach((group, groupIndex) => {
@@ -3584,27 +3623,53 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   if (index > 0) top.push({ x: hit.x0, z: group[index - 1].elevation });
                   top.push({ x: hit.x0, z: hit.elevation }, { x: hit.x1, z: hit.elevation });
                 });
-                const first = group[0];
-                const last = group[group.length - 1];
                 const thicknessM = 0.15;
+                const baseRuns: Array<{ kind: "tread" | "landing"; hits: typeof group }> = [];
+                for (const hit of group) {
+                  const run = baseRuns[baseRuns.length - 1];
+                  if (!run || run.kind !== hit.kind) baseRuns.push({ kind: hit.kind, hits: [hit] });
+                  else run.hits.push(hit);
+                }
+                const underside: Array<{ x: number; z: number }> = [];
+                for (const run of baseRuns) {
+                  const first = run.hits[0];
+                  const last = run.hits[run.hits.length - 1];
+                  if (!first || !last) continue;
+                  const start = { x: first.x0, z: first.elevation - thicknessM };
+                  const end = {
+                    x: last.x1,
+                    z: (run.kind === "landing" ? first.elevation : last.elevation) - thicknessM,
+                  };
+                  const previous = underside[underside.length - 1];
+                  if (!previous || Math.abs(previous.x - start.x) > 1e-5 || Math.abs(previous.z - start.z) > 1e-5) underside.push(start);
+                  underside.push(end);
+                }
                 const slabPoints = [
                   ...top.map((point) => `${mx(point.x)},${my(point.z)}`),
-                  `${mx(last.x1)},${my(last.elevation - thicknessM)}`,
-                  `${mx(first.x0)},${my(first.elevation - thicknessM)}`,
+                  ...[...underside].reverse().map((point) => `${mx(point.x)},${my(point.z)}`),
                 ].join(" ");
-                const railPoints = group.map((hit) => ({
-                  x: (hit.x0 + hit.x1) / 2,
-                  z: hit.elevation + 1.1,
-                }));
+                const railPoints: Array<{ x: number; z: number; surfaceZ: number }> = [];
+                for (const run of baseRuns) {
+                  const first = run.hits[0];
+                  const last = run.hits[run.hits.length - 1];
+                  if (!first || !last) continue;
+                  const startSurface = first.elevation;
+                  const endSurface = run.kind === "landing" ? first.elevation : last.elevation;
+                  const start = { x: first.x0, z: startSurface + 1.1, surfaceZ: startSurface };
+                  const end = { x: last.x1, z: endSurface + 1.1, surfaceZ: endSurface };
+                  const previous = railPoints[railPoints.length - 1];
+                  if (!previous || Math.abs(previous.x - start.x) > 1e-5 || Math.abs(previous.z - start.z) > 1e-5) railPoints.push(start);
+                  railPoints.push(end);
+                }
                 const railPolyline = railPoints.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ");
                 out.push(
                   <g key={`stair-sec-${stair.id}-${groupIndex}`}>
                     <polygon points={slabPoints} fill={`url(#concrete-dot-${slide.id})`} stroke="#1f2937" strokeWidth={0.8} />
                     <polyline points={top.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ")} fill="none" stroke="#1f2937" strokeWidth={1.2} />
+                    <polyline points={underside.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ")} fill="none" stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
                     {railPoints.length > 1 && <polyline points={railPolyline} fill="none" stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />}
                     {railPoints.map((point, index) => (
-                      (index === 0 || index === railPoints.length - 1 || index % 3 === 0) &&
-                      <line key={index} x1={mx(point.x)} y1={my(point.z)} x2={mx(point.x)} y2={my(point.z - 1.1)} stroke="#1f2937" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+                      <line key={index} x1={mx(point.x)} y1={my(point.z)} x2={mx(point.x)} y2={my(point.surfaceZ)} stroke="#1f2937" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
                     ))}
                   </g>,
                 );
