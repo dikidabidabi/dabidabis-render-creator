@@ -2696,6 +2696,43 @@ function sectionColumnBlocked(
     return sectionSegmentsIntersect(cutPoint, columnCenter, line.a, line.b);
   });
 }
+
+function sectionDoorProjection(
+  door: Door,
+  cut: SectionCut,
+  pxPerMeter: number,
+): { t: number; depthPx: number; projectedWidthM: number; hingeAtStart: boolean } | null {
+  const dx = cut.p2.x - cut.p1.x;
+  const dy = cut.p2.y - cut.p1.y;
+  const cutLen2 = dx * dx + dy * dy;
+  const cutLen = Math.sqrt(cutLen2);
+  if (cutLen < 1e-6) return null;
+
+  const center = { x: (door.a.x + door.b.x) / 2, y: (door.a.y + door.b.y) / 2 };
+  const relX = center.x - cut.p1.x;
+  const relY = center.y - cut.p1.y;
+  const viewNx = -dy / cutLen;
+  const viewNy = dx / cutLen;
+  const depthPx = relX * viewNx + relY * viewNy;
+  if (depthPx <= 0) return null;
+
+  const t = (relX * dx + relY * dy) / cutLen2;
+  if (t < -0.001 || t > 1.001) return null;
+
+  const doorDx = door.b.x - door.a.x;
+  const doorDy = door.b.y - door.a.y;
+  const alongCutPx = Math.abs((doorDx * dx + doorDy * dy) / cutLen);
+  const nominalWidthM = door.widthCm / 100;
+  const projectedWidthM = Math.max(0.05, Math.min(nominalWidthM, alongCutPx / pxPerMeter));
+  const hingeAlong = ((door.a.x - cut.p1.x) * dx + (door.a.y - cut.p1.y) * dy) / cutLen2;
+  const leafEndAlong = ((door.b.x - cut.p1.x) * dx + (door.b.y - cut.p1.y) * dy) / cutLen2;
+  return {
+    t: Math.max(0, Math.min(1, t)),
+    depthPx,
+    projectedWidthM,
+    hingeAtStart: hingeAlong <= leafEndAlong,
+  };
+}
 function isLahanSec(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoidSec(n: string) { return n.trim().toLowerCase() === "void"; }
 
@@ -3076,6 +3113,70 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   }
                 }
               }
+            }
+            return rendered;
+          })()}
+
+          {/* Pintu yang berada di sisi pandang setelah garis potong. Garis segitiga
+              menunjukkan posisi engsel dan dua ujung daun saat terbuka. */}
+          {(() => {
+            const frameM = 0.05;
+            const doorHeightM = 2.4;
+            const allLines = sketch.lines ?? [];
+            const rendered: React.ReactNode[] = [];
+            for (const door of sketch.doors ?? []) {
+              if (!door.levelId) continue;
+              const box = boxes.find((entry) => entry.id === door.levelId);
+              if (!box) continue;
+              const projection = sectionDoorProjection(door, cut, pxPerMeter);
+              if (!projection) continue;
+              const center = { x: (door.a.x + door.b.x) / 2, y: (door.a.y + door.b.y) / 2 };
+              const cutPoint = {
+                x: cut.p1.x + (cut.p2.x - cut.p1.x) * projection.t,
+                y: cut.p1.y + (cut.p2.y - cut.p1.y) * projection.t,
+              };
+              if (sectionColumnBlocked(cutPoint, center, allLines, door.levelId)) continue;
+
+              const fullWidthM = Math.max(frameM * 3, projection.projectedWidthM);
+              const xCenter = mx(projection.t * cutLenM);
+              const xLeft = xCenter - (fullWidthM * scalePxPerM) / 2;
+              const xRight = xCenter + (fullWidthM * scalePxPerM) / 2;
+              const yBottom = my(box.baseM);
+              const yTop = my(Math.min(box.baseM + doorHeightM, box.topM));
+              const framePx = Math.max(1, frameM * scalePxPerM);
+              const stroke = 0.35;
+              const openingInset = framePx / 2;
+              const leafTopY = yTop + framePx;
+              const hingeX = projection.hingeAtStart ? xLeft + openingInset : xRight - openingInset;
+              const farX = projection.hingeAtStart ? xRight - openingInset : xLeft + openingInset;
+              const leafCount = door.leaves === 2 ? 2 : 1;
+              const meetingX = (xLeft + xRight) / 2;
+
+              rendered.push(
+                <g key={`section-door-${door.id}`} pointerEvents="none">
+                  <rect x={xLeft} y={yTop} width={xRight - xLeft} height={yBottom - yTop}
+                    fill="#ffffff" stroke="none" />
+                  <path d={`M ${xLeft} ${yBottom} V ${yTop} H ${xRight} V ${yBottom}`}
+                    fill="none" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
+                  <rect x={xLeft} y={yTop} width={framePx} height={yBottom - yTop}
+                    fill="#ffffff" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
+                  <rect x={xRight - framePx} y={yTop} width={framePx} height={yBottom - yTop}
+                    fill="#ffffff" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
+                  <rect x={xLeft} y={yTop} width={xRight - xLeft} height={framePx}
+                    fill="#ffffff" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
+                  {leafCount === 1 ? (
+                    <path d={`M ${hingeX} ${yBottom} L ${farX} ${leafTopY} L ${farX} ${yBottom} Z`}
+                      fill="none" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
+                  ) : (
+                    <>
+                      <path d={`M ${xLeft + openingInset} ${yBottom} L ${meetingX} ${leafTopY} L ${meetingX} ${yBottom} Z`}
+                        fill="none" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
+                      <path d={`M ${xRight - openingInset} ${yBottom} L ${meetingX} ${leafTopY} L ${meetingX} ${yBottom} Z`}
+                        fill="none" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
+                    </>
+                  )}
+                </g>,
+              );
             }
             return rendered;
           })()}
