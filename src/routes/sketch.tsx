@@ -6119,6 +6119,66 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
 
 
+    // ===== Render Tangga =====
+    {
+      const sortedLv = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+      const stairs: Stair[] = [...(sketch.stairs ?? [])];
+      if (drawing && tool === "tangga" && stairSub === "gambar" && activeLvlId) {
+        const i = sortedLv.findIndex((l) => l.id === activeLvlId);
+        const above = i >= 0 ? sortedLv[i + 1] : undefined;
+        if (above) stairs.push({
+          id: "__stair_draft__", levelId: activeLvlId, toLevelId: above.id,
+          kind: stairKind, a: drawing.a, b: drawing.b, widthM: stairWidthM,
+          stepCount: stairSteps, landing: stairLanding, offsetM: stairOffsetM,
+          innerRadiusM: stairInnerRadiusM, createdAt: 0,
+        });
+      }
+      ctx.save();
+      ctx.translate(view.tx, view.ty);
+      ctx.rotate(view.r);
+      ctx.scale(view.s, view.s);
+      for (const stair of stairs) {
+        const visible = stair.levelId === activeLvlId || stair.toLevelId === activeLvlId || stair.id === "__stair_draft__";
+        if (!visible) continue;
+        const plan = stairPlanGeometry(stair, pxPerMeter);
+        const isTop = stair.toLevelId === activeLvlId;
+        const selected = stair.id === stairSelectedId;
+        ctx.beginPath();
+        plan.footprint.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.fillStyle = selected ? "rgba(232,93,58,0.16)" : "rgba(214,198,174,0.24)";
+        ctx.fill();
+        ctx.strokeStyle = selected ? "#e85d3a" : "#27231f";
+        ctx.lineWidth = (selected ? 2.4 : 1.4) / view.s;
+        ctx.setLineDash(isTop ? [6 / view.s, 4 / view.s] : []);
+        ctx.stroke();
+        for (const [a, b] of plan.stepLines) {
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        for (const landing of plan.landings) {
+          ctx.beginPath(); landing.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+          ctx.closePath(); ctx.stroke();
+        }
+        if (plan.path.length >= 2) {
+          ctx.beginPath(); plan.path.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)); ctx.stroke();
+          const tip = plan.path[plan.path.length - 1], prev = plan.path[plan.path.length - 2];
+          const dx = tip.x - prev.x, dy = tip.y - prev.y, len = Math.max(1, Math.hypot(dx, dy));
+          const ux = dx / len, uy = dy / len, h = Math.min(stair.widthM * pxPerMeter * 0.35, 16 / view.s);
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.beginPath(); ctx.moveTo(tip.x, tip.y);
+          ctx.lineTo(tip.x - ux * h - uy * h * 0.55, tip.y - uy * h + ux * h * 0.55);
+          ctx.lineTo(tip.x - ux * h + uy * h * 0.55, tip.y - uy * h - ux * h * 0.55); ctx.closePath(); ctx.fill();
+        }
+        if (tool === "tangga" && selected && (stairSub === "edit" || stairSub === "geser")) {
+          for (const p of [stair.a, stair.b]) {
+            ctx.beginPath(); ctx.arc(p.x, p.y, 5 / view.s, 0, Math.PI * 2); ctx.fillStyle = "#ffffff"; ctx.fill(); ctx.strokeStyle = "#e85d3a"; ctx.stroke();
+          }
+        }
+      }
+      ctx.restore();
+    }
+
     // ===== Render Ramps =====
     {
       const sortedLv = [...(levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
@@ -6873,7 +6933,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, rampWidthInput, rampNInput, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -7993,6 +8053,35 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         return;
       }
       return;
+    }
+
+    // ===== Tangga tool interactions =====
+    if (tool === "tangga") {
+      const raw = getWorldPosRaw(e);
+      const p = getWorldPos(e);
+      const candidates = (sketch.stairs ?? []).filter((stair) => stair.levelId === activeLvlId || stair.toLevelId === activeLvlId);
+      if (stairSub === "gambar") {
+        if (!activeLvlId) { toast.error("Pilih level dulu"); return; }
+        const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+        const i = sorted.findIndex((level) => level.id === activeLvlId);
+        if (i < 0 || i === sorted.length - 1) { toast.error("Tangga membutuhkan level lantai di atasnya"); return; }
+        setDrawing({ a: p, b: p });
+        return;
+      }
+      const hit = [...candidates].reverse().find((stair) => stairContains(stair, raw, pxPerMeter));
+      if (!hit) { setStairSelectedId(null); return; }
+      setStairSelectedId(hit.id);
+      setStairKind(hit.kind); setStairWidthInput(String(hit.widthM)); setStairStepsInput(String(hit.stepCount));
+      setStairLanding(hit.landing); setStairOffsetInput(String(hit.offsetM)); setStairRadiusInput(String(hit.innerRadiusM));
+      if (stairSub === "hapus") {
+        pushHistory(); onChange({ stairs: (sketch.stairs ?? []).filter((stair) => stair.id !== hit.id) });
+        setStairSelectedId(null); toast.success("Tangga dihapus"); return;
+      }
+      if (stairSub === "geser") {
+        pushHistory(); setStairMoveDrag({ id: hit.id, start: raw, original: hit }); return;
+      }
+      const endpoint = dist(raw, hit.a) <= dist(raw, hit.b) ? "a" : "b";
+      pushHistory(); setStairEndpointDrag({ id: hit.id, endpoint }); return;
     }
 
     // ===== Ramp tool interactions =====
@@ -9413,6 +9502,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setPinDrag(getWorldPosRaw(e));
       return;
     }
+    if (stairEndpointDrag) {
+      const p = getWorldPos(e);
+      onChange({ stairs: (sketch.stairs ?? []).map((stair) => stair.id === stairEndpointDrag.id ? { ...stair, [stairEndpointDrag.endpoint]: p } : stair) });
+      return;
+    }
+    if (stairMoveDrag) {
+      const p = getWorldPosRaw(e);
+      onChange({ stairs: (sketch.stairs ?? []).map((stair) => stair.id === stairMoveDrag.id ? translateStair(stairMoveDrag.original, p.x - stairMoveDrag.start.x, p.y - stairMoveDrag.start.y) : stair) });
+      return;
+    }
     // Ramp vertex drag
     if (roadVertexDrag) {
       const wp = getWorldPos(e);
@@ -9481,6 +9580,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         onChange({ sectionCuts: next });
       }
       return;
+    }
+    if (stairEndpointDrag || stairMoveDrag) {
+      setStairEndpointDrag(null); setStairMoveDrag(null); endPointer(e); return;
     }
     // Parking drag (vertex / rotate / area)
     if (parkingDrag) {
@@ -10220,6 +10322,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setRoofSelectedId(roof.id);
       const ridge = roofRidgeHeightOf(roof, pxPerMeter);
       toast.success(`Atap ${roofKind} — lebar ${roofWidthM} m · puncak ${ridge.toFixed(2)} m`);
+      return;
+    }
+
+    if (curTool === "tangga") {
+      const sorted = [...levels].sort((x, y) => x.mdpl - y.mdpl);
+      const i = sorted.findIndex((level) => level.id === activeLvlId);
+      const above = i >= 0 ? sorted[i + 1] : undefined;
+      if (!activeLvlId || !above) { toast.error("Tangga membutuhkan level lantai di atasnya"); return; }
+      const stair: Stair = {
+        id: genStairId(), levelId: activeLvlId, toLevelId: above.id, kind: stairKind,
+        a, b, widthM: stairWidthM, stepCount: stairSteps, landing: stairLanding,
+        offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM, createdAt: Date.now(),
+      };
+      pushHistory(); onChange({ stairs: [...(sketch.stairs ?? []), stair] }); setStairSelectedId(stair.id);
+      const metrics = stairMetrics(stair, levels, pxPerMeter);
+      toast.success(`Tangga ${stairKind} · tinggi anak tangga ${(metrics.riserM * 100).toFixed(1)} cm · pijakan ${(metrics.treadM * 100).toFixed(1)} cm`);
       return;
     }
 
