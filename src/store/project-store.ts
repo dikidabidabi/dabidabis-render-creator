@@ -32,7 +32,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     const s = get();
     if (s.hydrating && s.owner === owner) return;
     if (s.hydrated && s.owner === owner) return;
-    set({ hydrating: true, hydrated: false, owner, error: null });
+    set({
+      hydrating: true,
+      hydrated: false,
+      owner,
+      error: null,
+      parkingClipboard: s.owner === owner ? s.parkingClipboard : null,
+      stairClipboard: s.owner === owner ? s.stairClipboard : null,
+    });
     try {
       await hydrateFromIndexedDB(owner);
       if (get().owner !== owner) return;
