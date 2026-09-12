@@ -2719,11 +2719,8 @@ function sectionDoorProjection(
   const t = (relX * dx + relY * dy) / cutLen2;
   if (t < -0.001 || t > 1.001) return null;
 
-  const doorDx = door.b.x - door.a.x;
-  const doorDy = door.b.y - door.a.y;
-  const alongCutPx = Math.abs((doorDx * dx + doorDy * dy) / cutLen);
   const nominalWidthM = door.widthCm / 100;
-  const projectedWidthM = Math.max(0.05, Math.min(nominalWidthM, alongCutPx / pxPerMeter));
+  const projectedWidthM = nominalWidthM;
   const hingeAlong = ((door.a.x - cut.p1.x) * dx + (door.a.y - cut.p1.y) * dy) / cutLen2;
   const leafEndAlong = ((door.b.x - cut.p1.x) * dx + (door.b.y - cut.p1.y) * dy) / cutLen2;
   return {
