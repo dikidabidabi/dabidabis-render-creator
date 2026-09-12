@@ -14,14 +14,23 @@ export type Stair = {
   landing: boolean;
   offsetM: number;
   innerRadiusM: number;
+  rotationDeg: number;
   createdAt: number;
+};
+
+export type StairSectionSurface = {
+  polygon: Point[];
+  elevationRatio: number;
+  kind: "tread" | "landing";
 };
 
 export type StairPlan = {
   footprint: Point[];
   stepLines: Array<[Point, Point]>;
+  innerLines: Point[][];
   path: Point[];
   landings: Point[][];
+  sectionSurfaces: StairSectionSurface[];
   totalRunM: number;
 };
 
@@ -59,6 +68,7 @@ export function normalizeStairs(raw: unknown, validLevelIds: Set<string>): Stair
       landing: value.landing === true,
       offsetM: Math.max(0, finite(value.offsetM, DEFAULT_STAIR_OFFSET_M)),
       innerRadiusM: Math.max(0.1, finite(value.innerRadiusM, DEFAULT_STAIR_INNER_RADIUS_M)),
+      rotationDeg: finite(value.rotationDeg, Math.atan2(by - ay, bx - ax) * 180 / Math.PI),
       createdAt: finite(value.createdAt, Date.now()),
     });
   }
@@ -77,10 +87,6 @@ function frame(stair: Stair) {
   return { lengthPx, u, v, at };
 }
 
-function lerp(a: Point, b: Point, t: number): Point {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
 export function stairPlanGeometry(stair: Stair, pxPerMeter: number): StairPlan {
   const count = Math.max(2, stair.stepCount);
   const { lengthPx, at } = frame(stair);
@@ -95,13 +101,22 @@ export function stairPlanGeometry(stair: Stair, pxPerMeter: number): StairPlan {
     for (let i = 0; i <= segs; i++) footprint.push(point(outer, angle0 + (Math.PI * 2 * i) / segs));
     for (let i = segs; i >= 0; i--) footprint.push(point(inner, angle0 + (Math.PI * 2 * i) / segs));
     const stepLines: Array<[Point, Point]> = [];
+    const sectionSurfaces: StairSectionSurface[] = [];
     for (let i = 0; i < count; i++) {
       const a = angle0 + (Math.PI * 2 * i) / count;
+      const next = angle0 + (Math.PI * 2 * (i + 1)) / count;
       stepLines.push([point(inner, a), point(outer, a)]);
+      sectionSurfaces.push({
+        polygon: [point(inner, a), point(outer, a), point(outer, next), point(inner, next)],
+        elevationRatio: (i + 1) / count,
+        kind: "tread",
+      });
     }
     const path: Point[] = [];
     for (let i = 0; i <= count; i++) path.push(point((inner + outer) / 2, angle0 + (Math.PI * 2 * i) / count));
-    return { footprint, stepLines, path, landings: [], totalRunM: (Math.PI * (inner + outer)) / pxPerMeter };
+    const innerLine: Point[] = [];
+    for (let i = 0; i <= segs; i++) innerLine.push(point(inner, angle0 + (Math.PI * 2 * i) / segs));
+    return { footprint, stepLines, innerLines: [innerLine], path, landings: [], sectionSurfaces, totalRunM: (Math.PI * (inner + outer)) / pxPerMeter };
   }
   if (stair.kind === "u") {
     const gap = stair.offsetM * pxPerMeter;
@@ -111,11 +126,22 @@ export function stairPlanGeometry(stair: Stair, pxPerMeter: number): StairPlan {
     const run = Math.max(1, lengthPx - landingLen);
     const first = Math.ceil(count / 2), second = count - first;
     const stepLines: Array<[Point, Point]> = [];
+    const sectionSurfaces: StairSectionSurface[] = [];
     for (let i = 1; i <= first; i++) stepLines.push([at((run * i) / first, 0), at((run * i) / first, widthPx)]);
     for (let i = 1; i <= second; i++) stepLines.push([at(run - (run * i) / Math.max(1, second), widthPx + gap), at(run - (run * i) / Math.max(1, second), totalW)]);
     const landings = stair.landing ? [[at(run, 0), at(lengthPx, 0), at(lengthPx, totalW), at(run, totalW)]] : [];
+    for (let i = 0; i < first; i++) {
+      const x0 = (run * i) / first, x1 = (run * (i + 1)) / first;
+      sectionSurfaces.push({ polygon: [at(x0, 0), at(x1, 0), at(x1, widthPx), at(x0, widthPx)], elevationRatio: (i + 1) / count, kind: "tread" });
+    }
+    for (let i = 0; i < second; i++) {
+      const x1 = run - (run * i) / Math.max(1, second), x0 = run - (run * (i + 1)) / Math.max(1, second);
+      sectionSurfaces.push({ polygon: [at(x0, widthPx + gap), at(x1, widthPx + gap), at(x1, totalW), at(x0, totalW)], elevationRatio: (first + i + 1) / count, kind: "tread" });
+    }
+    if (stair.landing && landings[0]) sectionSurfaces.push({ polygon: landings[0], elevationRatio: first / count, kind: "landing" });
     const path = [at(0, widthPx / 2), at(lengthPx, widthPx / 2), at(lengthPx, widthPx + gap + widthPx / 2), at(0, widthPx + gap + widthPx / 2)];
-    return { footprint, stepLines, path, landings, totalRunM: (lengthPx * 2 + totalW) / pxPerMeter };
+    const innerLines = [[at(0, widthPx), at(run, widthPx)], [at(0, widthPx + gap), at(run, widthPx + gap)]];
+    return { footprint, stepLines, innerLines, path, landings, sectionSurfaces, totalRunM: (lengthPx * 2 + totalW) / pxPerMeter };
   }
   const half = widthPx / 2;
   const footprint = [at(0, -half), at(lengthPx, -half), at(lengthPx, half), at(0, half)];
@@ -124,7 +150,13 @@ export function stairPlanGeometry(stair: Stair, pxPerMeter: number): StairPlan {
   const stepLines: Array<[Point, Point]> = [];
   for (let i = 1; i <= count; i++) stepLines.push([at((run * i) / count, -half), at((run * i) / count, half)]);
   const landings = stair.landing ? [[at(run, -half), at(lengthPx, -half), at(lengthPx, half), at(run, half)]] : [];
-  return { footprint, stepLines, path: [at(0, 0), at(lengthPx, 0)], landings, totalRunM: lengthPx / pxPerMeter };
+  const sectionSurfaces: StairSectionSurface[] = [];
+  for (let i = 0; i < count; i++) {
+    const x0 = (run * i) / count, x1 = (run * (i + 1)) / count;
+    sectionSurfaces.push({ polygon: [at(x0, -half), at(x1, -half), at(x1, half), at(x0, half)], elevationRatio: (i + 1) / count, kind: "tread" });
+  }
+  if (stair.landing && landings[0]) sectionSurfaces.push({ polygon: landings[0], elevationRatio: 1, kind: "landing" });
+  return { footprint, stepLines, innerLines: [], path: [at(0, 0), at(lengthPx, 0)], landings, sectionSurfaces, totalRunM: lengthPx / pxPerMeter };
 }
 
 export function stairMetrics(stair: Stair, levels: Array<{ id: string; mdpl: number }>, pxPerMeter: number) {
@@ -141,6 +173,16 @@ export function stairMetrics(stair: Stair, levels: Array<{ id: string; mdpl: num
 
 export function translateStair(stair: Stair, dx: number, dy: number): Stair {
   return { ...stair, a: { x: stair.a.x + dx, y: stair.a.y + dy }, b: { x: stair.b.x + dx, y: stair.b.y + dy } };
+}
+
+export function rotateStair(stair: Stair, rotationDeg: number): Stair {
+  const length = Math.max(1, Math.hypot(stair.b.x - stair.a.x, stair.b.y - stair.a.y));
+  const radians = rotationDeg * Math.PI / 180;
+  return {
+    ...stair,
+    rotationDeg,
+    b: { x: stair.a.x + Math.cos(radians) * length, y: stair.a.y + Math.sin(radians) * length },
+  };
 }
 
 export function stairContains(stair: Stair, point: Point, pxPerMeter: number): boolean {

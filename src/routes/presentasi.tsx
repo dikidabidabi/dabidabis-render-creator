@@ -3405,27 +3405,33 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             });
             return out;
           })()}
-          {/* Tangga pada potongan — hanya saat footprint dipotong garis irisan. */}
+          {/* Tangga pada potongan — tiap bidang anak tangga diuji terhadap garis potong. */}
           {(() => {
             const out: React.ReactNode[] = [];
             for (const stair of sketch.stairs ?? []) {
-              const intervals = cutPolygonIntervals(cut.p1, cut.p2, stairPlanGeometry(stair, pxPerMeter).footprint);
-              if (!intervals.length) continue;
+              const plan = stairPlanGeometry(stair, pxPerMeter);
               const from = boxes.find((box) => box.id === stair.levelId);
               const to = boxes.find((box) => box.id === stair.toLevelId);
               if (!from || !to) continue;
-              for (const [t0, t1] of intervals) {
-                const x0 = t0 * cutLenM, x1 = t1 * cutLenM;
-                const count = Math.max(2, stair.stepCount);
-                const points: string[] = [`${mx(x0)},${my(from.baseM)}`];
-                for (let i = 1; i <= count; i++) {
-                  const xa = x0 + ((x1 - x0) * (i - 1)) / count;
-                  const xb = x0 + ((x1 - x0) * i) / count;
-                  const y = from.baseM + ((to.baseM - from.baseM) * i) / count;
-                  points.push(`${mx(xa)},${my(y)}`, `${mx(xb)},${my(y)}`);
+              const height = to.baseM - from.baseM;
+              const hits: Array<{ x0: number; x1: number; elevation: number; kind: "tread" | "landing" }> = [];
+              for (const surface of plan.sectionSurfaces) {
+                for (const [t0, t1] of cutPolygonIntervals(cut.p1, cut.p2, surface.polygon)) {
+                  hits.push({ x0: t0 * cutLenM, x1: t1 * cutLenM, elevation: from.baseM + height * surface.elevationRatio, kind: surface.kind });
                 }
-                out.push(<polyline key={`stair-sec-${stair.id}-${t0}`} points={points.join(" ")} fill="none" stroke="#1f2937" strokeWidth={1.5} />);
               }
+              hits.sort((a, b) => a.x0 - b.x0 || a.x1 - b.x1);
+              hits.forEach((hit, index) => {
+                const y = my(hit.elevation);
+                out.push(
+                  <g key={`stair-sec-${stair.id}-${index}`}>
+                    <line x1={mx(hit.x0)} y1={y} x2={mx(hit.x1)} y2={y} stroke="#1f2937" strokeWidth={hit.kind === "landing" ? 2 : 1.5} />
+                    {index > 0 && Math.abs(hits[index - 1].x1 - hit.x0) < 0.03 && (
+                      <line x1={mx(hit.x0)} y1={my(hits[index - 1].elevation)} x2={mx(hit.x0)} y2={y} stroke="#1f2937" strokeWidth={1.5} />
+                    )}
+                  </g>,
+                );
+              });
             }
             return out;
           })()}
@@ -4376,6 +4382,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             return <g key={`stair-${stair.id}`} pointerEvents="none" opacity={top ? 0.75 : 1}>
               <polygon points={plan.footprint.map((p) => `${p.x},${p.y}`).join(" ")} fill="rgba(214,198,174,0.22)" stroke="#27231f" strokeWidth={strokeWidth} strokeDasharray={top ? `${sw * 0.006} ${sw * 0.004}` : undefined} />
               {plan.stepLines.map(([a, b], i) => <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#27231f" strokeWidth={strokeWidth * 0.75} />)}
+              {plan.innerLines.map((line, i) => <polyline key={`inner-${i}`} points={line.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#6b4f3a" strokeWidth={strokeWidth * 1.15} />)}
               {plan.landings.map((landing, i) => <polygon key={i} points={landing.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#27231f" strokeWidth={strokeWidth} />)}
               <path d={path} fill="none" stroke="#e85d3a" strokeWidth={strokeWidth} strokeDasharray={top ? `${sw * 0.005} ${sw * 0.003}` : undefined} />
             </g>;
