@@ -2672,6 +2672,30 @@ function cutPolygonIntervals(p1: Point, p2: Point, poly: Point[]): Array<[number
   }
   return out;
 }
+
+function sectionSegmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
+  const abx = b.x - a.x, aby = b.y - a.y;
+  const cdx = d.x - c.x, cdy = d.y - c.y;
+  const denom = abx * cdy - aby * cdx;
+  if (Math.abs(denom) < 1e-7) return false;
+  const t = ((c.x - a.x) * cdy - (c.y - a.y) * cdx) / denom;
+  const u = ((c.x - a.x) * aby - (c.y - a.y) * abx) / denom;
+  // Abaikan sentuhan tepat di garis potong dan di pusat kolom.
+  return t > 1e-4 && t < 1 - 1e-4 && u >= -1e-6 && u <= 1 + 1e-6;
+}
+
+function sectionColumnBlocked(
+  cutPoint: Point,
+  columnCenter: Point,
+  lines: Line[],
+  levelId: string,
+): boolean {
+  return lines.some((line) => {
+    if (line.levelId && line.levelId !== levelId) return false;
+    if ((line.kind ?? "straight") !== "straight") return false;
+    return sectionSegmentsIntersect(cutPoint, columnCenter, line.a, line.b);
+  });
+}
 function isLahanSec(n: string) { return n.trim().toLowerCase().startsWith("lahan"); }
 function isVoidSec(n: string) { return n.trim().toLowerCase() === "void"; }
 
@@ -2978,6 +3002,83 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               });
             });
           })}
+
+          {/* Kolom struktur yang berada di sisi pandang setelah garis potong.
+              Kolom diproyeksikan ke bidang potongan dan disembunyikan bila
+              garis pandangnya terlebih dahulu memotong dinding pada level itu. */}
+          {(() => {
+            const dx = cut.p2.x - cut.p1.x;
+            const dy = cut.p2.y - cut.p1.y;
+            const cutLen2 = dx * dx + dy * dy;
+            const cutLen = Math.sqrt(cutLen2);
+            if (cutLen < 1e-6) return null;
+            const viewNx = -dy / cutLen;
+            const viewNy = dx / cutLen;
+            const allLines = sketch.lines ?? [];
+            const levels = sketch.levels ?? [];
+            const rendered: React.ReactNode[] = [];
+
+            for (const [gridIndex, grid] of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).entries()) {
+              if (grid.lineOnly) continue;
+              const rotation = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+              const cs = Math.cos(rotation), sn = Math.sin(rotation);
+              const halfColumnM = grid.colSizeCm / 200;
+              const columnWidthPx = Math.max(2, (grid.colSizeCm / 100) * scalePxPerM);
+
+              for (const box of boxes) {
+                const sourceLevel = levels.find((level) => level.id === box.id);
+                if (!sourceLevel || !levelInRange(grid, sourceLevel, levels)) continue;
+                const { spansX, spansY } = spansForLevel(grid, box.id);
+                const xs = axisPositions(spansX);
+                const ys = axisPositions(spansY);
+
+                for (let j = 0; j < ys.length; j++) {
+                  for (let i = 0; i < xs.length; i++) {
+                    if (!isColumnVisible(grid, box.id, i, j, spansX, spansY)) continue;
+                    const localX = xs[i] * pxPerMeter;
+                    const localY = ys[j] * pxPerMeter;
+                    const center = {
+                      x: grid.origin.x + localX * cs - localY * sn,
+                      y: grid.origin.y + localX * sn + localY * cs,
+                    };
+                    const relX = center.x - cut.p1.x;
+                    const relY = center.y - cut.p1.y;
+                    const depthPx = relX * viewNx + relY * viewNy;
+                    // Panah garis potong mengarah ke normal kanan; hanya kolom
+                    // yang seluruh pusatnya berada di sisi tersebut yang tampil.
+                    if (depthPx <= halfColumnM * pxPerMeter) continue;
+                    const t = (relX * dx + relY * dy) / cutLen2;
+                    if (t < -0.001 || t > 1.001) continue;
+                    const clampedT = Math.max(0, Math.min(1, t));
+                    const cutPoint = {
+                      x: cut.p1.x + dx * clampedT,
+                      y: cut.p1.y + dy * clampedT,
+                    };
+                    if (sectionColumnBlocked(cutPoint, center, allLines, box.id)) continue;
+
+                    const x = mx(clampedT * cutLenM) - columnWidthPx / 2;
+                    for (let floorIndex = 0; floorIndex < Math.max(1, box.count); floorIndex++) {
+                      const baseM = box.baseM + floorIndex * box.floorH;
+                      const topM = baseM + box.floorH;
+                      rendered.push(
+                        <rect
+                          key={`section-column-${gridIndex}-${box.id}-${i}-${j}-${floorIndex}`}
+                          x={x}
+                          y={my(topM)}
+                          width={columnWidthPx}
+                          height={my(baseM) - my(topM)}
+                          fill={`url(#concrete-dot-${slide.id})`}
+                          stroke="#111111"
+                          strokeWidth={0.8}
+                        />,
+                      );
+                    }
+                  }
+                }
+              }
+            }
+            return rendered;
+          })()}
 
           {/* Level boxes — pelat lantai tebal HANYA di bawah ruang;
               di luar ruang berupa garis putus-putus tipis.
