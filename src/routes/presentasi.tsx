@@ -3184,128 +3184,6 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             });
           })()}
 
-          {/* Slab lantai (150 mm) + Balok (400×700 mm) di setiap as grid.
-              Notasi: beton dengan pola bintik. */}
-          {(() => {
-            const floors = sketch.floors ?? [];
-            if (!floors.length) return null;
-            const SLAB_M = FLOOR_THICKNESS_MM / 1000;
-            const BEAM_W_M = 0.4;
-            const BEAM_H_M = 0.7;
-
-            // Cut intersection intervals (in cut-meters) untuk satu floor (outer minus holes).
-            const intervalsFor = (fl: Floor): Array<[number, number]> => {
-              const outer = cutPolygonIntervals(cut.p1, cut.p2, fl.outer);
-              if (!outer.length) return [];
-              const holes = (fl.holes ?? []).flatMap((h) => cutPolygonIntervals(cut.p1, cut.p2, h));
-              let segs: Array<[number, number]> = outer.map(([a, b]) => [a, b]);
-              for (const [ha, hb] of holes) {
-                const next: Array<[number, number]> = [];
-                for (const [a, b] of segs) {
-                  if (hb <= a || ha >= b) { next.push([a, b]); continue; }
-                  if (ha > a) next.push([a, Math.min(b, ha)]);
-                  if (hb < b) next.push([Math.max(a, hb), b]);
-                }
-                segs = next;
-              }
-              return segs
-                .filter(([a, b]) => b - a > 1e-5)
-                .map(([a, b]) => [a * cutLenM, b * cutLenM] as [number, number]);
-            };
-
-            // Pusat balok (cut-meters) — proyeksi semua as grid X & Y ke garis potongan.
-            const ppm = pxPerMeter;
-            const ddx = cut.p2.x - cut.p1.x;
-            const ddy = cut.p2.y - cut.p1.y;
-            const beamCenters: number[] = [];
-            for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
-              const axX = axisPositions(grid.spansX);
-              for (let i = 0; i < axX.length; i++) {
-                const planX = grid.origin.x + axX[i] * ppm;
-                if (Math.abs(ddx) < 1e-6) continue;
-                const t = (planX - cut.p1.x) / ddx;
-                if (t < -0.001 || t > 1.001) continue;
-                beamCenters.push(Math.max(0, Math.min(1, t)) * cutLenM);
-              }
-              if (!grid.lineOnly) {
-                const axY = axisPositions(grid.spansY);
-                for (let j = 0; j < axY.length; j++) {
-                  const planY = grid.origin.y + axY[j] * ppm;
-                  if (Math.abs(ddy) < 1e-6) continue;
-                  const t = (planY - cut.p1.y) / ddy;
-                  if (t < -0.001 || t > 1.001) continue;
-                  beamCenters.push(Math.max(0, Math.min(1, t)) * cutLenM);
-                }
-              }
-            }
-            // Dedupe pusat balok yang terlalu dekat (< setengah lebar balok).
-            beamCenters.sort((a, b) => a - b);
-            const uniqCenters: number[] = [];
-            for (const c of beamCenters) {
-              if (!uniqCenters.length || c - uniqCenters[uniqCenters.length - 1] > BEAM_W_M * 0.5) {
-                uniqCenters.push(c);
-              }
-            }
-
-            const fill = "#e8e8e8";
-            const strokeCol = "#111";
-            const swSlab = 0.4;
-            return floors.flatMap((fl) => {
-              const copies = floorsExp.filter((e) => e.sourceId === fl.levelId);
-              if (!copies.length) return [];
-              const intervals = intervalsFor(fl);
-              if (!intervals.length) return [];
-              return copies.map((cp) => {
-                const topM = cp.mdpl;
-                const yTop = my(topM);
-                const ySlabBot = my(topM - SLAB_M);
-                const yBeamBot = my(topM - SLAB_M - BEAM_H_M);
-                const EDGE_BEAM_W_M = 0.2;
-                return (
-                  <g key={`slab-${fl.id}-${cp.id}`}>
-                    {intervals.map(([a, b], i) => (
-                      <rect key={`s${i}`}
-                        x={mx(a)} y={yTop}
-                        width={(b - a) * scalePxPerM} height={ySlabBot - yTop}
-                        fill={fill} stroke={strokeCol} strokeWidth={swSlab} strokeLinejoin="miter" />
-                    ))}
-                    {uniqCenters.map((bc, i) => {
-                      const inside = intervals.some(([a, b]) => bc >= a - 1e-3 && bc <= b + 1e-3);
-                      if (!inside) return null;
-                      const x0 = mx(bc - BEAM_W_M / 2);
-                      const w = BEAM_W_M * scalePxPerM;
-                      const yTopBeam = ySlabBot - 0.2;
-                      return (
-                        <rect key={`b${i}`}
-                          x={x0} y={yTopBeam}
-                          width={w} height={yBeamBot - yTopBeam}
-                          fill={fill} stroke={strokeCol} strokeWidth={swSlab} strokeLinejoin="miter" />
-                      );
-                    })}
-                    {/* Balok tepi pada setiap ujung lantai / tepi void — 200mm × 700mm */}
-                    {intervals.flatMap(([a, b], i) => {
-                      const w = EDGE_BEAM_W_M * scalePxPerM;
-                      const yTopBeam = ySlabBot - 0.2;
-                      return [a, b].map((edge, k) => (
-                        <rect key={`eb${i}-${k}`}
-                          x={mx(edge - EDGE_BEAM_W_M / 2)} y={yTopBeam}
-                          width={w} height={yBeamBot - yTopBeam}
-                          fill={fill} stroke={strokeCol} strokeWidth={swSlab} strokeLinejoin="miter" />
-                      ));
-                    })}
-                    {/* Garis tipis penghubung ujung bawah balok dengan kedua ujung dinding (slab) */}
-                    {intervals.map(([a, b], i) => (
-                      <line key={`bl${i}`}
-                        x1={mx(a)} y1={yBeamBot}
-                        x2={mx(b)} y2={yBeamBot}
-                        stroke={strokeCol} strokeWidth={0.4} strokeLinecap="square" />
-                    ))}
-                  </g>
-                );
-              });
-            });
-          })()}
-
           {/* Pohon di permukaan Taman pada potongan — kanopi hijau solid 50%,
               tinggi total acak (kanopi..5 m) dari permukaan level. */}
           {boxes.flatMap((b) =>
@@ -3535,6 +3413,103 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               });
             }
             return out;
+          })()}
+          {/* Plat dan seluruh balok digambar paling akhir sebagai satu siluet beton.
+              Balok perimeter berada di dalam batas terluar plat, sehingga sisi
+              terluar keduanya tepat berimpit tanpa garis sambungan. */}
+          {(() => {
+            const floors = sketch.floors ?? [];
+            if (!floors.length) return null;
+            const slabM = FLOOR_THICKNESS_MM / 1000;
+            const beamWidthM = 0.4;
+            const perimeterBeamWidthM = 0.2;
+            const beamHeightM = 0.7;
+
+            const intervalsFor = (floor: Floor): Array<[number, number]> => {
+              const outer = cutPolygonIntervals(cut.p1, cut.p2, floor.outer);
+              const holes = (floor.holes ?? []).flatMap((hole) => cutPolygonIntervals(cut.p1, cut.p2, hole));
+              let intervals: Array<[number, number]> = outer.map(([a, b]) => [a, b]);
+              for (const [holeA, holeB] of holes) {
+                const next: Array<[number, number]> = [];
+                for (const [a, b] of intervals) {
+                  if (holeB <= a || holeA >= b) { next.push([a, b]); continue; }
+                  if (holeA > a) next.push([a, Math.min(b, holeA)]);
+                  if (holeB < b) next.push([Math.max(a, holeB), b]);
+                }
+                intervals = next;
+              }
+              return intervals
+                .filter(([a, b]) => b - a > 1e-5)
+                .map(([a, b]) => [a * cutLenM, b * cutLenM]);
+            };
+
+            const ddx = cut.p2.x - cut.p1.x;
+            const ddy = cut.p2.y - cut.p1.y;
+            const beamCenters: number[] = [];
+            for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
+              for (const axisX of axisPositions(grid.spansX)) {
+                if (Math.abs(ddx) < 1e-6) continue;
+                const t = (grid.origin.x + axisX * pxPerMeter - cut.p1.x) / ddx;
+                if (t >= -0.001 && t <= 1.001) beamCenters.push(Math.max(0, Math.min(1, t)) * cutLenM);
+              }
+              if (!grid.lineOnly) {
+                for (const axisY of axisPositions(grid.spansY)) {
+                  if (Math.abs(ddy) < 1e-6) continue;
+                  const t = (grid.origin.y + axisY * pxPerMeter - cut.p1.y) / ddy;
+                  if (t >= -0.001 && t <= 1.001) beamCenters.push(Math.max(0, Math.min(1, t)) * cutLenM);
+                }
+              }
+            }
+            beamCenters.sort((a, b) => a - b);
+            const uniqueCenters = beamCenters.filter((center, index) => index === 0 || center - beamCenters[index - 1] > beamWidthM * 0.5);
+
+            const mergeBands = (bands: Array<[number, number]>): Array<[number, number]> => {
+              const sorted = bands.filter(([a, b]) => b > a).sort((a, b) => a[0] - b[0]);
+              const merged: Array<[number, number]> = [];
+              for (const band of sorted) {
+                const last = merged[merged.length - 1];
+                if (last && band[0] <= last[1] + 1e-5) last[1] = Math.max(last[1], band[1]);
+                else merged.push([...band]);
+              }
+              return merged;
+            };
+
+            return floors.flatMap((floor) => {
+              const copies = floorsExp.filter((entry) => entry.sourceId === floor.levelId);
+              const intervals = intervalsFor(floor);
+              return copies.flatMap((copy) => intervals.map(([a, b], intervalIndex) => {
+                const bands = mergeBands([
+                  [a, Math.min(b, a + perimeterBeamWidthM)],
+                  [Math.max(a, b - perimeterBeamWidthM), b],
+                  ...uniqueCenters
+                    .filter((center) => center > a && center < b)
+                    .map((center) => [Math.max(a, center - beamWidthM / 2), Math.min(b, center + beamWidthM / 2)] as [number, number]),
+                ]);
+                const yTop = my(copy.mdpl);
+                const ySlabBottom = my(copy.mdpl - slabM);
+                const yBeamBottom = my(copy.mdpl - slabM - beamHeightM);
+                let path = `M ${mx(a)} ${yTop} H ${mx(b)} V ${ySlabBottom}`;
+                let cursor = b;
+                for (let i = bands.length - 1; i >= 0; i--) {
+                  const [bandA, bandB] = bands[i];
+                  if (cursor > bandB + 1e-5) path += ` H ${mx(bandB)}`;
+                  path += ` V ${yBeamBottom} H ${mx(bandA)} V ${ySlabBottom}`;
+                  cursor = bandA;
+                }
+                if (cursor > a + 1e-5) path += ` H ${mx(a)}`;
+                path += " Z";
+                return (
+                  <path
+                    key={`solid-slab-beams-${floor.id}-${copy.id}-${intervalIndex}`}
+                    d={path}
+                    fill={`url(#concrete-dot-${slide.id})`}
+                    stroke="#111111"
+                    strokeWidth={0.8}
+                    strokeLinejoin="miter"
+                  />
+                );
+              }));
+            });
           })()}
           {/* Nama Level di sisi paling kanan potongan */}
           {boxes.map((b) => {
