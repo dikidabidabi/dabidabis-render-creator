@@ -3499,14 +3499,24 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 if (cursor > a + 1e-5) path += ` H ${mx(a)}`;
                 path += " Z";
                 return (
-                  <path
-                    key={`solid-slab-beams-${floor.id}-${copy.id}-${intervalIndex}`}
-                    d={path}
-                    fill={`url(#concrete-dot-${slide.id})`}
-                    stroke="#111111"
-                    strokeWidth={0.8}
-                    strokeLinejoin="miter"
-                  />
+                  <g key={`solid-slab-beams-${floor.id}-${copy.id}-${intervalIndex}`}>
+                    <path
+                      d={path}
+                      fill={`url(#concrete-dot-${slide.id})`}
+                      stroke="#111111"
+                      strokeWidth={0.8}
+                      strokeLinejoin="miter"
+                    />
+                    <line
+                      x1={mx(a)}
+                      y1={yBeamBottom}
+                      x2={mx(b)}
+                      y2={yBeamBottom}
+                      stroke="#111111"
+                      strokeWidth={0.25}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
                 );
               }));
             });
