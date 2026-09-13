@@ -3179,52 +3179,58 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const projection = sectionDoorProjection(door, cut);
               if (!projection) continue;
               const xCenter = mx(projection.t * cutLenM);
-              const yBottom = my(box.baseM);
-              const yTop = my(Math.min(box.baseM + doorHeightM, box.topM));
               const stroke = 0.3;
+              const expandedDoorFloors = groupBySource.get(door.levelId) ?? [];
+              const doorFloors = expandedDoorFloors.length
+                ? expandedDoorFloors.map((floor) => ({ key: floor.id, baseM: floor.mdpl, topM: floor.mdpl + floor.height }))
+                : [{ key: door.levelId, baseM: box.baseM, topM: box.topM }];
 
-              if (projection.kind === "cut") {
-                const cutWidthPx = Math.max(1, wallThicknessM * scalePxPerM);
+              for (const doorFloor of doorFloors) {
+                const yBottom = my(doorFloor.baseM);
+                const yTop = my(Math.min(doorFloor.baseM + doorHeightM, doorFloor.topM));
+
+                if (projection.kind === "cut") {
+                  const cutWidthPx = Math.max(1, wallThicknessM * scalePxPerM);
+                  rendered.push(
+                    <rect
+                      key={`section-door-cut-${door.id}-${doorFloor.key}`}
+                      x={xCenter - cutWidthPx / 2}
+                      y={yTop}
+                      width={cutWidthPx}
+                      height={yBottom - yTop}
+                      fill="#ffffff"
+                      stroke="#111111"
+                      strokeWidth={stroke}
+                      vectorEffect="non-scaling-stroke"
+                      pointerEvents="none"
+                    />,
+                  );
+                  continue;
+                }
+
+                const center = { x: (door.a.x + door.b.x) / 2, y: (door.a.y + door.b.y) / 2 };
+                const cutPoint = {
+                  x: cut.p1.x + (cut.p2.x - cut.p1.x) * projection.t,
+                  y: cut.p1.y + (cut.p2.y - cut.p1.y) * projection.t,
+                };
+                if (sectionColumnBlocked(cutPoint, center, allLines, door.levelId)) continue;
+                if (columnBlocksDoor(cutPoint, center, door.levelId)) continue;
+
+                const fullWidthM = Math.max(frameM * 3, projection.widthM);
+                const xLeft = xCenter - (fullWidthM * scalePxPerM) / 2;
+                const xRight = xCenter + (fullWidthM * scalePxPerM) / 2;
+                const framePx = Math.max(1, frameM * scalePxPerM);
+                const openingInset = framePx / 2;
+                const hingeX = projection.hingeAtStart ? xLeft + openingInset : xRight - openingInset;
+                const farX = projection.hingeAtStart ? xRight - openingInset : xLeft + openingInset;
+                const leafCount = door.leaves === 2 ? 2 : 1;
+                const meetingX = (xLeft + xRight) / 2;
+                const hingeY = (yTop + yBottom) / 2;
+                const openingTopY = yTop + framePx;
+                const openingBottomY = yBottom;
+
                 rendered.push(
-                  <rect
-                    key={`section-door-cut-${door.id}`}
-                    x={xCenter - cutWidthPx / 2}
-                    y={yTop}
-                    width={cutWidthPx}
-                    height={yBottom - yTop}
-                    fill="#ffffff"
-                    stroke="#111111"
-                    strokeWidth={stroke}
-                    vectorEffect="non-scaling-stroke"
-                    pointerEvents="none"
-                  />,
-                );
-                continue;
-              }
-
-              const center = { x: (door.a.x + door.b.x) / 2, y: (door.a.y + door.b.y) / 2 };
-              const cutPoint = {
-                x: cut.p1.x + (cut.p2.x - cut.p1.x) * projection.t,
-                y: cut.p1.y + (cut.p2.y - cut.p1.y) * projection.t,
-              };
-              if (sectionColumnBlocked(cutPoint, center, allLines, door.levelId)) continue;
-              if (columnBlocksDoor(cutPoint, center, door.levelId)) continue;
-
-              const fullWidthM = Math.max(frameM * 3, projection.widthM);
-              const xLeft = xCenter - (fullWidthM * scalePxPerM) / 2;
-              const xRight = xCenter + (fullWidthM * scalePxPerM) / 2;
-              const framePx = Math.max(1, frameM * scalePxPerM);
-              const openingInset = framePx / 2;
-              const hingeX = projection.hingeAtStart ? xLeft + openingInset : xRight - openingInset;
-              const farX = projection.hingeAtStart ? xRight - openingInset : xLeft + openingInset;
-              const leafCount = door.leaves === 2 ? 2 : 1;
-              const meetingX = (xLeft + xRight) / 2;
-              const hingeY = (yTop + yBottom) / 2;
-              const openingTopY = yTop + framePx;
-              const openingBottomY = yBottom;
-
-              rendered.push(
-                <g key={`section-door-${door.id}`} pointerEvents="none">
+                  <g key={`section-door-${door.id}-${doorFloor.key}`} pointerEvents="none">
                   <rect x={xLeft} y={yTop} width={xRight - xLeft} height={yBottom - yTop}
                     fill="#ffffff" stroke="none" />
                   <path d={`M ${xLeft} ${yBottom} V ${yTop} H ${xRight} V ${yBottom}`}
@@ -3246,8 +3252,9 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         fill="none" stroke="#111111" strokeWidth={stroke} vectorEffect="non-scaling-stroke" />
                     </>
                   )}
-                </g>,
-              );
+                  </g>,
+                );
+              }
             }
             return rendered;
           })()}
@@ -3567,11 +3574,16 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const from = boxes.find((box) => box.id === stair.levelId);
               const to = boxes.find((box) => box.id === stair.toLevelId);
               if (!from || !to) continue;
-              const height = to.baseM - from.baseM;
+              const expandedFromFloors = groupBySource.get(stair.levelId) ?? [];
+              const stairInstances = expandedFromFloors.length > 1
+                ? expandedFromFloors.map((floor) => ({ key: floor.id, baseM: floor.mdpl, heightM: floor.height }))
+                : [{ key: stair.levelId, baseM: from.baseM, heightM: to.baseM - from.baseM }];
+              for (const stairInstance of stairInstances) {
+              const height = stairInstance.heightM;
               const hits: Array<{ x0: number; x1: number; elevation: number; kind: "tread" | "landing" }> = [];
               for (const surface of plan.sectionSurfaces) {
                 for (const [t0, t1] of cutPolygonIntervals(cut.p1, cut.p2, surface.polygon)) {
-                  hits.push({ x0: t0 * cutLenM, x1: t1 * cutLenM, elevation: from.baseM + height * surface.elevationRatio, kind: surface.kind });
+                  hits.push({ x0: t0 * cutLenM, x1: t1 * cutLenM, elevation: stairInstance.baseM + height * surface.elevationRatio, kind: surface.kind });
                 }
               }
               hits.sort((a, b) => a.x0 - b.x0 || a.x1 - b.x1);
@@ -3597,7 +3609,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   const bottomY = my(hit.elevation - thicknessM);
                   const railTopY = my(hit.elevation + 1.1);
                   out.push(
-                    <g key={`stair-sec-transverse-${stair.id}-${hitIndex}`}>
+                    <g key={`stair-sec-transverse-${stair.id}-${stairInstance.key}-${hitIndex}`}>
                       <rect
                         x={Math.min(x0, x1)} y={Math.min(topY, bottomY)}
                         width={Math.abs(x1 - x0)} height={Math.abs(bottomY - topY)}
@@ -3703,7 +3715,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 }
                 const railPolyline = railPoints.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ");
                 out.push(
-                  <g key={`stair-sec-${stair.id}-${groupIndex}`}>
+                  <g key={`stair-sec-${stair.id}-${stairInstance.key}-${groupIndex}`}>
                     <polygon points={slabPoints} fill={`url(#concrete-dot-${slide.id})`} stroke="#1f2937" strokeWidth={0.8} />
                     <polyline points={top.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ")} fill="none" stroke="#1f2937" strokeWidth={1.2} />
                     <polyline points={underside.map((point) => `${mx(point.x)},${my(point.z)}`).join(" ")} fill="none" stroke="#1f2937" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
@@ -3714,6 +3726,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   </g>,
                 );
               });
+              }
             }
             return out;
           })()}
