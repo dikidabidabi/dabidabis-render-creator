@@ -432,6 +432,7 @@ type Sketch = {
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
   ramps?: Ramp[]; // Ramp antar level
   stairs?: Stair[]; // Tangga antar level
+  imageReferences?: ImageReference[]; // JPG acuan per level, di atas peta dan di bawah geometri
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   illustrations?: Annotation[]; // Ilustrasi Analisa (panah, zona, node, dsb) — Master Plan
@@ -439,6 +440,18 @@ type Sketch = {
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
   /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
   linkedMasterplan?: { rootLayerId: string };
+};
+
+type ImageReference = {
+  id: string;
+  levelId: string;
+  dataUrl: string;
+  name: string;
+  center: Point;
+  width: number;
+  height: number;
+  opacity: number;
+  createdAt: number;
 };
 
 type Circle = {
@@ -1085,6 +1098,27 @@ function normalizeSketch(s: any): Sketch {
     })(),
     roofs: normalizeRoofs(s?.roofs, new Set(levels.map((l) => l.id)), fallback),
     stairs: normalizeStairs(s?.stairs, new Set(levels.map((l) => l.id))),
+    imageReferences: (() => {
+      if (!Array.isArray(s?.imageReferences)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const out: ImageReference[] = [];
+      for (const ref of s.imageReferences) {
+        const x = Number(ref?.center?.x), y = Number(ref?.center?.y);
+        const width = Number(ref?.width), height = Number(ref?.height);
+        if (!ref || typeof ref.dataUrl !== "string" || !ref.dataUrl.startsWith("data:image/jpeg")) continue;
+        if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) continue;
+        out.push({
+          id: typeof ref.id === "string" && ref.id ? ref.id : `IMG${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: typeof ref.levelId === "string" && validLvl.has(ref.levelId) ? ref.levelId : fallback,
+          dataUrl: ref.dataUrl,
+          name: typeof ref.name === "string" ? ref.name : "Referensi JPG",
+          center: { x, y }, width, height,
+          opacity: Number.isFinite(Number(ref.opacity)) ? Math.max(0.05, Math.min(1, Number(ref.opacity))) : 0.65,
+          createdAt: Number.isFinite(Number(ref.createdAt)) ? Number(ref.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
     parkingAreas: (() => {
       const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
       const mmRotRad = (mmRotDeg * Math.PI) / 180;
@@ -2488,10 +2522,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         layers: bound.layers,
         roofs: (sketch.roofs ?? []).filter((roof) => roof.levelId !== lvlId),
         stairs: (sketch.stairs ?? []).filter((stair) => stair.levelId !== lvlId && stair.toLevelId !== lvlId),
+        imageReferences: (sketch.imageReferences ?? []).filter((ref) => ref.levelId !== lvlId),
       });
       toast.success("Level dihapus");
     },
-    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs],
+    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.imageReferences],
   );
 
   const duplicateLevel = useCallback(
@@ -2574,7 +2609,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference">("line");
+  // ===== Image Reference (JPG) =====
+  const imageReferenceInputRef = useRef<HTMLInputElement>(null);
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const [imageTick, setImageTick] = useState(0);
+  const [imageReferenceSub, setImageReferenceSub] = useState<"geser" | "skalaBebas" | "skalaAcuan" | "hapus">("geser");
+  const [imageReferenceSelectedId, setImageReferenceSelectedId] = useState<string | null>(null);
+  const [imageReferenceDrag, setImageReferenceDrag] = useState<null | { kind: "move" | "scale"; id: string; start: Point; original: ImageReference }>(null);
+  const [imageCalibrationPoints, setImageCalibrationPoints] = useState<Point[]>([]);
+  const [imageReferenceDistanceInput, setImageReferenceDistanceInput] = useState("10");
   // ===== Alat Atap (pelana / limasan) =====
   const [roofKind, setRoofKind] = useState<RoofKind>("pelana");
   const [roofSub, setRoofSub] = useState<"gambar" | "geser" | "addpt" | "hapus">("gambar");
@@ -3261,6 +3305,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       a: sp(stair.a),
       b: sp(stair.b),
     }));
+    const nextImageReferences = (sketch.imageReferences || []).map((ref) => ({
+      ...ref,
+      center: sp(ref.center),
+      width: ref.width * k,
+      height: ref.height * k,
+    }));
 
     const nextRoads = (sketch.roads || []).map((r) => ({
       ...r,
@@ -3276,6 +3326,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       parkingAreas: nextParking,
       ramps: nextRamps,
       stairs: nextStairs,
+      imageReferences: nextImageReferences,
       roads: nextRoads,
       sectionCuts: nextSectionCuts,
       sectionCut: nextSectionCut,
@@ -4177,6 +4228,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         opacity: sketch.geo.mapOpacity,
         onTileLoad,
       });
+      ctx.restore();
+    }
+
+    // JPG reference layer: above OSM, below millimeter grid and sketch geometry.
+    for (const ref of sketch.imageReferences ?? []) {
+      if (activeLvlId && ref.levelId !== activeLvlId) continue;
+      let image = imageCacheRef.current.get(ref.id);
+      if (!image) {
+        image = new Image();
+        image.onload = () => setImageTick((n) => n + 1);
+        image.src = ref.dataUrl;
+        imageCacheRef.current.set(ref.id, image);
+      }
+      if (!image.complete || image.naturalWidth <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = ref.opacity;
+      ctx.drawImage(image, ref.center.x - ref.width / 2, ref.center.y - ref.height / 2, ref.width, ref.height);
+      ctx.restore();
+      if (tool === "imageReference" && ref.id === imageReferenceSelectedId) {
+        ctx.save();
+        ctx.strokeStyle = "#f97316";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([8 / s, 5 / s]);
+        ctx.strokeRect(ref.center.x - ref.width / 2, ref.center.y - ref.height / 2, ref.width, ref.height);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#f97316";
+        ctx.beginPath();
+        ctx.arc(ref.center.x + ref.width / 2, ref.center.y + ref.height / 2, 7 / s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    if (tool === "imageReference" && imageReferenceSub === "skalaAcuan" && imageCalibrationPoints.length) {
+      ctx.save();
+      ctx.strokeStyle = "#f97316"; ctx.fillStyle = "#f97316"; ctx.lineWidth = 2 / s;
+      imageCalibrationPoints.forEach((p, i) => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6 / s, 0, Math.PI * 2); ctx.fill();
+        ctx.font = `${12 / s}px sans-serif`; ctx.fillText(String(i + 1), p.x + 8 / s, p.y - 8 / s);
+      });
+      if (imageCalibrationPoints.length >= 2) {
+        ctx.beginPath(); ctx.moveTo(imageCalibrationPoints[0].x, imageCalibrationPoints[0].y);
+        ctx.lineTo(imageCalibrationPoints[1].x, imageCalibrationPoints[1].y); ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -6958,7 +7053,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -6970,6 +7065,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     return snapPoint(screenToWorld(sp));
   };
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
+
+  const imageReferenceAt = useCallback((p: Point) => {
+    const refs = (sketch.imageReferences ?? []).filter((ref) => ref.levelId === activeLvlId);
+    return [...refs].reverse().find((ref) =>
+      p.x >= ref.center.x - ref.width / 2 && p.x <= ref.center.x + ref.width / 2 &&
+      p.y >= ref.center.y - ref.height / 2 && p.y <= ref.center.y + ref.height / 2,
+    ) ?? null;
+  }, [sketch.imageReferences, activeLvlId]);
+
+  const uploadImageReference = useCallback((file: File) => {
+    if (!activeLvlId) { toast.error("Pilih level terlebih dahulu"); return; }
+    if (file.type !== "image/jpeg") { toast.error("Image Reference hanya menerima JPG/JPEG"); return; }
+    if (file.size > 8 * 1024 * 1024) { toast.error("Ukuran JPG maksimal 8 MB"); return; }
+    const reader = new FileReader();
+    reader.onerror = () => toast.error("Gagal membaca gambar JPG");
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      const image = new Image();
+      image.onerror = () => toast.error("JPG tidak dapat diproses");
+      image.onload = () => {
+        const width = 10 * pxPerMeter;
+        const height = width * image.naturalHeight / Math.max(1, image.naturalWidth);
+        const center = screenToWorld({ x: size.w / 2, y: size.h / 2 });
+        const ref: ImageReference = {
+          id: `IMG${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: activeLvlId,
+          dataUrl: reader.result as string,
+          name: file.name,
+          center,
+          width,
+          height,
+          opacity: 0.65,
+          createdAt: Date.now(),
+        };
+        imageCacheRef.current.set(ref.id, image);
+        pushHistory();
+        onChange({ imageReferences: [...(sketch.imageReferences ?? []), ref] });
+        setImageReferenceSelectedId(ref.id);
+        setImageReferenceSub("geser");
+        setTool("imageReference");
+        setImageTick((n) => n + 1);
+        toast.success("Image Reference ditambahkan pada level aktif");
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }, [activeLvlId, pxPerMeter, screenToWorld, size.w, size.h, pushHistory, onChange, sketch.imageReferences]);
 
 
 
@@ -7713,6 +7855,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     // Geser pin map — prioritas paling atas saat mode aktif.
     if (pinMoveMode && hasGeoPin) {
       setPinDrag(getWorldPosRaw(e));
+      return;
+    }
+
+    if (tool === "imageReference") {
+      const raw = getWorldPosRaw(e);
+      const selected = (sketch.imageReferences ?? []).find((ref) => ref.id === imageReferenceSelectedId);
+      if (imageReferenceSub === "skalaAcuan") {
+        if (!selected) { toast.error("Pilih gambar referensi dahulu"); return; }
+        const next = [...imageCalibrationPoints, raw];
+        if (next.length < 3) {
+          setImageCalibrationPoints(next);
+          toast.message(next.length === 1 ? "Pilih ujung jarak acuan pada JPG" : "Pilih titik target jarak pada milimeter block");
+          return;
+        }
+        const sourceDistance = dist(next[0], next[1]);
+        const targetDistance = dist(next[0], next[2]);
+        if (sourceDistance < 1 || targetDistance < 1) { setImageCalibrationPoints([]); toast.error("Titik kalibrasi terlalu berdekatan"); return; }
+        const scaleFactor = targetDistance / sourceDistance;
+        const anchor = next[0];
+        const newCenter = {
+          x: anchor.x + (selected.center.x - anchor.x) * scaleFactor,
+          y: anchor.y + (selected.center.y - anchor.y) * scaleFactor,
+        };
+        pushHistory();
+        onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => ref.id === selected.id ? {
+          ...ref, center: newCenter, width: ref.width * scaleFactor, height: ref.height * scaleFactor,
+        } : ref) });
+        setImageCalibrationPoints([]);
+        toast.success(`Skala acuan ${Math.max(0.01, Number(imageReferenceDistanceInput) || 10)} m diterapkan`);
+        return;
+      }
+      const hit = imageReferenceAt(raw);
+      if (!hit) { setImageReferenceSelectedId(null); return; }
+      setImageReferenceSelectedId(hit.id);
+      if (imageReferenceSub === "hapus") {
+        pushHistory();
+        onChange({ imageReferences: (sketch.imageReferences ?? []).filter((ref) => ref.id !== hit.id) });
+        imageCacheRef.current.delete(hit.id);
+        setImageReferenceSelectedId(null);
+        toast.success("Image Reference dihapus");
+        return;
+      }
+      pushHistory();
+      const corner = { x: hit.center.x + hit.width / 2, y: hit.center.y + hit.height / 2 };
+      const nearCorner = dist(raw, corner) <= 18 / view.s;
+      setImageReferenceDrag({ kind: imageReferenceSub === "skalaBebas" || nearCorner ? "scale" : "move", id: hit.id, start: raw, original: { ...hit, center: { ...hit.center } } });
       return;
     }
 
@@ -9524,6 +9712,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (imageReferenceDrag) {
+      const p = getWorldPosRaw(e);
+      const drag = imageReferenceDrag;
+      onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => {
+        if (ref.id !== drag.id) return ref;
+        if (drag.kind === "move") return { ...ref, center: { x: drag.original.center.x + p.x - drag.start.x, y: drag.original.center.y + p.y - drag.start.y } };
+        const startRadius = Math.hypot(drag.start.x - drag.original.center.x, drag.start.y - drag.original.center.y) || 1;
+        const radius = Math.hypot(p.x - drag.original.center.x, p.y - drag.original.center.y);
+        const factor = Math.max(0.05, radius / startRadius);
+        return { ...ref, width: drag.original.width * factor, height: drag.original.height * factor };
+      }) });
+      return;
+    }
     if (pinDrag && pinMoveMode) {
       setPinDrag(getWorldPosRaw(e));
       return;
@@ -9953,6 +10154,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (imageReferenceDrag) {
+      setImageReferenceDrag(null);
+      endPointer(e);
+      return;
+    }
     if (stairEndpointDrag || stairMoveDrag) {
       setStairEndpointDrag(null);
       setStairMoveDrag(null);
@@ -10563,6 +10769,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setPinDrag(null);
     setStairEndpointDrag(null);
     setStairMoveDrag(null);
+    setImageReferenceDrag(null);
     setDrawing(null);
     setDraggingHandle(null);
     setEditDrag(null);
@@ -11247,6 +11454,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Waypoints className="mr-1.5 h-4 w-4" /> Tangga
           </Button>
+          <Button
+            variant={tool === "imageReference" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("imageReference"); setImageCalibrationPoints([]); }}
+            className={cn(tool === "imageReference" && "bg-gradient-primary shadow-primary")}
+            title="Unggah dan atur JPG sebagai layer referensi di atas peta"
+          >
+            <Upload className="mr-1.5 h-4 w-4" /> Image Reference
+          </Button>
 
           <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
@@ -11305,6 +11521,63 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <PenTool className="mr-1.5 h-4 w-4" /> Ilustrasi Analisa
           </Button>
         </div>
+        {tool === "imageReference" && (
+          <div className="space-y-3 rounded-lg border border-border/60 bg-card/60 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Image Reference</span>
+              <Button size="sm" variant="outline" onClick={() => imageReferenceInputRef.current?.click()}>
+                <Upload className="mr-1.5 h-3.5 w-3.5" /> Unggah JPG
+              </Button>
+              <input
+                ref={imageReferenceInputRef}
+                type="file"
+                accept="image/jpeg,.jpg,.jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) uploadImageReference(file);
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {([
+                ["geser", "Geser"],
+                ["skalaBebas", "Skala Bebas"],
+                ["skalaAcuan", "Skala Acuan"],
+                ["hapus", "Hapus"],
+              ] as const).map(([mode, label]) => (
+                <Button key={mode} size="sm" variant={imageReferenceSub === mode ? "default" : "outline"}
+                  onClick={() => { setImageReferenceSub(mode); setImageCalibrationPoints([]); }}>
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {imageReferenceSub === "skalaAcuan" && (
+              <div className="space-y-1.5 rounded-md border border-border/50 p-2">
+                <Label className="text-xs">Jarak acuan (m)</Label>
+                <Input type="number" min="0.01" step="0.1" value={imageReferenceDistanceInput}
+                  onChange={(e) => setImageReferenceDistanceInput(e.target.value)} />
+                <p className="text-[11px] text-muted-foreground">
+                  {imageCalibrationPoints.length === 0 && "Pilih titik awal jarak pada JPG."}
+                  {imageCalibrationPoints.length === 1 && "Pilih ujung jarak acuan pada JPG."}
+                  {imageCalibrationPoints.length === 2 && "Pilih titik target jarak pada milimeter block."}
+                </p>
+                {imageCalibrationPoints.length > 0 && <Button size="sm" variant="ghost" className="w-full" onClick={() => setImageCalibrationPoints([])}>Ulangi titik</Button>}
+              </div>
+            )}
+            {(() => {
+              const selected = (sketch.imageReferences ?? []).find((ref) => ref.id === imageReferenceSelectedId);
+              if (!selected) return <p className="text-[11px] text-muted-foreground">Klik gambar pada level aktif untuk memilihnya.</p>;
+              return <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{selected.name}</span><span>{Math.round(selected.opacity * 100)}%</span></div>
+                <input className="w-full accent-ember" type="range" min="5" max="100" step="1" value={Math.round(selected.opacity * 100)}
+                  aria-label="Transparansi image reference"
+                  onChange={(e) => onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => ref.id === selected.id ? { ...ref, opacity: Number(e.target.value) / 100 } : ref) })} />
+              </div>;
+            })()}
+          </div>
+        )}
         {tool === "iluanalisa" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Ilustrasi Analisa</span>
