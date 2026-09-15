@@ -11454,6 +11454,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Waypoints className="mr-1.5 h-4 w-4" /> Tangga
           </Button>
+          <Button
+            variant={tool === "imageReference" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("imageReference"); setImageCalibrationPoints([]); }}
+            className={cn(tool === "imageReference" && "bg-gradient-primary shadow-primary")}
+            title="Unggah dan atur JPG sebagai layer referensi di atas peta"
+          >
+            <Upload className="mr-1.5 h-4 w-4" /> Image Reference
+          </Button>
 
           <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
@@ -11512,6 +11521,63 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <PenTool className="mr-1.5 h-4 w-4" /> Ilustrasi Analisa
           </Button>
         </div>
+        {tool === "imageReference" && (
+          <div className="space-y-3 rounded-lg border border-border/60 bg-card/60 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Image Reference</span>
+              <Button size="sm" variant="outline" onClick={() => imageReferenceInputRef.current?.click()}>
+                <Upload className="mr-1.5 h-3.5 w-3.5" /> Unggah JPG
+              </Button>
+              <input
+                ref={imageReferenceInputRef}
+                type="file"
+                accept="image/jpeg,.jpg,.jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) uploadImageReference(file);
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              {([
+                ["geser", "Geser"],
+                ["skalaBebas", "Skala Bebas"],
+                ["skalaAcuan", "Skala Acuan"],
+                ["hapus", "Hapus"],
+              ] as const).map(([mode, label]) => (
+                <Button key={mode} size="sm" variant={imageReferenceSub === mode ? "default" : "outline"}
+                  onClick={() => { setImageReferenceSub(mode); setImageCalibrationPoints([]); }}>
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {imageReferenceSub === "skalaAcuan" && (
+              <div className="space-y-1.5 rounded-md border border-border/50 p-2">
+                <Label className="text-xs">Jarak acuan (m)</Label>
+                <Input type="number" min="0.01" step="0.1" value={imageReferenceDistanceInput}
+                  onChange={(e) => setImageReferenceDistanceInput(e.target.value)} />
+                <p className="text-[11px] text-muted-foreground">
+                  {imageCalibrationPoints.length === 0 && "Pilih titik awal jarak pada JPG."}
+                  {imageCalibrationPoints.length === 1 && "Pilih ujung jarak acuan pada JPG."}
+                  {imageCalibrationPoints.length === 2 && "Pilih titik target jarak pada milimeter block."}
+                </p>
+                {imageCalibrationPoints.length > 0 && <Button size="sm" variant="ghost" className="w-full" onClick={() => setImageCalibrationPoints([])}>Ulangi titik</Button>}
+              </div>
+            )}
+            {(() => {
+              const selected = (sketch.imageReferences ?? []).find((ref) => ref.id === imageReferenceSelectedId);
+              if (!selected) return <p className="text-[11px] text-muted-foreground">Klik gambar pada level aktif untuk memilihnya.</p>;
+              return <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2 text-xs"><span className="truncate">{selected.name}</span><span>{Math.round(selected.opacity * 100)}%</span></div>
+                <input className="w-full accent-ember" type="range" min="5" max="100" step="1" value={Math.round(selected.opacity * 100)}
+                  aria-label="Transparansi image reference"
+                  onChange={(e) => onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => ref.id === selected.id ? { ...ref, opacity: Number(e.target.value) / 100 } : ref) })} />
+              </div>;
+            })()}
+          </div>
+        )}
         {tool === "iluanalisa" && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-orange-500/40 bg-orange-500/5 px-2 py-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Ilustrasi Analisa</span>
