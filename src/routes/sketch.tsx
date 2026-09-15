@@ -7066,6 +7066,53 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
 
+  const imageReferenceAt = useCallback((p: Point) => {
+    const refs = (sketch.imageReferences ?? []).filter((ref) => ref.levelId === activeLvlId);
+    return [...refs].reverse().find((ref) =>
+      p.x >= ref.center.x - ref.width / 2 && p.x <= ref.center.x + ref.width / 2 &&
+      p.y >= ref.center.y - ref.height / 2 && p.y <= ref.center.y + ref.height / 2,
+    ) ?? null;
+  }, [sketch.imageReferences, activeLvlId]);
+
+  const uploadImageReference = useCallback((file: File) => {
+    if (!activeLvlId) { toast.error("Pilih level terlebih dahulu"); return; }
+    if (file.type !== "image/jpeg") { toast.error("Image Reference hanya menerima JPG/JPEG"); return; }
+    if (file.size > 8 * 1024 * 1024) { toast.error("Ukuran JPG maksimal 8 MB"); return; }
+    const reader = new FileReader();
+    reader.onerror = () => toast.error("Gagal membaca gambar JPG");
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      const image = new Image();
+      image.onerror = () => toast.error("JPG tidak dapat diproses");
+      image.onload = () => {
+        const width = 10 * pxPerMeter;
+        const height = width * image.naturalHeight / Math.max(1, image.naturalWidth);
+        const center = screenToWorld({ x: size.w / 2, y: size.h / 2 });
+        const ref: ImageReference = {
+          id: `IMG${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: activeLvlId,
+          dataUrl: reader.result as string,
+          name: file.name,
+          center,
+          width,
+          height,
+          opacity: 0.65,
+          createdAt: Date.now(),
+        };
+        imageCacheRef.current.set(ref.id, image);
+        pushHistory();
+        onChange({ imageReferences: [...(sketch.imageReferences ?? []), ref] });
+        setImageReferenceSelectedId(ref.id);
+        setImageReferenceSub("geser");
+        setTool("imageReference");
+        setImageTick((n) => n + 1);
+        toast.success("Image Reference ditambahkan pada level aktif");
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }, [activeLvlId, pxPerMeter, screenToWorld, size.w, size.h, pushHistory, onChange, sketch.imageReferences]);
+
 
 
 
@@ -7808,6 +7855,52 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     // Geser pin map — prioritas paling atas saat mode aktif.
     if (pinMoveMode && hasGeoPin) {
       setPinDrag(getWorldPosRaw(e));
+      return;
+    }
+
+    if (tool === "imageReference") {
+      const raw = getWorldPosRaw(e);
+      const selected = (sketch.imageReferences ?? []).find((ref) => ref.id === imageReferenceSelectedId);
+      if (imageReferenceSub === "skalaAcuan") {
+        if (!selected) { toast.error("Pilih gambar referensi dahulu"); return; }
+        const next = [...imageCalibrationPoints, raw];
+        if (next.length < 3) {
+          setImageCalibrationPoints(next);
+          toast.message(next.length === 1 ? "Pilih ujung jarak acuan pada JPG" : "Pilih titik target jarak pada milimeter block");
+          return;
+        }
+        const sourceDistance = dist(next[0], next[1]);
+        const targetDistance = dist(next[0], next[2]);
+        if (sourceDistance < 1 || targetDistance < 1) { setImageCalibrationPoints([]); toast.error("Titik kalibrasi terlalu berdekatan"); return; }
+        const scaleFactor = targetDistance / sourceDistance;
+        const anchor = next[0];
+        const newCenter = {
+          x: anchor.x + (selected.center.x - anchor.x) * scaleFactor,
+          y: anchor.y + (selected.center.y - anchor.y) * scaleFactor,
+        };
+        pushHistory();
+        onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => ref.id === selected.id ? {
+          ...ref, center: newCenter, width: ref.width * scaleFactor, height: ref.height * scaleFactor,
+        } : ref) });
+        setImageCalibrationPoints([]);
+        toast.success(`Skala acuan ${Math.max(0.01, Number(imageReferenceDistanceInput) || 10)} m diterapkan`);
+        return;
+      }
+      const hit = imageReferenceAt(raw);
+      if (!hit) { setImageReferenceSelectedId(null); return; }
+      setImageReferenceSelectedId(hit.id);
+      if (imageReferenceSub === "hapus") {
+        pushHistory();
+        onChange({ imageReferences: (sketch.imageReferences ?? []).filter((ref) => ref.id !== hit.id) });
+        imageCacheRef.current.delete(hit.id);
+        setImageReferenceSelectedId(null);
+        toast.success("Image Reference dihapus");
+        return;
+      }
+      pushHistory();
+      const corner = { x: hit.center.x + hit.width / 2, y: hit.center.y + hit.height / 2 };
+      const nearCorner = dist(raw, corner) <= 18 / view.s;
+      setImageReferenceDrag({ kind: imageReferenceSub === "skalaBebas" || nearCorner ? "scale" : "move", id: hit.id, start: raw, original: { ...hit, center: { ...hit.center } } });
       return;
     }
 
@@ -9619,6 +9712,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (imageReferenceDrag) {
+      const p = getWorldPosRaw(e);
+      const drag = imageReferenceDrag;
+      onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => {
+        if (ref.id !== drag.id) return ref;
+        if (drag.kind === "move") return { ...ref, center: { x: drag.original.center.x + p.x - drag.start.x, y: drag.original.center.y + p.y - drag.start.y } };
+        const startRadius = Math.hypot(drag.start.x - drag.original.center.x, drag.start.y - drag.original.center.y) || 1;
+        const radius = Math.hypot(p.x - drag.original.center.x, p.y - drag.original.center.y);
+        const factor = Math.max(0.05, radius / startRadius);
+        return { ...ref, width: drag.original.width * factor, height: drag.original.height * factor };
+      }) });
+      return;
+    }
     if (pinDrag && pinMoveMode) {
       setPinDrag(getWorldPosRaw(e));
       return;
@@ -10048,6 +10154,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (imageReferenceDrag) {
+      setImageReferenceDrag(null);
+      endPointer(e);
+      return;
+    }
     if (stairEndpointDrag || stairMoveDrag) {
       setStairEndpointDrag(null);
       setStairMoveDrag(null);
@@ -10658,6 +10769,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setPinDrag(null);
     setStairEndpointDrag(null);
     setStairMoveDrag(null);
+    setImageReferenceDrag(null);
     setDrawing(null);
     setDraggingHandle(null);
     setEditDrag(null);
