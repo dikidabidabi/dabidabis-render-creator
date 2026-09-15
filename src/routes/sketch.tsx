@@ -432,6 +432,7 @@ type Sketch = {
   parkingAreas?: ParkingArea[]; // Area parkir (bounding box) per level
   ramps?: Ramp[]; // Ramp antar level
   stairs?: Stair[]; // Tangga antar level
+  imageReferences?: ImageReference[]; // JPG acuan per level, di atas peta dan di bawah geometri
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   illustrations?: Annotation[]; // Ilustrasi Analisa (panah, zona, node, dsb) — Master Plan
@@ -439,6 +440,18 @@ type Sketch = {
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
   /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
   linkedMasterplan?: { rootLayerId: string };
+};
+
+type ImageReference = {
+  id: string;
+  levelId: string;
+  dataUrl: string;
+  name: string;
+  center: Point;
+  width: number;
+  height: number;
+  opacity: number;
+  createdAt: number;
 };
 
 type Circle = {
@@ -1085,6 +1098,27 @@ function normalizeSketch(s: any): Sketch {
     })(),
     roofs: normalizeRoofs(s?.roofs, new Set(levels.map((l) => l.id)), fallback),
     stairs: normalizeStairs(s?.stairs, new Set(levels.map((l) => l.id))),
+    imageReferences: (() => {
+      if (!Array.isArray(s?.imageReferences)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      const out: ImageReference[] = [];
+      for (const ref of s.imageReferences) {
+        const x = Number(ref?.center?.x), y = Number(ref?.center?.y);
+        const width = Number(ref?.width), height = Number(ref?.height);
+        if (!ref || typeof ref.dataUrl !== "string" || !ref.dataUrl.startsWith("data:image/jpeg")) continue;
+        if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) continue;
+        out.push({
+          id: typeof ref.id === "string" && ref.id ? ref.id : `IMG${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: typeof ref.levelId === "string" && validLvl.has(ref.levelId) ? ref.levelId : fallback,
+          dataUrl: ref.dataUrl,
+          name: typeof ref.name === "string" ? ref.name : "Referensi JPG",
+          center: { x, y }, width, height,
+          opacity: Number.isFinite(Number(ref.opacity)) ? Math.max(0.05, Math.min(1, Number(ref.opacity))) : 0.65,
+          createdAt: Number.isFinite(Number(ref.createdAt)) ? Number(ref.createdAt) : Date.now(),
+        });
+      }
+      return out;
+    })(),
     parkingAreas: (() => {
       const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
       const mmRotRad = (mmRotDeg * Math.PI) / 180;
@@ -2488,10 +2522,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         layers: bound.layers,
         roofs: (sketch.roofs ?? []).filter((roof) => roof.levelId !== lvlId),
         stairs: (sketch.stairs ?? []).filter((stair) => stair.levelId !== lvlId && stair.toLevelId !== lvlId),
+        imageReferences: (sketch.imageReferences ?? []).filter((ref) => ref.levelId !== lvlId),
       });
       toast.success("Level dihapus");
     },
-    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs],
+    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.imageReferences],
   );
 
   const duplicateLevel = useCallback(
@@ -2574,7 +2609,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference">("line");
+  // ===== Image Reference (JPG) =====
+  const imageReferenceInputRef = useRef<HTMLInputElement>(null);
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const [imageTick, setImageTick] = useState(0);
+  const [imageReferenceSub, setImageReferenceSub] = useState<"geser" | "skalaBebas" | "skalaAcuan" | "hapus">("geser");
+  const [imageReferenceSelectedId, setImageReferenceSelectedId] = useState<string | null>(null);
+  const [imageReferenceDrag, setImageReferenceDrag] = useState<null | { kind: "move" | "scale"; id: string; start: Point; original: ImageReference }>(null);
+  const [imageCalibrationPoints, setImageCalibrationPoints] = useState<Point[]>([]);
+  const [imageReferenceDistanceInput, setImageReferenceDistanceInput] = useState("10");
   // ===== Alat Atap (pelana / limasan) =====
   const [roofKind, setRoofKind] = useState<RoofKind>("pelana");
   const [roofSub, setRoofSub] = useState<"gambar" | "geser" | "addpt" | "hapus">("gambar");
@@ -3261,6 +3305,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       a: sp(stair.a),
       b: sp(stair.b),
     }));
+    const nextImageReferences = (sketch.imageReferences || []).map((ref) => ({
+      ...ref,
+      center: sp(ref.center),
+      width: ref.width * k,
+      height: ref.height * k,
+    }));
 
     const nextRoads = (sketch.roads || []).map((r) => ({
       ...r,
@@ -3276,6 +3326,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       parkingAreas: nextParking,
       ramps: nextRamps,
       stairs: nextStairs,
+      imageReferences: nextImageReferences,
       roads: nextRoads,
       sectionCuts: nextSectionCuts,
       sectionCut: nextSectionCut,
@@ -4177,6 +4228,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         opacity: sketch.geo.mapOpacity,
         onTileLoad,
       });
+      ctx.restore();
+    }
+
+    // JPG reference layer: above OSM, below millimeter grid and sketch geometry.
+    for (const ref of sketch.imageReferences ?? []) {
+      if (activeLvlId && ref.levelId !== activeLvlId) continue;
+      let image = imageCacheRef.current.get(ref.id);
+      if (!image) {
+        image = new Image();
+        image.onload = () => setImageTick((n) => n + 1);
+        image.src = ref.dataUrl;
+        imageCacheRef.current.set(ref.id, image);
+      }
+      if (!image.complete || image.naturalWidth <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = ref.opacity;
+      ctx.drawImage(image, ref.center.x - ref.width / 2, ref.center.y - ref.height / 2, ref.width, ref.height);
+      ctx.restore();
+      if (tool === "imageReference" && ref.id === imageReferenceSelectedId) {
+        ctx.save();
+        ctx.strokeStyle = "#f97316";
+        ctx.lineWidth = 2 / s;
+        ctx.setLineDash([8 / s, 5 / s]);
+        ctx.strokeRect(ref.center.x - ref.width / 2, ref.center.y - ref.height / 2, ref.width, ref.height);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#f97316";
+        ctx.beginPath();
+        ctx.arc(ref.center.x + ref.width / 2, ref.center.y + ref.height / 2, 7 / s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    if (tool === "imageReference" && imageReferenceSub === "skalaAcuan" && imageCalibrationPoints.length) {
+      ctx.save();
+      ctx.strokeStyle = "#f97316"; ctx.fillStyle = "#f97316"; ctx.lineWidth = 2 / s;
+      imageCalibrationPoints.forEach((p, i) => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 6 / s, 0, Math.PI * 2); ctx.fill();
+        ctx.font = `${12 / s}px sans-serif`; ctx.fillText(String(i + 1), p.x + 8 / s, p.y - 8 / s);
+      });
+      if (imageCalibrationPoints.length >= 2) {
+        ctx.beginPath(); ctx.moveTo(imageCalibrationPoints[0].x, imageCalibrationPoints[0].y);
+        ctx.lineTo(imageCalibrationPoints[1].x, imageCalibrationPoints[1].y); ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -6958,7 +7053,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
