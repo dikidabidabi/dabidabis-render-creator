@@ -2553,15 +2553,25 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const newLines: Line[] = lines
         .filter((ln) => ln.levelId === lvlId)
         .map((ln) => ({ ...ln, a: { ...ln.a }, b: { ...ln.b }, c1: ln.c1 ? { ...ln.c1 } : undefined, c2: ln.c2 ? { ...ln.c2 } : undefined, levelId: newId }));
+      const newImageReferences: ImageReference[] = (sketch.imageReferences ?? [])
+        .filter((ref) => ref.levelId === lvlId)
+        .map((ref) => ({
+          ...ref,
+          id: `IMG${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: newId,
+          center: { ...ref.center },
+          createdAt: Date.now(),
+        }));
       onChange({
         levels: [...levels, newLvl],
         layers: [...layers, ...newLayers],
         lines: [...lines, ...newLines],
+        imageReferences: [...(sketch.imageReferences ?? []), ...newImageReferences],
         activeLevelId: newId,
       });
       toast.success(`${newLvl.name} hasil duplikat`);
     },
-    [levels, layers, lines, onChange],
+    [levels, layers, lines, onChange, sketch.imageReferences],
   );
 
   const setLevelTypical = useCallback(
