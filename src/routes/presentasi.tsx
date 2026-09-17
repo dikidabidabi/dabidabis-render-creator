@@ -2948,7 +2948,8 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           })}
 
           {/* Proyeksi latar tampak — siluet perimeter luar bangunan dari
-              ruang-ruang di belakang garis potongan. Digambar SEBELUM slice
+              ruang-ruang di depan garis potongan, mengikuti arah panah pandang.
+              Digambar SEBELUM slice
               ruang yang terpotong agar otomatis tertutup di dalam ruang
               yang terpotong (slice foreground berisi fill solid). */}
           {(() => {
@@ -2956,14 +2957,41 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const ddy = cut.p2.y - cut.p1.y;
             const L2 = ddx * ddx + ddy * ddy;
             if (L2 < 1e-6) return null;
+            const cutLength = Math.sqrt(L2);
+            const viewNx = -ddy / cutLength;
+            const viewNy = ddx / cutLength;
+            const signedViewDepth = (point: Point) =>
+              (point.x - cut.p1.x) * viewNx + (point.y - cut.p1.y) * viewNy;
+            const clipToFrontOfCut = (points: Point[]) => {
+              const clipped: Point[] = [];
+              for (let index = 0; index < points.length; index++) {
+                const current = points[index];
+                const next = points[(index + 1) % points.length];
+                const currentDepth = signedViewDepth(current);
+                const nextDepth = signedViewDepth(next);
+                const currentInFront = currentDepth >= -1e-6;
+                const nextInFront = nextDepth >= -1e-6;
+                if (currentInFront) clipped.push(current);
+                if (currentInFront !== nextInFront) {
+                  const ratio = currentDepth / (currentDepth - nextDepth);
+                  clipped.push({
+                    x: current.x + (next.x - current.x) * ratio,
+                    y: current.y + (next.y - current.y) * ratio,
+                  });
+                }
+              }
+              return clipped;
+            };
             return boxes.flatMap((b) => {
               const ranges: Array<[number, number]> = [];
               for (const layer of sketch.layers ?? []) {
                 if (layer.levelId !== b.id) continue;
                 if (isLahanSec(layer.name) || isVoidSec(layer.name)) continue;
                 if (!layer.points || layer.points.length < 2) continue;
+                const projectedPoints = clipToFrontOfCut(layer.points);
+                if (projectedPoints.length < 2) continue;
                 let tMin = Infinity, tMax = -Infinity;
-                for (const p of layer.points) {
+                for (const p of projectedPoints) {
                   const t = ((p.x - cut.p1.x) * ddx + (p.y - cut.p1.y) * ddy) / L2;
                   if (t < tMin) tMin = t;
                   if (t > tMax) tMax = t;
