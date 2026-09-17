@@ -5153,34 +5153,6 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             pxPerM={pxPerM}
             sw={sw}
           />
-          {/* Kolom struktur selalu menjadi lapisan denah paling atas. */}
-          {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
-            const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-            if (!levelInRange(grid, level, allLv) || grid.lineOnly) return null;
-            const { spansX, spansY } = spansForLevel(grid, level.id);
-            const xsM = axisPositions(spansX);
-            const ysM = axisPositions(spansY);
-            const xs = xsM.map((m) => grid.origin.x + m * pxPerM);
-            const ys = ysM.map((m) => grid.origin.y + m * pxPerM);
-            const colPx = (grid.colSizeCm / 100) * pxPerM;
-            const gridSW = sw * 0.0003;
-            const rotDeg = Number(grid.rotation) || 0;
-            return (
-              <g key={`column-overlay-${gIdx}`} pointerEvents="none"
-                transform={rotDeg ? `rotate(${rotDeg} ${grid.origin.x} ${grid.origin.y})` : undefined}>
-                {xs.flatMap((x, i) => ys.map((y, j) => {
-                  if (!isNodeActive(grid, level.id, i, j)) return null;
-                  if (isColumnClipped(grid, xsM[i], ysM[j])) return null;
-                  return (
-                    <rect key={`column-overlay-${i}-${j}`}
-                      x={x - colPx / 2} y={y - colPx / 2}
-                      width={colPx} height={colPx}
-                      fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
-                  );
-                }))}
-              </g>
-            );
-          })}
           {/* Lot parkir otomatis (geometris) untuk level ini. */}
           {(() => {
             const areas = (sketch.parkingAreas ?? []).filter((p) => p.levelId === level.id);
@@ -5378,6 +5350,34 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             );
 
           })()}
+          {/* Kolom struktur selalu menjadi lapisan denah paling atas. */}
+          {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
+            const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            if (!levelInRange(grid, level, allLv) || grid.lineOnly) return null;
+            const { spansX, spansY } = spansForLevel(grid, level.id);
+            const xsM = axisPositions(spansX);
+            const ysM = axisPositions(spansY);
+            const xs = xsM.map((m) => grid.origin.x + m * pxPerM);
+            const ys = ysM.map((m) => grid.origin.y + m * pxPerM);
+            const colPx = (grid.colSizeCm / 100) * pxPerM;
+            const gridSW = sw * 0.0003;
+            const rotDeg = Number(grid.rotation) || 0;
+            return (
+              <g key={`column-overlay-${gIdx}`} pointerEvents="none"
+                transform={rotDeg ? `rotate(${rotDeg} ${grid.origin.x} ${grid.origin.y})` : undefined}>
+                {xs.flatMap((x, i) => ys.map((y, j) => {
+                  if (!isNodeActive(grid, level.id, i, j)) return null;
+                  if (isColumnClipped(grid, xsM[i], ysM[j])) return null;
+                  return (
+                    <rect key={`column-overlay-${i}-${j}`}
+                      x={x - colPx / 2} y={y - colPx / 2}
+                      width={colPx} height={colPx}
+                      fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
+                  );
+                }))}
+              </g>
+            );
+          })}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
