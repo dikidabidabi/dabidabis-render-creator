@@ -127,6 +127,10 @@ type Layer = {
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
 type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
+type DetailArea = {
+  id: string; levelId: string; a: Point; b: Point; number: number;
+  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; createdAt: number;
+};
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
   lines?: Line[]; layers: Layer[]; levels: Level[];
@@ -143,6 +147,7 @@ type Sketch = {
   ramps?: Ramp[];
   stairs?: Stair[];
   roofs?: Roof[];
+  detailAreas?: DetailArea[];
   mmGridRotation?: number;
   linkedMasterplan?: { rootLayerId: string };
 };
@@ -1453,6 +1458,7 @@ type Slide =
   | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
   | { kind: "closing"; id: string; title: string; sketch: Sketch }
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "detail"; id: string; title: string; sketch: Sketch; level: Level; area: DetailArea; bounds: Bounds }
   | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
@@ -1570,6 +1576,22 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       level: lv,
       bounds,
     });
+    for (const area of (sk.detailAreas ?? [])
+      .filter((item) => item.levelId === lv.id && item.showOnSlide !== false)
+      .sort((a, b) => a.number - b.number)) {
+      out.push({
+        kind: "detail",
+        id: `detail-${area.id}`,
+        title: `Detail ${area.number} · ${lvName}`,
+        sketch: sk,
+        level: lv,
+        area,
+        bounds: {
+          minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y),
+          maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y),
+        },
+      });
+    }
   }
   // Slide Potongan Prinsip (A-A, B-B, …) — otomatis muncul setelah slide denah
   // ketika user menarik garis potong di kanvas sketsa.
@@ -1687,6 +1709,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "konsep": return "Konsep";
       case "perspektif": return "Perspektif";
       case "level": return "Denah per Level";
+      case "detail": return "Pendetailan Denah";
       case "bubble": return "Diagram Hubungan Ruang";
       case "section": return "Potongan Prinsip";
       case "matahari":
@@ -2092,13 +2115,14 @@ function useSlideTheme(slideId?: string) {
 function SlideContent({ slide }: { slide?: Slide }) {
   const theme = useSlideTheme(slide?.id);
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
       {slide.kind === "toc" && <TocBody slide={slide} />}
       {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
+      {slide.kind === "detail" && <DetailBody slide={slide} />}
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
@@ -2157,6 +2181,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
 function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Slide; theme?: PresentationTheme }) {
   const kicker =
     slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
+    : slide.kind === "detail" ? `Sketsa · Pendetailan · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
     : slide.kind === "site" ? (
