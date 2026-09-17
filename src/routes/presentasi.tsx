@@ -4467,30 +4467,35 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const patternId = useId().replace(/:/g, "");
   const levelMm = Math.round((Number(level.mdpl) || 0) * 1000);
   const elevation = `${levelMm >= 0 ? "+" : ""}${levelMm}`;
-  const crop = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value));
-  const uniqueCoords = (values: number[]) => values.sort((a, b) => a - b).filter((v, i, arr) => i === 0 || Math.abs(v - arr[i - 1]) > pxPerM * 0.08);
   const grids = collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).filter((grid) => levelInRange(grid, level, [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl)));
-  const columns = grids.flatMap((grid) => {
+  const gridData = grids.flatMap((grid, gridIndex) => {
     if (grid.lineOnly) return [];
     const { spansX, spansY } = spansForLevel(grid, level.id);
-    const xs = axisPositions(spansX).map((m) => grid.origin.x + m * pxPerM);
-    const ys = axisPositions(spansY).map((m) => grid.origin.y + m * pxPerM);
-    return xs.flatMap((x) => ys.map((y) => ({ x, y, size: (grid.colSizeCm / 100) * pxPerM })));
+    const xsM = axisPositions(spansX);
+    const ysM = axisPositions(spansY);
+    const xs = xsM.map((m) => grid.origin.x + m * pxPerM);
+    const ys = ysM.map((m) => grid.origin.y + m * pxPerM);
+    const rotation = Number(grid.rotation) || 0;
+    return [{ grid, gridIndex, spansX, spansY, xsM, ysM, xs, ys, rotation }];
   });
-  const xCoords = uniqueCoords([
-    slide.bounds.minX, slide.bounds.maxX,
-    ...lines.flatMap((line) => [line.a.x, line.b.x]),
-    ...doors.flatMap((door) => [door.a.x, door.b.x]),
-    ...columns.map((column) => column.x),
-  ].map((x) => crop(x, slide.bounds.minX, slide.bounds.maxX)));
-  const yCoords = uniqueCoords([
-    slide.bounds.minY, slide.bounds.maxY,
-    ...lines.flatMap((line) => [line.a.y, line.b.y]),
-    ...doors.flatMap((door) => [door.a.y, door.b.y]),
-    ...columns.map((column) => column.y),
-  ].map((y) => crop(y, slide.bounds.minY, slide.bounds.maxY)));
   const dimFont = sw * 0.012;
   const dimStroke = sw * 0.00065;
+  const gridStroke = Math.max(sw * 0.00028, 0.12);
+  const splitRoomName = (name: string, maxChars: number): string[] => {
+    if (name.length <= maxChars || !name.includes(" ")) return [name];
+    const words = name.trim().split(/\s+/);
+    let best = 1;
+    let bestDelta = Infinity;
+    for (let index = 1; index < words.length; index++) {
+      const left = words.slice(0, index).join(" ").length;
+      const right = words.slice(index).join(" ").length;
+      if (Math.max(left, right) <= maxChars && Math.abs(left - right) < bestDelta) {
+        best = index;
+        bestDelta = Math.abs(left - right);
+      }
+    }
+    return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+  };
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative", background: "#ffffff", overflow: "hidden" }}>
@@ -4499,54 +4504,93 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
             <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
           </pattern>
+          {rooms.map((room) => (
+            <clipPath id={`detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`} key={`clip-${room.id}`}>
+              <polygon points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} />
+            </clipPath>
+          ))}
         </defs>
         <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
         {rooms.map((room) => {
           const fill = roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
+          return <polygon key={room.id} points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} fill={area.floorHatch ? `url(#floor-grid-${patternId})` : fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />;
+        })}
+        {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+          if (!xs.length || !ys.length) return null;
+          const dimOffset = sw * 0.022;
+          const dash = `${sw * 0.004} ${sw * 0.003}`;
+          const xStart = xs[0], xEnd = xs[xs.length - 1];
+          const yStart = ys[0], yEnd = ys[ys.length - 1];
+          return (
+            <g key={`detail-grid-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
+              <g stroke="#555555" strokeWidth={gridStroke} strokeDasharray={dash} opacity={0.72}>
+                {xs.map((x, index) => <line key={`gx-${index}`} x1={x} y1={yStart} x2={x} y2={yEnd} />)}
+                {ys.map((y, index) => <line key={`gy-${index}`} x1={xStart} y1={y} x2={xEnd} y2={y} />)}
+              </g>
+              {area.dimensions && <g fill="#111111" stroke="#111111" strokeWidth={dimStroke}>
+                {spansX.map((span, index) => {
+                  const y = yStart - dimOffset;
+                  return <g key={`gdx-${index}`}>
+                    <line x1={xs[index]} y1={y} x2={xs[index + 1]} y2={y} />
+                    <line x1={xs[index]} y1={y - dimFont * 0.35} x2={xs[index]} y2={yStart} />
+                    <line x1={xs[index + 1]} y1={y - dimFont * 0.35} x2={xs[index + 1]} y2={yStart} />
+                    <text x={(xs[index] + xs[index + 1]) / 2} y={y - dimFont * 0.25} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600}>{Math.round(span * 1000)}</text>
+                  </g>;
+                })}
+                {spansY.map((span, index) => {
+                  const x = xStart - dimOffset;
+                  return <g key={`gdy-${index}`}>
+                    <line x1={x} y1={ys[index]} x2={x} y2={ys[index + 1]} />
+                    <line x1={x - dimFont * 0.35} y1={ys[index]} x2={xStart} y2={ys[index]} />
+                    <line x1={x - dimFont * 0.35} y1={ys[index + 1]} x2={xStart} y2={ys[index + 1]} />
+                    <text x={x - dimFont * 0.3} y={(ys[index] + ys[index + 1]) / 2} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600} transform={`rotate(-90 ${x - dimFont * 0.3} ${(ys[index] + ys[index + 1]) / 2})`}>{Math.round(span * 1000)}</text>
+                  </g>;
+                })}
+              </g>}
+            </g>
+          );
+        })}
+        {rooms.map((room) => {
           const c = centroid(room.points);
-          return <g key={room.id}>
-            <polygon points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} fill={area.floorHatch ? `url(#floor-grid-${patternId})` : fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />
-            <text x={c.x} y={c.y - dimFont * 0.8} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={sw * 0.018} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.004 }}>
-              {room.name}
+          const xs = room.points.map((point) => point.x);
+          const ys = room.points.map((point) => point.y);
+          const roomW = Math.max(...xs) - Math.min(...xs);
+          const roomH = Math.max(...ys) - Math.min(...ys);
+          const baseNameFont = sw * 0.0144;
+          const maxChars = Math.max(5, Math.floor((roomW * 0.82) / (baseNameFont * 0.58)));
+          const nameLines = splitRoomName(room.name, maxChars).slice(0, 2);
+          const longestLine = Math.max(...nameLines.map((line) => line.length), 1);
+          const widthFit = (roomW * 0.82) / (longestLine * 0.58);
+          const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
+          const nameFont = Math.max(sw * 0.006, Math.min(baseNameFont, widthFit, heightFit));
+          const lineHeight = nameFont * 1.08;
+          const firstY = c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
+          const infoFont = Math.min(sw * 0.01, nameFont * 0.78);
+          const clipId = `detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+          return <g key={`label-${room.id}`} clipPath={`url(#${clipId})`}>
+            <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
+              {nameLines.map((line, index) => <tspan key={`${room.id}-${index}`} x={c.x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>)}
             </text>
-            <text x={c.x} y={c.y + dimFont * 0.9} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={sw * 0.0125} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.003 }}>
+            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {fmt(room.areaM2 || 0, 2)} m²
             </text>
-            <text x={c.x} y={c.y + dimFont * 2.45} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={sw * 0.0115} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.003 }}>
+            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {elevation}
             </text>
           </g>;
         })}
         <MaterialEdges lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} sw={sw} />
-        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} />
+        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs />
         <SolidWallPracticalColumns lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} />
-        {columns.map((column, index) => (
-          <rect key={`detail-column-${index}`} x={column.x - column.size / 2} y={column.y - column.size / 2} width={column.size} height={column.size} fill="#0a0a0a" />
-        ))}
-        {area.dimensions && <g fill="#111111" stroke="#111111" strokeWidth={dimStroke}>
-          {xCoords.slice(0, -1).map((x, index) => {
-            const x2 = xCoords[index + 1];
-            if (x2 - x < pxPerM * 0.1) return null;
-            const y = slide.bounds.minY - pad * 0.42;
-            return <g key={`dx-${index}`}>
-              <line x1={x} y1={y} x2={x2} y2={y} />
-              <line x1={x} y1={y - dimFont * 0.35} x2={x} y2={slide.bounds.minY} />
-              <line x1={x2} y1={y - dimFont * 0.35} x2={x2} y2={slide.bounds.minY} />
-              <text x={(x + x2) / 2} y={y - dimFont * 0.25} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600}>{Math.round((x2 - x) / pxPerM * 1000)}</text>
-            </g>;
-          })}
-          {yCoords.slice(0, -1).map((y, index) => {
-            const y2 = yCoords[index + 1];
-            if (y2 - y < pxPerM * 0.1) return null;
-            const x = slide.bounds.minX - pad * 0.42;
-            return <g key={`dy-${index}`}>
-              <line x1={x} y1={y} x2={x} y2={y2} />
-              <line x1={x - dimFont * 0.35} y1={y} x2={slide.bounds.minX} y2={y} />
-              <line x1={x - dimFont * 0.35} y1={y2} x2={slide.bounds.minX} y2={y2} />
-              <text x={x - dimFont * 0.3} y={(y + y2) / 2} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600} transform={`rotate(-90 ${x - dimFont * 0.3} ${(y + y2) / 2})`}>{Math.round((y2 - y) / pxPerM * 1000)}</text>
-            </g>;
-          })}
-        </g>}
+        {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+          const colPx = (grid.colSizeCm / 100) * pxPerM;
+          return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
+            {xs.flatMap((x, i) => ys.map((y, j) => {
+              if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return null;
+              return <rect key={`detail-column-${i}-${j}`} x={x - colPx / 2} y={y - colPx / 2} width={colPx} height={colPx} fill="#0a0a0a" />;
+            }))}
+          </g>;
+        })}
       </svg>
       <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
@@ -7057,10 +7101,16 @@ function DoorNotation({
   doors,
   pxPerM,
   sw,
+  lines,
+  edgeAttrs,
+  showJambs = false,
 }: {
   doors: Door[];
   pxPerM: number;
   sw: number;
+  lines?: Line[];
+  edgeAttrs?: Record<string, EdgeMaterial>;
+  showJambs?: boolean;
 }) {
   if (!doors.length) return null;
   const stroke = sw * 0.0006;
@@ -7072,13 +7122,47 @@ function DoorNotation({
         const len = Math.hypot(bx - ax, by - ay) || 1;
         const dx = (bx - ax) / len, dy = (by - ay) / len;
         const px = -dy, py = dx;
-        const half = thick * 0.7;
+        const attachedMaterial = (() => {
+          if (!showJambs || !lines || !edgeAttrs) return undefined;
+          const midpoint = { x: (ax + bx) / 2, y: (ay + by) / 2 };
+          let best: { material: EdgeMaterial; distance: number } | undefined;
+          for (const segment of computeStraightSegments(lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })))) {
+            const material = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+            if (!material) continue;
+            const sx = segment.b.x - segment.a.x, sy = segment.b.y - segment.a.y;
+            const segmentLength = Math.hypot(sx, sy);
+            if (segmentLength < 1e-6) continue;
+            const alignment = Math.abs((sx / segmentLength) * dx + (sy / segmentLength) * dy);
+            if (alignment < 0.94) continue;
+            const t = Math.max(0, Math.min(1, ((midpoint.x - segment.a.x) * sx + (midpoint.y - segment.a.y) * sy) / (segmentLength * segmentLength)));
+            const distance = Math.hypot(midpoint.x - (segment.a.x + sx * t), midpoint.y - (segment.a.y + sy * t));
+            if (!best || distance < best.distance) best = { material, distance };
+          }
+          return best && best.distance <= 0.35 * pxPerM ? best.material : undefined;
+        })();
+        const wallDepth = ((attachedMaterial ? WALL_THICK_MM[attachedMaterial] : 150) / 1000) * pxPerM;
+        const half = wallDepth * 0.7;
         const widthPx = (d.widthCm / 100) * pxPerM;
         // Mask polygon (cover the wall band)
         const m1 = `${ax + px * half},${ay + py * half}`;
         const m2 = `${bx + px * half},${by + py * half}`;
         const m3 = `${bx - px * half},${by - py * half}`;
         const m4 = `${ax - px * half},${ay - py * half}`;
+        const jambWidth = 0.05 * pxPerM;
+        const jambHalfDepth = wallDepth / 2;
+        const jambPolygon = (cx: number, cy: number) => [
+          `${cx + px * jambHalfDepth},${cy + py * jambHalfDepth}`,
+          `${cx - px * jambHalfDepth},${cy - py * jambHalfDepth}`,
+          `${cx - px * jambHalfDepth - dx * jambWidth},${cy - py * jambHalfDepth - dy * jambWidth}`,
+          `${cx + px * jambHalfDepth - dx * jambWidth},${cy + py * jambHalfDepth - dy * jambWidth}`,
+        ].join(" ");
+        const jambA = jambPolygon(ax, ay);
+        const jambB = [
+          `${bx + px * jambHalfDepth},${by + py * jambHalfDepth}`,
+          `${bx - px * jambHalfDepth},${by - py * jambHalfDepth}`,
+          `${bx - px * jambHalfDepth + dx * jambWidth},${by - py * jambHalfDepth + dy * jambWidth}`,
+          `${bx + px * jambHalfDepth + dx * jambWidth},${by + py * jambHalfDepth + dy * jambWidth}`,
+        ].join(" ");
         // Door leaf + arc
         const nx = d.nx, ny = d.ny;
         const a0 = Math.atan2(ny, nx);
@@ -7093,6 +7177,10 @@ function DoorNotation({
           return (
             <g key={d.id}>
               <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+              {showJambs && <>
+                <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              </>}
               <line x1={ax} y1={ay} x2={lx} y2={ly} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
               <path
                 d={`M ${lx} ${ly} A ${widthPx} ${widthPx} 0 ${largeArc} ${sweep} ${bx} ${by}`}
@@ -7120,6 +7208,10 @@ function DoorNotation({
         return (
           <g key={d.id}>
             <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+            {showJambs && <>
+              <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+            </>}
             <line x1={ax} y1={ay} x2={la.x} y2={la.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
             <line x1={bx} y1={by} x2={lb.x} y2={lb.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
             <path d={`M ${la.x} ${la.y} A ${halfW} ${halfW} 0 0 ${swA} ${mxp} ${myp}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7} />
