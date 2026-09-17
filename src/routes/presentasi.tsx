@@ -4455,8 +4455,9 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const h = bounds.maxY - bounds.minY;
   const sw = Math.max(w, h);
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
-  const rooms = (sketch.layers ?? []).filter((layer) => {
-    if (layer.levelId !== level.id || isLahan(layer.name) || layer.points.length < 3) return false;
+  const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
+  const rooms = levelLayers.filter((layer) => {
+    if (isLahan(layer.name) || isVoid(layer.name)) return false;
     const xs = layer.points.map((p) => p.x);
     const ys = layer.points.map((p) => p.y);
     return Math.max(...xs) >= slide.bounds.minX && Math.min(...xs) <= slide.bounds.maxX
@@ -4579,8 +4580,21 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             </text>
           </g>;
         })}
-        <MaterialEdges lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} sw={sw} />
-        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs />
+        <DetailVoidNotation
+          voids={levelLayers.filter((layer) => isVoid(layer.name)).map((layer) => ({ id: layer.id, points: layer.points }))}
+          floorHoles={(sketch.floors ?? []).filter((floor) => floor.levelId === level.id).flatMap((floor) =>
+            (floor.holes ?? []).map((points, index) => ({ id: `${floor.id}-${index}`, points })),
+          )}
+          sw={sw}
+        />
+        <DetailStairNotation
+          stairs={(sketch.stairs ?? []).filter((stair) => stair.levelId === level.id || stair.toLevelId === level.id)}
+          levelId={level.id}
+          pxPerM={pxPerM}
+          sw={sw}
+        />
+        <MaterialEdges lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} sw={sw} detailSolidLayers />
+        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
         <SolidWallPracticalColumns lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} />
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
@@ -6867,12 +6881,112 @@ const WALL_THICK_MM: Record<EdgeMaterial, number> = {
 };
 const RAILING_COLOR = "#8b5a2b";
 
+function DetailVoidNotation({
+  voids,
+  floorHoles,
+  sw,
+}: {
+  voids: Array<{ id: string; points: Point[] }>;
+  floorHoles: Array<{ id: string; points: Point[] }>;
+  sw: number;
+}) {
+  const stroke = sw * 0.0006;
+  return (
+    <g pointerEvents="none">
+      {[...voids, ...floorHoles].map(({ id, points }) => {
+        if (points.length < 3) return null;
+        return (
+          <polygon
+            key={`detail-void-${id}`}
+            points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+            fill="#ffffff"
+            stroke="#0a0a0a"
+            strokeWidth={stroke}
+            strokeDasharray={`${sw * 0.004} ${sw * 0.003}`}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+function DetailStairNotation({
+  stairs,
+  levelId,
+  pxPerM,
+  sw,
+}: {
+  stairs: Stair[];
+  levelId: string;
+  pxPerM: number;
+  sw: number;
+}) {
+  const stroke = sw * 0.0006;
+  const railOffset = 0.05 * pxPerM;
+  const railThickness = 0.08 * pxPerM;
+  const bandAlongEdge = (a: Point, b: Point, center: Point) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy) || 1;
+    let nx = -dy / length;
+    let ny = dx / length;
+    const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    if ((center.x - midpoint.x) * nx + (center.y - midpoint.y) * ny < 0) {
+      nx *= -1;
+      ny *= -1;
+    }
+    const near = railOffset;
+    const far = railOffset + railThickness;
+    return `${a.x + nx * near},${a.y + ny * near} ${b.x + nx * near},${b.y + ny * near} ${b.x + nx * far},${b.y + ny * far} ${a.x + nx * far},${a.y + ny * far}`;
+  };
+  return (
+    <g pointerEvents="none">
+      {stairs.map((stair) => {
+        const plan = stairPlanGeometry(stair, pxPerM);
+        const top = stair.toLevelId === levelId;
+        const dash = top ? `${sw * 0.004} ${sw * 0.003}` : undefined;
+        const center = centroid(plan.footprint);
+        const path = plan.path.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+        let railings: React.ReactNode;
+        if (stair.kind === "lingkar") {
+          const radii = plan.footprint.map((point) => Math.hypot(point.x - stair.a.x, point.y - stair.a.y));
+          const inner = Math.min(...radii);
+          const outer = Math.max(...radii);
+          railings = <>
+            <circle cx={stair.a.x} cy={stair.a.y} r={inner + railOffset + railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} strokeDasharray={dash} />
+            <circle cx={stair.a.x} cy={stair.a.y} r={outer - railOffset - railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} strokeDasharray={dash} />
+          </>;
+        } else {
+          const edges = [0, 2].flatMap((index) => {
+            const a = plan.footprint[index];
+            const b = plan.footprint[(index + 1) % plan.footprint.length];
+            return a && b ? [{ a, b }] : [];
+          });
+          railings = edges.map((edge, index) => (
+            <polygon key={`rail-${index}`} points={bandAlongEdge(edge.a, edge.b, center)} fill={RAILING_COLOR} stroke="none" opacity={top ? 0.75 : 1} />
+          ));
+        }
+        return (
+          <g key={`detail-stair-${stair.id}`} opacity={top ? 0.75 : 1}>
+            <polygon points={plan.footprint.map((point) => `${point.x},${point.y}`).join(" ")} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />
+            {plan.stepLines.map(([a, b], index) => <line key={`step-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />)}
+            {plan.landings.map((landing, index) => <polygon key={`landing-${index}`} points={landing.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />)}
+            <path d={path} fill="none" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />
+            {railings}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 function MaterialEdges({
   lines,
   edgeAttrs,
   pxPerM,
   sw,
   mode = "all",
+  detailSolidLayers = false,
 }: {
   lines: Line[];
   edgeAttrs: Record<string, EdgeMaterial>;
@@ -6881,6 +6995,8 @@ function MaterialEdges({
   /** "base" = garis sketsa dasar saja; "overlay" = elemen ber-material saja
    *  di lapisan teratas; "all" = keduanya. */
   mode?: "base" | "overlay" | "all";
+  /** Detail arsitektur: finishing 15 mm di kedua sisi dan inti solid 120 mm. */
+  detailSolidLayers?: boolean;
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
   const curved = lines
@@ -6970,11 +7086,20 @@ function MaterialEdges({
           );
         }
         if (mat === "solid") {
-          // Dinding solid: kontur tebal + hatch 45° sangat tipis.
+          const coreHalf = (0.12 * pxPerM) / 2;
+          const coreA1 = { x: s.a.x + nx * coreHalf, y: s.a.y + ny * coreHalf };
+          const coreA2 = { x: s.a.x - nx * coreHalf, y: s.a.y - ny * coreHalf };
+          const coreB1 = { x: s.b.x + nx * coreHalf, y: s.b.y + ny * coreHalf };
+          const coreB2 = { x: s.b.x - nx * coreHalf, y: s.b.y - ny * coreHalf };
+          const corePts = `${coreA1.x},${coreA1.y} ${coreB1.x},${coreB1.y} ${coreB2.x},${coreB2.y} ${coreA2.x},${coreA2.y}`;
           return (
             <g key={`s-${s.id}`}>
               <polygon points={pts} fill="#ffffff" stroke="none" />
-              <polygon points={pts} fill={`url(#hatch45-${patternId})`} stroke="none" />
+              <polygon points={detailSolidLayers ? corePts : pts} fill={`url(#hatch45-${patternId})`} stroke="none" />
+              {detailSolidLayers && <>
+                <line x1={coreA1.x} y1={coreA1.y} x2={coreB1.x} y2={coreB1.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
+                <line x1={coreA2.x} y1={coreA2.y} x2={coreB2.x} y2={coreB2.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
+              </>}
               <polygon points={pts} fill="none"
                 stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
             </g>
@@ -7104,6 +7229,7 @@ function DoorNotation({
   lines,
   edgeAttrs,
   showJambs = false,
+  leafThicknessMm = 0,
 }: {
   doors: Door[];
   pxPerM: number;
@@ -7111,6 +7237,7 @@ function DoorNotation({
   lines?: Line[];
   edgeAttrs?: Record<string, EdgeMaterial>;
   showJambs?: boolean;
+  leafThicknessMm?: number;
 }) {
   if (!doors.length) return null;
   const stroke = sw * 0.0006;
@@ -7163,6 +7290,13 @@ function DoorNotation({
           `${bx - px * jambHalfDepth + dx * jambWidth},${by - py * jambHalfDepth + dy * jambWidth}`,
           `${bx + px * jambHalfDepth + dx * jambWidth},${by + py * jambHalfDepth + dy * jambWidth}`,
         ].join(" ");
+        const leafPolygon = (x1: number, y1: number, x2: number, y2: number) => {
+          const leafLength = Math.hypot(x2 - x1, y2 - y1) || 1;
+          const leafNx = -(y2 - y1) / leafLength;
+          const leafNy = (x2 - x1) / leafLength;
+          const leafHalf = ((leafThicknessMm / 1000) * pxPerM) / 2;
+          return `${x1 + leafNx * leafHalf},${y1 + leafNy * leafHalf} ${x2 + leafNx * leafHalf},${y2 + leafNy * leafHalf} ${x2 - leafNx * leafHalf},${y2 - leafNy * leafHalf} ${x1 - leafNx * leafHalf},${y1 - leafNy * leafHalf}`;
+        };
         // Door leaf + arc
         const nx = d.nx, ny = d.ny;
         const a0 = Math.atan2(ny, nx);
@@ -7181,7 +7315,9 @@ function DoorNotation({
                 <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
                 <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
               </>}
-              <line x1={ax} y1={ay} x2={lx} y2={ly} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+              {leafThicknessMm > 0
+                ? <polygon points={leafPolygon(ax, ay, lx, ly)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                : <line x1={ax} y1={ay} x2={lx} y2={ly} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />}
               <path
                 d={`M ${lx} ${ly} A ${widthPx} ${widthPx} 0 ${largeArc} ${sweep} ${bx} ${by}`}
                 fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7}
@@ -7212,8 +7348,13 @@ function DoorNotation({
               <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
               <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
             </>}
-            <line x1={ax} y1={ay} x2={la.x} y2={la.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
-            <line x1={bx} y1={by} x2={lb.x} y2={lb.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+            {leafThicknessMm > 0 ? <>
+              <polygon points={leafPolygon(ax, ay, la.x, la.y)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              <polygon points={leafPolygon(bx, by, lb.x, lb.y)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+            </> : <>
+              <line x1={ax} y1={ay} x2={la.x} y2={la.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+              <line x1={bx} y1={by} x2={lb.x} y2={lb.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+            </>}
             <path d={`M ${la.x} ${la.y} A ${halfW} ${halfW} 0 0 ${swA} ${mxp} ${myp}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7} />
             <path d={`M ${lb.x} ${lb.y} A ${halfW} ${halfW} 0 0 ${swB} ${mxp} ${myp}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7} />
           </g>
