@@ -5139,20 +5139,6 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               );
             });
           })()}
-          {/* Overlay material di lapisan teratas, menutupi garis base sketsa. */}
-          <MaterialEdges
-            lines={lines}
-            edgeAttrs={sketch.edgeAttrs ?? {}}
-            pxPerM={pxPerM}
-            sw={sw}
-            mode="overlay"
-          />
-          {/* Pintu digambar paling akhir agar bukaan pintu menutupi material/dinding di bawahnya. */}
-          <DoorNotation
-            doors={(sketch.doors ?? []).filter((d) => d.levelId === level.id)}
-            pxPerM={pxPerM}
-            sw={sw}
-          />
           {/* Lot parkir otomatis (geometris) untuk level ini. */}
           {(() => {
             const areas = (sketch.parkingAreas ?? []).filter((p) => p.levelId === level.id);
@@ -5350,6 +5336,27 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             );
 
           })()}
+          {/* Material dinding ditempatkan setelah seluruh warna, garis ruang,
+              dan notasi denah agar tidak pernah tertutup perimeter ruang. */}
+          <MaterialEdges
+            lines={lines}
+            edgeAttrs={sketch.edgeAttrs ?? {}}
+            pxPerM={pxPerM}
+            sw={sw}
+            mode="overlay"
+          />
+          {/* Bukaan pintu tetap memotong bidang dinding, lalu kolom praktis dan
+              kolom struktur berada pada lapisan paling atas. */}
+          <DoorNotation
+            doors={(sketch.doors ?? []).filter((d) => d.levelId === level.id)}
+            pxPerM={pxPerM}
+            sw={sw}
+          />
+          <SolidWallPracticalColumns
+            lines={lines}
+            edgeAttrs={sketch.edgeAttrs ?? {}}
+            pxPerM={pxPerM}
+          />
           {/* Kolom struktur selalu menjadi lapisan denah paling atas. */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
@@ -6849,6 +6856,58 @@ function MaterialEdges({
           </g>
         );
       })}
+    </g>
+  );
+}
+
+function SolidWallPracticalColumns({
+  lines,
+  edgeAttrs,
+  pxPerM,
+}: {
+  lines: Line[];
+  edgeAttrs: Record<string, EdgeMaterial>;
+  pxPerM: number;
+}) {
+  const solidSegments = computeStraightSegments(
+    lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })),
+  ).filter((segment) => edgeAttrs[segmentIdFor(segment.a, segment.b)] === "solid");
+  const nodes = new Map<string, { point: Point; directions: Point[] }>();
+  const addEndpoint = (point: Point, other: Point) => {
+    const length = Math.hypot(other.x - point.x, other.y - point.y);
+    if (length < 1e-6) return;
+    const key = `${Math.round(point.x * 1000)},${Math.round(point.y * 1000)}`;
+    const entry = nodes.get(key) ?? { point, directions: [] };
+    entry.directions.push({ x: (other.x - point.x) / length, y: (other.y - point.y) / length });
+    nodes.set(key, entry);
+  };
+  for (const segment of solidSegments) {
+    addEndpoint(segment.a, segment.b);
+    addEndpoint(segment.b, segment.a);
+  }
+  const corners = [...nodes.values()].filter(({ directions }) => {
+    if (directions.length < 2) return false;
+    for (let i = 0; i < directions.length; i++) {
+      for (let j = i + 1; j < directions.length; j++) {
+        const dot = Math.abs(directions[i].x * directions[j].x + directions[i].y * directions[j].y);
+        if (dot < 0.985) return true;
+      }
+    }
+    return false;
+  });
+  const size = 0.15 * pxPerM;
+  return (
+    <g pointerEvents="none">
+      {corners.map(({ point }, index) => (
+        <rect
+          key={`practical-column-${index}`}
+          x={point.x - size / 2}
+          y={point.y - size / 2}
+          width={size}
+          height={size}
+          fill="#0a0a0a"
+        />
+      ))}
     </g>
   );
 }
