@@ -2934,13 +2934,13 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
           <rect x={0} y={0} width={AREA_W} height={AREA_H} fill="#ffffff" />
 
           {/* Lahan / ground line — terikat MDPL 0 */}
-          <line x1={mx(0) - 30} y1={my(groundMdpl)} x2={mx(cutLenM) + 30} y2={my(groundMdpl)} stroke="#111" strokeWidth={1.6} />
+          <line x1={Math.min(mx(0), mx(cutLenM)) - 30} y1={my(groundMdpl)} x2={Math.max(mx(0), mx(cutLenM)) + 30} y2={my(groundMdpl)} stroke="#111" strokeWidth={1.6} />
           <text x={mx(0) - 36} y={my(groundMdpl) - 5} fontSize={10} textAnchor="end" fill="#111" style={{ fontFamily: "Manrope, sans-serif", fontWeight: 700 }}>
             Lahan ±0 Elev
           </text>
           {/* Hatching lahan */}
           {Array.from({ length: 18 }).map((_, i) => {
-            const x = mx(0) - 20 + i * ((cutLenM * scalePxPerM + 40) / 18);
+            const x = Math.min(mx(0), mx(cutLenM)) - 20 + i * ((cutLenM * scalePxPerM + 40) / 18);
             return (
               <line key={i} x1={x} y1={my(groundMdpl)} x2={x - 8} y2={my(groundMdpl) + 10}
                 stroke="#111" strokeWidth={0.7} />
@@ -2989,7 +2989,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 return merged.map(([a, c], i) => (
                   <rect
                     key={`proj-${b.id}-${fi}-${i}`}
-                    x={mx(a)} y={yT}
+                    x={Math.min(mx(a), mx(c))} y={yT}
                     width={(c - a) * scalePxPerM} height={hPx}
                     fill="none" stroke="#000000" strokeWidth={0.35}
                     pointerEvents="none"
@@ -3019,7 +3019,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               defaultFs = Math.max(8, Math.min(16, Math.min(w0 * 0.5, h0 * 0.6)));
             }
             return b.slices.flatMap((sl, i) => {
-              const x = mx(sl.x0);
+              const x = Math.min(mx(sl.x0), mx(sl.x1));
               const w = (sl.x1 - sl.x0) * scalePxPerM;
               const sliceHM = sl.heightOverride ?? b.floorH;
               const num = numberByLayerId.get(sl.layerId);
@@ -3329,7 +3329,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               );
             };
             return boxes.map((b) => {
-              const x = mx(0);
+              const x = Math.min(mx(0), mx(cutLenM));
               const y = my(b.topM);
               const w = cutLenM * scalePxPerM;
               const h = (b.topM - b.baseM) * scalePxPerM;
