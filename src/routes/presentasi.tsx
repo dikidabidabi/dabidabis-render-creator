@@ -4440,6 +4440,122 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 }
 
 // ---- Level body ----
+function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
+  const { sketch, level, area } = slide;
+  const rawW = Math.max(1, slide.bounds.maxX - slide.bounds.minX);
+  const rawH = Math.max(1, slide.bounds.maxY - slide.bounds.minY);
+  const pad = Math.max(rawW, rawH) * 0.08;
+  const bounds = {
+    minX: slide.bounds.minX - pad,
+    minY: slide.bounds.minY - pad,
+    maxX: slide.bounds.maxX + pad,
+    maxY: slide.bounds.maxY + pad,
+  };
+  const w = bounds.maxX - bounds.minX;
+  const h = bounds.maxY - bounds.minY;
+  const sw = Math.max(w, h);
+  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const rooms = (sketch.layers ?? []).filter((layer) => {
+    if (layer.levelId !== level.id || isLahan(layer.name) || layer.points.length < 3) return false;
+    const xs = layer.points.map((p) => p.x);
+    const ys = layer.points.map((p) => p.y);
+    return Math.max(...xs) >= slide.bounds.minX && Math.min(...xs) <= slide.bounds.maxX
+      && Math.max(...ys) >= slide.bounds.minY && Math.min(...ys) <= slide.bounds.maxY;
+  });
+  const lines = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
+  const doors = (sketch.doors ?? []).filter((door) => door.levelId === level.id);
+  const patternId = useId().replace(/:/g, "");
+  const levelMm = Math.round((Number(level.mdpl) || 0) * 1000);
+  const elevation = `${levelMm >= 0 ? "+" : ""}${levelMm}`;
+  const crop = (value: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, value));
+  const uniqueCoords = (values: number[]) => values.sort((a, b) => a - b).filter((v, i, arr) => i === 0 || Math.abs(v - arr[i - 1]) > pxPerM * 0.08);
+  const grids = collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).filter((grid) => levelInRange(grid, level, [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl)));
+  const columns = grids.flatMap((grid) => {
+    if (grid.lineOnly) return [];
+    const { spansX, spansY } = spansForLevel(grid, level.id);
+    const xs = axisPositions(spansX).map((m) => grid.origin.x + m * pxPerM);
+    const ys = axisPositions(spansY).map((m) => grid.origin.y + m * pxPerM);
+    return xs.flatMap((x) => ys.map((y) => ({ x, y, size: (grid.colSizeCm / 100) * pxPerM })));
+  });
+  const xCoords = uniqueCoords([
+    slide.bounds.minX, slide.bounds.maxX,
+    ...lines.flatMap((line) => [line.a.x, line.b.x]),
+    ...doors.flatMap((door) => [door.a.x, door.b.x]),
+    ...columns.map((column) => column.x),
+  ].map((x) => crop(x, slide.bounds.minX, slide.bounds.maxX)));
+  const yCoords = uniqueCoords([
+    slide.bounds.minY, slide.bounds.maxY,
+    ...lines.flatMap((line) => [line.a.y, line.b.y]),
+    ...doors.flatMap((door) => [door.a.y, door.b.y]),
+    ...columns.map((column) => column.y),
+  ].map((y) => crop(y, slide.bounds.minY, slide.bounds.maxY)));
+  const dimFont = sw * 0.012;
+  const dimStroke = sw * 0.00065;
+
+  return (
+    <div style={{ width: "100%", height: "100%", position: "relative", background: "#ffffff", overflow: "hidden" }}>
+      <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+        <defs>
+          <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
+            <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
+          </pattern>
+        </defs>
+        <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
+        {rooms.map((room) => {
+          const fill = roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
+          const c = centroid(room.points);
+          return <g key={room.id}>
+            <polygon points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} fill={area.floorHatch ? `url(#floor-grid-${patternId})` : fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />
+            <text x={c.x} y={c.y - dimFont * 0.8} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={sw * 0.018} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.004 }}>
+              {room.name}
+            </text>
+            <text x={c.x} y={c.y + dimFont * 0.9} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={sw * 0.0125} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.003 }}>
+              {fmt(room.areaM2 || 0, 2)} m²
+            </text>
+            <text x={c.x} y={c.y + dimFont * 2.45} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={sw * 0.0115} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.003 }}>
+              {elevation}
+            </text>
+          </g>;
+        })}
+        <MaterialEdges lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} sw={sw} />
+        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} />
+        <SolidWallPracticalColumns lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} />
+        {columns.map((column, index) => (
+          <rect key={`detail-column-${index}`} x={column.x - column.size / 2} y={column.y - column.size / 2} width={column.size} height={column.size} fill="#0a0a0a" />
+        ))}
+        {area.dimensions && <g fill="#111111" stroke="#111111" strokeWidth={dimStroke}>
+          {xCoords.slice(0, -1).map((x, index) => {
+            const x2 = xCoords[index + 1];
+            if (x2 - x < pxPerM * 0.1) return null;
+            const y = slide.bounds.minY - pad * 0.42;
+            return <g key={`dx-${index}`}>
+              <line x1={x} y1={y} x2={x2} y2={y} />
+              <line x1={x} y1={y - dimFont * 0.35} x2={x} y2={slide.bounds.minY} />
+              <line x1={x2} y1={y - dimFont * 0.35} x2={x2} y2={slide.bounds.minY} />
+              <text x={(x + x2) / 2} y={y - dimFont * 0.25} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600}>{Math.round((x2 - x) / pxPerM * 1000)}</text>
+            </g>;
+          })}
+          {yCoords.slice(0, -1).map((y, index) => {
+            const y2 = yCoords[index + 1];
+            if (y2 - y < pxPerM * 0.1) return null;
+            const x = slide.bounds.minX - pad * 0.42;
+            return <g key={`dy-${index}`}>
+              <line x1={x} y1={y} x2={x} y2={y2} />
+              <line x1={x - dimFont * 0.35} y1={y} x2={slide.bounds.minX} y2={y} />
+              <line x1={x - dimFont * 0.35} y1={y2} x2={slide.bounds.minX} y2={y2} />
+              <text x={x - dimFont * 0.3} y={(y + y2) / 2} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600} transform={`rotate(-90 ${x - dimFont * 0.3} ${(y + y2) / 2})`}>{Math.round((y2 - y) / pxPerM * 1000)}</text>
+            </g>;
+          })}
+        </g>}
+      </svg>
+      <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
+        <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
+        <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
+      </div>
+    </div>
+  );
+}
+
 function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const { sketch, level, bounds } = slide;
   const w = bounds.maxX - bounds.minX;
