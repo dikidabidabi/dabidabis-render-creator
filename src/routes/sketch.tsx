@@ -380,6 +380,18 @@ type SectionCut = {
   updatedAt?: number;
 };
 
+type DetailArea = {
+  id: string;
+  levelId: string;
+  a: Point;
+  b: Point;
+  number: number;
+  showOnSlide: boolean;
+  dimensions: boolean;
+  floorHatch: boolean;
+  createdAt: number;
+};
+
 // Label otomatis: A-A, B-B, ..., Z-Z, AA-AA, AB-AB, ...
 function sectionLabelFor(index: number): string {
   let n = index;
@@ -433,6 +445,7 @@ type Sketch = {
   ramps?: Ramp[]; // Ramp antar level
   stairs?: Stair[]; // Tangga antar level
   imageReferences?: ImageReference[]; // JPG acuan per level, di atas peta dan di bawah geometri
+  detailAreas?: DetailArea[]; // Kotak pendetailan per level untuk slide detail denah
   axes?: import("@/lib/axes").AxisSegment[]; // Aksis rancangan (garis/tangent) — dihindari oleh Cluster Generator
   roads?: import("@/lib/roads").RoadSegment[]; // Jalan dengan lebar + fillet — Master Plan
   illustrations?: Annotation[]; // Ilustrasi Analisa (panah, zona, node, dsb) — Master Plan
@@ -2526,10 +2539,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         roofs: (sketch.roofs ?? []).filter((roof) => roof.levelId !== lvlId),
         stairs: (sketch.stairs ?? []).filter((stair) => stair.levelId !== lvlId && stair.toLevelId !== lvlId),
         imageReferences: (sketch.imageReferences ?? []).filter((ref) => ref.levelId !== lvlId),
+        detailAreas: (sketch.detailAreas ?? []).filter((area) => area.levelId !== lvlId),
       });
       toast.success("Level dihapus");
     },
-    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.imageReferences],
+    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.imageReferences, sketch.detailAreas],
   );
 
   const duplicateLevel = useCallback(
@@ -2622,7 +2636,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan">("line");
   // ===== Image Reference (JPG) =====
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -4683,7 +4697,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.setLineDash([6 / s, 4 / s]);
       }
       ctx.beginPath();
-      const isRectPreview = tool === "rect" || isFloorRect;
+      const isRectPreview = tool === "rect" || tool === "pendetailan" || isFloorRect;
       if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
@@ -4924,6 +4938,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
         ctx.restore();
       }
+    }
+
+    // Kotak pendetailan tersimpan: layer penanda saja, tidak mengubah geometri.
+    for (const area of (sketch.detailAreas ?? []).filter((item) => item.levelId === activeLvlId)) {
+      const x = Math.min(area.a.x, area.b.x);
+      const y = Math.min(area.a.y, area.b.y);
+      const width = Math.abs(area.b.x - area.a.x);
+      const height = Math.abs(area.b.y - area.a.y);
+      ctx.save();
+      ctx.strokeStyle = area.showOnSlide ? "rgba(232,93,58,0.95)" : "rgba(90,90,90,0.7)";
+      ctx.lineWidth = 2 / s;
+      ctx.setLineDash([8 / s, 5 / s]);
+      ctx.strokeRect(x, y, width, height);
+      ctx.setLineDash([]);
+      ctx.fillStyle = area.showOnSlide ? "#e85d3a" : "#666666";
+      ctx.beginPath();
+      ctx.arc(x, y, 13 / s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `700 ${12 / s}px Sora, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(area.number), x, y);
+      ctx.restore();
     }
 
 
@@ -9083,7 +9121,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
     if (
-      tool === "line" || tool === "rect" || tool === "section" || tool === "separasi" ||
+      tool === "line" || tool === "rect" || tool === "pendetailan" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw") ||
       (tool === "aksis" && aksisSub === "garis") ||
       (tool === "jalan" && jalanSub === "garis")
@@ -10604,6 +10642,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (curTool === "pendetailan") {
+      if (!activeLvlId || Math.abs(b.x - a.x) < MINOR_PX || Math.abs(b.y - a.y) < MINOR_PX) return;
+      const existing = sketch.detailAreas ?? [];
+      const number = existing.reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
+      pushHistory();
+      onChange({
+        detailAreas: [...existing, {
+          id: `DETAIL${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          levelId: activeLvlId,
+          a: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) },
+          b: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) },
+          number,
+          showOnSlide: true,
+          dimensions: true,
+          floorHatch: false,
+          createdAt: Date.now(),
+        }],
+      });
+      toast.success(`Detail ${number} dibuat dan ditambahkan ke Presentasi`);
+      return;
+    }
+
 
     if (curTool === "parking") {
       // Hanya draw mode yang membuat area baru.
@@ -11478,6 +11538,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Upload className="mr-1.5 h-4 w-4" /> Image Reference
           </Button>
+          <Button
+            variant={tool === "pendetailan" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setDrawing(null); setTool("pendetailan"); }}
+            className={cn(tool === "pendetailan" && "bg-gradient-primary shadow-primary")}
+            title="Tarik kotak untuk membuat area detail dan slide pembesaran denah"
+          >
+            <Crop className="mr-1.5 h-4 w-4" /> Pendetailan
+          </Button>
 
           <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
@@ -11591,6 +11660,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   onChange={(e) => onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => ref.id === selected.id ? { ...ref, opacity: Number(e.target.value) / 100 } : ref) })} />
               </div>;
             })()}
+          </div>
+        )}
+        {tool === "pendetailan" && (
+          <div className="space-y-3 rounded-lg border border-border/60 bg-card/60 p-3">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Pendetailan</div>
+              <p className="mt-1 text-[11px] text-muted-foreground">Tarik kotak pada denah. Setiap kotak menjadi slide detail setelah slide denah level ini.</p>
+            </div>
+            <div className="space-y-2">
+              {(sketch.detailAreas ?? []).filter((area) => area.levelId === activeLvlId).map((area) => (
+                <div key={area.id} className="rounded-md border border-border/60 p-2">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold">Detail {area.number}</span>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Hapus kotak detail"
+                      onClick={() => onChange({ detailAreas: (sketch.detailAreas ?? []).filter((item) => item.id !== area.id) })}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  {([
+                    ["showOnSlide", "Munculkan di slide"],
+                    ["dimensions", "Dimensi"],
+                    ["floorHatch", "Hatch lantai 600 × 600 mm"],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center justify-between gap-3 py-1 text-[11px]">
+                      <span>{label}</span>
+                      <Switch checked={area[key]} onCheckedChange={(checked) => onChange({
+                        detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, [key]: checked } : item),
+                      })} />
+                    </label>
+                  ))}
+                </div>
+              ))}
+              {(sketch.detailAreas ?? []).filter((area) => area.levelId === activeLvlId).length === 0 && (
+                <p className="text-[11px] text-muted-foreground">Belum ada kotak detail pada level ini.</p>
+              )}
+            </div>
           </div>
         )}
         {tool === "iluanalisa" && (
