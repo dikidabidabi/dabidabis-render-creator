@@ -14560,6 +14560,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <MoveHorizontal className="h-4 w-4" />
           </Button>
           <Button
+            variant={tool === "pendetailan" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setDrawing(null); setTool("pendetailan"); }}
+            className={cn(tool === "pendetailan" && "bg-gradient-primary shadow-primary")}
+            title="Pendetailan (tarik kotak area pembesaran)"
+          >
+            <Crop className="h-4 w-4" />
+          </Button>
+          <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "ghost"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("parking"); setParkingKind("mobil"); setParkingSubTool("draw"); setParkingSelectedId(null); }}
