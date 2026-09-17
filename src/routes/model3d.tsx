@@ -111,6 +111,13 @@ type Sketch = {
   roofs?: Roof[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
+type VertexSelection = {
+  kind: "layer" | "floor";
+  objectId: string;
+  levelId: string;
+  pointIndex?: number;
+  holeIndex?: number;
+};
 
 import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
 
@@ -442,6 +449,79 @@ function FloorSlab({
   );
 }
 
+function VertexEditor({
+  points,
+  origin,
+  mPerPx,
+  baseY,
+  selectedIndex,
+  onSelect,
+  onCommit,
+  onDraggingChange,
+}: {
+  points: Point[];
+  origin: Point;
+  mPerPx: number;
+  baseY: number;
+  selectedIndex?: number;
+  onSelect: (index: number) => void;
+  onCommit: (index: number, world: THREE.Vector3) => void;
+  onDraggingChange: (dragging: boolean) => void;
+}) {
+  const controlRef = useRef<any>(null);
+  const markerRef = useRef<THREE.Mesh>(null);
+  const point = selectedIndex === undefined ? null : points[selectedIndex];
+
+  useEffect(() => {
+    if (!point || !markerRef.current) return;
+    markerRef.current.position.set(
+      (point.x - origin.x) * mPerPx,
+      baseY,
+      (point.y - origin.y) * mPerPx,
+    );
+  }, [point, origin.x, origin.y, mPerPx, baseY]);
+
+  return (
+    <>
+      {points.map((vertex, index) => (
+        <mesh
+          key={index}
+          position={[(vertex.x - origin.x) * mPerPx, baseY, (vertex.y - origin.y) * mPerPx]}
+          onClick={(event) => { event.stopPropagation(); onSelect(index); }}
+        >
+          <sphereGeometry args={[selectedIndex === index ? 0.18 : 0.12, 16, 16]} />
+          <meshBasicMaterial color={selectedIndex === index ? "#f59e0b" : "#ffffff"} depthTest={false} />
+        </mesh>
+      ))}
+      {point && selectedIndex !== undefined && (
+        <TransformControls
+          ref={controlRef}
+          mode="translate"
+          translationSnap={0.5}
+          onMouseDown={() => onDraggingChange(true)}
+          onMouseUp={() => {
+            onDraggingChange(false);
+            if (markerRef.current) onCommit(selectedIndex, markerRef.current.position.clone());
+          }}
+        >
+          <mesh
+            ref={markerRef}
+            position={[(point.x - origin.x) * mPerPx, baseY, (point.y - origin.y) * mPerPx]}
+          >
+            <sphereGeometry args={[0.16, 16, 16]} />
+            <meshBasicMaterial color="#f59e0b" depthTest={false} />
+            <Html center position={[0, 0.45, 0]}>
+              <div className="whitespace-nowrap rounded bg-background/95 px-2 py-1 text-[11px] font-semibold text-foreground shadow">
+                Snap 0,50 m
+              </div>
+            </Html>
+          </mesh>
+        </TransformControls>
+      )}
+    </>
+  );
+}
+
 
 
 function GroundPlane({
@@ -594,6 +674,11 @@ function Scene({
   onOsmDelete,
   osmOverrides,
   onOsmHeight,
+  vertexEditMode,
+  vertexSelection,
+  onVertexSelection,
+  onVertexCommit,
+  onGizmoDragging,
 }: {
   sketch: Sketch;
   highlightLevelId: string | null;
@@ -610,6 +695,11 @@ function Scene({
   onOsmDelete?: (id: string) => void;
   osmOverrides?: Record<string, number>;
   onOsmHeight?: (id: string, h: number) => void;
+  vertexEditMode?: boolean;
+  vertexSelection?: VertexSelection | null;
+  onVertexSelection?: (selection: VertexSelection | null) => void;
+  onVertexCommit?: (selection: VertexSelection, world: THREE.Vector3, origin: Point, mPerPx: number, baseY: number) => void;
+  onGizmoDragging?: (dragging: boolean) => void;
 }) {
   const isLevelVisible = (id: string | undefined | null) =>
     !id ? true : visibleLevels?.[id] !== false;
@@ -758,6 +848,8 @@ function Scene({
                   height={h}
                   color={color}
                   highlighted={highlightLevelId === lv.sourceId}
+                  selected={vertexSelection?.kind === "layer" && vertexSelection.objectId === ly.id}
+                  onSelect={vertexEditMode ? () => onVertexSelection?.({ kind: "layer", objectId: ly.id, levelId: lv.sourceId }) : undefined}
                 />
               );
             })}
@@ -811,11 +903,36 @@ function Scene({
                 thickness={thick}
                 color={slabColor}
                 highlighted={highlightLevelId === lvl.id}
+                selected={vertexSelection?.kind === "floor" && vertexSelection.objectId === fl.id}
+                onSelect={vertexEditMode ? () => onVertexSelection?.({ kind: "floor", objectId: fl.id, levelId: lvl.id }) : undefined}
               />
             </group>
           );
         });
       })}
+
+      {vertexEditMode && vertexSelection && (() => {
+        const level = sketch.levels.find((item) => item.id === vertexSelection.levelId);
+        const baseY = (level?.mdpl ?? baseMdpl) - baseMdpl;
+        const points = vertexSelection.kind === "layer"
+          ? sketch.layers.find((item) => item.id === vertexSelection.objectId)?.points
+          : vertexSelection.holeIndex === undefined
+            ? sketch.floors?.find((item) => item.id === vertexSelection.objectId)?.outer
+            : sketch.floors?.find((item) => item.id === vertexSelection.objectId)?.holes?.[vertexSelection.holeIndex];
+        if (!points) return null;
+        return (
+          <VertexEditor
+            points={points}
+            origin={origin}
+            mPerPx={mPerPx}
+            baseY={baseY}
+            selectedIndex={vertexSelection.pointIndex}
+            onSelect={(pointIndex) => onVertexSelection?.({ ...vertexSelection, pointIndex })}
+            onCommit={(pointIndex, world) => onVertexCommit?.({ ...vertexSelection, pointIndex }, world, origin, mPerPx, baseY)}
+            onDraggingChange={(dragging) => onGizmoDragging?.(dragging)}
+          />
+        );
+      })()}
 
 
 
