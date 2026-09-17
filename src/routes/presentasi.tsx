@@ -5002,17 +5002,6 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   );
                 })}
 
-                {/* Kolom hitam pada tiap titik temu (skip area clip) */}
-                {xs.flatMap((x, i) => ys.map((y, j) => {
-                  if (!isNodeActive(grid, level.id, i, j)) return null;
-                  if (isColumnClipped(grid, xsM[i], zsM[j])) return null;
-                  return (
-                    <rect key={`col-${i}-${j}`}
-                      x={x - colPx / 2} y={y - colPx / 2}
-                      width={colPx} height={colPx}
-                      fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
-                  );
-                }))}
               </g>
             );
           })}
@@ -5361,6 +5350,34 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             );
 
           })()}
+          {/* Kolom struktur selalu menjadi lapisan denah paling atas. */}
+          {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
+            const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+            if (!levelInRange(grid, level, allLv) || grid.lineOnly) return null;
+            const { spansX, spansY } = spansForLevel(grid, level.id);
+            const xsM = axisPositions(spansX);
+            const ysM = axisPositions(spansY);
+            const xs = xsM.map((m) => grid.origin.x + m * pxPerM);
+            const ys = ysM.map((m) => grid.origin.y + m * pxPerM);
+            const colPx = (grid.colSizeCm / 100) * pxPerM;
+            const gridSW = sw * 0.0003;
+            const rotDeg = Number(grid.rotation) || 0;
+            return (
+              <g key={`column-overlay-${gIdx}`} pointerEvents="none"
+                transform={rotDeg ? `rotate(${rotDeg} ${grid.origin.x} ${grid.origin.y})` : undefined}>
+                {xs.flatMap((x, i) => ys.map((y, j) => {
+                  if (!isNodeActive(grid, level.id, i, j)) return null;
+                  if (isColumnClipped(grid, xsM[i], ysM[j])) return null;
+                  return (
+                    <rect key={`column-overlay-${i}-${j}`}
+                      x={x - colPx / 2} y={y - colPx / 2}
+                      width={colPx} height={colPx}
+                      fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
+                  );
+                }))}
+              </g>
+            );
+          })}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
@@ -6700,13 +6717,13 @@ function MaterialEdges({
           <line x1={0} y1={0} x2={0} y2={hatchGap}
             stroke="#0a0a0a" strokeWidth={hatchStroke} />
         </pattern>
-        {/* Notasi beton yang sama dengan plat dan balok. */}
-        <pattern id={`concrete-dot-${patternId}`} width={5} height={5} patternUnits="userSpaceOnUse">
-          <rect width={5} height={5} fill="#ece6d3" />
-          <circle cx={1.2} cy={1.2} r={0.55} fill="#1a1a1a" />
-          <circle cx={3.7} cy={3.7} r={0.55} fill="#1a1a1a" />
-          <circle cx={3.7} cy={1.2} r={0.32} fill="#3a3a3a" />
-          <circle cx={1.2} cy={3.7} r={0.32} fill="#3a3a3a" />
+        {/* Notasi beton denah: bintik kecil, renggang, dan samar agar dinding tetap terbaca. */}
+        <pattern id={`concrete-dot-${patternId}`} width={7} height={7} patternUnits="userSpaceOnUse">
+          <rect width={7} height={7} fill="#f4f3ef" />
+          <circle cx={1.6} cy={1.7} r={0.3} fill="#282828" opacity={0.28} />
+          <circle cx={5.2} cy={5.1} r={0.24} fill="#282828" opacity={0.22} />
+          <circle cx={5.5} cy={1.5} r={0.16} fill="#282828" opacity={0.18} />
+          <circle cx={1.8} cy={5.4} r={0.16} fill="#282828" opacity={0.18} />
         </pattern>
       </defs>
       {/* Garis lengkung — render apa adanya (notasi material 2D hanya utk garis lurus). */}
