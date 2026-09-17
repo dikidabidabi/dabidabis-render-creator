@@ -4,7 +4,14 @@
 
 export type Point = { x: number; y: number };
 
-export type EdgeMaterial = "solid" | "curtain" | "window" | "railing";
+export type EdgeMaterial =
+  | "solid"
+  | "concrete200"
+  | "concrete300"
+  | "concept"
+  | "curtain"
+  | "window"
+  | "railing";
 
 // Garis input (subset dari Line di sketch.tsx).
 export type StraightLineInput = {
@@ -162,6 +169,9 @@ export function intersectSegmentWithCut(
 
 export const MATERIAL_COLORS: Record<EdgeMaterial, string> = {
   solid: "#0a0a0a",
+  concrete200: "#737373",
+  concrete300: "#525252",
+  concept: "#000000",
   curtain: "#22d3ee",
   window: "#1e3a8a",
   railing: "#8b5a2b",
@@ -169,6 +179,9 @@ export const MATERIAL_COLORS: Record<EdgeMaterial, string> = {
 
 export const MATERIAL_LABELS: Record<EdgeMaterial, string> = {
   solid: "Dinding Solid",
+  concrete200: "Dinding Beton · 200 mm",
+  concrete300: "Dinding Beton · 300 mm",
+  concept: "Dinding Konsep · 150 mm",
   curtain: "Curtain Wall",
   window: "Window Wall",
   railing: "Railing",

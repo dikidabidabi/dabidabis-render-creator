@@ -3452,13 +3452,21 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                     const yTop = my(b.topM);
                     const yBot = my(b.baseM);
                     const totalH = yBot - yTop;
-                    if (h.mat === "solid") {
+                    if (h.mat === "solid" || h.mat === "concept") {
                       return (
                         <g key={`mat-${b.id}-${idx}`}>
                           <rect x={x} y={yTop} width={bandW} height={totalH}
                             fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.8} />
                           <rect x={x} y={yTop} width={bandW} height={totalH}
                             fill={`url(#hatch45-sec-${slide.id})`} stroke="none" />
+                        </g>
+                      );
+                    }
+                    if (h.mat === "concrete200" || h.mat === "concrete300") {
+                      return (
+                        <g key={`mat-${b.id}-${idx}`}>
+                          <rect x={x} y={yTop} width={bandW} height={totalH}
+                            fill={`url(#concrete-dot-${slide.id})`} stroke="#0a0a0a" strokeWidth={0.8} />
                         </g>
                       );
                     }
@@ -3472,6 +3480,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         </g>
                       );
                     }
+                    if (h.mat === "railing") return null;
                     // window: dinding 0–0.9m, kaca 0.9–2.4m, dinding 2.4–plafon (relatif ke baseM)
                     const ySill = my(b.baseM + 0.9);
                     const yHead = my(b.baseM + 2.4);
@@ -6640,6 +6649,9 @@ function linePath(ln: Line): string {
 // Tebal dinding selubung (mm), dikonversi ke px sketsa via pxPerM.
 const WALL_THICK_MM: Record<EdgeMaterial, number> = {
   solid: 150,
+  concrete200: 200,
+  concrete300: 300,
+  concept: 150,
   curtain: 80,
   window: 150,
   railing: 100,
@@ -6688,6 +6700,14 @@ function MaterialEdges({
           <line x1={0} y1={0} x2={0} y2={hatchGap}
             stroke="#0a0a0a" strokeWidth={hatchStroke} />
         </pattern>
+        {/* Notasi beton yang sama dengan plat dan balok. */}
+        <pattern id={`concrete-dot-${patternId}`} width={5} height={5} patternUnits="userSpaceOnUse">
+          <rect width={5} height={5} fill="#ece6d3" />
+          <circle cx={1.2} cy={1.2} r={0.55} fill="#1a1a1a" />
+          <circle cx={3.7} cy={3.7} r={0.55} fill="#1a1a1a" />
+          <circle cx={3.7} cy={1.2} r={0.32} fill="#3a3a3a" />
+          <circle cx={1.2} cy={3.7} r={0.32} fill="#3a3a3a" />
+        </pattern>
       </defs>
       {/* Garis lengkung — render apa adanya (notasi material 2D hanya utk garis lurus). */}
       {mode !== "overlay" && curved.map(({ ln, i }) => (
@@ -6725,6 +6745,21 @@ function MaterialEdges({
         const b1 = { x: s.b.x + nx * half, y: s.b.y + ny * half };
         const b2 = { x: s.b.x - nx * half, y: s.b.y - ny * half };
         const pts = `${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`;
+        if (mat === "concept") {
+          // Dinding konsep hanya dibedakan di denah: bidang hitam penuh 150 mm.
+          return (
+            <polygon key={`s-${s.id}`} points={pts} fill="#0a0a0a" stroke="none" />
+          );
+        }
+        if (mat === "concrete200" || mat === "concrete300") {
+          return (
+            <g key={`s-${s.id}`}>
+              <polygon points={pts} fill={`url(#concrete-dot-${patternId})`} stroke="none" />
+              <polygon points={pts} fill="none"
+                stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
+            </g>
+          );
+        }
         if (mat === "solid") {
           // Dinding solid: kontur tebal + hatch 45° sangat tipis.
           return (

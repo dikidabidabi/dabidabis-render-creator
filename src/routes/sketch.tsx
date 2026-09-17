@@ -1030,7 +1030,10 @@ function normalizeSketch(s: any): Sketch {
       if (!raw || typeof raw !== "object") return {};
       const valid: Record<string, EdgeMaterial> = {};
       for (const [k, v] of Object.entries(raw)) {
-        if (v === "solid" || v === "curtain" || v === "window" || v === "railing") {
+        if (
+          v === "solid" || v === "concrete200" || v === "concrete300" ||
+          v === "concept" || v === "curtain" || v === "window" || v === "railing"
+        ) {
           valid[k] = v;
         }
       }
@@ -4519,7 +4522,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           const mat = attrs[seg.id];
           if (!mat) continue;
           ctx.strokeStyle = MATERIAL_COLORS[mat];
-          ctx.lineWidth = (mat === "solid" ? 4.5 : 4) / s;
+          ctx.lineWidth = (mat === "solid" || mat === "concept" ? 4.5 : 4) / s;
           ctx.globalAlpha = 0.95;
           ctx.beginPath();
           ctx.moveTo(seg.a.x, seg.a.y);
@@ -11399,7 +11402,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("pick"); }}
             className={cn(tool === "pick" && "bg-gradient-primary shadow-primary")}
-            title="Pick Material — klik segmen garis untuk menandai jenis selubung (Solid/Curtain/Window). Alt-klik untuk hapus."
+            title="Pick Material — klik segmen garis untuk menandai jenis dinding atau selubung. Alt-klik untuk hapus."
           >
             <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
           </Button>
@@ -12911,7 +12914,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               Material Selubung
             </Label>
             <div className="grid grid-cols-1 gap-1.5">
-              {(["solid", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
+              {(["solid", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
                 <button
                   key={m}
                   type="button"
