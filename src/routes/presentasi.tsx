@@ -6881,6 +6881,104 @@ const WALL_THICK_MM: Record<EdgeMaterial, number> = {
 };
 const RAILING_COLOR = "#8b5a2b";
 
+function DetailVoidNotation({
+  voids,
+  floorHoles,
+  sw,
+}: {
+  voids: Array<{ id: string; points: Point[] }>;
+  floorHoles: Array<{ id: string; points: Point[] }>;
+  sw: number;
+}) {
+  const stroke = sw * 0.0006;
+  return (
+    <g pointerEvents="none">
+      {[...voids, ...floorHoles].map(({ id, points }) => {
+        if (points.length < 3) return null;
+        return (
+          <polygon
+            key={`detail-void-${id}`}
+            points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+            fill="#ffffff"
+            stroke="#0a0a0a"
+            strokeWidth={stroke}
+            strokeDasharray={`${sw * 0.004} ${sw * 0.003}`}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+function DetailStairNotation({
+  stairs,
+  levelId,
+  pxPerM,
+  sw,
+}: {
+  stairs: Stair[];
+  levelId: string;
+  pxPerM: number;
+  sw: number;
+}) {
+  const stroke = sw * 0.0006;
+  const railOffset = 0.05 * pxPerM;
+  const railThickness = 0.08 * pxPerM;
+  const bandAlongEdge = (a: Point, b: Point, center: Point) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy) || 1;
+    let nx = -dy / length;
+    let ny = dx / length;
+    const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    if ((center.x - midpoint.x) * nx + (center.y - midpoint.y) * ny < 0) {
+      nx *= -1;
+      ny *= -1;
+    }
+    const near = railOffset;
+    const far = railOffset + railThickness;
+    return `${a.x + nx * near},${a.y + ny * near} ${b.x + nx * near},${b.y + ny * near} ${b.x + nx * far},${b.y + ny * far} ${a.x + nx * far},${a.y + ny * far}`;
+  };
+  return (
+    <g pointerEvents="none">
+      {stairs.map((stair) => {
+        const plan = stairPlanGeometry(stair, pxPerM);
+        const top = stair.toLevelId === levelId;
+        const dash = top ? `${sw * 0.004} ${sw * 0.003}` : undefined;
+        const center = centroid(plan.footprint);
+        const path = plan.path.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+        let railings: React.ReactNode;
+        if (stair.kind === "lingkar") {
+          const radii = plan.footprint.map((point) => Math.hypot(point.x - stair.a.x, point.y - stair.a.y));
+          const inner = Math.min(...radii);
+          const outer = Math.max(...radii);
+          railings = <>
+            <circle cx={stair.a.x} cy={stair.a.y} r={inner + railOffset + railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} strokeDasharray={dash} />
+            <circle cx={stair.a.x} cy={stair.a.y} r={outer - railOffset - railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} strokeDasharray={dash} />
+          </>;
+        } else {
+          const edges = plan.footprint.map((point, index) => {
+            const next = plan.footprint[(index + 1) % plan.footprint.length];
+            return { a: point, b: next, length: Math.hypot(next.x - point.x, next.y - point.y) };
+          }).sort((left, right) => right.length - left.length).slice(0, 2);
+          railings = edges.map((edge, index) => (
+            <polygon key={`rail-${index}`} points={bandAlongEdge(edge.a, edge.b, center)} fill={RAILING_COLOR} stroke="none" opacity={top ? 0.75 : 1} />
+          ));
+        }
+        return (
+          <g key={`detail-stair-${stair.id}`} opacity={top ? 0.75 : 1}>
+            <polygon points={plan.footprint.map((point) => `${point.x},${point.y}`).join(" ")} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />
+            {plan.stepLines.map(([a, b], index) => <line key={`step-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />)}
+            {plan.landings.map((landing, index) => <polygon key={`landing-${index}`} points={landing.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />)}
+            <path d={path} fill="none" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />
+            {railings}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 function MaterialEdges({
   lines,
   edgeAttrs,
