@@ -6957,10 +6957,11 @@ function DetailStairNotation({
             <circle cx={stair.a.x} cy={stair.a.y} r={outer - railOffset - railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} strokeDasharray={dash} />
           </>;
         } else {
-          const edges = plan.footprint.map((point, index) => {
-            const next = plan.footprint[(index + 1) % plan.footprint.length];
-            return { a: point, b: next, length: Math.hypot(next.x - point.x, next.y - point.y) };
-          }).sort((left, right) => right.length - left.length).slice(0, 2);
+          const edges = [0, 2].flatMap((index) => {
+            const a = plan.footprint[index];
+            const b = plan.footprint[(index + 1) % plan.footprint.length];
+            return a && b ? [{ a, b }] : [];
+          });
           railings = edges.map((edge, index) => (
             <polygon key={`rail-${index}`} points={bandAlongEdge(edge.a, edge.b, center)} fill={RAILING_COLOR} stroke="none" opacity={top ? 0.75 : 1} />
           ));
