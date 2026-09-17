@@ -1573,6 +1573,26 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
     setLoaded(true);
   }, [STORAGE_KEY_ACTIVE, LEGACY_KEY_ACTIVE]);
 
+  useEffect(() => {
+    if (mode === "masterplan") return;
+    const refreshFromModel = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY_ACTIVE || !event.newValue) return;
+      try {
+        const incoming = JSON.parse(event.newValue) as StoreShape;
+        if (!Array.isArray(incoming.sketches)) return;
+        const normalized = incoming.sketches.map((item) => normalizeSketch(item));
+        setSketches(normalized);
+        setOpenId((current) => current && normalized.some((item) => item.id === current)
+          ? current
+          : incoming.openId ?? normalized[0]?.id ?? null);
+      } catch {
+        // Abaikan notifikasi penyimpanan yang tidak lengkap.
+      }
+    };
+    window.addEventListener("storage", refreshFromModel);
+    return () => window.removeEventListener("storage", refreshFromModel);
+  }, [mode, STORAGE_KEY_ACTIVE]);
+
   // Save
   useEffect(() => {
     if (!loaded) return;
