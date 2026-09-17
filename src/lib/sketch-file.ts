@@ -292,6 +292,7 @@ const ENTITY_ARRAYS = [
   "sectionCuts",
   "roofs",
   "imageReferences",
+  "detailAreas",
 ] as const;
 
 export type MergeOptions = {

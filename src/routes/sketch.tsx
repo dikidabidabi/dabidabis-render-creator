@@ -1135,6 +1135,26 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    detailAreas: (() => {
+      if (!Array.isArray(s?.detailAreas)) return [];
+      const validLvl = new Set(levels.map((l) => l.id));
+      return s.detailAreas.flatMap((area: any, index: number): DetailArea[] => {
+        const ax = Number(area?.a?.x), ay = Number(area?.a?.y);
+        const bx = Number(area?.b?.x), by = Number(area?.b?.y);
+        if (![ax, ay, bx, by].every(Number.isFinite)) return [];
+        return [{
+          id: typeof area.id === "string" && area.id ? area.id : `DETAIL${Date.now()}_${index}`,
+          levelId: typeof area.levelId === "string" && validLvl.has(area.levelId) ? area.levelId : fallback,
+          a: { x: Math.min(ax, bx), y: Math.min(ay, by) },
+          b: { x: Math.max(ax, bx), y: Math.max(ay, by) },
+          number: Math.max(1, Math.round(Number(area.number) || index + 1)),
+          showOnSlide: area.showOnSlide !== false,
+          dimensions: area.dimensions !== false,
+          floorHatch: area.floorHatch === true,
+          createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
+        }];
+      });
+    })(),
     parkingAreas: (() => {
       const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
       const mmRotRad = (mmRotDeg * Math.PI) / 180;
@@ -3340,6 +3360,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       width: ref.width * k,
       height: ref.height * k,
     }));
+    const nextDetailAreas = (sketch.detailAreas || []).map((area) => ({
+      ...area,
+      a: sp(area.a),
+      b: sp(area.b),
+    }));
 
     const nextRoads = (sketch.roads || []).map((r) => ({
       ...r,
@@ -3356,6 +3381,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ramps: nextRamps,
       stairs: nextStairs,
       imageReferences: nextImageReferences,
+      detailAreas: nextDetailAreas,
       roads: nextRoads,
       sectionCuts: nextSectionCuts,
       sectionCut: nextSectionCut,
