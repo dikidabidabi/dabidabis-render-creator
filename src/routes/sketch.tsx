@@ -2974,6 +2974,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         unit: number;
       };
   const [gridDrag, setGridDrag] = useState<GridDrag | null>(null);
+  const [gridMoveDxMm, setGridMoveDxMm] = useState<string>("0");
+  const [gridMoveDyMm, setGridMoveDyMm] = useState<string>("0");
 
   // Grid Struktur — edit kolom: clip polygon (sembunyikan kolom di area)
   const [gridEditMode, setGridEditMode] = useState<"expand" | "clip" | "fromLine">("expand");
@@ -13246,6 +13248,72 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <p className="text-[10px] leading-snug text-muted-foreground">
               Tip: di kanvas, tarik 4 kotak sudut grid (oranye) dengan stylus untuk menambah/mengurangi bentang otomatis. Tarik bagian dalam grid untuk menggeser titik nol (snap milimeter block).
             </p>
+            <div className="space-y-1.5 rounded-md border border-border/40 bg-surface/30 p-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Geser Numerik (mm)
+                </Label>
+                <span className="text-[10px] text-muted-foreground">
+                  {editGridIdx === 0 ? "Grid Primer" : `Grid Extra ${editGridIdx}`}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">ΔX</Label>
+                  <Input
+                    type="text"
+                    inputMode="text"
+                    pattern="-?[0-9]*\.?[0-9]*"
+                    value={gridMoveDxMm}
+                    onChange={(e) => setGridMoveDxMm(e.target.value)}
+                    className="h-8 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">ΔY</Label>
+                  <Input
+                    type="text"
+                    inputMode="text"
+                    pattern="-?[0-9]*\.?[0-9]*"
+                    value={gridMoveDyMm}
+                    onChange={(e) => setGridMoveDyMm(e.target.value)}
+                    className="h-8 text-xs"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="w-full bg-gradient-primary shadow-primary"
+                disabled={!grid.enabled}
+                onClick={() => {
+                  const dxMm = Number(gridMoveDxMm) || 0;
+                  const dyMm = Number(gridMoveDyMm) || 0;
+                  if (dxMm === 0 && dyMm === 0) {
+                    toast.error("Isi ΔX atau ΔY terlebih dahulu");
+                    return;
+                  }
+                  const dxPx = (dxMm / 1000) * pxPerMeter;
+                  const dyPx = (dyMm / 1000) * pxPerMeter;
+                  pushHistory();
+                  updateGrid({
+                    origin: {
+                      x: grid.origin.x + dxPx,
+                      y: grid.origin.y + dyPx,
+                    },
+                  });
+                  setGridMoveDxMm("0");
+                  setGridMoveDyMm("0");
+                  toast.success(`Grid digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                }}
+              >
+                Terapkan Geser
+              </Button>
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                Angka negatif dapat digunakan. Positif ΔX = kanan, positif ΔY = bawah.
+              </p>
+            </div>
             <div className="space-y-1">
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dimensi Kolom (cm)</Label>
               <div className="flex flex-wrap gap-1">
