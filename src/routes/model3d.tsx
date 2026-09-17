@@ -2145,7 +2145,7 @@ function Model3DPage() {
     void patchStoredSketch(id, (current) => bindLahanToMdplZero({
       ...(current as Sketch),
       ...patch,
-    }) as unknown as Record<string, unknown>);
+    }) as unknown as typeof current);
   }, []);
 
   return (
