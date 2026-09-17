@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Grid, Edges, OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
+import { OrbitControls, Grid, Edges, Html, OrthographicCamera, PerspectiveCamera, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import { OsmBuildingsLayer } from "@/components/osm-buildings-layer";
 import { OsmRoadsLayer } from "@/components/osm-roads-layer";
@@ -27,6 +27,7 @@ import {
   Map as MapIcon,
   Building2,
   Edit3,
+  MousePointer2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { patchStoredSketch, SKETCH_STORAGE_KEY } from "@/lib/sketch-store";
 import { solidColorForRoomName } from "@/lib/room-color";
 import {
   buildExportGroup,
@@ -112,7 +114,7 @@ type StoreShape = { sketches: Sketch[]; openId: string | null };
 
 import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
 
-const STORAGE_KEY = "dabidabis_sketch_v2";
+const STORAGE_KEY = SKETCH_STORAGE_KEY;
 const MINOR_PX = 8;
 const MAJOR_EVERY = 10;
 const METERS_PER_MAJOR: Record<string, number> = {
@@ -261,6 +263,8 @@ function ExtrudedFloor({
   height,
   color,
   highlighted,
+  selected,
+  onSelect,
 }: {
   points: Point[];
   origin: Point;
@@ -269,6 +273,8 @@ function ExtrudedFloor({
   height: number;
   color: string;
   highlighted: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   const geometry = useMemo(() => {
     if (points.length < 3 || height <= 0) return null;
@@ -298,7 +304,12 @@ function ExtrudedFloor({
 
   return (
     <group position={[0, baseY, 0]}>
-      <mesh geometry={geometry} castShadow receiveShadow>
+      <mesh
+        geometry={geometry}
+        castShadow
+        receiveShadow
+        onClick={onSelect ? (event) => { event.stopPropagation(); onSelect(); } : undefined}
+      >
         <meshStandardMaterial
           color={color}
           roughness={0.7}
@@ -307,7 +318,7 @@ function ExtrudedFloor({
           emissive={highlighted ? color : "#000000"}
           emissiveIntensity={highlighted ? 0.18 : 0}
         />
-        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#1a1a1a"} />
+        <Edges threshold={15} color={selected ? "#d97706" : highlighted ? "#0a0a0a" : "#1a1a1a"} />
       </mesh>
     </group>
   );
@@ -364,6 +375,8 @@ function FloorSlab({
   thickness,
   color,
   highlighted,
+  selected,
+  onSelect,
 }: {
   outer: Point[];
   holes?: Point[][];
@@ -373,6 +386,8 @@ function FloorSlab({
   thickness: number;
   color: string;
   highlighted: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   const geometry = useMemo(() => {
     if (outer.length < 3 || thickness <= 0) return null;
@@ -407,7 +422,12 @@ function FloorSlab({
   // baseY = topY - thickness, supaya top face berada di topY.
   return (
     <group position={[0, topY - thickness, 0]}>
-      <mesh geometry={geometry} castShadow receiveShadow>
+      <mesh
+        geometry={geometry}
+        castShadow
+        receiveShadow
+        onClick={onSelect ? (event) => { event.stopPropagation(); onSelect(); } : undefined}
+      >
         <meshStandardMaterial
           color={color}
           roughness={0.6}
@@ -416,7 +436,7 @@ function FloorSlab({
           emissive={highlighted ? color : "#000000"}
           emissiveIntensity={highlighted ? 0.18 : 0}
         />
-        <Edges threshold={15} color={highlighted ? "#0a0a0a" : "#1a1a1a"} />
+        <Edges threshold={15} color={selected ? "#d97706" : highlighted ? "#0a0a0a" : "#1a1a1a"} />
       </mesh>
     </group>
   );
