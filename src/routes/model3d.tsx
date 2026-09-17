@@ -923,24 +923,27 @@ function Scene({
       {vertexEditMode && vertexSelection && (() => {
         const level = sketch.levels.find((item) => item.id === vertexSelection.levelId);
         const baseY = (level?.mdpl ?? baseMdpl) - baseMdpl;
-        const points = vertexSelection.kind === "layer"
-          ? sketch.layers.find((item) => item.id === vertexSelection.objectId)?.points
-          : vertexSelection.holeIndex === undefined
-            ? sketch.floors?.find((item) => item.id === vertexSelection.objectId)?.outer
-            : sketch.floors?.find((item) => item.id === vertexSelection.objectId)?.holes?.[vertexSelection.holeIndex];
-        if (!points) return null;
-        return (
+        const contours = vertexSelection.kind === "layer"
+          ? [{ points: sketch.layers.find((item) => item.id === vertexSelection.objectId)?.points, holeIndex: undefined }]
+          : (() => {
+              const floor = sketch.floors?.find((item) => item.id === vertexSelection.objectId);
+              return floor
+                ? [{ points: floor.outer, holeIndex: undefined }, ...(floor.holes ?? []).map((points, holeIndex) => ({ points, holeIndex }))]
+                : [];
+            })();
+        return contours.map((contour, contourIndex) => contour.points ? (
           <VertexEditor
-            points={points}
+            key={`${vertexSelection.objectId}_${contourIndex}`}
+            points={contour.points}
             origin={origin}
             mPerPx={mPerPx}
             baseY={baseY}
-            selectedIndex={vertexSelection.pointIndex}
-            onSelect={(pointIndex) => onVertexSelection?.({ ...vertexSelection, pointIndex })}
-            onCommit={(pointIndex, world) => onVertexCommit?.({ ...vertexSelection, pointIndex }, world, origin, mPerPx, baseY)}
+            selectedIndex={vertexSelection.holeIndex === contour.holeIndex ? vertexSelection.pointIndex : undefined}
+            onSelect={(pointIndex) => onVertexSelection?.({ ...vertexSelection, pointIndex, holeIndex: contour.holeIndex })}
+            onCommit={(pointIndex, world) => onVertexCommit?.({ ...vertexSelection, pointIndex, holeIndex: contour.holeIndex }, world, origin, mPerPx, baseY)}
             onDraggingChange={(dragging) => onGizmoDragging?.(dragging)}
           />
-        );
+        ) : null);
       })()}
 
 
