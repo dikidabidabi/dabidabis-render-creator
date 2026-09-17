@@ -470,6 +470,8 @@ function VertexEditor({
 }) {
   const controlRef = useRef<any>(null);
   const markerRef = useRef<THREE.Mesh>(null);
+  const startRef = useRef(new THREE.Vector3());
+  const [offset, setOffset] = useState(new THREE.Vector3());
   const point = selectedIndex === undefined ? null : points[selectedIndex];
 
   useEffect(() => {
@@ -498,7 +500,14 @@ function VertexEditor({
           ref={controlRef}
           mode="translate"
           translationSnap={0.5}
-          onMouseDown={() => onDraggingChange(true)}
+          onMouseDown={() => {
+            if (markerRef.current) startRef.current.copy(markerRef.current.position);
+            setOffset(new THREE.Vector3());
+            onDraggingChange(true);
+          }}
+          onObjectChange={() => {
+            if (markerRef.current) setOffset(markerRef.current.position.clone().sub(startRef.current));
+          }}
           onMouseUp={() => {
             onDraggingChange(false);
             if (markerRef.current) onCommit(selectedIndex, markerRef.current.position.clone());
@@ -512,7 +521,7 @@ function VertexEditor({
             <meshBasicMaterial color="#f59e0b" depthTest={false} />
             <Html center position={[0, 0.45, 0]}>
               <div className="whitespace-nowrap rounded bg-background/95 px-2 py-1 text-[11px] font-semibold text-foreground shadow">
-                Snap 0,50 m
+                ΔX {offset.x.toFixed(2)} m · ΔY {offset.z.toFixed(2)} m · ΔZ {offset.y.toFixed(2)} m
               </div>
             </Html>
           </mesh>
@@ -1145,6 +1154,9 @@ function SketchViewer({
   const [showOsm, setShowOsm] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [delMode, setDelMode] = useState(false);
+  const [vertexEditMode, setVertexEditMode] = useState(false);
+  const [vertexSelection, setVertexSelection] = useState<VertexSelection | null>(null);
+  const [gizmoDragging, setGizmoDragging] = useState(false);
   const osmKey = `dabidabis_osmH_${sketch.id}`;
   const osmDelKey = `dabidabis_osmDel_${sketch.id}`;
   const [osmHidden, setOsmHidden] = useState<Record<string, boolean>>({});
@@ -1221,6 +1233,45 @@ function SketchViewer({
   const canvasRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<any>(null);
   const r3fRef = useRef<{ gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera } | null>(null);
+
+  const commitVertex = useCallback((
+    selection: VertexSelection,
+    world: THREE.Vector3,
+    origin: Point,
+    mPerPx: number,
+    baseY: number,
+  ) => {
+    if (selection.pointIndex === undefined) return;
+    const nextPoint = {
+      x: origin.x + world.x / mPerPx,
+      y: origin.y + world.z / mPerPx,
+    };
+    const verticalDelta = world.y - baseY;
+    if (selection.kind === "layer") {
+      const layers = sketch.layers.map((layer) => layer.id === selection.objectId
+        ? { ...layer, points: layer.points.map((point, index) => index === selection.pointIndex ? nextPoint : point) }
+        : layer);
+      const levels = Math.abs(verticalDelta) < 0.001 ? sketch.levels : sketch.levels.map((level) =>
+        level.id === selection.levelId ? { ...level, mdpl: level.mdpl + verticalDelta } : level);
+      onChange({ layers, levels });
+      return;
+    }
+    const floors = (sketch.floors ?? []).map((floor) => {
+      if (floor.id !== selection.objectId) return floor;
+      if (selection.holeIndex === undefined) {
+        return { ...floor, outer: floor.outer.map((point, index) => index === selection.pointIndex ? nextPoint : point) };
+      }
+      return {
+        ...floor,
+        holes: (floor.holes ?? []).map((hole, holeIndex) => holeIndex === selection.holeIndex
+          ? hole.map((point, index) => index === selection.pointIndex ? nextPoint : point)
+          : hole),
+      };
+    });
+    const levels = Math.abs(verticalDelta) < 0.001 ? sketch.levels : sketch.levels.map((level) =>
+      level.id === selection.levelId ? { ...level, mdpl: level.mdpl + verticalDelta } : level);
+    onChange({ floors, levels });
+  }, [sketch.layers, sketch.levels, sketch.floors, onChange]);
 
   const viewKey = `dabidabis_model3d_view_${sketch.id}`;
   useEffect(() => {
@@ -1712,12 +1763,17 @@ function SketchViewer({
               onOsmDelete={handleOsmDelete}
               osmOverrides={osmOverrides}
               onOsmHeight={handleOsmHeight}
+              vertexEditMode={vertexEditMode}
+              vertexSelection={vertexSelection}
+              onVertexSelection={setVertexSelection}
+              onVertexCommit={commitVertex}
+              onGizmoDragging={setGizmoDragging}
             />
             <OrbitControls
               ref={orbitRef}
               enableDamping
               dampingFactor={0.08}
-              enabled={!editMode && !delMode}
+              enabled={!editMode && !delMode && !gizmoDragging}
               makeDefault
             />
             {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
@@ -1725,6 +1781,20 @@ function SketchViewer({
           </Canvas>
 
           <div className="absolute right-2 top-2 flex flex-wrap justify-end gap-1">
+            <Button
+              variant={vertexEditMode ? "default" : "secondary"}
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => {
+                setVertexEditMode((active) => !active);
+                setVertexSelection(null);
+                setEditMode(false);
+                setDelMode(false);
+              }}
+              title="Pilih ruang atau pelat, lalu pilih vertex dan geser dengan gizmo"
+            >
+              <MousePointer2 className="h-3 w-3" /> {vertexEditMode ? "Edit Vertex: On" : "Edit Vertex"}
+            </Button>
             <div className="flex overflow-hidden rounded-md border border-border/60 bg-secondary/90 text-xs">
               <button
                 type="button"
@@ -2070,21 +2140,13 @@ function Model3DPage() {
   }, [load]);
 
   const updateSketch = useCallback((id: string, patch: Partial<Sketch>) => {
-    setSketches((prev) => {
-      const next = prev.map((s) =>
-        s.id === id ? bindLahanToMdplZero({ ...s, ...patch, updatedAt: Date.now() }) : s,
-      );
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ sketches: next, openId } as StoreShape),
-        );
-      } catch {
-        // ignore
-      }
-      return next;
-    });
-  }, [openId]);
+    setSketches((prev) => prev.map((sketch) =>
+      sketch.id === id ? bindLahanToMdplZero({ ...sketch, ...patch, updatedAt: Date.now() }) : sketch));
+    void patchStoredSketch(id, (current) => bindLahanToMdplZero({
+      ...(current as Sketch),
+      ...patch,
+    }) as unknown as Record<string, unknown>);
+  }, []);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
