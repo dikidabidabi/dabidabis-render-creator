@@ -473,6 +473,13 @@ function VertexEditor({
   const startRef = useRef(new THREE.Vector3());
   const [offset, setOffset] = useState(new THREE.Vector3());
   const point = selectedIndex === undefined ? null : points[selectedIndex];
+  const selectedPosition = point
+    ? new THREE.Vector3(
+        (point.x - origin.x) * mPerPx,
+        baseY,
+        (point.y - origin.y) * mPerPx,
+      )
+    : null;
 
   useEffect(() => {
     if (!point || !markerRef.current) return;
@@ -489,17 +496,26 @@ function VertexEditor({
         <mesh
           key={index}
           position={[(vertex.x - origin.x) * mPerPx, baseY, (vertex.y - origin.y) * mPerPx]}
-          onClick={(event) => { event.stopPropagation(); onSelect(index); }}
+          visible={selectedIndex !== index}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onSelect(index);
+          }}
         >
-          <sphereGeometry args={[selectedIndex === index ? 0.18 : 0.12, 16, 16]} />
-          <meshBasicMaterial color={selectedIndex === index ? "#f59e0b" : "#ffffff"} depthTest={false} />
+          <sphereGeometry args={[0.15, 16, 16]} />
+          <meshBasicMaterial color="#ffffff" depthTest={false} />
         </mesh>
       ))}
-      {point && selectedIndex !== undefined && (
+      {point && selectedPosition && selectedIndex !== undefined && (
         <TransformControls
           ref={controlRef}
           mode="translate"
+          space="world"
+          size={1.45}
           translationSnap={0.5}
+          showX
+          showY
+          showZ
           onMouseDown={() => {
             if (markerRef.current) startRef.current.copy(markerRef.current.position);
             setOffset(new THREE.Vector3());
@@ -515,10 +531,11 @@ function VertexEditor({
         >
           <mesh
             ref={markerRef}
-            position={[(point.x - origin.x) * mPerPx, baseY, (point.y - origin.y) * mPerPx]}
+            position={selectedPosition}
+            renderOrder={1000}
           >
-            <sphereGeometry args={[0.16, 16, 16]} />
-            <meshBasicMaterial color="#f59e0b" depthTest={false} />
+            <sphereGeometry args={[0.2, 20, 20]} />
+            <meshBasicMaterial color="#f59e0b" depthTest={false} depthWrite={false} />
             <Html center position={[0, 0.45, 0]}>
               <div className="whitespace-nowrap rounded bg-background/95 px-2 py-1 text-[11px] font-semibold text-foreground shadow">
                 ΔX {offset.x.toFixed(2)} m · ΔY {offset.z.toFixed(2)} m · ΔZ {offset.y.toFixed(2)} m
@@ -1776,7 +1793,7 @@ function SketchViewer({
               ref={orbitRef}
               enableDamping
               dampingFactor={0.08}
-              enabled={!editMode && !delMode && !gizmoDragging}
+              enabled={!editMode && !delMode && !vertexEditMode && !gizmoDragging}
               makeDefault
             />
             {projection === "persp" && autoTilt && <VerticalPerspectiveCorrection controlsRef={orbitRef} />}
