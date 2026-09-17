@@ -493,10 +493,10 @@ function VertexEditor({
   return (
     <>
       {points.map((vertex, index) => (
+        selectedIndex === index ? null : (
         <mesh
           key={index}
           position={[(vertex.x - origin.x) * mPerPx, baseY, (vertex.y - origin.y) * mPerPx]}
-          visible={selectedIndex !== index}
           onPointerDown={(event) => {
             event.stopPropagation();
             onSelect(index);
@@ -505,9 +505,11 @@ function VertexEditor({
           <sphereGeometry args={[0.15, 16, 16]} />
           <meshBasicMaterial color="#ffffff" depthTest={false} />
         </mesh>
+        )
       ))}
       {point && selectedPosition && selectedIndex !== undefined && (
         <TransformControls
+          key={`${selectedIndex}-${point.x}-${point.y}-${baseY}`}
           ref={controlRef}
           mode="translate"
           space="world"
