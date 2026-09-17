@@ -2879,8 +2879,9 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
   const offsetX = (AREA_W - drawW) / 2;
   const offsetY = Math.max(8, (AREA_H_DRAW - drawH) / 2);
 
-  // Map meter X (0..cutLenM) to svg px.
-  const mx = (m: number) => offsetX + m * scalePxPerM;
+  // Map meter X (0..cutLenM) secara terbalik agar arah tampak potongan
+  // sesuai arah pandang garis potong, tanpa mencerminkan teks anotasi.
+  const mx = (m: number) => offsetX + (cutLenM - m) * scalePxPerM;
   // Map meter elevation (mdpl) to svg px (y down). Drawing is centered vertically.
   const topMdpl = maxMdpl + padTopM;
   const my = (mdpl: number) => offsetY + (topMdpl - mdpl) * scalePxPerM;
