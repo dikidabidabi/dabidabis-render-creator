@@ -4582,7 +4582,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <MaterialEdges lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} sw={sw} />
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs />
         <SolidWallPracticalColumns lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} />
-        {gridData.map(({ grid, gridIndex, spansX, spansY, xsM, ysM, xs, ys, rotation }) => {
+        {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
             {xs.flatMap((x, i) => ys.map((y, j) => {
