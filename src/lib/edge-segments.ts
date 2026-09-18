@@ -6,6 +6,7 @@ export type Point = { x: number; y: number };
 
 export type EdgeMaterial =
   | "solid"
+  | "concrete150"
   | "concrete200"
   | "concrete300"
   | "concept"
@@ -169,6 +170,7 @@ export function intersectSegmentWithCut(
 
 export const MATERIAL_COLORS: Record<EdgeMaterial, string> = {
   solid: "#0a0a0a",
+  concrete150: "#929292",
   concrete200: "#737373",
   concrete300: "#525252",
   concept: "#000000",
@@ -179,6 +181,7 @@ export const MATERIAL_COLORS: Record<EdgeMaterial, string> = {
 
 export const MATERIAL_LABELS: Record<EdgeMaterial, string> = {
   solid: "Dinding Solid",
+  concrete150: "Dinding Beton · 150 mm",
   concrete200: "Dinding Beton · 200 mm",
   concrete300: "Dinding Beton · 300 mm",
   concept: "Dinding Konsep · 150 mm",
