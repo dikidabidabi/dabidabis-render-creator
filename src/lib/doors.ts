@@ -15,7 +15,11 @@ export type Door = {
   ny: number;
   /** 1 = single leaf, 2 = double leaf. */
   leaves: 1 | 2;
-  /** Lebar bukaan (cm), 90–200. */
+  /** Jenis gerak daun pintu. Data lama tanpa nilai ini dibaca sebagai swing. */
+  type?: "swing" | "sliding";
+  /** Arah pergeseran daun jika type = sliding, relatif dari A menuju B. */
+  slideDirection?: "left" | "right";
+  /** Lebar bukaan (cm), 70–200. */
   widthCm: number;
 };
 
@@ -32,8 +36,10 @@ export function normalizeDoor(raw: any): Door | null {
   const nx = Number(raw.nx), ny = Number(raw.ny);
   if (!Number.isFinite(nx) || !Number.isFinite(ny)) return null;
   const leaves: 1 | 2 = raw.leaves === 2 ? 2 : 1;
+  const type: "swing" | "sliding" = raw.type === "sliding" ? "sliding" : "swing";
+  const slideDirection: "left" | "right" = raw.slideDirection === "right" ? "right" : "left";
   const wRaw = Number(raw.widthCm);
-  const widthCm = Number.isFinite(wRaw) ? Math.max(60, Math.min(240, wRaw)) : 100;
+  const widthCm = Number.isFinite(wRaw) ? Math.max(70, Math.min(200, wRaw)) : 100;
   // Pastikan (nx,ny) ternormalisasi.
   const nlen = Math.hypot(nx, ny) || 1;
   return {
@@ -44,6 +50,8 @@ export function normalizeDoor(raw: any): Door | null {
     nx: nx / nlen,
     ny: ny / nlen,
     leaves,
+    type,
+    slideDirection,
     widthCm,
   };
 }
