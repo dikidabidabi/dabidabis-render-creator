@@ -1044,7 +1044,7 @@ function normalizeSketch(s: any): Sketch {
       const valid: Record<string, EdgeMaterial> = {};
       for (const [k, v] of Object.entries(raw)) {
         if (
-          v === "solid" || v === "concrete200" || v === "concrete300" ||
+          v === "solid" || v === "concrete150" || v === "concrete200" || v === "concrete300" ||
           v === "concept" || v === "curtain" || v === "window" || v === "railing"
         ) {
           valid[k] = v;
@@ -4642,19 +4642,36 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.strokeStyle = "#0a0a0a";
         ctx.lineWidth = 1.6 / s;
         if (d.type === "sliding") {
-          const direction = d.slideDirection === "right" ? 1 : -1;
-          const startAlong = direction > 0 ? widthPx * 0.5 : -widthPx * 0.5;
           const centerNormal = thick * 0.5 + 0.04 * pxPerMeter + 0.02 * pxPerMeter;
           const normalSign = d.nx * pnx + d.ny * pny < 0 ? -1 : 1;
-          const sx = ax + dirX * startAlong + pnx * centerNormal * normalSign;
-          const sy = ay + dirY * startAlong + pny * centerNormal * normalSign;
-          const ex = sx + dirX * widthPx;
-          const ey = sy + dirY * widthPx;
           ctx.lineWidth = Math.max(2 / s, 0.04 * pxPerMeter);
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(ex, ey);
-          ctx.stroke();
+          if (d.leaves === 2) {
+            const halfLeaf = widthPx / 2;
+            const shift = halfLeaf * 0.5;
+            const midX = (ax + bx) / 2;
+            const midY = (ay + by) / 2;
+            const leftEnd = midX - dirX * shift;
+            const leftEndY = midY - dirY * shift;
+            const rightStart = midX + dirX * shift;
+            const rightStartY = midY + dirY * shift;
+            const ox = pnx * centerNormal * normalSign;
+            const oy = pny * centerNormal * normalSign;
+            ctx.beginPath();
+            ctx.moveTo(leftEnd - dirX * halfLeaf + ox, leftEndY - dirY * halfLeaf + oy);
+            ctx.lineTo(leftEnd + ox, leftEndY + oy);
+            ctx.moveTo(rightStart + ox, rightStartY + oy);
+            ctx.lineTo(rightStart + dirX * halfLeaf + ox, rightStartY + dirY * halfLeaf + oy);
+            ctx.stroke();
+          } else {
+            const direction = d.slideDirection === "right" ? 1 : -1;
+            const startAlong = direction > 0 ? widthPx * 0.5 : -widthPx * 0.5;
+            const sx = ax + dirX * startAlong + pnx * centerNormal * normalSign;
+            const sy = ay + dirY * startAlong + pny * centerNormal * normalSign;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + dirX * widthPx, sy + dirY * widthPx);
+            ctx.stroke();
+          }
           ctx.lineWidth = 1.2 / s;
           ctx.setLineDash([4 / s, 3 / s]);
           ctx.beginPath();
@@ -10482,7 +10499,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       };
       const prev = sketch.doors ?? [];
       onChange({ doors: [...prev, door] });
-      toast.success(`Pintu ${doorType === "sliding" ? `geser ${doorSlideDirection === "left" ? "kiri" : "kanan"}` : doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
+      toast.success(`Pintu ${doorType === "sliding" ? doorLeaves === 2 ? "geser 2 arah" : `geser ${doorSlideDirection === "left" ? "kiri" : "kanan"}` : doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
       return;
     }
     if (circleDraft && tool === "circle") {
@@ -12968,15 +12985,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pintu — Parameter</Label>
             <div className="grid grid-cols-2 gap-1.5">
               <Button type="button" size="sm" variant={doorType === "swing" ? "default" : "outline"} onClick={() => setDoorType("swing")} className="h-8 text-xs">Swing</Button>
-              <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => { setDoorType("sliding"); setDoorLeaves(1); }} className="h-8 text-xs">Geser</Button>
+              <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => setDoorType("sliding")} className="h-8 text-xs">Geser</Button>
             </div>
-            {doorType === "sliding" && (
-              <div className="grid grid-cols-2 gap-1.5">
-                <Button type="button" size="sm" variant={doorSlideDirection === "left" ? "default" : "outline"} onClick={() => setDoorSlideDirection("left")} className="h-8 text-xs">Geser Kiri</Button>
-                <Button type="button" size="sm" variant={doorSlideDirection === "right" ? "default" : "outline"} onClick={() => setDoorSlideDirection("right")} className="h-8 text-xs">Geser Kanan</Button>
-              </div>
-            )}
-            {doorType === "swing" && (
             <div className="grid grid-cols-2 gap-1.5">
               {([1, 2] as const).map((n) => (
                 <Button
@@ -12991,6 +13001,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 </Button>
               ))}
             </div>
+            {doorType === "sliding" && doorLeaves === 1 && (
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button type="button" size="sm" variant={doorSlideDirection === "left" ? "default" : "outline"} onClick={() => setDoorSlideDirection("left")} className="h-8 text-xs">Geser Kiri</Button>
+                <Button type="button" size="sm" variant={doorSlideDirection === "right" ? "default" : "outline"} onClick={() => setDoorSlideDirection("right")} className="h-8 text-xs">Geser Kanan</Button>
+              </div>
+            )}
+            {doorType === "sliding" && doorLeaves === 2 && (
+              <p className="text-[10px] text-muted-foreground">Dua daun otomatis bergeser berlawanan ke kiri dan kanan.</p>
             )}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -13110,7 +13128,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               Material Selubung
             </Label>
             <div className="grid grid-cols-1 gap-1.5">
-              {(["solid", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
+              {(["solid", "concrete150", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
                 <button
                   key={m}
                   type="button"

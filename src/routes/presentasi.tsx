@@ -3487,7 +3487,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         </g>
                       );
                     }
-                    if (h.mat === "concrete200" || h.mat === "concrete300") {
+                    if (h.mat === "concrete150" || h.mat === "concrete200" || h.mat === "concrete300") {
                       return (
                         <g key={`mat-${b.id}-${idx}`}>
                           <rect x={x} y={yTop} width={bandW} height={totalH}
@@ -6892,6 +6892,7 @@ function linePath(ln: Line): string {
 // Tebal dinding selubung (mm), dikonversi ke px sketsa via pxPerM.
 const WALL_THICK_MM: Record<EdgeMaterial, number> = {
   solid: 150,
+  concrete150: 150,
   concrete200: 200,
   concrete300: 300,
   concept: 150,
@@ -7135,7 +7136,7 @@ function MaterialEdges({
             <polygon key={`s-${s.id}`} points={pts} fill="#0a0a0a" stroke="none" />
           );
         }
-        if (mat === "concrete200" || mat === "concrete300") {
+        if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
           return (
             <g key={`s-${s.id}`}>
               <polygon points={pts} fill={`url(#concrete-dot-${patternId})`} stroke="none" />
