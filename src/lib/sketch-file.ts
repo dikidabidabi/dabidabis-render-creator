@@ -288,6 +288,7 @@ const ENTITY_ARRAYS = [
   "roads",
   "illustrations",
   "doors",
+  "windows",
   "structuralGridExtras",
   "sectionCuts",
   "roofs",

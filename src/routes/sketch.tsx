@@ -37,6 +37,7 @@ import {
   Grid3x3,
   Paintbrush,
   DoorOpen,
+  PanelsTopLeft,
   Circle as CircleIcon,
   Crop,
   MoveHorizontal,
@@ -158,6 +159,7 @@ import {
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
 import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
+import { type Window, genWindowId, normalizeWindows } from "@/lib/windows";
 import {
   type ParkingArea,
   type ParkingPath,
@@ -389,6 +391,7 @@ type DetailArea = {
   showOnSlide: boolean;
   dimensions: boolean;
   floorHatch: boolean;
+  showKeyplan: boolean;
   createdAt: number;
 };
 
@@ -438,6 +441,7 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
   edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
+  windows?: Window[]; // Notasi jendela 2D — tidak mengubah massa 3D
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
   roofs?: Roof[]; // Atap (pelana/limasan) — di-extrude otomatis di Model 3D
@@ -1057,6 +1061,11 @@ function normalizeSketch(s: any): Sketch {
       const validLvl = new Set(levels.map((l) => l.id));
       return arr.map((d) => (d.levelId && validLvl.has(d.levelId) ? d : { ...d, levelId: fallback }));
     })(),
+    windows: (() => {
+      const arr = normalizeWindows(s?.windows);
+      const validLvl = new Set(levels.map((l) => l.id));
+      return arr.map((window) => (window.levelId && validLvl.has(window.levelId) ? window : { ...window, levelId: fallback }));
+    })(),
     circles: (() => {
       const raw = s?.circles;
       if (!Array.isArray(raw)) return [];
@@ -1151,6 +1160,7 @@ function normalizeSketch(s: any): Sketch {
           showOnSlide: area.showOnSlide !== false,
           dimensions: area.dimensions !== false,
           floorHatch: area.floorHatch === true,
+          showKeyplan: area.showKeyplan !== false,
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
         }];
       });
@@ -2676,7 +2686,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "window" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan">("line");
   // ===== Image Reference (JPG) =====
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -2982,6 +2992,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   >(null);
   const [doorEraseMode, setDoorEraseMode] = useState(false);
   const [doorClipboard, setDoorClipboard] = useState<Door[]>([]);
+  const [windowLeaves, setWindowLeaves] = useState(1);
+  const [windowWidthCm, setWindowWidthCm] = useState(120);
+  const [windowDraft, setWindowDraft] = useState<
+    | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
+    | null
+  >(null);
+  const [windowEraseMode, setWindowEraseMode] = useState(false);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -3325,6 +3342,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       a: sp(d.a),
       b: sp(d.b),
     }));
+    const nextWindows = (sketch.windows || []).map((window) => ({
+      ...window,
+      a: sp(window.a),
+      b: sp(window.b),
+    }));
     const nextCircles = (sketch.circles || []).map((c) => ({
       ...c,
       c: sp(c.c),
@@ -3398,6 +3420,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       layers: nextLayers,
       floors: nextFloors,
       doors: nextDoors,
+      windows: nextWindows,
       circles: nextCircles,
       parkingAreas: nextParking,
       ramps: nextRamps,
@@ -4777,6 +4800,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.arc(ax, ay, 4 / s, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+    }
+
+    // ----- Notasi Jendela (committed + draft) -----
+    const drawWindow = (window: Window, color: string, dashed = false) => {
+      const ax = window.a.x, ay = window.a.y, bx = window.b.x, by = window.b.y;
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const dx = (bx - ax) / len, dy = (by - ay) / len;
+      const nx = -dy, ny = dx;
+      const halfDepth = 0.075 * pxPerMeter;
+      const glassGap = 0.01 * pxPerMeter;
+      ctx.save();
+      ctx.fillStyle = "#f6efe3";
+      ctx.beginPath();
+      ctx.moveTo(ax + nx * halfDepth, ay + ny * halfDepth);
+      ctx.lineTo(bx + nx * halfDepth, by + ny * halfDepth);
+      ctx.lineTo(bx - nx * halfDepth, by - ny * halfDepth);
+      ctx.lineTo(ax - nx * halfDepth, ay - ny * halfDepth);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.25 / s;
+      ctx.setLineDash(dashed ? [6 / s, 4 / s] : []);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(ax + nx * glassGap * side, ay + ny * glassGap * side);
+        ctx.lineTo(bx + nx * glassGap * side, by + ny * glassGap * side);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      const leaves = Math.max(1, Math.round(window.leaves));
+      for (let index = 0; index <= leaves; index++) {
+        const t = index / leaves;
+        const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
+        ctx.beginPath();
+        ctx.moveTo(cx + nx * halfDepth, cy + ny * halfDepth);
+        ctx.lineTo(cx - nx * halfDepth, cy - ny * halfDepth);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+    for (const window of sketch.windows ?? []) {
+      if (!activeLvlId || window.levelId === activeLvlId) drawWindow(window, "#0a0a0a");
+    }
+    if (windowDraft && tool === "window") {
+      drawWindow({
+        id: "window-draft", levelId: windowDraft.levelId, a: windowDraft.a, b: windowDraft.b,
+        nx: windowDraft.nx, ny: windowDraft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
+      }, "rgba(232,93,58,0.95)", true);
     }
 
 
@@ -7203,7 +7274,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, windowDraft, windowLeaves, windowWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -9699,6 +9770,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         nx: -dirY, ny: dirX,
         levelId: bestLn.levelId ?? activeLvlId ?? undefined,
       });
+    } else if (tool === "window") {
+      const raw = getWorldPosRaw(e);
+      if (windowEraseMode) {
+        const windows = sketch.windows ?? [];
+        const tolPx = 18 / view.s;
+        let bestId: string | null = null;
+        let bestDistance = Infinity;
+        for (const window of windows) {
+          if (activeLvlId && window.levelId && window.levelId !== activeLvlId) continue;
+          const distance = dist(raw, projectOnSegment(raw, window.a, window.b));
+          if (distance < bestDistance) { bestDistance = distance; bestId = window.id; }
+        }
+        if (!bestId || bestDistance > tolPx) {
+          toast.error("Tap dekat jendela yang ingin dihapus");
+          return;
+        }
+        pushHistory();
+        onChange({ windows: windows.filter((window) => window.id !== bestId) });
+        toast.success("Jendela dihapus");
+        return;
+      }
+      const tolPx = 16 / view.s;
+      let bestLn: Line | null = null;
+      let bestProj: Point | null = null;
+      let bestDistance = Infinity;
+      for (const line of lines) {
+        if (activeLvlId && line.levelId !== activeLvlId) continue;
+        if ((line.kind ?? "straight") !== "straight") continue;
+        const projection = projectOnSegment(raw, line.a, line.b);
+        const distance = dist(raw, projection);
+        if (distance < bestDistance) { bestDistance = distance; bestProj = projection; bestLn = line; }
+      }
+      if (!bestLn || !bestProj || bestDistance > tolPx) {
+        toast.error("Tap pada garis dinding untuk menempatkan jendela");
+        return;
+      }
+      const lineDx = bestLn.b.x - bestLn.a.x, lineDy = bestLn.b.y - bestLn.a.y;
+      const lineLength = Math.hypot(lineDx, lineDy) || 1;
+      const dirX = lineDx / lineLength, dirY = lineDy / lineLength;
+      const widthPx = (windowWidthCm / 100) * pxPerMeter;
+      const remainForward = (bestLn.b.x - bestProj.x) * dirX + (bestLn.b.y - bestProj.y) * dirY;
+      const sign = remainForward >= widthPx * 0.5 ? 1 : -1;
+      setWindowDraft({
+        a: bestProj,
+        b: { x: bestProj.x + dirX * sign * widthPx, y: bestProj.y + dirY * sign * widthPx },
+        dirX, dirY, nx: -dirY, ny: dirX,
+        levelId: bestLn.levelId ?? activeLvlId ?? undefined,
+      });
     } else if (tool === "circle") {
       setCircleDraft({ c: p, cur: p, levelId: activeLvlId ?? undefined });
     } else if (tool === "trim" || tool === "offset") {
@@ -10181,6 +10300,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setDoorDraft({ ...doorDraft, b: { x: bx, y: by }, nx, ny });
       return;
     }
+    if (windowDraft) {
+      const raw = getWorldPosRaw(e);
+      const along = (raw.x - windowDraft.a.x) * windowDraft.dirX + (raw.y - windowDraft.a.y) * windowDraft.dirY;
+      const sign = along < 0 ? -1 : 1;
+      const widthPx = (windowWidthCm / 100) * pxPerMeter;
+      setWindowDraft({
+        ...windowDraft,
+        b: { x: windowDraft.a.x + windowDraft.dirX * sign * widthPx, y: windowDraft.a.y + windowDraft.dirY * sign * widthPx },
+        nx: -windowDraft.dirY * sign,
+        ny: windowDraft.dirX * sign,
+      });
+      return;
+    }
 
     if (editDrag) {
       const newPos = getWorldPos(e);
@@ -10500,6 +10632,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const prev = sketch.doors ?? [];
       onChange({ doors: [...prev, door] });
       toast.success(`Pintu ${doorType === "sliding" ? doorLeaves === 2 ? "geser 2 arah" : `geser ${doorSlideDirection === "left" ? "kiri" : "kanan"}` : doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
+      return;
+    }
+    if (windowDraft) {
+      const draft = windowDraft;
+      setWindowDraft(null);
+      pushHistory();
+      const window: Window = {
+        id: genWindowId(), levelId: draft.levelId, a: draft.a, b: draft.b,
+        nx: draft.nx, ny: draft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
+      };
+      onChange({ windows: [...(sketch.windows ?? []), window] });
+      toast.success(`Jendela ${windowLeaves} daun · ${windowWidthCm}cm ditambahkan`);
       return;
     }
     if (circleDraft && tool === "circle") {
@@ -10951,6 +11095,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setGridDrag(null);
     setClipDrag(null);
     setDoorDraft(null);
+    setWindowDraft(null);
     setCircleDraft(null);
   };
 
