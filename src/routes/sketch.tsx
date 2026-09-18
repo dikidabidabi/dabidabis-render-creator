@@ -3342,6 +3342,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       a: sp(d.a),
       b: sp(d.b),
     }));
+    const nextWindows = (sketch.windows || []).map((window) => ({
+      ...window,
+      a: sp(window.a),
+      b: sp(window.b),
+    }));
     const nextCircles = (sketch.circles || []).map((c) => ({
       ...c,
       c: sp(c.c),
@@ -3415,6 +3420,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       layers: nextLayers,
       floors: nextFloors,
       doors: nextDoors,
+      windows: nextWindows,
       circles: nextCircles,
       parkingAreas: nextParking,
       ramps: nextRamps,
@@ -4794,6 +4800,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.arc(ax, ay, 4 / s, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+    }
+
+    // ----- Notasi Jendela (committed + draft) -----
+    const drawWindow = (window: Window, color: string, dashed = false) => {
+      const ax = window.a.x, ay = window.a.y, bx = window.b.x, by = window.b.y;
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const dx = (bx - ax) / len, dy = (by - ay) / len;
+      const nx = -dy, ny = dx;
+      const halfDepth = 0.075 * pxPerMeter;
+      const glassGap = 0.01 * pxPerMeter;
+      ctx.save();
+      ctx.fillStyle = "#f6efe3";
+      ctx.beginPath();
+      ctx.moveTo(ax + nx * halfDepth, ay + ny * halfDepth);
+      ctx.lineTo(bx + nx * halfDepth, by + ny * halfDepth);
+      ctx.lineTo(bx - nx * halfDepth, by - ny * halfDepth);
+      ctx.lineTo(ax - nx * halfDepth, ay - ny * halfDepth);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.25 / s;
+      ctx.setLineDash(dashed ? [6 / s, 4 / s] : []);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(ax + nx * glassGap * side, ay + ny * glassGap * side);
+        ctx.lineTo(bx + nx * glassGap * side, by + ny * glassGap * side);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      const leaves = Math.max(1, Math.round(window.leaves));
+      for (let index = 0; index <= leaves; index++) {
+        const t = index / leaves;
+        const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
+        ctx.beginPath();
+        ctx.moveTo(cx + nx * halfDepth, cy + ny * halfDepth);
+        ctx.lineTo(cx - nx * halfDepth, cy - ny * halfDepth);
+        ctx.stroke();
+      }
+      ctx.restore();
+    };
+    for (const window of sketch.windows ?? []) {
+      if (!activeLvlId || window.levelId === activeLvlId) drawWindow(window, "#0a0a0a");
+    }
+    if (windowDraft && tool === "window") {
+      drawWindow({
+        id: "window-draft", levelId: windowDraft.levelId, a: windowDraft.a, b: windowDraft.b,
+        nx: windowDraft.nx, ny: windowDraft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
+      }, "rgba(232,93,58,0.95)", true);
     }
 
 
@@ -7220,7 +7274,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, windowDraft, windowLeaves, windowWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
