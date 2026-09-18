@@ -6893,6 +6893,17 @@ const WALL_THICK_MM: Record<EdgeMaterial, number> = {
 };
 const RAILING_COLOR = "#8b5a2b";
 
+function materialForEdgeSegment(
+  segment: EdgeSegment,
+  sourceLines: Line[],
+  edgeAttrs: Record<string, EdgeMaterial>,
+): EdgeMaterial | undefined {
+  const exact = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+  if (exact) return exact;
+  const source = sourceLines[segment.sourceLineIndex];
+  return source ? edgeAttrs[segmentIdFor(source.a, source.b)] : undefined;
+}
+
 function DetailVoidNotation({
   voids,
   floorHoles,
@@ -7075,8 +7086,8 @@ function MaterialEdges({
           strokeLinecap="round"
         />
       ))}
-      {mode !== "overlay" && segs.map((s) => {
-        const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
+       {mode !== "overlay" && segs.map((s) => {
+         const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
         if (mat) return null;
         return (
           <line
@@ -7088,17 +7099,27 @@ function MaterialEdges({
       })}
       {/* Render elemen ber-material di lapisan teratas agar menutupi
           garis dasar sketsa yang berada di bawahnya. */}
-      {mode !== "base" && segs.map((s) => {
-        const mat = edgeAttrs[segmentIdFor(s.a, s.b)];
+      {mode !== "base" && [...segs].sort((a, b) => {
+        const materialA = materialForEdgeSegment(a, segmentSource, edgeAttrs);
+        const materialB = materialForEdgeSegment(b, segmentSource, edgeAttrs);
+        return (materialA ? WALL_THICK_MM[materialA] : 0) - (materialB ? WALL_THICK_MM[materialB] : 0);
+      }).map((s) => {
+        const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
         if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
         const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
         const nx = -dy / len, ny = dx / len;
         const half = (WALL_THICK_MM[mat] / 1000) * pxPerM * 0.5;
-        const a1 = { x: s.a.x + nx * half, y: s.a.y + ny * half };
-        const a2 = { x: s.a.x - nx * half, y: s.a.y - ny * half };
-        const b1 = { x: s.b.x + nx * half, y: s.b.y + ny * half };
-        const b2 = { x: s.b.x - nx * half, y: s.b.y - ny * half };
+        // Perpanjang bidang setengah tebal pada kedua ujung. Bidang yang saling
+        // bertemu menjadi overlap, sehingga sudut runcing selalu tertutup tanpa
+        // celah. Urutan tebal di atas memastikan material terlebar menang.
+        const start = { x: s.a.x - ux * half, y: s.a.y - uy * half };
+        const end = { x: s.b.x + ux * half, y: s.b.y + uy * half };
+        const a1 = { x: start.x + nx * half, y: start.y + ny * half };
+        const a2 = { x: start.x - nx * half, y: start.y - ny * half };
+        const b1 = { x: end.x + nx * half, y: end.y + ny * half };
+        const b2 = { x: end.x - nx * half, y: end.y - ny * half };
         const pts = `${a1.x},${a1.y} ${b1.x},${b1.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`;
         if (mat === "concept") {
           // Dinding konsep hanya dibedakan di denah: bidang hitam penuh 150 mm.
@@ -7117,10 +7138,12 @@ function MaterialEdges({
         }
         if (mat === "solid") {
           const coreHalf = (0.12 * pxPerM) / 2;
-          const coreA1 = { x: s.a.x + nx * coreHalf, y: s.a.y + ny * coreHalf };
-          const coreA2 = { x: s.a.x - nx * coreHalf, y: s.a.y - ny * coreHalf };
-          const coreB1 = { x: s.b.x + nx * coreHalf, y: s.b.y + ny * coreHalf };
-          const coreB2 = { x: s.b.x - nx * coreHalf, y: s.b.y - ny * coreHalf };
+          const coreStart = { x: s.a.x - ux * coreHalf, y: s.a.y - uy * coreHalf };
+          const coreEnd = { x: s.b.x + ux * coreHalf, y: s.b.y + uy * coreHalf };
+          const coreA1 = { x: coreStart.x + nx * coreHalf, y: coreStart.y + ny * coreHalf };
+          const coreA2 = { x: coreStart.x - nx * coreHalf, y: coreStart.y - ny * coreHalf };
+          const coreB1 = { x: coreEnd.x + nx * coreHalf, y: coreEnd.y + ny * coreHalf };
+          const coreB2 = { x: coreEnd.x - nx * coreHalf, y: coreEnd.y - ny * coreHalf };
           const corePts = `${coreA1.x},${coreA1.y} ${coreB1.x},${coreB1.y} ${coreB2.x},${coreB2.y} ${coreA2.x},${coreA2.y}`;
           return (
             <g key={`s-${s.id}`}>
@@ -7202,16 +7225,27 @@ function MaterialEdges({
 
 function SolidWallPracticalColumns({
   lines,
+  segmentationLines,
+  levelId,
   edgeAttrs,
   pxPerM,
 }: {
   lines: Line[];
+  segmentationLines?: Line[];
+  levelId?: string;
   edgeAttrs: Record<string, EdgeMaterial>;
   pxPerM: number;
 }) {
+  const segmentSource = segmentationLines ?? lines;
+  const visibleLineIds = new Set(lines.map((line) => segmentIdFor(line.a, line.b)));
   const solidSegments = computeStraightSegments(
-    lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })),
-  ).filter((segment) => edgeAttrs[segmentIdFor(segment.a, segment.b)] === "solid");
+    segmentSource.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })),
+  ).filter((segment) => {
+    const source = segmentSource[segment.sourceLineIndex];
+    if (!source || (levelId && segment.levelId !== levelId)) return false;
+    if (!visibleLineIds.has(segmentIdFor(source.a, source.b))) return false;
+    return materialForEdgeSegment(segment, segmentSource, edgeAttrs) === "solid";
+  });
   const nodes = new Map<string, { point: Point; directions: Point[] }>();
   const addEndpoint = (point: Point, other: Point) => {
     const length = Math.hypot(other.x - point.x, other.y - point.y);
@@ -7224,6 +7258,28 @@ function SolidWallPracticalColumns({
   for (const segment of solidSegments) {
     addEndpoint(segment.a, segment.b);
     addEndpoint(segment.b, segment.a);
+  }
+  // Pertemuan T: endpoint satu dinding berada di tengah dinding lain. Topologi
+  // segmen lama tidak selalu membelah kasus ini, jadi tambahkan dua arah dari
+  // dinding yang dilewati langsung pada simpul endpoint tersebut.
+  const addContainingDirections = (point: Point, owner: EdgeSegment) => {
+    for (const segment of solidSegments) {
+      if (segment === owner) continue;
+      const dx = segment.b.x - segment.a.x;
+      const dy = segment.b.y - segment.a.y;
+      const length2 = dx * dx + dy * dy;
+      if (length2 < 1e-9) continue;
+      const t = ((point.x - segment.a.x) * dx + (point.y - segment.a.y) * dy) / length2;
+      if (t <= 1e-5 || t >= 1 - 1e-5) continue;
+      const projected = { x: segment.a.x + dx * t, y: segment.a.y + dy * t };
+      if (Math.hypot(projected.x - point.x, projected.y - point.y) > 1e-3) continue;
+      addEndpoint(point, segment.a);
+      addEndpoint(point, segment.b);
+    }
+  };
+  for (const segment of solidSegments) {
+    addContainingDirections(segment.a, segment);
+    addContainingDirections(segment.b, segment);
   }
   const corners = [...nodes.values()].filter(({ directions }) => {
     if (directions.length < 2) return false;
