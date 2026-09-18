@@ -4603,7 +4603,13 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           detailSolidLayers
         />
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
-        <SolidWallPracticalColumns lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} />
+        <SolidWallPracticalColumns
+          lines={lines}
+          segmentationLines={sketch.lines ?? []}
+          levelId={level.id}
+          edgeAttrs={sketch.edgeAttrs ?? {}}
+          pxPerM={pxPerM}
+        />
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
@@ -5565,6 +5571,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           />
           <SolidWallPracticalColumns
             lines={lines}
+            segmentationLines={sketch.lines ?? []}
+            levelId={level.id}
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
           />
