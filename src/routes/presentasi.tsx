@@ -6895,15 +6895,22 @@ function DetailVoidNotation({
     <g pointerEvents="none">
       {[...voids, ...floorHoles].map(({ id, points }) => {
         if (points.length < 3) return null;
+        const xs = points.map((point) => point.x);
+        const ys = points.map((point) => point.y);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minY = Math.min(...ys), maxY = Math.max(...ys);
+        const center = centroid(points);
+        const clipId = `detail-void-clip-${id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
         return (
-          <polygon
-            key={`detail-void-${id}`}
-            points={points.map((point) => `${point.x},${point.y}`).join(" ")}
-            fill="#ffffff"
-            stroke="#0a0a0a"
-            strokeWidth={stroke}
-            strokeDasharray={`${sw * 0.004} ${sw * 0.003}`}
-          />
+          <g key={`detail-void-${id}`}>
+            <defs><clipPath id={clipId}><polygon points={points.map((point) => `${point.x},${point.y}`).join(" ")} /></clipPath></defs>
+            <polygon points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+            <g clipPath={`url(#${clipId})`} stroke="#0a0a0a" strokeWidth={stroke}>
+              <line x1={minX} y1={minY} x2={maxX} y2={maxY} />
+              <line x1={maxX} y1={minY} x2={minX} y2={maxY} />
+            </g>
+            <text x={center.x} y={center.y} textAnchor="middle" dominantBaseline="central" fontFamily="Sora, sans-serif" fontSize={sw * 0.012} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.003 }}>void</text>
+          </g>
         );
       })}
     </g>
@@ -7297,6 +7304,28 @@ function DoorNotation({
           const leafHalf = ((leafThicknessMm / 1000) * pxPerM) / 2;
           return `${x1 + leafNx * leafHalf},${y1 + leafNy * leafHalf} ${x2 + leafNx * leafHalf},${y2 + leafNy * leafHalf} ${x2 - leafNx * leafHalf},${y2 - leafNy * leafHalf} ${x1 - leafNx * leafHalf},${y1 - leafNy * leafHalf}`;
         };
+        if (d.type === "sliding") {
+          const direction = d.slideDirection === "right" ? 1 : -1;
+          const startAlong = direction > 0 ? widthPx * 0.5 : -widthPx * 0.5;
+          const sideSign = d.nx * px + d.ny * py < 0 ? -1 : 1;
+          const leafHalfDepth = 0.02 * pxPerM;
+          const leafCenterOffset = wallDepth / 2 + 0.04 * pxPerM + leafHalfDepth;
+          const sx = ax + dx * startAlong + px * leafCenterOffset * sideSign;
+          const sy = ay + dy * startAlong + py * leafCenterOffset * sideSign;
+          const ex = sx + dx * widthPx;
+          const ey = sy + dy * widthPx;
+          return (
+            <g key={d.id}>
+              <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+              {showJambs && <>
+                <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              </>}
+              <polygon points={leafPolygon(sx, sy, ex, ey)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+            </g>
+          );
+        }
         // Door leaf + arc
         const nx = d.nx, ny = d.ny;
         const a0 = Math.atan2(ny, nx);

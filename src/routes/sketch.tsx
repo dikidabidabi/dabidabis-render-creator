@@ -2973,6 +2973,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
   // Door tool — parameter & live draft (3-langkah gesture single drag).
   const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
+  const [doorType, setDoorType] = useState<"swing" | "sliding">("swing");
+  const [doorSlideDirection, setDoorSlideDirection] = useState<"left" | "right">("left");
   const [doorWidthCm, setDoorWidthCm] = useState<number>(100);
   const [doorDraft, setDoorDraft] = useState<
     | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
@@ -4636,10 +4638,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.lineTo(ax - pnx * thick * 0.6, ay - pny * thick * 0.6);
         ctx.closePath();
         ctx.fill();
-        // Daun pintu + arc
+        // Daun pintu + arc / pintu geser 50% terbuka.
         ctx.strokeStyle = "#0a0a0a";
         ctx.lineWidth = 1.6 / s;
-        if (d.leaves === 1) {
+        if (d.type === "sliding") {
+          const direction = d.slideDirection === "right" ? 1 : -1;
+          const startAlong = direction > 0 ? widthPx * 0.5 : -widthPx * 0.5;
+          const centerNormal = thick * 0.5 + 0.04 * pxPerMeter + 0.02 * pxPerMeter;
+          const normalSign = d.nx * pnx + d.ny * pny < 0 ? -1 : 1;
+          const sx = ax + dirX * startAlong + pnx * centerNormal * normalSign;
+          const sy = ay + dirY * startAlong + pny * centerNormal * normalSign;
+          const ex = sx + dirX * widthPx;
+          const ey = sy + dirY * widthPx;
+          ctx.lineWidth = Math.max(2 / s, 0.04 * pxPerMeter);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+          ctx.lineWidth = 1.2 / s;
+          ctx.setLineDash([4 / s, 3 / s]);
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (d.leaves === 1) {
           const lx = ax + d.nx * widthPx;
           const ly = ay + d.ny * widthPx;
           ctx.beginPath();
@@ -4706,19 +4729,30 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.beginPath();
       ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
       ctx.stroke();
-      // arc preview
       ctx.setLineDash([3 / s, 3 / s]);
       ctx.lineWidth = 1.4 / s;
       ctx.strokeStyle = "rgba(232,93,58,0.7)";
-      const a0 = Math.atan2(doorDraft.ny, doorDraft.nx);
-      const a1 = Math.atan2(by - ay, bx - ax);
-      let delta = a1 - a0;
-      while (delta > Math.PI) delta -= Math.PI * 2;
-      while (delta < -Math.PI) delta += Math.PI * 2;
-      ctx.beginPath();
-      ctx.arc(ax, ay, doorLeaves === 2 ? widthPx / 2 : widthPx, a0, a0 + delta, delta < 0);
-      void (0); // placeholder
-      ctx.stroke();
+      if (doorType === "sliding") {
+        const len = Math.hypot(bx - ax, by - ay) || 1;
+        const dx = (bx - ax) / len, dy = (by - ay) / len;
+        const startAlong = doorSlideDirection === "right" ? widthPx * 0.5 : -widthPx * 0.5;
+        const offset = 0.135 * pxPerMeter;
+        const sx = ax + dx * startAlong + doorDraft.nx * offset;
+        const sy = ay + dy * startAlong + doorDraft.ny * offset;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + dx * widthPx, sy + dy * widthPx);
+        ctx.stroke();
+      } else {
+        const a0 = Math.atan2(doorDraft.ny, doorDraft.nx);
+        const a1 = Math.atan2(by - ay, bx - ax);
+        let delta = a1 - a0;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(ax, ay, doorLeaves === 2 ? widthPx / 2 : widthPx, a0, a0 + delta, delta < 0);
+        ctx.stroke();
+      }
       ctx.setLineDash([]);
       // Hinge marker
       ctx.fillStyle = "#e85d3a";
@@ -7152,7 +7186,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -10442,11 +10476,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         nx: d.nx,
         ny: d.ny,
         leaves: doorLeaves,
+        type: doorType,
+        slideDirection: doorSlideDirection,
         widthCm: doorWidthCm,
       };
       const prev = sketch.doors ?? [];
       onChange({ doors: [...prev, door] });
-      toast.success(`Pintu ${doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
+      toast.success(`Pintu ${doorType === "sliding" ? `geser ${doorSlideDirection === "left" ? "kiri" : "kanan"}` : doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
       return;
     }
     if (circleDraft && tool === "circle") {
@@ -12931,42 +12967,51 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pintu — Parameter</Label>
             <div className="grid grid-cols-2 gap-1.5">
+              <Button type="button" size="sm" variant={doorType === "swing" ? "default" : "outline"} onClick={() => setDoorType("swing")} className="h-8 text-xs">Swing</Button>
+              <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => { setDoorType("sliding"); setDoorLeaves(1); }} className="h-8 text-xs">Geser</Button>
+            </div>
+            {doorType === "sliding" && (
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button type="button" size="sm" variant={doorSlideDirection === "left" ? "default" : "outline"} onClick={() => setDoorSlideDirection("left")} className="h-8 text-xs">Geser Kiri</Button>
+                <Button type="button" size="sm" variant={doorSlideDirection === "right" ? "default" : "outline"} onClick={() => setDoorSlideDirection("right")} className="h-8 text-xs">Geser Kanan</Button>
+              </div>
+            )}
+            {doorType === "swing" && (
+            <div className="grid grid-cols-2 gap-1.5">
               {([1, 2] as const).map((n) => (
-                <button
+                <Button
                   key={n}
                   type="button"
+                  size="sm"
+                  variant={doorLeaves === n ? "default" : "outline"}
                   onClick={() => setDoorLeaves(n)}
-                  className={cn(
-                    "rounded-md border px-2.5 py-1.5 text-xs font-medium transition",
-                    doorLeaves === n
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/40"
-                      : "border-border/60 hover:bg-muted/40",
-                  )}
+                  className="h-8 text-xs"
                 >
                   {n === 1 ? "1 Daun" : "2 Daun"}
-                </button>
+                </Button>
               ))}
             </div>
+            )}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-[11px] text-muted-foreground">Lebar (cm)</Label>
                 <Input
                   type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
-                  min={90}
+                  min={70}
                   max={200}
                   step={5}
                   value={doorWidthCm}
                   onChange={(e) => {
                     const v = Number(e.target.value);
                     if (!Number.isFinite(v)) return;
-                    setDoorWidthCm(Math.max(90, Math.min(200, Math.round(v))));
+                    setDoorWidthCm(Math.max(70, Math.min(200, Math.round(v))));
                   }}
                   className="h-7 w-20 text-xs"
                 />
               </div>
               <input
                 type="range"
-                min={90}
+                min={70}
                 max={200}
                 step={1}
                 value={doorWidthCm}
@@ -12975,7 +13020,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               />
             </div>
             <p className="text-[10px] leading-snug text-muted-foreground">
-              1) Tap di garis dinding — titik akan snap ke dinding (engsel).
+              1) Tap di garis dinding — titik akan snap ke dinding.
               2) Geser searah dinding untuk menentukan arah pintu.
               3) Geser tegak lurus untuk memilih sisi ayun, lalu lepas.
               Notasi muncul di Slide Denah; massa 3D tidak berubah.
