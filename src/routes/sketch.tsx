@@ -37,6 +37,7 @@ import {
   Grid3x3,
   Paintbrush,
   DoorOpen,
+  PanelsTopLeft,
   Circle as CircleIcon,
   Crop,
   MoveHorizontal,
@@ -158,6 +159,7 @@ import {
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
 import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
+import { type Window, genWindowId, normalizeWindows } from "@/lib/windows";
 import {
   type ParkingArea,
   type ParkingPath,
@@ -389,6 +391,7 @@ type DetailArea = {
   showOnSlide: boolean;
   dimensions: boolean;
   floorHatch: boolean;
+  showKeyplan: boolean;
   createdAt: number;
 };
 
@@ -438,6 +441,7 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
   edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
+  windows?: Window[]; // Notasi jendela 2D — tidak mengubah massa 3D
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
   floors?: Floor[]; // Lantai (slab) — entitas terpisah, di-extrude 150mm ke bawah dari MDPL level
   roofs?: Roof[]; // Atap (pelana/limasan) — di-extrude otomatis di Model 3D
@@ -1057,6 +1061,11 @@ function normalizeSketch(s: any): Sketch {
       const validLvl = new Set(levels.map((l) => l.id));
       return arr.map((d) => (d.levelId && validLvl.has(d.levelId) ? d : { ...d, levelId: fallback }));
     })(),
+    windows: (() => {
+      const arr = normalizeWindows(s?.windows);
+      const validLvl = new Set(levels.map((l) => l.id));
+      return arr.map((window) => (window.levelId && validLvl.has(window.levelId) ? window : { ...window, levelId: fallback }));
+    })(),
     circles: (() => {
       const raw = s?.circles;
       if (!Array.isArray(raw)) return [];
@@ -1151,6 +1160,7 @@ function normalizeSketch(s: any): Sketch {
           showOnSlide: area.showOnSlide !== false,
           dimensions: area.dimensions !== false,
           floorHatch: area.floorHatch === true,
+          showKeyplan: area.showKeyplan !== false,
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
         }];
       });
@@ -2676,7 +2686,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "window" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan">("line");
   // ===== Image Reference (JPG) =====
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -2982,6 +2992,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   >(null);
   const [doorEraseMode, setDoorEraseMode] = useState(false);
   const [doorClipboard, setDoorClipboard] = useState<Door[]>([]);
+  const [windowLeaves, setWindowLeaves] = useState(1);
+  const [windowWidthCm, setWindowWidthCm] = useState(120);
+  const [windowDraft, setWindowDraft] = useState<
+    | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
+    | null
+  >(null);
+  const [windowEraseMode, setWindowEraseMode] = useState(false);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
