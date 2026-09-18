@@ -9770,6 +9770,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         nx: -dirY, ny: dirX,
         levelId: bestLn.levelId ?? activeLvlId ?? undefined,
       });
+    } else if (tool === "window") {
+      const raw = getWorldPosRaw(e);
+      if (windowEraseMode) {
+        const windows = sketch.windows ?? [];
+        const tolPx = 18 / view.s;
+        let bestId: string | null = null;
+        let bestDistance = Infinity;
+        for (const window of windows) {
+          if (activeLvlId && window.levelId && window.levelId !== activeLvlId) continue;
+          const distance = dist(raw, projectOnSegment(raw, window.a, window.b));
+          if (distance < bestDistance) { bestDistance = distance; bestId = window.id; }
+        }
+        if (!bestId || bestDistance > tolPx) {
+          toast.error("Tap dekat jendela yang ingin dihapus");
+          return;
+        }
+        pushHistory();
+        onChange({ windows: windows.filter((window) => window.id !== bestId) });
+        toast.success("Jendela dihapus");
+        return;
+      }
+      const tolPx = 16 / view.s;
+      let bestLn: Line | null = null;
+      let bestProj: Point | null = null;
+      let bestDistance = Infinity;
+      for (const line of lines) {
+        if (activeLvlId && line.levelId !== activeLvlId) continue;
+        if ((line.kind ?? "straight") !== "straight") continue;
+        const projection = projectOnSegment(raw, line.a, line.b);
+        const distance = dist(raw, projection);
+        if (distance < bestDistance) { bestDistance = distance; bestProj = projection; bestLn = line; }
+      }
+      if (!bestLn || !bestProj || bestDistance > tolPx) {
+        toast.error("Tap pada garis dinding untuk menempatkan jendela");
+        return;
+      }
+      const lineDx = bestLn.b.x - bestLn.a.x, lineDy = bestLn.b.y - bestLn.a.y;
+      const lineLength = Math.hypot(lineDx, lineDy) || 1;
+      const dirX = lineDx / lineLength, dirY = lineDy / lineLength;
+      const widthPx = (windowWidthCm / 100) * pxPerMeter;
+      const remainForward = (bestLn.b.x - bestProj.x) * dirX + (bestLn.b.y - bestProj.y) * dirY;
+      const sign = remainForward >= widthPx * 0.5 ? 1 : -1;
+      setWindowDraft({
+        a: bestProj,
+        b: { x: bestProj.x + dirX * sign * widthPx, y: bestProj.y + dirY * sign * widthPx },
+        dirX, dirY, nx: -dirY, ny: dirX,
+        levelId: bestLn.levelId ?? activeLvlId ?? undefined,
+      });
     } else if (tool === "circle") {
       setCircleDraft({ c: p, cur: p, levelId: activeLvlId ?? undefined });
     } else if (tool === "trim" || tool === "offset") {
@@ -10252,6 +10300,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setDoorDraft({ ...doorDraft, b: { x: bx, y: by }, nx, ny });
       return;
     }
+    if (windowDraft) {
+      const raw = getWorldPosRaw(e);
+      const along = (raw.x - windowDraft.a.x) * windowDraft.dirX + (raw.y - windowDraft.a.y) * windowDraft.dirY;
+      const sign = along < 0 ? -1 : 1;
+      const widthPx = (windowWidthCm / 100) * pxPerMeter;
+      setWindowDraft({
+        ...windowDraft,
+        b: { x: windowDraft.a.x + windowDraft.dirX * sign * widthPx, y: windowDraft.a.y + windowDraft.dirY * sign * widthPx },
+        nx: -windowDraft.dirY * sign,
+        ny: windowDraft.dirX * sign,
+      });
+      return;
+    }
 
     if (editDrag) {
       const newPos = getWorldPos(e);
@@ -10571,6 +10632,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const prev = sketch.doors ?? [];
       onChange({ doors: [...prev, door] });
       toast.success(`Pintu ${doorType === "sliding" ? doorLeaves === 2 ? "geser 2 arah" : `geser ${doorSlideDirection === "left" ? "kiri" : "kanan"}` : doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
+      return;
+    }
+    if (windowDraft) {
+      const draft = windowDraft;
+      setWindowDraft(null);
+      pushHistory();
+      const window: Window = {
+        id: genWindowId(), levelId: draft.levelId, a: draft.a, b: draft.b,
+        nx: draft.nx, ny: draft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
+      };
+      onChange({ windows: [...(sketch.windows ?? []), window] });
+      toast.success(`Jendela ${windowLeaves} daun · ${windowWidthCm}cm ditambahkan`);
       return;
     }
     if (circleDraft && tool === "circle") {
@@ -11022,6 +11095,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setGridDrag(null);
     setClipDrag(null);
     setDoorDraft(null);
+    setWindowDraft(null);
     setCircleDraft(null);
   };
 
