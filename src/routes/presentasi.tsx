@@ -4593,7 +4593,15 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           pxPerM={pxPerM}
           sw={sw}
         />
-        <MaterialEdges lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} sw={sw} detailSolidLayers />
+        <MaterialEdges
+          lines={lines}
+          segmentationLines={sketch.lines ?? []}
+          levelId={level.id}
+          edgeAttrs={sketch.edgeAttrs ?? {}}
+          pxPerM={pxPerM}
+          sw={sw}
+          detailSolidLayers
+        />
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
         <SolidWallPracticalColumns lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} pxPerM={pxPerM} />
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
@@ -5022,6 +5030,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           })}
           <MaterialEdges
             lines={lines}
+            segmentationLines={sketch.lines ?? []}
+            levelId={level.id}
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
             sw={sw}
@@ -5539,6 +5549,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               dan notasi denah agar tidak pernah tertutup perimeter ruang. */}
           <MaterialEdges
             lines={lines}
+            segmentationLines={sketch.lines ?? []}
+            levelId={level.id}
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
             sw={sw}
@@ -6989,6 +7001,8 @@ function DetailStairNotation({
 
 function MaterialEdges({
   lines,
+  segmentationLines,
+  levelId,
   edgeAttrs,
   pxPerM,
   sw,
@@ -6996,6 +7010,10 @@ function MaterialEdges({
   detailSolidLayers = false,
 }: {
   lines: Line[];
+  /** Selalu gunakan seluruh garis sketsa untuk membentuk ID segmen yang sama
+   *  dengan alat Pick Material, lalu batasi hasil ke level slide aktif. */
+  segmentationLines?: Line[];
+  levelId?: string;
   edgeAttrs: Record<string, EdgeMaterial>;
   pxPerM: number;
   sw: number;
@@ -7009,9 +7027,14 @@ function MaterialEdges({
   const curved = lines
     .map((ln, i) => ({ ln, i }))
     .filter((x) => (x.ln.kind ?? "straight") !== "straight");
+  const segmentSource = segmentationLines ?? lines;
   const segs = computeStraightSegments(
-    lines.map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
-  ).filter((s) => (lines[s.sourceLineIndex].kind ?? "straight") === "straight");
+    segmentSource.map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId })),
+  ).filter((s) => {
+    const source = segmentSource[s.sourceLineIndex];
+    if (!source || (source.kind ?? "straight") !== "straight") return false;
+    return !levelId || s.levelId === levelId;
+  });
   // Kontur dinding sangat tipis & seragam (80% lebih tipis dari sebelumnya).
   const stroke = sw * 0.00028;
   const strokeFine = stroke;
