@@ -4465,6 +4465,25 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   });
   const lines = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
   const doors = (sketch.doors ?? []).filter((door) => door.levelId === level.id);
+  const keyPlanPoints = [
+    ...levelLayers.flatMap((layer) => layer.points),
+    ...lines.flatMap((line) => [line.a, line.b]),
+  ];
+  const keyPlanRaw = keyPlanPoints.length > 0 ? {
+    minX: Math.min(...keyPlanPoints.map((point) => point.x)),
+    minY: Math.min(...keyPlanPoints.map((point) => point.y)),
+    maxX: Math.max(...keyPlanPoints.map((point) => point.x)),
+    maxY: Math.max(...keyPlanPoints.map((point) => point.y)),
+  } : slide.bounds;
+  const keyPlanPad = Math.max(keyPlanRaw.maxX - keyPlanRaw.minX, keyPlanRaw.maxY - keyPlanRaw.minY, 1) * 0.08;
+  const keyPlanBounds = {
+    minX: keyPlanRaw.minX - keyPlanPad,
+    minY: keyPlanRaw.minY - keyPlanPad,
+    maxX: keyPlanRaw.maxX + keyPlanPad,
+    maxY: keyPlanRaw.maxY + keyPlanPad,
+  };
+  const keyPlanW = keyPlanBounds.maxX - keyPlanBounds.minX;
+  const keyPlanH = keyPlanBounds.maxY - keyPlanBounds.minY;
   const patternId = useId().replace(/:/g, "");
   const levelMm = Math.round((Number(level.mdpl) || 0) * 1000);
   const elevation = `${levelMm >= 0 ? "+" : ""}${levelMm}`;
@@ -4623,6 +4642,35 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
+      </div>
+      <div style={{ position: "absolute", right: 28, bottom: 24, height: "33.333%", width: "30%", minWidth: 240, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 8 }}>
+        <div style={{ fontFamily: "Sora, sans-serif", fontSize: 12, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>KEY PLAN · {level.name}</div>
+        <svg viewBox={`${keyPlanBounds.minX} ${keyPlanBounds.minY} ${keyPlanW} ${keyPlanH}`} preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0, width: "100%", display: "block", background: "#ffffff" }}>
+          {levelLayers.map((layer) => (
+            <polygon key={`key-room-${layer.id}`} points={layer.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={isVoid(layer.name) ? "#ffffff" : "#eeeeea"} stroke="#777777" strokeWidth={Math.max(keyPlanW, keyPlanH) * 0.0014} />
+          ))}
+          <MaterialEdges
+            lines={lines}
+            segmentationLines={sketch.lines ?? []}
+            levelId={level.id}
+            edgeAttrs={sketch.edgeAttrs ?? {}}
+            pxPerM={pxPerM}
+            sw={Math.max(keyPlanW, keyPlanH)}
+          />
+          {(sketch.detailAreas ?? []).filter((detail) => detail.levelId === level.id && detail.showOnSlide !== false).map((detail) => {
+            const x = Math.min(detail.a.x, detail.b.x);
+            const y = Math.min(detail.a.y, detail.b.y);
+            const width = Math.abs(detail.b.x - detail.a.x);
+            const height = Math.abs(detail.b.y - detail.a.y);
+            const active = detail.id === area.id;
+            const markerSize = Math.max(keyPlanW, keyPlanH) * 0.055;
+            return <g key={`key-detail-${detail.id}`}>
+              <rect x={x} y={y} width={width} height={height} fill={active ? "rgba(232,93,58,0.2)" : "none"} stroke={active ? "#e85d3a" : "#555555"} strokeWidth={Math.max(keyPlanW, keyPlanH) * (active ? 0.006 : 0.0025)} />
+              <circle cx={x + width / 2} cy={y + height / 2} r={markerSize} fill={active ? "#e85d3a" : "#ffffff"} stroke="#111111" strokeWidth={Math.max(keyPlanW, keyPlanH) * 0.002} />
+              <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fontFamily="Sora, sans-serif" fontSize={markerSize * 1.05} fontWeight={800} fill={active ? "#ffffff" : "#111111"}>{detail.number}</text>
+            </g>;
+          })}
+        </svg>
       </div>
     </div>
   );
@@ -7393,15 +7441,29 @@ function DoorNotation({
           return `${x1 + leafNx * leafHalf},${y1 + leafNy * leafHalf} ${x2 + leafNx * leafHalf},${y2 + leafNy * leafHalf} ${x2 - leafNx * leafHalf},${y2 - leafNy * leafHalf} ${x1 - leafNx * leafHalf},${y1 - leafNy * leafHalf}`;
         };
         if (d.type === "sliding") {
-          const direction = d.slideDirection === "right" ? 1 : -1;
-          const startAlong = direction > 0 ? widthPx * 0.5 : -widthPx * 0.5;
           const sideSign = d.nx * px + d.ny * py < 0 ? -1 : 1;
           const leafHalfDepth = 0.02 * pxPerM;
           const leafCenterOffset = wallDepth / 2 + 0.04 * pxPerM + leafHalfDepth;
-          const sx = ax + dx * startAlong + px * leafCenterOffset * sideSign;
-          const sy = ay + dy * startAlong + py * leafCenterOffset * sideSign;
-          const ex = sx + dx * widthPx;
-          const ey = sy + dy * widthPx;
+          const offsetX = px * leafCenterOffset * sideSign;
+          const offsetY = py * leafCenterOffset * sideSign;
+          const slidingLeaves = d.leaves === 2
+            ? (() => {
+                const halfLeaf = widthPx / 2;
+                const shift = halfLeaf * 0.5;
+                const midX = (ax + bx) / 2;
+                const midY = (ay + by) / 2;
+                return [
+                  [midX - dx * (shift + halfLeaf) + offsetX, midY - dy * (shift + halfLeaf) + offsetY, midX - dx * shift + offsetX, midY - dy * shift + offsetY],
+                  [midX + dx * shift + offsetX, midY + dy * shift + offsetY, midX + dx * (shift + halfLeaf) + offsetX, midY + dy * (shift + halfLeaf) + offsetY],
+                ];
+              })()
+            : (() => {
+                const direction = d.slideDirection === "right" ? 1 : -1;
+                const startAlong = direction > 0 ? widthPx * 0.5 : -widthPx * 0.5;
+                const sx = ax + dx * startAlong + offsetX;
+                const sy = ay + dy * startAlong + offsetY;
+                return [[sx, sy, sx + dx * widthPx, sy + dy * widthPx]];
+              })();
           return (
             <g key={d.id}>
               <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
@@ -7409,7 +7471,7 @@ function DoorNotation({
                 <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
                 <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
               </>}
-              <polygon points={leafPolygon(sx, sy, ex, ey)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              {slidingLeaves.map(([x1, y1, x2, y2], index) => <polygon key={`sliding-leaf-${index}`} points={leafPolygon(x1, y1, x2, y2)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />)}
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
             </g>
           );
