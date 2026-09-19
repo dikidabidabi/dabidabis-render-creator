@@ -10900,6 +10900,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           showOnSlide: true,
           dimensions: true,
           floorHatch: false,
+          showKeyplan: true,
           createdAt: Date.now(),
         }],
       });
@@ -11720,6 +11721,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <DoorOpen className="mr-1.5 h-4 w-4" /> Pintu
           </Button>
           <Button
+            variant={tool === "window" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setWindowDraft(null); setTool("window"); }}
+            className={cn(tool === "window" && "bg-gradient-primary shadow-primary")}
+            title="Jendela — tap pada dinding lalu geser searah dinding untuk menentukan orientasi."
+          >
+            <PanelsTopLeft className="mr-1.5 h-4 w-4" /> Jendela
+          </Button>
+          <Button
             variant={tool === "circle" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("circle"); }}
@@ -11926,6 +11936,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     ["showOnSlide", "Munculkan di slide"],
                     ["dimensions", "Dimensi"],
                     ["floorHatch", "Hatch lantai 600 × 600 mm"],
+                    ["showKeyplan", "Keyplan"],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex items-center justify-between gap-3 py-1 text-[11px]">
                       <span>{label}</span>
@@ -13262,6 +13273,75 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 >
                   <Trash2 className="mr-1.5 h-3 w-3" />
                   {doorEraseMode ? "Mode Hapus Aktif — tap pintu" : "Hapus Pintu (per item)"}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+        {tool === "window" && (
+          <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
+            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Jendela — Parameter</Label>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-[11px] text-muted-foreground">Jumlah daun</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={24}
+                  step={1}
+                  value={windowLeaves}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (Number.isFinite(value)) setWindowLeaves(Math.max(1, Math.min(24, Math.round(value))));
+                  }}
+                  className="h-7 w-20 text-xs"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button type="button" size="sm" variant={windowLeaves === 1 ? "default" : "outline"} onClick={() => setWindowLeaves(1)} className="h-8 text-xs">1 Daun</Button>
+                <Button type="button" size="sm" variant={windowLeaves > 1 ? "default" : "outline"} onClick={() => setWindowLeaves(Math.max(2, windowLeaves))} className="h-8 text-xs">Lebih dari 1</Button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-[11px] text-muted-foreground">Lebar total (cm)</Label>
+                <Input
+                  type="number"
+                  min={50}
+                  max={600}
+                  step={5}
+                  value={windowWidthCm}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (Number.isFinite(value)) setWindowWidthCm(Math.max(50, Math.min(600, Math.round(value))));
+                  }}
+                  className="h-7 w-20 text-xs"
+                />
+              </div>
+              <input
+                type="range"
+                min={50}
+                max={600}
+                step={5}
+                value={windowWidthCm}
+                onChange={(event) => setWindowWidthCm(Number(event.target.value))}
+                className="w-full accent-primary"
+              />
+            </div>
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Tap pada garis dinding, geser searah dinding untuk menentukan orientasi, lalu lepas untuk menempatkan jendela.
+            </p>
+            {(sketch.windows?.length ?? 0) > 0 && (
+              <div className="space-y-1.5 border-t border-border/60 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">{sketch.windows?.length ?? 0} jendela</span>
+                  <Button variant="outline" size="sm" onClick={() => { pushHistory(); onChange({ windows: [] }); setWindowEraseMode(false); }} className="h-7 text-xs">
+                    <Trash2 className="mr-1.5 h-3 w-3" /> Reset
+                  </Button>
+                </div>
+                <Button variant={windowEraseMode ? "default" : "outline"} size="sm" onClick={() => setWindowEraseMode((value) => !value)} className={cn("h-7 w-full text-xs", windowEraseMode && "bg-gradient-primary shadow-primary")}>
+                  <Trash2 className="mr-1.5 h-3 w-3" />
+                  {windowEraseMode ? "Mode Hapus Aktif — tap jendela" : "Hapus Jendela (per item)"}
                 </Button>
               </div>
             )}
@@ -14672,7 +14752,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "window" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
