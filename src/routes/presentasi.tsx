@@ -54,6 +54,7 @@ import {
   type EdgeSegment,
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
+import { type Window } from "@/lib/windows";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -129,7 +130,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; createdAt: number;
 };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
@@ -142,6 +143,7 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[];
   edgeAttrs?: Record<string, EdgeMaterial>;
   doors?: Door[];
+  windows?: Window[];
   floors?: Floor[];
   parkingAreas?: ParkingArea[];
   ramps?: Ramp[];
@@ -4465,6 +4467,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   });
   const lines = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
   const doors = (sketch.doors ?? []).filter((door) => door.levelId === level.id);
+  const windows = (sketch.windows ?? []).filter((window) => window.levelId === level.id);
   const keyPlanPoints = [
     ...levelLayers.flatMap((layer) => layer.points),
     ...lines.flatMap((line) => [line.a, line.b]),
@@ -4622,6 +4625,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           detailSolidLayers
         />
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
+        <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
         <SolidWallPracticalColumns
           lines={lines}
           segmentationLines={sketch.lines ?? []}
@@ -4643,7 +4647,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>
-      <div style={{ position: "absolute", right: 28, bottom: 24, height: "33.333%", width: "30%", minWidth: 240, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 8 }}>
+      {area.showKeyplan !== false && <div style={{ position: "absolute", right: 28, bottom: 24, height: "16.666%", width: "15%", minWidth: 120, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 6 }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 12, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>KEY PLAN · {level.name}</div>
         <svg viewBox={`${keyPlanBounds.minX} ${keyPlanBounds.minY} ${keyPlanW} ${keyPlanH}`} preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0, width: "100%", display: "block", background: "#ffffff" }}>
           {levelLayers.map((layer) => (
@@ -4665,13 +4669,13 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             const active = detail.id === area.id;
             const markerSize = Math.max(keyPlanW, keyPlanH) * 0.055;
             return <g key={`key-detail-${detail.id}`}>
-              <rect x={x} y={y} width={width} height={height} fill={active ? "rgba(232,93,58,0.2)" : "none"} stroke={active ? "#e85d3a" : "#555555"} strokeWidth={Math.max(keyPlanW, keyPlanH) * (active ? 0.006 : 0.0025)} />
+              <rect x={x} y={y} width={width} height={height} fill={active ? "rgba(232,93,58,0.2)" : "none"} stroke={active ? "#e85d3a" : "#555555"} strokeWidth={Math.max(keyPlanW, keyPlanH) * (active ? 0.006 : 0.0025)} strokeDasharray={`${Math.max(keyPlanW, keyPlanH) * 0.018} ${Math.max(keyPlanW, keyPlanH) * 0.012}`} />
               <circle cx={x + width / 2} cy={y + height / 2} r={markerSize} fill={active ? "#e85d3a" : "#ffffff"} stroke="#111111" strokeWidth={Math.max(keyPlanW, keyPlanH) * 0.002} />
               <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fontFamily="Sora, sans-serif" fontSize={markerSize * 1.05} fontWeight={800} fill={active ? "#ffffff" : "#111111"}>{detail.number}</text>
             </g>;
           })}
         </svg>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -5614,6 +5618,11 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               kolom struktur berada pada lapisan paling atas. */}
           <DoorNotation
             doors={(sketch.doors ?? []).filter((d) => d.levelId === level.id)}
+            pxPerM={pxPerM}
+            sw={sw}
+          />
+          <WindowNotation
+            windows={(sketch.windows ?? []).filter((window) => window.levelId === level.id)}
             pxPerM={pxPerM}
             sw={sw}
           />
