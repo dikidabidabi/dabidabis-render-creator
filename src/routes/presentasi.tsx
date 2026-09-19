@@ -7552,6 +7552,74 @@ function DoorNotation({
   );
 }
 
+function WindowNotation({
+  windows,
+  pxPerM,
+  sw,
+  lines,
+  edgeAttrs,
+  detailed = false,
+}: {
+  windows: Window[];
+  pxPerM: number;
+  sw: number;
+  lines?: Line[];
+  edgeAttrs?: Record<string, EdgeMaterial>;
+  detailed?: boolean;
+}) {
+  if (!windows.length) return null;
+  const stroke = Math.max(sw * 0.00055, 0.08);
+  return <g pointerEvents="none">
+    {windows.map((window) => {
+      const ax = window.a.x, ay = window.a.y, bx = window.b.x, by = window.b.y;
+      const length = Math.hypot(bx - ax, by - ay) || 1;
+      const dx = (bx - ax) / length, dy = (by - ay) / length;
+      const nx = -dy, ny = dx;
+      const midpoint = { x: (ax + bx) / 2, y: (ay + by) / 2 };
+      let attachedMaterial: EdgeMaterial | undefined;
+      let closestDistance = Infinity;
+      if (lines && edgeAttrs) {
+        const segments = computeStraightSegments(lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })));
+        for (const segment of segments) {
+          const material = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+          if (!material) continue;
+          const segmentDx = segment.b.x - segment.a.x, segmentDy = segment.b.y - segment.a.y;
+          const segmentLength = Math.hypot(segmentDx, segmentDy);
+          if (segmentLength < 1e-6) continue;
+          const alignment = Math.abs((segmentDx / segmentLength) * dx + (segmentDy / segmentLength) * dy);
+          if (alignment < 0.94) continue;
+          const t = Math.max(0, Math.min(1, ((midpoint.x - segment.a.x) * segmentDx + (midpoint.y - segment.a.y) * segmentDy) / (segmentLength * segmentLength)));
+          const distance = Math.hypot(midpoint.x - (segment.a.x + segmentDx * t), midpoint.y - (segment.a.y + segmentDy * t));
+          if (distance < closestDistance) { closestDistance = distance; attachedMaterial = material; }
+        }
+      }
+      const wallDepth = (((attachedMaterial && closestDistance <= 0.35 * pxPerM) ? WALL_THICK_MM[attachedMaterial] : 150) / 1000) * pxPerM;
+      const halfDepth = wallDepth / 2;
+      const jambWidth = 0.05 * pxPerM;
+      const glassStroke = detailed ? 0.01 * pxPerM : stroke;
+      const glassOffset = detailed ? Math.max(glassStroke * 0.8, 0.01 * pxPerM) : 0.018 * pxPerM;
+      const jamb = (cx: number, cy: number, direction: number) => [
+        `${cx + nx * halfDepth},${cy + ny * halfDepth}`,
+        `${cx - nx * halfDepth},${cy - ny * halfDepth}`,
+        `${cx - nx * halfDepth + dx * jambWidth * direction},${cy - ny * halfDepth + dy * jambWidth * direction}`,
+        `${cx + nx * halfDepth + dx * jambWidth * direction},${cy + ny * halfDepth + dy * jambWidth * direction}`,
+      ].join(" ");
+      const leaves = Math.max(1, Math.round(window.leaves));
+      return <g key={window.id}>
+        <polygon points={`${ax + nx * halfDepth},${ay + ny * halfDepth} ${bx + nx * halfDepth},${by + ny * halfDepth} ${bx - nx * halfDepth},${by - ny * halfDepth} ${ax - nx * halfDepth},${ay - ny * halfDepth}`} fill="#ffffff" stroke="none" />
+        <polygon points={jamb(ax, ay, 1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+        <polygon points={jamb(bx, by, -1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+        {[-1, 1].map((side) => <line key={`glass-${side}`} x1={ax + dx * jambWidth + nx * glassOffset * side} y1={ay + dy * jambWidth + ny * glassOffset * side} x2={bx - dx * jambWidth + nx * glassOffset * side} y2={by - dy * jambWidth + ny * glassOffset * side} stroke="#0a0a0a" strokeWidth={glassStroke} />)}
+        {Array.from({ length: Math.max(0, leaves - 1) }, (_, index) => {
+          const t = (index + 1) / leaves;
+          const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
+          return <rect key={`mullion-${index}`} x={cx - dx * jambWidth / 2 - nx * halfDepth} y={cy - dy * jambWidth / 2 - ny * halfDepth} width={jambWidth} height={wallDepth} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} transform={`rotate(${Math.atan2(dy, dx) * 180 / Math.PI} ${cx} ${cy})`} />;
+        })}
+      </g>;
+    })}
+  </g>;
+}
+
 
 // ---- Stacking Diagram (from Model 3D data) ----
 function levelColor(i: number, total: number) {
