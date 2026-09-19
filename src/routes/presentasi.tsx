@@ -54,6 +54,7 @@ import {
   type EdgeSegment,
 } from "@/lib/edge-segments";
 import { type Door } from "@/lib/doors";
+import { type Window } from "@/lib/windows";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -129,7 +130,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; createdAt: number;
 };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
@@ -142,6 +143,7 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[];
   edgeAttrs?: Record<string, EdgeMaterial>;
   doors?: Door[];
+  windows?: Window[];
   floors?: Floor[];
   parkingAreas?: ParkingArea[];
   ramps?: Ramp[];
@@ -4465,6 +4467,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   });
   const lines = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
   const doors = (sketch.doors ?? []).filter((door) => door.levelId === level.id);
+  const windows = (sketch.windows ?? []).filter((window) => window.levelId === level.id);
   const keyPlanPoints = [
     ...levelLayers.flatMap((layer) => layer.points),
     ...lines.flatMap((line) => [line.a, line.b]),
@@ -4622,6 +4625,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           detailSolidLayers
         />
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
+        <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
         <SolidWallPracticalColumns
           lines={lines}
           segmentationLines={sketch.lines ?? []}
@@ -4643,7 +4647,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>
-      <div style={{ position: "absolute", right: 28, bottom: 24, height: "33.333%", width: "30%", minWidth: 240, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 8 }}>
+      {area.showKeyplan !== false && <div style={{ position: "absolute", right: 28, bottom: 24, height: "16.666%", width: "15%", minWidth: 120, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 6 }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 12, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>KEY PLAN · {level.name}</div>
         <svg viewBox={`${keyPlanBounds.minX} ${keyPlanBounds.minY} ${keyPlanW} ${keyPlanH}`} preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0, width: "100%", display: "block", background: "#ffffff" }}>
           {levelLayers.map((layer) => (
@@ -4665,13 +4669,13 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             const active = detail.id === area.id;
             const markerSize = Math.max(keyPlanW, keyPlanH) * 0.055;
             return <g key={`key-detail-${detail.id}`}>
-              <rect x={x} y={y} width={width} height={height} fill={active ? "rgba(232,93,58,0.2)" : "none"} stroke={active ? "#e85d3a" : "#555555"} strokeWidth={Math.max(keyPlanW, keyPlanH) * (active ? 0.006 : 0.0025)} />
+              <rect x={x} y={y} width={width} height={height} fill={active ? "rgba(232,93,58,0.2)" : "none"} stroke={active ? "#e85d3a" : "#555555"} strokeWidth={Math.max(keyPlanW, keyPlanH) * (active ? 0.006 : 0.0025)} strokeDasharray={`${Math.max(keyPlanW, keyPlanH) * 0.018} ${Math.max(keyPlanW, keyPlanH) * 0.012}`} />
               <circle cx={x + width / 2} cy={y + height / 2} r={markerSize} fill={active ? "#e85d3a" : "#ffffff"} stroke="#111111" strokeWidth={Math.max(keyPlanW, keyPlanH) * 0.002} />
               <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fontFamily="Sora, sans-serif" fontSize={markerSize * 1.05} fontWeight={800} fill={active ? "#ffffff" : "#111111"}>{detail.number}</text>
             </g>;
           })}
         </svg>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -5614,6 +5618,11 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               kolom struktur berada pada lapisan paling atas. */}
           <DoorNotation
             doors={(sketch.doors ?? []).filter((d) => d.levelId === level.id)}
+            pxPerM={pxPerM}
+            sw={sw}
+          />
+          <WindowNotation
+            windows={(sketch.windows ?? []).filter((window) => window.levelId === level.id)}
             pxPerM={pxPerM}
             sw={sw}
           />
@@ -7541,6 +7550,74 @@ function DoorNotation({
       })}
     </g>
   );
+}
+
+function WindowNotation({
+  windows,
+  pxPerM,
+  sw,
+  lines,
+  edgeAttrs,
+  detailed = false,
+}: {
+  windows: Window[];
+  pxPerM: number;
+  sw: number;
+  lines?: Line[];
+  edgeAttrs?: Record<string, EdgeMaterial>;
+  detailed?: boolean;
+}) {
+  if (!windows.length) return null;
+  const stroke = Math.max(sw * 0.00055, 0.08);
+  return <g pointerEvents="none">
+    {windows.map((window) => {
+      const ax = window.a.x, ay = window.a.y, bx = window.b.x, by = window.b.y;
+      const length = Math.hypot(bx - ax, by - ay) || 1;
+      const dx = (bx - ax) / length, dy = (by - ay) / length;
+      const nx = -dy, ny = dx;
+      const midpoint = { x: (ax + bx) / 2, y: (ay + by) / 2 };
+      let attachedMaterial: EdgeMaterial | undefined;
+      let closestDistance = Infinity;
+      if (lines && edgeAttrs) {
+        const segments = computeStraightSegments(lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })));
+        for (const segment of segments) {
+          const material = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+          if (!material) continue;
+          const segmentDx = segment.b.x - segment.a.x, segmentDy = segment.b.y - segment.a.y;
+          const segmentLength = Math.hypot(segmentDx, segmentDy);
+          if (segmentLength < 1e-6) continue;
+          const alignment = Math.abs((segmentDx / segmentLength) * dx + (segmentDy / segmentLength) * dy);
+          if (alignment < 0.94) continue;
+          const t = Math.max(0, Math.min(1, ((midpoint.x - segment.a.x) * segmentDx + (midpoint.y - segment.a.y) * segmentDy) / (segmentLength * segmentLength)));
+          const distance = Math.hypot(midpoint.x - (segment.a.x + segmentDx * t), midpoint.y - (segment.a.y + segmentDy * t));
+          if (distance < closestDistance) { closestDistance = distance; attachedMaterial = material; }
+        }
+      }
+      const wallDepth = (((attachedMaterial && closestDistance <= 0.35 * pxPerM) ? WALL_THICK_MM[attachedMaterial] : 150) / 1000) * pxPerM;
+      const halfDepth = wallDepth / 2;
+      const jambWidth = 0.05 * pxPerM;
+      const glassStroke = detailed ? 0.01 * pxPerM : stroke;
+      const glassOffset = detailed ? Math.max(glassStroke * 0.8, 0.01 * pxPerM) : 0.018 * pxPerM;
+      const jamb = (cx: number, cy: number, direction: number) => [
+        `${cx + nx * halfDepth},${cy + ny * halfDepth}`,
+        `${cx - nx * halfDepth},${cy - ny * halfDepth}`,
+        `${cx - nx * halfDepth + dx * jambWidth * direction},${cy - ny * halfDepth + dy * jambWidth * direction}`,
+        `${cx + nx * halfDepth + dx * jambWidth * direction},${cy + ny * halfDepth + dy * jambWidth * direction}`,
+      ].join(" ");
+      const leaves = Math.max(1, Math.round(window.leaves));
+      return <g key={window.id}>
+        <polygon points={`${ax + nx * halfDepth},${ay + ny * halfDepth} ${bx + nx * halfDepth},${by + ny * halfDepth} ${bx - nx * halfDepth},${by - ny * halfDepth} ${ax - nx * halfDepth},${ay - ny * halfDepth}`} fill="#ffffff" stroke="none" />
+        <polygon points={jamb(ax, ay, 1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+        <polygon points={jamb(bx, by, -1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+        {[-1, 1].map((side) => <line key={`glass-${side}`} x1={ax + dx * jambWidth + nx * glassOffset * side} y1={ay + dy * jambWidth + ny * glassOffset * side} x2={bx - dx * jambWidth + nx * glassOffset * side} y2={by - dy * jambWidth + ny * glassOffset * side} stroke="#0a0a0a" strokeWidth={glassStroke} />)}
+        {Array.from({ length: Math.max(0, leaves - 1) }, (_, index) => {
+          const t = (index + 1) / leaves;
+          const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
+          return <rect key={`mullion-${index}`} x={cx - dx * jambWidth / 2 - nx * halfDepth} y={cy - dy * jambWidth / 2 - ny * halfDepth} width={jambWidth} height={wallDepth} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} transform={`rotate(${Math.atan2(dy, dx) * 180 / Math.PI} ${cx} ${cy})`} />;
+        })}
+      </g>;
+    })}
+  </g>;
 }
 
 
