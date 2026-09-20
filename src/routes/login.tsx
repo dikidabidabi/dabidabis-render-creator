@@ -15,6 +15,16 @@ export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): { mode?: "signin" | "signup" } => ({
     mode: (search.mode as string) === "signup" ? "signup" : "signin",
   }),
+  head: () => ({
+    meta: [
+      { title: "Masuk atau Daftar — Dabidabi's" },
+      { name: "description", content: "Masuk atau buat akun Dabidabi's untuk melanjutkan proyek arsitektur Anda." },
+      { property: "og:title", content: "Masuk atau Daftar — Dabidabi's" },
+      { property: "og:description", content: "Akses ruang kerja arsitektur privat Dabidabi's." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: LoginPage,
 });
 
@@ -66,33 +76,37 @@ function LoginPage() {
       return;
     }
     setLoading(true);
-    if (tab === "signin") {
-      const { error } = await signIn(email, password);
-      setLoading(false);
-      if (error) toast.error(error);
-      else toast.success("Berhasil masuk.");
-      return;
-    }
+    try {
+      if (tab === "signin") {
+        const { error } = await signIn(email, password);
+        if (error) toast.error(error);
+        else toast.success("Berhasil masuk.");
+        return;
+      }
 
-    const meta = {
-      account_type: accountType,
-      professional_level: level,
-      corporate_code: isCorpAccount ? corpCode.trim() : null,
-      corporate_parent_code: needsParentCode ? corpCode.trim() : null,
-    } as const;
-    const { error, hasSession } = await signUp(email, password, meta);
-    if (!error && hasSession) {
-      const r = await setupFn({ data: { ...meta } });
-      if (!r.ok && r.error) toast.error(r.error);
+      const meta = {
+        account_type: accountType,
+        professional_level: level,
+        corporate_code: isCorpAccount ? corpCode.trim() : null,
+        corporate_parent_code: needsParentCode ? corpCode.trim() : null,
+      } as const;
+      const { error, hasSession } = await signUp(email, password, meta);
+      if (!error && hasSession) {
+        const r = await setupFn({ data: { ...meta } });
+        if (!r.ok && r.error) toast.error(r.error);
+      }
+      if (error) toast.error(error);
+      else
+        toast.success(
+          hasSession
+            ? "Akun dibuat dan jenis akun tersimpan."
+            : "Akun dibuat. Cek email untuk konfirmasi.",
+        );
+    } catch {
+      toast.error("Layanan akun sedang tidak dapat dijangkau. Silakan coba lagi beberapa saat.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    if (error) toast.error(error);
-    else
-      toast.success(
-        hasSession
-          ? "Akun dibuat dan jenis akun tersimpan."
-          : "Akun dibuat. Cek email untuk konfirmasi.",
-      );
   };
 
 

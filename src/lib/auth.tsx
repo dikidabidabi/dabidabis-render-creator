@@ -24,6 +24,14 @@ type AuthCtx = {
   signOut: () => Promise<void>;
 };
 
+function authErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/failed to fetch|fetch failed|networkerror|load failed/i.test(message)) {
+    return "Layanan akun sedang tidak dapat dijangkau. Periksa koneksi Anda, lalu coba lagi beberapa saat.";
+  }
+  return message || "Terjadi kendala pada layanan akun. Silakan coba lagi.";
+}
+
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
@@ -50,20 +58,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return { error: error ? authErrorMessage(error) : null };
+    } catch (error) {
+      return { error: authErrorMessage(error) };
+    }
   };
 
   const signUp = async (email: string, password: string, meta?: SignUpMeta) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/feed`,
-        ...(meta ? { data: meta as Record<string, unknown> } : {}),
-      },
-    });
-    return { error: error?.message ?? null, hasSession: Boolean(data.session) };
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/feed`,
+          ...(meta ? { data: meta as Record<string, unknown> } : {}),
+        },
+      });
+      return { error: error ? authErrorMessage(error) : null, hasSession: Boolean(data.session) };
+    } catch (error) {
+      return { error: authErrorMessage(error), hasSession: false };
+    }
   };
 
 
