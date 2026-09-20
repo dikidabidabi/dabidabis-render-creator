@@ -2588,12 +2588,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         layers: bound.layers,
         roofs: (sketch.roofs ?? []).filter((roof) => roof.levelId !== lvlId),
         stairs: (sketch.stairs ?? []).filter((stair) => stair.levelId !== lvlId && stair.toLevelId !== lvlId),
+        doors: (sketch.doors ?? []).filter((door) => door.levelId !== lvlId),
+        windows: (sketch.windows ?? []).filter((window) => window.levelId !== lvlId),
         imageReferences: (sketch.imageReferences ?? []).filter((ref) => ref.levelId !== lvlId),
         detailAreas: (sketch.detailAreas ?? []).filter((area) => area.levelId !== lvlId),
       });
       toast.success("Level dihapus");
     },
-    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.imageReferences, sketch.detailAreas],
+    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.doors, sketch.windows, sketch.imageReferences, sketch.detailAreas],
   );
 
   const duplicateLevel = useCallback(
