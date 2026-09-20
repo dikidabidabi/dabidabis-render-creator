@@ -5625,6 +5625,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             windows={(sketch.windows ?? []).filter((window) => window.levelId === level.id)}
             pxPerM={pxPerM}
             sw={sw}
+            lines={lines}
+            edgeAttrs={sketch.edgeAttrs ?? {}}
           />
           <SolidWallPracticalColumns
             lines={lines}
@@ -7579,9 +7581,9 @@ function WindowNotation({
       let attachedMaterial: EdgeMaterial | undefined;
       let closestDistance = Infinity;
       if (lines && edgeAttrs) {
-        const segments = computeStraightSegments(lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })));
+        const segments = computeStraightSegments(lines);
         for (const segment of segments) {
-          const material = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+          const material = materialForEdgeSegment(segment, lines, edgeAttrs);
           if (!material) continue;
           const segmentDx = segment.b.x - segment.a.x, segmentDy = segment.b.y - segment.a.y;
           const segmentLength = Math.hypot(segmentDx, segmentDy);
@@ -7596,8 +7598,8 @@ function WindowNotation({
       const wallDepth = (((attachedMaterial && closestDistance <= 0.35 * pxPerM) ? WALL_THICK_MM[attachedMaterial] : 150) / 1000) * pxPerM;
       const halfDepth = wallDepth / 2;
       const jambWidth = 0.05 * pxPerM;
-      const glassStroke = detailed ? 0.01 * pxPerM : stroke;
-      const glassOffset = detailed ? Math.max(glassStroke * 0.8, 0.01 * pxPerM) : 0.018 * pxPerM;
+      const glassStroke = detailed ? Math.max(stroke * 0.72, 0.06) : stroke;
+      const glassOffset = 0.005 * pxPerM;
       const jamb = (cx: number, cy: number, direction: number) => [
         `${cx + nx * halfDepth},${cy + ny * halfDepth}`,
         `${cx - nx * halfDepth},${cy - ny * halfDepth}`,
@@ -7613,7 +7615,14 @@ function WindowNotation({
         {Array.from({ length: Math.max(0, leaves - 1) }, (_, index) => {
           const t = (index + 1) / leaves;
           const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
-          return <rect key={`mullion-${index}`} x={cx - dx * jambWidth / 2 - nx * halfDepth} y={cy - dy * jambWidth / 2 - ny * halfDepth} width={jambWidth} height={wallDepth} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} transform={`rotate(${Math.atan2(dy, dx) * 180 / Math.PI} ${cx} ${cy})`} />;
+          const halfJamb = jambWidth / 2;
+          const points = [
+            `${cx - dx * halfJamb + nx * halfDepth},${cy - dy * halfJamb + ny * halfDepth}`,
+            `${cx + dx * halfJamb + nx * halfDepth},${cy + dy * halfJamb + ny * halfDepth}`,
+            `${cx + dx * halfJamb - nx * halfDepth},${cy + dy * halfJamb - ny * halfDepth}`,
+            `${cx - dx * halfJamb - nx * halfDepth},${cy - dy * halfJamb - ny * halfDepth}`,
+          ].join(" ");
+          return <polygon key={`mullion-${index}`} points={points} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />;
         })}
       </g>;
     })}
