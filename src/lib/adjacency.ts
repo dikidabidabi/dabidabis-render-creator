@@ -21,9 +21,9 @@ export type RoomNode = {
 export type RoomLink = {
   source: string; // layerId
   target: string; // layerId
-  /** Bobot tebal garis. 1 = adjacency biasa, 2 = ada pintu. */
+  /** Bobot simulasi; gaya visual ditentukan oleh `relation`. */
   weight: number;
-  hasDoor: boolean;
+  relation: "direct" | "door" | "wall";
 };
 
 function segDistSq(p: Pt, a: Pt, b: Pt): number {
@@ -61,6 +61,52 @@ function polygonMinDist(A: Pt[], B: Pt[]): number {
     }
   }
   return Math.sqrt(best);
+}
+
+function pointPolygonPerimeterDist(p: Pt, poly: Pt[]): number {
+  let bestSq = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    bestSq = Math.min(bestSq, segDistSq(p, poly[i], poly[(i + 1) % poly.length]));
+  }
+  return Math.sqrt(bestSq);
+}
+
+/** Garis pembatas dianggap berada di antara dua ruang bila sebagian panjangnya
+ * mengikuti kedua perimeter. Syarat dua sampel yang terpisah menghindari garis
+ * di sudut pertemuan ruang terbaca sebagai dinding pemisah. */
+function hasSharedBoundaryLine(
+  roomA: RoomLike,
+  roomB: RoomLike,
+  lines: BoundaryLineLike[],
+  tolerancePx: number,
+): boolean {
+  const boundaryTolerance = Math.max(1, tolerancePx * 0.55);
+  for (const line of lines) {
+    const length = Math.hypot(line.b.x - line.a.x, line.b.y - line.a.y);
+    if (length < 1e-6) continue;
+    const sampleCount = Math.max(4, Math.min(80, Math.ceil(length / Math.max(1, boundaryTolerance * 0.5))));
+    let firstMatch = -1;
+    let lastMatch = -1;
+    for (let i = 0; i <= sampleCount; i++) {
+      const t = i / sampleCount;
+      const p = {
+        x: line.a.x + (line.b.x - line.a.x) * t,
+        y: line.a.y + (line.b.y - line.a.y) * t,
+      };
+      if (
+        pointPolygonPerimeterDist(p, roomA.points) <= boundaryTolerance
+        && pointPolygonPerimeterDist(p, roomB.points) <= boundaryTolerance
+      ) {
+        if (firstMatch < 0) firstMatch = i;
+        lastMatch = i;
+      }
+    }
+    if (firstMatch >= 0 && lastMatch > firstMatch) {
+      const matchedLength = ((lastMatch - firstMatch) / sampleCount) * length;
+      if (matchedLength >= Math.max(1, boundaryTolerance * 0.5)) return true;
+    }
+  }
+  return false;
 }
 
 function polygonCentroid(pts: Pt[]): Pt {
@@ -109,11 +155,18 @@ export type DoorLike = {
   a: Pt; b: Pt; nx: number; ny: number; widthCm: number; levelId?: string;
 };
 
+export type BoundaryLineLike = {
+  a: Pt;
+  b: Pt;
+  levelId?: string;
+};
+
 /** Bangun nodes + edges adjacency dari ruang-ruang pada satu level. */
 export function buildBubbleGraph(
   rooms: RoomLike[],
   doors: DoorLike[],
   tolerancePx: number,
+  boundaryLines: BoundaryLineLike[] = [],
 ): { nodes: RoomNode[]; links: RoomLink[] } {
   const nodes: RoomNode[] = rooms.map((r) => {
     const c = polygonCentroid(r.points);
@@ -131,7 +184,8 @@ export function buildBubbleGraph(
   const linkMap = new Map<string, RoomLink>();
   const keyOf = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-  // 1) Adjacency berbasis jarak perimeter.
+  // 1) Adjacency berbasis jarak perimeter. Garis pembatas membedakan ruang
+  //    terbuka langsung dari ruang yang dipisahkan dinding.
   for (let i = 0; i < rooms.length; i++) {
     for (let j = i + 1; j < rooms.length; j++) {
       const A = rooms[i], B = rooms[j];
@@ -139,7 +193,13 @@ export function buildBubbleGraph(
       const d = polygonMinDist(A.points, B.points);
       if (d <= tolerancePx) {
         const k = keyOf(A.id, B.id);
-        linkMap.set(k, { source: A.id, target: B.id, weight: 1, hasDoor: false });
+        const relation = hasSharedBoundaryLine(A, B, boundaryLines, tolerancePx) ? "wall" : "direct";
+        linkMap.set(k, {
+          source: A.id,
+          target: B.id,
+          weight: relation === "direct" ? 2.2 : 1,
+          relation,
+        });
       }
     }
   }
@@ -164,10 +224,10 @@ export function buildBubbleGraph(
     const k = keyOf(roomA.id, roomB.id);
     const existing = linkMap.get(k);
     if (existing) {
-      existing.hasDoor = true;
+      existing.relation = "door";
       existing.weight = 2;
     } else {
-      linkMap.set(k, { source: roomA.id, target: roomB.id, weight: 2, hasDoor: true });
+      linkMap.set(k, { source: roomA.id, target: roomB.id, weight: 2, relation: "door" });
     }
   }
 

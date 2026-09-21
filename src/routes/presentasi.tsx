@@ -4206,7 +4206,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
 
 // ---- Bubble Diagram (Diagram Hubungan Ruang) ----
 type SimNode = SimulationNodeDatum & RoomNode & { r: number };
-type SimLink = SimulationLinkDatum<SimNode> & { weight: number; hasDoor: boolean };
+type SimLink = SimulationLinkDatum<SimNode> & { weight: number; relation: RoomLink["relation"] };
 
 const BUBBLE_VB_W = 1240;
 const BUBBLE_VB_H = 720;
@@ -4224,6 +4224,7 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
     (l) => l.levelId === level.id && !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name) && l.points.length >= 3,
   );
   const doorsOnLevel = (sketch.doors ?? []).filter((d) => d.levelId === level.id);
+  const boundaryLinesOnLevel = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
 
   // Tolerance ~ 1 m (anggap ruang yang dindingnya berjarak ≤ 1m sebagai bertetangga).
   const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
@@ -4243,11 +4244,12 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
         levelId: l.levelId,
       };
     });
-    return buildBubbleGraph(rooms, doorsOnLevel, tolerancePx);
+    return buildBubbleGraph(rooms, doorsOnLevel, tolerancePx, boundaryLinesOnLevel);
     // re-compute when any room polygon changes or doors change
   }, [
     JSON.stringify(layersOnLevel.map((l) => ({ id: l.id, n: l.name, a: l.areaM2, p: l.points, c: l.coefficient }))),
     JSON.stringify(doorsOnLevel),
+    JSON.stringify(boundaryLinesOnLevel),
     tolerancePx,
   ]);
 
@@ -4276,7 +4278,7 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
         const s = byId.get(l.source);
         const t = byId.get(l.target);
         if (!s || !t) return null;
-        return { source: s, target: t, weight: l.weight, hasDoor: l.hasDoor } as SimLink;
+        return { source: s, target: t, weight: l.weight, relation: l.relation } as SimLink;
       })
       .filter((x): x is SimLink => x !== null);
 
@@ -4318,7 +4320,9 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 
   // Statistik kecil.
   const totalArea = layersOnLevel.reduce((s, l) => s + l.areaM2, 0);
-  const doorCount = links.filter((l) => l.hasDoor).length;
+  const directCount = links.filter((l) => l.relation === "direct").length;
+  const doorCount = links.filter((l) => l.relation === "door").length;
+  const wallCount = links.filter((l) => l.relation === "wall").length;
   const adjCount = links.length;
 
   return (
@@ -4341,15 +4345,17 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
             const s = l.source as SimNode;
             const t = l.target as SimNode;
             if (s.x == null || s.y == null || t.x == null || t.y == null) return null;
-            const sw = l.hasDoor ? 3.2 : 1.4;
-            const color = l.hasDoor ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.45)";
+            const isDirect = l.relation === "direct";
+            const isDoor = l.relation === "door";
+            const sw = isDirect ? 4 : isDoor ? 3.2 : 1.4;
+            const color = isDirect ? "#17365d" : isDoor ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.45)";
             return (
               <line
                 key={`e-${i}`}
                 x1={s.x} y1={s.y} x2={t.x} y2={t.y}
                 stroke={color}
                 strokeWidth={sw}
-                strokeDasharray={l.hasDoor ? undefined : "4 4"}
+                strokeDasharray={l.relation === "wall" ? "4 4" : undefined}
               />
             );
           })}
@@ -4396,7 +4402,7 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
             {nodes.length} Ruang
           </div>
           <div style={{ fontSize: 13, color: "#444", marginTop: 4 }}>
-            {adjCount} relasi adjacency · {doorCount} hubungan pintu
+            {adjCount} relasi · {directCount} langsung · {doorCount} pintu · {wallCount} dinding
           </div>
           <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
             Total luas: {totalArea.toFixed(1)} m²
@@ -4408,6 +4414,10 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
             Legenda
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#17365d" strokeWidth={4} /></svg>
+            <span style={{ fontSize: 12 }}>Hubungan langsung</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
             <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#141414" strokeWidth={3.2} /></svg>
             <span style={{ fontSize: 12 }}>Terhubung pintu</span>
           </div>
