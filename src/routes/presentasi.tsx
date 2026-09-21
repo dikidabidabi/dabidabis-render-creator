@@ -48,6 +48,7 @@ import {
 } from "@/lib/structural-grid";
 import {
   computeStraightSegments,
+  edgeMaterialForSegment,
   segmentIdFor,
   intersectSegmentWithCut,
   type EdgeMaterial,
@@ -6966,10 +6967,10 @@ function materialForEdgeSegment(
   sourceLines: Line[],
   edgeAttrs: Record<string, EdgeMaterial>,
 ): EdgeMaterial | undefined {
-  const exact = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+  const exact = edgeMaterialForSegment(edgeAttrs, segment);
   if (exact) return exact;
   const source = sourceLines[segment.sourceLineIndex];
-  return source ? edgeAttrs[segmentIdFor(source.a, source.b)] : undefined;
+  return source ? edgeMaterialForSegment(edgeAttrs, source) : undefined;
 }
 
 function DetailVoidNotation({
@@ -7408,7 +7409,7 @@ function DoorNotation({
           const midpoint = { x: (ax + bx) / 2, y: (ay + by) / 2 };
           let best: { material: EdgeMaterial; distance: number } | undefined;
           for (const segment of computeStraightSegments(lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })))) {
-            const material = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+            const material = edgeMaterialForSegment(edgeAttrs, segment);
             if (!material) continue;
             const sx = segment.b.x - segment.a.x, sy = segment.b.y - segment.a.y;
             const segmentLength = Math.hypot(sx, sy);

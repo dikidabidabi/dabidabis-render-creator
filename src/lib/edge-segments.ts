@@ -46,6 +46,19 @@ export function segmentIdFor(a: Point, b: Point): string {
   return aKey <= bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
 }
 
+/** Kunci material yang terisolasi per level. Garis dengan koordinat sama pada
+ * level berbeda tidak boleh berbagi atribut material. */
+export function edgeMaterialKey(levelId: string | undefined, a: Point, b: Point): string {
+  return `${levelId ?? "__tanpa_level__"}::${segmentIdFor(a, b)}`;
+}
+
+export function edgeMaterialForSegment(
+  attrs: Record<string, EdgeMaterial>,
+  segment: Pick<EdgeSegment, "a" | "b" | "levelId">,
+): EdgeMaterial | undefined {
+  return attrs[edgeMaterialKey(segment.levelId, segment.a, segment.b)];
+}
+
 /** Interseksi dua segmen (lurus). Mengembalikan parameter t pada AB ([0..1]) jika
  *  terjadi pemotongan strict (bukan endpoint), null jika tidak. */
 function intersectParam(
@@ -89,10 +102,10 @@ export function computeStraightSegments(lines: StraightLineInput[]): EdgeSegment
     const ts: number[] = [0, 1];
     for (const j of straightIdx) {
       if (j === i) continue;
-      // Batasi split per level — material berbasis denah; potongan di level lain
-      // tidak relevan. Tetap pecah lintas-level kalau kedua garis memang berpotong
-      // di sketsa yang sama (untuk konsistensi visual saat picking di kanvas).
       const lj = lines[j];
+      // Topologi material sepenuhnya terisolasi per level. Garis pada level lain
+      // tidak boleh memecah segmen atau mengubah identitas garis level ini.
+      if (ln.levelId !== lj.levelId) continue;
       const t = intersectParam(ln.a, ln.b, lj.a, lj.b);
       if (t != null) ts.push(t);
     }
