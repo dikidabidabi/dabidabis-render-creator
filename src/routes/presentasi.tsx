@@ -4348,7 +4348,7 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
             const isDirect = l.relation === "direct";
             const isDoor = l.relation === "door";
             const sw = isDirect ? 4 : isDoor ? 3.2 : 1.4;
-            const color = isDirect ? "#17365d" : isDoor ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.45)";
+            const color = isDirect ? "#19bfff" : isDoor ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.45)";
             return (
               <line
                 key={`e-${i}`}
@@ -4414,7 +4414,7 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
             Legenda
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#17365d" strokeWidth={4} /></svg>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#19bfff" strokeWidth={4} /></svg>
             <span style={{ fontSize: 12 }}>Hubungan langsung</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>

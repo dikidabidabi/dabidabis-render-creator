@@ -63,6 +63,44 @@ function polygonMinDist(A: Pt[], B: Pt[]): number {
   return Math.sqrt(best);
 }
 
+/** Panjang lintasan terpanjang pada perimeter A yang berada dekat perimeter B.
+ *  Berbeda dari jarak titik minimum, ini tetap mengenali dua sisi panjang yang
+ *  sejajar/berimpit meski vertex keduanya tidak saling berdekatan, sekaligus
+ *  menghindari dua ruang yang hanya bertemu pada satu sudut. */
+function longestNearbyPerimeterRun(A: Pt[], B: Pt[], tolerancePx: number): number {
+  let longest = 0;
+  const sampleStep = Math.max(1, tolerancePx * 0.2);
+  for (let i = 0; i < A.length; i++) {
+    const a = A[i];
+    const b = A[(i + 1) % A.length];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < 1e-6) continue;
+    const sampleCount = Math.max(2, Math.ceil(length / sampleStep));
+    const stepLength = length / sampleCount;
+    let run = 0;
+    for (let sample = 0; sample <= sampleCount; sample++) {
+      const t = sample / sampleCount;
+      const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      if (pointPolygonPerimeterDist(p, B) <= tolerancePx) {
+        run += stepLength;
+        longest = Math.max(longest, run);
+      } else {
+        run = 0;
+      }
+    }
+  }
+  return longest;
+}
+
+function polygonsShareSide(A: Pt[], B: Pt[], tolerancePx: number): boolean {
+  if (polygonMinDist(A, B) > tolerancePx) return false;
+  const requiredRun = Math.max(2, tolerancePx * 0.3);
+  return Math.max(
+    longestNearbyPerimeterRun(A, B, tolerancePx),
+    longestNearbyPerimeterRun(B, A, tolerancePx),
+  ) >= requiredRun;
+}
+
 function pointPolygonPerimeterDist(p: Pt, poly: Pt[]): number {
   let bestSq = Infinity;
   for (let i = 0; i < poly.length; i++) {
@@ -190,8 +228,7 @@ export function buildBubbleGraph(
     for (let j = i + 1; j < rooms.length; j++) {
       const A = rooms[i], B = rooms[j];
       if (A.points.length < 3 || B.points.length < 3) continue;
-      const d = polygonMinDist(A.points, B.points);
-      if (d <= tolerancePx) {
+      if (polygonsShareSide(A.points, B.points, tolerancePx)) {
         const k = keyOf(A.id, B.id);
         const relation = hasSharedBoundaryLine(A, B, boundaryLines, tolerancePx) ? "wall" : "direct";
         linkMap.set(k, {
