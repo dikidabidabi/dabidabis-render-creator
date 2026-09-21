@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car } from "lucide-react";
+import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { patchStoredSketch } from "@/lib/sketch-store";
+import { newFunctionZone, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import {
   type StructuralGrid,
   computeAllStructuralStats,
@@ -42,6 +45,7 @@ type Layer = {
   levelId?: string;
   coefficient?: number;
   isReferenceRoom?: boolean;
+  functionZoneId?: string;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Line = { a: Point; b: Point; kind?: string; levelId?: string };
@@ -62,6 +66,7 @@ type Sketch = {
   structuralGridExtras?: StructuralGrid[];
   parkingAreas?: ParkingArea[];
   mmGridRotation?: number;
+  functionZones?: FunctionZone[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -768,13 +773,49 @@ function DeviationRow({ dev, invert }: { dev: number; invert?: boolean }) {
 
 
 function LevelDetailSection({ sketch }: { sketch: Sketch }) {
+  const [zones, setZones] = useState<FunctionZone[]>(() => normalizeFunctionZones(sketch.functionZones));
+  const [assignments, setAssignments] = useState<Record<string, string>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  useEffect(() => {
+    setZones(normalizeFunctionZones(sketch.functionZones));
+    setAssignments(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
+  }, [sketch.id, sketch.updatedAt]);
+  const persist = useCallback(async (nextZones: FunctionZone[], nextAssignments: Record<string, string>) => {
+    await patchStoredSketch(sketch.id, (stored) => ({
+      ...stored,
+      functionZones: nextZones,
+      layers: Array.isArray(stored.layers)
+        ? stored.layers.map((layer: any) => {
+            const functionZoneId = nextAssignments[String(layer.id)] || undefined;
+            const next = { ...layer };
+            if (functionZoneId) next.functionZoneId = functionZoneId;
+            else delete next.functionZoneId;
+            return next;
+          })
+        : stored.layers,
+    }));
+  }, [sketch.id]);
+  const updateZone = (zoneId: string, name: string) => {
+    setZones((current) => current.map((zone) => zone.id === zoneId ? { ...zone, name } : zone));
+  };
+  const removeZone = (zoneId: string) => {
+    const nextZones = zones.filter((zone) => zone.id !== zoneId);
+    const nextAssignments = Object.fromEntries(Object.entries(assignments).map(([roomId, value]) => [roomId, value === zoneId ? "" : value]));
+    setZones(nextZones);
+    setAssignments(nextAssignments);
+    void persist(nextZones, nextAssignments);
+  };
+  const assignZone = (roomId: string, zoneId: string) => {
+    const nextAssignments = { ...assignments, [roomId]: zoneId === "__none__" ? "" : zoneId };
+    setAssignments(nextAssignments);
+    void persist(zones, nextAssignments);
+  };
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
   return (
-    <div className="max-h-[420px] space-y-3 overflow-y-auto pr-2 text-sm">
+    <div className="max-h-[520px] space-y-3 overflow-y-auto pr-2 text-sm">
       {levels.map((lv) => {
         const items = ruang.filter((l) => l.levelId === lv.id);
         const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
@@ -790,10 +831,12 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
             {items.length === 0 ? (
               <div className="px-2 py-2 text-xs text-muted-foreground">Belum ada ruang.</div>
             ) : (
-              <table className="w-full text-xs">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px] text-xs">
                 <thead className="text-muted-foreground">
                   <tr className="border-b border-border/60">
                     <th className="px-2 py-1 text-left font-normal">Ruang</th>
+                    <th className="px-2 py-1 text-left font-normal">Zona Fungsi</th>
                     <th className="px-2 py-1 text-right font-normal">Koef.</th>
                     <th className="px-2 py-1 text-right font-normal">Luas</th>
                     <th className="px-2 py-1 text-right font-normal">Efektif</th>
@@ -805,6 +848,15 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
                     return (
                       <tr key={r.id} className="border-b border-border/40 last:border-0">
                         <td className="px-2 py-1">{r.name}</td>
+                        <td className="min-w-36 px-2 py-1">
+                          <Select value={assignments[r.id] || "__none__"} onValueChange={(value) => assignZone(r.id, value)} disabled={zones.length === 0}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Belum dipilih" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Belum dipilih</SelectItem>
+                              {zones.map((zone) => <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{coef}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2)}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2 * coef)}</td>
@@ -812,16 +864,40 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
                     );
                   })}
                   <tr className="bg-muted/20 font-medium">
-                    <td className="px-2 py-1" colSpan={2}>Total</td>
+                    <td className="px-2 py-1" colSpan={3}>Total</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalAsli)}</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalEfektif)}</td>
                   </tr>
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         );
       })}
+      <div className="rounded-md border border-border/60 p-2">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-xs font-medium">Tipologi Zona Fungsi</span>
+          <Button type="button" variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => {
+            const nextZones = [...zones, newFunctionZone(zones)];
+            setZones(nextZones);
+            void persist(nextZones, assignments);
+          }}><Plus className="h-3.5 w-3.5" />Tambah</Button>
+        </div>
+        {zones.length === 0 ? <p className="text-xs text-muted-foreground">Tambahkan zona untuk mengelompokkan ruang.</p> : (
+          <div className="space-y-2">
+            {zones.map((zone) => <div key={zone.id} className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: zone.color }} />
+              <Input value={zone.name} onChange={(event) => updateZone(zone.id, event.target.value)} onBlur={() => {
+                const cleaned = zones.map((item) => item.id === zone.id ? { ...item, name: item.name.trim() || "Zona Tanpa Nama" } : item);
+                setZones(cleaned);
+                void persist(cleaned, assignments);
+              }} className="h-8 text-xs" aria-label={`Nama ${zone.name}`} />
+              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeZone(zone.id)} title={`Hapus ${zone.name}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+            </div>)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -892,15 +968,16 @@ function downloadSketchExcel(sketch: Sketch, data: Stats) {
     if (items.length === 0) continue;
     const rows: (string | number)[][] = items.map((r) => {
       const coef = r.coefficient ?? 1;
-      return [r.name, coef, Number(r.areaM2.toFixed(2)), Number((r.areaM2 * coef).toFixed(2))];
+      const zoneName = normalizeFunctionZones(sketch.functionZones).find((zone) => zone.id === r.functionZoneId)?.name ?? "";
+      return [r.name, zoneName, coef, Number(r.areaM2.toFixed(2)), Number((r.areaM2 * coef).toFixed(2))];
     });
     const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
     const totalEfektif = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
-    rows.push(["TOTAL", "", Number(totalAsli.toFixed(2)), Number(totalEfektif.toFixed(2))]);
+    rows.push(["TOTAL", "", "", Number(totalAsli.toFixed(2)), Number(totalEfektif.toFixed(2))]);
     sections.push(
       tableHtml(
         `Rincian — ${lv.name} (${fmt(lv.mdpl, 1)} Elev)`,
-        ["Ruang", "Koef.", "Luas (m²)", "Efektif (m²)"],
+        ["Ruang", "Zona Fungsi", "Koef.", "Luas (m²)", "Efektif (m²)"],
         rows,
       ),
     );

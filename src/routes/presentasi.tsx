@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
+import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
@@ -125,6 +126,7 @@ type Layer = {
   isReferenceRoom?: boolean;
   hidden?: boolean;
   locked?: boolean;
+  functionZoneId?: string;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
@@ -153,6 +155,7 @@ type Sketch = {
   detailAreas?: DetailArea[];
   mmGridRotation?: number;
   linkedMasterplan?: { rootLayerId: string };
+  functionZones?: FunctionZone[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -4477,6 +4480,15 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     return Math.max(...xs) >= slide.bounds.minX && Math.min(...xs) <= slide.bounds.maxX
       && Math.max(...ys) >= slide.bounds.minY && Math.min(...ys) <= slide.bounds.maxY;
   });
+  const functionZones = normalizeFunctionZones(sketch.functionZones);
+  const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
+  const detailZoneStats = functionZones.flatMap((zone) => {
+    const areaM2 = levelLayers
+      .filter((layer) => layer.functionZoneId === zone.id && !isLahan(layer.name) && !isVoid(layer.name) && !isTaman(layer.name))
+      .reduce((sum, layer) => sum + (layer.areaM2 || 0), 0);
+    return areaM2 > 0 ? [{ ...zone, areaM2 }] : [];
+  });
+  const detailZonedAreaM2 = detailZoneStats.reduce((sum, zone) => sum + zone.areaM2, 0);
   const lines = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
   const doors = (sketch.doors ?? []).filter((door) => door.levelId === level.id);
   const windows = (sketch.windows ?? []).filter((window) => window.levelId === level.id);
@@ -4547,8 +4559,15 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         </defs>
         <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
         {rooms.map((room) => {
-          const fill = roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
-          return <polygon key={room.id} points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} fill={area.floorHatch ? `url(#floor-grid-${patternId})` : fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />;
+          const zone = room.functionZoneId ? functionZoneById.get(room.functionZoneId) : undefined;
+          const fill = zone
+            ? functionZoneColor(zone.color, 0.28)
+            : roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
+          const points = room.points.map((p) => `${p.x},${p.y}`).join(" ");
+          return <g key={room.id}>
+            <polygon points={points} fill={fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />
+            {area.floorHatch && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
+          </g>;
         })}
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
@@ -4659,6 +4678,17 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>
+      {detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
+        <Donut segments={detailZoneStats.map((zone) => ({ value: zone.areaM2, color: zone.color }))} size={86} thickness={12} centerValue="100%" centerLabel="Zona" />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>Zona Fungsi · {level.name}</div>
+          {detailZoneStats.map((zone) => <div key={zone.id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "Manrope, sans-serif", fontSize: 10, lineHeight: 1.35 }}>
+            <span style={{ width: 8, height: 8, flexShrink: 0, borderRadius: "50%", background: zone.color }} />
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{zone.name}</span>
+            <strong>{fmt(detailZonedAreaM2 > 0 ? (zone.areaM2 / detailZonedAreaM2) * 100 : 0, 1)}%</strong>
+          </div>)}
+        </div>
+      </div>}
       {area.showKeyplan !== false && <div style={{ position: "absolute", right: 28, bottom: 24, height: "16.666%", width: "15%", minWidth: 120, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 6 }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 12, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>KEY PLAN · {level.name}</div>
         <svg viewBox={`${keyPlanBounds.minX} ${keyPlanBounds.minY} ${keyPlanW} ${keyPlanH}`} preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0, width: "100%", display: "block", background: "#ffffff" }}>
@@ -4713,6 +4743,15 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
     ? layers.filter((l) => l.name.trim().toLowerCase() === "tangga evk" && l.points.length >= 3)
     : [];
   const sw = Math.max(w, h);
+  const functionZones = normalizeFunctionZones(sketch.functionZones);
+  const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
+  const zoneStats = functionZones.flatMap((zone) => {
+    const areaM2 = layers
+      .filter((layer) => layer.functionZoneId === zone.id && !isLahan(layer.name) && !isVoid(layer.name) && !isTaman(layer.name))
+      .reduce((sum, layer) => sum + (layer.areaM2 || 0), 0);
+    return areaM2 > 0 ? [{ ...zone, areaM2 }] : [];
+  });
+  const zonedAreaM2 = zoneStats.reduce((sum, zone) => sum + zone.areaM2, 0);
 
   // Convex hull of all non-lahan room vertices for outer dimensions
   const roomLayers = layers.filter((l) => !isLahan(l.name));
@@ -4803,11 +4842,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 </g>
               );
             }
+            const zone = l.functionZoneId ? functionZoneById.get(l.functionZoneId) : undefined;
             const overrideFill = roomFillOverride(l.name, "0.45");
             const overrideStroke = roomStrokeOverride(l.name);
             const baseCol = colorForRoomName(l.name) ?? l.color;
-            const fillCol = overrideFill ?? baseCol.replace("ALPHA", "0.28");
-            const strokeCol = overrideStroke ?? baseCol.replace("ALPHA", "1");
+            const fillCol = zone ? functionZoneColor(zone.color, 0.32) : overrideFill ?? baseCol.replace("ALPHA", "0.28");
+            const strokeCol = zone ? functionZoneColor(zone.color, 1) : overrideStroke ?? baseCol.replace("ALPHA", "1");
             return (
               <g key={l.id}>
                 <polygon
@@ -5677,6 +5717,17 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           })}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
+        {zoneStats.length > 0 && <div style={{ position: "absolute", left: 18, bottom: 18, width: 260, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", display: "flex", alignItems: "center", gap: 12 }}>
+          <Donut segments={zoneStats.map((zone) => ({ value: zone.areaM2, color: zone.color }))} size={86} thickness={12} centerValue="100%" centerLabel="Zona" />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>Zona Fungsi</div>
+            {zoneStats.map((zone) => <div key={zone.id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "Manrope, sans-serif", fontSize: 10, lineHeight: 1.35 }}>
+              <span style={{ width: 8, height: 8, flexShrink: 0, borderRadius: "50%", background: zone.color }} />
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{zone.name}</span>
+              <strong>{fmt(zonedAreaM2 > 0 ? (zone.areaM2 / zonedAreaM2) * 100 : 0, 1)}%</strong>
+            </div>)}
+          </div>
+        </div>}
         </div>
       </div>
       <div style={{ width: (layers.filter((l) => !isLahan(l.name)).length > 60 ? 420 : layers.filter((l) => !isLahan(l.name)).length > 32 ? 360 : 300), flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>

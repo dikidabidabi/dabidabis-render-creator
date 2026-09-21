@@ -180,6 +180,7 @@ import {
   distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
+import { normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { MasterplanSketch3DPreview } from "@/components/masterplan-sketch-3d-preview";
 import { useProjectStore } from "@/store/project-store";
 import { exportBuildingToSketch, syncSketchReferenceToMasterplan, syncMasterplanToSketches } from "@/lib/masterplan-sketch-sync";
@@ -284,6 +285,7 @@ type Layer = {
   isReferenceRoom?: boolean;
   /** Asal masterplan (untuk sinkronisasi dua arah). */
   refSourceLayerId?: string;
+  functionZoneId?: string;
 };
 
 type Level = {
@@ -459,6 +461,7 @@ type Sketch = {
   clusterGraph?: { nodes: { id: string; levelId: string; name: string; areaM2: number }[]; links: { source: string; target: string }[] };
   /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
   linkedMasterplan?: { rootLayerId: string };
+  functionZones?: FunctionZone[];
 };
 
 type ImageReference = {
@@ -971,7 +974,8 @@ function normalizeSketch(s: any): Sketch {
     const floors = Number.isFinite(fRaw) && fRaw >= 1 ? Math.max(1, Math.round(fRaw)) : 1;
     const isRef = (base as any).isReferenceRoom === true;
     const refSrc = typeof (base as any).refSourceLayerId === "string" ? (base as any).refSourceLayerId : undefined;
-    return { ...base, coefficient: coef, floors, ...(isRef ? { isReferenceRoom: true } : {}), ...(refSrc ? { refSourceLayerId: refSrc } : {}) };
+    const functionZoneId = typeof (base as any).functionZoneId === "string" ? (base as any).functionZoneId : undefined;
+    return { ...base, coefficient: coef, floors, ...(isRef ? { isReferenceRoom: true } : {}), ...(refSrc ? { refSourceLayerId: refSrc } : {}), ...(functionZoneId ? { functionZoneId } : {}) };
   });
   ({ levels, layers } = bindLahanLayersToMdplZero(levels, layers));
   return {
@@ -998,6 +1002,7 @@ function normalizeSketch(s: any): Sketch {
     linkedMasterplan: s?.linkedMasterplan && typeof s.linkedMasterplan.rootLayerId === "string"
       ? { rootLayerId: s.linkedMasterplan.rootLayerId }
       : undefined,
+    functionZones: normalizeFunctionZones(s?.functionZones),
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
