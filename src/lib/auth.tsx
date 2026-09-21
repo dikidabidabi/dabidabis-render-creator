@@ -3,6 +3,8 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchFormulaSettings, loadFormulaSettings } from "@/lib/formula-settings";
 
+const AUTH_BOOT_TIMEOUT_MS = 4_000;
+
 export type SignUpMeta = {
   account_type: "perorangan" | "korporasi";
   professional_level?: string | null;
@@ -41,20 +43,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    let active = true;
+    const finishAuthBoot = (s: Session | null) => {
+      if (!active) return;
       setSession(s);
       setUser(s?.user ?? null);
       loadFormulaSettings(s?.user?.id ?? null);
       if (s?.user?.id) void fetchFormulaSettings(s.user.id);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      loadFormulaSettings(data.session?.user?.id ?? null);
-      if (data.session?.user?.id) void fetchFormulaSettings(data.session.user.id);
       setLoading(false);
+    };
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      finishAuthBoot(s);
     });
-    return () => sub.subscription.unsubscribe();
+    const timer = window.setTimeout(() => finishAuthBoot(null), AUTH_BOOT_TIMEOUT_MS);
+    void supabase.auth.getSession().then(
+      ({ data }) => finishAuthBoot(data.session),
+      () => finishAuthBoot(null),
+    ).finally(() => window.clearTimeout(timer));
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
