@@ -32,24 +32,6 @@ const hydratePromises = new Map<string, Promise<void>>();
 let patched = false;
 const debounceTimers = new Map<string, number>();
 const memoryCache = new Map<string, string>();
-const IDB_OPERATION_TIMEOUT_MS = 8_000;
-
-function withStorageTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(`${label} melewati batas waktu`)), IDB_OPERATION_TIMEOUT_MS);
-    operation.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 function isQuotaError(error: unknown): boolean {
   const maybe = error as { name?: string; code?: number } | null;
   return (
@@ -364,22 +346,22 @@ export function hydrateFromIndexedDB(owner: string = GUEST_OWNER): Promise<void>
 
     try {
       const db = getStore();
-      await withStorageTimeout(reclaimMisattributed(owner, db), "Pemulihan proyek");
+      await reclaimMisattributed(owner, db);
       const idbKeys: string[] = [];
-      await withStorageTimeout(db.iterate<string, void>((_value, key) => {
+      await db.iterate<string, void>((_value, key) => {
         if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
-      }), "Pembacaan daftar proyek");
+      });
 
       if (idbKeys.length === 0) {
-        await withStorageTimeout(adoptLegacyIfEligible(owner, db), "Migrasi proyek lama");
-        await withStorageTimeout(db.iterate<string, void>((_value, key) => {
+        await adoptLegacyIfEligible(owner, db);
+        await db.iterate<string, void>((_value, key) => {
           if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
-        }), "Pembacaan proyek lama");
+        });
       }
 
       for (const k of idbKeys) {
         try {
-          const v = await withStorageTimeout(db.getItem<string>(k), "Pembacaan data proyek");
+          const v = await db.getItem<string>(k);
           if (typeof v === "string") {
             memoryCache.set(k, v);
             rawSet(k, v);

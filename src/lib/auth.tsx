@@ -3,8 +3,6 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchFormulaSettings, loadFormulaSettings } from "@/lib/formula-settings";
 
-const AUTH_BOOT_TIMEOUT_MS = 4_000;
-
 export type SignUpMeta = {
   account_type: "perorangan" | "korporasi";
   professional_level?: string | null;
@@ -55,14 +53,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       finishAuthBoot(s);
     });
-    const timer = window.setTimeout(() => finishAuthBoot(null), AUTH_BOOT_TIMEOUT_MS);
     void supabase.auth.getSession().then(
       ({ data }) => finishAuthBoot(data.session),
       () => finishAuthBoot(null),
-    ).finally(() => window.clearTimeout(timer));
+    );
     return () => {
       active = false;
-      window.clearTimeout(timer);
       sub.subscription.unsubscribe();
     };
   }, []);
