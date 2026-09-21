@@ -3494,10 +3494,17 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                       );
                     }
                     if (h.mat === "concrete150" || h.mat === "concrete200" || h.mat === "concrete300") {
+                      const finishPx = Math.min(bandW / 2, 0.015 * scalePxPerM);
+                      const coreW = Math.max(0, bandW - finishPx * 2);
                       return (
                         <g key={`mat-${b.id}-${idx}`}>
+                          <rect x={x} y={yTop} width={bandW} height={totalH} fill="#ffffff" stroke="none" />
+                          <rect x={x + finishPx} y={yTop} width={coreW} height={totalH}
+                            fill={`url(#concrete-dot-${slide.id})`} stroke="none" />
+                          <line x1={x + finishPx} y1={yTop} x2={x + finishPx} y2={yBot} stroke="#0a0a0a" strokeWidth={0.45} />
+                          <line x1={x + bandW - finishPx} y1={yTop} x2={x + bandW - finishPx} y2={yBot} stroke="#0a0a0a" strokeWidth={0.45} />
                           <rect x={x} y={yTop} width={bandW} height={totalH}
-                            fill={`url(#concrete-dot-${slide.id})`} stroke="#0a0a0a" strokeWidth={0.8} />
+                            fill="none" stroke="#0a0a0a" strokeWidth={0.8} />
                         </g>
                       );
                     }
@@ -7162,7 +7169,7 @@ function MaterialEdges({
   /** "base" = garis sketsa dasar saja; "overlay" = elemen ber-material saja
    *  di lapisan teratas; "all" = keduanya. */
   mode?: "base" | "overlay" | "all";
-  /** Detail arsitektur: finishing 15 mm di kedua sisi dan inti solid 120 mm. */
+  /** Detail arsitektur: finishing 15 mm di kedua sisi dinding solid. */
   detailSolidLayers?: boolean;
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
@@ -7259,9 +7266,20 @@ function MaterialEdges({
           );
         }
         if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
+          const coreHalf = Math.max(0, half - 0.015 * pxPerM);
+          const coreStart = { x: s.a.x - ux * half, y: s.a.y - uy * half };
+          const coreEnd = { x: s.b.x + ux * half, y: s.b.y + uy * half };
+          const coreA1 = { x: coreStart.x + nx * coreHalf, y: coreStart.y + ny * coreHalf };
+          const coreA2 = { x: coreStart.x - nx * coreHalf, y: coreStart.y - ny * coreHalf };
+          const coreB1 = { x: coreEnd.x + nx * coreHalf, y: coreEnd.y + ny * coreHalf };
+          const coreB2 = { x: coreEnd.x - nx * coreHalf, y: coreEnd.y - ny * coreHalf };
+          const corePts = `${coreA1.x},${coreA1.y} ${coreB1.x},${coreB1.y} ${coreB2.x},${coreB2.y} ${coreA2.x},${coreA2.y}`;
           return (
             <g key={`s-${s.id}`}>
-              <polygon points={pts} fill={`url(#concrete-dot-${patternId})`} stroke="none" />
+              <polygon points={pts} fill="#ffffff" stroke="none" />
+              <polygon points={corePts} fill={`url(#concrete-dot-${patternId})`} stroke="none" />
+              <line x1={coreA1.x} y1={coreA1.y} x2={coreB1.x} y2={coreB1.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
+              <line x1={coreA2.x} y1={coreA2.y} x2={coreB2.x} y2={coreB2.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
               <polygon points={pts} fill="none"
                 stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
             </g>
@@ -9156,6 +9174,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   const mPerPx = stackMetersPerPx(sketch.scale);
   const ascLevels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const displayNames = computeLevelDisplayNames(ascLevels, sketch.layers ?? []);
+  const functionZoneById = new Map(normalizeFunctionZones(sketch.functionZones).map((zone) => [zone.id, zone]));
 
   // Signature per source level: nama ruang + luas (m²) yang dibulatkan.
   const buildLayersOf = (levelId: string) =>
@@ -9227,8 +9246,9 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   type Anno = { at: { x: number; y: number }; label: string; floorIdx: number; num: number };
 
   const faces: Face[] = [];
+  const zoneFaces: Face[] = [];
   const annos: Anno[] = [];
-  const tipeRooms: { name: string; num: number }[][] = reps.map(() => []);
+  const tipeRooms: { name: string; num: number; zoneName: string; zoneColor: string }[][] = reps.map(() => []);
 
   type VConnEntry = { floorIdx: number; baseY: number; topY: number; kind: "tangga" | "lift" };
   const vconnMap = new Map<string, Map<string, VConnEntry[]>>();
@@ -9257,6 +9277,10 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
       const sideFill = ov
         ? (isAtapHijau(ly.name) || isTaman(ly.name) ? HIJAU_SIDE : ABU_SIDE)
         : side;
+      const zone = ly.functionZoneId ? functionZoneById.get(ly.functionZoneId) : undefined;
+      const roomColor = (colorForRoomName(ly.name) ?? ly.color ?? "rgba(180,180,180,ALPHA)").replace("ALPHA", "1");
+      const zoneTopFill = zone ? functionZoneColor(zone.color, 1) : roomColor;
+      const zoneSideFill = zone ? functionZoneColor(zone.color, 0.76) : roomColor;
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
         const b = pm[(i + 1) % pm.length];
@@ -9268,11 +9292,16 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
         ];
         const depth = (a.x + b.x + a.z + b.z) / 2 + baseY * 0.01;
         faces.push({ pts: quad, fill: sideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
+        zoneFaces.push({ pts: quad, fill: zoneSideFill, stroke: "rgba(0,0,0,0.45)", depth, sw: 0.5, kind: "side" });
       }
       const topPts = pm.map((p) => project(p.x, p.z, topY));
       const avg = pm.reduce((s, p) => s + p.x + p.z, 0) / pm.length;
       faces.push({
         pts: topPts, fill: topFill, stroke: "rgba(0,0,0,0.55)",
+        depth: avg + topY * 0.01, sw: 0.7, kind: "top",
+      });
+      zoneFaces.push({
+        pts: topPts, fill: zoneTopFill, stroke: "rgba(0,0,0,0.55)",
         depth: avg + topY * 0.01, sw: 0.7, kind: "top",
       });
 
@@ -9282,7 +9311,12 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
         const cx = pm.reduce((s, p) => s + p.x, 0) / pm.length;
         const cz = pm.reduce((s, p) => s + p.z, 0) / pm.length;
         annos.push({ at: project(cx, cz, topY), label: ly.name, floorIdx: idx, num: roomCounter });
-        tipeRooms[idx].push({ name: ly.name, num: roomCounter });
+        tipeRooms[idx].push({
+          name: ly.name,
+          num: roomCounter,
+          zoneName: zone?.name ?? "Belum ada zona",
+          zoneColor: zone?.color ?? roomColor,
+        });
       }
 
       if (isTangga(ly.name) || isLift(ly.name)) {
@@ -9367,6 +9401,7 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
 
   const faceLayer = (k: Face["kind"]) => (k === "top" ? 1 : 2);
   faces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
+  zoneFaces.sort((a, b) => faceLayer(a.kind) - faceLayer(b.kind) || a.depth - b.depth);
 
   // viewBox dari faces + vlines
   let vx0 = Infinity, vy0 = Infinity, vx1 = -Infinity, vy1 = -Infinity;
@@ -9406,89 +9441,41 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
   const COLOR_TANGGA = "#2563eb";
   const COLOR_LIFT = "#7f1d1d";
   const numR = fontPx * 0.9;
+  const renderAxonometric = (renderFaces: Face[], includeFloorLabels: boolean) => (
+    <svg viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+      {renderFaces.map((f, i) => {
+        if (f.holes && f.holes.length) {
+          const ring = (pts: { x: number; y: number }[]) =>
+            `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ") + " Z";
+          const d = [f.pts, ...f.holes].map(ring).join(" ");
+          return <path key={i} d={d} fill={f.fill} fillRule="evenodd" stroke={f.stroke} strokeWidth={baseStroke * f.sw * 2} strokeLinejoin="round" />;
+        }
+        return <polygon key={i} points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")} fill={f.fill} stroke={f.stroke} strokeWidth={baseStroke * f.sw * 2} strokeLinejoin="round" />;
+      })}
+      {vlines.map((vl, i) => {
+        const a = project(vl.x, vl.z, vl.yLo);
+        const b = project(vl.x, vl.z, vl.yHi);
+        return <line key={`vl-${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={vl.kind === "tangga" ? COLOR_TANGGA : COLOR_LIFT} strokeWidth={baseStroke * 0.9} strokeDasharray={`${baseStroke * 2.5} ${baseStroke * 2}`} strokeLinecap="round" />;
+      })}
+      {annos.map((a, i) => <g key={`an-${i}`}>
+        <circle cx={a.at.x} cy={a.at.y} r={numR} fill="#0a0a0a" stroke="#fff" strokeWidth={baseStroke * 0.6} />
+        <text x={a.at.x} y={a.at.y} fontSize={numR * 1.25} fontFamily="var(--font-display, Sora, sans-serif)" fontWeight={700} textAnchor="middle" dominantBaseline="central" fill="#fff">{a.num}</text>
+      </g>)}
+      {includeFloorLabels && floorLabels.map((fl, i) => <text key={`fl-${i}`} x={fl.x} y={fl.y} fontSize={fontPx * 1.1} fontFamily="var(--font-display, Sora, sans-serif)" fontWeight={600} letterSpacing="0.04em" fill="#0a0a0a" textAnchor="end" dominantBaseline="middle">{fl.text.toUpperCase()}</text>)}
+    </svg>
+  );
 
   return (
     <div style={{ display: "flex", gap: 20, width: "100%", height: "100%", overflow: "hidden" }}>
-      <div style={{ flex: 1, minWidth: 0, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 10, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        <svg viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
-          {faces.map((f, i) => {
-            if (f.holes && f.holes.length) {
-              const ring = (pts: { x: number; y: number }[]) =>
-                `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ") + " Z";
-              const d = [f.pts, ...f.holes].map(ring).join(" ");
-              return (
-                <path
-                  key={i}
-                  d={d}
-                  fill={f.fill}
-                  fillRule="evenodd"
-                  stroke={f.stroke}
-                  strokeWidth={baseStroke * f.sw * 2}
-                  strokeLinejoin="round"
-                />
-              );
-            }
-            return (
-              <polygon
-                key={i}
-                points={f.pts.map((p) => `${p.x},${p.y}`).join(" ")}
-                fill={f.fill}
-                stroke={f.stroke}
-                strokeWidth={baseStroke * f.sw * 2}
-                strokeLinejoin="round"
-              />
-            );
-          })}
-          {vlines.map((vl, i) => {
-            const a = project(vl.x, vl.z, vl.yLo);
-            const b = project(vl.x, vl.z, vl.yHi);
-            const stroke = vl.kind === "tangga" ? COLOR_TANGGA : COLOR_LIFT;
-            return (
-              <line
-                key={`vl-${i}`}
-                x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                stroke={stroke}
-                strokeWidth={baseStroke * 0.9}
-                strokeDasharray={`${baseStroke * 2.5} ${baseStroke * 2}`}
-                strokeLinecap="round"
-              />
-            );
-          })}
-          {annos.map((a, i) => (
-            <g key={`an-${i}`}>
-              <circle cx={a.at.x} cy={a.at.y} r={numR} fill="#0a0a0a" stroke="#fff" strokeWidth={baseStroke * 0.6} />
-              <text
-                x={a.at.x}
-                y={a.at.y}
-                fontSize={numR * 1.25}
-                fontFamily="var(--font-display, Sora, sans-serif)"
-                fontWeight={700}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill="#fff"
-              >
-                {a.num}
-              </text>
-            </g>
-          ))}
-          {floorLabels.map((fl, i) => (
-            <text
-              key={`fl-${i}`}
-              x={fl.x}
-              y={fl.y}
-              fontSize={fontPx * 1.1}
-              fontFamily="var(--font-display, Sora, sans-serif)"
-              fontWeight={600}
-              letterSpacing="0.04em"
-              fill="#0a0a0a"
-              textAnchor="end"
-              dominantBaseline="middle"
-            >
-              {fl.text.toUpperCase()}
-            </text>
-          ))}
-
-        </svg>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+        <div style={{ minWidth: 0, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "#777", fontWeight: 700 }}>Tipe Layout</div>
+          <div style={{ flex: 1, minHeight: 0 }}>{renderAxonometric(faces, true)}</div>
+        </div>
+        <div style={{ minWidth: 0, minHeight: 0, border: "1px solid #ececec", background: "#fafafa", padding: 8, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "#777", fontWeight: 700 }}>Zona Fungsi · Ruang Solid</div>
+          <div style={{ flex: 1, minHeight: 0 }}>{renderAxonometric(zoneFaces, true)}</div>
+        </div>
       </div>
 
       {(() => {
@@ -9525,11 +9512,15 @@ function ExplodedAxoBody({ sketch }: { sketch: Sketch }) {
                     {rooms.length > 0 && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 2, marginLeft: 17, marginTop: 2 }}>
                         {rooms.map((r) => (
-                          <div key={r.num} style={{ display: "flex", gap: 6, alignItems: "baseline", fontSize: 9.8, lineHeight: 1.3 }}>
+                          <div key={r.num} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 9.8, lineHeight: 1.3 }}>
                             <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 16, height: 14, padding: "0 4px", background: "#0a0a0a", color: "#fff", borderRadius: 7, fontWeight: 700, fontSize: 8.8 }}>
                               {r.num}
                             </span>
-                            <span style={{ color: "#222" }}>{r.name}</span>
+                            <span style={{ width: 9, height: 9, background: r.zoneColor, border: "1px solid rgba(0,0,0,0.28)", flexShrink: 0 }} />
+                            <span style={{ minWidth: 0, color: "#222" }}>
+                              <span>{r.name}</span>
+                              <span style={{ color: "#777" }}> · {r.zoneName}</span>
+                            </span>
                           </div>
                         ))}
                       </div>
