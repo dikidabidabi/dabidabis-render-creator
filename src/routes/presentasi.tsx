@@ -48,6 +48,7 @@ import {
 } from "@/lib/structural-grid";
 import {
   computeStraightSegments,
+  edgeMaterialForSegment,
   segmentIdFor,
   intersectSegmentWithCut,
   type EdgeMaterial,
@@ -3461,7 +3462,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             type Hit = { t: number; mat: EdgeMaterial; levelId?: string };
             const hits: Hit[] = [];
             for (const seg of allSegs) {
-              const mat = attrs[segmentIdFor(seg.a, seg.b)];
+              const mat = edgeMaterialForSegment(attrs, seg);
               if (!mat) continue;
               const t = intersectSegmentWithCut({ a: seg.a, b: seg.b }, cut.p1, cut.p2);
               if (t == null) continue;
@@ -4024,7 +4025,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
             const railingHits: Array<{ t: number; levelId?: string }> = [];
             for (const seg of allSegs) {
-              if (attrs[segmentIdFor(seg.a, seg.b)] !== "railing") continue;
+              if (edgeMaterialForSegment(attrs, seg) !== "railing") continue;
               const t = intersectSegmentWithCut({ a: seg.a, b: seg.b }, cut.p1, cut.p2);
               if (t == null) continue;
               railingHits.push({ t, levelId: seg.levelId });
@@ -6966,10 +6967,10 @@ function materialForEdgeSegment(
   sourceLines: Line[],
   edgeAttrs: Record<string, EdgeMaterial>,
 ): EdgeMaterial | undefined {
-  const exact = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+  const exact = edgeMaterialForSegment(edgeAttrs, segment);
   if (exact) return exact;
   const source = sourceLines[segment.sourceLineIndex];
-  return source ? edgeAttrs[segmentIdFor(source.a, source.b)] : undefined;
+  return source ? edgeMaterialForSegment(edgeAttrs, source) : undefined;
 }
 
 function DetailVoidNotation({
@@ -7408,7 +7409,7 @@ function DoorNotation({
           const midpoint = { x: (ax + bx) / 2, y: (ay + by) / 2 };
           let best: { material: EdgeMaterial; distance: number } | undefined;
           for (const segment of computeStraightSegments(lines.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })))) {
-            const material = edgeAttrs[segmentIdFor(segment.a, segment.b)];
+            const material = edgeMaterialForSegment(edgeAttrs, segment);
             if (!material) continue;
             const sx = segment.b.x - segment.a.x, sy = segment.b.y - segment.a.y;
             const segmentLength = Math.hypot(sx, sy);

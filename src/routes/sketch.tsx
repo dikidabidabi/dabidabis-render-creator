@@ -153,6 +153,8 @@ import {
   type EdgeMaterial,
   type EdgeSegment,
   computeStraightSegments,
+  edgeMaterialForSegment,
+  edgeMaterialKey,
   pickSegmentAt,
   segmentIdFor,
   MATERIAL_COLORS,
@@ -439,7 +441,7 @@ type Sketch = {
   sectionCuts?: SectionCut[]; // Garis Potong A-A, B-B, ... (dinamis, men-trigger slide potongan)
   structuralGrid?: StructuralGrid; // Modul Struktur parametric grid (primer)
   structuralGridExtras?: StructuralGrid[]; // Hasil "paste" grid → grid tambahan dgn range level sendiri
-  edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = segmentId)
+  edgeAttrs?: Record<string, EdgeMaterial>; // Material per segmen edge (key = levelId + segmentId)
   doors?: Door[]; // Notasi pintu 2D — tidak mengubah massa 3D
   windows?: Window[]; // Notasi jendela 2D — tidak mengubah massa 3D
   circles?: Circle[]; // Lingkaran (center + radius), tidak memengaruhi massa 3D
@@ -1053,6 +1055,17 @@ function normalizeSketch(s: any): Sketch {
         ) {
           valid[k] = v;
         }
+      }
+      // Migrasi data lama yang hanya memakai koordinat segmen. Salin nilainya
+      // menjadi kunci terpisah untuk setiap level yang memiliki segmen tersebut.
+      const segments = computeStraightSegments(lines);
+      for (const segment of segments) {
+        const legacyKey = segmentIdFor(segment.a, segment.b);
+        const material = valid[legacyKey];
+        if (material) valid[edgeMaterialKey(segment.levelId, segment.a, segment.b)] = material;
+      }
+      for (const key of Object.keys(valid)) {
+        if (!key.includes("::")) delete valid[key];
       }
       return valid;
     })(),
@@ -4606,7 +4619,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.lineCap = "round";
         for (const seg of allSegs) {
           if (!activeLvlId || seg.levelId !== activeLvlId) continue;
-          const mat = attrs[seg.id];
+          const mat = edgeMaterialForSegment(attrs, seg);
           if (!mat) continue;
           ctx.strokeStyle = MATERIAL_COLORS[mat];
           ctx.lineWidth = (mat === "solid" || mat === "concept" ? 4.5 : 4) / s;
@@ -9703,9 +9716,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const next: Record<string, EdgeMaterial> = { ...prev };
       // Alt/Shift = hapus attribute.
       if (e.altKey || e.shiftKey) {
-        delete next[hit.id];
+        delete next[edgeMaterialKey(activeLvlId, hit.a, hit.b)];
       } else {
-        next[hit.id] = pickMaterial;
+        next[edgeMaterialKey(activeLvlId, hit.a, hit.b)] = pickMaterial;
       }
       pushHistory();
       onChange({ edgeAttrs: next });
@@ -13382,18 +13395,28 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               Tanda ini hanya mengubah notasi di slide Denah & Potongan, tidak
               memengaruhi massa 3D.
             </p>
-            {Object.keys(sketch.edgeAttrs ?? {}).length > 0 && (
+            {computeStraightSegments(lines).some(
+              (segment) => segment.levelId === activeLvlId && edgeMaterialForSegment(sketch.edgeAttrs ?? {}, segment),
+            ) && (
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full"
                 onClick={() => {
                   pushHistory();
-                  onChange({ edgeAttrs: {} });
-                  toast.success("Semua tanda material dihapus");
+                  const activeKeys = new Set(
+                    computeStraightSegments(lines)
+                      .filter((segment) => segment.levelId === activeLvlId)
+                      .map((segment) => edgeMaterialKey(segment.levelId, segment.a, segment.b)),
+                  );
+                  const next = Object.fromEntries(
+                    Object.entries(sketch.edgeAttrs ?? {}).filter(([key]) => !activeKeys.has(key)),
+                  ) as Record<string, EdgeMaterial>;
+                  onChange({ edgeAttrs: next });
+                  toast.success("Tanda material level aktif dihapus");
                 }}
               >
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Reset semua tanda
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Reset tanda level ini
               </Button>
             )}
           </div>
