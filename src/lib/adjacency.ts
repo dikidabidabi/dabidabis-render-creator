@@ -63,42 +63,38 @@ function polygonMinDist(A: Pt[], B: Pt[]): number {
   return Math.sqrt(best);
 }
 
-/** Panjang lintasan terpanjang pada perimeter A yang berada dekat perimeter B.
- *  Berbeda dari jarak titik minimum, ini tetap mengenali dua sisi panjang yang
- *  sejajar/berimpit meski vertex keduanya tidak saling berdekatan, sekaligus
- *  menghindari dua ruang yang hanya bertemu pada satu sudut. */
-function longestNearbyPerimeterRun(A: Pt[], B: Pt[], tolerancePx: number): number {
-  let longest = 0;
-  const sampleStep = Math.max(1, tolerancePx * 0.2);
-  for (let i = 0; i < A.length; i++) {
-    const a = A[i];
-    const b = A[(i + 1) % A.length];
-    const length = Math.hypot(b.x - a.x, b.y - a.y);
-    if (length < 1e-6) continue;
-    const sampleCount = Math.max(2, Math.ceil(length / sampleStep));
-    const stepLength = length / sampleCount;
-    let run = 0;
-    for (let sample = 0; sample <= sampleCount; sample++) {
-      const t = sample / sampleCount;
-      const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-      if (pointPolygonPerimeterDist(p, B) <= tolerancePx) {
-        run += stepLength;
-        longest = Math.max(longest, run);
-      } else {
-        run = 0;
-      }
-    }
-  }
-  return longest;
-}
-
 function polygonsShareSide(A: Pt[], B: Pt[], tolerancePx: number): boolean {
   if (polygonMinDist(A, B) > tolerancePx) return false;
-  const requiredRun = Math.max(2, tolerancePx * 0.3);
-  return Math.max(
-    longestNearbyPerimeterRun(A, B, tolerancePx),
-    longestNearbyPerimeterRun(B, A, tolerancePx),
-  ) >= requiredRun;
+  const requiredOverlap = Math.max(2, tolerancePx * 0.25);
+  const minParallelCos = Math.cos(Math.PI / 12);
+
+  for (let i = 0; i < A.length; i++) {
+    const a0 = A[i], a1 = A[(i + 1) % A.length];
+    const adx = a1.x - a0.x, ady = a1.y - a0.y;
+    const aLength = Math.hypot(adx, ady);
+    if (aLength < 1e-6) continue;
+    const ux = adx / aLength, uy = ady / aLength;
+
+    for (let j = 0; j < B.length; j++) {
+      const b0 = B[j], b1 = B[(j + 1) % B.length];
+      const bdx = b1.x - b0.x, bdy = b1.y - b0.y;
+      const bLength = Math.hypot(bdx, bdy);
+      if (bLength < 1e-6) continue;
+      const parallelCos = Math.abs((adx * bdx + ady * bdy) / (aLength * bLength));
+      if (parallelCos < minParallelCos) continue;
+
+      const b0Along = (b0.x - a0.x) * ux + (b0.y - a0.y) * uy;
+      const b1Along = (b1.x - a0.x) * ux + (b1.y - a0.y) * uy;
+      const overlap = Math.min(aLength, Math.max(b0Along, b1Along))
+        - Math.max(0, Math.min(b0Along, b1Along));
+      if (overlap < requiredOverlap) continue;
+
+      const b0Across = Math.abs((b0.x - a0.x) * -uy + (b0.y - a0.y) * ux);
+      const b1Across = Math.abs((b1.x - a0.x) * -uy + (b1.y - a0.y) * ux);
+      if (Math.min(b0Across, b1Across) <= tolerancePx) return true;
+    }
+  }
+  return false;
 }
 
 function pointPolygonPerimeterDist(p: Pt, poly: Pt[]): number {
