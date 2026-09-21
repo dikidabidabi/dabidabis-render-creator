@@ -4226,9 +4226,10 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
   const doorsOnLevel = (sketch.doors ?? []).filter((d) => d.levelId === level.id);
   const boundaryLinesOnLevel = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
 
-  // Tolerance ~ 1 m (anggap ruang yang dindingnya berjarak ≤ 1m sebagai bertetangga).
+  // Toleransi 1 m menangkap ruang terbuka yang berbagi akses langsung meski
+  // perimeter hasil gambar tidak tepat berimpit (misalnya sisi koridor).
   const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
-  const tolerancePx = (1 / mPerSPx) * 0.6;
+  const tolerancePx = 1 / mPerSPx;
 
   const graph = useMemo(() => {
     const rooms = layersOnLevel.map((l) => {
