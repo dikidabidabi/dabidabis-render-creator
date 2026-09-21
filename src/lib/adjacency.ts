@@ -70,7 +70,7 @@ type SharedBoundarySpan = { a: Pt; b: Pt };
 function sharedBoundarySpans(A: Pt[], B: Pt[], tolerancePx: number): SharedBoundarySpan[] {
   if (polygonMinDist(A, B) > tolerancePx) return [];
   const spans: SharedBoundarySpan[] = [];
-  const minOverlap = 1e-3;
+  const minOverlap = 1e-9;
   const minParallelCos = Math.cos(Math.PI / 12);
 
   for (let i = 0; i < A.length; i++) {
