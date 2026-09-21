@@ -3494,10 +3494,17 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                       );
                     }
                     if (h.mat === "concrete150" || h.mat === "concrete200" || h.mat === "concrete300") {
+                      const finishPx = Math.min(bandW / 2, 0.015 * scalePxPerM);
+                      const coreW = Math.max(0, bandW - finishPx * 2);
                       return (
                         <g key={`mat-${b.id}-${idx}`}>
+                          <rect x={x} y={yTop} width={bandW} height={totalH} fill="#ffffff" stroke="none" />
+                          <rect x={x + finishPx} y={yTop} width={coreW} height={totalH}
+                            fill={`url(#concrete-dot-${slide.id})`} stroke="none" />
+                          <line x1={x + finishPx} y1={yTop} x2={x + finishPx} y2={yBot} stroke="#0a0a0a" strokeWidth={0.45} />
+                          <line x1={x + bandW - finishPx} y1={yTop} x2={x + bandW - finishPx} y2={yBot} stroke="#0a0a0a" strokeWidth={0.45} />
                           <rect x={x} y={yTop} width={bandW} height={totalH}
-                            fill={`url(#concrete-dot-${slide.id})`} stroke="#0a0a0a" strokeWidth={0.8} />
+                            fill="none" stroke="#0a0a0a" strokeWidth={0.8} />
                         </g>
                       );
                     }
@@ -7162,7 +7169,7 @@ function MaterialEdges({
   /** "base" = garis sketsa dasar saja; "overlay" = elemen ber-material saja
    *  di lapisan teratas; "all" = keduanya. */
   mode?: "base" | "overlay" | "all";
-  /** Detail arsitektur: finishing 15 mm di kedua sisi dan inti solid 120 mm. */
+  /** Detail arsitektur: finishing 15 mm di kedua sisi dinding solid. */
   detailSolidLayers?: boolean;
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
@@ -7259,9 +7266,20 @@ function MaterialEdges({
           );
         }
         if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
+          const coreHalf = Math.max(0, half - 0.015 * pxPerM);
+          const coreStart = { x: s.a.x - ux * coreHalf, y: s.a.y - uy * coreHalf };
+          const coreEnd = { x: s.b.x + ux * coreHalf, y: s.b.y + uy * coreHalf };
+          const coreA1 = { x: coreStart.x + nx * coreHalf, y: coreStart.y + ny * coreHalf };
+          const coreA2 = { x: coreStart.x - nx * coreHalf, y: coreStart.y - ny * coreHalf };
+          const coreB1 = { x: coreEnd.x + nx * coreHalf, y: coreEnd.y + ny * coreHalf };
+          const coreB2 = { x: coreEnd.x - nx * coreHalf, y: coreEnd.y - ny * coreHalf };
+          const corePts = `${coreA1.x},${coreA1.y} ${coreB1.x},${coreB1.y} ${coreB2.x},${coreB2.y} ${coreA2.x},${coreA2.y}`;
           return (
             <g key={`s-${s.id}`}>
-              <polygon points={pts} fill={`url(#concrete-dot-${patternId})`} stroke="none" />
+              <polygon points={pts} fill="#ffffff" stroke="none" />
+              <polygon points={corePts} fill={`url(#concrete-dot-${patternId})`} stroke="none" />
+              <line x1={coreA1.x} y1={coreA1.y} x2={coreB1.x} y2={coreB1.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
+              <line x1={coreA2.x} y1={coreA2.y} x2={coreB2.x} y2={coreB2.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
               <polygon points={pts} fill="none"
                 stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
             </g>
