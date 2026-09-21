@@ -4466,20 +4466,35 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 // ---- Level body ----
 function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const { sketch, level, area } = slide;
+  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
+  const levelFloors = (sketch.floors ?? []).filter((floor) => floor.levelId === level.id && floor.outer.length >= 3);
+  const floorPerimeterPoints = levelFloors.length > 0
+    ? levelFloors.flatMap((floor) => floor.outer)
+    : levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)).flatMap((layer) => layer.points);
+  const perimeterBounds = floorPerimeterPoints.length > 0 ? {
+    minX: Math.min(...floorPerimeterPoints.map((point) => point.x)),
+    minY: Math.min(...floorPerimeterPoints.map((point) => point.y)),
+    maxX: Math.max(...floorPerimeterPoints.map((point) => point.x)),
+    maxY: Math.max(...floorPerimeterPoints.map((point) => point.y)),
+  } : slide.bounds;
   const rawW = Math.max(1, slide.bounds.maxX - slide.bounds.minX);
   const rawH = Math.max(1, slide.bounds.maxY - slide.bounds.minY);
-  const pad = Math.max(rawW, rawH) * 0.08;
+  const dimensionClearance = area.dimensions ? 2.65 * pxPerM : 0;
+  const contentMinX = area.dimensions ? Math.min(slide.bounds.minX, perimeterBounds.minX - dimensionClearance) : slide.bounds.minX;
+  const contentMinY = area.dimensions ? Math.min(slide.bounds.minY, perimeterBounds.minY - dimensionClearance) : slide.bounds.minY;
+  const contentMaxX = area.dimensions ? Math.max(slide.bounds.maxX, perimeterBounds.maxX + dimensionClearance) : slide.bounds.maxX;
+  const contentMaxY = area.dimensions ? Math.max(slide.bounds.maxY, perimeterBounds.maxY + dimensionClearance) : slide.bounds.maxY;
+  const pad = Math.max(contentMaxX - contentMinX, contentMaxY - contentMinY, rawW, rawH) * 0.035;
   const bounds = {
-    minX: slide.bounds.minX - pad,
-    minY: slide.bounds.minY - pad,
-    maxX: slide.bounds.maxX + pad,
-    maxY: slide.bounds.maxY + pad,
+    minX: contentMinX - pad,
+    minY: contentMinY - pad,
+    maxX: contentMaxX + pad,
+    maxY: contentMaxY + pad,
   };
   const w = bounds.maxX - bounds.minX;
   const h = bounds.maxY - bounds.minY;
   const sw = Math.max(w, h);
-  const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
-  const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
   const rooms = levelLayers.filter((layer) => {
     if (isLahan(layer.name) || isVoid(layer.name)) return false;
     const xs = layer.points.map((p) => p.x);
@@ -4535,6 +4550,92 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const dimFont = sw * 0.012;
   const dimStroke = sw * 0.00065;
   const gridStroke = Math.max(sw * 0.00028, 0.12);
+  const roomDimensionPoints = computeStraightSegments(lines.map((line) => ({
+    a: line.a,
+    b: line.b,
+    kind: line.kind,
+    levelId: line.levelId,
+  }))).flatMap((segment) => [segment.a, segment.b]);
+  const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
+  const dedupeDimensionCoordinates = (values: number[]): number[] => {
+    const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+    const unique: number[] = [];
+    for (const value of sorted) {
+      if (unique.length === 0 || Math.abs(value - unique[unique.length - 1]) > dimensionTolerance) unique.push(value);
+    }
+    return unique;
+  };
+  const roomXs = dedupeDimensionCoordinates([
+    perimeterBounds.minX,
+    ...roomDimensionPoints.filter((point) => point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.maxX + dimensionTolerance).map((point) => point.x),
+    perimeterBounds.maxX,
+  ]);
+  const roomYs = dedupeDimensionCoordinates([
+    perimeterBounds.minY,
+    ...roomDimensionPoints.filter((point) => point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.maxY + dimensionTolerance).map((point) => point.y),
+    perimeterBounds.maxY,
+  ]);
+  const roomOffset = pxPerM;
+  const gridOffset = pxPerM * 2;
+  const tickSize = dimFont * 0.34;
+  const rotateGridPoint = (point: Point, grid: StructuralGrid): Point => {
+    const radians = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+    if (Math.abs(radians) < 1e-9) return point;
+    const dx = point.x - grid.origin.x;
+    const dy = point.y - grid.origin.y;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    return {
+      x: grid.origin.x + dx * cos - dy * sin,
+      y: grid.origin.y + dx * sin + dy * cos,
+    };
+  };
+  const gridDimensionChains = gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+    const horizontalX = Math.abs(Math.cos((rotation * Math.PI) / 180)) >= Math.abs(Math.sin((rotation * Math.PI) / 180));
+    const xAxisPoints = xs.map((x) => rotateGridPoint({ x, y: ys[0] }, grid));
+    const yAxisPoints = ys.map((y) => rotateGridPoint({ x: xs[0], y }, grid));
+    return { gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints };
+  });
+  const renderHorizontalDimension = (
+    key: string,
+    coordinates: number[],
+    labels: number[],
+    y: number,
+    extensionY: number,
+    labelAbove: boolean,
+  ) => coordinates.length >= 2 ? <g key={key} fill="#111111" stroke="#111111" strokeWidth={dimStroke} pointerEvents="none">
+    {coordinates.slice(0, -1).map((x, index) => {
+      const nextX = coordinates[index + 1];
+      const label = labels[index] ?? Math.round((Math.abs(nextX - x) / pxPerM) * 1000);
+      return <g key={`${key}-${index}`}>
+        <line x1={x} y1={y} x2={nextX} y2={y} />
+        <line x1={x} y1={y - tickSize} x2={x} y2={extensionY} />
+        {index === coordinates.length - 2 && <line x1={nextX} y1={y - tickSize} x2={nextX} y2={extensionY} />}
+        <text x={(x + nextX) / 2} y={y + (labelAbove ? -dimFont * 0.35 : dimFont * 1.05)} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600}>{label}</text>
+      </g>;
+    })}
+  </g> : null;
+  const renderVerticalDimension = (
+    key: string,
+    coordinates: number[],
+    labels: number[],
+    x: number,
+    extensionX: number,
+    labelLeft: boolean,
+  ) => coordinates.length >= 2 ? <g key={key} fill="#111111" stroke="#111111" strokeWidth={dimStroke} pointerEvents="none">
+    {coordinates.slice(0, -1).map((y, index) => {
+      const nextY = coordinates[index + 1];
+      const label = labels[index] ?? Math.round((Math.abs(nextY - y) / pxPerM) * 1000);
+      const textX = x + (labelLeft ? -dimFont * 0.4 : dimFont * 0.4);
+      const textY = (y + nextY) / 2;
+      return <g key={`${key}-${index}`}>
+        <line x1={x} y1={y} x2={x} y2={nextY} />
+        <line x1={x - tickSize} y1={y} x2={extensionX} y2={y} />
+        {index === coordinates.length - 2 && <line x1={x - tickSize} y1={nextY} x2={extensionX} y2={nextY} />}
+        <text x={textX} y={textY} textAnchor="middle" dominantBaseline="central" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600} transform={`rotate(-90 ${textX} ${textY})`}>{label}</text>
+      </g>;
+    })}
+  </g> : null;
   const splitRoomName = (name: string, maxChars: number): string[] => {
     if (name.length <= maxChars || !name.includes(" ")) return [name];
     const words = name.trim().split(/\s+/);
@@ -4578,9 +4679,8 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             {area.floorHatch && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
           </g>;
         })}
-        {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+        {gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
-          const dimOffset = sw * 0.022;
           const dash = `${sw * 0.004} ${sw * 0.003}`;
           const xStart = xs[0], xEnd = xs[xs.length - 1];
           const yStart = ys[0], yEnd = ys[ys.length - 1];
@@ -4590,29 +4690,29 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
                 {xs.map((x, index) => <line key={`gx-${index}`} x1={x} y1={yStart} x2={x} y2={yEnd} />)}
                 {ys.map((y, index) => <line key={`gy-${index}`} x1={xStart} y1={y} x2={xEnd} y2={y} />)}
               </g>
-              {area.dimensions && <g fill="#111111" stroke="#111111" strokeWidth={dimStroke}>
-                {spansX.map((span, index) => {
-                  const y = yStart - dimOffset;
-                  return <g key={`gdx-${index}`}>
-                    <line x1={xs[index]} y1={y} x2={xs[index + 1]} y2={y} />
-                    <line x1={xs[index]} y1={y - dimFont * 0.35} x2={xs[index]} y2={yStart} />
-                    <line x1={xs[index + 1]} y1={y - dimFont * 0.35} x2={xs[index + 1]} y2={yStart} />
-                    <text x={(xs[index] + xs[index + 1]) / 2} y={y - dimFont * 0.25} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600}>{Math.round(span * 1000)}</text>
-                  </g>;
-                })}
-                {spansY.map((span, index) => {
-                  const x = xStart - dimOffset;
-                  return <g key={`gdy-${index}`}>
-                    <line x1={x} y1={ys[index]} x2={x} y2={ys[index + 1]} />
-                    <line x1={x - dimFont * 0.35} y1={ys[index]} x2={xStart} y2={ys[index]} />
-                    <line x1={x - dimFont * 0.35} y1={ys[index + 1]} x2={xStart} y2={ys[index + 1]} />
-                    <text x={x - dimFont * 0.3} y={(ys[index] + ys[index + 1]) / 2} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={dimFont} fontWeight={600} transform={`rotate(-90 ${x - dimFont * 0.3} ${(ys[index] + ys[index + 1]) / 2})`}>{Math.round(span * 1000)}</text>
-                  </g>;
-                })}
-              </g>}
             </g>
           );
         })}
+        {area.dimensions && <>
+          {renderHorizontalDimension("room-top", roomXs, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true)}
+          {renderHorizontalDimension("room-bottom", roomXs, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false)}
+          {renderVerticalDimension("room-left", roomYs, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true)}
+          {renderVerticalDimension("room-right", roomYs, [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false)}
+          {gridDimensionChains.flatMap(({ gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints }) => {
+            const horizontalPoints = horizontalX ? xAxisPoints : yAxisPoints;
+            const verticalPoints = horizontalX ? yAxisPoints : xAxisPoints;
+            const horizontalLabels = (horizontalX ? spansX : spansY).map((span) => Math.round(span * 1000));
+            const verticalLabels = (horizontalX ? spansY : spansX).map((span) => Math.round(span * 1000));
+            const horizontalCoordinates = horizontalPoints.map((point) => point.x);
+            const verticalCoordinates = verticalPoints.map((point) => point.y);
+            return [
+              renderHorizontalDimension(`grid-top-${gridIndex}`, horizontalCoordinates, horizontalLabels, perimeterBounds.minY - gridOffset, perimeterBounds.minY, true),
+              renderHorizontalDimension(`grid-bottom-${gridIndex}`, horizontalCoordinates, horizontalLabels, perimeterBounds.maxY + gridOffset, perimeterBounds.maxY, false),
+              renderVerticalDimension(`grid-left-${gridIndex}`, verticalCoordinates, verticalLabels, perimeterBounds.minX - gridOffset, perimeterBounds.minX, true),
+              renderVerticalDimension(`grid-right-${gridIndex}`, verticalCoordinates, verticalLabels, perimeterBounds.maxX + gridOffset, perimeterBounds.maxX, false),
+            ];
+          })}
+        </>}
         {rooms.map((room) => {
           const c = centroid(room.points);
           const xs = room.points.map((point) => point.x);
