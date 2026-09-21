@@ -32,6 +32,23 @@ const hydratePromises = new Map<string, Promise<void>>();
 let patched = false;
 const debounceTimers = new Map<string, number>();
 const memoryCache = new Map<string, string>();
+const IDB_OPERATION_TIMEOUT_MS = 8_000;
+
+function withStorageTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} melewati batas waktu`)), IDB_OPERATION_TIMEOUT_MS);
+    operation.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 function isQuotaError(error: unknown): boolean {
   const maybe = error as { name?: string; code?: number } | null;
@@ -326,6 +343,13 @@ export function hydrateFromIndexedDB(owner: string = GUEST_OWNER): Promise<void>
   if (existing && currentOwner === owner) return existing;
 
   const promise = (async () => {
+    // Simpan cache lama sebelum pergantian pemilik. Jika IndexedDB browser
+    // macet/rusak, proyek lama tetap dapat dibuka dari salinan localStorage.
+    const localBackup = new Map<string, string>();
+    for (const key of projectKeysInLocalStorage()) {
+      const value = rawStorage().getItem.call(localStorage, key);
+      if (value != null) localBackup.set(key, value);
+    }
     // Switching account: persist whatever is pending for the previous owner,
     // then wipe caches so no karya crosses over.
     if (currentOwner !== null && currentOwner !== owner) {
@@ -338,31 +362,41 @@ export function hydrateFromIndexedDB(owner: string = GUEST_OWNER): Promise<void>
     dropCaches();
     currentOwner = owner;
 
-    const db = getStore();
-    await reclaimMisattributed(owner, db);
-    const idbKeys: string[] = [];
-    await db.iterate<string, void>((_value, key) => {
-      if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
-    });
-
-
-    if (idbKeys.length === 0) {
-      await adoptLegacyIfEligible(owner, db);
-      await db.iterate<string, void>((_value, key) => {
+    try {
+      const db = getStore();
+      await withStorageTimeout(reclaimMisattributed(owner, db), "Pemulihan proyek");
+      const idbKeys: string[] = [];
+      await withStorageTimeout(db.iterate<string, void>((_value, key) => {
         if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
-      });
-    }
+      }), "Pembacaan daftar proyek");
 
-    for (const k of idbKeys) {
-      try {
-        const v = await db.getItem<string>(k);
-        if (typeof v === "string") {
-          memoryCache.set(k, v);
-          rawSet(k, v);
-        }
-      } catch {
-        /* ignore individual key errors */
+      if (idbKeys.length === 0) {
+        await withStorageTimeout(adoptLegacyIfEligible(owner, db), "Migrasi proyek lama");
+        await withStorageTimeout(db.iterate<string, void>((_value, key) => {
+          if (typeof key === "string" && key.startsWith(PREFIX)) idbKeys.push(key);
+        }), "Pembacaan proyek lama");
       }
+
+      for (const k of idbKeys) {
+        try {
+          const v = await withStorageTimeout(db.getItem<string>(k), "Pembacaan data proyek");
+          if (typeof v === "string") {
+            memoryCache.set(k, v);
+            rawSet(k, v);
+          }
+        } catch {
+          /* ignore individual key errors */
+        }
+      }
+    } catch (error) {
+      // Fail open: jangan mengunci seluruh aplikasi. Pulihkan salinan yang
+      // sudah ada di browser dan biarkan halaman proyek melakukan normalisasi.
+      for (const [key, value] of localBackup) {
+        memoryCache.set(key, value);
+        rawSet(key, value);
+      }
+      patchLocalStorage();
+      throw error;
     }
 
     patchLocalStorage();

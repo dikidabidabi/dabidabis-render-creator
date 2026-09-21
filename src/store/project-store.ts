@@ -46,6 +46,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       set({ hydrated: true, hydrating: false });
     } catch (e) {
       set({
+        // Penyimpanan browser yang bermasalah tidak boleh mengunci seluruh
+        // aplikasi; halaman tetap dibuka memakai cache proyek yang tersedia.
+        hydrated: true,
         hydrating: false,
         error: e instanceof Error ? e.message : "Gagal memuat data proyek",
       });
