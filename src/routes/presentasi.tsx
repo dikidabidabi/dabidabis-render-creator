@@ -7267,8 +7267,8 @@ function MaterialEdges({
         }
         if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
           const coreHalf = Math.max(0, half - 0.015 * pxPerM);
-          const coreStart = { x: s.a.x - ux * coreHalf, y: s.a.y - uy * coreHalf };
-          const coreEnd = { x: s.b.x + ux * coreHalf, y: s.b.y + uy * coreHalf };
+          const coreStart = { x: s.a.x - ux * half, y: s.a.y - uy * half };
+          const coreEnd = { x: s.b.x + ux * half, y: s.b.y + uy * half };
           const coreA1 = { x: coreStart.x + nx * coreHalf, y: coreStart.y + ny * coreHalf };
           const coreA2 = { x: coreStart.x - nx * coreHalf, y: coreStart.y - ny * coreHalf };
           const coreB1 = { x: coreEnd.x + nx * coreHalf, y: coreEnd.y + ny * coreHalf };
