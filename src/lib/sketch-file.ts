@@ -13,6 +13,7 @@
 //    MDPL berbeda otomatis menghasilkan entri level baru.
 
 import { geoOffsetToWorld, type Geo } from "@/lib/geo";
+import { computeStraightSegments, edgeMaterialKey, segmentIdFor, type EdgeMaterial } from "@/lib/edge-segments";
 
 export type AnySketch = Record<string, any> & {
   id: string;
@@ -422,10 +423,26 @@ export function mergeSketches(sources: AnySketch[], opts: MergeOptions): MergeRe
       base.structuralGridExtras.push(g);
     }
 
-    // 6) Material per edge (key segmentId ikut di-tag)
+    // 6) Material per edge. Bentuk ulang kunci dari geometri yang sudah
+    // ditranslasi dan level yang sudah dipetakan agar tetap terbaca setelah merge.
     if (src.edgeAttrs && typeof src.edgeAttrs === "object") {
       base.edgeAttrs = { ...(base.edgeAttrs ?? {}) };
-      for (const [k, v] of Object.entries(src.edgeAttrs)) base.edgeAttrs[`${tag}${k}`] = v as any;
+      const sourceLines = Array.isArray(src.lines) ? src.lines : [];
+      const sourceSegments = computeStraightSegments(sourceLines);
+      const mergedLines = sourceLines.map((line: any) => ({
+        ...line,
+        a: { x: Number(line.a?.x) + dx, y: Number(line.a?.y) + dy },
+        b: { x: Number(line.b?.x) + dx, y: Number(line.b?.y) + dy },
+        levelId: mapLevel(line.levelId),
+      }));
+      const mergedSegments = computeStraightSegments(mergedLines);
+      sourceSegments.forEach((segment, index) => {
+        const material = src.edgeAttrs?.[edgeMaterialKey(segment.levelId, segment.a, segment.b)]
+          ?? src.edgeAttrs?.[segmentIdFor(segment.a, segment.b)];
+        const merged = mergedSegments[index];
+        if (!material || !merged) return;
+        base.edgeAttrs[edgeMaterialKey(merged.levelId, merged.a, merged.b)] = material as EdgeMaterial;
+      });
     }
   }
 

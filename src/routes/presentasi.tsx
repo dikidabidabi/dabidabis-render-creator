@@ -3462,7 +3462,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             type Hit = { t: number; mat: EdgeMaterial; levelId?: string };
             const hits: Hit[] = [];
             for (const seg of allSegs) {
-              const mat = attrs[segmentIdFor(seg.a, seg.b)];
+              const mat = edgeMaterialForSegment(attrs, seg);
               if (!mat) continue;
               const t = intersectSegmentWithCut({ a: seg.a, b: seg.b }, cut.p1, cut.p2);
               if (t == null) continue;
@@ -4025,7 +4025,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             );
             const railingHits: Array<{ t: number; levelId?: string }> = [];
             for (const seg of allSegs) {
-              if (attrs[segmentIdFor(seg.a, seg.b)] !== "railing") continue;
+              if (edgeMaterialForSegment(attrs, seg) !== "railing") continue;
               const t = intersectSegmentWithCut({ a: seg.a, b: seg.b }, cut.p1, cut.p2);
               if (t == null) continue;
               railingHits.push({ t, levelId: seg.levelId });
