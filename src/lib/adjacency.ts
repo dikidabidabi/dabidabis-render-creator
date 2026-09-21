@@ -63,9 +63,14 @@ function polygonMinDist(A: Pt[], B: Pt[]): number {
   return Math.sqrt(best);
 }
 
-function polygonsShareSide(A: Pt[], B: Pt[], tolerancePx: number): boolean {
-  if (polygonMinDist(A, B) > tolerancePx) return false;
-  const requiredOverlap = Math.max(2, tolerancePx * 0.25);
+type SharedBoundarySpan = { a: Pt; b: Pt };
+
+/** Cari seluruh bagian sisi yang saling berhadapan. Panjang kontak positif
+ * sekecil apa pun diterima; pertemuan satu titik/sudut saja tetap diabaikan. */
+function sharedBoundarySpans(A: Pt[], B: Pt[], tolerancePx: number): SharedBoundarySpan[] {
+  if (polygonMinDist(A, B) > tolerancePx) return [];
+  const spans: SharedBoundarySpan[] = [];
+  const minOverlap = 1e-3;
   const minParallelCos = Math.cos(Math.PI / 12);
 
   for (let i = 0; i < A.length; i++) {
@@ -87,14 +92,25 @@ function polygonsShareSide(A: Pt[], B: Pt[], tolerancePx: number): boolean {
       const b1Along = (b1.x - a0.x) * ux + (b1.y - a0.y) * uy;
       const overlap = Math.min(aLength, Math.max(b0Along, b1Along))
         - Math.max(0, Math.min(b0Along, b1Along));
-      if (overlap < requiredOverlap) continue;
+      if (overlap <= minOverlap) continue;
 
-      const b0Across = Math.abs((b0.x - a0.x) * -uy + (b0.y - a0.y) * ux);
-      const b1Across = Math.abs((b1.x - a0.x) * -uy + (b1.y - a0.y) * ux);
-      if (Math.min(b0Across, b1Across) <= tolerancePx) return true;
+      const overlapStart = Math.max(0, Math.min(b0Along, b1Along));
+      const overlapEnd = Math.min(aLength, Math.max(b0Along, b1Along));
+      const start = { x: a0.x + ux * overlapStart, y: a0.y + uy * overlapStart };
+      const end = { x: a0.x + ux * overlapEnd, y: a0.y + uy * overlapEnd };
+      const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+      if (
+        Math.min(
+          Math.sqrt(segDistSq(start, b0, b1)),
+          Math.sqrt(segDistSq(middle, b0, b1)),
+          Math.sqrt(segDistSq(end, b0, b1)),
+        ) <= tolerancePx
+      ) {
+        spans.push({ a: start, b: end });
+      }
     }
   }
-  return false;
+  return spans;
 }
 
 function pointPolygonPerimeterDist(p: Pt, poly: Pt[]): number {
@@ -105,40 +121,48 @@ function pointPolygonPerimeterDist(p: Pt, poly: Pt[]): number {
   return Math.sqrt(bestSq);
 }
 
-/** Garis pembatas dianggap berada di antara dua ruang bila sebagian panjangnya
- * mengikuti kedua perimeter. Syarat dua sampel yang terpisah menghindari garis
- * di sudut pertemuan ruang terbaca sebagai dinding pemisah. */
-function hasSharedBoundaryLine(
-  roomA: RoomLike,
-  roomB: RoomLike,
+/** Sebuah bentang kontak dianggap tertutup hanya bila gabungan garis pembatas
+ * menutup seluruh panjangnya. Bila ada bukaan sekecil apa pun, hubungan tetap
+ * langsung. */
+function spanFullyCoveredByBoundary(
+  span: SharedBoundarySpan,
   lines: BoundaryLineLike[],
   tolerancePx: number,
 ): boolean {
+  const dx = span.b.x - span.a.x;
+  const dy = span.b.y - span.a.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) return false;
+  const ux = dx / length;
+  const uy = dy / length;
+  const minParallelCos = Math.cos(Math.PI / 12);
   const boundaryTolerance = Math.max(1, tolerancePx * 0.55);
+  const coverage: Array<[number, number]> = [];
+
   for (const line of lines) {
-    const length = Math.hypot(line.b.x - line.a.x, line.b.y - line.a.y);
-    if (length < 1e-6) continue;
-    const sampleCount = Math.max(4, Math.min(80, Math.ceil(length / Math.max(1, boundaryTolerance * 0.5))));
-    let firstMatch = -1;
-    let lastMatch = -1;
-    for (let i = 0; i <= sampleCount; i++) {
-      const t = i / sampleCount;
-      const p = {
-        x: line.a.x + (line.b.x - line.a.x) * t,
-        y: line.a.y + (line.b.y - line.a.y) * t,
-      };
-      if (
-        pointPolygonPerimeterDist(p, roomA.points) <= boundaryTolerance
-        && pointPolygonPerimeterDist(p, roomB.points) <= boundaryTolerance
-      ) {
-        if (firstMatch < 0) firstMatch = i;
-        lastMatch = i;
-      }
-    }
-    if (firstMatch >= 0 && lastMatch > firstMatch) {
-      const matchedLength = ((lastMatch - firstMatch) / sampleCount) * length;
-      if (matchedLength >= Math.max(1, boundaryTolerance * 0.5)) return true;
-    }
+    const ldx = line.b.x - line.a.x;
+    const ldy = line.b.y - line.a.y;
+    const lineLength = Math.hypot(ldx, ldy);
+    if (lineLength < 1e-6) continue;
+    if (Math.abs((dx * ldx + dy * ldy) / (length * lineLength)) < minParallelCos) continue;
+
+    const startAcross = Math.abs((line.a.x - span.a.x) * -uy + (line.a.y - span.a.y) * ux);
+    const endAcross = Math.abs((line.b.x - span.a.x) * -uy + (line.b.y - span.a.y) * ux);
+    if (Math.min(startAcross, endAcross) > boundaryTolerance) continue;
+
+    const lineStart = (line.a.x - span.a.x) * ux + (line.a.y - span.a.y) * uy;
+    const lineEnd = (line.b.x - span.a.x) * ux + (line.b.y - span.a.y) * uy;
+    const coveredStart = Math.max(0, Math.min(lineStart, lineEnd));
+    const coveredEnd = Math.min(length, Math.max(lineStart, lineEnd));
+    if (coveredEnd > coveredStart) coverage.push([coveredStart, coveredEnd]);
+  }
+
+  coverage.sort((left, right) => left[0] - right[0]);
+  let coveredUntil = 0;
+  for (const [start, end] of coverage) {
+    if (start > coveredUntil + 1e-3) return false;
+    coveredUntil = Math.max(coveredUntil, end);
+    if (coveredUntil >= length - 1e-3) return true;
   }
   return false;
 }
@@ -224,9 +248,12 @@ export function buildBubbleGraph(
     for (let j = i + 1; j < rooms.length; j++) {
       const A = rooms[i], B = rooms[j];
       if (A.points.length < 3 || B.points.length < 3) continue;
-      if (polygonsShareSide(A.points, B.points, tolerancePx)) {
+      const sharedSpans = sharedBoundarySpans(A.points, B.points, tolerancePx);
+      if (sharedSpans.length > 0) {
         const k = keyOf(A.id, B.id);
-        const relation = hasSharedBoundaryLine(A, B, boundaryLines, tolerancePx) ? "wall" : "direct";
+        const relation = sharedSpans.every((span) =>
+          spanFullyCoveredByBoundary(span, boundaryLines, tolerancePx)
+        ) ? "wall" : "direct";
         linkMap.set(k, {
           source: A.id,
           target: B.id,
