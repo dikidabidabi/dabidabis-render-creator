@@ -4482,6 +4482,13 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   });
   const functionZones = normalizeFunctionZones(sketch.functionZones);
   const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
+  const detailZoneStats = functionZones.flatMap((zone) => {
+    const areaM2 = levelLayers
+      .filter((layer) => layer.functionZoneId === zone.id && !isLahan(layer.name) && !isVoid(layer.name) && !isTaman(layer.name))
+      .reduce((sum, layer) => sum + (layer.areaM2 || 0), 0);
+    return areaM2 > 0 ? [{ ...zone, areaM2 }] : [];
+  });
+  const detailZonedAreaM2 = detailZoneStats.reduce((sum, zone) => sum + zone.areaM2, 0);
   const lines = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
   const doors = (sketch.doors ?? []).filter((door) => door.levelId === level.id);
   const windows = (sketch.windows ?? []).filter((window) => window.levelId === level.id);
@@ -4556,7 +4563,11 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           const fill = zone
             ? functionZoneColor(zone.color, 0.28)
             : roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
-          return <polygon key={room.id} points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} fill={area.floorHatch ? `url(#floor-grid-${patternId})` : fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />;
+          const points = room.points.map((p) => `${p.x},${p.y}`).join(" ");
+          return <g key={room.id}>
+            <polygon points={points} fill={fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />
+            {area.floorHatch && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
+          </g>;
         })}
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
@@ -4667,6 +4678,17 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>
+      {detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
+        <Donut segments={detailZoneStats.map((zone) => ({ value: zone.areaM2, color: zone.color }))} size={86} thickness={12} centerValue="100%" centerLabel="Zona" />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>Zona Fungsi · {level.name}</div>
+          {detailZoneStats.map((zone) => <div key={zone.id} style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "Manrope, sans-serif", fontSize: 10, lineHeight: 1.35 }}>
+            <span style={{ width: 8, height: 8, flexShrink: 0, borderRadius: "50%", background: zone.color }} />
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{zone.name}</span>
+            <strong>{fmt(detailZonedAreaM2 > 0 ? (zone.areaM2 / detailZonedAreaM2) * 100 : 0, 1)}%</strong>
+          </div>)}
+        </div>
+      </div>}
       {area.showKeyplan !== false && <div style={{ position: "absolute", right: 28, bottom: 24, height: "16.666%", width: "15%", minWidth: 120, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 6 }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 12, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>KEY PLAN · {level.name}</div>
         <svg viewBox={`${keyPlanBounds.minX} ${keyPlanBounds.minY} ${keyPlanW} ${keyPlanH}`} preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0, width: "100%", display: "block", background: "#ffffff" }}>
