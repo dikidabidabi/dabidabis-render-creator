@@ -10,6 +10,27 @@ import { GUEST_OWNER, hydrateFromIndexedDB } from "@/lib/storage/idb-bridge";
 import type { ParkingArea } from "@/lib/parking";
 import type { Stair } from "@/lib/stairs";
 
+const PROJECT_HYDRATION_TIMEOUT_MS = 5_000;
+
+function hydrateWithTimeout(owner: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error("Pemuatan proyek melewati batas waktu")),
+      PROJECT_HYDRATION_TIMEOUT_MS,
+    );
+    hydrateFromIndexedDB(owner).then(
+      () => {
+        window.clearTimeout(timer);
+        resolve();
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 type ProjectStore = {
   hydrated: boolean;
   hydrating: boolean;
@@ -41,7 +62,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       stairClipboard: s.owner === owner ? s.stairClipboard : null,
     });
     try {
-      await hydrateFromIndexedDB(owner);
+      await hydrateWithTimeout(owner);
       if (get().owner !== owner) return;
       set({ hydrated: true, hydrating: false });
     } catch (e) {
