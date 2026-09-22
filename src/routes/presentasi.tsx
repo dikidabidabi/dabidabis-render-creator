@@ -4537,13 +4537,37 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const dimFont = sw * 0.012;
   const dimStroke = sw * 0.000325;
   const gridStroke = Math.max(sw * 0.00028, 0.12);
-  const roomDimensionPoints = computeStraightSegments(lines.map((line) => ({
+  const roomDimensionSegments = computeStraightSegments(lines.map((line) => ({
     a: line.a,
     b: line.b,
     kind: line.kind,
     levelId: line.levelId,
-  }))).flatMap((segment) => [segment.a, segment.b]);
+  })));
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
+  const roomDimensionPoints = (() => {
+    const junctions: { point: Point; directions: Point[] }[] = [];
+    for (const segment of roomDimensionSegments) {
+      for (const [point, other] of [[segment.a, segment.b], [segment.b, segment.a]] as const) {
+        let junction = junctions.find((candidate) => Math.hypot(candidate.point.x - point.x, candidate.point.y - point.y) <= dimensionTolerance);
+        if (!junction) {
+          junction = { point, directions: [] };
+          junctions.push(junction);
+        }
+        const dx = other.x - point.x;
+        const dy = other.y - point.y;
+        const length = Math.hypot(dx, dy);
+        if (length > dimensionTolerance) junction.directions.push({ x: dx / length, y: dy / length });
+      }
+    }
+    // Hanya pertemuan yang memiliki sedikitnya sepasang garis tegak lurus.
+    // Toleransi dua derajat mengakomodasi pembulatan koordinat hasil gambar.
+    const maxRightAngleDot = Math.sin((2 * Math.PI) / 180);
+    return junctions
+      .filter(({ directions }) => directions.some((first, firstIndex) =>
+        directions.slice(firstIndex + 1).some((second) => Math.abs(first.x * second.x + first.y * second.y) <= maxRightAngleDot),
+      ))
+      .map(({ point }) => point);
+  })();
   const dedupeDimensionCoordinates = (values: number[]): number[] => {
     const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
     const unique: number[] = [];
@@ -4552,16 +4576,16 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     }
     return unique;
   };
-  const roomXs = dedupeDimensionCoordinates([
-    perimeterBounds.minX,
-    ...roomDimensionPoints.filter((point) => point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.maxX + dimensionTolerance).map((point) => point.x),
-    perimeterBounds.maxX,
-  ]);
-  const roomYs = dedupeDimensionCoordinates([
-    perimeterBounds.minY,
-    ...roomDimensionPoints.filter((point) => point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.maxY + dimensionTolerance).map((point) => point.y),
-    perimeterBounds.maxY,
-  ]);
+  const roomXs = dedupeDimensionCoordinates(
+    roomDimensionPoints
+      .filter((point) => point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.maxX + dimensionTolerance)
+      .map((point) => point.x),
+  );
+  const roomYs = dedupeDimensionCoordinates(
+    roomDimensionPoints
+      .filter((point) => point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.maxY + dimensionTolerance)
+      .map((point) => point.y),
+  );
   const roomOffset = pxPerM;
   const gridOffset = pxPerM * 2;
   const tickSize = dimFont * 0.34;
