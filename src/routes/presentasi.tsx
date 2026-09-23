@@ -8413,9 +8413,10 @@ function FunctionSectionBody({ slide }: { slide: Extract<Slide, { kind: "functio
       }
     }
     const slices = mergeSlices(rawSlices);
-    const hitIds = new Set(rawSlices.flatMap((slice) => slice.layerIds));
     const stats = new Map<string, { name: string; color: string; areaM2: number }>();
-    for (const layer of roomLayers.filter((item) => item.levelId === level.id && hitIds.has(item.id))) {
+    // Diagram menghitung seluruh ruang pada lantai, bukan hanya ruang yang
+    // kebetulan dilewati garis potong.
+    for (const layer of roomLayers.filter((item) => item.levelId === level.id)) {
       const zone = resolveZone(layer);
       const current = stats.get(zone.id) ?? { name: zone.name, color: zone.color, areaM2: 0 };
       current.areaM2 += layer.areaM2 || 0;
@@ -8449,9 +8450,48 @@ function FunctionSectionBody({ slide }: { slide: Extract<Slide, { kind: "functio
   const sy = (value: number) => topPad + (maxTop - value) * sectionScale;
   const axoColorOf = (layer: Layer) => resolveZone(layer).color;
   const rings = rows.slice().reverse();
+  const totalStatsMap = new Map<string, { name: string; color: string; areaM2: number }>();
+  for (const row of rows) {
+    for (const item of row.stats) {
+      const key = `${item.name}\u0000${item.color}`;
+      const current = totalStatsMap.get(key) ?? { name: item.name, color: item.color, areaM2: 0 };
+      current.areaM2 += item.areaM2;
+      totalStatsMap.set(key, current);
+    }
+  }
+  const totalStats = [...totalStatsMap.values()].sort((a, b) => b.areaM2 - a.areaM2);
+  const totalArea = totalStats.reduce((sum, item) => sum + item.areaM2, 0);
+  const floorColumns = rings.length > 4 ? 2 : 1;
+  const ringSize = rings.length > 6 ? 44 : rings.length > 4 ? 52 : 62;
+
+  const compositionBlock = (
+    key: string,
+    label: string,
+    stats: Array<{ name: string; color: string; areaM2: number }>,
+    total: number,
+    emphasized = false,
+  ) => (
+    <div key={key} style={{ borderTop: emphasized ? "2px solid #111111" : "1px solid #dedede", paddingTop: emphasized ? 7 : 5, minWidth: 0 }}>
+      <div style={{ fontSize: emphasized ? 11 : 9, fontWeight: 800, marginBottom: 4, lineHeight: 1.2 }}>{label}</div>
+      <div style={{ display: "flex", gap: 7, alignItems: "center", minWidth: 0 }}>
+        <div style={{ flex: "0 0 auto" }}>
+          <Donut segments={stats.map((item) => ({ value: item.areaM2, color: item.color }))} size={emphasized ? 68 : ringSize} thickness={emphasized ? 11 : Math.max(7, ringSize * 0.15)} centerValue="100%" />
+        </div>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+          {stats.map((item) => (
+            <div key={`${key}-${item.name}-${item.color}`} style={{ display: "grid", gridTemplateColumns: "7px minmax(0,1fr) auto", gap: 4, alignItems: "start", fontSize: floorColumns > 1 && !emphasized ? 7 : 8 }}>
+              <span style={{ width: 7, height: 7, marginTop: 1, background: item.color, border: "1px solid rgba(0,0,0,0.2)" }} />
+              <span style={{ whiteSpace: "normal", overflowWrap: "anywhere", lineHeight: 1.12 }}>{item.name}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700, whiteSpace: "nowrap", lineHeight: 1.12 }}>{total > 0 ? fmt((item.areaM2 / total) * 100, 0) : 0}% · {fmt(item.areaM2)} m²</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: "300px minmax(0, 1fr) 300px", gap: 16, minHeight: 0 }}>
+    <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: "270px minmax(0, 1fr) 430px", gap: 14, minHeight: 0 }}>
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "#777", fontWeight: 700, marginBottom: 8 }}>Aksonometri Zona Fungsi</div>
         <div style={{ flex: 1, minHeight: 0, border: "1px solid #dedede", background: "#fafafa", padding: 8 }}>
@@ -8510,29 +8550,18 @@ function FunctionSectionBody({ slide }: { slide: Extract<Slide, { kind: "functio
         )}
       </div>
 
-      <div style={{ minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ minHeight: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "#777", fontWeight: 700, marginBottom: 8 }}>Komposisi Fungsi per Lantai</div>
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, paddingRight: 4 }}>
-          {rings.map((row) => {
-            const total = row.stats.reduce((sum, item) => sum + item.areaM2, 0);
-            return (
-              <div key={`ring-${row.id}`} style={{ borderTop: "1px solid #dedede", paddingTop: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 6 }}>{row.label}</div>
-                <div style={{ display: "flex", gap: 9, alignItems: "center" }}>
-                  <Donut segments={row.stats.map((item) => ({ value: item.areaM2, color: item.color }))} size={72} thickness={11} centerValue="100%" />
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-                    {row.stats.map((item) => (
-                      <div key={`${row.id}-${item.name}`} style={{ display: "grid", gridTemplateColumns: "8px minmax(0,1fr) auto", gap: 5, alignItems: "center", fontSize: 9 }}>
-                        <span style={{ width: 8, height: 8, background: item.color, border: "1px solid rgba(0,0,0,0.2)" }} />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
-                        <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{total > 0 ? fmt((item.areaM2 / total) * 100, 0) : 0}% · {fmt(item.areaM2)} m²</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          {compositionBlock("ring-total", "Total Akumulasi Semua Lantai", totalStats, totalArea, true)}
+          <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `repeat(${floorColumns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${Math.ceil(rings.length / floorColumns)}, minmax(0, 1fr))`, columnGap: 12, rowGap: 5 }}>
+            {rings.map((row) => compositionBlock(
+              `ring-${row.id}`,
+              row.label,
+              row.stats,
+              row.stats.reduce((sum, item) => sum + item.areaM2, 0),
+            ))}
+          </div>
         </div>
       </div>
     </div>
