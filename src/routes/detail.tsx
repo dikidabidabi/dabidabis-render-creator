@@ -166,7 +166,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const [view, setView] = useState<ViewBox>(initialView);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [library, setLibrary] = useState<ImportedFurniture[]>([]);
-  const [hasClipboard, setHasClipboard] = useState(false);
+  const [clipboard, setClipboard] = useState<DetailFurniture[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
   const furniture = area.furniture ?? [];
   const width = Math.max(1, bounds.maxX - bounds.minX);
@@ -179,7 +179,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   useEffect(() => {
     try {
       setLibrary(normalizeImportedFurniture(JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]")));
-      setHasClipboard(normalizeDetailFurniture(JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || "[]")).length > 0);
+      setClipboard(normalizeDetailFurniture(JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || "[]")));
     } catch { setLibrary([]); }
   }, []);
 
@@ -217,13 +217,13 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
     const copied = furniture.filter((item) => selectedIds.has(item.id));
     if (copied.length === 0) return;
     void setProjectItem(CLIPBOARD_KEY, JSON.stringify(copied));
-    setHasClipboard(true);
+    setClipboard(copied);
     toast.success(`${copied.length} furniture disalin`);
   }, [furniture, selectedIds]);
 
   const pasteSelection = useCallback(() => {
     try {
-      const copied = normalizeDetailFurniture(JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || "[]"));
+      const copied = clipboard.length > 0 ? clipboard : normalizeDetailFurniture(JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || "[]"));
       if (copied.length === 0) { toast.error("Belum ada furniture yang disalin"); return; }
       const sourceCenter = { x: (Math.min(...copied.map((item) => item.x)) + Math.max(...copied.map((item) => item.x))) / 2, y: (Math.min(...copied.map((item) => item.y)) + Math.max(...copied.map((item) => item.y))) / 2 };
       const target = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
@@ -233,7 +233,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       setSelectedIds(new Set(pasted.map((item) => item.id)));
       toast.success(`${pasted.length} furniture ditempel`);
     } catch { toast.error("Furniture salinan tidak dapat dibaca"); }
-  }, [bounds, furniture, onFurnitureChange]);
+  }, [bounds, clipboard, furniture, onFurnitureChange]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -280,7 +280,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
         const initialDistance = Math.max(1, Math.hypot(gesture.start.x - gesture.initial.x, gesture.start.y - gesture.initial.y));
         const factor = Math.max(0.15, Math.hypot(point.x - gesture.initial.x, point.y - gesture.initial.y) / initialDistance);
         onFurnitureChange(furniture.map((item) => item.id === gesture.initial.id ? { ...item, width: gesture.initial.width * factor, height: gesture.initial.height * factor } : item));
-      } else {
+      } else if (gesture.kind === "select") {
         gestureRef.current = { ...gesture, current: point };
         const minX = Math.min(gesture.start.x, point.x), maxX = Math.max(gesture.start.x, point.x), minY = Math.min(gesture.start.y, point.y), maxY = Math.max(gesture.start.y, point.y);
         const hits = furniture.filter((item) => item.x >= minX && item.x <= maxX && item.y >= minY && item.y <= maxY).map((item) => item.id);
@@ -298,7 +298,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
     return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
   }, [clientToSvg, furniture, initialView, onFurnitureChange]);
 
-  const registerPointer = (event: React.PointerEvent<SVGSVGElement>) => {
+  const registerPointer = (event: React.PointerEvent<SVGElement>) => {
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (pointersRef.current.size === 2) {
       const points = [...pointersRef.current.values()];
@@ -380,7 +380,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
         <div className="mb-3 flex items-center justify-between"><h3 className="font-display text-sm font-semibold">Furniture</h3><span className="text-xs text-muted-foreground">{selectedIds.size} dipilih</span></div>
         <div className="mb-4 grid grid-cols-3 gap-1">
           <Button size="sm" variant="outline" disabled={selectedIds.size === 0} title="Salin pilihan" onClick={copySelection}><Copy className="mr-1 h-3.5 w-3.5" />Salin</Button>
-          <Button size="sm" variant="outline" disabled={!hasClipboard} title="Tempel ke tengah detail" onClick={pasteSelection}><ImagePlus className="mr-1 h-3.5 w-3.5" />Tempel</Button>
+          <Button size="sm" variant="outline" disabled={clipboard.length === 0} title="Tempel ke tengah detail" onClick={pasteSelection}><ImagePlus className="mr-1 h-3.5 w-3.5" />Tempel</Button>
           <Button size="sm" variant="outline" disabled={selectedIds.size === 0} title="Hapus pilihan" onClick={() => { onFurnitureChange(furniture.filter((item) => !selectedIds.has(item.id))); setSelectedIds(new Set()); }}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>
         <div className="grid grid-cols-2 gap-2">
