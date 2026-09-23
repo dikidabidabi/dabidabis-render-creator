@@ -8479,16 +8479,18 @@ function FunctionSectionBody({ slide }: { slide: Extract<Slide, { kind: "functio
                     const width = Math.max(1, (slice.x1 - slice.x0) * sectionScale);
                     const y = sy(row.baseM + row.heightM);
                     const height = row.heightM * sectionScale;
+                    const clipId = `function-label-${slide.id}-${row.id}-${index}`.replace(/[^a-zA-Z0-9_-]/g, "");
                     const words = slice.zoneName.split(/\s+/).filter(Boolean);
-                    const lines = words.length > 2 && width < 150
+                    const lines = words.length > 1 && width < 150
                       ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")]
                       : [slice.zoneName];
                     const longest = Math.max(...lines.map((line) => line.length), 1);
-                    const fontSize = Math.max(8, Math.min(28, width / (longest * 0.58), height / (lines.length * 1.25)));
+                    const fontSize = Math.max(6, Math.min(28, (width - 8) / (longest * 0.58), height / (lines.length * 1.25)));
                     return (
                       <g key={`${row.id}-${slice.zoneId}-${index}`}>
+                        <defs><clipPath id={clipId}><rect x={x + 3} y={y + 3} width={Math.max(0, width - 6)} height={Math.max(0, height - 6)} /></clipPath></defs>
                         <rect x={x} y={y} width={width} height={height} fill={slice.color} stroke="#111111" strokeWidth={1.1} />
-                        <text x={x + width / 2} y={y + height / 2 - ((lines.length - 1) * fontSize * 0.58)} textAnchor="middle" dominantBaseline="middle" fill="#0a0a0a" fontFamily="Sora, sans-serif" fontWeight={800} fontSize={fontSize}>
+                        <text clipPath={`url(#${clipId})`} x={x + width / 2} y={y + height / 2 - ((lines.length - 1) * fontSize * 0.58)} textAnchor="middle" dominantBaseline="middle" fill="#0a0a0a" fontFamily="Sora, sans-serif" fontWeight={800} fontSize={fontSize}>
                           {lines.map((line, lineIndex) => <tspan key={lineIndex} x={x + width / 2} dy={lineIndex === 0 ? 0 : fontSize * 1.08}>{line}</tspan>)}
                         </text>
                       </g>
