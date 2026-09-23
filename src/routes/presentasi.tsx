@@ -4576,6 +4576,44 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     }
     return unique;
   };
+  const rotateGridPoint = (point: Point, grid: StructuralGrid): Point => {
+    const radians = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+    if (Math.abs(radians) < 1e-9) return point;
+    const dx = point.x - grid.origin.x;
+    const dy = point.y - grid.origin.y;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    return {
+      x: grid.origin.x + dx * cos - dy * sin,
+      y: grid.origin.y + dx * sin + dy * cos,
+    };
+  };
+  const gridDimensionChains = gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+    const horizontalX = Math.abs(Math.cos((rotation * Math.PI) / 180)) >= Math.abs(Math.sin((rotation * Math.PI) / 180));
+    const xAxisPoints = xs.map((x) => rotateGridPoint({ x, y: ys[0] }, grid));
+    const yAxisPoints = ys.map((y) => rotateGridPoint({ x: xs[0], y }, grid));
+    return { gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints };
+  });
+  const horizontalGridCoordinates = dedupeDimensionCoordinates(gridDimensionChains.flatMap(({ horizontalX, xAxisPoints, yAxisPoints }) =>
+    (horizontalX ? xAxisPoints : yAxisPoints).map((point) => point.x),
+  ));
+  const verticalGridCoordinates = dedupeDimensionCoordinates(gridDimensionChains.flatMap(({ horizontalX, xAxisPoints, yAxisPoints }) =>
+    (horizontalX ? yAxisPoints : xAxisPoints).map((point) => point.y),
+  ));
+  const includeBracketingGridCoordinates = (roomCoordinates: number[], gridCoordinates: number[]): number[] => {
+    if (roomCoordinates.length === 0 || gridCoordinates.length === 0) return roomCoordinates;
+    const minRoom = roomCoordinates[0];
+    const maxRoom = roomCoordinates[roomCoordinates.length - 1];
+    const inside = gridCoordinates.filter((coordinate) => coordinate >= minRoom - dimensionTolerance && coordinate <= maxRoom + dimensionTolerance);
+    const before = [...gridCoordinates].reverse().find((coordinate) => coordinate < minRoom - dimensionTolerance);
+    const after = gridCoordinates.find((coordinate) => coordinate > maxRoom + dimensionTolerance);
+    return dedupeDimensionCoordinates([
+      ...roomCoordinates,
+      ...inside,
+      ...(before == null ? [] : [before]),
+      ...(after == null ? [] : [after]),
+    ]);
+  };
   const gridDepthCandidates = gridData.map(({ spansX, spansY, rotation }) => {
     const horizontalX = Math.abs(Math.cos((rotation * Math.PI) / 180)) >= Math.abs(Math.sin((rotation * Math.PI) / 180));
     const horizontalSpans = horizontalX ? spansX : spansY;
@@ -4597,39 +4635,21 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const bottomProjectionDepth = sideDepth("bottom");
   const withinHorizontalPerimeter = (point: Point) => point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.maxX + dimensionTolerance;
   const withinVerticalPerimeter = (point: Point) => point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.maxY + dimensionTolerance;
-  const roomXsTop = dedupeDimensionCoordinates(roomDimensionPoints
+  const roomXsTop = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
     .filter((point) => withinHorizontalPerimeter(point) && point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.minY + topProjectionDepth + dimensionTolerance)
-    .map((point) => point.x));
-  const roomXsBottom = dedupeDimensionCoordinates(roomDimensionPoints
+    .map((point) => point.x)), horizontalGridCoordinates);
+  const roomXsBottom = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
     .filter((point) => withinHorizontalPerimeter(point) && point.y <= perimeterBounds.maxY + dimensionTolerance && point.y >= perimeterBounds.maxY - bottomProjectionDepth - dimensionTolerance)
-    .map((point) => point.x));
-  const roomYsLeft = dedupeDimensionCoordinates(roomDimensionPoints
+    .map((point) => point.x)), horizontalGridCoordinates);
+  const roomYsLeft = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
     .filter((point) => withinVerticalPerimeter(point) && point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.minX + leftProjectionDepth + dimensionTolerance)
-    .map((point) => point.y));
-  const roomYsRight = dedupeDimensionCoordinates(roomDimensionPoints
+    .map((point) => point.y)), verticalGridCoordinates);
+  const roomYsRight = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
     .filter((point) => withinVerticalPerimeter(point) && point.x <= perimeterBounds.maxX + dimensionTolerance && point.x >= perimeterBounds.maxX - rightProjectionDepth - dimensionTolerance)
-    .map((point) => point.y));
+    .map((point) => point.y)), verticalGridCoordinates);
   const roomOffset = pxPerM;
   const gridOffset = pxPerM * 2;
   const tickSize = dimFont * 0.34;
-  const rotateGridPoint = (point: Point, grid: StructuralGrid): Point => {
-    const radians = ((Number(grid.rotation) || 0) * Math.PI) / 180;
-    if (Math.abs(radians) < 1e-9) return point;
-    const dx = point.x - grid.origin.x;
-    const dy = point.y - grid.origin.y;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    return {
-      x: grid.origin.x + dx * cos - dy * sin,
-      y: grid.origin.y + dx * sin + dy * cos,
-    };
-  };
-  const gridDimensionChains = gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
-    const horizontalX = Math.abs(Math.cos((rotation * Math.PI) / 180)) >= Math.abs(Math.sin((rotation * Math.PI) / 180));
-    const xAxisPoints = xs.map((x) => rotateGridPoint({ x, y: ys[0] }, grid));
-    const yAxisPoints = ys.map((y) => rotateGridPoint({ x: xs[0], y }, grid));
-    return { gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints };
-  });
   const renderHorizontalDimension = (
     key: string,
     coordinates: number[],
@@ -4643,10 +4663,11 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       const nextX = coordinates[index + 1];
       const label = labels[index] ?? Math.round((Math.abs(nextX - x) / pxPerM) * 1000);
       const labelFont = dimFont * fontScale;
+      const outerTickY = y + (labelAbove ? -tickSize : tickSize);
       return <g key={`${key}-${index}`}>
         <line x1={x} y1={y} x2={nextX} y2={y} />
-        <line x1={x} y1={y - tickSize} x2={x} y2={extensionY} />
-        {index === coordinates.length - 2 && <line x1={nextX} y1={y - tickSize} x2={nextX} y2={extensionY} />}
+        <line x1={x} y1={outerTickY} x2={x} y2={extensionY} />
+        {index === coordinates.length - 2 && <line x1={nextX} y1={outerTickY} x2={nextX} y2={extensionY} />}
         <text x={(x + nextX) / 2} y={y + (labelAbove ? -labelFont * 0.35 : labelFont * 1.05)} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600}>{label}</text>
       </g>;
     })}
@@ -4666,10 +4687,11 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       const labelFont = dimFont * fontScale;
       const textX = x + (labelLeft ? -labelFont * 0.4 : labelFont * 0.4);
       const textY = (y + nextY) / 2;
+      const outerTickX = x + (labelLeft ? -tickSize : tickSize);
       return <g key={`${key}-${index}`}>
         <line x1={x} y1={y} x2={x} y2={nextY} />
-        <line x1={x - tickSize} y1={y} x2={extensionX} y2={y} />
-        {index === coordinates.length - 2 && <line x1={x - tickSize} y1={nextY} x2={extensionX} y2={nextY} />}
+        <line x1={outerTickX} y1={y} x2={extensionX} y2={y} />
+        {index === coordinates.length - 2 && <line x1={outerTickX} y1={nextY} x2={extensionX} y2={nextY} />}
         <text x={textX} y={textY} textAnchor="middle" dominantBaseline="central" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600} transform={`rotate(-90 ${textX} ${textY})`}>{label}</text>
       </g>;
     })}
