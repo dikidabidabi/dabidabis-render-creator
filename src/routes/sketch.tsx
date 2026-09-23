@@ -397,6 +397,7 @@ type DetailArea = {
   dimensions: boolean;
   floorHatch: boolean;
   showKeyplan: boolean;
+  showFurniture: boolean;
   createdAt: number;
   furniture?: DetailFurniture[];
 };
@@ -1181,6 +1182,7 @@ function normalizeSketch(s: any): Sketch {
           dimensions: area.dimensions !== false,
           floorHatch: area.floorHatch === true,
           showKeyplan: area.showKeyplan !== false,
+          showFurniture: area.showFurniture !== false,
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
         }];
@@ -10924,6 +10926,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           dimensions: true,
           floorHatch: false,
           showKeyplan: true,
+          showFurniture: true,
           createdAt: Date.now(),
         }],
       });
@@ -11960,6 +11963,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     ["dimensions", "Dimensi"],
                     ["floorHatch", "Hatch lantai 600 × 600 mm"],
                     ["showKeyplan", "Keyplan"],
+                    ["showFurniture", "Furniture"],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex items-center justify-between gap-3 py-1 text-[11px]">
                       <span>{label}</span>

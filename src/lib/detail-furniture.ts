@@ -15,12 +15,33 @@ export type DetailAreaWithFurniture = {
   furniture?: DetailFurniture[];
 };
 
-type CatalogFurniture = {
+export type CatalogFurniture = {
   id: string;
   name: string;
   aspectRatio: number;
   imageUrl: string;
 };
+
+export type ImportedFurniture = CatalogFurniture & {
+  importedAt: number;
+};
+
+export function normalizeImportedFurniture(value: unknown): ImportedFurniture[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return [];
+    const raw = item as Partial<ImportedFurniture>;
+    const aspectRatio = Number(raw.aspectRatio);
+    if (typeof raw.imageUrl !== "string" || !raw.imageUrl.startsWith("data:image/") || !Number.isFinite(aspectRatio) || aspectRatio <= 0) return [];
+    return [{
+      id: typeof raw.id === "string" && raw.id ? raw.id : `CUSTOM${Date.now()}_${index}`,
+      name: typeof raw.name === "string" && raw.name ? raw.name : "Furniture impor",
+      imageUrl: raw.imageUrl,
+      aspectRatio,
+      importedAt: Number.isFinite(Number(raw.importedAt)) ? Number(raw.importedAt) : Date.now(),
+    }];
+  });
+}
 
 const svgDataUrl = (body: string) =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
