@@ -4576,16 +4576,39 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     }
     return unique;
   };
-  const roomXs = dedupeDimensionCoordinates(
-    roomDimensionPoints
-      .filter((point) => point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.maxX + dimensionTolerance)
-      .map((point) => point.x),
-  );
-  const roomYs = dedupeDimensionCoordinates(
-    roomDimensionPoints
-      .filter((point) => point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.maxY + dimensionTolerance)
-      .map((point) => point.y),
-  );
+  const gridDepthCandidates = gridData.map(({ spansX, spansY, rotation }) => {
+    const horizontalX = Math.abs(Math.cos((rotation * Math.PI) / 180)) >= Math.abs(Math.sin((rotation * Math.PI) / 180));
+    const horizontalSpans = horizontalX ? spansX : spansY;
+    const verticalSpans = horizontalX ? spansY : spansX;
+    return {
+      left: horizontalSpans[0],
+      right: horizontalSpans[horizontalSpans.length - 1],
+      top: verticalSpans[0],
+      bottom: verticalSpans[verticalSpans.length - 1],
+    };
+  });
+  const sideDepth = (side: "left" | "right" | "top" | "bottom") => {
+    const spans = gridDepthCandidates.map((candidate) => candidate[side]).filter((span): span is number => Number.isFinite(span) && span > 0);
+    return spans.length > 0 ? Math.max(...spans) * pxPerM : Number.POSITIVE_INFINITY;
+  };
+  const leftProjectionDepth = sideDepth("left");
+  const rightProjectionDepth = sideDepth("right");
+  const topProjectionDepth = sideDepth("top");
+  const bottomProjectionDepth = sideDepth("bottom");
+  const withinHorizontalPerimeter = (point: Point) => point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.maxX + dimensionTolerance;
+  const withinVerticalPerimeter = (point: Point) => point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.maxY + dimensionTolerance;
+  const roomXsTop = dedupeDimensionCoordinates(roomDimensionPoints
+    .filter((point) => withinHorizontalPerimeter(point) && point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.minY + topProjectionDepth + dimensionTolerance)
+    .map((point) => point.x));
+  const roomXsBottom = dedupeDimensionCoordinates(roomDimensionPoints
+    .filter((point) => withinHorizontalPerimeter(point) && point.y <= perimeterBounds.maxY + dimensionTolerance && point.y >= perimeterBounds.maxY - bottomProjectionDepth - dimensionTolerance)
+    .map((point) => point.x));
+  const roomYsLeft = dedupeDimensionCoordinates(roomDimensionPoints
+    .filter((point) => withinVerticalPerimeter(point) && point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.minX + leftProjectionDepth + dimensionTolerance)
+    .map((point) => point.y));
+  const roomYsRight = dedupeDimensionCoordinates(roomDimensionPoints
+    .filter((point) => withinVerticalPerimeter(point) && point.x <= perimeterBounds.maxX + dimensionTolerance && point.x >= perimeterBounds.maxX - rightProjectionDepth - dimensionTolerance)
+    .map((point) => point.y));
   const roomOffset = pxPerM;
   const gridOffset = pxPerM * 2;
   const tickSize = dimFont * 0.34;
@@ -4709,10 +4732,10 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           );
         })}
         {area.dimensions && <>
-          {renderHorizontalDimension("room-top", roomXs, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.5)}
-          {renderHorizontalDimension("room-bottom", roomXs, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.5)}
-          {renderVerticalDimension("room-left", roomYs, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.5)}
-          {renderVerticalDimension("room-right", roomYs, [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.5)}
+          {renderHorizontalDimension("room-top", roomXsTop, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.5)}
+          {renderHorizontalDimension("room-bottom", roomXsBottom, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.5)}
+          {renderVerticalDimension("room-left", roomYsLeft, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.5)}
+          {renderVerticalDimension("room-right", roomYsRight, [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.5)}
           {gridDimensionChains.flatMap(({ gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints }) => {
             const horizontalPoints = horizontalX ? xAxisPoints : yAxisPoints;
             const verticalPoints = horizontalX ? yAxisPoints : xAxisPoints;
