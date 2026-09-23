@@ -11,6 +11,7 @@ import {
   Sparkles,
   Table2,
   FileText,
+  Armchair,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/project")({
       {
         name: "description",
         content:
-          "Ruang kerja privat pemilik akun: studio render AI, master plan, sketsa, tabulasi, narasi, presentasi, dan model 3D.",
+          "Ruang kerja privat pemilik akun: studio render AI, master plan, sketsa, detail, tabulasi, narasi, presentasi, dan model 3D.",
       },
       { property: "og:title", content: "Project — Ruang Kerja Arsitek Dabidabi's" },
       {
@@ -39,6 +40,7 @@ const TOOLS = [
   { to: "/studio", label: "Studio", desc: "Render AI berbasis node", icon: Sparkles },
   { to: "/masterplan", label: "Master Plan", desc: "Tata kawasan & konteks 3D", icon: Layers },
   { to: "/sketch", label: "Sketsa", desc: "Gambar denah & ilustrasi analisa", icon: PenTool },
+  { to: "/detail", label: "Detail", desc: "Pendetailan & penataan furniture", icon: Armchair },
   { to: "/tabulasi", label: "Tabulasi", desc: "Program ruang, KDB/KLB, parkir", icon: Table2 },
   { to: "/narasi", label: "Narasi", desc: "Naskah konsep desain", icon: FileText },
   { to: "/presentasi", label: "Presentasi", desc: "Slide paparan otomatis", icon: Presentation },

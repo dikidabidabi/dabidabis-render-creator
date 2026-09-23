@@ -181,6 +181,7 @@ import {
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
+import { normalizeDetailFurniture, type DetailFurniture } from "@/lib/detail-furniture";
 import { MasterplanSketch3DPreview } from "@/components/masterplan-sketch-3d-preview";
 import { useProjectStore } from "@/store/project-store";
 import { exportBuildingToSketch, syncSketchReferenceToMasterplan, syncMasterplanToSketches } from "@/lib/masterplan-sketch-sync";
@@ -397,6 +398,7 @@ type DetailArea = {
   floorHatch: boolean;
   showKeyplan: boolean;
   createdAt: number;
+  furniture?: DetailFurniture[];
 };
 
 // Label otomatis: A-A, B-B, ..., Z-Z, AA-AA, AB-AB, ...
@@ -1180,6 +1182,7 @@ function normalizeSketch(s: any): Sketch {
           floorHatch: area.floorHatch === true,
           showKeyplan: area.showKeyplan !== false,
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
+          furniture: normalizeDetailFurniture(area.furniture),
         }];
       });
     })(),
