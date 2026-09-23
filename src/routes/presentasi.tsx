@@ -8342,6 +8342,201 @@ function StackingBody({ sketch }: { sketch: Sketch }) {
   );
 }
 
+type FunctionSectionSlice = {
+  x0: number;
+  x1: number;
+  zoneId: string;
+  zoneName: string;
+  color: string;
+  areaM2: number;
+  layerIds: string[];
+};
+
+function FunctionSectionBody({ slide }: { slide: Extract<Slide, { kind: "function-section" }> }) {
+  const { sketch, cut } = slide;
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const expanded = expandLevelsForView(levels);
+  const displayNames = computeLevelDisplayNames(levels, sketch.layers ?? []);
+  const zones = normalizeFunctionZones(sketch.functionZones);
+  const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
+  const pxPerMeter = (8 * 10) / (SECTION_METERS_PER_MAJOR[sketch.scale] ?? 1);
+  const cutLengthPx = Math.hypot(cut.p2.x - cut.p1.x, cut.p2.y - cut.p1.y);
+  const cutLengthM = Math.max(0.01, cutLengthPx / pxPerMeter);
+  const roomLayers = (sketch.layers ?? []).filter((layer) =>
+    !!layer.levelId && !isLahan(layer.name) && !isVoid(layer.name) && !isTaman(layer.name),
+  );
+  const fallbackZone = (layer: Layer) => ({
+    id: `room-${layer.id}`,
+    name: layer.name,
+    color: (colorForRoomName(layer.name) ?? layer.color ?? "rgba(232,93,58,1)").replace("ALPHA", "1"),
+  });
+  const resolveZone = (layer: Layer) => {
+    const zone = layer.functionZoneId ? zoneById.get(layer.functionZoneId) : undefined;
+    return zone ? { id: zone.id, name: zone.name, color: functionZoneColor(zone.color, 1) } : fallbackZone(layer);
+  };
+  const groupsBySource = new Map<string, typeof expanded>();
+  for (const floor of expanded) {
+    const group = groupsBySource.get(floor.sourceId) ?? [];
+    group.push(floor);
+    groupsBySource.set(floor.sourceId, group);
+  }
+  const mergeSlices = (slices: FunctionSectionSlice[]) => {
+    const ordered = [...slices].sort((a, b) => a.x0 - b.x0 || a.x1 - b.x1);
+    const merged: FunctionSectionSlice[] = [];
+    for (const slice of ordered) {
+      const previous = merged[merged.length - 1];
+      if (previous && previous.zoneId === slice.zoneId && slice.x0 <= previous.x1 + 0.03) {
+        previous.x1 = Math.max(previous.x1, slice.x1);
+        previous.areaM2 += slice.areaM2;
+        previous.layerIds.push(...slice.layerIds);
+      } else {
+        merged.push({ ...slice, layerIds: [...slice.layerIds] });
+      }
+    }
+    return merged;
+  };
+  const rows = levels.flatMap((level) => {
+    const copies = groupsBySource.get(level.id) ?? [];
+    const rawSlices: FunctionSectionSlice[] = [];
+    for (const layer of roomLayers.filter((item) => item.levelId === level.id)) {
+      const zone = resolveZone(layer);
+      for (const [t0, t1] of cutPolygonIntervals(cut.p1, cut.p2, layer.points)) {
+        rawSlices.push({
+          x0: t0 * cutLengthM,
+          x1: t1 * cutLengthM,
+          zoneId: zone.id,
+          zoneName: zone.name,
+          color: zone.color,
+          areaM2: layer.areaM2 || 0,
+          layerIds: [layer.id],
+        });
+      }
+    }
+    const slices = mergeSlices(rawSlices);
+    const hitIds = new Set(rawSlices.flatMap((slice) => slice.layerIds));
+    const stats = new Map<string, { name: string; color: string; areaM2: number }>();
+    for (const layer of roomLayers.filter((item) => item.levelId === level.id && hitIds.has(item.id))) {
+      const zone = resolveZone(layer);
+      const current = stats.get(zone.id) ?? { name: zone.name, color: zone.color, areaM2: 0 };
+      current.areaM2 += layer.areaM2 || 0;
+      stats.set(zone.id, current);
+    }
+    const visibleCopies = copies.length ? copies : [{ id: level.id, sourceId: level.id, name: level.name, mdpl: level.mdpl, height: 3, typicalIndex: 0, typicalTotal: 1 }];
+    return visibleCopies.map((copy) => ({
+      id: copy.id,
+      sourceId: level.id,
+      label: copy.typicalTotal > 1
+        ? `${displayNames[level.id] ?? level.name} · ${copy.typicalIndex + 1}/${copy.typicalTotal}`
+        : (displayNames[level.id] ?? level.name),
+      baseM: copy.mdpl,
+      heightM: copy.height,
+      slices,
+      stats: [...stats.values()].sort((a, b) => b.areaM2 - a.areaM2),
+    }));
+  }).filter((row) => row.slices.length > 0);
+  const minBase = rows.length ? Math.min(...rows.map((row) => row.baseM)) : 0;
+  const maxTop = rows.length ? Math.max(...rows.map((row) => row.baseM + row.heightM)) : 3;
+  const sectionW = 720;
+  const sectionH = 610;
+  const leftPad = 18;
+  const topPad = 18;
+  const floorThicknessM = 0.5;
+  const sectionScale = Math.min(
+    (sectionW - leftPad * 2) / cutLengthM,
+    (sectionH - topPad * 2) / Math.max(1, maxTop - minBase + floorThicknessM),
+  );
+  const sx = (value: number) => leftPad + (cutLengthM - value) * sectionScale;
+  const sy = (value: number) => topPad + (maxTop - value) * sectionScale;
+  const axoColorOf = (layer: Layer) => resolveZone(layer).color;
+  const rings = rows.slice().reverse();
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "grid", gridTemplateColumns: "300px minmax(0, 1fr) 300px", gap: 16, minHeight: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "#777", fontWeight: 700, marginBottom: 8 }}>Aksonometri Zona Fungsi</div>
+        <div style={{ flex: 1, minHeight: 0, border: "1px solid #dedede", background: "#fafafa", padding: 8 }}>
+          <AxonometricView sketch={sketch} colorOf={() => "#888888"} colorOfLayer={axoColorOf} />
+        </div>
+        <div style={{ fontSize: 10, color: "#888", marginTop: 7, lineHeight: 1.35 }}>Massa ruang mengikuti warna zona fungsi pada Tabulasi.</div>
+      </div>
+
+      <div style={{ minWidth: 0, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        {rows.length === 0 ? (
+          <div style={{ color: "#888", fontSize: 14, textAlign: "center" }}>Garis potong belum mengenai ruang.</div>
+        ) : (
+          <svg viewBox={`0 0 ${sectionW} ${sectionH}`} width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-label={`Potongan fungsi ${cut.label ?? ""}`}>
+            <rect width={sectionW} height={sectionH} fill="#ffffff" />
+            {rows.map((row) => {
+              const floorTop = sy(row.baseM);
+              const floorBottom = sy(row.baseM - floorThicknessM);
+              const floorRanges = row.slices.map((slice) => [slice.x0, slice.x1] as [number, number]).sort((a, b) => a[0] - b[0]);
+              const minX = Math.min(...row.slices.map((slice) => slice.x0));
+              const maxX = Math.max(...row.slices.map((slice) => slice.x1));
+              return (
+                <g key={row.id}>
+                  {row.slices.map((slice, index) => {
+                    const x = Math.min(sx(slice.x0), sx(slice.x1));
+                    const width = Math.max(1, (slice.x1 - slice.x0) * sectionScale);
+                    const y = sy(row.baseM + row.heightM);
+                    const height = row.heightM * sectionScale;
+                    const words = slice.zoneName.split(/\s+/).filter(Boolean);
+                    const lines = words.length > 2 && width < 150
+                      ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")]
+                      : [slice.zoneName];
+                    const longest = Math.max(...lines.map((line) => line.length), 1);
+                    const fontSize = Math.max(8, Math.min(28, width / (longest * 0.58), height / (lines.length * 1.25)));
+                    return (
+                      <g key={`${row.id}-${slice.zoneId}-${index}`}>
+                        <rect x={x} y={y} width={width} height={height} fill={slice.color} stroke="#111111" strokeWidth={1.1} />
+                        <text x={x + width / 2} y={y + height / 2 - ((lines.length - 1) * fontSize * 0.58)} textAnchor="middle" dominantBaseline="middle" fill="#0a0a0a" fontFamily="Sora, sans-serif" fontWeight={800} fontSize={fontSize}>
+                          {lines.map((line, lineIndex) => <tspan key={lineIndex} x={x + width / 2} dy={lineIndex === 0 ? 0 : fontSize * 1.08}>{line}</tspan>)}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {floorRanges.map(([start, end], index) => (
+                    <rect key={`slab-${row.id}-${index}`} x={Math.min(sx(start), sx(end))} y={floorTop} width={(end - start) * sectionScale} height={Math.max(2, floorBottom - floorTop)} fill="#0a0a0a" />
+                  ))}
+                  <line x1={sx(minX)} y1={sy(row.baseM + row.heightM)} x2={sx(minX)} y2={floorTop} stroke="#0a0a0a" strokeWidth={3} />
+                  <line x1={sx(maxX)} y1={sy(row.baseM + row.heightM)} x2={sx(maxX)} y2={floorTop} stroke="#0a0a0a" strokeWidth={3} />
+                  <text x={Math.max(sx(minX), sx(maxX)) + 8} y={sy(row.baseM + row.heightM) + 12} fontSize={10} fill="#666666" fontFamily="Manrope, sans-serif">{row.label}</text>
+                </g>
+              );
+            })}
+            <line x1={leftPad - 5} y1={sy(0)} x2={sectionW - leftPad + 5} y2={sy(0)} stroke="#111111" strokeWidth={1.2} />
+          </svg>
+        )}
+      </div>
+
+      <div style={{ minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase", color: "#777", fontWeight: 700, marginBottom: 8 }}>Komposisi Fungsi per Lantai</div>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, paddingRight: 4 }}>
+          {rings.map((row) => {
+            const total = row.stats.reduce((sum, item) => sum + item.areaM2, 0);
+            return (
+              <div key={`ring-${row.id}`} style={{ borderTop: "1px solid #dedede", paddingTop: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 6 }}>{row.label}</div>
+                <div style={{ display: "flex", gap: 9, alignItems: "center" }}>
+                  <Donut segments={row.stats.map((item) => ({ value: item.areaM2, color: item.color }))} size={72} thickness={11} centerValue="100%" />
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                    {row.stats.map((item) => (
+                      <div key={`${row.id}-${item.name}`} style={{ display: "grid", gridTemplateColumns: "8px minmax(0,1fr) auto", gap: 5, alignItems: "center", fontSize: 9 }}>
+                        <span style={{ width: 8, height: 8, background: item.color, border: "1px solid rgba(0,0,0,0.2)" }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+                        <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{total > 0 ? fmt((item.areaM2 / total) * 100, 0) : 0}% · {fmt(item.areaM2)} m²</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ---- Simulasi Aliran Angin (Three.js, conceptual particle stream) ----
 function WindBody({ sketch }: { sketch: Sketch }) {
