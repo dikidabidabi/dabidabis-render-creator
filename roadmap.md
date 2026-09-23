@@ -17,4 +17,8 @@
 - [x] Simpan furniture impor ke pustaka akun dan tampilkan kembali pada panel seluruh proyek.
 - [x] Tambahkan ceklis Furniture pada Pendetailan untuk mengatur kemunculan di Slide Detail.
 - [x] Verifikasi seluruh interaksi pada desktop dan layar sentuh serta tampilan Presentasi.
+- [ ] Tambahkan ceklis Fungsi per garis potong dan simpan bersama proyek.
+- [ ] Tambahkan slide Potongan Fungsi setelah Stacking Diagram.
+- [ ] Render pelat 50 cm, zona gabungan, dinding luar, aksonometri, dan diagram cincin per lantai.
+- [ ] Verifikasi urutan slide, tampilan desktop, dan layar kecil.
 

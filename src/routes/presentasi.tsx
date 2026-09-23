@@ -131,7 +131,7 @@ type Layer = {
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
-type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
+type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
@@ -1479,6 +1479,7 @@ type Slide =
   | { kind: "wind"; id: string; title: string; sketch: Sketch }
   | { kind: "thermal"; id: string; title: string; sketch: Sketch }
   | { kind: "stacking"; id: string; title: string; sketch: Sketch }
+  | { kind: "function-section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "explode-axo"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
@@ -1626,6 +1627,22 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "facade-zoning", id: "facade-zoning", title: "Zonasi Fasad · Masif vs Bukaan", sketch: sk, bounds });
   out.push({ kind: "thermal", id: "thermal", title: "Analisa Thermal Heatmap", sketch: sk });
   out.push({ kind: "stacking", id: "stacking", title: "Stacking Diagram", sketch: sk });
+  {
+    const cuts = Array.isArray(sk.sectionCuts) && sk.sectionCuts.length > 0
+      ? sk.sectionCuts
+      : (sk.sectionCut ? [sk.sectionCut] : []);
+    cuts.forEach((cut, index) => {
+      if (!cut.showFunctionSlide || !cut.p1 || !cut.p2) return;
+      const label = cut.label || `Potongan ${index + 1}`;
+      out.push({
+        kind: "function-section",
+        id: `function-section-${index}-${label}`,
+        title: `Potongan Fungsi ${label}`,
+        sketch: sk,
+        cut,
+      });
+    });
+  }
   out.push({ kind: "explode-axo", id: "explode-axo", title: "Diagram Aksonometri Eksplode · Tipe Layout", sketch: sk });
   // Slide Perspektif — ditempatkan setelah Aksonometri Eksplode.
   perspektifList.forEach((p, i) => {
@@ -1726,6 +1743,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "wind": return "Analisa Iklim · Angin";
       case "thermal": return "Analisa Thermal Heatmap";
       case "stacking": return "Stacking Diagram";
+      case "function-section": return "Potongan Fungsi";
       case "explode-axo": return "Aksonometri Eksplode";
       case "rekap": return "Rekapitulasi";
       case "rincian": return "Rincian per Level";
@@ -2143,6 +2161,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "wind" && <WindBody sketch={slide.sketch} />}
       {slide.kind === "thermal" && <ThermalBody sketch={slide.sketch} />}
       {slide.kind === "stacking" && <StackingBody sketch={slide.sketch} />}
+      {slide.kind === "function-section" && <FunctionSectionBody slide={slide} />}
       {slide.kind === "explode-axo" && <ExplodedAxoBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "rincian" && <RincianBody slide={slide} />}
@@ -2203,6 +2222,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     : slide.kind === "facade-zoning" ? "Analisa · Zonasi Fasad"
     : slide.kind === "konsep" ? "Konsep · Narasi"
     : slide.kind === "stacking" ? "Sketsa · Stacking"
+    : slide.kind === "function-section" ? "Sketsa · Potongan Fungsi"
     : slide.kind === "wind" ? "Analisa · Iklim Angin"
     : slide.kind === "thermal" ? "Analisa · Thermal Heatmap"
     : slide.kind === "explode-axo" ? "Sketsa · Aksonometri Eksplode"
@@ -7891,9 +7911,11 @@ function stackMetersPerPx(scale: string) {
 function AxonometricView({
   sketch,
   colorOf,
+  colorOfLayer,
 }: {
   sketch: Sketch;
   colorOf: (levelId: string) => string;
+  colorOfLayer?: (layer: Layer, levelId: string) => string;
 }) {
   const mPerPx = stackMetersPerPx(sketch.scale);
   const ascLevels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
@@ -8028,8 +8050,10 @@ function AxonometricView({
       const ov = roomExtrudeOverride(ly.name);
       const yBot = lv.base + (ov?.baseDelta ?? 0);
       const yTop = yBot + (ov?.height ?? lv.height);
-      const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : top;
-      const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : side;
+      const layerTop = colorOfLayer?.(ly, lv.sourceId) ?? top;
+      const layerSide = colorOfLayer ? functionZoneColor(layerTop, 0.76) : side;
+      const topFill = ov ? (isAtapHijau(ly.name) ? HIJAU_HEX : ABU_HEX) : layerTop;
+      const sideFill = ov ? (isAtapHijau(ly.name) ? HIJAU_SIDE : ABU_SIDE) : layerSide;
       // Side quads: render semua sisi, lalu painter sorting menempatkan sisi depan di atas top/back face.
       for (let i = 0; i < pm.length; i++) {
         const a = pm[i];
