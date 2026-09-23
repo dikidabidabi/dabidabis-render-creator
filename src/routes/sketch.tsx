@@ -384,6 +384,7 @@ type SectionCut = {
   p1: Point;
   p2: Point;
   label?: string;
+  showFunctionSlide?: boolean;
   updatedAt?: number;
 };
 
@@ -1027,6 +1028,7 @@ function normalizeSketch(s: any): Sketch {
           p1: { x: Number(c.p1.x), y: Number(c.p1.y) },
           p2: { x: Number(c.p2.x), y: Number(c.p2.y) },
           label: typeof c.label === "string" && c.label.trim() ? c.label : "A-A",
+          showFunctionSlide: c.showFunctionSlide === true,
           updatedAt: Number.isFinite(Number(c.updatedAt)) ? Number(c.updatedAt) : Date.now(),
         };
       };
@@ -10982,7 +10984,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const label = nextSectionLabel(existing);
       const next: SectionCut[] = [
         ...existing,
-        { p1: a, p2: b, label, updatedAt: Date.now() },
+        { p1: a, p2: b, label, showFunctionSlide: false, updatedAt: Date.now() },
       ];
       onChange({ sectionCuts: next, sectionCut: undefined });
       toast.success(`Garis Potong ${label} tersimpan · slide potongan otomatis dibuat`, { duration: 2500 });
@@ -14195,6 +14197,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     className="flex items-center justify-between gap-1.5 rounded border border-border/60 bg-surface/40 px-2 py-1"
                   >
                     <span className="text-[11px] font-medium">{c.label || sectionLabelFor(i)}</span>
+                    <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={c.showFunctionSlide === true}
+                        onChange={(event) => {
+                          const next = (sketch.sectionCuts ?? []).map((cut, index) => index === i
+                            ? { ...cut, showFunctionSlide: event.target.checked, updatedAt: Date.now() }
+                            : cut);
+                          onChange({ sectionCuts: next, sectionCut: undefined });
+                        }}
+                        className="h-3.5 w-3.5 accent-foreground"
+                      />
+                      Fungsi
+                    </label>
                     <Button
                       variant="ghost"
                       size="sm"
