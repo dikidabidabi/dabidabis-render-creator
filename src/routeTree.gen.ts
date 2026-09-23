@@ -20,6 +20,7 @@ import { Route as MasterplanRouteImport } from './routes/masterplan'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GalleryRouteImport } from './routes/gallery'
 import { Route as FeedRouteImport } from './routes/feed'
+import { Route as DetailRouteImport } from './routes/detail'
 import { Route as AkunRouteImport } from './routes/akun'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
@@ -82,6 +83,11 @@ const FeedRoute = FeedRouteImport.update({
   path: '/feed',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DetailRoute = DetailRouteImport.update({
+  id: '/detail',
+  path: '/detail',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AkunRoute = AkunRouteImport.update({
   id: '/akun',
   path: '/akun',
@@ -116,6 +122,7 @@ const StudioPustakaPromptRoute = StudioPustakaPromptRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/akun': typeof AkunRoute
+  '/detail': typeof DetailRoute
   '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
@@ -135,6 +142,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/akun': typeof AkunRoute
+  '/detail': typeof DetailRoute
   '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/akun': typeof AkunRoute
+  '/detail': typeof DetailRoute
   '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
   '/login': typeof LoginRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/akun'
+    | '/detail'
     | '/feed'
     | '/gallery'
     | '/login'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/akun'
+    | '/detail'
     | '/feed'
     | '/gallery'
     | '/login'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/akun'
+    | '/detail'
     | '/feed'
     | '/gallery'
     | '/login'
@@ -234,6 +246,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AkunRoute: typeof AkunRoute
+  DetailRoute: typeof DetailRoute
   FeedRoute: typeof FeedRoute
   GalleryRoute: typeof GalleryRoute
   LoginRoute: typeof LoginRoute
@@ -330,6 +343,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FeedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/detail': {
+      id: '/detail'
+      path: '/detail'
+      fullPath: '/detail'
+      preLoaderRoute: typeof DetailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/akun': {
       id: '/akun'
       path: '/akun'
@@ -378,6 +398,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AkunRoute: AkunRoute,
+  DetailRoute: DetailRoute,
   FeedRoute: FeedRoute,
   GalleryRoute: GalleryRoute,
   LoginRoute: LoginRoute,

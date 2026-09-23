@@ -114,6 +114,7 @@ export const Route = createFileRoute("/presentasi")({
 });
 
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
+import { normalizeDetailFurniture, type DetailFurniture } from "@/lib/detail-furniture";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -134,6 +135,7 @@ type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; createdAt: number;
+  furniture?: DetailFurniture[];
 };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
@@ -4833,6 +4835,18 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />
+        {normalizeDetailFurniture(area.furniture).map((item) => (
+          <image
+            key={`detail-furniture-${item.id}`}
+            href={item.imageUrl}
+            x={item.x - item.width / 2}
+            y={item.y - item.height / 2}
+            width={item.width}
+            height={item.height}
+            preserveAspectRatio="none"
+            transform={`rotate(${item.rotation} ${item.x} ${item.y})`}
+          />
+        ))}
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>

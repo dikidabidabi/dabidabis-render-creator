@@ -102,6 +102,7 @@ const PROJECT_LINKS = [
   { to: "/studio", label: "Studio" },
   { to: "/masterplan", label: "Master Plan" },
   { to: "/sketch", label: "Sketsa" },
+  { to: "/detail", label: "Detail" },
   { to: "/tabulasi", label: "Tabulasi" },
   { to: "/narasi", label: "Narasi" },
   { to: "/presentasi", label: "Presentasi" },
