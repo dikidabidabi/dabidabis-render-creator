@@ -21,4 +21,6 @@
 - [x] Tambahkan slide Potongan Fungsi setelah Stacking Diagram.
 - [x] Render pelat 50 cm, zona gabungan, dinding luar, aksonometri, dan diagram cincin per lantai.
 - [x] Verifikasi urutan slide, tampilan desktop, dan layar kecil.
+- [x] Hitung komposisi fungsi dari seluruh ruang per lantai dan tambahkan akumulasi semua lantai.
+- [x] Tampilkan seluruh legenda Potongan Fungsi tanpa gulir vertikal atau teks terpotong.
 
