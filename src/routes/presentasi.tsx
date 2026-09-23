@@ -134,7 +134,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
 };
 type Sketch = {
@@ -4835,7 +4835,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />
-        {normalizeDetailFurniture(area.furniture).map((item) => (
+        {area.showFurniture !== false && normalizeDetailFurniture(area.furniture).map((item) => (
           <image
             key={`detail-furniture-${item.id}`}
             href={item.imageUrl}
