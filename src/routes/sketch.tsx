@@ -3008,6 +3008,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Offset tool — jarak offset (cm pada skala asli)
   const [offsetCm, setOffsetCm] = useState<number>(100);
   const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
+  const [pickMarquee, setPickMarquee] = useState<
+    { start: Point; cur: Point; erase: boolean } | null
+  >(null);
   // Door tool — parameter & live draft (3-langkah gesture single drag).
   const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
   const [doorType, setDoorType] = useState<"swing" | "sliding">("swing");
@@ -3141,6 +3144,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     if (tool !== "edit") setEditVertexMarquee(null);
     if (tool !== "floor") setFloorVertexMarquee(null);
+    if (tool !== "pick") setPickMarquee(null);
     if (tool !== "mirror") setMirrorDraft(null);
   }, [tool]);
   useEffect(() => {
@@ -3149,6 +3153,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setMoveMarquee(null);
     setEditVertexMarquee(null);
     setFloorVertexMarquee(null);
+    setPickMarquee(null);
   }, [id, activeLvlId]);
 
 
@@ -4660,6 +4665,41 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             ctx.arc(x, y, 3.5 / s, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
+          }
+
+          if (pickMarquee) {
+            const x0 = Math.min(pickMarquee.start.x, pickMarquee.cur.x);
+            const x1 = Math.max(pickMarquee.start.x, pickMarquee.cur.x);
+            const y0 = Math.min(pickMarquee.start.y, pickMarquee.cur.y);
+            const y1 = Math.max(pickMarquee.start.y, pickMarquee.cur.y);
+            const pointInRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+            const orient = (a: Point, b: Point, c: Point) =>
+              (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            const crosses = (a: Point, b: Point, c: Point, d: Point) => {
+              const o1 = orient(a, b, c), o2 = orient(a, b, d);
+              const o3 = orient(c, d, a), o4 = orient(c, d, b);
+              return o1 * o2 <= 0 && o3 * o4 <= 0;
+            };
+            const touchesRect = (seg: EdgeSegment) =>
+              pointInRect(seg.a) || pointInRect(seg.b) ||
+              crosses(seg.a, seg.b, { x: x0, y: y0 }, { x: x1, y: y0 }) ||
+              crosses(seg.a, seg.b, { x: x1, y: y0 }, { x: x1, y: y1 }) ||
+              crosses(seg.a, seg.b, { x: x1, y: y1 }, { x: x0, y: y1 }) ||
+              crosses(seg.a, seg.b, { x: x0, y: y1 }, { x: x0, y: y0 });
+
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = pickMarquee.erase ? "rgba(220,38,38,0.95)" : MATERIAL_COLORS[pickMaterial];
+            ctx.lineWidth = 6 / s;
+            for (const seg of allSegs) {
+              if (seg.levelId !== activeLvlId || !touchesRect(seg)) continue;
+              ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y); ctx.stroke();
+            }
+            ctx.setLineDash([6 / s, 4 / s]);
+            ctx.lineWidth = 1.4 / s;
+            ctx.strokeStyle = pickMarquee.erase ? "rgba(220,38,38,0.95)" : "rgba(232,93,58,0.95)";
+            ctx.fillStyle = pickMarquee.erase ? "rgba(220,38,38,0.08)" : "rgba(232,93,58,0.08)";
+            ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.fill(); ctx.stroke();
+            ctx.setLineDash([]);
           }
         }
         ctx.restore();
@@ -7301,7 +7341,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, windowDraft, windowLeaves, windowWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, windowDraft, windowLeaves, windowWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -9723,7 +9763,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         (s) => s.levelId === activeLvlId,
       );
       const hit = pickSegmentAt(raw, segs, tol);
-      if (!hit) return;
+      if (!hit) {
+        setPickMarquee({ start: raw, cur: raw, erase: e.altKey || e.shiftKey });
+        return;
+      }
       const prev = sketch.edgeAttrs ?? {};
       const next: Record<string, EdgeMaterial> = { ...prev };
       // Alt/Shift = hapus attribute.
@@ -10219,6 +10262,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setMoveMarquee({ ...moveMarquee, cur: raw });
       return;
     }
+    if (pickMarquee) {
+      setPickMarquee({ ...pickMarquee, cur: getWorldPosRaw(e) });
+      return;
+    }
     if (editVertexMarquee) {
       const raw = getWorldPosRaw(e);
       setEditVertexMarquee({ ...editVertexMarquee, cur: raw });
@@ -10610,6 +10657,50 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         if (inRect(c.p1) && inRect(c.p2)) next.add(`section:${i}`);
       });
       setMoveSel(next);
+      return;
+    }
+    if (pickMarquee) {
+      const mm = pickMarquee;
+      setPickMarquee(null);
+      if (!activeLvlId) return;
+      const moved = Math.hypot(mm.cur.x - mm.start.x, mm.cur.y - mm.start.y) * view.s > 4;
+      if (!moved) return;
+      const x0 = Math.min(mm.start.x, mm.cur.x);
+      const x1 = Math.max(mm.start.x, mm.cur.x);
+      const y0 = Math.min(mm.start.y, mm.cur.y);
+      const y1 = Math.max(mm.start.y, mm.cur.y);
+      const pointInRect = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+      const orient = (a: Point, b: Point, c: Point) =>
+        (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+      const crosses = (a: Point, b: Point, c: Point, d: Point) => {
+        const o1 = orient(a, b, c), o2 = orient(a, b, d);
+        const o3 = orient(c, d, a), o4 = orient(c, d, b);
+        return o1 * o2 <= 0 && o3 * o4 <= 0;
+      };
+      const touchesRect = (seg: EdgeSegment) =>
+        pointInRect(seg.a) || pointInRect(seg.b) ||
+        crosses(seg.a, seg.b, { x: x0, y: y0 }, { x: x1, y: y0 }) ||
+        crosses(seg.a, seg.b, { x: x1, y: y0 }, { x: x1, y: y1 }) ||
+        crosses(seg.a, seg.b, { x: x1, y: y1 }, { x: x0, y: y1 }) ||
+        crosses(seg.a, seg.b, { x: x0, y: y1 }, { x: x0, y: y0 });
+      const selected = computeStraightSegments(lines).filter(
+        (segment) => segment.levelId === activeLvlId && touchesRect(segment),
+      );
+      if (selected.length === 0) {
+        toast.message("Tidak ada garis dalam area seleksi");
+        return;
+      }
+      const next: Record<string, EdgeMaterial> = { ...(sketch.edgeAttrs ?? {}) };
+      for (const segment of selected) {
+        const key = edgeMaterialKey(activeLvlId, segment.a, segment.b);
+        if (mm.erase) delete next[key];
+        else next[key] = pickMaterial;
+      }
+      pushHistory();
+      onChange({ edgeAttrs: next });
+      toast.success(mm.erase
+        ? `${selected.length} garis dihapus tanda materialnya`
+        : `${selected.length} garis diubah menjadi ${MATERIAL_LABELS[pickMaterial]}`);
       return;
     }
 
@@ -11126,6 +11217,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setDoorDraft(null);
     setWindowDraft(null);
     setCircleDraft(null);
+    setPickMarquee(null);
   };
 
   const handleUndo = () => {
@@ -11735,7 +11827,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("pick"); }}
             className={cn(tool === "pick" && "bg-gradient-primary shadow-primary")}
-            title="Pick Material — klik segmen garis untuk menandai jenis dinding atau selubung. Alt-klik untuk hapus."
+            title="Pick Material — klik satu garis atau tarik kotak untuk mengubah banyak garis. Alt/Shift untuk hapus."
           >
             <Paintbrush className="mr-1.5 h-4 w-4" /> Pick Material
           </Button>
@@ -13404,8 +13496,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               ))}
             </div>
             <p className="text-[10px] leading-snug text-muted-foreground">
-              Klik segmen garis di kanvas untuk menandai. Segmen dipecah otomatis
-              pada tiap titik potong (node). Alt/Shift + klik = hapus tanda.
+              Klik satu garis atau tarik kotak dari area kosong untuk mengubah banyak garis sekaligus.
+              Garis yang disentuh kotak akan dipilih. Alt/Shift + klik atau tarik = hapus tanda.
+              Segmen dipecah otomatis pada tiap titik potong (node).
               Tanda ini hanya mengubah notasi di slide Denah & Potongan, tidak
               memengaruhi massa 3D.
             </p>
@@ -14805,7 +14898,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "window" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "window" || tool === "pick" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
@@ -15199,7 +15292,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               onPointerLeave={() => setHover(null)}
               className={cn(
                 "block touch-none select-none",
-                tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+                tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "pick" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
               )}
             />
             <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 shadow-soft backdrop-blur">
