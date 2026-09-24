@@ -4678,7 +4678,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const crosses = (a: Point, b: Point, c: Point, d: Point) => {
               const o1 = orient(a, b, c), o2 = orient(a, b, d);
               const o3 = orient(c, d, a), o4 = orient(c, d, b);
-              return o1 * o2 <= 0 && o3 * o4 <= 0;
+              const within = (p: Point, q: Point, r: Point) =>
+                r.x >= Math.min(p.x, q.x) - 1e-6 && r.x <= Math.max(p.x, q.x) + 1e-6 &&
+                r.y >= Math.min(p.y, q.y) - 1e-6 && r.y <= Math.max(p.y, q.y) + 1e-6;
+              return (
+                ((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) &&
+                ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0))
+              ) || Math.abs(o1) < 1e-6 && within(a, b, c)
+                || Math.abs(o2) < 1e-6 && within(a, b, d)
+                || Math.abs(o3) < 1e-6 && within(c, d, a)
+                || Math.abs(o4) < 1e-6 && within(c, d, b);
             };
             const touchesRect = (seg: EdgeSegment) =>
               pointInRect(seg.a) || pointInRect(seg.b) ||
@@ -10675,7 +10684,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const crosses = (a: Point, b: Point, c: Point, d: Point) => {
         const o1 = orient(a, b, c), o2 = orient(a, b, d);
         const o3 = orient(c, d, a), o4 = orient(c, d, b);
-        return o1 * o2 <= 0 && o3 * o4 <= 0;
+        const within = (p: Point, q: Point, r: Point) =>
+          r.x >= Math.min(p.x, q.x) - 1e-6 && r.x <= Math.max(p.x, q.x) + 1e-6 &&
+          r.y >= Math.min(p.y, q.y) - 1e-6 && r.y <= Math.max(p.y, q.y) + 1e-6;
+        return (
+          ((o1 > 0 && o2 < 0) || (o1 < 0 && o2 > 0)) &&
+          ((o3 > 0 && o4 < 0) || (o3 < 0 && o4 > 0))
+        ) || Math.abs(o1) < 1e-6 && within(a, b, c)
+          || Math.abs(o2) < 1e-6 && within(a, b, d)
+          || Math.abs(o3) < 1e-6 && within(c, d, a)
+          || Math.abs(o4) < 1e-6 && within(c, d, b);
       };
       const touchesRect = (seg: EdgeSegment) =>
         pointInRect(seg.a) || pointInRect(seg.b) ||
