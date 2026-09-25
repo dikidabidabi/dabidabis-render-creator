@@ -4557,7 +4557,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     return [{ grid, gridIndex, spansX, spansY, xsM, ysM, xs, ys, rotation }];
   });
   const dimFont = sw * 0.012;
-  const dimStroke = sw * 0.000325;
+  const dimStroke = sw * 0.0001625;
   const gridStroke = Math.max(sw * 0.00028, 0.12);
   const roomDimensionSegments = computeStraightSegments(lines.map((line) => ({
     a: line.a,
@@ -4776,10 +4776,10 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           );
         })}
         {area.dimensions && <>
-          {renderHorizontalDimension("room-top", roomXsTop, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.5)}
-          {renderHorizontalDimension("room-bottom", roomXsBottom, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.5)}
-          {renderVerticalDimension("room-left", roomYsLeft, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.5)}
-          {renderVerticalDimension("room-right", roomYsRight, [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.5)}
+          {renderHorizontalDimension("room-top", roomXsTop, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.75)}
+          {renderHorizontalDimension("room-bottom", roomXsBottom, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.75)}
+          {renderVerticalDimension("room-left", roomYsLeft, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.75)}
+          {renderVerticalDimension("room-right", roomYsRight, [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.75)}
           {gridDimensionChains.flatMap(({ gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints }) => {
             const horizontalPoints = horizontalX ? xAxisPoints : yAxisPoints;
             const verticalPoints = horizontalX ? yAxisPoints : xAxisPoints;

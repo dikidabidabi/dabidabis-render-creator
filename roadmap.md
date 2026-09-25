@@ -24,4 +24,5 @@
 - [x] Hitung komposisi fungsi dari seluruh ruang per lantai dan tambahkan akumulasi semua lantai.
 - [x] Tampilkan seluruh legenda Potongan Fungsi tanpa gulir vertikal atau teks terpotong.
 - [x] Tambahkan seleksi marquee untuk mengubah material banyak garis sekaligus pada level aktif.
+- [x] Atur teks dimensi ruang 25% lebih kecil dari teks grid dan tipiskan garis dimensi 50%.
 
