@@ -33,6 +33,7 @@ import { Link } from "@tanstack/react-router";
 
 import SunCalc from "suncalc";
 import * as THREE from "three";
+import polygonClipping from "polygon-clipping";
 import { drawOsmTiles } from "@/lib/geo";
 import {
   type StructuralGrid,
@@ -7205,6 +7206,48 @@ const WALL_THICK_MM: Record<EdgeMaterial, number> = {
 };
 const RAILING_COLOR = "#8b5a2b";
 
+type WallBandGeometry = {
+  segment: EdgeSegment;
+  material: "solid" | "concrete150" | "concrete200" | "concrete300";
+  outer: Point[];
+  core: Point[];
+};
+
+function wallBandPolygon(segment: EdgeSegment, halfWidth: number, endExtension: number): Point[] {
+  const dx = segment.b.x - segment.a.x;
+  const dy = segment.b.y - segment.a.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = dx / length, uy = dy / length;
+  const nx = -dy / length, ny = dx / length;
+  const start = { x: segment.a.x - ux * endExtension, y: segment.a.y - uy * endExtension };
+  const end = { x: segment.b.x + ux * endExtension, y: segment.b.y + uy * endExtension };
+  return [
+    { x: start.x + nx * halfWidth, y: start.y + ny * halfWidth },
+    { x: end.x + nx * halfWidth, y: end.y + ny * halfWidth },
+    { x: end.x - nx * halfWidth, y: end.y - ny * halfWidth },
+    { x: start.x - nx * halfWidth, y: start.y - ny * halfWidth },
+  ];
+}
+
+function unionWallBands(polygons: Point[][]): Point[][][] {
+  if (polygons.length === 0) return [];
+  try {
+    const inputs = polygons.map((polygon) => [polygon.map((point) => [point.x, point.y] as [number, number])]);
+    return polygonClipping.union(inputs[0] as any, ...(inputs.slice(1) as any[])).map((polygon) =>
+      polygon.map((ring) => ring.map(([x, y]) => ({ x, y }))),
+    );
+  } catch {
+    return polygons.map((polygon) => [polygon]);
+  }
+}
+
+function wallUnionPath(polygons: Point[][][]): string {
+  return polygons.map((polygon) => polygon.map((ring) => {
+    if (ring.length === 0) return "";
+    return `M ${ring.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`;
+  }).join(" ")).join(" ");
+}
+
 function materialForEdgeSegment(
   segment: EdgeSegment,
   sourceLines: Line[],
@@ -7365,6 +7408,30 @@ function MaterialEdges({
   const hatchGap = Math.max(1.2, pxPerM * 0.1);
   const hatchStroke = Math.max(0.18, sw * 0.0004);
   const patternId = useId();
+  const materialSegments = [...segs].sort((a, b) => {
+    const materialA = materialForEdgeSegment(a, segmentSource, edgeAttrs);
+    const materialB = materialForEdgeSegment(b, segmentSource, edgeAttrs);
+    return (materialA ? WALL_THICK_MM[materialA] : 0) - (materialB ? WALL_THICK_MM[materialB] : 0);
+  });
+  const wallBands: WallBandGeometry[] = materialSegments.flatMap((segment) => {
+    const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
+    if (material !== "solid" && material !== "concrete150" && material !== "concrete200" && material !== "concrete300") return [];
+    const half = (WALL_THICK_MM[material] / 1000) * pxPerM * 0.5;
+    const coreHalf = material === "solid" && !detailSolidLayers
+      ? half
+      : Math.max(0, half - 0.015 * pxPerM);
+    return [{
+      segment,
+      material,
+      outer: wallBandPolygon(segment, half, half),
+      core: wallBandPolygon(segment, coreHalf, half),
+    }];
+  });
+  const outerWallUnion = unionWallBands(wallBands.map((band) => band.outer));
+  const coreWallUnion = unionWallBands(wallBands.map((band) => band.core));
+  const outerWallPath = wallUnionPath(outerWallUnion);
+  const coreWallPath = wallUnionPath(coreWallUnion);
+  const pointsValue = (points: Point[]) => points.map((point) => `${point.x},${point.y}`).join(" ");
   return (
     <g>
       <defs>
@@ -7409,13 +7476,37 @@ function MaterialEdges({
           />
         );
       })}
-      {/* Render elemen ber-material di lapisan teratas agar menutupi
-          garis dasar sketsa yang berada di bawahnya. */}
-      {mode !== "base" && [...segs].sort((a, b) => {
-        const materialA = materialForEdgeSegment(a, segmentSource, edgeAttrs);
-        const materialB = materialForEdgeSegment(b, segmentSource, edgeAttrs);
-        return (materialA ? WALL_THICK_MM[materialA] : 0) - (materialB ? WALL_THICK_MM[materialB] : 0);
-      }).map((s) => {
+      {/* Dinding masif digabung dahulu. Dengan demikian tidak ada garis penutup
+          segmen yang menerobos dinding lain pada sudut, T, atau persilangan. */}
+      {mode !== "base" && outerWallPath && <path d={outerWallPath} fill="#ffffff" fillRule="evenodd" stroke="none" />}
+      {mode !== "base" && wallBands.map((band, index) => (
+        <polygon
+          key={`wall-core-fill-${band.segment.id}-${index}`}
+          points={pointsValue(band.core)}
+          fill={band.material === "solid" ? `url(#hatch45-${patternId})` : `url(#concrete-dot-${patternId})`}
+          stroke="none"
+        />
+      ))}
+      {mode !== "base" && coreWallPath && <path
+        d={coreWallPath}
+        fill="none"
+        fillRule="evenodd"
+        stroke="#0a0a0a"
+        strokeWidth={strokeFine}
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+      />}
+      {mode !== "base" && outerWallPath && <path
+        d={outerWallPath}
+        fill="none"
+        fillRule="evenodd"
+        stroke="#0a0a0a"
+        strokeWidth={stroke}
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+      />}
+      {/* Material non-masif tetap dirender per segmen. */}
+      {mode !== "base" && materialSegments.map((s) => {
         const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
         if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
@@ -7440,46 +7531,10 @@ function MaterialEdges({
           );
         }
         if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
-          const coreHalf = Math.max(0, half - 0.015 * pxPerM);
-          const coreStart = { x: s.a.x - ux * half, y: s.a.y - uy * half };
-          const coreEnd = { x: s.b.x + ux * half, y: s.b.y + uy * half };
-          const coreA1 = { x: coreStart.x + nx * coreHalf, y: coreStart.y + ny * coreHalf };
-          const coreA2 = { x: coreStart.x - nx * coreHalf, y: coreStart.y - ny * coreHalf };
-          const coreB1 = { x: coreEnd.x + nx * coreHalf, y: coreEnd.y + ny * coreHalf };
-          const coreB2 = { x: coreEnd.x - nx * coreHalf, y: coreEnd.y - ny * coreHalf };
-          const corePts = `${coreA1.x},${coreA1.y} ${coreB1.x},${coreB1.y} ${coreB2.x},${coreB2.y} ${coreA2.x},${coreA2.y}`;
-          return (
-            <g key={`s-${s.id}`}>
-              <polygon points={pts} fill="#ffffff" stroke="none" />
-              <polygon points={corePts} fill={`url(#concrete-dot-${patternId})`} stroke="none" />
-              <line x1={coreA1.x} y1={coreA1.y} x2={coreB1.x} y2={coreB1.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
-              <line x1={coreA2.x} y1={coreA2.y} x2={coreB2.x} y2={coreB2.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
-              <polygon points={pts} fill="none"
-                stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
-            </g>
-          );
+          return null;
         }
         if (mat === "solid") {
-          const coreHalf = (0.12 * pxPerM) / 2;
-          const coreStart = { x: s.a.x - ux * coreHalf, y: s.a.y - uy * coreHalf };
-          const coreEnd = { x: s.b.x + ux * coreHalf, y: s.b.y + uy * coreHalf };
-          const coreA1 = { x: coreStart.x + nx * coreHalf, y: coreStart.y + ny * coreHalf };
-          const coreA2 = { x: coreStart.x - nx * coreHalf, y: coreStart.y - ny * coreHalf };
-          const coreB1 = { x: coreEnd.x + nx * coreHalf, y: coreEnd.y + ny * coreHalf };
-          const coreB2 = { x: coreEnd.x - nx * coreHalf, y: coreEnd.y - ny * coreHalf };
-          const corePts = `${coreA1.x},${coreA1.y} ${coreB1.x},${coreB1.y} ${coreB2.x},${coreB2.y} ${coreA2.x},${coreA2.y}`;
-          return (
-            <g key={`s-${s.id}`}>
-              <polygon points={pts} fill="#ffffff" stroke="none" />
-              <polygon points={detailSolidLayers ? corePts : pts} fill={`url(#hatch45-${patternId})`} stroke="none" />
-              {detailSolidLayers && <>
-                <line x1={coreA1.x} y1={coreA1.y} x2={coreB1.x} y2={coreB1.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
-                <line x1={coreA2.x} y1={coreA2.y} x2={coreB2.x} y2={coreB2.y} stroke="#0a0a0a" strokeWidth={strokeFine} />
-              </>}
-              <polygon points={pts} fill="none"
-                stroke="#0a0a0a" strokeWidth={stroke} strokeLinejoin="miter" />
-            </g>
-          );
+          return null;
         }
         if (mat === "curtain") {
           // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.
