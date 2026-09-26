@@ -10,6 +10,10 @@ export const Route = createFileRoute("/masterplan")({
         content:
           "Master Plan kawasan berbasis sketsa milimeter block: gambar massa lantai dasar, atur KDB/KLB/KDH, dan jalankan Cluster Generator parametrik berbasis konteks tapak.",
       },
+      { property: "og:title", content: "Master Plan — Dabidabi's" },
+      { property: "og:description", content: "Rancang kawasan dan massa bangunan di Master Plan Dabidabi's." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: MasterPlanPage,

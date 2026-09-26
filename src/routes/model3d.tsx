@@ -70,6 +70,10 @@ export const Route = createFileRoute("/model3d")({
         content:
           "Generator model 3D dari sketsa milimeter block. Ekstrusi polygon per-lantai berdasarkan Elevasi dengan tampilan interaktif.",
       },
+      { property: "og:title", content: "Model 3D — Dabidabi's" },
+      { property: "og:description", content: "Lihat dan sunting model bangunan 3D dari sketsa Dabidabi's." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Model3DPage,

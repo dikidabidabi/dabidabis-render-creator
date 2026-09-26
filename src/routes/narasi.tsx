@@ -16,6 +16,10 @@ export const Route = createFileRoute("/narasi")({
         content:
           "Tulis narasi konsep tiap sketsa dengan tabel gagasan utama dan unggah gambar pendukung. Tersinkron otomatis ke slide Presentasi.",
       },
+      { property: "og:title", content: "Narasi — Dabidabi's" },
+      { property: "og:description", content: "Susun narasi konsep dan gambar pendukung proyek Dabidabi's." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: NarasiPage,
