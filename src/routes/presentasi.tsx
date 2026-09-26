@@ -3498,7 +3498,9 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               if (t == null) continue;
               hits.push({ t, mat, levelId: seg.levelId });
             }
-            if (!hits.length) return null;
+             if (!hits.length) return null;
+             // Beton selalu berada di depan material lain pada titik potong yang sama.
+             hits.sort((a, b) => Number(a.mat.startsWith("concrete")) - Number(b.mat.startsWith("concrete")) || WALL_THICK_MM[a.mat] - WALL_THICK_MM[b.mat]);
             return (
               <g>
                 {boxes.map((b) => {
@@ -7431,11 +7433,29 @@ function MaterialEdges({
       core: wallBandPolygon(segment, coreHalf, half),
     }];
   });
-  const outerWallUnion = unionWallBands(wallBands.map((band) => band.outer));
-  const coreWallUnion = unionWallBands(wallBands.map((band) => band.core));
-  const outerWallPath = wallUnionPath(outerWallUnion);
-  const coreWallPath = wallUnionPath(coreWallUnion);
+  const solidBands = wallBands.filter((band) => band.material === "solid");
+  const concreteBands = wallBands.filter((band) => band.material !== "solid");
+  const wallPaths = (bands: WallBandGeometry[]) => ({
+    outer: wallUnionPath(unionWallBands(bands.map((band) => band.outer))),
+    core: wallUnionPath(unionWallBands(bands.map((band) => band.core))),
+  });
+  const solidPaths = wallPaths(solidBands);
+  const concretePaths = wallPaths(concreteBands);
   const pointsValue = (points: Point[]) => points.map((point) => `${point.x},${point.y}`).join(" ");
+  const renderWallLayer = (bands: WallBandGeometry[], paths: { outer: string; core: string }) => (
+    <g>
+      {paths.outer && <path d={paths.outer} fill="#ffffff" fillRule="evenodd" stroke="none" />}
+      {bands.map((band, index) => (
+        <polygon key={`wall-core-fill-${band.segment.id}-${index}`} points={pointsValue(band.core)}
+          fill={band.material === "solid" ? `url(#hatch45-${patternId})` : `url(#concrete-dot-${patternId})`}
+          stroke="none" />
+      ))}
+      {paths.core && <path d={paths.core} fill="none" fillRule="evenodd" stroke="#0a0a0a"
+        strokeWidth={strokeFine} strokeLinejoin="miter" strokeLinecap="square" />}
+      {paths.outer && <path d={paths.outer} fill="none" fillRule="evenodd" stroke="#0a0a0a"
+        strokeWidth={stroke} strokeLinejoin="miter" strokeLinecap="square" />}
+    </g>
+  );
   return (
     <g>
       <defs>
@@ -7480,35 +7500,8 @@ function MaterialEdges({
           />
         );
       })}
-      {/* Dinding masif digabung dahulu. Dengan demikian tidak ada garis penutup
-          segmen yang menerobos dinding lain pada sudut, T, atau persilangan. */}
-      {mode !== "base" && outerWallPath && <path d={outerWallPath} fill="#ffffff" fillRule="evenodd" stroke="none" />}
-      {mode !== "base" && wallBands.map((band, index) => (
-        <polygon
-          key={`wall-core-fill-${band.segment.id}-${index}`}
-          points={pointsValue(band.core)}
-          fill={band.material === "solid" ? `url(#hatch45-${patternId})` : `url(#concrete-dot-${patternId})`}
-          stroke="none"
-        />
-      ))}
-      {mode !== "base" && coreWallPath && <path
-        d={coreWallPath}
-        fill="none"
-        fillRule="evenodd"
-        stroke="#0a0a0a"
-        strokeWidth={strokeFine}
-        strokeLinejoin="miter"
-        strokeLinecap="square"
-      />}
-      {mode !== "base" && outerWallPath && <path
-        d={outerWallPath}
-        fill="none"
-        fillRule="evenodd"
-        stroke="#0a0a0a"
-        strokeWidth={stroke}
-        strokeLinejoin="miter"
-        strokeLinecap="square"
-      />}
+      {/* Lapisan solid berada di bawah seluruh material lain. */}
+      {mode !== "base" && renderWallLayer(solidBands, solidPaths)}
       {/* Material non-masif tetap dirender per segmen. */}
       {mode !== "base" && materialSegments.map((s) => {
         const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
@@ -7520,7 +7513,7 @@ function MaterialEdges({
         const half = (WALL_THICK_MM[mat] / 1000) * pxPerM * 0.5;
         // Perpanjang bidang setengah tebal pada kedua ujung. Bidang yang saling
         // bertemu menjadi overlap, sehingga sudut runcing selalu tertutup tanpa
-        // celah. Urutan tebal di atas memastikan material terlebar menang.
+         // celah. Urutan tebal berlaku antar material non-beton.
         const start = { x: s.a.x - ux * half, y: s.a.y - uy * half };
         const end = { x: s.b.x + ux * half, y: s.b.y + uy * half };
         const a1 = { x: start.x + nx * half, y: start.y + ny * half };
@@ -7600,7 +7593,10 @@ function MaterialEdges({
               stroke="#0a0a0a" strokeWidth={stroke} />
           </g>
         );
-      })}
+       })}
+      {/* Beton 150/200/300 mm selalu paling atas, tanpa garis sambungan
+          antarsegmen yang memotong bidang beton pada sudut dan pertemuan T. */}
+      {mode !== "base" && renderWallLayer(concreteBands, concretePaths)}
     </g>
   );
 }

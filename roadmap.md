@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Tempatkan beton semua ketebalan di atas material dinding lain pada denah, detail, key plan, dan potongan.
+
 - [x] Satukan bidang dan garis tepi dinding beton/solid pada sudut, sambungan T, dan persilangan di Denah, Detail, serta key plan.
 
 - [x] Dimensi ruang 1 m dan grid struktur 2 m pada sisi kiri, kanan, atas, dan bawah Slide Detail.
