@@ -6,6 +6,16 @@ import { useAuth } from "@/lib/auth";
 import heroBg from "@/assets/sta13.jpeg.asset.json";
 
 export const Route = createFileRoute("/")({
+  head: () => ({ meta: [
+    { title: "Dabidabi's — Ruang Kerja Arsitektur" },
+    { name: "description", content: "Rancang sketsa, model, dan presentasi arsitektur dalam satu ruang kerja Dabidabi's." },
+    { property: "og:title", content: "Dabidabi's — Ruang Kerja Arsitektur" },
+    { property: "og:description", content: "Rancang sketsa, model, dan presentasi arsitektur dalam satu ruang kerja Dabidabi's." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+    { property: "og:image", content: heroBg.url },
+    { name: "twitter:image", content: heroBg.url },
+  ] }),
   component: Landing,
 });
 

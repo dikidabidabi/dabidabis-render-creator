@@ -249,6 +249,10 @@ export const Route = createFileRoute("/sketch")({
         content:
           "Sketsa batas lahan presisi di kertas milimeter block digital. Multi-tab, skala 1:100 hingga 1:1000, snap to grid, dan rekapitulasi luas otomatis dalam m².",
       },
+      { property: "og:title", content: "Sketsa Konseptual — Dabidabi's" },
+      { property: "og:description", content: "Gambar dan kelola sketsa arsitektur presisi di Dabidabi's." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: SketchPage,

@@ -29,6 +29,10 @@ export const Route = createFileRoute("/tabulasi/")({
     meta: [
       { title: "Tabulasi — Dabidabi's" },
       { name: "description", content: "Tabulasi otomatis tiap sketsa: rekap KDB/KLB, rincian ruang per level, dan infografis prosentase fungsi." },
+      { property: "og:title", content: "Tabulasi — Dabidabi's" },
+      { property: "og:description", content: "Lihat rincian ruang, zona fungsi, dan perhitungan proyek Dabidabi's." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: TabulasiPage,

@@ -1,5 +1,6 @@
 # Roadmap
 
+- [x] Satukan bidang dan garis tepi dinding beton/solid pada sudut, sambungan T, dan persilangan di Denah, Detail, serta key plan.
 
 - [x] Dimensi ruang 1 m dan grid struktur 2 m pada sisi kiri, kanan, atas, dan bawah Slide Detail.
 - [x] Area Slide Detail tepat mengikuti kotak detail; teks dimensi ruang dan ketebalan garis dimensi diperkecil.

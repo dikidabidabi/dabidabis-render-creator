@@ -109,6 +109,10 @@ export const Route = createFileRoute("/presentasi")({
     meta: [
       { title: "Presentasi — Dabidabi's" },
       { name: "description", content: "Slide presentasi A3 modern: per-level dan tabulasi, siap cetak." },
+      { property: "og:title", content: "Presentasi — Dabidabi's" },
+      { property: "og:description", content: "Slide presentasi arsitektur per lantai, detail, dan tabulasi Dabidabi's." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: PresentasiPage,
@@ -7413,7 +7417,7 @@ function MaterialEdges({
     const materialB = materialForEdgeSegment(b, segmentSource, edgeAttrs);
     return (materialA ? WALL_THICK_MM[materialA] : 0) - (materialB ? WALL_THICK_MM[materialB] : 0);
   });
-  const wallBands: WallBandGeometry[] = materialSegments.flatMap((segment) => {
+  const wallBands: WallBandGeometry[] = mode === "base" ? [] : materialSegments.flatMap((segment) => {
     const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
     if (material !== "solid" && material !== "concrete150" && material !== "concrete200" && material !== "concrete300") return [];
     const half = (WALL_THICK_MM[material] / 1000) * pxPerM * 0.5;

@@ -16,6 +16,14 @@ import {
 } from "@/lib/workspace-sync";
 
 export const Route = createFileRoute("/akun")({
+  head: () => ({ meta: [
+    { title: "Akun — Dabidabi's" },
+    { name: "description", content: "Kelola akun dan cadangan proyek Dabidabi's." },
+    { property: "og:title", content: "Akun — Dabidabi's" },
+    { property: "og:description", content: "Kelola akun dan cadangan proyek Dabidabi's." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: AkunPage,
 });
 
