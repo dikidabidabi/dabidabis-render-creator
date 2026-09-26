@@ -69,6 +69,14 @@ import {
 } from "@/lib/prompt-library";
 
 export const Route = createFileRoute("/studio/")({
+  head: () => ({ meta: [
+    { title: "Studio AI — Dabidabi's" },
+    { name: "description", content: "Studio untuk membuat dan menyempurnakan visual arsitektur Dabidabi's." },
+    { property: "og:title", content: "Studio AI — Dabidabi's" },
+    { property: "og:description", content: "Buat dan sempurnakan visual arsitektur di Studio Dabidabi's." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: StudioPage,
 });
 
