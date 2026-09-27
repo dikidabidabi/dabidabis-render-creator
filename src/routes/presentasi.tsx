@@ -1456,9 +1456,28 @@ function A3Frame({ children, overlay, innerRef }: { children: React.ReactNode; o
 
 // ---------- Slide types ----------
 type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
+type RincianRow = { room: Layer; groupId: string; groupName: string; groupArea: number; groupLast: boolean };
+function rincianRowsForLevel(items: Layer[], zones: FunctionZone[]): RincianRow[] {
+  const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
+  const groups = new Map<string, Layer[]>();
+  for (const room of items) {
+    const id = room.functionZoneId && zoneById.has(room.functionZoneId) ? room.functionZoneId : "__unassigned__";
+    const group = groups.get(id) ?? [];
+    group.push(room);
+    groups.set(id, group);
+  }
+  return [...zones.map((zone) => zone.id), "__unassigned__"].flatMap((id) => {
+    const group = groups.get(id);
+    if (!group?.length) return [];
+    const name = zoneById.get(id)?.name ?? "Belum dikelompokkan";
+    const area = group.reduce((sum, room) => sum + room.areaM2, 0);
+    return [...group].sort((a, b) => (b.coefficient ?? 1) - (a.coefficient ?? 1))
+      .map((room, index) => ({ room, groupId: id, groupName: name, groupArea: area, groupLast: index === group.length - 1 }));
+  });
+}
 type RincianSection = {
   level: Level;
-  items: Layer[];
+  items: RincianRow[];
   k: number;
   partIndex: number;
   partCount: number;
@@ -1677,16 +1696,17 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   // Rincian per Level — paginated jika tidak muat satu slide.
   {
     const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+    const zones = normalizeFunctionZones(sk.functionZones);
     const MAX_ROWS_PER_CHUNK = 18;
     const SECTION_OVERHEAD = 130; // px (header + thead + total row + margin)
     const ROW_HEIGHT = 28;
     const BUDGET = 700;
     const allSections: RincianSection[] = [];
     for (const lv of levels) {
-      const items = ruangAll.filter((l) => l.levelId === lv.id);
+      const items = rincianRowsForLevel(ruangAll.filter((l) => l.levelId === lv.id), zones);
       const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
-      const totalAsliPer = items.reduce((s, l) => s + l.areaM2, 0);
-      const totalEfPer = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
+      const totalAsliPer = items.reduce((s, { room }) => s + room.areaM2, 0);
+      const totalEfPer = items.reduce((s, { room }) => s + room.areaM2 * (room.coefficient ?? 1), 0);
       if (items.length === 0) {
         allSections.push({ level: lv, items, k, partIndex: 1, partCount: 1, totalAsliPer, totalEfPer });
         continue;
@@ -10298,33 +10318,42 @@ function RincianBody({ slide }: { slide: Extract<Slide, { kind: "rincian" }> }) 
               {items.length === 0 ? (
                 <div style={{ fontSize: 13, color: "#999", padding: "8px 0" }}>Belum ada ruang.</div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed" }}>
                   <thead>
                     <tr style={{ color: "#888", fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase" }}>
-                      <th style={{ textAlign: "left", padding: "6px 0", fontWeight: 600 }}>Ruang</th>
-                      <th style={{ textAlign: "right", padding: "6px 8px", fontWeight: 600 }}>Koef.</th>
-                      <th style={{ textAlign: "right", padding: "6px 8px", fontWeight: 600 }}>Luas</th>
-                      <th style={{ textAlign: "right", padding: "6px 0", fontWeight: 600 }}>Efektif</th>
+                      <th style={{ width: "19%", textAlign: "left", padding: "6px 8px 6px 0", fontWeight: 600 }}>Fungsi</th>
+                      <th style={{ width: "35%", textAlign: "left", padding: "6px 8px", fontWeight: 600 }}>Ruang</th>
+                      <th style={{ width: "9%", textAlign: "right", padding: "6px 8px", fontWeight: 600 }}>Koef.</th>
+                      <th style={{ width: "11%", textAlign: "right", padding: "6px 8px", fontWeight: 600 }}>Luas</th>
+                      <th style={{ width: "15%", textAlign: "right", padding: "6px 8px", fontWeight: 600 }}>Luas Fungsi</th>
+                      <th style={{ width: "11%", textAlign: "right", padding: "6px 0 6px 8px", fontWeight: 600 }}>Efektif</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((r) => {
+                    {items.map(({ room: r, groupId, groupName, groupArea }, index) => {
                       const coef = r.coefficient ?? 1;
                       const luas = r.areaM2 * k;
                       const ef = luas * coef;
+                      const groupStart = index === 0 || items[index - 1].groupId !== groupId;
+                      let groupSpan = 1;
+                      if (groupStart) while (items[index + groupSpan]?.groupId === groupId) groupSpan++;
+                      const groupEndsHere = items[index + groupSpan - 1]?.groupLast;
                       return (
                         <tr key={r.id} style={{ borderTop: "1px solid #f0f0f0" }}>
-                          <td style={{ padding: "6px 0" }}>{r.name}</td>
+                          {groupStart && <td rowSpan={groupSpan} style={{ padding: "6px 8px 6px 0", borderRight: "1px solid #e5e5e5", verticalAlign: "middle", fontWeight: 600, overflowWrap: "anywhere" }}>{groupName}</td>}
+                          <td style={{ padding: "6px 8px", overflowWrap: "anywhere" }}>{r.name}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{coef}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(luas)}</td>
+                          {groupStart && <td rowSpan={groupSpan} style={{ padding: "6px 8px", textAlign: "right", verticalAlign: "middle", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{groupEndsHere ? `${fmt(groupArea * k)} m²` : ""}</td>}
                           <td style={{ padding: "6px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(ef)}</td>
                         </tr>
                       );
                     })}
                     {partIndex === partCount && (
                       <tr style={{ borderTop: "1px solid #111", fontWeight: 600 }}>
-                        <td style={{ padding: "8px 0" }} colSpan={2}>Total</td>
+                        <td style={{ padding: "8px 0" }} colSpan={3}>Total</td>
                         <td style={{ padding: "8px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalAsli)}</td>
+                        <td style={{ padding: "8px 8px" }} />
                         <td style={{ padding: "8px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalEf)}</td>
                       </tr>
                     )}
