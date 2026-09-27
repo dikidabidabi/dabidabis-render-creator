@@ -1456,7 +1456,7 @@ function A3Frame({ children, overlay, innerRef }: { children: React.ReactNode; o
 
 // ---------- Slide types ----------
 type SiteView = "lokasi" | "akses" | "fasilitas" | "lingkungan";
-type RincianRow = { room: Layer; groupId: string; groupName: string; groupArea: number };
+type RincianRow = { room: Layer; groupId: string; groupName: string; groupArea: number; groupLast: boolean };
 function rincianRowsForLevel(items: Layer[], zones: FunctionZone[]): RincianRow[] {
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
   const groups = new Map<string, Layer[]>();
@@ -1472,7 +1472,7 @@ function rincianRowsForLevel(items: Layer[], zones: FunctionZone[]): RincianRow[
     const name = zoneById.get(id)?.name ?? "Belum dikelompokkan";
     const area = group.reduce((sum, room) => sum + room.areaM2, 0);
     return [...group].sort((a, b) => (b.coefficient ?? 1) - (a.coefficient ?? 1))
-      .map((room) => ({ room, groupId: id, groupName: name, groupArea: area }));
+      .map((room, index) => ({ room, groupId: id, groupName: name, groupArea: area, groupLast: index === group.length - 1 }));
   });
 }
 type RincianSection = {
@@ -10337,13 +10337,14 @@ function RincianBody({ slide }: { slide: Extract<Slide, { kind: "rincian" }> }) 
                       const groupStart = index === 0 || items[index - 1].groupId !== groupId;
                       let groupSpan = 1;
                       if (groupStart) while (items[index + groupSpan]?.groupId === groupId) groupSpan++;
+                      const groupEndsHere = items[index + groupSpan - 1]?.groupLast;
                       return (
                         <tr key={r.id} style={{ borderTop: "1px solid #f0f0f0" }}>
                           {groupStart && <td rowSpan={groupSpan} style={{ padding: "6px 8px 6px 0", borderRight: "1px solid #e5e5e5", verticalAlign: "middle", fontWeight: 600, overflowWrap: "anywhere" }}>{groupName}</td>}
                           <td style={{ padding: "6px 8px", overflowWrap: "anywhere" }}>{r.name}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{coef}</td>
                           <td style={{ padding: "6px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(luas)}</td>
-                          {groupStart && <td rowSpan={groupSpan} style={{ padding: "6px 8px", textAlign: "right", verticalAlign: "middle", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmt(groupArea * k)} m²</td>}
+                          {groupStart && <td rowSpan={groupSpan} style={{ padding: "6px 8px", textAlign: "right", verticalAlign: "middle", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{groupEndsHere ? `${fmt(groupArea * k)} m²` : ""}</td>}
                           <td style={{ padding: "6px 0", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(ef)}</td>
                         </tr>
                       );
