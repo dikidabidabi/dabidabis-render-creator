@@ -14361,11 +14361,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <div className="grid grid-cols-2 gap-1.5">
                   <div>
                     <Label htmlFor="section-dx" className="text-[10px] text-muted-foreground">ΔX</Label>
-                    <Input id="section-dx" type="text" inputMode="text" pattern="-?[0-9]*\\.?[0-9]*" value={sectionDxMm} onChange={(e) => setSectionDxMm(e.target.value)} className="h-8 text-xs" placeholder="0" />
+                    <Input id="section-dx" type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*" value={sectionDxMm} onChange={(e) => setSectionDxMm(e.target.value)} className="h-8 text-xs" placeholder="0" />
                   </div>
                   <div>
                     <Label htmlFor="section-dy" className="text-[10px] text-muted-foreground">ΔY</Label>
-                    <Input id="section-dy" type="text" inputMode="text" pattern="-?[0-9]*\\.?[0-9]*" value={sectionDyMm} onChange={(e) => setSectionDyMm(e.target.value)} className="h-8 text-xs" placeholder="0" />
+                    <Input id="section-dy" type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*" value={sectionDyMm} onChange={(e) => setSectionDyMm(e.target.value)} className="h-8 text-xs" placeholder="0" />
                   </div>
                 </div>
                 <Button
