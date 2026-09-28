@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Tambahkan input ΔX/ΔY untuk menggeser seluruh garis potong terpilih seperti geser titik.
+
 - [x] Kelompokkan slide Rincian per Level berdasarkan zona fungsi, tampilkan luasan per fungsi per level, dan urutkan koefisien 1 sebelum 0.
 
 - [x] Tempatkan beton semua ketebalan di atas material dinding lain pada denah, detail, key plan, dan potongan.
