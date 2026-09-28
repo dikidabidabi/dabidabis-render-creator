@@ -2994,6 +2994,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [floorEditSub, setFloorEditSub] = useState<"move" | "add" | "delete" | "addVoid">("move");
   // Garis Potong — sub-mode edit titik (geser bubble ujung / flip arah pandang)
   const [sectionSub, setSectionSub] = useState<"add" | "geser" | "flip">("add");
+  const [selectedSectionLabel, setSelectedSectionLabel] = useState<string | null>(null);
+  const [sectionDxMm, setSectionDxMm] = useState("0");
+  const [sectionDyMm, setSectionDyMm] = useState("0");
   // Garis — sub-mode: gambar garis vs "jadikan ruang" (klik area tertutup → Layer)
   const [lineSub, setLineSub] = useState<"draw" | "room">("draw");
   const [sectionEndpointDrag, setSectionEndpointDrag] = useState<
@@ -9313,6 +9316,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       // geser bubble ujung
       if (bestIdx >= 0 && bestD <= tol) {
         pushHistory();
+        setSelectedSectionLabel(cuts[bestIdx].label ?? sectionLabelFor(bestIdx));
         setSectionEndpointDrag({ idx: bestIdx, which: bestWhich });
       } else {
         toast.message("Ketuk bubble ujung garis potong untuk menggeser");
@@ -14297,7 +14301,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               {sectionSub === "add" && <>Tarik garis lurus untuk menentukan bidang irisan. Setiap potongan baru otomatis diberi label berurutan (<span className="font-medium text-foreground">A-A</span>, <span className="font-medium text-foreground">B-B</span>, …) dan menjadi slide tersendiri pada presentasi.</>}
-              {sectionSub === "geser" && <>Ketuk &amp; tarik bubble ujung (A / A') untuk menggeser titik garis potong. Label dan slide otomatis ikut menyesuaikan.</>}
+              {sectionSub === "geser" && <>Ketuk &amp; tarik bubble ujung (A / A') untuk menggeser titik, atau pilih potongan dari daftar untuk menggeser seluruh garis dengan ΔX/ΔY. Label dan slide otomatis ikut menyesuaikan.</>}
               {sectionSub === "flip" && <>Ketuk garis potong atau salah satu bubble ujungnya untuk membalik arah pandang (tukar A ↔ A').</>}
             </p>
 
@@ -14311,7 +14315,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     key={`${c.label}-${i}`}
                     className="flex items-center justify-between gap-1.5 rounded border border-border/60 bg-surface/40 px-2 py-1"
                   >
-                    <span className="text-[11px] font-medium">{c.label || sectionLabelFor(i)}</span>
+                    <Button
+                      variant={sectionSub === "geser" && selectedSectionLabel === (c.label || sectionLabelFor(i)) ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-6 min-w-0 px-1.5 text-[11px] font-medium"
+                      onClick={() => { setSelectedSectionLabel(c.label || sectionLabelFor(i)); setSectionSub("geser"); }}
+                      title={`Pilih garis potong ${c.label || sectionLabelFor(i)} untuk digeser`}
+                    >{c.label || sectionLabelFor(i)}</Button>
                     <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[10px] text-muted-foreground">
                       <input
                         type="checkbox"
@@ -14340,6 +14350,51 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     </Button>
                   </div>
                 ))}
+              </div>
+            )}
+            {sectionSub === "geser" && (sketch.sectionCuts ?? []).length > 0 && (
+              <div className="space-y-1.5 rounded-md border border-border/60 bg-background/40 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Geser Numerik (mm)</Label>
+                  <span className="text-[10px] text-muted-foreground">{(sketch.sectionCuts ?? []).some((c) => c.label === selectedSectionLabel) ? selectedSectionLabel : "Pilih potongan dulu"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div>
+                    <Label htmlFor="section-dx" className="text-[10px] text-muted-foreground">ΔX</Label>
+                    <Input id="section-dx" type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*" value={sectionDxMm} onChange={(e) => setSectionDxMm(e.target.value)} className="h-8 text-xs" placeholder="0" />
+                  </div>
+                  <div>
+                    <Label htmlFor="section-dy" className="text-[10px] text-muted-foreground">ΔY</Label>
+                    <Input id="section-dy" type="text" inputMode="text" pattern="-?[0-9]*\.?[0-9]*" value={sectionDyMm} onChange={(e) => setSectionDyMm(e.target.value)} className="h-8 text-xs" placeholder="0" />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full bg-gradient-primary shadow-primary"
+                  disabled={!(sketch.sectionCuts ?? []).some((c) => c.label === selectedSectionLabel)}
+                  onClick={() => {
+                    const dxMm = Number(sectionDxMm);
+                    const dyMm = Number(sectionDyMm);
+                    if (!Number.isFinite(dxMm) || !Number.isFinite(dyMm) || (dxMm === 0 && dyMm === 0)) {
+                      toast.error("Isi ΔX atau ΔY dengan angka yang valid");
+                      return;
+                    }
+                    const cuts = sketch.sectionCuts ?? [];
+                    if (!cuts.some((c) => c.label === selectedSectionLabel)) return;
+                    const dx = dxMm / 1000 * pxPerMeter;
+                    const dy = dyMm / 1000 * pxPerMeter;
+                    pushHistory();
+                    onChange({ sectionCuts: cuts.map((c) => c.label === selectedSectionLabel ? {
+                      ...c,
+                      p1: { x: c.p1.x + dx, y: c.p1.y + dy },
+                      p2: { x: c.p2.x + dx, y: c.p2.y + dy },
+                      updatedAt: Date.now(),
+                    } : c), sectionCut: undefined });
+                    setSectionDxMm("0"); setSectionDyMm("0");
+                    toast.success(`Garis Potong ${selectedSectionLabel} digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
+                  }}
+                >Apply Geser</Button>
+                <p className="text-[10px] leading-snug text-muted-foreground">Positif ΔX = kanan, positif ΔY = bawah. Angka negatif menggeser ke arah sebaliknya.</p>
               </div>
             )}
             <Button
