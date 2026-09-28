@@ -3015,6 +3015,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Offset tool — jarak offset (cm pada skala asli)
   const [offsetCm, setOffsetCm] = useState<number>(100);
   const [pickMaterial, setPickMaterial] = useState<EdgeMaterial>("solid");
+  const [convertFromMaterial, setConvertFromMaterial] = useState<EdgeMaterial | "">("");
   const [pickMarquee, setPickMarquee] = useState<
     { start: Point; cur: Point; erase: boolean } | null
   >(null);
@@ -13501,12 +13502,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             </Label>
             <div className="grid grid-cols-1 gap-1.5">
               {(["solid", "concrete150", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
-                <button
+                <Button
                   key={m}
                   type="button"
+                  variant="outline"
                   onClick={() => setPickMaterial(m)}
                   className={cn(
-                    "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition",
+                    "h-auto min-h-8 justify-start gap-2 whitespace-normal px-2.5 py-1.5 text-left text-xs",
                     pickMaterial === m
                       ? "border-primary bg-primary/10 ring-1 ring-primary/40"
                       : "border-border/60 hover:bg-muted/40",
@@ -13518,8 +13520,54 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     style={{ background: MATERIAL_COLORS[m] }}
                   />
                   <span className="font-medium">{MATERIAL_LABELS[m]}</span>
-                </button>
+                </Button>
               ))}
+            </div>
+            <div className="space-y-2 border-t border-border/60 pt-2">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground" htmlFor="convert-from-material">
+                Konversi material level aktif
+              </Label>
+              <Select value={convertFromMaterial} onValueChange={(value) => setConvertFromMaterial(value as EdgeMaterial)}>
+                <SelectTrigger id="convert-from-material" className="w-full text-xs">
+                  <SelectValue placeholder="Material asal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["solid", "concrete150", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((material) => (
+                    <SelectItem key={material} value={material}>{MATERIAL_LABELS[material]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">Menjadi: {MATERIAL_LABELS[pickMaterial]}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={!activeLvlId || !convertFromMaterial || convertFromMaterial === pickMaterial}
+                onClick={() => {
+                  if (!activeLvlId || !convertFromMaterial || convertFromMaterial === pickMaterial) return;
+                  const keys = new Set(
+                    computeStraightSegments(lines)
+                      .filter((segment) => segment.levelId === activeLvlId)
+                      .map((segment) => edgeMaterialKey(segment.levelId, segment.a, segment.b)),
+                  );
+                  const next = { ...(sketch.edgeAttrs ?? {}) };
+                  let count = 0;
+                  for (const key of keys) {
+                    if (next[key] !== convertFromMaterial) continue;
+                    next[key] = pickMaterial;
+                    count++;
+                  }
+                  if (count === 0) {
+                    toast.message("Tidak ada garis dengan material asal pada level ini");
+                    return;
+                  }
+                  pushHistory();
+                  onChange({ edgeAttrs: next });
+                  toast.success(`${count} garis dikonversi menjadi ${MATERIAL_LABELS[pickMaterial]}`);
+                }}
+              >
+                Konversi semua pada level ini
+              </Button>
             </div>
             <p className="text-[10px] leading-snug text-muted-foreground">
               Klik satu garis atau tarik kotak dari area kosong untuk mengubah banyak garis sekaligus.
