@@ -4690,7 +4690,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           b: a,
           clear: startThickness,
         }] : []),
-        [{ a, b, clear }],
+        { a, b, clear },
         ...(endThickness > dimensionTolerance ? [{
           a: b,
           b: { x: b.x + edge.ux * endThickness, y: b.y + edge.uy * endThickness },
