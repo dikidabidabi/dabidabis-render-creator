@@ -7954,6 +7954,7 @@ function WindowNotation({
           ].join(" ");
           return <polygon key={`mullion-${index}`} points={points} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />;
         })}
+        <path d={`M ${midpoint.x - dx * Math.min(length * 0.07, pxPerM * 0.07)} ${midpoint.y - dy * Math.min(length * 0.07, pxPerM * 0.07)} L ${midpoint.x + window.nx * Math.min(length * 0.18, pxPerM * 0.18)} ${midpoint.y + window.ny * Math.min(length * 0.18, pxPerM * 0.18)} L ${midpoint.x + dx * Math.min(length * 0.07, pxPerM * 0.07)} ${midpoint.y + dy * Math.min(length * 0.07, pxPerM * 0.07)}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke} />
       </g>;
     })}
   </g>;

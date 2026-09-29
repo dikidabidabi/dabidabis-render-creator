@@ -4961,6 +4961,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.lineTo(cx - nx * halfDepth, cy - ny * halfDepth);
         ctx.stroke();
       }
+      // Tanda arah panel: dari sisi engsel A menuju sisi bukaan pada normal tersimpan.
+      const centerX = (ax + bx) / 2, centerY = (ay + by) / 2;
+      const orientationLength = Math.min(len * 0.18, 0.18 * pxPerMeter);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.1 / s;
+      ctx.beginPath();
+      ctx.moveTo(centerX - dx * orientationLength * 0.4, centerY - dy * orientationLength * 0.4);
+      ctx.lineTo(centerX + window.nx * orientationLength, centerY + window.ny * orientationLength);
+      ctx.lineTo(centerX + dx * orientationLength * 0.4, centerY + dy * orientationLength * 0.4);
+      ctx.stroke();
       ctx.restore();
     };
     for (const window of sketch.windows ?? []) {
@@ -9885,7 +9895,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const { left, right, dx, dy } = openingAxis(selected);
             const a = hinge === "left" ? left : right, b = hinge === "left" ? right : left;
             const sideSign = (side === "inside" ? 1 : -1) * insideSign;
-            const slideDirection = hinge === "left" ? "left" : "right";
+            const slideDirection = "left";
             onChange({ doors: (sketch.doors ?? []).map((item) => item.id === selected.id ? {
               ...item, a, b, nx: -dy * sideSign, ny: dx * sideSign, slideDirection: item.leaves === 1 ? slideDirection : item.slideDirection,
             } : item) });
