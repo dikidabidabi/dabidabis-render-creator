@@ -3007,7 +3007,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 <pattern id={`solid-pair-sec-${slide.id}`} patternUnits="userSpaceOnUse"
                   width={period} height={period} patternTransform="rotate(45)">
                   <path d={`M ${period * 0.1} 0 V ${period} M ${period * (0.1 + 4 / 15)} 0 V ${period}`}
-                    fill="none" stroke="#0a0a0a" strokeWidth={0.09} />
+                    fill="none" stroke="#0a0a0a" strokeWidth={0.045} />
                 </pattern>
               );
             })()}
@@ -7494,7 +7494,7 @@ function MaterialEdges({
         <pattern id={`solid-pair-${patternId}`} patternUnits="userSpaceOnUse"
           width={solidHatchPeriod} height={solidHatchPeriod} patternTransform="rotate(45)">
           <path d={`M ${solidHatchPeriod * 0.1} 0 V ${solidHatchPeriod} M ${solidHatchPeriod * (0.1 + 4 / 15)} 0 V ${solidHatchPeriod}`}
-            fill="none" stroke="#0a0a0a" strokeWidth={0.09} />
+            fill="none" stroke="#0a0a0a" strokeWidth={0.045} />
         </pattern>
         {/* Hatch 45° tunggal untuk band jendela. */}
         <pattern
