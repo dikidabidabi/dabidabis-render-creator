@@ -5103,7 +5103,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />
-        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers, detailRooms).map((item) => (
+        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers, detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY).map((item) => (
           <image
             key={`detail-furniture-${item.id}`}
             href={item.imageUrl}

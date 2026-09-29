@@ -331,8 +331,6 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
     } }; void setProjectItem(CATALOG_SIZE_KEY, JSON.stringify(next)); return next; });
   };
 
-  const changeFurniture = (id: string, change: Partial<DetailFurniture>) => onFurnitureChange(furniture.map((item) => item.id === id ? { ...item, ...change } : item));
-
   const importImage = (file: File) => {
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { toast.error("Pilih file gambar PNG, JPG, atau WebP"); return; }
     if (file.size > 20 * 1024 * 1024) { toast.error("Ukuran gambar maksimal 20 MB"); return; }

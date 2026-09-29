@@ -62,7 +62,7 @@ export const FURNITURE_CATALOG: CatalogFurniture[] = [
     aspectRatio: 1,
     lengthMm: 1000,
     widthMm: 1000,
-    imageUrl: svgDataUrl('<rect x="20" y="0" width="120" height="120" rx="0"/>'),
+    imageUrl: svgDataUrl('<rect x="2" y="2" width="156" height="116" rx="0"/>'),
   },
   {
     id: "meja",
@@ -156,12 +156,6 @@ export function newDetailFurniture(
     catalogId: catalog.id,
     price: 0,
   };
-}
-
-export function furnitureInRoom(item: DetailFurniture, roomId: string, layers: { id: string; points: { x: number; y: number }[] }[]): boolean {
-  if (item.roomId) return item.roomId === roomId;
-  const room = layers.find((layer) => layer.id === roomId);
-  return room ? pointInRoom(item, room.points) : false;
 }
 
 export function pointInRoom(point: { x: number; y: number }, polygon: { x: number; y: number }[]): boolean {
