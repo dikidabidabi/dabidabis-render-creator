@@ -355,6 +355,15 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
 
   const selectionBox = gestureRef.current?.kind === "select" ? gestureRef.current : null;
   const onlySelected = selectedIds.size === 1 ? furniture.find((item) => selectedIds.has(item.id)) : undefined;
+  const furnitureRows = Object.values(furniture.reduce<Record<string, DetailFurniture[]>>((groups, item) => {
+    const key = JSON.stringify([item.catalogId ?? item.imageUrl, item.name, dimensionMm(item.width, pxPerMeter), dimensionMm(item.height, pxPerMeter), item.price ?? 0]);
+    (groups[key] ??= []).push(item);
+    return groups;
+  }, {}));
+  const changeRow = (row: DetailFurniture[], change: Partial<DetailFurniture>) => {
+    const ids = new Set(row.map((item) => item.id));
+    onFurnitureChange(furniture.map((item) => ids.has(item.id) ? { ...item, ...change } : item));
+  };
 
   return <section ref={workspaceRef} className={fullscreen ? "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background" : "mt-6 overflow-hidden rounded-lg border border-border/60 bg-card"}>
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
@@ -417,15 +426,15 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       <h3 className="mb-3 font-display text-base font-semibold">Tabel furniture</h3>
       <div className="overflow-x-auto"><table className="w-full min-w-[780px] border-collapse text-left text-xs">
         <thead><tr className="border-b border-border text-muted-foreground"><th className="p-2">Lantai</th><th className="p-2">Nama furniture</th><th className="p-2">Ukuran (mm)</th><th className="p-2">Jumlah</th><th className="p-2">Harga per item (Rp)</th><th className="p-2">Harga total (Rp)</th><th className="p-2"><span className="sr-only">Aksi</span></th></tr></thead>
-        <tbody>{furniture.map((item) => <tr key={item.id} className="border-b border-border/50">
+        <tbody>{furnitureRows.map((row) => { const item = row[0]; return <tr key={item.id} className="border-b border-border/50">
           <td className="p-2">{level?.name ?? "Level"}</td>
-          <td className="p-2"><input aria-label={`Nama ${item.id}`} className="w-full min-w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.name} onChange={(event) => changeFurniture(item.id, { name: event.target.value })} /></td>
-          <td className="p-2"><div className="flex items-center gap-1"><input aria-label={`Panjang ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.width, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeFurniture(item.id, { width: n / 1000 * pxPerMeter }); }} /><span>×</span><input aria-label={`Lebar ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.height, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeFurniture(item.id, { height: n / 1000 * pxPerMeter }); }} /></div></td>
-          <td className="p-2 tabular-nums">1</td>
-          <td className="p-2"><input aria-label={`Harga ${item.id}`} type="number" min="0" className="w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.price ?? 0} onChange={(event) => { const n = Number(event.target.value); if (n >= 0) changeFurniture(item.id, { price: n }); }} /></td>
-          <td className="p-2 tabular-nums">{(item.price ?? 0).toLocaleString("id-ID")}</td>
-          <td className="p-2"><div className="flex gap-1"><Button size="icon" variant="ghost" title="Duplikasi furniture" onClick={() => { const copy = { ...item, id: `FURN${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, x: item.x + pxPerMeter * 0.3, y: item.y + pxPerMeter * 0.3, createdAt: Date.now() }; onFurnitureChange([...furniture, { ...copy, roomId: roomForFurniture(copy, layers) }]); }}><Copy className="h-3.5 w-3.5" /></Button><Button size="icon" variant="ghost" title="Hapus furniture" onClick={() => onFurnitureChange(furniture.filter((entry) => entry.id !== item.id))}><Trash2 className="h-3.5 w-3.5" /></Button></div></td>
-        </tr>)}</tbody>
+          <td className="p-2"><input aria-label={`Nama ${item.id}`} className="w-full min-w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.name} onChange={(event) => changeRow(row, { name: event.target.value })} /></td>
+          <td className="p-2"><div className="flex items-center gap-1"><input aria-label={`Panjang ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.width, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeRow(row, { width: n / 1000 * pxPerMeter }); }} /><span>×</span><input aria-label={`Lebar ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.height, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeRow(row, { height: n / 1000 * pxPerMeter }); }} /></div></td>
+          <td className="p-2 tabular-nums">{row.length}</td>
+          <td className="p-2"><input aria-label={`Harga ${item.id}`} type="number" min="0" className="w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.price ?? 0} onChange={(event) => { const n = Number(event.target.value); if (n >= 0) changeRow(row, { price: n }); }} /></td>
+          <td className="p-2 tabular-nums">{((item.price ?? 0) * row.length).toLocaleString("id-ID")}</td>
+          <td className="p-2"><div className="flex gap-1"><Button size="icon" variant="ghost" title="Duplikasi furniture" onClick={() => { const copy = { ...item, id: `FURN${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, x: item.x + pxPerMeter * 0.3, y: item.y + pxPerMeter * 0.3, createdAt: Date.now() }; onFurnitureChange([...furniture, { ...copy, roomId: roomForFurniture(copy, layers) }]); }}><Copy className="h-3.5 w-3.5" /></Button><Button size="icon" variant="ghost" title="Hapus satu furniture" onClick={() => onFurnitureChange(furniture.filter((entry) => entry.id !== item.id))}><Trash2 className="h-3.5 w-3.5" /></Button></div></td>
+        </tr>; })}</tbody>
         <tfoot><tr className="font-semibold"><td colSpan={5} className="p-2 text-right">Total</td><td className="p-2 tabular-nums">{furniture.reduce((sum, item) => sum + (item.price ?? 0), 0).toLocaleString("id-ID")}</td><td /></tr></tfoot>
       </table></div>
     </div>
