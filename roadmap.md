@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan ceklis Dimensi Interior dan tampilkan ukuran bersih ruang serta bukaan pada Slide Detail dengan area tayang melebar 1 m.
+- [x] Tambahkan ceklis Dimensi Interior dan tampilkan ukuran bersih ruang serta bukaan pada Slide Detail dengan area tayang melebar 1 m.
 
 - [x] Tambahkan editing pintu dan jendela terpasang: seleksi, orientasi, slider ukuran, dan drag kedua ujung.
 
