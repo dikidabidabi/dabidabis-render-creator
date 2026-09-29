@@ -393,7 +393,18 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
               const idsToMove = next.has(item.id) ? next : new Set([item.id]);
               gestureRef.current = { kind: "move", start: clientToSvg(event.clientX, event.clientY), initial: new Map(furniture.filter((entry) => idsToMove.has(entry.id)).map((entry) => [entry.id, { ...entry }])) };
             }}>
-              <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height} preserveAspectRatio="none" />
+              {item.catalogId === "dinamic" ? (
+                <rect
+                  x={item.x - item.width / 2}
+                  y={item.y - item.height / 2}
+                  width={item.width}
+                  height={item.height}
+                  fill="white"
+                  stroke="#222"
+                  strokeWidth={0.05}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ) : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height} preserveAspectRatio="none" />}
               {selected && <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height} fill="none" className="stroke-ember" strokeWidth={handle * 0.13} strokeDasharray={`${handle * 0.45} ${handle * 0.3}`} />}
               {selected && selectedIds.size === 1 ? <>
                 <g transform={`translate(${item.x + item.width / 2} ${item.y - item.height / 2})`} onPointerDown={(event) => { event.stopPropagation(); const point = clientToSvg(event.clientX, event.clientY); gestureRef.current = { kind: "rotate", start: point, initial: { ...item } }; }}><circle r={handle} className="fill-ember stroke-background" strokeWidth={handle * 0.12} /><RotateCw x={-handle * 0.55} y={-handle * 0.55} width={handle * 1.1} height={handle * 1.1} className="text-primary-foreground" /></g>

@@ -5103,17 +5103,12 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />
-        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY).map((item) => (
-          <image
-            key={`detail-furniture-${item.id}`}
-            href={item.imageUrl}
-            x={item.x - item.width / 2}
-            y={item.y - item.height / 2}
-            width={item.width}
-            height={item.height}
-            preserveAspectRatio="none"
-            transform={`rotate(${item.rotation} ${item.x} ${item.y})`}
-          />
+        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY).map((item) => item.catalogId === "dinamic" ? (
+          <rect key={`detail-furniture-${item.id}`} x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
+            fill="white" stroke="#222" strokeWidth={0.05} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
+        ) : (
+          <image key={`detail-furniture-${item.id}`} href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
+            width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
         ))}
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
@@ -6128,12 +6123,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
           />
-          {furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name))).map((item) => <image
-            key={`level-furniture-${item.id}`} href={item.imageUrl}
-            x={item.x - item.width / 2} y={item.y - item.height / 2}
-            width={item.width} height={item.height} preserveAspectRatio="none"
+          {furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name))).map((item) => item.catalogId === "dinamic" ? <rect
+            key={`level-furniture-${item.id}`} x={item.x - item.width / 2} y={item.y - item.height / 2}
+            width={item.width} height={item.height} fill="white" stroke="#222" strokeWidth={0.05} vectorEffect="non-scaling-stroke"
             transform={`rotate(${item.rotation} ${item.x} ${item.y})`}
-          />)}
+          /> : <image key={`level-furniture-${item.id}`} href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
+            width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />)}
           {/* Kolom struktur selalu menjadi lapisan denah paling atas. */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
