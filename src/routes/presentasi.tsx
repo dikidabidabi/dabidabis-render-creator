@@ -119,7 +119,7 @@ export const Route = createFileRoute("/presentasi")({
 });
 
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
-import { normalizeDetailFurniture, type DetailFurniture } from "@/lib/detail-furniture";
+import { furnitureForVisibleRooms, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -4530,6 +4530,10 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const { sketch, level, area } = slide;
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
   const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
+  const detailMinX = Math.min(area.a.x, area.b.x), detailMaxX = Math.max(area.a.x, area.b.x);
+  const detailMinY = Math.min(area.a.y, area.b.y), detailMaxY = Math.max(area.a.y, area.b.y);
+  const detailRooms = levelLayers.filter((layer) => layer.points.some((p) => p.x >= detailMinX && p.x <= detailMaxX && p.y >= detailMinY && p.y <= detailMaxY)
+    || [{ x: detailMinX, y: detailMinY }, { x: detailMaxX, y: detailMaxY }, { x: detailMinX, y: detailMaxY }, { x: detailMaxX, y: detailMinY }].some((p) => pointInRoom(p, layer.points)));
   const levelFloors = (sketch.floors ?? []).filter((floor) => floor.levelId === level.id && floor.outer.length >= 3);
   const floorPerimeterPoints = levelFloors.length > 0
     ? levelFloors.flatMap((floor) => floor.outer)
@@ -5099,7 +5103,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />
-        {area.showFurniture !== false && normalizeDetailFurniture(area.furniture).map((item) => (
+        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers, detailRooms).map((item) => (
           <image
             key={`detail-furniture-${item.id}`}
             href={item.imageUrl}
@@ -6124,6 +6128,12 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
           />
+          {furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers, layers).map((item) => <image
+            key={`level-furniture-${item.id}`} href={item.imageUrl}
+            x={item.x - item.width / 2} y={item.y - item.height / 2}
+            width={item.width} height={item.height} preserveAspectRatio="none"
+            transform={`rotate(${item.rotation} ${item.x} ${item.y})`}
+          />)}
           {/* Kolom struktur selalu menjadi lapisan denah paling atas. */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
