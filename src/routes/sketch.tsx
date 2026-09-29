@@ -9886,7 +9886,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const a = hinge === "left" ? left : right, b = hinge === "left" ? right : left;
             const sideSign = (side === "inside" ? 1 : -1) * insideSign;
             const slideDirection = hinge === "left" ? "left" : "right";
-            onChange({ doors: (sketch.doors'' ?? []).map((item) => item.id === selected.id ? {
+            onChange({ doors: (sketch.doors ?? []).map((item) => item.id === selected.id ? {
               ...item, a, b, nx: -dy * sideSign, ny: dx * sideSign, slideDirection: item.leaves === 1 ? slideDirection : item.slideDirection,
             } : item) });
             return;
@@ -9980,8 +9980,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const { left, right, dx, dy } = openingAxis(selected);
             const a = hinge === "left" ? left : right, b = hinge === "left" ? right : left;
             const sideSign = (side === "inside" ? 1 : -1) * insideSign;
-            const slideDirection = hinge === "left" ? "left" : "right";
-            onChange({ windows: (sketch.windows'' ?? []).map((item) => item.id === selected.id ? {
+            onChange({ windows: (sketch.windows ?? []).map((item) => item.id === selected.id ? {
               ...item, a, b, nx: -dy * sideSign, ny: dx * sideSign,
             } : item) });
             return;
