@@ -139,7 +139,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
 };
 type Sketch = {
@@ -1620,8 +1620,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
         level: lv,
         area,
         bounds: {
-          minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y),
-          maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y),
+          minX: Math.min(area.a.x, area.b.x) - (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
+          minY: Math.min(area.a.y, area.b.y) - (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
+          maxX: Math.max(area.a.x, area.b.x) + (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
+          maxY: Math.max(area.a.y, area.b.y) + (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
         },
       });
     }
@@ -4604,6 +4606,101 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     levelId: line.levelId,
   })));
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
+  // Dimensi bersih memakai permukaan material yang sama dengan bidang dinding
+  // (setengah ketebalan di tiap sisi as), bukan koordinat as dinding.
+  const wallFaces = computeStraightSegments((sketch.lines ?? []).map((line) => ({
+    a: line.a, b: line.b, kind: line.kind, levelId: line.levelId,
+  }))).filter((segment) => segment.levelId === level.id && Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y) > dimensionTolerance)
+    .map((segment) => ({
+      segment,
+      half: ((WALL_THICK_MM[materialForEdgeSegment(segment, sketch.lines ?? [], sketch.edgeAttrs ?? {}) ?? "solid"] ?? 150) / 2000) * pxPerM,
+    }));
+  const boxBounds = {
+    minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y),
+    maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y),
+  };
+  const interiorRoomDimensions = area.interiorDimensions ? rooms.flatMap((room) => {
+    const points = room.points;
+    if (points.length < 3) return [];
+    const signedArea = points.reduce((sum, p, i) => sum + p.x * points[(i + 1) % points.length].y - points[(i + 1) % points.length].x * p.y, 0);
+    const edges = points.map((p, i) => {
+      const q = points[(i + 1) % points.length];
+      const len = Math.hypot(q.x - p.x, q.y - p.y);
+      if (len < dimensionTolerance) return null;
+      const ux = (q.x - p.x) / len, uy = (q.y - p.y) / len;
+      const nx = (signedArea >= 0 ? -uy : uy), ny = (signedArea >= 0 ? ux : -ux);
+      const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+      const attached = wallFaces.filter(({ segment }) => {
+        const vx = segment.b.x - segment.a.x, vy = segment.b.y - segment.a.y;
+        const wallLen = Math.hypot(vx, vy);
+        if (Math.abs((vx * uy - vy * ux) / wallLen) > 0.035) return false;
+        const dist = Math.abs((mid.x - segment.a.x) * (-vy / wallLen) + (mid.y - segment.a.y) * (vx / wallLen));
+        const projection = ((mid.x - segment.a.x) * vx + (mid.y - segment.a.y) * vy) / wallLen;
+        return dist < pxPerM * 0.18 && projection >= -pxPerM * 0.18 && projection <= wallLen + pxPerM * 0.18;
+      });
+      const half = attached.length ? Math.max(...attached.map((face) => face.half)) : 0;
+      return { p, q, ux, uy, nx, ny, half, len };
+    });
+    const innerCorner = (index: number): Point => {
+      const previous = edges[(index - 1 + edges.length) % edges.length];
+      const next = edges[index];
+      const vertex = points[index];
+      if (!previous || !next) return vertex;
+      const cross = previous.ux * next.uy - previous.uy * next.ux;
+      if (Math.abs(cross) < 0.05) return { x: vertex.x + next.nx * next.half, y: vertex.y + next.ny * next.half };
+      const a = { x: vertex.x + previous.nx * previous.half, y: vertex.y + previous.ny * previous.half };
+      const b = { x: vertex.x + next.nx * next.half, y: vertex.y + next.ny * next.half };
+      const t = ((b.x - a.x) * next.uy - (b.y - a.y) * next.ux) / cross;
+      const intersection = { x: a.x + previous.ux * t, y: a.y + previous.uy * t };
+      return Math.hypot(intersection.x - vertex.x, intersection.y - vertex.y) < pxPerM * 0.7 ? intersection : b;
+    };
+    return edges.flatMap((edge, index) => {
+      if (!edge || edge.len < pxPerM * 0.6) return [];
+      const a = innerCorner(index), b = innerCorner((index + 1) % points.length);
+      const clear = (b.x - a.x) * edge.ux + (b.y - a.y) * edge.uy;
+      const railOffset = pxPerM * 0.5;
+      const middle = { x: (a.x + b.x) / 2 + edge.nx * railOffset, y: (a.y + b.y) / 2 + edge.ny * railOffset };
+      const quarters = [0.25, 0.5, 0.75].map((fraction) => ({
+        x: a.x + (b.x - a.x) * fraction + edge.nx * railOffset,
+        y: a.y + (b.y - a.y) * fraction + edge.ny * railOffset,
+      }));
+      if (clear <= dimensionTolerance || !sectionPointInPolygon(middle, points) || quarters.some((point) => !sectionPointInPolygon(point, points))) return [];
+      return [{ a, b, nx: edge.nx, ny: edge.ny, clear, roomId: room.id, index }];
+    });
+  }) : [];
+  const exteriorDimensionChains = area.interiorDimensions ? (["top", "bottom", "left", "right"] as const).map((side) => {
+    const horizontal = side === "top" || side === "bottom";
+    const near = side === "top" || side === "left";
+    const alongMin = horizontal ? boxBounds.minX : boxBounds.minY;
+    const alongMax = horizontal ? boxBounds.maxX : boxBounds.maxY;
+    const crossMin = horizontal ? boxBounds.minY : boxBounds.minX;
+    const crossMax = horizontal ? boxBounds.maxY : boxBounds.maxX;
+    // Ambil bidang dinding paling luar yang berada dalam kotak detail, bukan lantai lain.
+    const candidates = wallFaces.flatMap(({ segment, half }) => {
+      const a = horizontal ? segment.a.x : segment.a.y;
+      const b = horizontal ? segment.b.x : segment.b.y;
+      const c = horizontal ? segment.a.y : segment.a.x;
+      const d = horizontal ? segment.b.y : segment.b.x;
+      if (Math.max(a, b) < alongMin || Math.min(a, b) > alongMax || Math.max(c, d) < crossMin || Math.min(c, d) > crossMax) return [];
+      if (Math.abs(c - d) > dimensionTolerance || Math.abs(a - b) < dimensionTolerance) return [];
+      return [{ start: Math.max(alongMin, Math.min(a, b)), end: Math.min(alongMax, Math.max(a, b)), face: c + (near ? -half : half), center: c }];
+    });
+    if (!candidates.length) return { side, coordinates: [] as number[], face: 0 };
+    const face = near ? Math.min(...candidates.map((c) => c.face)) : Math.max(...candidates.map((c) => c.face));
+    const outer = candidates.filter((c) => Math.abs(c.face - face) < pxPerM * 0.2);
+    const values = outer.flatMap((c) => [c.start, c.end]);
+    const openings = [...doors, ...windows];
+    for (const opening of openings) {
+      const oa = horizontal ? opening.a.y : opening.a.x;
+      const ob = horizontal ? opening.b.y : opening.b.x;
+      if (Math.abs(oa - ob) > dimensionTolerance || !outer.some((c) => Math.abs(c.center - oa) < pxPerM * 0.2)) continue;
+      for (const end of [opening.a, opening.b]) {
+        const value = horizontal ? end.x : end.y;
+        if (value >= alongMin && value <= alongMax) values.push(value);
+      }
+    }
+    return { side, coordinates: values, face };
+  }) : [];
   const roomDimensionPoints = (() => {
     const junctions: { point: Point; directions: Point[] }[] = [];
     for (const segment of roomDimensionSegments) {
@@ -4756,6 +4853,49 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       </g>;
     })}
   </g> : null;
+  const interiorDimensionMarks = interiorRoomDimensions.map(({ a, b, nx, ny, clear, roomId, index }) => {
+    const offset = pxPerM * 0.5;
+    const x1 = a.x + nx * offset, y1 = a.y + ny * offset;
+    const x2 = b.x + nx * offset, y2 = b.y + ny * offset;
+    const labelFont = dimFont * 0.75;
+    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+    const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+    const readableAngle = angle > 90 || angle < -90 ? angle + 180 : angle;
+    if (clear < Math.max(pxPerM * 0.35, labelFont * 3)) return null;
+    return <g key={`interior-${roomId}-${index}`} stroke="#111111" fill="#111111" strokeWidth={dimStroke} pointerEvents="none">
+      <line x1={x1} y1={y1} x2={x2} y2={y2} />
+      <line x1={a.x - nx * tickSize} y1={a.y - ny * tickSize} x2={a.x + nx * (offset + tickSize)} y2={a.y + ny * (offset + tickSize)} />
+      <line x1={b.x - nx * tickSize} y1={b.y - ny * tickSize} x2={b.x + nx * (offset + tickSize)} y2={b.y + ny * (offset + tickSize)} />
+      <text x={cx} y={cy - labelFont * 0.32} transform={`rotate(${readableAngle} ${cx} ${cy})`} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600} style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: dimStroke * 5 }}>{Math.round((clear / pxPerM) * 1000)}</text>
+    </g>;
+  });
+  const exteriorDimensionMarks = exteriorDimensionChains.map(({ side, coordinates, face }) => {
+    const values = dedupeDimensionCoordinates(coordinates);
+    if (values.length < 2) return null;
+    const horizontal = side === "top" || side === "bottom";
+    const near = side === "top" || side === "left";
+    const rail = (horizontal ? (near ? boxBounds.minY : boxBounds.maxY) : (near ? boxBounds.minX : boxBounds.maxX)) + (near ? -1 : 1) * pxPerM * 0.5;
+    return <g key={`exterior-${side}`} stroke="#111111" fill="#111111" strokeWidth={dimStroke} pointerEvents="none">
+      {values.slice(0, -1).map((value, index) => {
+        const end = values[index + 1];
+        const middle = (value + end) / 2;
+        const font = dimFont * 0.75;
+        return <g key={`${side}-${index}`}>
+          {horizontal ? <>
+            <line x1={value} y1={rail} x2={end} y2={rail} />
+            <line x1={value} y1={face} x2={value} y2={rail + (near ? -tickSize : tickSize)} />
+            {index === values.length - 2 && <line x1={end} y1={face} x2={end} y2={rail + (near ? -tickSize : tickSize)} />}
+            <text x={middle} y={rail + (near ? -font * 0.35 : font * 1.05)} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={font} fontWeight={600}>{Math.round((end - value) / pxPerM * 1000)}</text>
+          </> : <>
+            <line x1={rail} y1={value} x2={rail} y2={end} />
+            <line x1={face} y1={value} x2={rail + (near ? -tickSize : tickSize)} y2={value} />
+            {index === values.length - 2 && <line x1={face} y1={end} x2={rail + (near ? -tickSize : tickSize)} y2={end} />}
+            <text x={rail + (near ? -font * 0.4 : font * 0.4)} y={middle} textAnchor="middle" dominantBaseline="central" stroke="none" fontFamily="Manrope, sans-serif" fontSize={font} fontWeight={600} transform={`rotate(-90 ${rail + (near ? -font * 0.4 : font * 0.4)} ${middle})`}>{Math.round((end - value) / pxPerM * 1000)}</text>
+          </>}
+        </g>;
+      })}
+    </g>;
+  });
   const splitRoomName = (name: string, maxChars: number): string[] => {
     if (name.length <= maxChars || !name.includes(" ")) return [name];
     const words = name.trim().split(/\s+/);
@@ -4914,6 +5054,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             }))}
           </g>;
         })}
+        {area.interiorDimensions && <g>{interiorDimensionMarks}{exteriorDimensionMarks}</g>}
       </svg>
       <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
