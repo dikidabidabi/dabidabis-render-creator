@@ -4725,19 +4725,18 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     const face = near ? Math.min(...candidates.map((c) => c.face)) : Math.max(...candidates.map((c) => c.face));
     const outer = candidates.filter((c) => Math.abs(c.face - face) < pxPerM * 0.2);
     const values = outer.flatMap((c) => [c.start, c.end]);
-    // Bidang dinding melintang yang mencapai dinding terluar diproyeksikan
-    // dari kedua muka materialnya, bukan dari as garis sketsa.
+    // Semua dinding melintang dalam kotak detail menyumbang kedua muka
+    // materialnya, termasuk sekat interior yang tidak menyentuh dinding luar.
     for (const { segment, half } of wallFaces) {
       const a = horizontal ? segment.a.x : segment.a.y;
       const b = horizontal ? segment.b.x : segment.b.y;
       const c = horizontal ? segment.a.y : segment.a.x;
       const d = horizontal ? segment.b.y : segment.b.x;
       if (Math.abs(a - b) > dimensionTolerance || Math.abs(c - d) < dimensionTolerance) continue;
-      if (a < alongMin || a > alongMax) continue;
-      if (!outer.some((wall) => a >= wall.start - dimensionTolerance && a <= wall.end + dimensionTolerance
-        && Math.min(c, d) <= wall.center + half + dimensionTolerance
-        && Math.max(c, d) >= wall.center - half - dimensionTolerance)) continue;
-      values.push(a - half, a + half);
+      if (a < alongMin - half || a > alongMax + half) continue;
+      if (Math.max(c, d) < crossMin || Math.min(c, d) > crossMax) continue;
+      if (a - half >= alongMin && a - half <= alongMax) values.push(a - half);
+      if (a + half >= alongMin && a + half <= alongMax) values.push(a + half);
     }
     const openings = [...doors, ...windows];
     for (const opening of openings) {
