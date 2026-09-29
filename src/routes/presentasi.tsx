@@ -3000,14 +3000,14 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 </pattern>
               );
             })()}
-            {/* Arsiran dinding solid: pasangan garis 45° berjarak 50 mm, berulang tiap 150 mm. */}
+            {/* Arsiran dinding solid: pasangan garis 45° berjarak 40 mm, berulang tiap 150 mm. */}
             {(() => {
               const period = Math.max(1.8, scalePxPerM * 0.15);
               return (
                 <pattern id={`solid-pair-sec-${slide.id}`} patternUnits="userSpaceOnUse"
                   width={period} height={period} patternTransform="rotate(45)">
-                  <path d={`M 0 0 V ${period} M ${period / 3} 0 V ${period}`}
-                    fill="none" stroke="#0a0a0a" strokeWidth={0.35} />
+                  <path d={`M ${period * 0.1} 0 V ${period} M ${period * (0.1 + 4 / 15)} 0 V ${period}`}
+                    fill="none" stroke="#0a0a0a" strokeWidth={0.09} />
                 </pattern>
               );
             })()}
@@ -7441,7 +7441,7 @@ function MaterialEdges({
   // Kontur dinding sangat tipis & seragam (80% lebih tipis dari sebelumnya).
   const stroke = sw * 0.00028;
   const strokeFine = stroke;
-  // Dinding solid: pasangan garis 45° (50 mm antar garis, berulang tiap 150 mm).
+  // Dinding solid: pasangan garis 45° (40 mm antar garis, berulang tiap 150 mm).
   const hatchGap = Math.max(1.2, pxPerM * 0.1);
   const solidHatchPeriod = Math.max(1.8, pxPerM * 0.15);
   const hatchStroke = Math.max(0.18, sw * 0.0004);
@@ -7493,8 +7493,8 @@ function MaterialEdges({
       <defs>
         <pattern id={`solid-pair-${patternId}`} patternUnits="userSpaceOnUse"
           width={solidHatchPeriod} height={solidHatchPeriod} patternTransform="rotate(45)">
-          <path d={`M 0 0 V ${solidHatchPeriod} M ${solidHatchPeriod / 3} 0 V ${solidHatchPeriod}`}
-            fill="none" stroke="#0a0a0a" strokeWidth={hatchStroke} />
+          <path d={`M ${solidHatchPeriod * 0.1} 0 V ${solidHatchPeriod} M ${solidHatchPeriod * (0.1 + 4 / 15)} 0 V ${solidHatchPeriod}`}
+            fill="none" stroke="#0a0a0a" strokeWidth={0.09} />
         </pattern>
         {/* Hatch 45° tunggal untuk band jendela. */}
         <pattern
