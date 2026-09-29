@@ -11,6 +11,7 @@ const PRIVATE_PREFIXES = [
   "/studio",
   "/masterplan",
   "/sketch",
+  "/detail",
   "/tabulasi",
   "/narasi",
   "/presentasi",

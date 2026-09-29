@@ -225,10 +225,10 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const copySelection = useCallback(() => {
     const copied = furniture.filter((item) => selectedIds.has(item.id));
     if (copied.length === 0) return;
-    void setProjectItem(CLIPBOARD_KEY, JSON.stringify(copied));
+    void setProjectItem(CLIPBOARD_KEY, JSON.stringify(copied.map((item) => ({ ...item, widthMm: dimensionMm(item.width, pxPerMeter), heightMm: dimensionMm(item.height, pxPerMeter) }))));
     setClipboard(copied);
     toast.success(`${copied.length} furniture disalin`);
-  }, [furniture, selectedIds]);
+  }, [furniture, selectedIds, pxPerMeter]);
 
   const pasteSelection = useCallback(() => {
     try {
@@ -238,14 +238,14 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       const target = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
       const stamp = Date.now();
       const pasted = copied.map((item, index) => {
-        const next = { ...item, id: `FURN${stamp}_${index}_${Math.random().toString(36).slice(2, 6)}`, x: target.x + item.x - sourceCenter.x, y: target.y + item.y - sourceCenter.y, createdAt: stamp + index };
-        return anchorFurniture(next, sketch.layers.filter((layer) => layer.levelId === area.levelId));
+        const next = { ...item, id: `FURN${stamp}_${index}_${Math.random().toString(36).slice(2, 6)}`, x: target.x + item.x - sourceCenter.x, y: target.y + item.y - sourceCenter.y, width: (item.widthMm ?? dimensionMm(item.width, pxPerMeter)) / 1000 * pxPerMeter, height: (item.heightMm ?? dimensionMm(item.height, pxPerMeter)) / 1000 * pxPerMeter, createdAt: stamp + index };
+        return anchorFurniture(next, layers);
       });
       onFurnitureChange([...furniture, ...pasted]);
       setSelectedIds(new Set(pasted.map((item) => item.id)));
       toast.success(`${pasted.length} furniture ditempel`);
     } catch { toast.error("Furniture salinan tidak dapat dibaca"); }
-  }, [bounds, clipboard, furniture, onFurnitureChange, sketch.layers, area.levelId]);
+  }, [bounds, clipboard, furniture, onFurnitureChange, layers, pxPerMeter]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
