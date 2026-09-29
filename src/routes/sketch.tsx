@@ -400,6 +400,7 @@ type DetailArea = {
   number: number;
   showOnSlide: boolean;
   dimensions: boolean;
+  interiorDimensions: boolean;
   floorHatch: boolean;
   showKeyplan: boolean;
   showFurniture: boolean;
@@ -1201,6 +1202,7 @@ function normalizeSketch(s: any): Sketch {
           number: Math.max(1, Math.round(Number(area.number) || index + 1)),
           showOnSlide: area.showOnSlide !== false,
           dimensions: area.dimensions !== false,
+          interiorDimensions: area.interiorDimensions === true,
           floorHatch: area.floorHatch === true,
           showKeyplan: area.showKeyplan !== false,
           showFurniture: area.showFurniture !== false,
@@ -11235,6 +11237,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           number,
           showOnSlide: true,
           dimensions: true,
+          interiorDimensions: false,
           floorHatch: false,
           showKeyplan: true,
           showFurniture: true,
@@ -12275,6 +12278,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   {([
                     ["showOnSlide", "Munculkan di slide"],
                     ["dimensions", "Dimensi"],
+                    ["interiorDimensions", "Dimensi interior"],
                     ["floorHatch", "Hatch lantai 600 × 600 mm"],
                     ["showKeyplan", "Keyplan"],
                     ["showFurniture", "Furniture"],

@@ -139,7 +139,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
 };
 type Sketch = {
@@ -1620,8 +1620,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
         level: lv,
         area,
         bounds: {
-          minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y),
-          maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y),
+          minX: Math.min(area.a.x, area.b.x) - (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
+          minY: Math.min(area.a.y, area.b.y) - (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
+          maxX: Math.max(area.a.x, area.b.x) + (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
+          maxY: Math.max(area.a.y, area.b.y) + (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
         },
       });
     }
