@@ -19,9 +19,11 @@ import { colorForRoomName } from "@/lib/room-color";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import {
   FURNITURE_CATALOG,
+  anchorFurniture,
   newDetailFurniture,
   normalizeDetailFurniture,
   normalizeImportedFurniture,
+  positionFurniture,
   roomForFurniture,
   type CatalogFurniture,
   type DetailFurniture,
@@ -173,7 +175,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const [clipboard, setClipboard] = useState<DetailFurniture[]>([]);
   const [catalogSizes, setCatalogSizes] = useState<Record<string, { lengthMm: number; widthMm: number }>>({});
   const [fullscreen, setFullscreen] = useState(false);
-  const furniture = area.furniture ?? [];
+  const furniture = (area.furniture ?? []).map((item) => positionFurniture(item, sketch.layers));
   const width = Math.max(1, bounds.maxX - bounds.minX);
   const height = Math.max(1, bounds.maxY - bounds.minY);
   const level = sketch.levels.find((item) => item.id === area.levelId);
@@ -238,7 +240,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       const stamp = Date.now();
       const pasted = copied.map((item, index) => {
         const next = { ...item, id: `FURN${stamp}_${index}_${Math.random().toString(36).slice(2, 6)}`, x: target.x + item.x - sourceCenter.x, y: target.y + item.y - sourceCenter.y, createdAt: stamp + index };
-        return { ...next, roomId: roomForFurniture(next, sketch.layers.filter((layer) => layer.levelId === area.levelId)) };
+        return anchorFurniture(next, sketch.layers.filter((layer) => layer.levelId === area.levelId));
       });
       onFurnitureChange([...furniture, ...pasted]);
       setSelectedIds(new Set(pasted.map((item) => item.id)));
@@ -284,7 +286,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       const point = clientToSvg(event.clientX, event.clientY);
       if (gesture.kind === "move") {
         const dx = point.x - gesture.start.x; const dy = point.y - gesture.start.y;
-        onFurnitureChange(furniture.map((item) => { const original = gesture.initial.get(item.id); if (!original) return item; const next = { ...item, x: original.x + dx, y: original.y + dy }; return { ...next, roomId: roomForFurniture(next, layers) }; }));
+        onFurnitureChange(furniture.map((item) => { const original = gesture.initial.get(item.id); if (!original) return item; const next = { ...item, x: original.x + dx, y: original.y + dy }; return anchorFurniture(next, layers); }));
       } else if (gesture.kind === "rotate") {
         const angle = Math.atan2(point.y - gesture.initial.y, point.x - gesture.initial.x) * 180 / Math.PI + 90;
         onFurnitureChange(furniture.map((item) => item.id === gesture.initial.id ? { ...item, rotation: Math.round(angle / 5) * 5 } : item));
@@ -317,8 +319,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
 
   const addFurniture = (entry: CatalogFurniture) => {
     const item = newDetailFurniture({ ...entry, ...catalogSizes[entry.id] }, bounds, pxPerMeter);
-    item.roomId = roomForFurniture(item, layers);
-    onFurnitureChange([...furniture, item]); setSelectedIds(new Set([item.id]));
+    onFurnitureChange([...furniture, anchorFurniture(item, layers)]); setSelectedIds(new Set([item.id]));
   };
 
   const changeCatalogSize = (entry: CatalogFurniture, key: "lengthMm" | "widthMm", value: string) => {
@@ -431,7 +432,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
           <td className="p-2 tabular-nums">{row.length}</td>
           <td className="p-2"><input aria-label={`Harga ${item.id}`} type="number" min="0" className="w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.price ?? 0} onChange={(event) => { const n = Number(event.target.value); if (n >= 0) changeRow(row, { price: n }); }} /></td>
           <td className="p-2 tabular-nums">{((item.price ?? 0) * row.length).toLocaleString("id-ID")}</td>
-          <td className="p-2"><div className="flex gap-1"><Button size="icon" variant="ghost" title="Duplikasi furniture" onClick={() => { const copy = { ...item, id: `FURN${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, x: item.x + pxPerMeter * 0.3, y: item.y + pxPerMeter * 0.3, createdAt: Date.now() }; onFurnitureChange([...furniture, { ...copy, roomId: roomForFurniture(copy, layers) }]); }}><Copy className="h-3.5 w-3.5" /></Button><Button size="icon" variant="ghost" title="Hapus satu furniture" onClick={() => onFurnitureChange(furniture.filter((entry) => entry.id !== item.id))}><Trash2 className="h-3.5 w-3.5" /></Button></div></td>
+          <td className="p-2"><div className="flex gap-1"><Button size="icon" variant="ghost" title="Duplikasi furniture" onClick={() => { const copy = { ...item, id: `FURN${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, x: item.x + pxPerMeter * 0.3, y: item.y + pxPerMeter * 0.3, createdAt: Date.now() }; onFurnitureChange([...furniture, anchorFurniture(copy, layers)]); }}><Copy className="h-3.5 w-3.5" /></Button><Button size="icon" variant="ghost" title="Hapus satu furniture" onClick={() => onFurnitureChange(furniture.filter((entry) => entry.id !== item.id))}><Trash2 className="h-3.5 w-3.5" /></Button></div></td>
         </tr>; })}</tbody>
         <tfoot><tr className="font-semibold"><td colSpan={5} className="p-2 text-right">Total</td><td className="p-2 tabular-nums">{furniture.reduce((sum, item) => sum + (item.price ?? 0), 0).toLocaleString("id-ID")}</td><td /></tr></tfoot>
       </table></div>

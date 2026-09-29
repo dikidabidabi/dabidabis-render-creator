@@ -6128,7 +6128,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
           />
-          {furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers, layers).map((item) => <image
+          {(sketch.detailAreas ?? []).some((detail) => detail.levelId === level.id && detail.showFurniture !== false) && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers, layers).map((item) => <image
             key={`level-furniture-${item.id}`} href={item.imageUrl}
             x={item.x - item.width / 2} y={item.y - item.height / 2}
             width={item.width} height={item.height} preserveAspectRatio="none"

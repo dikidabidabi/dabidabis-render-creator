@@ -9,6 +9,7 @@ export type DetailFurniture = {
   rotation: number;
   createdAt: number;
   roomId?: string;
+  roomAnchor?: { x: number; y: number };
   catalogId?: string;
   price?: number;
 };
@@ -130,6 +131,7 @@ export function normalizeDetailFurniture(value: unknown): DetailFurniture[] {
       rotation: Number.isFinite(rotation) ? Math.round(rotation / 5) * 5 : 0,
       createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
       roomId: typeof raw.roomId === "string" ? raw.roomId : undefined,
+      roomAnchor: raw.roomAnchor && Number.isFinite(raw.roomAnchor.x) && Number.isFinite(raw.roomAnchor.y) ? raw.roomAnchor : undefined,
       catalogId: typeof raw.catalogId === "string" ? raw.catalogId : undefined,
       price: Number.isFinite(Number(raw.price)) && Number(raw.price) >= 0 ? Number(raw.price) : 0,
     }];
@@ -171,6 +173,23 @@ export function roomForFurniture(point: { x: number; y: number }, layers: { id: 
   return layers.find((layer) => layer.points.length >= 3 && pointInRoom(point, layer.points))?.id;
 }
 
+export function anchorFurniture(item: DetailFurniture, layers: { id: string; points: { x: number; y: number }[] }[]): DetailFurniture {
+  const roomId = roomForFurniture(item, layers);
+  const room = layers.find((layer) => layer.id === roomId);
+  if (!room) return { ...item, roomId: undefined, roomAnchor: undefined };
+  const xs = room.points.map((point) => point.x), ys = room.points.map((point) => point.y);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  return { ...item, roomId, roomAnchor: { x: (item.x - minX) / Math.max(1, Math.max(...xs) - minX), y: (item.y - minY) / Math.max(1, Math.max(...ys) - minY) } };
+}
+
+export function positionFurniture(item: DetailFurniture, layers: { id: string; points: { x: number; y: number }[] }[]): DetailFurniture {
+  const room = layers.find((layer) => layer.id === item.roomId);
+  if (!room || !item.roomAnchor || room.points.length < 3) return item;
+  const xs = room.points.map((point) => point.x), ys = room.points.map((point) => point.y);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  return { ...item, x: minX + item.roomAnchor.x * (Math.max(...xs) - minX), y: minY + item.roomAnchor.y * (Math.max(...ys) - minY) };
+}
+
 export function furnitureForVisibleRooms(
   areas: { levelId: string; showFurniture?: boolean; furniture?: DetailFurniture[] }[],
   levelId: string,
@@ -179,8 +198,9 @@ export function furnitureForVisibleRooms(
 ): DetailFurniture[] {
   const ids = new Set(visibleRooms.map((room) => room.id));
   const seen = new Set<string>();
-  return areas.filter((area) => area.levelId === levelId && area.showFurniture !== false)
+  return areas.filter((area) => area.levelId === levelId)
     .flatMap((area) => normalizeDetailFurniture(area.furniture))
+    .map((item) => positionFurniture(item, rooms))
     .filter((item) => {
       if (seen.has(item.id)) return false;
       seen.add(item.id);
