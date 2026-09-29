@@ -178,7 +178,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const width = Math.max(1, bounds.maxX - bounds.minX);
   const height = Math.max(1, bounds.maxY - bounds.minY);
   const level = sketch.levels.find((item) => item.id === area.levelId);
-  const layers = sketch.layers.filter((item) => item.levelId === area.levelId);
+  const layers = sketch.layers.filter((item) => item.levelId === area.levelId && !/^(lahan|void|taman|atap)/i.test(item.name.trim()));
   const lines = (sketch.lines ?? []).filter((item) => item.levelId === area.levelId);
   const pxPerMeter = 80 / (MAJOR_METERS[sketch.scale ?? "1:100"] ?? 1);
   const zoom = width / view.width;
