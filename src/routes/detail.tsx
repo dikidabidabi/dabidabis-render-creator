@@ -61,6 +61,7 @@ type Pinch = { distance: number; centerClient: Point; view: ViewBox };
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const LIBRARY_KEY = "dabidabis_furniture_library_v1";
 const CLIPBOARD_KEY = "dabidabis_furniture_clipboard_v1";
+const CATALOG_SIZE_KEY = "dabidabis_furniture_sizes_v1";
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 const MAJOR_METERS: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 };
@@ -185,6 +186,8 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
     try {
       setLibrary(normalizeImportedFurniture(JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]")));
       setClipboard(normalizeDetailFurniture(JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || "[]")));
+      const sizes = JSON.parse(localStorage.getItem(CATALOG_SIZE_KEY) || "{}");
+      if (sizes && typeof sizes === "object" && !Array.isArray(sizes)) setCatalogSizes(sizes);
     } catch { setLibrary([]); }
   }, []);
 
@@ -321,11 +324,11 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const changeCatalogSize = (entry: CatalogFurniture, key: "lengthMm" | "widthMm", value: string) => {
     const number = Number(value);
     if (!Number.isFinite(number) || number <= 0) return;
-    setCatalogSizes((previous) => ({ ...previous, [entry.id]: {
+    setCatalogSizes((previous) => { const next = { ...previous, [entry.id]: {
       lengthMm: previous[entry.id]?.lengthMm ?? entry.lengthMm ?? 1000,
       widthMm: previous[entry.id]?.widthMm ?? entry.widthMm ?? Math.round((entry.lengthMm ?? 1000) / entry.aspectRatio),
       [key]: number,
-    } }));
+    } }; void setProjectItem(CATALOG_SIZE_KEY, JSON.stringify(next)); return next; });
   };
 
   const changeFurniture = (id: string, change: Partial<DetailFurniture>) => onFurnitureChange(furniture.map((item) => item.id === id ? { ...item, ...change } : item));

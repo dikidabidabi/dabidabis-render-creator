@@ -3488,6 +3488,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ...area,
       a: sp(area.a),
       b: sp(area.b),
+      furniture: area.furniture?.map((item) => ({ ...item, x: item.x * k, y: item.y * k, width: item.width * k, height: item.height * k })),
     }));
 
     const nextRoads = (sketch.roads || []).map((r) => ({
