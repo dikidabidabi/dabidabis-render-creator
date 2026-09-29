@@ -3290,8 +3290,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       !isLahanLayerName(layer.name) && !isVoidLayerName(layer.name) &&
       pointInPolygon({ x: midpoint.x + nx * offset * sign, y: midpoint.y + ny * offset * sign }, layer.points));
     const positive = inRoom(1), negative = inRoom(-1);
-    return positive !== negative ? positive ? 1 : -1 :
-      opening.nx * nx + opening.ny * ny < 0 ? -1 : 1;
+    return positive !== negative ? positive ? 1 : -1 : 1;
   };
 
 
@@ -5001,11 +5000,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       }
       ctx.font = `700 ${6.5 / s}px var(--font-display), sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const axis = openingAxis(opening);
+      const currentHinge = axis.aFirst ? "left" : "right";
+      const currentSide = (opening.nx * -axis.dy + opening.ny * axis.dx) * insideSign >= 0 ? "inside" : "outside";
       for (const hinge of ["left", "right"] as const) for (const side of ["inside", "outside"] as const) {
         const point = openingChoicePoint(opening, insideSign, hinge, side, s);
         ctx.beginPath(); ctx.arc(point.x, point.y, 9 / s, 0, Math.PI * 2);
-        ctx.fillStyle = "#f6efe3"; ctx.fill(); ctx.strokeStyle = "#e85d3a"; ctx.stroke();
-        ctx.fillStyle = "#0a0a0a"; ctx.fillText(`${hinge === "left" ? "K" : "N"}${side === "inside" ? "D" : "L"}`, point.x, point.y);
+        const active = currentHinge === hinge && currentSide === side;
+        ctx.fillStyle = active ? "#e85d3a" : "#f6efe3"; ctx.fill(); ctx.strokeStyle = "#e85d3a"; ctx.stroke();
+        ctx.fillStyle = active ? "#f6efe3" : "#0a0a0a"; ctx.fillText(`${hinge === "left" ? "K" : "N"}${side === "inside" ? "D" : "L"}`, point.x, point.y);
       }
       ctx.restore();
     };
@@ -9895,9 +9898,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const { left, right, dx, dy } = openingAxis(selected);
             const a = hinge === "left" ? left : right, b = hinge === "left" ? right : left;
             const sideSign = (side === "inside" ? 1 : -1) * insideSign;
-            const slideDirection = "left";
             onChange({ doors: (sketch.doors ?? []).map((item) => item.id === selected.id ? {
-              ...item, a, b, nx: -dy * sideSign, ny: dx * sideSign, slideDirection: item.leaves === 1 ? slideDirection : item.slideDirection,
+              ...item, a, b, nx: -dy * sideSign, ny: dx * sideSign,
             } : item) });
             return;
           }
@@ -13500,7 +13502,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   <Button size="sm" variant={selected.leaves === 1 ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, leaves: 1 } : door) }); }} className="h-7 text-xs">1 Daun</Button>
                   <Button size="sm" variant={selected.leaves === 2 ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, leaves: 2 } : door) }); }} className="h-7 text-xs">2 Daun</Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">L/R memilih sisi engsel; +/− memilih arah bukaan. Tarik salah satu lingkaran ujung untuk mengubah panjang.</p>
+                <p className="text-[10px] text-muted-foreground">KD: engsel kiri, buka ke dalam; KL: kiri, ke luar; ND/NL: engsel kanan. Tarik lingkaran ujung untuk mengubah panjang.</p>
               </div>;
             })()}
             {!doorEditMode && <>
@@ -13664,7 +13666,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Jendela terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
                 <Slider min={50} max={600} step={5} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
                 <div className="flex items-center justify-between gap-3"><Label className="text-[11px] text-muted-foreground">Jumlah daun</Label><Input type="number" min={1} max={24} value={selected.leaves} onFocus={() => pushHistory()} onChange={(event) => { const leaves = Math.max(1, Math.min(24, Math.round(Number(event.target.value) || 1))); onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, leaves } : window) }); }} className="h-7 w-20 text-xs" /></div>
-                <p className="text-[10px] text-muted-foreground">L/R memilih sisi bukaan; +/− memilih arah dalam/luar. Tarik salah satu lingkaran ujung untuk mengubah panjang.</p>
+                <p className="text-[10px] text-muted-foreground">KD/KL: bukaan kiri ke dalam/luar; ND/NL: bukaan kanan. Tarik lingkaran ujung untuk mengubah panjang.</p>
               </div>;
             })()}
             {!windowEditMode && <>
