@@ -4660,7 +4660,11 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       const clear = (b.x - a.x) * edge.ux + (b.y - a.y) * edge.uy;
       const railOffset = pxPerM * 0.5;
       const middle = { x: (a.x + b.x) / 2 + edge.nx * railOffset, y: (a.y + b.y) / 2 + edge.ny * railOffset };
-      if (clear <= dimensionTolerance || !sectionPointInPolygon(middle, points)) return [];
+      const quarters = [0.25, 0.5, 0.75].map((fraction) => ({
+        x: a.x + (b.x - a.x) * fraction + edge.nx * railOffset,
+        y: a.y + (b.y - a.y) * fraction + edge.ny * railOffset,
+      }));
+      if (clear <= dimensionTolerance || !sectionPointInPolygon(middle, points) || quarters.some((point) => !sectionPointInPolygon(point, points))) return [];
       return [{ a, b, nx: edge.nx, ny: edge.ny, clear, roomId: room.id, index }];
     });
   }) : [];
