@@ -1080,7 +1080,7 @@ function normalizeSketch(s: any): Sketch {
       const valid: Record<string, EdgeMaterial> = {};
       for (const [k, v] of Object.entries(raw)) {
         if (
-          v === "solid" || v === "concrete150" || v === "concrete200" || v === "concrete300" ||
+          v === "solid" || v === "standard150" || v === "concrete150" || v === "concrete200" || v === "concrete300" ||
           v === "concept" || v === "curtain" || v === "window" || v === "railing"
         ) {
           valid[k] = v;
@@ -13747,7 +13747,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               Material Selubung
             </Label>
             <div className="grid grid-cols-1 gap-1.5">
-              {(["solid", "concrete150", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
+              {(["solid", "standard150", "concrete150", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((m) => (
                 <Button
                   key={m}
                   type="button"
@@ -13778,7 +13778,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   <SelectValue placeholder="Material asal" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(["solid", "concrete150", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((material) => (
+                  {(["solid", "standard150", "concrete150", "concrete200", "concrete300", "concept", "curtain", "window", "railing"] as EdgeMaterial[]).map((material) => (
                     <SelectItem key={material} value={material}>{MATERIAL_LABELS[material]}</SelectItem>
                   ))}
                 </SelectContent>
