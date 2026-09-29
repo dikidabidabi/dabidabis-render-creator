@@ -3030,6 +3030,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   >(null);
   const [doorEraseMode, setDoorEraseMode] = useState(false);
   const [doorClipboard, setDoorClipboard] = useState<Door[]>([]);
+  const [doorEditMode, setDoorEditMode] = useState(false);
+  const [selectedDoorId, setSelectedDoorId] = useState<string | null>(null);
+  const [doorEndpointDrag, setDoorEndpointDrag] = useState<{ id: string; endpoint: "a" | "b" } | null>(null);
   const [windowLeaves, setWindowLeaves] = useState(1);
   const [windowWidthCm, setWindowWidthCm] = useState(120);
   const [windowDraft, setWindowDraft] = useState<
@@ -3037,6 +3040,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     | null
   >(null);
   const [windowEraseMode, setWindowEraseMode] = useState(false);
+  const [windowEditMode, setWindowEditMode] = useState(false);
+  const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null);
+  const [windowEndpointDrag, setWindowEndpointDrag] = useState<{ id: string; endpoint: "a" | "b" } | null>(null);
   const [lineKind, setLineKind] = useState<LineKind>("straight");
   const [drawing, setDrawing] = useState<{ a: Point; b: Point } | null>(null);
   const [hover, setHover] = useState<Point | null>(null);
@@ -4933,6 +4939,49 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         nx: windowDraft.nx, ny: windowDraft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
       }, "rgba(232,93,58,0.95)", true);
     }
+
+    // ----- Kontrol edit bukaan terpasang -----
+    const drawOpeningEditor = (opening: Door | Window, kind: "door" | "window") => {
+      const isSelected = kind === "door" ? selectedDoorId === opening.id : selectedWindowId === opening.id;
+      const editing = kind === "door" ? tool === "door" && doorEditMode : tool === "window" && windowEditMode;
+      if (!isSelected || !editing) return;
+      const len = Math.hypot(opening.b.x - opening.a.x, opening.b.y - opening.a.y) || 1;
+      const dx = (opening.b.x - opening.a.x) / len, dy = (opening.b.y - opening.a.y) / len;
+      const side = opening.nx * -dy + opening.ny * dx < 0 ? -1 : 1;
+      const px = -dy * side, py = dx * side;
+      const mid = { x: (opening.a.x + opening.b.x) / 2, y: (opening.a.y + opening.b.y) / 2 };
+      const handleR = 6 / s;
+      ctx.save();
+      ctx.strokeStyle = "#e85d3a";
+      ctx.fillStyle = "#f6efe3";
+      ctx.lineWidth = 2 / s;
+      ctx.setLineDash([6 / s, 4 / s]);
+      ctx.beginPath(); ctx.moveTo(opening.a.x, opening.a.y); ctx.lineTo(opening.b.x, opening.b.y); ctx.stroke();
+      ctx.setLineDash([]);
+      for (const point of [opening.a, opening.b]) {
+        ctx.beginPath(); ctx.arc(point.x, point.y, handleR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+      const chipGap = 22 / s;
+      const chipR = 9 / s;
+      const choices = [
+        { along: -1, normal: 1, label: "L+" },
+        { along: 1, normal: 1, label: "R+" },
+        { along: -1, normal: -1, label: "L−" },
+        { along: 1, normal: -1, label: "R−" },
+      ];
+      ctx.font = `700 ${7 / s}px var(--font-display), sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const choice of choices) {
+        const cx = mid.x + dx * choice.along * chipGap + px * choice.normal * chipGap;
+        const cy = mid.y + dy * choice.along * chipGap + py * choice.normal * chipGap;
+        ctx.beginPath(); ctx.arc(cx, cy, chipR, 0, Math.PI * 2);
+        ctx.fillStyle = "#f6efe3"; ctx.fill(); ctx.strokeStyle = "#e85d3a"; ctx.stroke();
+        ctx.fillStyle = "#0a0a0a"; ctx.fillText(choice.label, cx, cy);
+      }
+      ctx.restore();
+    };
+    for (const door of sketch.doors ?? []) if (!activeLvlId || door.levelId === activeLvlId) drawOpeningEditor(door, "door");
+    for (const window of sketch.windows ?? []) if (!activeLvlId || window.levelId === activeLvlId) drawOpeningEditor(window, "window");
 
 
     // Active drawing preview (during drag)
@@ -7358,7 +7407,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, windowDraft, windowLeaves, windowWidthCm, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -9797,6 +9846,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       onChange({ edgeAttrs: next });
     } else if (tool === "door") {
       const raw = getWorldPosRaw(e);
+      if (doorEditMode) {
+        const doors = (sketch.doors ?? []).filter((door) => !activeLvlId || door.levelId === activeLvlId);
+        const selected = doors.find((door) => door.id === selectedDoorId);
+        const handleTol = 14 / view.s;
+        if (selected) {
+          if (dist(raw, selected.a) <= handleTol || dist(raw, selected.b) <= handleTol) {
+            pushHistory();
+            setDoorEndpointDrag({ id: selected.id, endpoint: dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
+            return;
+          }
+          const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
+          const dx = (selected.b.x - selected.a.x) / len, dy = (selected.b.y - selected.a.y) / len;
+          const side = selected.nx * -dy + selected.ny * dx < 0 ? -1 : 1;
+          const px = -dy * side, py = dx * side;
+          const mid = { x: (selected.a.x + selected.b.x) / 2, y: (selected.a.y + selected.b.y) / 2 };
+          const chipGap = 22 / view.s;
+          const choices = [
+            { along: -1, normal: 1 }, { along: 1, normal: 1 },
+            { along: -1, normal: -1 }, { along: 1, normal: -1 },
+          ];
+          const choice = choices.find((item) => dist(raw, { x: mid.x + dx * item.along * chipGap + px * item.normal * chipGap, y: mid.y + dy * item.along * chipGap + py * item.normal * chipGap }) <= 12 / view.s);
+          if (choice) {
+            pushHistory();
+            const swap = choice.along > 0;
+            const a = swap ? selected.b : selected.a, b = swap ? selected.a : selected.b;
+            const ndx = (b.x - a.x) / len, ndy = (b.y - a.y) / len;
+            const normalSign = choice.normal > 0 ? 1 : -1;
+            onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, a, b, nx: -ndy * normalSign, ny: ndx * normalSign, slideDirection: swap ? door.slideDirection === "right" ? "left" : "right" : door.slideDirection } : door) });
+            return;
+          }
+        }
+        let hit: Door | null = null, best = Infinity;
+        for (const door of doors) {
+          const distance = dist(raw, projectOnSegment(raw, door.a, door.b));
+          if (distance < best) { best = distance; hit = door; }
+        }
+        setSelectedDoorId(hit && best <= 18 / view.s ? hit.id : null);
+        return;
+      }
       if (doorEraseMode) {
         const doors = sketch.doors ?? [];
         if (doors.length === 0) {
@@ -9860,6 +9948,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       });
     } else if (tool === "window") {
       const raw = getWorldPosRaw(e);
+      if (windowEditMode) {
+        const windows = (sketch.windows ?? []).filter((window) => !activeLvlId || window.levelId === activeLvlId);
+        const selected = windows.find((window) => window.id === selectedWindowId);
+        const handleTol = 14 / view.s;
+        if (selected) {
+          if (dist(raw, selected.a) <= handleTol || dist(raw, selected.b) <= handleTol) {
+            pushHistory();
+            setWindowEndpointDrag({ id: selected.id, endpoint: dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
+            return;
+          }
+          const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
+          const dx = (selected.b.x - selected.a.x) / len, dy = (selected.b.y - selected.a.y) / len;
+          const side = selected.nx * -dy + selected.ny * dx < 0 ? -1 : 1;
+          const px = -dy * side, py = dx * side;
+          const mid = { x: (selected.a.x + selected.b.x) / 2, y: (selected.a.y + selected.b.y) / 2 };
+          const chipGap = 22 / view.s;
+          const choices = [
+            { along: -1, normal: 1 }, { along: 1, normal: 1 },
+            { along: -1, normal: -1 }, { along: 1, normal: -1 },
+          ];
+          const choice = choices.find((item) => dist(raw, { x: mid.x + dx * item.along * chipGap + px * item.normal * chipGap, y: mid.y + dy * item.along * chipGap + py * item.normal * chipGap }) <= 12 / view.s);
+          if (choice) {
+            pushHistory();
+            const swap = choice.along > 0;
+            const a = swap ? selected.b : selected.a, b = swap ? selected.a : selected.b;
+            const ndx = (b.x - a.x) / len, ndy = (b.y - a.y) / len;
+            const normalSign = choice.normal > 0 ? 1 : -1;
+            onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, a, b, nx: -ndy * normalSign, ny: ndx * normalSign } : window) });
+            return;
+          }
+        }
+        let hit: Window | null = null, best = Infinity;
+        for (const window of windows) {
+          const distance = dist(raw, projectOnSegment(raw, window.a, window.b));
+          if (distance < best) { best = distance; hit = window; }
+        }
+        setSelectedWindowId(hit && best <= 18 / view.s ? hit.id : null);
+        return;
+      }
       if (windowEraseMode) {
         const windows = sketch.windows ?? [];
         const tolPx = 18 / view.s;
@@ -10069,6 +10196,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (doorEndpointDrag) {
+      const raw = getWorldPosRaw(e);
+      onChange({ doors: (sketch.doors ?? []).map((door) => {
+        if (door.id !== doorEndpointDrag.id) return door;
+        const fixed = doorEndpointDrag.endpoint === "a" ? door.b : door.a;
+        const moving = doorEndpointDrag.endpoint === "a" ? door.a : door.b;
+        const len = Math.hypot(door.b.x - door.a.x, door.b.y - door.a.y) || 1;
+        const ux = (door.b.x - door.a.x) / len, uy = (door.b.y - door.a.y) / len;
+        const signed = (raw.x - fixed.x) * ux + (raw.y - fixed.y) * uy;
+        const minPx = 0.7 * pxPerMeter, maxPx = 2 * pxPerMeter;
+        const fallbackSign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
+        const sign = Math.abs(signed) > 1e-6 ? Math.sign(signed) : fallbackSign;
+        const lengthPx = Math.max(minPx, Math.min(maxPx, Math.abs(signed)));
+        const point = { x: fixed.x + ux * sign * lengthPx, y: fixed.y + uy * sign * lengthPx };
+        return { ...door, [doorEndpointDrag.endpoint]: point, widthCm: Math.round(lengthPx / pxPerMeter * 100) };
+      }) });
+      return;
+    }
+    if (windowEndpointDrag) {
+      const raw = getWorldPosRaw(e);
+      onChange({ windows: (sketch.windows ?? []).map((window) => {
+        if (window.id !== windowEndpointDrag.id) return window;
+        const fixed = windowEndpointDrag.endpoint === "a" ? window.b : window.a;
+        const moving = windowEndpointDrag.endpoint === "a" ? window.a : window.b;
+        const len = Math.hypot(window.b.x - window.a.x, window.b.y - window.a.y) || 1;
+        const ux = (window.b.x - window.a.x) / len, uy = (window.b.y - window.a.y) / len;
+        const signed = (raw.x - fixed.x) * ux + (raw.y - fixed.y) * uy;
+        const minPx = 0.5 * pxPerMeter, maxPx = 6 * pxPerMeter;
+        const fallbackSign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
+        const sign = Math.abs(signed) > 1e-6 ? Math.sign(signed) : fallbackSign;
+        const lengthPx = Math.max(minPx, Math.min(maxPx, Math.abs(signed)));
+        const point = { x: fixed.x + ux * sign * lengthPx, y: fixed.y + uy * sign * lengthPx };
+        return { ...window, [windowEndpointDrag.endpoint]: point, widthCm: Math.round(lengthPx / pxPerMeter * 100) };
+      }) });
+      return;
+    }
     if (imageReferenceDrag) {
       const p = getWorldPosRaw(e);
       const drag = imageReferenceDrag;
@@ -10528,6 +10691,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (doorEndpointDrag || windowEndpointDrag) {
+      setDoorEndpointDrag(null);
+      setWindowEndpointDrag(null);
+      endPointer(e);
+      return;
+    }
     if (imageReferenceDrag) {
       setImageReferenceDrag(null);
       endPointer(e);
@@ -11243,6 +11412,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setClipDrag(null);
     setDoorDraft(null);
     setWindowDraft(null);
+    setDoorEndpointDrag(null);
+    setWindowEndpointDrag(null);
     setCircleDraft(null);
     setPickMarquee(null);
   };
@@ -13288,6 +13459,32 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Pintu — Parameter</Label>
             <div className="grid grid-cols-2 gap-1.5">
+              <Button type="button" size="sm" variant={!doorEditMode ? "default" : "outline"} onClick={() => { setDoorEditMode(false); setSelectedDoorId(null); setDoorEraseMode(false); }} className="h-8 text-xs"><Plus className="mr-1.5 h-3 w-3" />Pasang</Button>
+              <Button type="button" size="sm" variant={doorEditMode ? "default" : "outline"} onClick={() => { setDoorEditMode(true); setDoorEraseMode(false); setDoorDraft(null); }} className="h-8 text-xs"><Pencil className="mr-1.5 h-3 w-3" />Edit</Button>
+            </div>
+            {doorEditMode && (() => {
+              const selected = (sketch.doors ?? []).find((door) => door.id === selectedDoorId);
+              if (!selected) return <p className="text-[10px] text-muted-foreground">Tap pintu terpasang untuk menampilkan pegangan dan simbol orientasi.</p>;
+              const resize = (value: number) => {
+                const widthCm = Math.max(70, Math.min(200, Math.round(value)));
+                const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
+                const scale = widthCm / 100 * pxPerMeter / len;
+                onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, b: { x: door.a.x + (door.b.x - door.a.x) * scale, y: door.a.y + (door.b.y - door.a.y) * scale }, widthCm } : door) });
+              };
+              return <div className="space-y-2 border-t border-border/60 pt-2">
+                <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Pintu terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
+                <Slider min={70} max={200} step={1} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button size="sm" variant={selected.type !== "sliding" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "swing" } : door) }); }} className="h-7 text-xs">Swing</Button>
+                  <Button size="sm" variant={selected.type === "sliding" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "sliding" } : door) }); }} className="h-7 text-xs">Geser</Button>
+                  <Button size="sm" variant={selected.leaves === 1 ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, leaves: 1 } : door) }); }} className="h-7 text-xs">1 Daun</Button>
+                  <Button size="sm" variant={selected.leaves === 2 ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, leaves: 2 } : door) }); }} className="h-7 text-xs">2 Daun</Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">L/R memilih sisi engsel; +/− memilih arah bukaan. Tarik salah satu lingkaran ujung untuk mengubah panjang.</p>
+              </div>;
+            })()}
+            {!doorEditMode && <>
+            <div className="grid grid-cols-2 gap-1.5">
               <Button type="button" size="sm" variant={doorType === "swing" ? "default" : "outline"} onClick={() => setDoorType("swing")} className="h-8 text-xs">Swing</Button>
               <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => setDoorType("sliding")} className="h-8 text-xs">Geser</Button>
             </div>
@@ -13347,6 +13544,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               3) Geser tegak lurus untuk memilih sisi ayun, lalu lepas.
               Notasi muncul di Slide Denah; massa 3D tidak berubah.
             </p>
+            </>}
             {(() => {
               const doorsInLevel = (sketch.doors ?? []).filter(
                 (d) => (d.levelId ?? activeLvlId) === activeLvlId,
@@ -13410,7 +13608,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     <Trash2 className="mr-1.5 h-3 w-3" /> Reset
                   </Button>
                 </div>
-                <Button
+                {!doorEditMode && <Button
                   variant={doorEraseMode ? "default" : "outline"}
                   size="sm"
                   onClick={() => setDoorEraseMode((v) => !v)}
@@ -13421,7 +13619,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 >
                   <Trash2 className="mr-1.5 h-3 w-3" />
                   {doorEraseMode ? "Mode Hapus Aktif — tap pintu" : "Hapus Pintu (per item)"}
-                </Button>
+                </Button>}
               </div>
             )}
           </div>
@@ -13429,6 +13627,27 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {tool === "window" && (
           <div className="space-y-2.5 rounded-md border border-border/60 bg-background/40 p-2.5">
             <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Jendela — Parameter</Label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button type="button" size="sm" variant={!windowEditMode ? "default" : "outline"} onClick={() => { setWindowEditMode(false); setSelectedWindowId(null); setWindowEraseMode(false); }} className="h-8 text-xs"><Plus className="mr-1.5 h-3 w-3" />Pasang</Button>
+              <Button type="button" size="sm" variant={windowEditMode ? "default" : "outline"} onClick={() => { setWindowEditMode(true); setWindowEraseMode(false); setWindowDraft(null); }} className="h-8 text-xs"><Pencil className="mr-1.5 h-3 w-3" />Edit</Button>
+            </div>
+            {windowEditMode && (() => {
+              const selected = (sketch.windows ?? []).find((window) => window.id === selectedWindowId);
+              if (!selected) return <p className="text-[10px] text-muted-foreground">Tap jendela terpasang untuk menampilkan pegangan dan simbol orientasi.</p>;
+              const resize = (value: number) => {
+                const widthCm = Math.max(50, Math.min(600, Math.round(value)));
+                const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
+                const scale = widthCm / 100 * pxPerMeter / len;
+                onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, b: { x: window.a.x + (window.b.x - window.a.x) * scale, y: window.a.y + (window.b.y - window.a.y) * scale }, widthCm } : window) });
+              };
+              return <div className="space-y-2 border-t border-border/60 pt-2">
+                <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Jendela terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
+                <Slider min={50} max={600} step={5} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
+                <div className="flex items-center justify-between gap-3"><Label className="text-[11px] text-muted-foreground">Jumlah daun</Label><Input type="number" min={1} max={24} value={selected.leaves} onFocus={() => pushHistory()} onChange={(event) => { const leaves = Math.max(1, Math.min(24, Math.round(Number(event.target.value) || 1))); onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, leaves } : window) }); }} className="h-7 w-20 text-xs" /></div>
+                <p className="text-[10px] text-muted-foreground">L/R memilih sisi bukaan; +/− memilih arah dalam/luar. Tarik salah satu lingkaran ujung untuk mengubah panjang.</p>
+              </div>;
+            })()}
+            {!windowEditMode && <>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">
                 <Label className="text-[11px] text-muted-foreground">Jumlah daun</Label>
@@ -13479,6 +13698,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <p className="text-[10px] leading-snug text-muted-foreground">
               Tap pada garis dinding, geser searah dinding untuk menentukan orientasi, lalu lepas untuk menempatkan jendela.
             </p>
+            </>}
             {(sketch.windows?.length ?? 0) > 0 && (
               <div className="space-y-1.5 border-t border-border/60 pt-2">
                 <div className="flex items-center justify-between">
@@ -13487,10 +13707,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     <Trash2 className="mr-1.5 h-3 w-3" /> Reset
                   </Button>
                 </div>
-                <Button variant={windowEraseMode ? "default" : "outline"} size="sm" onClick={() => setWindowEraseMode((value) => !value)} className={cn("h-7 w-full text-xs", windowEraseMode && "bg-gradient-primary shadow-primary")}>
+                {!windowEditMode && <Button variant={windowEraseMode ? "default" : "outline"} size="sm" onClick={() => setWindowEraseMode((value) => !value)} className={cn("h-7 w-full text-xs", windowEraseMode && "bg-gradient-primary shadow-primary")}>
                   <Trash2 className="mr-1.5 h-3 w-3" />
                   {windowEraseMode ? "Mode Hapus Aktif — tap jendela" : "Hapus Jendela (per item)"}
-                </Button>
+                </Button>}
               </div>
             )}
           </div>
