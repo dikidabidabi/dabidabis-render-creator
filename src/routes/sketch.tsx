@@ -524,6 +524,21 @@ const LAYER_COLORS = [
 function dist(a: Point, b: Point) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
+// Sumbu kanonis menjaga arti kiri/kanan tetap sama saat titik A/B dibalik.
+function openingAxis(opening: Door | Window) {
+  const aFirst = opening.a.x < opening.b.x - 1e-6 || (Math.abs(opening.a.x - opening.b.x) <= 1e-6 && opening.a.y <= opening.b.y);
+  const left = aFirst ? opening.a : opening.b;
+  const right = aFirst ? opening.b : opening.a;
+  const len = Math.hypot(right.x - left.x, right.y - left.y) || 1;
+  return { left, right, aFirst, dx: (right.x - left.x) / len, dy: (right.y - left.y) / len, len };
+}
+function openingChoicePoint(opening: Door | Window, insideSign: number, hinge: "left" | "right", side: "inside" | "outside", zoom: number): Point {
+  const { dx, dy } = openingAxis(opening);
+  const along = hinge === "left" ? -1 : 1;
+  const normal = side === "inside" ? insideSign : -insideSign;
+  const mid = { x: (opening.a.x + opening.b.x) / 2, y: (opening.a.y + opening.b.y) / 2 };
+  return { x: mid.x + (dx * along - dy * normal) * 22 / zoom, y: mid.y + (dy * along + dx * normal) * 22 / zoom };
+}
 function keyOf(p: Point) {
   return `${Math.round(p.x / SNAP_TOL)}_${Math.round(p.y / SNAP_TOL)}`;
 }
@@ -3265,6 +3280,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const resetView = () => setView({ s: 1, r: 0, tx: 0, ty: 0 });
 
   const pxPerMeter = (MINOR_PX * MAJOR_EVERY) / METERS_PER_MAJOR[scale];
+  const openingInteriorSign = (opening: Door | Window) => {
+    const { dx, dy } = openingAxis(opening);
+    const nx = -dy, ny = dx;
+    const midpoint = { x: (opening.a.x + opening.b.x) / 2, y: (opening.a.y + opening.b.y) / 2 };
+    const offset = 0.3 * pxPerMeter;
+    const inRoom = (sign: number) => layers.some((layer) =>
+      (layer.levelId ?? activeLvlId) === activeLvlId && !layer.hidden &&
+      !isLahanLayerName(layer.name) && !isVoidLayerName(layer.name) &&
+      pointInPolygon({ x: midpoint.x + nx * offset * sign, y: midpoint.y + ny * offset * sign }, layer.points));
+    const positive = inRoom(1), negative = inRoom(-1);
+    return positive !== negative ? positive ? 1 : -1 :
+      opening.nx * nx + opening.ny * ny < 0 ? -1 : 1;
+  };
+
 
   // ---------- Cluster Generator (Node Editor) integration ----------
   const handleClusterGenerate = useCallback(
@@ -4949,12 +4978,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const isSelected = kind === "door" ? selectedDoorId === opening.id : selectedWindowId === opening.id;
       const editing = kind === "door" ? tool === "door" && doorEditMode : tool === "window" && windowEditMode;
       if (!isSelected || !editing) return;
-      const len = Math.hypot(opening.b.x - opening.a.x, opening.b.y - opening.a.y) || 1;
-      const dx = (opening.b.x - opening.a.x) / len, dy = (opening.b.y - opening.a.y) / len;
-      const side = opening.nx * -dy + opening.ny * dx < 0 ? -1 : 1;
-      const px = -dy * side, py = dx * side;
-      const mid = { x: (opening.a.x + opening.b.x) / 2, y: (opening.a.y + opening.b.y) / 2 };
-      const handleR = 6 / s;
+      const insideSign = openingInteriorSign(opening);
       ctx.save();
       ctx.strokeStyle = "#e85d3a";
       ctx.fillStyle = "#f6efe3";
@@ -4963,24 +4987,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.beginPath(); ctx.moveTo(opening.a.x, opening.a.y); ctx.lineTo(opening.b.x, opening.b.y); ctx.stroke();
       ctx.setLineDash([]);
       for (const point of [opening.a, opening.b]) {
-        ctx.beginPath(); ctx.arc(point.x, point.y, handleR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(point.x, point.y, 6 / s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
-      const chipGap = 22 / s;
-      const chipR = 9 / s;
-      const choices = [
-        { along: -1, normal: 1, label: "L+" },
-        { along: 1, normal: 1, label: "R+" },
-        { along: -1, normal: -1, label: "L−" },
-        { along: 1, normal: -1, label: "R−" },
-      ];
-      ctx.font = `700 ${7 / s}px var(--font-display), sans-serif`;
+      ctx.font = `700 ${6.5 / s}px var(--font-display), sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      for (const choice of choices) {
-        const cx = mid.x + dx * choice.along * chipGap + px * choice.normal * chipGap;
-        const cy = mid.y + dy * choice.along * chipGap + py * choice.normal * chipGap;
-        ctx.beginPath(); ctx.arc(cx, cy, chipR, 0, Math.PI * 2);
+      for (const hinge of ["left", "right"] as const) for (const side of ["inside", "outside"] as const) {
+        const point = openingChoicePoint(opening, insideSign, hinge, side, s);
+        ctx.beginPath(); ctx.arc(point.x, point.y, 9 / s, 0, Math.PI * 2);
         ctx.fillStyle = "#f6efe3"; ctx.fill(); ctx.strokeStyle = "#e85d3a"; ctx.stroke();
-        ctx.fillStyle = "#0a0a0a"; ctx.fillText(choice.label, cx, cy);
+        ctx.fillStyle = "#0a0a0a"; ctx.fillText(`${hinge === "left" ? "K" : "N"}${side === "inside" ? "D" : "L"}`, point.x, point.y);
       }
       ctx.restore();
     };
@@ -7424,20 +7439,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
 
-  // Sisi dalam adalah sisi yang memuat ruang pada lantai aktif; fallback ke normal tersimpan.
-  const openingInteriorSign = (opening: Door | Window) => {
-    const length = Math.hypot(opening.b.x - opening.a.x, opening.b.y - opening.a.y) || 1;
-    const nx = -(opening.b.y - opening.a.y) / length;
-    const ny = (opening.b.x - opening.a.x) / length;
-    const midpoint = { x: (opening.a.x + opening.b.x) / 2, y: (opening.a.y + opening.b.y) / 2 };
-    const offset = 0.3 * pxPerMeter;
-    const inRoom = (sign: number) => layers.some((layer) =>
-      (layer.levelId ?? activeLvlId) === activeLvlId && !layer.hidden &&
-      !isLahanLayerName(layer.name) && !isVoidLayerName(layer.name) &&
-      pointInPolygon({ x: midpoint.x + nx * offset * sign, y: midpoint.y + ny * offset * sign }, layer.points));
-    const positive = inRoom(1), negative = inRoom(-1);
-    return positive !== negative ? positive ? 1 : -1 : opening.nx * nx + opening.ny * ny < 0 ? -1 : 1;
-  };
 
   const imageReferenceAt = useCallback((p: Point) => {
     const refs = (sketch.imageReferences ?? []).filter((ref) => ref.levelId === activeLvlId);
@@ -8220,6 +8221,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     // Two or more fingers => gesture (pinch zoom + rotate). Abort any draw.
     if (pointersRef.current.size >= 2) {
       if (drawing) setDrawing(null);
+      setDoorEndpointDrag(null);
+      setWindowEndpointDrag(null);
       setDraggingHandle(null);
       startGesture();
       return;
@@ -9875,24 +9878,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             setDoorEndpointDrag({ id: selected.id, endpoint: dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
             return;
           }
-          const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
-          const dx = (selected.b.x - selected.a.x) / len, dy = (selected.b.y - selected.a.y) / len;
-          const side = selected.nx * -dy + selected.ny * dx < 0 ? -1 : 1;
-          const px = -dy * side, py = dx * side;
-          const mid = { x: (selected.a.x + selected.b.x) / 2, y: (selected.a.y + selected.b.y) / 2 };
-          const chipGap = 22 / view.s;
-          const choices = [
-            { along: -1, normal: 1 }, { along: 1, normal: 1 },
-            { along: -1, normal: -1 }, { along: 1, normal: -1 },
-          ];
-          const choice = choices.find((item) => dist(raw, { x: mid.x + dx * item.along * chipGap + px * item.normal * chipGap, y: mid.y + dy * item.along * chipGap + py * item.normal * chipGap }) <= 12 / view.s);
-          if (choice) {
+          const insideSign = openingInteriorSign(selected);
+          for (const hinge of ["left", "right"] as const) for (const side of ["inside", "outside"] as const) {
+            if (dist(raw, openingChoicePoint(selected, insideSign, hinge, side, view.s)) > 12 / view.s) continue;
             pushHistory();
-            const swap = choice.along > 0;
-            const a = swap ? selected.b : selected.a, b = swap ? selected.a : selected.b;
-            const ndx = (b.x - a.x) / len, ndy = (b.y - a.y) / len;
-            const normalSign = choice.normal > 0 ? 1 : -1;
-            onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, a, b, nx: -ndy * normalSign, ny: ndx * normalSign, slideDirection: swap ? door.slideDirection === "right" ? "left" : "right" : door.slideDirection } : door) });
+            const { left, right, dx, dy } = openingAxis(selected);
+            const a = hinge === "left" ? left : right, b = hinge === "left" ? right : left;
+            const sideSign = (side === "inside" ? 1 : -1) * insideSign;
+            const slideDirection = hinge === "left" ? "left" : "right";
+            onChange({ doors: (sketch.doors'' ?? []).map((item) => item.id === selected.id ? {
+              ...item, a, b, nx: -dy * sideSign, ny: dx * sideSign, slideDirection: item.leaves === 1 ? slideDirection : item.slideDirection,
+            } : item) });
             return;
           }
         }
@@ -9977,24 +9973,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             setWindowEndpointDrag({ id: selected.id, endpoint: dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
             return;
           }
-          const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
-          const dx = (selected.b.x - selected.a.x) / len, dy = (selected.b.y - selected.a.y) / len;
-          const side = selected.nx * -dy + selected.ny * dx < 0 ? -1 : 1;
-          const px = -dy * side, py = dx * side;
-          const mid = { x: (selected.a.x + selected.b.x) / 2, y: (selected.a.y + selected.b.y) / 2 };
-          const chipGap = 22 / view.s;
-          const choices = [
-            { along: -1, normal: 1 }, { along: 1, normal: 1 },
-            { along: -1, normal: -1 }, { along: 1, normal: -1 },
-          ];
-          const choice = choices.find((item) => dist(raw, { x: mid.x + dx * item.along * chipGap + px * item.normal * chipGap, y: mid.y + dy * item.along * chipGap + py * item.normal * chipGap }) <= 12 / view.s);
-          if (choice) {
+          const insideSign = openingInteriorSign(selected);
+          for (const hinge of ["left", "right"] as const) for (const side of ["inside", "outside"] as const) {
+            if (dist(raw, openingChoicePoint(selected, insideSign, hinge, side, view.s)) > 12 / view.s) continue;
             pushHistory();
-            const swap = choice.along > 0;
-            const a = swap ? selected.b : selected.a, b = swap ? selected.a : selected.b;
-            const ndx = (b.x - a.x) / len, ndy = (b.y - a.y) / len;
-            const normalSign = choice.normal > 0 ? 1 : -1;
-            onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, a, b, nx: -ndy * normalSign, ny: ndx * normalSign } : window) });
+            const { left, right, dx, dy } = openingAxis(selected);
+            const a = hinge === "left" ? left : right, b = hinge === "left" ? right : left;
+            const sideSign = (side === "inside" ? 1 : -1) * insideSign;
+            const slideDirection = hinge === "left" ? "left" : "right";
+            onChange({ windows: (sketch.windows'' ?? []).map((item) => item.id === selected.id ? {
+              ...item, a, b, nx: -dy * sideSign, ny: dx * sideSign,
+            } : item) });
             return;
           }
         }
@@ -10215,6 +10204,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (gestureRef.current && pointersRef.current.size >= 2) {
+      pointersRef.current.set(e.pointerId, getScreenPos(e));
+      updateGesture();
+      return;
+    }
     if (doorEndpointDrag) {
       const raw = getWorldPosRaw(e);
       onChange({ doors: (sketch.doors ?? []).map((door) => {
@@ -10225,9 +10219,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const ux = (door.b.x - door.a.x) / len, uy = (door.b.y - door.a.y) / len;
         const signed = (raw.x - fixed.x) * ux + (raw.y - fixed.y) * uy;
         const minPx = 0.7 * pxPerMeter, maxPx = 2 * pxPerMeter;
-        const fallbackSign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
-        const sign = Math.abs(signed) > 1e-6 ? Math.sign(signed) : fallbackSign;
-        const lengthPx = Math.max(minPx, Math.min(maxPx, Math.abs(signed)));
+        const sign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
+        const lengthPx = Math.max(minPx, Math.min(maxPx, signed * sign));
         const point = { x: fixed.x + ux * sign * lengthPx, y: fixed.y + uy * sign * lengthPx };
         return { ...door, [doorEndpointDrag.endpoint]: point, widthCm: Math.round(lengthPx / pxPerMeter * 100) };
       }) });
@@ -10243,9 +10236,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const ux = (window.b.x - window.a.x) / len, uy = (window.b.y - window.a.y) / len;
         const signed = (raw.x - fixed.x) * ux + (raw.y - fixed.y) * uy;
         const minPx = 0.5 * pxPerMeter, maxPx = 6 * pxPerMeter;
-        const fallbackSign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
-        const sign = Math.abs(signed) > 1e-6 ? Math.sign(signed) : fallbackSign;
-        const lengthPx = Math.max(minPx, Math.min(maxPx, Math.abs(signed)));
+        const sign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
+        const lengthPx = Math.max(minPx, Math.min(maxPx, signed * sign));
         const point = { x: fixed.x + ux * sign * lengthPx, y: fixed.y + uy * sign * lengthPx };
         return { ...window, [windowEndpointDrag.endpoint]: point, widthCm: Math.round(lengthPx / pxPerMeter * 100) };
       }) });
