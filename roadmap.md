@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Koreksi dimensi interior agar mengukur permukaan dan ketebalan dinding, selalu sejajar dinding acuan, serta menyelang-selingkan dimensi di bawah 200 mm.
+- [x] Koreksi dimensi interior agar mengukur permukaan dan ketebalan dinding, selalu sejajar dinding acuan, serta menyelang-selingkan dimensi di bawah 200 mm.
 
 - [x] Tambahkan Dinding standar 150 mm pada Pick Material dengan hatch dinding solid dan kolom praktis beton berfinishing 15 mm.
 

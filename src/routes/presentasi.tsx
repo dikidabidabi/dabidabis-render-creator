@@ -4656,7 +4656,16 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     };
     return edges.flatMap((edge, index) => {
       if (!edge || edge.len < pxPerM * 0.6) return [];
-      const a = innerCorner(index), b = innerCorner((index + 1) % points.length);
+      const rawA = innerCorner(index), rawB = innerCorner((index + 1) % points.length);
+      // Proyeksikan kedua sudut ke bidang muka dinding acuan yang sama. Dengan
+      // demikian garis ukur selalu sejajar dinding dan garis bantunya selalu
+      // tegak lurus, termasuk bila hasil pertemuan sudut sedikit tidak presisi.
+      const faceOrigin = { x: edge.p.x + edge.nx * edge.half, y: edge.p.y + edge.ny * edge.half };
+      const projectToFace = (point: Point): Point => {
+        const along = (point.x - faceOrigin.x) * edge.ux + (point.y - faceOrigin.y) * edge.uy;
+        return { x: faceOrigin.x + edge.ux * along, y: faceOrigin.y + edge.uy * along };
+      };
+      const a = projectToFace(rawA), b = projectToFace(rawB);
       const clear = (b.x - a.x) * edge.ux + (b.y - a.y) * edge.uy;
       const railOffset = pxPerM * 0.5;
       const middle = { x: (a.x + b.x) / 2 + edge.nx * railOffset, y: (a.y + b.y) / 2 + edge.ny * railOffset };
@@ -4665,7 +4674,45 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         y: a.y + (b.y - a.y) * fraction + edge.ny * railOffset,
       }));
       if (clear <= dimensionTolerance || !sectionPointInPolygon(middle, points) || quarters.some((point) => !sectionPointInPolygon(point, points))) return [];
-      return [{ a, b, nx: edge.nx, ny: edge.ny, clear, roomId: room.id, index }];
+      const previous = edges[(index - 1 + edges.length) % edges.length];
+      const next = edges[(index + 1) % edges.length];
+      const crossingThickness = (crossing: typeof edge): number => {
+        if (!crossing || crossing.half <= dimensionTolerance) return 0;
+        const crossingNormalAlong = Math.abs(edge.ux * crossing.nx + edge.uy * crossing.ny);
+        if (crossingNormalAlong < 0.2) return 0;
+        return (crossing.half * 2) / crossingNormalAlong;
+      };
+      const startThickness = crossingThickness(previous);
+      const endThickness = crossingThickness(next);
+      const chain = [
+        ...(startThickness > dimensionTolerance ? [{
+          a: { x: a.x - edge.ux * startThickness, y: a.y - edge.uy * startThickness },
+          b: a,
+          clear: startThickness,
+        }] : []),
+        [{ a, b, clear }],
+        ...(endThickness > dimensionTolerance ? [{
+          a: b,
+          b: { x: b.x + edge.ux * endThickness, y: b.y + edge.uy * endThickness },
+          clear: endThickness,
+        }] : []),
+      ];
+      let shortRunIndex = 0;
+      return chain.map((mark, markIndex) => {
+        const isShort = (mark.clear / pxPerM) * 1000 < 200;
+        const alternateOutward = isShort && shortRunIndex % 2 === 0;
+        shortRunIndex = isShort ? shortRunIndex + 1 : 0;
+        return {
+          ...mark,
+          ux: edge.ux,
+          uy: edge.uy,
+          nx: edge.nx,
+          ny: edge.ny,
+          extraOffset: alternateOutward ? pxPerM * 0.15 : 0,
+          roomId: room.id,
+          index: `${index}-${markIndex}`,
+        };
+      });
     });
   }) : [];
   const exteriorDimensionChains = area.interiorDimensions ? (["top", "bottom", "left", "right"] as const).map((side) => {
@@ -4853,20 +4900,22 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       </g>;
     })}
   </g> : null;
-  const interiorDimensionMarks = interiorRoomDimensions.map(({ a, b, nx, ny, clear, roomId, index }) => {
-    const offset = pxPerM * 0.5;
+  const interiorDimensionMarks = interiorRoomDimensions.map(({ a, b, ux, uy, nx, ny, clear, extraOffset, roomId, index }) => {
+    const offset = pxPerM * 0.5 + extraOffset;
     const x1 = a.x + nx * offset, y1 = a.y + ny * offset;
     const x2 = b.x + nx * offset, y2 = b.y + ny * offset;
     const labelFont = dimFont * 0.75;
     const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-    const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+    const angle = Math.atan2(uy, ux) * 180 / Math.PI;
     const readableAngle = angle > 90 || angle < -90 ? angle + 180 : angle;
-    if (clear < Math.max(pxPerM * 0.35, labelFont * 3)) return null;
+    if (clear <= dimensionTolerance) return null;
+    const textX = cx - nx * labelFont * 0.32;
+    const textY = cy - ny * labelFont * 0.32;
     return <g key={`interior-${roomId}-${index}`} stroke="#111111" fill="#111111" strokeWidth={dimStroke} pointerEvents="none">
       <line x1={x1} y1={y1} x2={x2} y2={y2} />
       <line x1={a.x - nx * tickSize} y1={a.y - ny * tickSize} x2={a.x + nx * (offset + tickSize)} y2={a.y + ny * (offset + tickSize)} />
       <line x1={b.x - nx * tickSize} y1={b.y - ny * tickSize} x2={b.x + nx * (offset + tickSize)} y2={b.y + ny * (offset + tickSize)} />
-      <text x={cx} y={cy - labelFont * 0.32} transform={`rotate(${readableAngle} ${cx} ${cy})`} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600} style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: dimStroke * 5 }}>{Math.round((clear / pxPerM) * 1000)}</text>
+      <text x={textX} y={textY} transform={`rotate(${readableAngle} ${textX} ${textY})`} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600} style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: dimStroke * 5 }}>{Math.round((clear / pxPerM) * 1000)}</text>
     </g>;
   });
   const exteriorDimensionMarks = exteriorDimensionChains.map(({ side, coordinates, face }) => {
