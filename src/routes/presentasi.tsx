@@ -119,7 +119,7 @@ export const Route = createFileRoute("/presentasi")({
 });
 
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
-import { furnitureForVisibleRooms, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
+import { furnitureForVisibleRooms, pointInRoom, roomForFurniture, type DetailFurniture } from "@/lib/detail-furniture";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -4532,7 +4532,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
   const detailMinX = Math.min(area.a.x, area.b.x), detailMaxX = Math.max(area.a.x, area.b.x);
   const detailMinY = Math.min(area.a.y, area.b.y), detailMaxY = Math.max(area.a.y, area.b.y);
-  const detailRooms = levelLayers.filter((layer) => layer.points.some((p) => p.x >= detailMinX && p.x <= detailMaxX && p.y >= detailMinY && p.y <= detailMaxY)
+  const detailRooms = levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name) && (layer.points.some((p) => p.x >= detailMinX && p.x <= detailMaxX && p.y >= detailMinY && p.y <= detailMaxY)
     || [{ x: detailMinX, y: detailMinY }, { x: detailMaxX, y: detailMaxY }, { x: detailMinX, y: detailMaxY }, { x: detailMaxX, y: detailMinY }].some((p) => pointInRoom(p, layer.points)));
   const levelFloors = (sketch.floors ?? []).filter((floor) => floor.levelId === level.id && floor.outer.length >= 3);
   const floorPerimeterPoints = levelFloors.length > 0
@@ -5103,7 +5103,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />
-        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers, detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY).map((item) => (
+        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY).map((item) => (
           <image
             key={`detail-furniture-${item.id}`}
             href={item.imageUrl}
@@ -6128,7 +6128,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
           />
-          {furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers, layers).map((item) => <image
+          {furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name))).map((item) => <image
             key={`level-furniture-${item.id}`} href={item.imageUrl}
             x={item.x - item.width / 2} y={item.y - item.height / 2}
             width={item.width} height={item.height} preserveAspectRatio="none"
