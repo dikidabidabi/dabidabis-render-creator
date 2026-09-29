@@ -3545,7 +3545,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                     const yTop = my(b.topM);
                     const yBot = my(b.baseM);
                     const totalH = yBot - yTop;
-                    if (h.mat === "solid" || h.mat === "concept") {
+                    if (h.mat === "solid" || h.mat === "standard150" || h.mat === "concept") {
                       return (
                         <g key={`mat-${b.id}-${idx}`}>
                           <rect x={x} y={yTop} width={bandW} height={totalH}
@@ -7374,6 +7374,7 @@ function linePath(ln: Line): string {
 // Tebal dinding selubung (mm), dikonversi ke px sketsa via pxPerM.
 const WALL_THICK_MM: Record<EdgeMaterial, number> = {
   solid: 150,
+  standard150: 150,
   concrete150: 150,
   concrete200: 200,
   concrete300: 300,
@@ -7386,7 +7387,7 @@ const RAILING_COLOR = "#8b5a2b";
 
 type WallBandGeometry = {
   segment: EdgeSegment;
-  material: "solid" | "concrete150" | "concrete200" | "concrete300";
+  material: "solid" | "standard150" | "concrete150" | "concrete200" | "concrete300";
   outer: Point[];
   core: Point[];
 };
@@ -7594,9 +7595,9 @@ function MaterialEdges({
   });
   const wallBands: WallBandGeometry[] = mode === "base" ? [] : materialSegments.flatMap((segment) => {
     const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
-    if (material !== "solid" && material !== "concrete150" && material !== "concrete200" && material !== "concrete300") return [];
+    if (material !== "solid" && material !== "standard150" && material !== "concrete150" && material !== "concrete200" && material !== "concrete300") return [];
     const half = (WALL_THICK_MM[material] / 1000) * pxPerM * 0.5;
-    const coreHalf = material === "solid" && !detailSolidLayers
+    const coreHalf = (material === "solid" || material === "standard150") && !detailSolidLayers
       ? half
       : Math.max(0, half - 0.015 * pxPerM);
     return [{
@@ -7606,8 +7607,8 @@ function MaterialEdges({
       core: wallBandPolygon(segment, coreHalf, half),
     }];
   });
-  const solidBands = wallBands.filter((band) => band.material === "solid");
-  const concreteBands = wallBands.filter((band) => band.material !== "solid");
+  const solidBands = wallBands.filter((band) => band.material === "solid" || band.material === "standard150");
+  const concreteBands = wallBands.filter((band) => band.material !== "solid" && band.material !== "standard150");
   const wallPaths = (bands: WallBandGeometry[]) => ({
     outer: wallUnionPath(unionWallBands(bands.map((band) => band.outer))),
     core: wallUnionPath(unionWallBands(bands.map((band) => band.core))),
@@ -7620,7 +7621,7 @@ function MaterialEdges({
       {paths.outer && <path d={paths.outer} fill="#ffffff" fillRule="evenodd" stroke="none" />}
       {bands.map((band, index) => (
         <polygon key={`wall-core-fill-${band.segment.id}-${index}`} points={pointsValue(band.core)}
-          fill={band.material === "solid" ? `url(#solid-pair-${patternId})` : `url(#concrete-dot-${patternId})`}
+          fill={band.material === "solid" || band.material === "standard150" ? `url(#solid-pair-${patternId})` : `url(#concrete-dot-${patternId})`}
           stroke="none" />
       ))}
       {paths.core && <path d={paths.core} fill="none" fillRule="evenodd" stroke="#0a0a0a"
@@ -7708,7 +7709,7 @@ function MaterialEdges({
         if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
           return null;
         }
-        if (mat === "solid") {
+        if (mat === "solid" || mat === "standard150") {
           return null;
         }
         if (mat === "curtain") {
@@ -7800,20 +7801,23 @@ function SolidWallPracticalColumns({
     const source = segmentSource[segment.sourceLineIndex];
     if (!source || (levelId && segment.levelId !== levelId)) return false;
     if (!visibleLineIds.has(segmentIdFor(source.a, source.b))) return false;
-    return materialForEdgeSegment(segment, segmentSource, edgeAttrs) === "solid";
+    const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
+    return material === "solid" || material === "standard150";
   });
-  const nodes = new Map<string, { point: Point; directions: Point[] }>();
-  const addEndpoint = (point: Point, other: Point) => {
+  const nodes = new Map<string, { point: Point; directions: Point[]; standard: boolean }>();
+  const addEndpoint = (point: Point, other: Point, standard: boolean) => {
     const length = Math.hypot(other.x - point.x, other.y - point.y);
     if (length < 1e-6) return;
     const key = `${Math.round(point.x * 1000)},${Math.round(point.y * 1000)}`;
-    const entry = nodes.get(key) ?? { point, directions: [] };
+    const entry = nodes.get(key) ?? { point, directions: [], standard: false };
     entry.directions.push({ x: (other.x - point.x) / length, y: (other.y - point.y) / length });
+    entry.standard ||= standard;
     nodes.set(key, entry);
   };
   for (const segment of solidSegments) {
-    addEndpoint(segment.a, segment.b);
-    addEndpoint(segment.b, segment.a);
+    const standard = materialForEdgeSegment(segment, segmentSource, edgeAttrs) === "standard150";
+    addEndpoint(segment.a, segment.b, standard);
+    addEndpoint(segment.b, segment.a, standard);
   }
   // Pertemuan T: endpoint satu dinding berada di tengah dinding lain. Topologi
   // segmen lama tidak selalu membelah kasus ini, jadi tambahkan dua arah dari
@@ -7829,8 +7833,9 @@ function SolidWallPracticalColumns({
       if (t <= 1e-5 || t >= 1 - 1e-5) continue;
       const projected = { x: segment.a.x + dx * t, y: segment.a.y + dy * t };
       if (Math.hypot(projected.x - point.x, projected.y - point.y) > 1e-3) continue;
-      addEndpoint(point, segment.a);
-      addEndpoint(point, segment.b);
+      const standard = materialForEdgeSegment(segment, segmentSource, edgeAttrs) === "standard150";
+      addEndpoint(point, segment.a, standard);
+      addEndpoint(point, segment.b, standard);
     }
   };
   for (const segment of solidSegments) {
@@ -7848,17 +7853,16 @@ function SolidWallPracticalColumns({
     return false;
   });
   const size = 0.15 * pxPerM;
+  const finish = 0.015 * pxPerM;
   return (
     <g pointerEvents="none">
-      {corners.map(({ point }, index) => (
-        <rect
-          key={`practical-column-${index}`}
-          x={point.x - size / 2}
-          y={point.y - size / 2}
-          width={size}
-          height={size}
-          fill="#0a0a0a"
-        />
+      {corners.map(({ point, standard }, index) => standard ? (
+        <g key={`practical-column-${index}`}>
+          <rect x={point.x - size / 2} y={point.y - size / 2} width={size} height={size} fill="#ffffff" stroke="#929292" strokeWidth={Math.max(0.2, pxPerM * 0.002)} />
+          <rect x={point.x - size / 2 + finish} y={point.y - size / 2 + finish} width={size - finish * 2} height={size - finish * 2} fill="#929292" />
+        </g>
+      ) : (
+        <rect key={`practical-column-${index}`} x={point.x - size / 2} y={point.y - size / 2} width={size} height={size} fill="#0a0a0a" />
       ))}
     </g>
   );
