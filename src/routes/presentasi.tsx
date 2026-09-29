@@ -7496,7 +7496,7 @@ function MaterialEdges({
           <path d={`M 0 0 V ${solidHatchPeriod} M ${solidHatchPeriod / 3} 0 V ${solidHatchPeriod}`}
             fill="none" stroke="#0a0a0a" strokeWidth={hatchStroke} />
         </pattern>
-        {/* Hatch 45° sangat tipis untuk dinding solid. */}
+        {/* Hatch 45° tunggal untuk band jendela. */}
         <pattern
           id={`hatch45-${patternId}`}
           patternUnits="userSpaceOnUse"
