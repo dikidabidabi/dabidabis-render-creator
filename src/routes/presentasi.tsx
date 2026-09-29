@@ -4724,7 +4724,9 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     if (!candidates.length) return { side, coordinates: [] as number[], face: 0 };
     const face = near ? Math.min(...candidates.map((c) => c.face)) : Math.max(...candidates.map((c) => c.face));
     const outer = candidates.filter((c) => Math.abs(c.face - face) < pxPerM * 0.2);
-    const values = outer.flatMap((c) => [c.start, c.end]);
+    // Titik rantai hanya berasal dari muka material yang melintang. Endpoint
+    // garis dinding memuat as dinding, sehingga tidak boleh ikut sebagai titik ukur.
+    const values: number[] = [];
     // Semua dinding melintang dalam kotak detail menyumbang kedua muka
     // materialnya, termasuk sekat interior yang tidak menyentuh dinding luar.
     for (const { segment, half } of wallFaces) {
@@ -4925,12 +4927,25 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     if (values.length < 2) return null;
     const horizontal = side === "top" || side === "bottom";
     const near = side === "top" || side === "left";
-    const rail = (horizontal ? (near ? boxBounds.minY : boxBounds.maxY) : (near ? boxBounds.minX : boxBounds.maxX)) + (near ? -1 : 1) * pxPerM * 0.5;
+    const baseRail = (horizontal ? (near ? boxBounds.minY : boxBounds.maxY) : (near ? boxBounds.minX : boxBounds.maxX)) + (near ? -1 : 1) * pxPerM * 0.5;
+    const intervals = values.slice(0, -1).map((value, index) => ({ value, end: values[index + 1], short: values[index + 1] - value < pxPerM * 0.2 }));
+    const shortOffsets = new Map<number, number>();
+    for (let start = 0; start < intervals.length;) {
+      if (!intervals[start].short) { start += 1; continue; }
+      let end = start + 1;
+      while (end < intervals.length && intervals[end].short) end += 1;
+      if (end - start >= 2) {
+        for (let index = start; index < end; index++) {
+          if ((index - start) % 2 === 0) shortOffsets.set(index, pxPerM * 0.15);
+        }
+      }
+      start = end;
+    }
     return <g key={`exterior-${side}`} stroke="#111111" fill="#111111" strokeWidth={dimStroke} pointerEvents="none">
-      {values.slice(0, -1).map((value, index) => {
-        const end = values[index + 1];
+      {intervals.map(({ value, end }, index) => {
         const middle = (value + end) / 2;
         const font = dimFont * 0.75;
+        const rail = baseRail + (near ? -1 : 1) * (shortOffsets.get(index) ?? 0);
         return <g key={`${side}-${index}`}>
           {horizontal ? <>
             <line x1={value} y1={rail} x2={end} y2={rail} />
@@ -4979,7 +4994,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
         {rooms.map((room) => {
           const zone = room.functionZoneId ? functionZoneById.get(room.functionZoneId) : undefined;
-          const fill = area.floorHatch
+          const fill = area.interiorDimensions || area.floorHatch
             ? "#ffffff"
             : zone
               ? functionZoneColor(zone.color, 0.28)
@@ -4987,7 +5002,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           const points = room.points.map((p) => `${p.x},${p.y}`).join(" ");
           return <g key={room.id}>
             <polygon points={points} fill={fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />
-            {area.floorHatch && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
+            {area.floorHatch && !area.interiorDimensions && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
           </g>;
         })}
         {gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
@@ -5111,7 +5126,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>
-      {!area.floorHatch && detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
+      {!area.floorHatch && !area.interiorDimensions && detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
         <Donut segments={detailZoneStats.map((zone) => ({ value: zone.areaM2, color: zone.color }))} size={86} thickness={12} centerValue="100%" centerLabel="Zona" />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>Zona Fungsi · {level.name}</div>
@@ -7910,7 +7925,7 @@ function SolidWallPracticalColumns({
       {corners.map(({ point, standard }, index) => standard ? (
         <g key={`practical-column-${index}`}>
           <rect x={point.x - size / 2} y={point.y - size / 2} width={size} height={size} fill="#ffffff" stroke="#929292" strokeWidth={Math.max(0.2, pxPerM * 0.002)} />
-          <rect x={point.x - size / 2 + finish} y={point.y - size / 2 + finish} width={size - finish * 2} height={size - finish * 2} fill="#929292" />
+          <rect x={point.x - size / 2 + finish} y={point.y - size / 2 + finish} width={size - finish * 2} height={size - finish * 2} fill="#ffffff" stroke="#929292" strokeWidth={Math.max(0.15, pxPerM * 0.0015)} />
         </g>
       ) : (
         <rect key={`practical-column-${index}`} x={point.x - size / 2} y={point.y - size / 2} width={size} height={size} fill="#0a0a0a" />
