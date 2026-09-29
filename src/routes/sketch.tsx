@@ -7424,6 +7424,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
   const getWorldPosRaw = (e: React.PointerEvent): Point => screenToWorld(getScreenPos(e));
 
+  // Sisi dalam adalah sisi yang memuat ruang pada lantai aktif; fallback ke normal tersimpan.
+  const openingInteriorSign = (opening: Door | Window) => {
+    const length = Math.hypot(opening.b.x - opening.a.x, opening.b.y - opening.a.y) || 1;
+    const nx = -(opening.b.y - opening.a.y) / length;
+    const ny = (opening.b.x - opening.a.x) / length;
+    const midpoint = { x: (opening.a.x + opening.b.x) / 2, y: (opening.a.y + opening.b.y) / 2 };
+    const offset = 0.3 * pxPerMeter;
+    const inRoom = (sign: number) => layers.some((layer) =>
+      (layer.levelId ?? activeLvlId) === activeLvlId && !layer.hidden &&
+      !isLahanLayerName(layer.name) && !isVoidLayerName(layer.name) &&
+      pointInPolygon({ x: midpoint.x + nx * offset * sign, y: midpoint.y + ny * offset * sign }, layer.points));
+    const positive = inRoom(1), negative = inRoom(-1);
+    return positive !== negative ? positive ? 1 : -1 : opening.nx * nx + opening.ny * ny < 0 ? -1 : 1;
+  };
+
   const imageReferenceAt = useCallback((p: Point) => {
     const refs = (sketch.imageReferences ?? []).filter((ref) => ref.levelId === activeLvlId);
     return [...refs].reverse().find((ref) =>
