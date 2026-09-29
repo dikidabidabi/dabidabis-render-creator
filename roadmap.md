@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Cegah tumpang tindih dimensi luar pendek berurutan, gunakan muka material saja, putihkan Detail saat Dimensi interior aktif, dan putihkan isi kolom praktis standar 150 mm.
+
 - [x] Ukuran dalam hanya bentang bersih, geser ukuran pendek hanya saat berurutan; proyeksi ukuran luar memakai kedua permukaan material dinding.
 
 - [x] Tambahkan Dinding standar 150 mm pada Pick Material dengan hatch dinding solid dan kolom praktis beton berfinishing 15 mm.
