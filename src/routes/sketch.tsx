@@ -3163,6 +3163,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   }, [tool]);
   useEffect(() => {
     setMoveSel(new Set());
+    setSelectedDoorId(null);
+    setSelectedWindowId(null);
+    setDoorEndpointDrag(null);
+    setWindowEndpointDrag(null);
     setMoveDrag(null);
     setMoveMarquee(null);
     setEditVertexMarquee(null);
@@ -3172,8 +3176,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
 
 
-  // Undo/redo history snapshots: {lines, layers}
-  type Snap = { lines: Line[]; layers: Layer[] };
+  // Undo/redo menyimpan notasi bukaan juga, agar edit orientasi/ukuran dapat dibatalkan.
+  type Snap = { lines: Line[]; layers: Layer[]; doors?: Door[]; windows?: Window[] };
   const [past, setPast] = useState<Snap[]>([]);
   const [future, setFuture] = useState<Snap[]>([]);
   // Reset history when switching sketch
@@ -3183,9 +3187,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   }, [id]);
 
   const pushHistory = useCallback(() => {
-    setPast((p) => [...p.slice(-49), { lines, layers }]);
+    setPast((p) => [...p.slice(-49), { lines, layers, doors: sketch.doors ?? [], windows: sketch.windows ?? [] }]);
     setFuture([]);
-  }, [lines, layers]);
+  }, [lines, layers, sketch.doors, sketch.windows]);
 
   // ===== Viewport transform (pan/zoom/rotate) =====
   // World (where lines/layers are stored) -> screen via: rotate(r) -> scale(s) -> translate(tx,ty)
@@ -11425,8 +11429,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     const prev = past[past.length - 1];
     setPast((p) => p.slice(0, -1));
-    setFuture((f) => [...f, { lines, layers }]);
-    onChange({ lines: prev.lines, layers: prev.layers });
+    setFuture((f) => [...f, { lines, layers, doors: sketch.doors ?? [], windows: sketch.windows ?? [] }]);
+    onChange({ lines: prev.lines, layers: prev.layers, ...(prev.doors ? { doors: prev.doors } : {}), ...(prev.windows ? { windows: prev.windows } : {}) });
   };
 
   const handleRedo = () => {
@@ -11436,8 +11440,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
     const nxt = future[future.length - 1];
     setFuture((f) => f.slice(0, -1));
-    setPast((p) => [...p, { lines, layers }]);
-    onChange({ lines: nxt.lines, layers: nxt.layers });
+    setPast((p) => [...p, { lines, layers, doors: sketch.doors ?? [], windows: sketch.windows ?? [] }]);
+    onChange({ lines: nxt.lines, layers: nxt.layers, ...(nxt.doors ? { doors: nxt.doors } : {}), ...(nxt.windows ? { windows: nxt.windows } : {}) });
   };
 
   const removeLayer = (lid: string) => {
