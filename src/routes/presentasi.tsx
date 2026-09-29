@@ -4849,6 +4849,49 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       </g>;
     })}
   </g> : null;
+  const interiorDimensionMarks = interiorRoomDimensions.map(({ a, b, nx, ny, clear, roomId, index }) => {
+    const offset = pxPerM * 0.5;
+    const x1 = a.x + nx * offset, y1 = a.y + ny * offset;
+    const x2 = b.x + nx * offset, y2 = b.y + ny * offset;
+    const labelFont = dimFont * 0.75;
+    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+    const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+    const readableAngle = angle > 90 || angle < -90 ? angle + 180 : angle;
+    if (clear < Math.max(pxPerM * 0.35, labelFont * 3)) return null;
+    return <g key={`interior-${roomId}-${index}`} stroke="#111111" fill="#111111" strokeWidth={dimStroke} pointerEvents="none">
+      <line x1={x1} y1={y1} x2={x2} y2={y2} />
+      <line x1={a.x - nx * tickSize} y1={a.y - ny * tickSize} x2={a.x + nx * (offset + tickSize)} y2={a.y + ny * (offset + tickSize)} />
+      <line x1={b.x - nx * tickSize} y1={b.y - ny * tickSize} x2={b.x + nx * (offset + tickSize)} y2={b.y + ny * (offset + tickSize)} />
+      <text x={cx} y={cy - labelFont * 0.32} transform={`rotate(${readableAngle} ${cx} ${cy})`} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600} style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: dimStroke * 5 }}>{Math.round((clear / pxPerM) * 1000)}</text>
+    </g>;
+  });
+  const exteriorDimensionMarks = exteriorDimensionChains.map(({ side, coordinates, face }) => {
+    const values = dedupeDimensionCoordinates(coordinates);
+    if (values.length < 2) return null;
+    const horizontal = side === "top" || side === "bottom";
+    const near = side === "top" || side === "left";
+    const rail = (horizontal ? (near ? boxBounds.minY : boxBounds.maxY) : (near ? boxBounds.minX : boxBounds.maxX)) + (near ? -1 : 1) * pxPerM * 0.5;
+    return <g key={`exterior-${side}`} stroke="#111111" fill="#111111" strokeWidth={dimStroke} pointerEvents="none">
+      {values.slice(0, -1).map((value, index) => {
+        const end = values[index + 1];
+        const middle = (value + end) / 2;
+        const font = dimFont * 0.75;
+        return <g key={`${side}-${index}`}>
+          {horizontal ? <>
+            <line x1={value} y1={rail} x2={end} y2={rail} />
+            <line x1={value} y1={face} x2={value} y2={rail + (near ? -tickSize : tickSize)} />
+            {index === values.length - 2 && <line x1={end} y1={face} x2={end} y2={rail + (near ? -tickSize : tickSize)} />}
+            <text x={middle} y={rail + (near ? -font * 0.35 : font * 1.05)} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={font} fontWeight={600}>{Math.round((end - value) / pxPerM * 1000)}</text>
+          </> : <>
+            <line x1={rail} y1={value} x2={rail} y2={end} />
+            <line x1={face} y1={value} x2={rail + (near ? -tickSize : tickSize)} y2={value} />
+            {index === values.length - 2 && <line x1={face} y1={end} x2={rail + (near ? -tickSize : tickSize)} y2={end} />}
+            <text x={rail + (near ? -font * 0.4 : font * 0.4)} y={middle} textAnchor="middle" dominantBaseline="central" stroke="none" fontFamily="Manrope, sans-serif" fontSize={font} fontWeight={600} transform={`rotate(-90 ${rail + (near ? -font * 0.4 : font * 0.4)} ${middle})`}>{Math.round((end - value) / pxPerM * 1000)}</text>
+          </>}
+        </g>;
+      })}
+    </g>;
+  });
   const splitRoomName = (name: string, maxChars: number): string[] => {
     if (name.length <= maxChars || !name.includes(" ")) return [name];
     const words = name.trim().split(/\s+/);
@@ -5007,6 +5050,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             }))}
           </g>;
         })}
+        {area.interiorDimensions && <g>{interiorDimensionMarks}{exteriorDimensionMarks}</g>}
       </svg>
       <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
