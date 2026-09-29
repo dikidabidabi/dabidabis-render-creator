@@ -4606,6 +4606,97 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     levelId: line.levelId,
   })));
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
+  // Dimensi bersih memakai permukaan material yang sama dengan bidang dinding
+  // (setengah ketebalan di tiap sisi as), bukan koordinat as dinding.
+  const wallFaces = computeStraightSegments((sketch.lines ?? []).map((line) => ({
+    a: line.a, b: line.b, kind: line.kind, levelId: line.levelId,
+  }))).filter((segment) => segment.levelId === level.id && Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y) > dimensionTolerance)
+    .map((segment) => ({
+      segment,
+      half: ((WALL_THICK_MM[materialForEdgeSegment(segment, sketch.lines ?? [], sketch.edgeAttrs ?? {}) ?? "solid"] ?? 150) / 2000) * pxPerM,
+    }));
+  const boxBounds = {
+    minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y),
+    maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y),
+  };
+  const interiorRoomDimensions = area.interiorDimensions ? rooms.flatMap((room) => {
+    const points = room.points;
+    if (points.length < 3) return [];
+    const signedArea = points.reduce((sum, p, i) => sum + p.x * points[(i + 1) % points.length].y - points[(i + 1) % points.length].x * p.y, 0);
+    const edges = points.map((p, i) => {
+      const q = points[(i + 1) % points.length];
+      const len = Math.hypot(q.x - p.x, q.y - p.y);
+      if (len < dimensionTolerance) return null;
+      const ux = (q.x - p.x) / len, uy = (q.y - p.y) / len;
+      const nx = (signedArea >= 0 ? -uy : uy), ny = (signedArea >= 0 ? ux : -ux);
+      const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+      const attached = wallFaces.filter(({ segment }) => {
+        const vx = segment.b.x - segment.a.x, vy = segment.b.y - segment.a.y;
+        const wallLen = Math.hypot(vx, vy);
+        if (Math.abs((vx * uy - vy * ux) / wallLen) > 0.035) return false;
+        const dist = Math.abs((mid.x - segment.a.x) * (-vy / wallLen) + (mid.y - segment.a.y) * (vx / wallLen));
+        const projection = ((mid.x - segment.a.x) * vx + (mid.y - segment.a.y) * vy) / wallLen;
+        return dist < pxPerM * 0.18 && projection >= -pxPerM * 0.18 && projection <= wallLen + pxPerM * 0.18;
+      });
+      const half = attached.length ? Math.max(...attached.map((face) => face.half)) : 0;
+      return { p, q, ux, uy, nx, ny, half, len };
+    });
+    const innerCorner = (index: number): Point => {
+      const previous = edges[(index - 1 + edges.length) % edges.length];
+      const next = edges[index];
+      const vertex = points[index];
+      if (!previous || !next) return vertex;
+      const cross = previous.ux * next.uy - previous.uy * next.ux;
+      if (Math.abs(cross) < 0.05) return { x: vertex.x + next.nx * next.half, y: vertex.y + next.ny * next.half };
+      const a = { x: vertex.x + previous.nx * previous.half, y: vertex.y + previous.ny * previous.half };
+      const b = { x: vertex.x + next.nx * next.half, y: vertex.y + next.ny * next.half };
+      const t = ((b.x - a.x) * next.uy - (b.y - a.y) * next.ux) / cross;
+      const intersection = { x: a.x + previous.ux * t, y: a.y + previous.uy * t };
+      return Math.hypot(intersection.x - vertex.x, intersection.y - vertex.y) < pxPerM * 0.7 ? intersection : b;
+    };
+    return edges.flatMap((edge, index) => {
+      if (!edge || edge.len < pxPerM * 0.6) return [];
+      const a = innerCorner(index), b = innerCorner((index + 1) % points.length);
+      const clear = (b.x - a.x) * edge.ux + (b.y - a.y) * edge.uy;
+      const railOffset = pxPerM * 0.5;
+      const middle = { x: (a.x + b.x) / 2 + edge.nx * railOffset, y: (a.y + b.y) / 2 + edge.ny * railOffset };
+      if (clear <= dimensionTolerance || !sectionPointInPolygon(middle, points)) return [];
+      return [{ a, b, nx: edge.nx, ny: edge.ny, clear, roomId: room.id, index }];
+    });
+  }) : [];
+  const exteriorDimensionChains = area.interiorDimensions ? (["top", "bottom", "left", "right"] as const).map((side) => {
+    const horizontal = side === "top" || side === "bottom";
+    const near = side === "top" || side === "left";
+    const alongMin = horizontal ? boxBounds.minX : boxBounds.minY;
+    const alongMax = horizontal ? boxBounds.maxX : boxBounds.maxY;
+    const crossMin = horizontal ? boxBounds.minY : boxBounds.minX;
+    const crossMax = horizontal ? boxBounds.maxY : boxBounds.maxX;
+    // Ambil bidang dinding paling luar yang berada dalam kotak detail, bukan lantai lain.
+    const candidates = wallFaces.flatMap(({ segment, half }) => {
+      const a = horizontal ? segment.a.x : segment.a.y;
+      const b = horizontal ? segment.b.x : segment.b.y;
+      const c = horizontal ? segment.a.y : segment.a.x;
+      const d = horizontal ? segment.b.y : segment.b.x;
+      if (Math.max(a, b) < alongMin || Math.min(a, b) > alongMax || Math.max(c, d) < crossMin || Math.min(c, d) > crossMax) return [];
+      if (Math.abs(c - d) > dimensionTolerance || Math.abs(a - b) < dimensionTolerance) return [];
+      return [{ start: Math.max(alongMin, Math.min(a, b)), end: Math.min(alongMax, Math.max(a, b)), face: c + (near ? -half : half), center: c }];
+    });
+    if (!candidates.length) return { side, coordinates: [] as number[], face: 0 };
+    const face = near ? Math.min(...candidates.map((c) => c.face)) : Math.max(...candidates.map((c) => c.face));
+    const outer = candidates.filter((c) => Math.abs(c.face - face) < pxPerM * 0.2);
+    const values = outer.flatMap((c) => [c.start, c.end]);
+    const openings = [...doors, ...windows];
+    for (const opening of openings) {
+      const oa = horizontal ? opening.a.y : opening.a.x;
+      const ob = horizontal ? opening.b.y : opening.b.x;
+      if (Math.abs(oa - ob) > dimensionTolerance || !outer.some((c) => Math.abs(c.center - oa) < pxPerM * 0.2)) continue;
+      for (const end of [opening.a, opening.b]) {
+        const value = horizontal ? end.x : end.y;
+        if (value >= alongMin && value <= alongMax) values.push(value);
+      }
+    }
+    return { side, coordinates: values, face };
+  }) : [];
   const roomDimensionPoints = (() => {
     const junctions: { point: Point; directions: Point[] }[] = [];
     for (const segment of roomDimensionSegments) {
