@@ -4606,8 +4606,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     levelId: line.levelId,
   })));
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
-  // Dimensi bersih memakai permukaan material yang sama dengan bidang dinding
-  // (setengah ketebalan di tiap sisi as), bukan koordinat as dinding.
+  // Permukaan material dipakai sebagai acuan ukuran bersih dan proyeksi luar.
   const wallFaces = computeStraightSegments((sketch.lines ?? []).map((line) => ({
     a: line.a, b: line.b, kind: line.kind, levelId: line.levelId,
   }))).filter((segment) => segment.levelId === level.id && Math.hypot(segment.b.x - segment.a.x, segment.b.y - segment.a.y) > dimensionTolerance)
@@ -4655,7 +4654,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       return Math.hypot(intersection.x - vertex.x, intersection.y - vertex.y) < pxPerM * 0.7 ? intersection : b;
     };
     return edges.flatMap((edge, index) => {
-      if (!edge || edge.len < pxPerM * 0.6) return [];
+      if (!edge) return [];
       const rawA = innerCorner(index), rawB = innerCorner((index + 1) % points.length);
       // Proyeksikan kedua sudut ke bidang muka dinding acuan yang sama. Dengan
       // demikian garis ukur selalu sejajar dinding dan garis bantunya selalu
@@ -4674,47 +4673,37 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         y: a.y + (b.y - a.y) * fraction + edge.ny * railOffset,
       }));
       if (clear <= dimensionTolerance || !sectionPointInPolygon(middle, points) || quarters.some((point) => !sectionPointInPolygon(point, points))) return [];
-      const previous = edges[(index - 1 + edges.length) % edges.length];
-      const next = edges[(index + 1) % edges.length];
-      const crossingThickness = (crossing: NonNullable<typeof edge> | null): number => {
-        if (!crossing || crossing.half <= dimensionTolerance) return 0;
-        const crossingNormalAlong = Math.abs(edge.ux * crossing.nx + edge.uy * crossing.ny);
-        if (crossingNormalAlong < 0.2) return 0;
-        return (crossing.half * 2) / crossingNormalAlong;
-      };
-      const startThickness = crossingThickness(previous);
-      const endThickness = crossingThickness(next);
-      const chain = [
-        ...(startThickness > dimensionTolerance ? [{
-          a: { x: a.x - edge.ux * startThickness, y: a.y - edge.uy * startThickness },
-          b: a,
-          clear: startThickness,
-        }] : []),
-        { a, b, clear },
-        ...(endThickness > dimensionTolerance ? [{
-          a: b,
-          b: { x: b.x + edge.ux * endThickness, y: b.y + edge.uy * endThickness },
-          clear: endThickness,
-        }] : []),
-      ];
-      let shortRunIndex = 0;
-      return chain.map((mark, markIndex) => {
-        const isShort = (mark.clear / pxPerM) * 1000 < 200;
-        const alternateOutward = isShort && shortRunIndex % 2 === 0;
-        shortRunIndex = isShort ? shortRunIndex + 1 : 0;
-        return {
-          ...mark,
-          ux: edge.ux,
-          uy: edge.uy,
-          nx: edge.nx,
-          ny: edge.ny,
-          extraOffset: alternateOutward ? pxPerM * 0.15 : 0,
-          roomId: room.id,
-          index: `${index}-${markIndex}`,
-        };
-      });
+      return [{ a, b, clear, ux: edge.ux, uy: edge.uy, nx: edge.nx, ny: edge.ny, roomId: room.id, index: `${index}` }];
     });
   }) : [];
+  // Geser hanya rangkaian ukuran pendek yang benar-benar saling berdampingan
+  // pada jalur ukur yang sama; ukuran pendek tunggal tetap pada offset 50 cm.
+  const interiorShortOffsets = new Map<string, number>();
+  const shortMarks = interiorRoomDimensions.filter((mark) => mark.clear < pxPerM * 0.2);
+  const visitedShort = new Set<number>();
+  shortMarks.forEach((mark, start) => {
+    if (visitedShort.has(start)) return;
+    const chain = [start];
+    visitedShort.add(start);
+    for (let cursor = 0; cursor < chain.length; cursor++) {
+      const current = shortMarks[chain[cursor]];
+      shortMarks.forEach((other, i) => {
+        if (visitedShort.has(i) || other.roomId !== current.roomId) return;
+        const parallel = Math.abs(current.ux * other.ux + current.uy * other.uy) > 0.995;
+        const sameRail = Math.abs((other.a.x - current.a.x) * current.nx + (other.a.y - current.a.y) * current.ny) < dimensionTolerance;
+        const touching = [current.a, current.b].some((endpoint) => [other.a, other.b].some((p) => Math.hypot(endpoint.x - p.x, endpoint.y - p.y) < dimensionTolerance));
+        if (parallel && sameRail && touching) { visitedShort.add(i); chain.push(i); }
+      });
+    }
+    if (chain.length < 2) return;
+    chain.sort((left, right) => {
+      const a = shortMarks[left], b = shortMarks[right];
+      return ((a.a.x + a.b.x) - (b.a.x + b.b.x)) * mark.ux + ((a.a.y + a.b.y) - (b.a.y + b.b.y)) * mark.uy;
+    });
+    chain.forEach((i, position) => {
+      if (position % 2 === 0) interiorShortOffsets.set(`${shortMarks[i].roomId}-${shortMarks[i].index}`, pxPerM * 0.15);
+    });
+  });
   const exteriorDimensionChains = area.interiorDimensions ? (["top", "bottom", "left", "right"] as const).map((side) => {
     const horizontal = side === "top" || side === "bottom";
     const near = side === "top" || side === "left";
@@ -4736,6 +4725,19 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     const face = near ? Math.min(...candidates.map((c) => c.face)) : Math.max(...candidates.map((c) => c.face));
     const outer = candidates.filter((c) => Math.abs(c.face - face) < pxPerM * 0.2);
     const values = outer.flatMap((c) => [c.start, c.end]);
+    // Semua dinding melintang dalam kotak detail menyumbang kedua muka
+    // materialnya, termasuk sekat interior yang tidak menyentuh dinding luar.
+    for (const { segment, half } of wallFaces) {
+      const a = horizontal ? segment.a.x : segment.a.y;
+      const b = horizontal ? segment.b.x : segment.b.y;
+      const c = horizontal ? segment.a.y : segment.a.x;
+      const d = horizontal ? segment.b.y : segment.b.x;
+      if (Math.abs(a - b) > dimensionTolerance || Math.abs(c - d) < dimensionTolerance) continue;
+      if (a < alongMin - half || a > alongMax + half) continue;
+      if (Math.max(c, d) < crossMin || Math.min(c, d) > crossMax) continue;
+      if (a - half >= alongMin && a - half <= alongMax) values.push(a - half);
+      if (a + half >= alongMin && a + half <= alongMax) values.push(a + half);
+    }
     const openings = [...doors, ...windows];
     for (const opening of openings) {
       const oa = horizontal ? opening.a.y : opening.a.x;
@@ -4900,8 +4902,8 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       </g>;
     })}
   </g> : null;
-  const interiorDimensionMarks = interiorRoomDimensions.map(({ a, b, ux, uy, nx, ny, clear, extraOffset, roomId, index }) => {
-    const offset = pxPerM * 0.5 + extraOffset;
+  const interiorDimensionMarks = interiorRoomDimensions.map(({ a, b, ux, uy, nx, ny, clear, roomId, index }) => {
+    const offset = pxPerM * 0.5 + (interiorShortOffsets.get(`${roomId}-${index}`) ?? 0);
     const x1 = a.x + nx * offset, y1 = a.y + ny * offset;
     const x2 = b.x + nx * offset, y2 = b.y + ny * offset;
     const labelFont = dimFont * 0.75;
