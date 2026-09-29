@@ -12,6 +12,8 @@ export type DetailFurniture = {
   roomAnchor?: { x: number; y: number };
   catalogId?: string;
   price?: number;
+  widthMm?: number;
+  heightMm?: number;
 };
 
 export type DetailAreaWithFurniture = {
@@ -134,6 +136,8 @@ export function normalizeDetailFurniture(value: unknown): DetailFurniture[] {
       roomAnchor: raw.roomAnchor && Number.isFinite(raw.roomAnchor.x) && Number.isFinite(raw.roomAnchor.y) ? raw.roomAnchor : undefined,
       catalogId: typeof raw.catalogId === "string" ? raw.catalogId : undefined,
       price: Number.isFinite(Number(raw.price)) && Number(raw.price) >= 0 ? Number(raw.price) : 0,
+      widthMm: Number(raw.widthMm) > 0 ? Number(raw.widthMm) : undefined,
+      heightMm: Number(raw.heightMm) > 0 ? Number(raw.heightMm) : undefined,
     }];
   });
 }
