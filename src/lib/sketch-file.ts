@@ -407,6 +407,13 @@ export function mergeSketches(sources: AnySketch[], opts: MergeOptions): MergeRe
           item = translateDeep(item, dx, dy, new Set<string>(["nx", "ny"]));
         }
         if (typeof item.id === "string") item.id = `${tag}${item.id}`;
+        if (arr === "detailAreas" && Array.isArray(item.furniture)) {
+          item.furniture = item.furniture.map((furniture: any) => ({
+            ...furniture,
+            id: `${tag}${furniture.id ?? newId("FURN")}`,
+            roomId: mapLayer(furniture.roomId) ?? furniture.roomId,
+          }));
+        }
         if ("levelId" in item) item.levelId = mapLevel(item.levelId);
         if ("toLevelId" in item) item.toLevelId = mapLevel(item.toLevelId);
         if (item.parentLayerId) item.parentLayerId = mapLayer(item.parentLayerId) ?? undefined;

@@ -19,9 +19,11 @@ import { colorForRoomName } from "@/lib/room-color";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import {
   FURNITURE_CATALOG,
+  anchorFurniture,
   newDetailFurniture,
   normalizeDetailFurniture,
   normalizeImportedFurniture,
+  positionFurniture,
   type CatalogFurniture,
   type DetailFurniture,
   type ImportedFurniture,
@@ -49,10 +51,10 @@ type Line = { a: Point; b: Point; levelId?: string };
 type Layer = { id: string; name: string; points: Point[]; color: string; levelId?: string };
 type Level = { id: string; name: string };
 type DetailArea = { id: string; levelId: string; a: Point; b: Point; number: number; furniture?: DetailFurniture[] };
-type Sketch = { id: string; title: string; levels: Level[]; layers: Layer[]; lines?: Line[]; detailAreas?: DetailArea[] };
+type Sketch = { id: string; title: string; scale?: string; levels: Level[]; layers: Layer[]; lines?: Line[]; detailAreas?: DetailArea[] };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 type MoveGesture = { kind: "move"; start: Point; initial: Map<string, DetailFurniture> };
-type ItemGesture = { kind: "rotate" | "scale"; start: Point; initial: DetailFurniture };
+type ItemGesture = { kind: "rotate"; start: Point; initial: DetailFurniture };
 type SelectGesture = { kind: "select"; start: Point; current: Point; additive: boolean };
 type Gesture = MoveGesture | ItemGesture | SelectGesture;
 type Pinch = { distance: number; centerClient: Point; view: ViewBox };
@@ -60,8 +62,11 @@ type Pinch = { distance: number; centerClient: Point; view: ViewBox };
 const STORAGE_KEY = "dabidabis_sketch_v2";
 const LIBRARY_KEY = "dabidabis_furniture_library_v1";
 const CLIPBOARD_KEY = "dabidabis_furniture_clipboard_v1";
+const CATALOG_SIZE_KEY = "dabidabis_furniture_sizes_v1";
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
+const MAJOR_METERS: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 };
+const dimensionMm = (px: number, ppm: number) => Math.round(px / ppm * 1000);
 
 function boundsFor(area: DetailArea): Bounds {
   return { minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y), maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y) };
@@ -167,19 +172,23 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [library, setLibrary] = useState<ImportedFurniture[]>([]);
   const [clipboard, setClipboard] = useState<DetailFurniture[]>([]);
+  const [catalogSizes, setCatalogSizes] = useState<Record<string, { lengthMm: number; widthMm: number }>>({});
   const [fullscreen, setFullscreen] = useState(false);
-  const furniture = area.furniture ?? [];
+  const furniture = (area.furniture ?? []).map((item) => positionFurniture(item, sketch.layers));
   const width = Math.max(1, bounds.maxX - bounds.minX);
   const height = Math.max(1, bounds.maxY - bounds.minY);
   const level = sketch.levels.find((item) => item.id === area.levelId);
-  const layers = sketch.layers.filter((item) => item.levelId === area.levelId);
+  const layers = sketch.layers.filter((item) => item.levelId === area.levelId && !/^(lahan|void|taman|atap)/i.test(item.name.trim()));
   const lines = (sketch.lines ?? []).filter((item) => item.levelId === area.levelId);
+  const pxPerMeter = 80 / (MAJOR_METERS[sketch.scale ?? "1:100"] ?? 1);
   const zoom = width / view.width;
 
   useEffect(() => {
     try {
       setLibrary(normalizeImportedFurniture(JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]")));
       setClipboard(normalizeDetailFurniture(JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || "[]")));
+      const sizes = JSON.parse(localStorage.getItem(CATALOG_SIZE_KEY) || "{}");
+      if (sizes && typeof sizes === "object" && !Array.isArray(sizes)) setCatalogSizes(sizes);
     } catch { setLibrary([]); }
   }, []);
 
@@ -216,10 +225,10 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const copySelection = useCallback(() => {
     const copied = furniture.filter((item) => selectedIds.has(item.id));
     if (copied.length === 0) return;
-    void setProjectItem(CLIPBOARD_KEY, JSON.stringify(copied));
+    void setProjectItem(CLIPBOARD_KEY, JSON.stringify(copied.map((item) => ({ ...item, widthMm: dimensionMm(item.width, pxPerMeter), heightMm: dimensionMm(item.height, pxPerMeter) }))));
     setClipboard(copied);
     toast.success(`${copied.length} furniture disalin`);
-  }, [furniture, selectedIds]);
+  }, [furniture, selectedIds, pxPerMeter]);
 
   const pasteSelection = useCallback(() => {
     try {
@@ -228,15 +237,19 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       const sourceCenter = { x: (Math.min(...copied.map((item) => item.x)) + Math.max(...copied.map((item) => item.x))) / 2, y: (Math.min(...copied.map((item) => item.y)) + Math.max(...copied.map((item) => item.y))) / 2 };
       const target = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
       const stamp = Date.now();
-      const pasted = copied.map((item, index) => ({ ...item, id: `FURN${stamp}_${index}_${Math.random().toString(36).slice(2, 6)}`, x: target.x + item.x - sourceCenter.x, y: target.y + item.y - sourceCenter.y, createdAt: stamp + index }));
+      const pasted = copied.map((item, index) => {
+        const next = { ...item, id: `FURN${stamp}_${index}_${Math.random().toString(36).slice(2, 6)}`, x: target.x + item.x - sourceCenter.x, y: target.y + item.y - sourceCenter.y, width: (item.widthMm ?? dimensionMm(item.width, pxPerMeter)) / 1000 * pxPerMeter, height: (item.heightMm ?? dimensionMm(item.height, pxPerMeter)) / 1000 * pxPerMeter, createdAt: stamp + index };
+        return anchorFurniture(next, layers);
+      });
       onFurnitureChange([...furniture, ...pasted]);
       setSelectedIds(new Set(pasted.map((item) => item.id)));
       toast.success(`${pasted.length} furniture ditempel`);
     } catch { toast.error("Furniture salinan tidak dapat dibaca"); }
-  }, [bounds, clipboard, furniture, onFurnitureChange]);
+  }, [bounds, clipboard, furniture, onFurnitureChange, layers, pxPerMeter]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement && (event.target.closest("input,textarea,[contenteditable=true]") || event.target.isContentEditable)) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") { event.preventDefault(); copySelection(); }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") { event.preventDefault(); pasteSelection(); }
       if ((event.key === "Delete" || event.key === "Backspace") && selectedIds.size > 0) {
@@ -272,14 +285,10 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       const point = clientToSvg(event.clientX, event.clientY);
       if (gesture.kind === "move") {
         const dx = point.x - gesture.start.x; const dy = point.y - gesture.start.y;
-        onFurnitureChange(furniture.map((item) => { const original = gesture.initial.get(item.id); return original ? { ...item, x: original.x + dx, y: original.y + dy } : item; }));
+        onFurnitureChange(furniture.map((item) => { const original = gesture.initial.get(item.id); if (!original) return item; const next = { ...item, x: original.x + dx, y: original.y + dy }; return anchorFurniture(next, layers); }));
       } else if (gesture.kind === "rotate") {
         const angle = Math.atan2(point.y - gesture.initial.y, point.x - gesture.initial.x) * 180 / Math.PI + 90;
         onFurnitureChange(furniture.map((item) => item.id === gesture.initial.id ? { ...item, rotation: Math.round(angle / 5) * 5 } : item));
-      } else if (gesture.kind === "scale") {
-        const initialDistance = Math.max(1, Math.hypot(gesture.start.x - gesture.initial.x, gesture.start.y - gesture.initial.y));
-        const factor = Math.max(0.15, Math.hypot(point.x - gesture.initial.x, point.y - gesture.initial.y) / initialDistance);
-        onFurnitureChange(furniture.map((item) => item.id === gesture.initial.id ? { ...item, width: gesture.initial.width * factor, height: gesture.initial.height * factor } : item));
       } else if (gesture.kind === "select") {
         gestureRef.current = { ...gesture, current: point };
         const minX = Math.min(gesture.start.x, point.x), maxX = Math.max(gesture.start.x, point.x), minY = Math.min(gesture.start.y, point.y), maxY = Math.max(gesture.start.y, point.y);
@@ -296,7 +305,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
     return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
-  }, [clientToSvg, furniture, initialView, onFurnitureChange]);
+  }, [clientToSvg, furniture, initialView, onFurnitureChange, layers]);
 
   const registerPointer = (event: React.PointerEvent<SVGElement>) => {
     pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -308,8 +317,18 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   };
 
   const addFurniture = (entry: CatalogFurniture) => {
-    const item = newDetailFurniture(entry, bounds);
-    onFurnitureChange([...furniture, item]); setSelectedIds(new Set([item.id]));
+    const item = newDetailFurniture({ ...entry, ...catalogSizes[entry.id] }, bounds, pxPerMeter);
+    onFurnitureChange([...furniture, anchorFurniture(item, layers)]); setSelectedIds(new Set([item.id]));
+  };
+
+  const changeCatalogSize = (entry: CatalogFurniture, key: "lengthMm" | "widthMm", value: string) => {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0) return;
+    setCatalogSizes((previous) => { const next = { ...previous, [entry.id]: {
+      lengthMm: previous[entry.id]?.lengthMm ?? entry.lengthMm ?? 1000,
+      widthMm: previous[entry.id]?.widthMm ?? entry.widthMm ?? Math.round((entry.lengthMm ?? 1000) / entry.aspectRatio),
+      [key]: number,
+    } }; void setProjectItem(CATALOG_SIZE_KEY, JSON.stringify(next)); return next; });
   };
 
   const importImage = (file: File) => {
@@ -334,6 +353,15 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
 
   const selectionBox = gestureRef.current?.kind === "select" ? gestureRef.current : null;
   const onlySelected = selectedIds.size === 1 ? furniture.find((item) => selectedIds.has(item.id)) : undefined;
+  const furnitureRows = Object.values(furniture.reduce<Record<string, DetailFurniture[]>>((groups, item) => {
+    const key = JSON.stringify([item.catalogId ?? item.imageUrl, item.name, dimensionMm(item.width, pxPerMeter), dimensionMm(item.height, pxPerMeter), item.price ?? 0]);
+    (groups[key] ??= []).push(item);
+    return groups;
+  }, {}));
+  const changeRow = (row: DetailFurniture[], change: Partial<DetailFurniture>) => {
+    const ids = new Set(row.map((item) => item.id));
+    onFurnitureChange(furniture.map((item) => ids.has(item.id) ? { ...item, ...change } : item));
+  };
 
   return <section ref={workspaceRef} className={fullscreen ? "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background" : "mt-6 overflow-hidden rounded-lg border border-border/60 bg-card"}>
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
@@ -369,7 +397,6 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
               {selected && <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height} fill="none" className="stroke-ember" strokeWidth={handle * 0.13} strokeDasharray={`${handle * 0.45} ${handle * 0.3}`} />}
               {selected && selectedIds.size === 1 ? <>
                 <g transform={`translate(${item.x + item.width / 2} ${item.y - item.height / 2})`} onPointerDown={(event) => { event.stopPropagation(); const point = clientToSvg(event.clientX, event.clientY); gestureRef.current = { kind: "rotate", start: point, initial: { ...item } }; }}><circle r={handle} className="fill-ember stroke-background" strokeWidth={handle * 0.12} /><RotateCw x={-handle * 0.55} y={-handle * 0.55} width={handle * 1.1} height={handle * 1.1} className="text-primary-foreground" /></g>
-                <rect x={item.x + item.width / 2 - handle} y={item.y + item.height / 2 - handle} width={handle * 2} height={handle * 2} rx={handle * 0.2} className="fill-ember stroke-background" strokeWidth={handle * 0.12} onPointerDown={(event) => { event.stopPropagation(); const point = clientToSvg(event.clientX, event.clientY); gestureRef.current = { kind: "scale", start: point, initial: { ...item } }; }} />
               </> : null}
             </g>;
           })}
@@ -384,14 +411,37 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
           <Button size="sm" variant="outline" disabled={selectedIds.size === 0} title="Hapus pilihan" onClick={() => { onFurnitureChange(furniture.filter((item) => !selectedIds.has(item.id))); setSelectedIds(new Set()); }}><Trash2 className="h-3.5 w-3.5" /></Button>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {FURNITURE_CATALOG.map((item) => <Button key={item.id} type="button" variant="outline" className="h-auto flex-col gap-1 rounded-none p-2" onClick={() => addFurniture(item)}><img src={item.imageUrl} alt="" className="h-16 w-full object-contain" draggable={false} /><span className="mt-1 block w-full truncate text-center text-[11px] font-medium">{item.name}</span></Button>)}
+          {FURNITURE_CATALOG.map((item) => <CatalogTile key={item.id} item={item} size={catalogSizes[item.id]} onSize={changeCatalogSize} onAdd={addFurniture} />)}
         </div>
-        {library.length > 0 ? <><div className="mb-2 mt-5 text-[11px] font-semibold uppercase text-muted-foreground">Pustaka impor</div><div className="grid grid-cols-2 gap-2">{library.map((item) => <div key={item.id} className="relative"><Button type="button" variant="outline" className="h-auto w-full flex-col gap-1 rounded-none p-2" onClick={() => addFurniture(item)}><img src={item.imageUrl} alt="" className="h-16 w-full object-contain" draggable={false} /><span className="mt-1 block w-full truncate text-center text-[11px] font-medium">{item.name}</span></Button><Button size="icon" variant="secondary" className="absolute right-1 top-1 h-6 w-6" title="Hapus dari pustaka" onClick={() => saveLibrary(library.filter((entry) => entry.id !== item.id))}><X className="h-3 w-3" /></Button></div>)}</div></> : null}
+        {library.length > 0 ? <><div className="mb-2 mt-5 text-[11px] font-semibold uppercase text-muted-foreground">Pustaka impor</div><div className="grid grid-cols-2 gap-2">{library.map((item) => <div key={item.id} className="relative"><CatalogTile item={item} size={catalogSizes[item.id]} onSize={changeCatalogSize} onAdd={addFurniture} /><Button size="icon" variant="secondary" className="absolute right-1 top-1 h-6 w-6" title="Hapus dari pustaka" onClick={() => saveLibrary(library.filter((entry) => entry.id !== item.id))}><X className="h-3 w-3" /></Button></div>)}</div></> : null}
         <input ref={uploadRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) importImage(file); event.currentTarget.value = ""; }} />
         <Button variant="outline" className="mt-3 w-full" onClick={() => uploadRef.current?.click()}><ImagePlus className="mr-2 h-4 w-4" />Impor gambar</Button>
         <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">Cubit dua jari atau gunakan roda untuk zoom. Tarik area kosong untuk memilih beberapa furniture.</p>
         {onlySelected ? <div className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">Rotasi {onlySelected.rotation}° · snap 5°</div> : null}
       </aside>
     </div>
+    <div className="border-t border-border/60 p-4">
+      <h3 className="mb-3 font-display text-base font-semibold">Tabel furniture</h3>
+      <div className="overflow-x-auto"><table className="w-full min-w-[780px] border-collapse text-left text-xs">
+        <thead><tr className="border-b border-border text-muted-foreground"><th className="p-2">Lantai</th><th className="p-2">Nama furniture</th><th className="p-2">Ukuran (mm)</th><th className="p-2">Jumlah</th><th className="p-2">Harga per item (Rp)</th><th className="p-2">Harga total (Rp)</th><th className="p-2"><span className="sr-only">Aksi</span></th></tr></thead>
+        <tbody>{furnitureRows.map((row) => { const item = row[0]; return <tr key={item.id} className="border-b border-border/50">
+          <td className="p-2">{level?.name ?? "Level"}</td>
+          <td className="p-2"><input aria-label={`Nama ${item.id}`} className="w-full min-w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.name} onChange={(event) => changeRow(row, { name: event.target.value })} /></td>
+          <td className="p-2"><div className="flex items-center gap-1"><input aria-label={`Panjang ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.width, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeRow(row, { width: n / 1000 * pxPerMeter }); }} /><span>×</span><input aria-label={`Lebar ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.height, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeRow(row, { height: n / 1000 * pxPerMeter }); }} /></div></td>
+          <td className="p-2 tabular-nums">{row.length}</td>
+          <td className="p-2"><input aria-label={`Harga ${item.id}`} type="number" min="0" className="w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.price ?? 0} onChange={(event) => { const n = Number(event.target.value); if (n >= 0) changeRow(row, { price: n }); }} /></td>
+          <td className="p-2 tabular-nums">{((item.price ?? 0) * row.length).toLocaleString("id-ID")}</td>
+          <td className="p-2"><div className="flex gap-1"><Button size="icon" variant="ghost" title="Duplikasi furniture" onClick={() => { const copy = { ...item, id: `FURN${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: item.catalogId === "dinamic" ? `${item.name} salinan` : item.name, x: item.x + pxPerMeter * 0.3, y: item.y + pxPerMeter * 0.3, createdAt: Date.now() }; onFurnitureChange([...furniture, anchorFurniture(copy, layers)]); }}><Copy className="h-3.5 w-3.5" /></Button><Button size="icon" variant="ghost" title="Hapus satu furniture" onClick={() => onFurnitureChange(furniture.filter((entry) => entry.id !== item.id))}><Trash2 className="h-3.5 w-3.5" /></Button></div></td>
+        </tr>; })}</tbody>
+        <tfoot><tr className="font-semibold"><td colSpan={5} className="p-2 text-right">Total</td><td className="p-2 tabular-nums">{furniture.reduce((sum, item) => sum + (item.price ?? 0), 0).toLocaleString("id-ID")}</td><td /></tr></tfoot>
+      </table></div>
+    </div>
   </section>;
+}
+
+function CatalogTile({ item, size, onSize, onAdd }: { item: CatalogFurniture; size?: { lengthMm: number; widthMm: number }; onSize: (item: CatalogFurniture, key: "lengthMm" | "widthMm", value: string) => void; onAdd: (item: CatalogFurniture) => void }) {
+  return <div className="min-w-0 border border-border bg-background p-2">
+    <Button type="button" variant="ghost" className="h-auto w-full flex-col rounded-none p-0" onClick={() => onAdd(item)}><img src={item.imageUrl} alt="" className="h-14 w-full object-contain" draggable={false} /><span className="mt-1 block w-full whitespace-normal text-center text-[11px] font-medium">{item.name}</span></Button>
+    <div className="mt-2 grid grid-cols-2 gap-1"><input aria-label={`Panjang ${item.name} (mm)`} type="number" min="1" title="Panjang (mm)" className="min-w-0 w-full border border-input bg-background px-1 py-1 text-[11px] text-foreground" value={size?.lengthMm ?? item.lengthMm ?? 1000} onChange={(event) => onSize(item, "lengthMm", event.target.value)} /><input aria-label={`Lebar ${item.name} (mm)`} type="number" min="1" title="Lebar (mm)" className="min-w-0 w-full border border-input bg-background px-1 py-1 text-[11px] text-foreground" value={size?.widthMm ?? item.widthMm ?? Math.round((item.lengthMm ?? 1000) / item.aspectRatio)} onChange={(event) => onSize(item, "widthMm", event.target.value)} /></div>
+  </div>;
 }
