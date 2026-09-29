@@ -4676,7 +4676,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       if (clear <= dimensionTolerance || !sectionPointInPolygon(middle, points) || quarters.some((point) => !sectionPointInPolygon(point, points))) return [];
       const previous = edges[(index - 1 + edges.length) % edges.length];
       const next = edges[(index + 1) % edges.length];
-      const crossingThickness = (crossing: typeof edge): number => {
+      const crossingThickness = (crossing: NonNullable<typeof edge> | null): number => {
         if (!crossing || crossing.half <= dimensionTolerance) return 0;
         const crossingNormalAlong = Math.abs(edge.ux * crossing.nx + edge.uy * crossing.ny);
         if (crossingNormalAlong < 0.2) return 0;
