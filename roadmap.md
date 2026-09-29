@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan Dinding standar 150 mm pada Pick Material dengan hatch dinding solid dan kolom praktis beton berfinishing 15 mm.
+- [x] Tambahkan Dinding standar 150 mm pada Pick Material dengan hatch dinding solid dan kolom praktis beton berfinishing 15 mm.
 
 - [x] Tambahkan ceklis Dimensi Interior dan tampilkan ukuran bersih ruang serta bukaan pada Slide Detail dengan area tayang melebar 1 m.
 
