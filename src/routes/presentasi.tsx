@@ -2986,7 +2986,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               <rect width={gridMajor} height={gridMajor} fill={`url(#mm-minor-${slide.id})`} />
               <path d={`M ${gridMajor} 0 L 0 0 0 ${gridMajor}`} fill="none" stroke="#d6cfb8" strokeWidth={0.8} />
             </pattern>
-            {/* Hatch 45° rapat (1 garis / 100 mm skala asli) untuk dinding solid pada potongan. */}
+            {/* Hatch 45° untuk atap. */}
             {(() => {
               const gap = Math.max(1.2, scalePxPerM * 0.1);
               return (
@@ -2997,6 +2997,17 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                   patternTransform="rotate(45)"
                 >
                   <line x1={0} y1={0} x2={0} y2={gap} stroke="#0a0a0a" strokeWidth={0.35} />
+                </pattern>
+              );
+            })()}
+            {/* Arsiran dinding solid: pasangan garis 45° berjarak 50 mm, berulang tiap 150 mm. */}
+            {(() => {
+              const period = Math.max(1.8, scalePxPerM * 0.15);
+              return (
+                <pattern id={`solid-pair-sec-${slide.id}`} patternUnits="userSpaceOnUse"
+                  width={period} height={period} patternTransform="rotate(45)">
+                  <path d={`M 0 0 V ${period} M ${period / 3} 0 V ${period}`}
+                    fill="none" stroke="#0a0a0a" strokeWidth={0.35} />
                 </pattern>
               );
             })()}
@@ -3538,7 +3549,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                           <rect x={x} y={yTop} width={bandW} height={totalH}
                             fill="#ffffff" stroke="#0a0a0a" strokeWidth={0.8} />
                           <rect x={x} y={yTop} width={bandW} height={totalH}
-                            fill={`url(#hatch45-sec-${slide.id})`} stroke="none" />
+                            fill={`url(#solid-pair-sec-${slide.id})`} stroke="none" />
                         </g>
                       );
                     }
@@ -7430,8 +7441,9 @@ function MaterialEdges({
   // Kontur dinding sangat tipis & seragam (80% lebih tipis dari sebelumnya).
   const stroke = sw * 0.00028;
   const strokeFine = stroke;
-  // Hatch 45° rapat: 1 garis tiap 100 mm pada skala asli.
+  // Dinding solid: pasangan garis 45° (50 mm antar garis, berulang tiap 150 mm).
   const hatchGap = Math.max(1.2, pxPerM * 0.1);
+  const solidHatchPeriod = Math.max(1.8, pxPerM * 0.15);
   const hatchStroke = Math.max(0.18, sw * 0.0004);
   const patternId = useId();
   const materialSegments = [...segs].sort((a, b) => {
@@ -7467,7 +7479,7 @@ function MaterialEdges({
       {paths.outer && <path d={paths.outer} fill="#ffffff" fillRule="evenodd" stroke="none" />}
       {bands.map((band, index) => (
         <polygon key={`wall-core-fill-${band.segment.id}-${index}`} points={pointsValue(band.core)}
-          fill={band.material === "solid" ? `url(#hatch45-${patternId})` : `url(#concrete-dot-${patternId})`}
+          fill={band.material === "solid" ? `url(#solid-pair-${patternId})` : `url(#concrete-dot-${patternId})`}
           stroke="none" />
       ))}
       {paths.core && <path d={paths.core} fill="none" fillRule="evenodd" stroke="#0a0a0a"
@@ -7479,6 +7491,11 @@ function MaterialEdges({
   return (
     <g>
       <defs>
+        <pattern id={`solid-pair-${patternId}`} patternUnits="userSpaceOnUse"
+          width={solidHatchPeriod} height={solidHatchPeriod} patternTransform="rotate(45)">
+          <path d={`M 0 0 V ${solidHatchPeriod} M ${solidHatchPeriod / 3} 0 V ${solidHatchPeriod}`}
+            fill="none" stroke="#0a0a0a" strokeWidth={hatchStroke} />
+        </pattern>
         {/* Hatch 45° sangat tipis untuk dinding solid. */}
         <pattern
           id={`hatch45-${patternId}`}
