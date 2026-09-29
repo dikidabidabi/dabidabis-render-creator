@@ -8,6 +8,9 @@ export type DetailFurniture = {
   height: number;
   rotation: number;
   createdAt: number;
+  roomId?: string;
+  catalogId?: string;
+  price?: number;
 };
 
 export type DetailAreaWithFurniture = {
@@ -20,6 +23,8 @@ export type CatalogFurniture = {
   name: string;
   aspectRatio: number;
   imageUrl: string;
+  lengthMm?: number;
+  widthMm?: number;
 };
 
 export type ImportedFurniture = CatalogFurniture & {
@@ -39,6 +44,8 @@ export function normalizeImportedFurniture(value: unknown): ImportedFurniture[] 
       imageUrl: raw.imageUrl,
       aspectRatio,
       importedAt: Number.isFinite(Number(raw.importedAt)) ? Number(raw.importedAt) : Date.now(),
+      lengthMm: Number(raw.lengthMm) > 0 ? Number(raw.lengthMm) : undefined,
+      widthMm: Number(raw.widthMm) > 0 ? Number(raw.widthMm) : undefined,
     }];
   });
 }
@@ -49,6 +56,14 @@ const svgDataUrl = (body: string) =>
   )}`;
 
 export const FURNITURE_CATALOG: CatalogFurniture[] = [
+  {
+    id: "dinamic",
+    name: "Dinamic furniture",
+    aspectRatio: 1,
+    lengthMm: 1000,
+    widthMm: 1000,
+    imageUrl: svgDataUrl('<rect x="20" y="0" width="120" height="120" rx="0"/>'),
+  },
   {
     id: "meja",
     name: "Meja",
@@ -114,26 +129,68 @@ export function normalizeDetailFurniture(value: unknown): DetailFurniture[] {
       height,
       rotation: Number.isFinite(rotation) ? Math.round(rotation / 5) * 5 : 0,
       createdAt: Number.isFinite(Number(raw.createdAt)) ? Number(raw.createdAt) : Date.now(),
+      roomId: typeof raw.roomId === "string" ? raw.roomId : undefined,
+      catalogId: typeof raw.catalogId === "string" ? raw.catalogId : undefined,
+      price: Number.isFinite(Number(raw.price)) && Number(raw.price) >= 0 ? Number(raw.price) : 0,
     }];
   });
 }
 
 export function newDetailFurniture(
-  catalog: Pick<CatalogFurniture, "name" | "imageUrl" | "aspectRatio">,
+  catalog: CatalogFurniture,
   bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  pxPerMeter: number,
 ): DetailFurniture {
-  const areaW = Math.max(1, bounds.maxX - bounds.minX);
-  const areaH = Math.max(1, bounds.maxY - bounds.minY);
-  const width = Math.min(areaW, areaH) * 0.22;
+  const lengthMm = catalog.lengthMm && catalog.lengthMm > 0 ? catalog.lengthMm : 1000;
+  const widthMm = catalog.widthMm && catalog.widthMm > 0 ? catalog.widthMm : lengthMm / Math.max(0.2, catalog.aspectRatio);
   return {
     id: `FURN${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     name: catalog.name,
     imageUrl: catalog.imageUrl,
     x: (bounds.minX + bounds.maxX) / 2,
     y: (bounds.minY + bounds.maxY) / 2,
-    width,
-    height: width / Math.max(0.2, catalog.aspectRatio),
+    width: lengthMm / 1000 * pxPerMeter,
+    height: widthMm / 1000 * pxPerMeter,
     rotation: 0,
     createdAt: Date.now(),
+    catalogId: catalog.id,
+    price: 0,
   };
+}
+
+export function furnitureInRoom(item: DetailFurniture, roomId: string, layers: { id: string; points: { x: number; y: number }[] }[]): boolean {
+  if (item.roomId) return item.roomId === roomId;
+  const room = layers.find((layer) => layer.id === roomId);
+  return room ? pointInRoom(item, room.points) : false;
+}
+
+export function pointInRoom(point: { x: number; y: number }, polygon: { x: number; y: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i], b = polygon[j];
+    if ((a.y > point.y) !== (b.y > point.y) && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+export function roomForFurniture(point: { x: number; y: number }, layers: { id: string; points: { x: number; y: number }[] }[]): string | undefined {
+  return layers.find((layer) => layer.points.length >= 3 && pointInRoom(point, layer.points))?.id;
+}
+
+export function furnitureForVisibleRooms(
+  areas: { levelId: string; showFurniture?: boolean; furniture?: DetailFurniture[] }[],
+  levelId: string,
+  rooms: { id: string; points: { x: number; y: number }[] }[],
+  visibleRooms: { id: string; points: { x: number; y: number }[] }[],
+): DetailFurniture[] {
+  const ids = new Set(visibleRooms.map((room) => room.id));
+  const seen = new Set<string>();
+  return areas.filter((area) => area.levelId === levelId && area.showFurniture !== false)
+    .flatMap((area) => normalizeDetailFurniture(area.furniture))
+    .filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      const roomId = item.roomId ?? roomForFurniture(item, rooms);
+      return roomId ? ids.has(roomId) : visibleRooms.some((room) => pointInRoom(item, room.points));
+    });
 }
