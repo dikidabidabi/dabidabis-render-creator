@@ -198,7 +198,7 @@ export function furnitureForVisibleRooms(
 ): DetailFurniture[] {
   const ids = new Set(visibleRooms.map((room) => room.id));
   const seen = new Set<string>();
-  return areas.filter((area) => area.levelId === levelId)
+  return areas.filter((area) => area.levelId === levelId && area.showFurniture !== false)
     .flatMap((area) => normalizeDetailFurniture(area.furniture))
     .map((item) => positionFurniture(item, rooms))
     .filter((item) => {

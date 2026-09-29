@@ -24,7 +24,6 @@ import {
   normalizeDetailFurniture,
   normalizeImportedFurniture,
   positionFurniture,
-  roomForFurniture,
   type CatalogFurniture,
   type DetailFurniture,
   type ImportedFurniture,
