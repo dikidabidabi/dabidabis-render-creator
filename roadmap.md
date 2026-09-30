@@ -54,4 +54,5 @@
 - [x] Atur teks dimensi ruang 25% lebih kecil dari teks grid dan tipiskan garis dimensi 50%.
 - [x] Input dimensi katalog furniture dalam mm, tambah template Dinamic furniture 1000 × 1000 mm dan hilangkan skala langsung di denah.
 - [x] Tambahkan tabel furniture dengan ukuran, jumlah, harga dan duplikasi; tautkan posisi furniture ke ruang untuk denah Presentasi sesuai ceklis.
+- [x] Tambahkan ceklis kirim ke presentasi, slide Furniture per kategori dan level, serta elemen konstruksi pada gambar Detail.
 
