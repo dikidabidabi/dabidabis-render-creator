@@ -23,7 +23,6 @@ export async function saveMaterialLibrary(materials: LibraryMaterial[]) {
   const payload = JSON.stringify(materials);
   pendingSave = pendingSave.catch(() => {}).then(async () => {
     await setProjectItem(MATERIAL_LIBRARY_KEY, payload);
-    window.dispatchEvent(new StorageEvent("storage", { key: MATERIAL_LIBRARY_KEY }));
   });
   await pendingSave;
 }

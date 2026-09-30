@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { TabulasiNavigation } from "@/components/tabulasi-navigation";
-import { loadMaterialLibrary, MATERIAL_KINDS, MATERIAL_LIBRARY_KEY, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
+import { loadMaterialLibrary, MATERIAL_KINDS, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
 import { patchStoredSketch } from "@/lib/sketch-store";
 import { newFunctionZone, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import {
