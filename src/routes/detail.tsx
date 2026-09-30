@@ -17,6 +17,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { colorForRoomName } from "@/lib/room-color";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
+import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
+import { axisPositions, collectGrids, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
+import type { Door } from "@/lib/doors";
+import type { Window } from "@/lib/windows";
 import {
   FURNITURE_CATALOG,
   anchorFurniture,
@@ -47,11 +51,11 @@ export const Route = createFileRoute("/detail")({
 type Point = { x: number; y: number };
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 type ViewBox = { x: number; y: number; width: number; height: number };
-type Line = { a: Point; b: Point; levelId?: string };
+type Line = { a: Point; b: Point; levelId?: string; kind?: "straight" | "arc" | "bezier" };
 type Layer = { id: string; name: string; points: Point[]; color: string; levelId?: string };
-type Level = { id: string; name: string };
+type Level = { id: string; name: string; mdpl?: number };
 type DetailArea = { id: string; levelId: string; a: Point; b: Point; number: number; furniture?: DetailFurniture[] };
-type Sketch = { id: string; title: string; scale?: string; levels: Level[]; layers: Layer[]; lines?: Line[]; detailAreas?: DetailArea[] };
+type Sketch = { id: string; title: string; scale?: string; levels: Level[]; layers: Layer[]; lines?: Line[]; detailAreas?: DetailArea[]; showFurnitureSlide?: boolean; edgeAttrs?: Record<string, EdgeMaterial>; structuralGrid?: StructuralGrid; structuralGridExtras?: StructuralGrid[]; doors?: Door[]; windows?: Window[] };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 type MoveGesture = { kind: "move"; start: Point; initial: Map<string, DetailFurniture> };
 type ItemGesture = { kind: "rotate"; start: Point; initial: DetailFurniture };
@@ -118,6 +122,14 @@ function DetailPage() {
     });
   }, []);
 
+  const updateFurnitureSlide = useCallback((sketchId: string, enabled: boolean) => {
+    setStore((current) => {
+      const next: StoreShape = { ...current, sketches: current.sketches.map((sketch) => sketch.id === sketchId ? { ...sketch, showFurnitureSlide: enabled } : sketch) };
+      void setProjectItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const activeSketch = active ? store.sketches.find((sketch) => sketch.id === active.sketchId) : undefined;
   const activeArea = activeSketch?.detailAreas?.find((area) => area.id === active?.areaId);
 
@@ -152,7 +164,7 @@ function DetailPage() {
         </section>;
       })}
     </div>
-    {activeSketch && activeArea ? <DetailWorkspace key={`${activeSketch.id}-${activeArea.id}`} sketch={activeSketch} area={activeArea} onFurnitureChange={(items) => updateArea(activeSketch.id, activeArea.id, items)} /> : loaded ? <EmptyState text="Buat kotak dengan alat Pendetailan di halaman Sketsa untuk mulai menata furniture." /> : null}
+    {activeSketch && activeArea ? <DetailWorkspace key={`${activeSketch.id}-${activeArea.id}`} sketch={activeSketch} area={activeArea} onFurnitureChange={(items) => updateArea(activeSketch.id, activeArea.id, items)} onFurnitureSlideChange={(enabled) => updateFurnitureSlide(activeSketch.id, enabled)} /> : loaded ? <EmptyState text="Buat kotak dengan alat Pendetailan di halaman Sketsa untuk mulai menata furniture." /> : null}
   </main>;
 }
 
@@ -160,7 +172,7 @@ function EmptyState({ text }: { text: string }) {
   return <div className="mt-6 border border-dashed border-border px-5 py-12 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
-function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; area: DetailArea; onFurnitureChange: (items: DetailFurniture[]) => void }) {
+function DetailWorkspace({ sketch, area, onFurnitureChange, onFurnitureSlideChange }: { sketch: Sketch; area: DetailArea; onFurnitureChange: (items: DetailFurniture[]) => void; onFurnitureSlideChange: (enabled: boolean) => void }) {
   const workspaceRef = useRef<HTMLElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -183,6 +195,8 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const level = sketch.levels.find((item) => item.id === area.levelId);
   const layers = sketch.layers.filter((item) => item.levelId === area.levelId && !/^(lahan|void|taman|atap)/i.test(item.name.trim()));
   const lines = (sketch.lines ?? []).filter((item) => item.levelId === area.levelId);
+  const doors = (sketch.doors ?? []).filter((item) => item.levelId === area.levelId);
+  const windows = (sketch.windows ?? []).filter((item) => item.levelId === area.levelId);
   const pxPerMeter = 80 / (MAJOR_METERS[sketch.scale ?? "1:100"] ?? 1);
   const zoom = width / view.width;
 
@@ -399,7 +413,8 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
           onPointerDown={(event) => { registerPointer(event); if (pointersRef.current.size > 1) return; const point = clientToSvg(event.clientX, event.clientY); gestureRef.current = { kind: "select", start: point, current: point, additive: event.shiftKey || event.ctrlKey || event.metaKey }; if (!(event.shiftKey || event.ctrlKey || event.metaKey)) setSelectedIds(new Set()); }}>
           <rect x={view.x} y={view.y} width={view.width} height={view.height} className="fill-background" />
           {layers.map((layer) => <polygon key={layer.id} points={layer.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={(colorForRoomName(layer.name) ?? layer.color ?? "rgba(210,210,210,ALPHA)").replace("ALPHA", "0.16")} className="stroke-border" strokeWidth={Math.max(width, height) * 0.001 / zoom} />)}
-          <g className="stroke-foreground" fill="none" strokeWidth={Math.max(width, height) * 0.002 / zoom}>{lines.map((line, index) => <line key={index} x1={line.a.x} y1={line.a.y} x2={line.b.x} y2={line.b.y} />)}</g>
+          <DetailConstruction sketch={sketch} levelId={area.levelId} lines={lines} pxPerMeter={pxPerMeter} />
+          <DetailOpenings doors={doors} windows={windows} pxPerMeter={pxPerMeter} />
           {furniture.map((item) => {
             const selected = selectedIds.has(item.id); const handle = Math.max(width, height) * 0.014 / zoom;
             const tagFont = Math.max(handle * 0.42, Math.min(handle * 0.72, item.width / Math.max(4, item.name.length * 0.58)));
@@ -455,7 +470,10 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       </aside>
     </div>
     <div className="border-t border-border/60 p-4">
-      <h3 className="mb-3 font-display text-base font-semibold">Tabel furniture</h3>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-display text-base font-semibold">Tabel furniture</h3>
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium"><input type="checkbox" className="h-4 w-4 accent-primary" checked={sketch.showFurnitureSlide === true} onChange={(event) => onFurnitureSlideChange(event.target.checked)} />Kirim ke presentasi</label>
+      </div>
       <div className="overflow-x-auto"><table className="w-full min-w-[920px] border-collapse text-left text-xs">
         <thead><tr className="border-b border-border text-muted-foreground"><th className="p-2">Lantai</th><th className="p-2">Nama furniture</th><th className="p-2">Kategori</th><th className="p-2">Ukuran (mm)</th><th className="p-2">Jumlah</th><th className="p-2">Harga per item (Rp)</th><th className="p-2">Harga total (Rp)</th><th className="p-2"><span className="sr-only">Aksi</span></th></tr></thead>
         <tbody>{furnitureRows.map((row) => { const item = row[0]; return <tr key={item.id} className="border-b border-border/50">
@@ -476,6 +494,59 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       </div>
     </div>
   </section>;
+}
+
+const WALL_MM: Record<EdgeMaterial, number> = { solid: 150, standard150: 150, concrete150: 150, concrete200: 200, concrete300: 300, concept: 150, curtain: 80, window: 150, railing: 100 };
+
+function DetailConstruction({ sketch, levelId, lines, pxPerMeter }: { sketch: Sketch; levelId: string; lines: Line[]; pxPerMeter: number }) {
+  const attrs = sketch.edgeAttrs ?? {};
+  const allLines = sketch.lines ?? [];
+  const segments = computeStraightSegments(allLines).filter((segment) => segment.levelId === levelId);
+  const grids = collectGrids(sketch.structuralGrid, sketch.structuralGridExtras);
+  const level = sketch.levels.find((item) => item.id === levelId);
+  return <g pointerEvents="none">
+    {segments.map((segment) => {
+      const material = edgeMaterialForSegment(attrs, segment) ?? edgeMaterialForSegment(attrs, allLines[segment.sourceLineIndex] ?? segment);
+      const thickness = ((material ? WALL_MM[material] : 100) / 1000) * pxPerMeter;
+      const dx = segment.b.x - segment.a.x, dy = segment.b.y - segment.a.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const nx = -dy / length * thickness / 2, ny = dx / length * thickness / 2;
+      const points = `${segment.a.x + nx},${segment.a.y + ny} ${segment.b.x + nx},${segment.b.y + ny} ${segment.b.x - nx},${segment.b.y - ny} ${segment.a.x - nx},${segment.a.y - ny}`;
+      const concrete = material?.startsWith("concrete");
+      return <polygon key={segment.id} points={points} fill={concrete ? "#d8d8d8" : "#ffffff"} stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} />;
+    })}
+    {lines.filter((line) => (line.kind ?? "straight") !== "straight").map((line, index) => <line key={`curve-${index}`} x1={line.a.x} y1={line.a.y} x2={line.b.x} y2={line.b.y} stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} />)}
+    {level ? grids.flatMap((grid, gridIndex) => {
+      if (grid.lineOnly || !levelInRange(grid, { id: level.id, mdpl: level.mdpl ?? 0 }, sketch.levels.map((item) => ({ id: item.id, mdpl: item.mdpl ?? 0 })))) return [];
+      const { spansX, spansY } = spansForLevel(grid, levelId);
+      const xs = axisPositions(spansX), ys = axisPositions(spansY);
+      const angle = (grid.rotation ?? 0) * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+      const size = grid.colSizeCm / 100 * pxPerMeter;
+      return ys.flatMap((my, j) => xs.flatMap((mx, i) => {
+        if (!isColumnVisible(grid, levelId, i, j, spansX, spansY)) return [];
+        const x = grid.origin.x + (mx * cos - my * sin) * pxPerMeter;
+        const y = grid.origin.y + (mx * sin + my * cos) * pxPerMeter;
+        return [<rect key={`column-${gridIndex}-${i}-${j}`} x={x - size / 2} y={y - size / 2} width={size} height={size} fill="#bdbdbd" stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} transform={`rotate(${grid.rotation ?? 0} ${x} ${y})`} />];
+      }));
+    }) : null}
+  </g>;
+}
+
+function DetailOpenings({ doors, windows, pxPerMeter }: { doors: Door[]; windows: Window[]; pxPerMeter: number }) {
+  const stroke = Math.max(0.35, pxPerMeter * 0.004);
+  return <g pointerEvents="none">
+    {windows.map((item) => {
+      const dx = item.b.x - item.a.x, dy = item.b.y - item.a.y, length = Math.hypot(dx, dy) || 1;
+      const nx = -dy / length, ny = dx / length, half = 0.075 * pxPerMeter;
+      return <g key={item.id}><polygon points={`${item.a.x + nx * half},${item.a.y + ny * half} ${item.b.x + nx * half},${item.b.y + ny * half} ${item.b.x - nx * half},${item.b.y - ny * half} ${item.a.x - nx * half},${item.a.y - ny * half}`} fill="#ffffff" stroke="#202020" strokeWidth={stroke} /><line x1={item.a.x} y1={item.a.y} x2={item.b.x} y2={item.b.y} stroke="#202020" strokeWidth={stroke} /></g>;
+    })}
+    {doors.map((item) => {
+      const width = item.widthCm / 100 * pxPerMeter;
+      if (item.type === "sliding") return <g key={item.id}><line x1={item.a.x} y1={item.a.y} x2={item.b.x} y2={item.b.y} stroke="#202020" strokeWidth={stroke * 2} /><line x1={item.a.x + item.nx * 0.04 * pxPerMeter} y1={item.a.y + item.ny * 0.04 * pxPerMeter} x2={item.b.x + item.nx * 0.04 * pxPerMeter} y2={item.b.y + item.ny * 0.04 * pxPerMeter} stroke="#202020" strokeWidth={stroke} /></g>;
+      const leaf = { x: item.a.x + item.nx * width, y: item.a.y + item.ny * width };
+      return <g key={item.id}><line x1={item.a.x} y1={item.a.y} x2={leaf.x} y2={leaf.y} stroke="#202020" strokeWidth={stroke} /><path d={`M ${leaf.x} ${leaf.y} A ${width} ${width} 0 0 1 ${item.b.x} ${item.b.y}`} fill="none" stroke="#202020" strokeWidth={stroke * 0.8} /></g>;
+    })}
+  </g>;
 }
 
 function CatalogTile({ item, size, onSize, onAdd }: { item: CatalogFurniture; size?: { lengthMm: number; widthMm: number }; onSize: (item: CatalogFurniture, key: "lengthMm" | "widthMm", value: string) => void; onAdd: (item: CatalogFurniture) => void }) {

@@ -163,6 +163,7 @@ type Sketch = {
   mmGridRotation?: number;
   linkedMasterplan?: { rootLayerId: string };
   functionZones?: FunctionZone[];
+  showFurnitureSlide?: boolean;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -1509,6 +1510,7 @@ type Slide =
   | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "furniture"; id: string; title: string; sketch: Sketch }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }
   | { kind: "siteplan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
@@ -1749,6 +1751,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   }
   out.push({ kind: "infografis", id: "info", title: "Infografis", sketch: sk, data });
   out.push({ kind: "komposisi", id: "komposisi", title: "Komposisi Ruang", sketch: sk, data });
+  if (sk.showFurnitureSlide) out.push({ kind: "furniture", id: "furniture", title: "Furniture", sketch: sk });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
@@ -1776,6 +1779,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "rincian": return "Rincian per Level";
       case "infografis": return "Infografis";
       case "komposisi": return "Komposisi Ruang";
+      case "furniture": return "Furniture";
       case "biaya": return "Estimasi Biaya";
       case "closing": return "Penutup";
       case "masterplan": return "Master Plan";
@@ -2194,6 +2198,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "rincian" && <RincianBody slide={slide} />}
       {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "komposisi" && <KomposisiBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "furniture" && <FurnitureBody sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "masterplan" && <MasterPlanBody plan={slide.plan} analysis={slide.analysis} />}
       {slide.kind === "siteplan" && <SiteplanBody analysis={slide.analysis} />}
@@ -11111,6 +11116,26 @@ function Legend({ dotColor, label, pct }: { dotColor: string; label: string; pct
 }
 
 // ---- Biaya ----
+function FurnitureBody({ sketch }: { sketch: Sketch }) {
+  const levelOrder = new Map([...sketch.levels].sort((a, b) => a.mdpl - b.mdpl).map((level, index) => [level.id, index]));
+  const rows = (sketch.detailAreas ?? []).flatMap((area) => normalizeDetailFurniture(area.furniture).map((item) => ({ item, levelId: area.levelId })))
+    .reduce<Array<{ item: DetailFurniture; levelId: string; quantity: number }>>((result, current) => {
+      const match = result.find((row) => row.levelId === current.levelId && row.item.name === current.item.name && (row.item.category ?? "") === (current.item.category ?? "") && row.item.widthMm === current.item.widthMm && row.item.heightMm === current.item.heightMm && (row.item.price ?? 0) === (current.item.price ?? 0));
+      if (match) match.quantity += 1; else result.push({ ...current, quantity: 1 });
+      return result;
+    }, [])
+    .sort((a, b) => (a.item.category ?? "Tanpa kategori").localeCompare(b.item.category ?? "Tanpa kategori", "id") || (levelOrder.get(a.levelId) ?? 999) - (levelOrder.get(b.levelId) ?? 999) || a.item.name.localeCompare(b.item.name, "id"));
+  const grouped = Map.groupBy(rows, (row) => row.item.category?.trim() || "Tanpa kategori");
+  const total = rows.reduce((sum, row) => sum + (row.item.price ?? 0) * row.quantity, 0);
+  return <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
+    {rows.length === 0 ? <div style={{ border: "1px dashed #bbb", padding: 48, textAlign: "center", color: "#777" }}>Belum ada furniture pada kotak detail.</div> : [...grouped.entries()].map(([category, items]) => <section key={category}>
+      <div style={{ background: "#0a0a0a", color: "#fff", padding: "7px 10px", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>{category}</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ color: "#777", borderBottom: "1px solid #ddd" }}><th style={ktd}>Level</th><th style={ktd}>Nama furniture</th><th style={ktd}>Ukuran</th><th style={ktd}>Jumlah</th><th style={ktd}>Harga per item</th><th style={ktd}>Harga total</th></tr></thead><tbody>{items.map(({ item, levelId, quantity }) => <tr key={`${levelId}-${item.id}`} style={{ borderBottom: "1px solid #eee" }}><td style={ktd}>{sketch.levels.find((level) => level.id === levelId)?.name ?? "Level"}</td><td style={{ ...ktd, fontWeight: 700 }}>{item.name}</td><td style={ktd}>{Math.round(item.widthMm ?? 0)} × {Math.round(item.heightMm ?? 0)} mm</td><td style={ktd}>{quantity}</td><td style={ktd}>{fmtRp(item.price ?? 0)}</td><td style={{ ...ktd, fontWeight: 700 }}>{fmtRp((item.price ?? 0) * quantity)}</td></tr>)}</tbody></table>
+    </section>)}
+    <div style={{ marginTop: "auto", borderTop: "2px solid #0a0a0a", paddingTop: 12, display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700 }}><span>Total furniture</span><span>{fmtRp(total)}</span></div>
+  </div>;
+}
+
 function BiayaBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
   const rate = loadCostMap()[sketch.id] ?? 0;
   const total = data.totalTerhitungM2 * rate;
