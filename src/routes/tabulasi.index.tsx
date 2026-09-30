@@ -1,10 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car, Plus, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { TabulasiNavigation } from "@/components/tabulasi-navigation";
+import { loadMaterialLibrary, MATERIAL_KINDS, MATERIAL_LIBRARY_KEY, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
 import { patchStoredSketch } from "@/lib/sketch-store";
 import { newFunctionZone, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import {
@@ -50,6 +54,7 @@ type Layer = {
   coefficient?: number;
   isReferenceRoom?: boolean;
   functionZoneId?: string;
+  roomMaterials?: RoomMaterials;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Line = { a: Point; b: Point; kind?: string; levelId?: string };
@@ -127,6 +132,7 @@ function TabulasiPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [materials, setMaterials] = useState<LibraryMaterial[]>([]);
 
   const load = () => {
     try {
@@ -175,14 +181,23 @@ function TabulasiPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const reload = () => setMaterials(loadMaterialLibrary());
+    reload();
+    window.addEventListener("storage", reload);
+    return () => window.removeEventListener("storage", reload);
+  }, []);
+
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Tabulasi</h1>
         <p className="text-sm text-muted-foreground">
           Rekap otomatis seluruh sketsa. Terhubung langsung dengan halaman Sketsa — setiap perubahan tersinkron.
         </p>
       </div>
+
+      <TabulasiNavigation active="tabulasi" />
 
       {loaded && sketches.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-surface/40 p-10 text-center">
@@ -199,6 +214,7 @@ function TabulasiPage() {
               sketch={sk}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
+              materials={materials}
             />
           ))}
         </div>
@@ -211,19 +227,21 @@ function TabulasiBox({
   sketch,
   open,
   onToggle,
+  materials,
 }: {
   sketch: Sketch;
   open: boolean;
   onToggle: () => void;
+  materials: LibraryMaterial[];
 }) {
   const data = useMemo(() => computeStats(sketch), [sketch]);
 
   const handleDownloadExcel = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      downloadSketchExcel(sketch, data);
+      downloadSketchExcel(sketch, data, materials);
     },
-    [sketch, data],
+    [sketch, data, materials],
   );
 
   return (
@@ -267,12 +285,9 @@ function TabulasiBox({
 
       {open && (
         <div className="border-t border-border p-4">
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <Section title="Rekapitulasi" icon={<BarChart3 className="h-4 w-4" />}>
               <RekapSection data={data} />
-            </Section>
-            <Section title="Rincian per Level" icon={<TableIcon className="h-4 w-4" />}>
-              <LevelDetailSection sketch={sketch} />
             </Section>
             <Section title="Infografis" icon={<PieChart className="h-4 w-4" />}>
               <InfographicSection data={data} sketch={sketch} />
@@ -283,6 +298,10 @@ function TabulasiBox({
             <Section title="Estimasi Biaya" icon={<Wallet className="h-4 w-4" />}>
               <CostEstimateSection sketch={sketch} />
             </Section>
+          </div>
+          <div className="mt-6 border-t border-border pt-5">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><TableIcon className="h-4 w-4" />Rincian per Level</h2>
+            <LevelDetailSection sketch={sketch} materials={materials} />
           </div>
         </div>
       )}
@@ -776,14 +795,49 @@ function DeviationRow({ dev, invert }: { dev: number; invert?: boolean }) {
 }
 
 
-function LevelDetailSection({ sketch }: { sketch: Sketch }) {
+function MaterialPicker({ kind, value, materials, onChange }: { kind: MaterialKind; value?: string; materials: LibraryMaterial[]; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const options = materials.filter((item) => item.kind === kind && item.name.trim());
+  const selected = materials.find((item) => item.id === value);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={`Material ${kind}`} className="h-8 w-full min-w-0 justify-between px-2 text-left text-xs font-normal">
+          <span className="truncate">{selected?.name || (value ? "Material dihapus" : "Pilih material")}</span><ChevronDown className="shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[240px] p-0">
+        <Command>
+          <CommandInput placeholder={`Cari material ${kind}…`} />
+          <CommandList>
+            <CommandEmpty>Material tidak ditemukan.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="Tanpa material" onSelect={() => { onChange(""); setOpen(false); }}>Tanpa material</CommandItem>
+              {options.map((item) => (
+                <CommandItem key={item.id} value={`${item.name} ${item.id}`} onSelect={() => { onChange(item.id); setOpen(false); }}>
+                  {item.image && <img src={item.image} alt="" className="h-7 w-7 shrink-0 rounded-sm object-cover" />}
+                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                  {value === item.id && <Check className="ml-auto" />}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: LibraryMaterial[] }) {
   const [zones, setZones] = useState<FunctionZone[]>(() => normalizeFunctionZones(sketch.functionZones));
   const [assignments, setAssignments] = useState<Record<string, string>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
+  const [roomMaterials, setRoomMaterials] = useState<Record<string, RoomMaterials>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   useEffect(() => {
     setZones(normalizeFunctionZones(sketch.functionZones));
     setAssignments(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
+    setRoomMaterials(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
   }, [sketch.id, sketch.updatedAt]);
   const persist = useCallback(async (nextZones: FunctionZone[], nextAssignments: Record<string, string>) => {
     await patchStoredSketch(sketch.id, (stored) => ({
@@ -815,11 +869,20 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
     setAssignments(nextAssignments);
     void persist(zones, nextAssignments);
   };
+  const assignMaterial = (roomId: string, kind: MaterialKind, materialId: string) => {
+    setRoomMaterials((current) => ({ ...current, [roomId]: { ...current[roomId], [kind]: materialId } }));
+    void patchStoredSketch(sketch.id, (stored) => ({
+      ...stored,
+      layers: Array.isArray(stored.layers) ? stored.layers.map((layer: any) => layer.id === roomId
+        ? { ...layer, roomMaterials: { ...layer.roomMaterials, [kind]: materialId } }
+        : layer) : stored.layers,
+    }));
+  };
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
   return (
-    <div className="max-h-[520px] space-y-3 overflow-y-auto pr-2 text-sm">
+    <div className="space-y-5 text-sm">
       {levels.map((lv) => {
         const items = ruang.filter((l) => l.levelId === lv.id);
         const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
@@ -836,14 +899,19 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
               <div className="px-2 py-2 text-xs text-muted-foreground">Belum ada ruang.</div>
             ) : (
               <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px] text-xs">
+              <table className="w-full min-w-[1020px] text-xs">
                 <thead className="text-muted-foreground">
+                  <tr className="border-b border-border/60 bg-muted/20">
+                    <th colSpan={5} className="px-2 py-1 text-left font-medium">Rincian Ruang</th>
+                    <th colSpan={3} className="border-l border-border/60 px-2 py-1 text-center font-medium">Material</th>
+                  </tr>
                   <tr className="border-b border-border/60">
                     <th className="px-2 py-1 text-left font-normal">Ruang</th>
                     <th className="px-2 py-1 text-left font-normal">Zona Fungsi</th>
                     <th className="px-2 py-1 text-right font-normal">Koef.</th>
                     <th className="px-2 py-1 text-right font-normal">Luas</th>
                     <th className="px-2 py-1 text-right font-normal">Efektif</th>
+                    {MATERIAL_KINDS.map((kind) => <th key={kind} className="min-w-40 px-2 py-1 text-left font-normal capitalize">{kind}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -864,6 +932,7 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{coef}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2)}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2 * coef)}</td>
+                        {MATERIAL_KINDS.map((kind) => <td key={kind} className="w-44 px-2 py-1"><MaterialPicker kind={kind} value={roomMaterials[r.id]?.[kind]} materials={materials} onChange={(id) => assignMaterial(r.id, kind, id)} /></td>)}
                       </tr>
                     );
                   })}
@@ -871,6 +940,7 @@ function LevelDetailSection({ sketch }: { sketch: Sketch }) {
                     <td className="px-2 py-1" colSpan={3}>Total</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalAsli)}</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalEfektif)}</td>
+                    <td colSpan={3} />
                   </tr>
                 </tbody>
               </table>
@@ -936,7 +1006,7 @@ function tableHtml(title: string, headers: string[], rows: (string | number)[][]
   return `<h3>${escapeXml(title)}</h3><table style="border-collapse:collapse;margin-bottom:16px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
-function downloadSketchExcel(sketch: Sketch, data: Stats) {
+function downloadSketchExcel(sketch: Sketch, data: Stats, materials: LibraryMaterial[]) {
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name));
 
@@ -973,15 +1043,15 @@ function downloadSketchExcel(sketch: Sketch, data: Stats) {
     const rows: (string | number)[][] = items.map((r) => {
       const coef = r.coefficient ?? 1;
       const zoneName = normalizeFunctionZones(sketch.functionZones).find((zone) => zone.id === r.functionZoneId)?.name ?? "";
-      return [r.name, zoneName, coef, Number(r.areaM2.toFixed(2)), Number((r.areaM2 * coef).toFixed(2))];
+      return [r.name, zoneName, coef, Number(r.areaM2.toFixed(2)), Number((r.areaM2 * coef).toFixed(2)), ...MATERIAL_KINDS.map((kind) => materials.find((m) => m.id === r.roomMaterials?.[kind])?.name ?? "")];
     });
     const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
     const totalEfektif = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
-    rows.push(["TOTAL", "", "", Number(totalAsli.toFixed(2)), Number(totalEfektif.toFixed(2))]);
+    rows.push(["TOTAL", "", "", Number(totalAsli.toFixed(2)), Number(totalEfektif.toFixed(2)), "", "", ""]);
     sections.push(
       tableHtml(
         `Rincian — ${lv.name} (${fmt(lv.mdpl, 1)} Elev)`,
-        ["Ruang", "Zona Fungsi", "Koef.", "Luas (m²)", "Efektif (m²)"],
+        ["Ruang", "Zona Fungsi", "Koef.", "Luas (m²)", "Efektif (m²)", "Material Lantai", "Material Dinding", "Material Plafon"],
         rows,
       ),
     );
