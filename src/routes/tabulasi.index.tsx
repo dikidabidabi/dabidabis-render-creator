@@ -285,7 +285,7 @@ function TabulasiBox({
 
       {open && (
         <div className="border-t border-border p-4">
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2">
             <Section title="Rekapitulasi" icon={<BarChart3 className="h-4 w-4" />}>
               <RekapSection data={data} />
             </Section>

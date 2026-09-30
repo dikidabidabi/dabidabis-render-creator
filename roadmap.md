@@ -1,7 +1,7 @@
 # Roadmap
 
-- [ ] Pisahkan Tabulasi dan List Material; simpan pustaka material per akun dengan gambar.
-- [ ] Letakkan Rincian per Level sepanjang lebar halaman di bagian bawah dan hubungkan pilihan material tiap ruang ke pustaka.
+- [x] Pisahkan Tabulasi dan List Material; simpan pustaka material per akun dengan gambar.
+- [x] Letakkan Rincian per Level sepanjang lebar halaman di bagian bawah dan hubungkan pilihan material tiap ruang ke pustaka.
 
 - [x] Tebalkan garis Dinamic Furniture menjadi 1,5, pusatkan tag per item, dan tambahkan kategori furniture yang dapat dikelola.
 
