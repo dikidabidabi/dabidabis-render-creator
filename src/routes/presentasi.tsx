@@ -4526,6 +4526,28 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 }
 
 // ---- Level body ----
+function SlideFurniture({ items, sw, prefix }: { items: DetailFurniture[]; sw: number; prefix: string }) {
+  return <g pointerEvents="none">
+    {items.map((item) => {
+      const name = item.name.trim() || "Furniture";
+      const font = Math.max(sw * 0.0045, Math.min(sw * 0.008, item.width / Math.max(4, name.length * 0.58)));
+      const tagWidth = Math.max(font * 4, name.length * font * 0.58 + font * 1.2);
+      const tagHeight = font * 1.55;
+      const tagY = item.y + item.height / 2 - tagHeight / 2;
+      return <g key={`${prefix}-${item.id}`}>
+        {item.catalogId === "dinamic" ? <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
+          fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={0.3} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
+          : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
+            width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />}
+        <rect x={item.x - tagWidth / 2} y={tagY} width={tagWidth} height={tagHeight}
+          fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={sw * 0.00035} />
+        <text x={item.x} y={tagY + tagHeight / 2} textAnchor="middle" dominantBaseline="central"
+          fontFamily="Manrope, sans-serif" fontSize={font} fontWeight={700} fill="var(--foreground)">{name}</text>
+      </g>;
+    })}
+  </g>;
+}
+
 function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const { sketch, level, area } = slide;
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
@@ -4989,11 +5011,6 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
             <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
           </pattern>
-          {rooms.map((room) => (
-            <clipPath id={`detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`} key={`clip-${room.id}`}>
-              <polygon points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} />
-            </clipPath>
-          ))}
         </defs>
         <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
         {rooms.map((room) => {
@@ -5009,6 +5026,10 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             {area.floorHatch && !area.interiorDimensions && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
           </g>;
         })}
+        <SlideFurniture
+          items={area.showFurniture === false ? [] : furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY)}
+          sw={sw} prefix="detail-furniture"
+        />
         {gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
           const dash = `${sw * 0.004} ${sw * 0.003}`;
@@ -5043,35 +5064,6 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             ];
           })}
         </>}
-        {rooms.map((room) => {
-          const c = centroid(room.points);
-          const xs = room.points.map((point) => point.x);
-          const ys = room.points.map((point) => point.y);
-          const roomW = Math.max(...xs) - Math.min(...xs);
-          const roomH = Math.max(...ys) - Math.min(...ys);
-          const baseNameFont = sw * 0.0144;
-          const maxChars = Math.max(5, Math.floor((roomW * 0.82) / (baseNameFont * 0.58)));
-          const nameLines = splitRoomName(room.name, maxChars).slice(0, 2);
-          const longestLine = Math.max(...nameLines.map((line) => line.length), 1);
-          const widthFit = (roomW * 0.82) / (longestLine * 0.58);
-          const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
-          const nameFont = Math.max(sw * 0.006, Math.min(baseNameFont, widthFit, heightFit));
-          const lineHeight = nameFont * 1.08;
-          const firstY = c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
-          const infoFont = Math.min(sw * 0.01, nameFont * 0.78);
-          const clipId = `detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
-          return <g key={`label-${room.id}`} clipPath={`url(#${clipId})`}>
-            <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
-              {nameLines.map((line, index) => <tspan key={`${room.id}-${index}`} x={c.x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>)}
-            </text>
-            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
-              {fmt(room.areaM2 || 0, 2)} m²
-            </text>
-            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
-              {elevation}
-            </text>
-          </g>;
-        })}
         <DetailVoidNotation
           voids={levelLayers.filter((layer) => isVoid(layer.name)).map((layer) => ({ id: layer.id, points: layer.points }))}
           floorHoles={(sketch.floors ?? []).filter((floor) => floor.levelId === level.id).flatMap((floor) =>
@@ -5103,13 +5095,6 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />
-        {area.showFurniture !== false && furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY).map((item) => item.catalogId === "dinamic" ? (
-          <rect key={`detail-furniture-${item.id}`} x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
-            fill="white" stroke="#222" strokeWidth={0.3} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
-        ) : (
-          <image key={`detail-furniture-${item.id}`} href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
-            width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
-        ))}
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
@@ -5120,6 +5105,35 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           </g>;
         })}
         {area.interiorDimensions && <g>{interiorDimensionMarks}{exteriorDimensionMarks}</g>}
+        {rooms.map((room) => {
+          const c = centroid(room.points);
+          const xs = room.points.map((point) => point.x);
+          const ys = room.points.map((point) => point.y);
+          const roomW = Math.max(...xs) - Math.min(...xs);
+          const roomH = Math.max(...ys) - Math.min(...ys);
+          const baseNameFont = sw * 0.0144;
+          const maxChars = Math.max(5, Math.floor((roomW * 0.82) / (baseNameFont * 0.58)));
+          const nameLines = splitRoomName(room.name, maxChars).slice(0, 2);
+          const longestLine = Math.max(...nameLines.map((line) => line.length), 1);
+          const widthFit = (roomW * 0.82) / (longestLine * 0.58);
+          const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
+          const nameFont = Math.max(sw * 0.006, Math.min(baseNameFont, widthFit, heightFit));
+          const lineHeight = nameFont * 1.08;
+          const firstY = c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
+          const infoFont = Math.min(sw * 0.01, nameFont * 0.78);
+          const clipId = `detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+          return <g key={`label-${room.id}`} clipPath={`url(#${clipId})`} pointerEvents="none">
+            <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
+              {nameLines.map((line, index) => <tspan key={`${room.id}-${index}`} x={c.x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>)}
+            </text>
+            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+              {fmt(room.areaM2 || 0, 2)} m²
+            </text>
+            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+              {elevation}
+            </text>
+          </g>;
+        })}
       </svg>
       <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
