@@ -26,6 +26,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
 import { Route as StudioIndexRouteImport } from './routes/studio.index'
 import { Route as TabulasiRumusRouteImport } from './routes/tabulasi.rumus'
+import { Route as TabulasiListMaterialRouteImport } from './routes/tabulasi.list-material'
 import { Route as StudioPustakaPromptRouteImport } from './routes/studio.pustaka-prompt'
 
 const SketchRoute = SketchRouteImport.update({
@@ -113,6 +114,11 @@ const TabulasiRumusRoute = TabulasiRumusRouteImport.update({
   path: '/tabulasi/rumus',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TabulasiListMaterialRoute = TabulasiListMaterialRouteImport.update({
+  id: '/tabulasi/list-material',
+  path: '/tabulasi/list-material',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioPustakaPromptRoute = StudioPustakaPromptRouteImport.update({
   id: '/studio/pustaka-prompt',
   path: '/studio/pustaka-prompt',
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
+  '/tabulasi/list-material': typeof TabulasiListMaterialRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
   '/studio/': typeof StudioIndexRoute
   '/tabulasi/': typeof TabulasiIndexRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
+  '/tabulasi/list-material': typeof TabulasiListMaterialRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
   '/studio': typeof StudioIndexRoute
   '/tabulasi': typeof TabulasiIndexRoute
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
+  '/tabulasi/list-material': typeof TabulasiListMaterialRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
   '/studio/': typeof StudioIndexRoute
   '/tabulasi/': typeof TabulasiIndexRoute
@@ -198,6 +207,7 @@ export interface FileRouteTypes {
     | '/project'
     | '/sketch'
     | '/studio/pustaka-prompt'
+    | '/tabulasi/list-material'
     | '/tabulasi/rumus'
     | '/studio/'
     | '/tabulasi/'
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/project'
     | '/sketch'
     | '/studio/pustaka-prompt'
+    | '/tabulasi/list-material'
     | '/tabulasi/rumus'
     | '/studio'
     | '/tabulasi'
@@ -238,6 +249,7 @@ export interface FileRouteTypes {
     | '/project'
     | '/sketch'
     | '/studio/pustaka-prompt'
+    | '/tabulasi/list-material'
     | '/tabulasi/rumus'
     | '/studio/'
     | '/tabulasi/'
@@ -259,6 +271,7 @@ export interface RootRouteChildren {
   ProjectRoute: typeof ProjectRoute
   SketchRoute: typeof SketchRoute
   StudioPustakaPromptRoute: typeof StudioPustakaPromptRoute
+  TabulasiListMaterialRoute: typeof TabulasiListMaterialRoute
   TabulasiRumusRoute: typeof TabulasiRumusRoute
   StudioIndexRoute: typeof StudioIndexRoute
   TabulasiIndexRoute: typeof TabulasiIndexRoute
@@ -385,6 +398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabulasiRumusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tabulasi/list-material': {
+      id: '/tabulasi/list-material'
+      path: '/tabulasi/list-material'
+      fullPath: '/tabulasi/list-material'
+      preLoaderRoute: typeof TabulasiListMaterialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studio/pustaka-prompt': {
       id: '/studio/pustaka-prompt'
       path: '/studio/pustaka-prompt'
@@ -411,6 +431,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectRoute: ProjectRoute,
   SketchRoute: SketchRoute,
   StudioPustakaPromptRoute: StudioPustakaPromptRoute,
+  TabulasiListMaterialRoute: TabulasiListMaterialRoute,
   TabulasiRumusRoute: TabulasiRumusRoute,
   StudioIndexRoute: StudioIndexRoute,
   TabulasiIndexRoute: TabulasiIndexRoute,
