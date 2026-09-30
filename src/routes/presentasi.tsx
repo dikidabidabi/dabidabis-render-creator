@@ -5074,6 +5074,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <DetailStairNotation
           stairs={(sketch.stairs ?? []).filter((stair) => stair.levelId === level.id || stair.toLevelId === level.id)}
           levelId={level.id}
+          levels={sketch.levels ?? []}
           pxPerM={pxPerM}
           sw={sw}
         />
@@ -5584,20 +5585,13 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               );
             });
           })()}
-          {/* Tangga tampil pada level asal dan level tujuan. */}
-          {(sketch.stairs ?? []).filter((stair) => stair.levelId === level.id || stair.toLevelId === level.id).map((stair) => {
-            const plan = stairPlanGeometry(stair, pxPerM);
-            const top = stair.toLevelId === level.id;
-            const strokeWidth = sw * 0.0014;
-            const path = plan.path.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-            return <g key={`stair-${stair.id}`} pointerEvents="none" opacity={top ? 0.75 : 1}>
-              <polygon points={plan.footprint.map((p) => `${p.x},${p.y}`).join(" ")} fill="rgba(214,198,174,0.22)" stroke="#27231f" strokeWidth={strokeWidth} strokeDasharray={top ? `${sw * 0.006} ${sw * 0.004}` : undefined} />
-              {plan.stepLines.map(([a, b], i) => <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#27231f" strokeWidth={strokeWidth * 0.75} />)}
-              {plan.innerLines.map((line, i) => <polyline key={`inner-${i}`} points={line.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#6b4f3a" strokeWidth={strokeWidth * 1.15} />)}
-              {plan.landings.map((landing, i) => <polygon key={i} points={landing.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#27231f" strokeWidth={strokeWidth} />)}
-              <path d={path} fill="none" stroke="#e85d3a" strokeWidth={strokeWidth} strokeDasharray={top ? `${sw * 0.005} ${sw * 0.003}` : undefined} />
-            </g>;
-          })}
+          <ArchitecturalStairNotation
+            stairs={(sketch.stairs ?? []).filter((stair) => stair.levelId === level.id || stair.toLevelId === level.id)}
+            levelId={level.id}
+            levels={sketch.levels ?? []}
+            pxPerM={pxPerM}
+            sw={sw}
+          />
           <MaterialEdges
             lines={lines}
             segmentationLines={sketch.lines ?? []}
@@ -7595,15 +7589,38 @@ function DetailVoidNotation({
 function DetailStairNotation({
   stairs,
   levelId,
+  levels,
   pxPerM,
   sw,
 }: {
   stairs: Stair[];
   levelId: string;
+  levels: Level[];
   pxPerM: number;
   sw: number;
 }) {
-  const stroke = sw * 0.0006;
+  return <ArchitecturalStairNotation stairs={stairs} levelId={levelId} levels={levels} pxPerM={pxPerM} sw={sw} detailed />;
+}
+
+function ArchitecturalStairNotation({
+  stairs,
+  levelId,
+  levels,
+  pxPerM,
+  sw,
+  detailed = false,
+}: {
+  stairs: Stair[];
+  levelId: string;
+  levels: Level[];
+  pxPerM: number;
+  sw: number;
+  detailed?: boolean;
+}) {
+  const stroke = sw * (detailed ? 0.0006 : 0.0014);
+  const fineStroke = detailed ? stroke : stroke * 0.75;
+  const innerStroke = stroke * 1.35;
+  const dash = `${sw * 0.004} ${sw * 0.003}`;
   const railOffset = 0.05 * pxPerM;
   const railThickness = 0.08 * pxPerM;
   const bandAlongEdge = (a: Point, b: Point, center: Point) => {
@@ -7625,18 +7642,59 @@ function DetailStairNotation({
     <g pointerEvents="none">
       {stairs.map((stair) => {
         const plan = stairPlanGeometry(stair, pxPerM);
-        const top = stair.toLevelId === levelId;
-        const dash = top ? `${sw * 0.004} ${sw * 0.003}` : undefined;
+        const isDestination = stair.toLevelId === levelId;
+        const sourceLevel = levels.find((candidate) => candidate.id === stair.levelId);
+        const destinationLevel = levels.find((candidate) => candidate.id === stair.toLevelId);
+        const typicalMiddle = levelId === stair.levelId && Math.max(1, Math.round(sourceLevel?.typicalCount ?? 1)) > 1;
+        const floorHeightM = Math.max(0.1, Math.max(1, Math.round(sourceLevel?.typicalCount ?? 1)) > 1
+          ? tipH(sourceLevel ?? {})
+          : Math.abs((destinationLevel?.mdpl ?? 0) - (sourceLevel?.mdpl ?? 0)) || 3);
+        const cutRatio = Math.min(0.92, Math.max(0.08, 1 / floorHeightM));
         const center = centroid(plan.footprint);
-        const path = plan.path.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+        const pathPoints = isDestination && !typicalMiddle ? [...plan.path].reverse() : plan.path;
+        const path = pathPoints.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+        const pathLength = pathPoints.slice(1).reduce((sum, point, index) => sum + Math.hypot(point.x - pathPoints[index].x, point.y - pathPoints[index].y), 0);
+        const pointOnPath = (ratio: number) => {
+          const target = Math.max(0, Math.min(1, ratio)) * pathLength;
+          let walked = 0;
+          for (let index = 1; index < pathPoints.length; index++) {
+            const a = pathPoints[index - 1], b = pathPoints[index];
+            const length = Math.hypot(b.x - a.x, b.y - a.y);
+            if (walked + length >= target || index === pathPoints.length - 1) {
+              const t = Math.max(0, Math.min(1, (target - walked) / Math.max(length, 1e-9)));
+              return { point: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, tangent: { x: (b.x - a.x) / Math.max(length, 1e-9), y: (b.y - a.y) / Math.max(length, 1e-9) } };
+            }
+            walked += length;
+          }
+          const fallback = pathPoints[0] ?? stair.a;
+          return { point: fallback, tangent: { x: 1, y: 0 } };
+        };
+        const cut = pointOnPath(isDestination && !typicalMiddle ? 1 - cutRatio : cutRatio);
+        const normal = { x: -cut.tangent.y, y: cut.tangent.x };
+        const halfCut = Math.max(stair.widthM * pxPerM * 0.55, stroke * 8);
+        const skew = halfCut * 0.38;
+        const cutA = { x: cut.point.x - normal.x * halfCut - cut.tangent.x * skew, y: cut.point.y - normal.y * halfCut - cut.tangent.y * skew };
+        const cutB = { x: cut.point.x + normal.x * halfCut + cut.tangent.x * skew, y: cut.point.y + normal.y * halfCut + cut.tangent.y * skew };
+        const directionStart = pointOnPath(0.18);
+        const directionEnd = pointOnPath(0.82);
+        const arrowTip = directionEnd.point;
+        const arrowTangent = directionEnd.tangent;
+        const arrowSize = Math.min(stair.widthM * pxPerM * 0.28, sw * 0.014);
+        const arrowNormal = { x: -arrowTangent.y, y: arrowTangent.x };
+        const arrowBase = { x: arrowTip.x - arrowTangent.x * arrowSize, y: arrowTip.y - arrowTangent.y * arrowSize };
+        const arrowPoints = `${arrowTip.x},${arrowTip.y} ${arrowBase.x + arrowNormal.x * arrowSize * 0.5},${arrowBase.y + arrowNormal.y * arrowSize * 0.5} ${arrowBase.x - arrowNormal.x * arrowSize * 0.5},${arrowBase.y - arrowNormal.y * arrowSize * 0.5}`;
+        const labelPoint = pointOnPath(0.33).point;
+        const label = isDestination && !typicalMiddle ? "TURUN" : "NAIK";
         let railings: React.ReactNode;
-        if (stair.kind === "lingkar") {
+        if (!detailed) {
+          railings = null;
+        } else if (stair.kind === "lingkar") {
           const radii = plan.footprint.map((point) => Math.hypot(point.x - stair.a.x, point.y - stair.a.y));
           const inner = Math.min(...radii);
           const outer = Math.max(...radii);
           railings = <>
-            <circle cx={stair.a.x} cy={stair.a.y} r={inner + railOffset + railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} strokeDasharray={dash} />
-            <circle cx={stair.a.x} cy={stair.a.y} r={outer - railOffset - railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} strokeDasharray={dash} />
+            <circle cx={stair.a.x} cy={stair.a.y} r={inner + railOffset + railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} />
+            <circle cx={stair.a.x} cy={stair.a.y} r={outer - railOffset - railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} />
           </>;
         } else {
           const edges = [0, 2].flatMap((index) => {
@@ -7645,15 +7703,27 @@ function DetailStairNotation({
             return a && b ? [{ a, b }] : [];
           });
           railings = edges.map((edge, index) => (
-            <polygon key={`rail-${index}`} points={bandAlongEdge(edge.a, edge.b, center)} fill={RAILING_COLOR} stroke="none" opacity={top ? 0.75 : 1} />
+            <polygon key={`rail-${index}`} points={bandAlongEdge(edge.a, edge.b, center)} fill={RAILING_COLOR} stroke="none" />
           ));
         }
         return (
-          <g key={`detail-stair-${stair.id}`} opacity={top ? 0.75 : 1}>
-            <polygon points={plan.footprint.map((point) => `${point.x},${point.y}`).join(" ")} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />
-            {plan.stepLines.map(([a, b], index) => <line key={`step-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />)}
-            {plan.landings.map((landing, index) => <polygon key={`landing-${index}`} points={landing.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />)}
-            <path d={path} fill="none" stroke="#0a0a0a" strokeWidth={stroke} strokeDasharray={dash} />
+          <g key={`architectural-stair-${stair.id}`}>
+            <polygon points={plan.footprint.map((point) => `${point.x},${point.y}`).join(" ")} fill={detailed ? "#ffffff" : "rgba(214,198,174,0.16)"} stroke="#0a0a0a" strokeWidth={stroke} />
+            {plan.stepLines.map(([a, b], index) => {
+              const ratio = plan.sectionSurfaces[index]?.elevationRatio ?? (index + 1) / Math.max(1, plan.stepLines.length);
+              const hidden = !typicalMiddle && (isDestination ? false : ratio > cutRatio);
+              return <line key={`step-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#0a0a0a" strokeWidth={fineStroke} strokeDasharray={hidden ? dash : undefined} />;
+            })}
+            {plan.innerLines.map((line, index) => <polyline key={`inner-${index}`} points={line.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#0a0a0a" strokeWidth={innerStroke} />)}
+            {plan.landings.map((landing, index) => <polygon key={`landing-${index}`} points={landing.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#0a0a0a" strokeWidth={stroke} />)}
+            <path d={path} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 1.15} strokeLinejoin="round" strokeLinecap="round" />
+            <polygon points={arrowPoints} fill="#0a0a0a" />
+            <text x={labelPoint.x} y={labelPoint.y - sw * 0.006} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={sw * 0.007} fontWeight={800} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0018 }}>{label}</text>
+            {typicalMiddle && <>
+              <polygon points={`${directionStart.point.x},${directionStart.point.y} ${directionStart.point.x + directionStart.tangent.x * arrowSize + arrowNormal.x * arrowSize * 0.5},${directionStart.point.y + directionStart.tangent.y * arrowSize + arrowNormal.y * arrowSize * 0.5} ${directionStart.point.x + directionStart.tangent.x * arrowSize - arrowNormal.x * arrowSize * 0.5},${directionStart.point.y + directionStart.tangent.y * arrowSize - arrowNormal.y * arrowSize * 0.5}`} fill="#0a0a0a" />
+              <text x={pointOnPath(0.67).point.x} y={pointOnPath(0.67).point.y + sw * 0.011} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={sw * 0.007} fontWeight={800} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0018 }}>TURUN</text>
+            </>}
+            {!isDestination || typicalMiddle ? <line x1={cutA.x} y1={cutA.y} x2={cutB.x} y2={cutB.y} stroke="#0a0a0a" strokeWidth={stroke * 2.2} /> : null}
             {railings}
           </g>
         );
