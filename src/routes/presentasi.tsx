@@ -4533,10 +4533,10 @@ function SlideFurniture({ items, sw, prefix }: { items: DetailFurniture[]; sw: n
       const font = Math.max(sw * 0.0045, Math.min(sw * 0.008, item.width / Math.max(4, name.length * 0.58)));
       const tagWidth = Math.max(font * 4, name.length * font * 0.58 + font * 1.2);
       const tagHeight = font * 1.55;
-      const tagY = item.y + item.height / 2 - tagHeight / 2;
+      const tagY = item.y - tagHeight / 2;
       return <g key={`${prefix}-${item.id}`}>
         {item.catalogId === "dinamic" ? <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
-          fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={0.3} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
+          fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
           : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
             width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />}
         <rect x={item.x - tagWidth / 2} y={tagY} width={tagWidth} height={tagHeight}

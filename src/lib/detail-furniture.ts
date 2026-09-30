@@ -11,6 +11,7 @@ export type DetailFurniture = {
   roomId?: string;
   roomAnchor?: { x: number; y: number };
   catalogId?: string;
+  category?: string;
   price?: number;
   widthMm?: number;
   heightMm?: number;
@@ -135,6 +136,7 @@ export function normalizeDetailFurniture(value: unknown): DetailFurniture[] {
       roomId: typeof raw.roomId === "string" ? raw.roomId : undefined,
       roomAnchor: raw.roomAnchor && Number.isFinite(raw.roomAnchor.x) && Number.isFinite(raw.roomAnchor.y) ? raw.roomAnchor : undefined,
       catalogId: typeof raw.catalogId === "string" ? raw.catalogId : undefined,
+      category: typeof raw.category === "string" && raw.category.trim() ? raw.category.trim() : undefined,
       price: Number.isFinite(Number(raw.price)) && Number(raw.price) >= 0 ? Number(raw.price) : 0,
       widthMm: Number(raw.widthMm) > 0 ? Number(raw.widthMm) : undefined,
       heightMm: Number(raw.heightMm) > 0 ? Number(raw.heightMm) : undefined,
