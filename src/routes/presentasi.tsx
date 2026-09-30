@@ -4548,6 +4548,22 @@ function SlideFurniture({ items, sw, prefix }: { items: DetailFurniture[]; sw: n
   </g>;
 }
 
+function splitRoomLabel(name: string, maxChars: number): string[] {
+  if (name.length <= maxChars || !name.includes(" ")) return [name];
+  const words = name.trim().split(/\s+/);
+  let best = 1;
+  let bestDelta = Infinity;
+  for (let index = 1; index < words.length; index++) {
+    const left = words.slice(0, index).join(" ").length;
+    const right = words.slice(index).join(" ").length;
+    if (Math.max(left, right) <= maxChars && Math.abs(left - right) < bestDelta) {
+      best = index;
+      bestDelta = Math.abs(left - right);
+    }
+  }
+  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+}
+
 function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const { sketch, level, area } = slide;
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
@@ -4988,22 +5004,6 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       })}
     </g>;
   });
-  const splitRoomName = (name: string, maxChars: number): string[] => {
-    if (name.length <= maxChars || !name.includes(" ")) return [name];
-    const words = name.trim().split(/\s+/);
-    let best = 1;
-    let bestDelta = Infinity;
-    for (let index = 1; index < words.length; index++) {
-      const left = words.slice(0, index).join(" ").length;
-      const right = words.slice(index).join(" ").length;
-      if (Math.max(left, right) <= maxChars && Math.abs(left - right) < bestDelta) {
-        best = index;
-        bestDelta = Math.abs(left - right);
-      }
-    }
-    return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
-  };
-
   return (
     <div style={{ width: "100%", height: "100%", position: "relative", background: "#ffffff", overflow: "hidden" }}>
       <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
@@ -5113,7 +5113,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           const roomH = Math.max(...ys) - Math.min(...ys);
           const baseNameFont = sw * 0.0144;
           const maxChars = Math.max(5, Math.floor((roomW * 0.82) / (baseNameFont * 0.58)));
-          const nameLines = splitRoomName(room.name, maxChars).slice(0, 2);
+          const nameLines = splitRoomLabel(room.name, maxChars).slice(0, 2);
           const longestLine = Math.max(...nameLines.map((line) => line.length), 1);
           const widthFit = (roomW * 0.82) / (longestLine * 0.58);
           const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
@@ -5364,6 +5364,16 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
+          <SlideFurniture
+            items={furnitureForVisibleRooms(
+              sketch.detailAreas ?? [],
+              level.id,
+              layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)),
+              layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)),
+            )}
+            sw={sw}
+            prefix="level-furniture"
+          />
           {/* ===== Atap (pelana/limasan) — hanya pada level tempat digambar ===== */}
           {(sketch.roofs ?? []).filter((rf) => rf.levelId === level.id).map((rf) => {
             const g = roofPlanGeometry(rf, pxPerM);
@@ -6137,13 +6147,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             edgeAttrs={sketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
           />
-          {furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name))).map((item) => item.catalogId === "dinamic" ? <rect
-            key={`level-furniture-${item.id}`} x={item.x - item.width / 2} y={item.y - item.height / 2}
-            width={item.width} height={item.height} fill="white" stroke="#222" strokeWidth={0.3} vectorEffect="non-scaling-stroke"
-            transform={`rotate(${item.rotation} ${item.x} ${item.y})`}
-          /> : <image key={`level-furniture-${item.id}`} href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
-            width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />)}
-          {/* Kolom struktur selalu menjadi lapisan denah paling atas. */}
+          {/* Kolom struktur berada di atas furniture dan notasi denah lainnya. */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
             if (!levelInRange(grid, level, allLv) || grid.lineOnly) return null;
@@ -6170,6 +6174,35 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 }))}
               </g>
             );
+          })}
+          {/* Informasi ruang selalu menjadi lapisan paling atas pada Slide Denah. */}
+          {layers.filter((room) => !isLahan(room.name) && !isVoid(room.name) && room.points.length >= 3).map((room) => {
+            const c = centroid(room.points);
+            const xs = room.points.map((point) => point.x);
+            const ys = room.points.map((point) => point.y);
+            const roomW = Math.max(...xs) - Math.min(...xs);
+            const roomH = Math.max(...ys) - Math.min(...ys);
+            const baseNameFont = sw * 0.0144;
+            const maxChars = Math.max(5, Math.floor((roomW * 0.82) / (baseNameFont * 0.58)));
+            const nameLines = splitRoomLabel(room.name, maxChars).slice(0, 2);
+            const longestLine = Math.max(...nameLines.map((line) => line.length), 1);
+            const widthFit = (roomW * 0.82) / (longestLine * 0.58);
+            const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
+            const nameFont = Math.max(sw * 0.006, Math.min(baseNameFont, widthFit, heightFit));
+            const lineHeight = nameFont * 1.08;
+            const firstY = c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
+            const infoFont = Math.min(sw * 0.01, nameFont * 0.78);
+            return <g key={`level-room-label-${room.id}`} pointerEvents="none">
+              <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
+                {nameLines.map((line, index) => <tspan key={`${room.id}-${index}`} x={c.x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>)}
+              </text>
+              <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+                {fmt(room.areaM2 || 0, 2)} m²
+              </text>
+              <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+                {level.mdpl >= 0 ? "+" : ""}{fmt(level.mdpl, 2)} Elev
+              </text>
+            </g>;
           })}
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
