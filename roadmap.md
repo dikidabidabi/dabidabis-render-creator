@@ -1,6 +1,6 @@
 # Roadmap
 
-- [x] Tetapkan tebal garis Dinamic Furniture sebesar 0,05 agar tidak berubah saat dimensinya diubah.
+- [x] Tetapkan tebal garis Dinamic Furniture sebesar 0,3 agar tidak berubah saat dimensinya diubah.
 
 - [x] Cegah tumpang tindih dimensi luar pendek berurutan, gunakan muka material saja, putihkan Detail saat Dimensi interior aktif, dan putihkan isi kolom praktis standar 150 mm.
 
