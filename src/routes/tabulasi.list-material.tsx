@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TabulasiNavigation } from "@/components/tabulasi-navigation";
-import { loadMaterialLibrary, MATERIAL_KINDS, MATERIAL_LIBRARY_KEY, saveMaterialLibrary, type LibraryMaterial, type MaterialKind } from "@/lib/material-library";
+import { loadMaterialLibrary, MATERIAL_KINDS, saveMaterialLibrary, type LibraryMaterial, type MaterialKind } from "@/lib/material-library";
 
 export const Route = createFileRoute("/tabulasi/list-material")({
   head: () => ({ meta: [
@@ -26,14 +26,21 @@ async function compressImage(file: File): Promise<string> {
     const image = new Image();
     image.src = url;
     await image.decode();
-    const scale = Math.min(1, 900 / Math.max(image.naturalWidth, image.naturalHeight));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Gambar tidak dapat diproses.");
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.78);
+    let maxSize = 900;
+    let output = "";
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Gambar tidak dapat diproses.");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      output = canvas.toDataURL("image/jpeg", 0.78 - attempt * 0.06);
+      if (output.length < 850 * 1024) break;
+      maxSize *= 0.8;
+    }
+    return output;
   } finally {
     URL.revokeObjectURL(url);
   }

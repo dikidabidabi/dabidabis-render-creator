@@ -5,6 +5,7 @@ export const MATERIAL_KINDS = ["lantai", "dinding", "plafon"] as const;
 export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 export type LibraryMaterial = { id: string; kind: MaterialKind; name: string; image: string | null };
 export type RoomMaterials = Partial<Record<MaterialKind, string>>;
+let pendingSave: Promise<void> = Promise.resolve();
 
 export function loadMaterialLibrary(): LibraryMaterial[] {
   try {
@@ -19,6 +20,10 @@ export function loadMaterialLibrary(): LibraryMaterial[] {
 }
 
 export async function saveMaterialLibrary(materials: LibraryMaterial[]) {
-  await setProjectItem(MATERIAL_LIBRARY_KEY, JSON.stringify(materials));
-  window.dispatchEvent(new StorageEvent("storage", { key: MATERIAL_LIBRARY_KEY }));
+  const payload = JSON.stringify(materials);
+  pendingSave = pendingSave.catch(() => {}).then(async () => {
+    await setProjectItem(MATERIAL_LIBRARY_KEY, payload);
+    window.dispatchEvent(new StorageEvent("storage", { key: MATERIAL_LIBRARY_KEY }));
+  });
+  await pendingSave;
 }

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car, Plus, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -832,6 +832,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   const [zones, setZones] = useState<FunctionZone[]>(() => normalizeFunctionZones(sketch.functionZones));
   const [assignments, setAssignments] = useState<Record<string, string>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
   const [roomMaterials, setRoomMaterials] = useState<Record<string, RoomMaterials>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
+  const materialSave = useRef<Promise<unknown>>(Promise.resolve());
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   useEffect(() => {
@@ -871,12 +872,12 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   };
   const assignMaterial = (roomId: string, kind: MaterialKind, materialId: string) => {
     setRoomMaterials((current) => ({ ...current, [roomId]: { ...current[roomId], [kind]: materialId } }));
-    void patchStoredSketch(sketch.id, (stored) => ({
+    materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({
       ...stored,
       layers: Array.isArray(stored.layers) ? stored.layers.map((layer: any) => layer.id === roomId
         ? { ...layer, roomMaterials: { ...layer.roomMaterials, [kind]: materialId } }
         : layer) : stored.layers,
-    }));
+    })));
   };
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
