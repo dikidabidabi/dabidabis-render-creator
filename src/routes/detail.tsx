@@ -63,6 +63,7 @@ const STORAGE_KEY = "dabidabis_sketch_v2";
 const LIBRARY_KEY = "dabidabis_furniture_library_v1";
 const CLIPBOARD_KEY = "dabidabis_furniture_clipboard_v1";
 const CATALOG_SIZE_KEY = "dabidabis_furniture_sizes_v1";
+const CATEGORY_KEY = "dabidabis_furniture_categories_v1";
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 const MAJOR_METERS: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 };
@@ -173,6 +174,8 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const [library, setLibrary] = useState<ImportedFurniture[]>([]);
   const [clipboard, setClipboard] = useState<DetailFurniture[]>([]);
   const [catalogSizes, setCatalogSizes] = useState<Record<string, { lengthMm: number; widthMm: number }>>({});
+  const [categories, setCategories] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
   const furniture = (area.furniture ?? []).map((item) => positionFurniture(item, sketch.layers));
   const width = Math.max(1, bounds.maxX - bounds.minX);
@@ -189,6 +192,8 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       setClipboard(normalizeDetailFurniture(JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || "[]")));
       const sizes = JSON.parse(localStorage.getItem(CATALOG_SIZE_KEY) || "{}");
       if (sizes && typeof sizes === "object" && !Array.isArray(sizes)) setCatalogSizes(sizes);
+      const storedCategories = JSON.parse(localStorage.getItem(CATEGORY_KEY) || "[]");
+      if (Array.isArray(storedCategories)) setCategories([...new Set(storedCategories.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))]);
     } catch { setLibrary([]); }
   }, []);
 
@@ -221,6 +226,19 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
     setLibrary(next);
     void setProjectItem(LIBRARY_KEY, JSON.stringify(next));
   }, []);
+
+  const addCategory = () => {
+    const category = newCategory.trim();
+    if (!category) return;
+    if (categories.some((item) => item.toLocaleLowerCase("id-ID") === category.toLocaleLowerCase("id-ID"))) {
+      toast.error("Kategori sudah tersedia");
+      return;
+    }
+    const next = [...categories, category];
+    setCategories(next);
+    setNewCategory("");
+    void setProjectItem(CATEGORY_KEY, JSON.stringify(next));
+  };
 
   const copySelection = useCallback(() => {
     const copied = furniture.filter((item) => selectedIds.has(item.id));
@@ -354,7 +372,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
   const selectionBox = gestureRef.current?.kind === "select" ? gestureRef.current : null;
   const onlySelected = selectedIds.size === 1 ? furniture.find((item) => selectedIds.has(item.id)) : undefined;
   const furnitureRows = Object.values(furniture.reduce<Record<string, DetailFurniture[]>>((groups, item) => {
-    const key = JSON.stringify([item.catalogId ?? item.imageUrl, item.name, dimensionMm(item.width, pxPerMeter), dimensionMm(item.height, pxPerMeter), item.price ?? 0]);
+    const key = JSON.stringify([item.catalogId ?? item.imageUrl, item.name, dimensionMm(item.width, pxPerMeter), dimensionMm(item.height, pxPerMeter), item.category ?? "", item.price ?? 0]);
     (groups[key] ??= []).push(item);
     return groups;
   }, {}));
@@ -384,6 +402,9 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
           <g className="stroke-foreground" fill="none" strokeWidth={Math.max(width, height) * 0.002 / zoom}>{lines.map((line, index) => <line key={index} x1={line.a.x} y1={line.a.y} x2={line.b.x} y2={line.b.y} />)}</g>
           {furniture.map((item) => {
             const selected = selectedIds.has(item.id); const handle = Math.max(width, height) * 0.014 / zoom;
+            const tagFont = Math.max(handle * 0.42, Math.min(handle * 0.72, item.width / Math.max(4, item.name.length * 0.58)));
+            const tagWidth = Math.min(item.width * 0.9, Math.max(tagFont * 4, item.name.length * tagFont * 0.58 + tagFont));
+            const tagHeight = tagFont * 1.5;
             return <g key={item.id} transform={`rotate(${item.rotation} ${item.x} ${item.y})`} onPointerDown={(event) => {
               event.stopPropagation(); registerPointer(event); if (pointersRef.current.size > 1) return;
               const additive = event.shiftKey || event.ctrlKey || event.metaKey;
@@ -401,10 +422,12 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
                   height={item.height}
                   fill="white"
                   stroke="#222"
-                  strokeWidth={0.3}
+                  strokeWidth={1.5}
                   vectorEffect="non-scaling-stroke"
                 />
               ) : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height} preserveAspectRatio="none" />}
+              <rect x={item.x - tagWidth / 2} y={item.y - tagHeight / 2} width={tagWidth} height={tagHeight} className="fill-background stroke-foreground" strokeWidth={Math.max(0.3, handle * 0.025)} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              <text x={item.x} y={item.y} textAnchor="middle" dominantBaseline="central" className="fill-foreground" fontFamily="Manrope, sans-serif" fontSize={tagFont} fontWeight={700} pointerEvents="none">{item.name.trim() || "Furniture"}</text>
               {selected && <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height} fill="none" className="stroke-ember" strokeWidth={handle * 0.13} strokeDasharray={`${handle * 0.45} ${handle * 0.3}`} />}
               {selected && selectedIds.size === 1 ? <>
                 <g transform={`translate(${item.x + item.width / 2} ${item.y - item.height / 2})`} onPointerDown={(event) => { event.stopPropagation(); const point = clientToSvg(event.clientX, event.clientY); gestureRef.current = { kind: "rotate", start: point, initial: { ...item } }; }}><circle r={handle} className="fill-ember stroke-background" strokeWidth={handle * 0.12} /><RotateCw x={-handle * 0.55} y={-handle * 0.55} width={handle * 1.1} height={handle * 1.1} className="text-primary-foreground" /></g>
@@ -433,19 +456,24 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
     </div>
     <div className="border-t border-border/60 p-4">
       <h3 className="mb-3 font-display text-base font-semibold">Tabel furniture</h3>
-      <div className="overflow-x-auto"><table className="w-full min-w-[780px] border-collapse text-left text-xs">
-        <thead><tr className="border-b border-border text-muted-foreground"><th className="p-2">Lantai</th><th className="p-2">Nama furniture</th><th className="p-2">Ukuran (mm)</th><th className="p-2">Jumlah</th><th className="p-2">Harga per item (Rp)</th><th className="p-2">Harga total (Rp)</th><th className="p-2"><span className="sr-only">Aksi</span></th></tr></thead>
+      <div className="overflow-x-auto"><table className="w-full min-w-[920px] border-collapse text-left text-xs">
+        <thead><tr className="border-b border-border text-muted-foreground"><th className="p-2">Lantai</th><th className="p-2">Nama furniture</th><th className="p-2">Kategori</th><th className="p-2">Ukuran (mm)</th><th className="p-2">Jumlah</th><th className="p-2">Harga per item (Rp)</th><th className="p-2">Harga total (Rp)</th><th className="p-2"><span className="sr-only">Aksi</span></th></tr></thead>
         <tbody>{furnitureRows.map((row) => { const item = row[0]; return <tr key={item.id} className="border-b border-border/50">
           <td className="p-2">{level?.name ?? "Level"}</td>
           <td className="p-2"><input aria-label={`Nama ${item.id}`} className="w-full min-w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.name} onChange={(event) => changeRow(row, { name: event.target.value })} /></td>
+          <td className="p-2"><select aria-label={`Kategori ${item.id}`} className="w-full min-w-32 border border-input bg-background px-2 py-1 text-foreground" value={item.category ?? ""} onChange={(event) => changeRow(row, { category: event.target.value || undefined })}><option value="">Tanpa kategori</option>{[...new Set([...categories, ...(item.category ? [item.category] : [])])].map((category) => <option key={category} value={category}>{category}</option>)}</select></td>
           <td className="p-2"><div className="flex items-center gap-1"><input aria-label={`Panjang ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.width, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeRow(row, { width: n / 1000 * pxPerMeter }); }} /><span>×</span><input aria-label={`Lebar ${item.id}`} type="number" min="1" className="w-20 border border-input bg-background px-2 py-1 text-foreground" value={dimensionMm(item.height, pxPerMeter)} onChange={(event) => { const n = Number(event.target.value); if (n > 0) changeRow(row, { height: n / 1000 * pxPerMeter }); }} /></div></td>
           <td className="p-2 tabular-nums">{row.length}</td>
           <td className="p-2"><input aria-label={`Harga ${item.id}`} type="number" min="0" className="w-28 border border-input bg-background px-2 py-1 text-foreground" value={item.price ?? 0} onChange={(event) => { const n = Number(event.target.value); if (n >= 0) changeRow(row, { price: n }); }} /></td>
           <td className="p-2 tabular-nums">{((item.price ?? 0) * row.length).toLocaleString("id-ID")}</td>
           <td className="p-2"><div className="flex gap-1"><Button size="icon" variant="ghost" title="Duplikasi furniture" onClick={() => { const copy = { ...item, id: `FURN${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: item.catalogId === "dinamic" ? `${item.name} salinan` : item.name, x: item.x + pxPerMeter * 0.3, y: item.y + pxPerMeter * 0.3, createdAt: Date.now() }; onFurnitureChange([...furniture, anchorFurniture(copy, layers)]); }}><Copy className="h-3.5 w-3.5" /></Button><Button size="icon" variant="ghost" title="Hapus satu furniture" onClick={() => onFurnitureChange(furniture.filter((entry) => entry.id !== item.id))}><Trash2 className="h-3.5 w-3.5" /></Button></div></td>
         </tr>; })}</tbody>
-        <tfoot><tr className="font-semibold"><td colSpan={5} className="p-2 text-right">Total</td><td className="p-2 tabular-nums">{furniture.reduce((sum, item) => sum + (item.price ?? 0), 0).toLocaleString("id-ID")}</td><td /></tr></tfoot>
+        <tfoot><tr className="font-semibold"><td colSpan={6} className="p-2 text-right">Total</td><td className="p-2 tabular-nums">{furniture.reduce((sum, item) => sum + (item.price ?? 0), 0).toLocaleString("id-ID")}</td><td /></tr></tfoot>
       </table></div>
+      <div className="mt-4 border-t border-border/60 pt-4">
+        <label htmlFor="new-furniture-category" className="mb-2 block text-xs font-semibold text-muted-foreground">Tambah kategori</label>
+        <div className="flex max-w-md gap-2"><input id="new-furniture-category" value={newCategory} onChange={(event) => setNewCategory(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addCategory(); } }} placeholder="Nama kategori" className="min-w-0 flex-1 border border-input bg-background px-3 py-2 text-sm text-foreground" /><Button type="button" onClick={addCategory} disabled={!newCategory.trim()}><Plus className="mr-2 h-4 w-4" />Tambah kategori</Button></div>
+      </div>
     </div>
   </section>;
 }
