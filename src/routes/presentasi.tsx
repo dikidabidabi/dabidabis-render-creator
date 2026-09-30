@@ -4526,6 +4526,28 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 }
 
 // ---- Level body ----
+function SlideFurniture({ items, sw, prefix }: { items: DetailFurniture[]; sw: number; prefix: string }) {
+  return <g pointerEvents="none">
+    {items.map((item) => {
+      const name = item.name.trim() || "Furniture";
+      const font = Math.max(sw * 0.0045, Math.min(sw * 0.008, item.width / Math.max(4, name.length * 0.58)));
+      const tagWidth = Math.max(font * 4, name.length * font * 0.58 + font * 1.2);
+      const tagHeight = font * 1.55;
+      const tagY = item.y + item.height / 2 - tagHeight / 2;
+      return <g key={`${prefix}-${item.id}`}>
+        {item.catalogId === "dinamic" ? <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
+          fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={0.3} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
+          : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
+            width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />}
+        <rect x={item.x - tagWidth / 2} y={tagY} width={tagWidth} height={tagHeight}
+          fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={sw * 0.00035} />
+        <text x={item.x} y={tagY + tagHeight / 2} textAnchor="middle" dominantBaseline="central"
+          fontFamily="Manrope, sans-serif" fontSize={font} fontWeight={700} fill="var(--foreground)">{name}</text>
+      </g>;
+    })}
+  </g>;
+}
+
 function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const { sketch, level, area } = slide;
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
@@ -4989,11 +5011,6 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
             <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
           </pattern>
-          {rooms.map((room) => (
-            <clipPath id={`detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`} key={`clip-${room.id}`}>
-              <polygon points={room.points.map((p) => `${p.x},${p.y}`).join(" ")} />
-            </clipPath>
-          ))}
         </defs>
         <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
         {rooms.map((room) => {
@@ -5009,6 +5026,10 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             {area.floorHatch && !area.interiorDimensions && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
           </g>;
         })}
+        <SlideFurniture
+          items={area.showFurniture === false ? [] : furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY)}
+          sw={sw} prefix="detail-furniture"
+        />
         {gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
           const dash = `${sw * 0.004} ${sw * 0.003}`;
