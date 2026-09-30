@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Pisahkan Tabulasi dan List Material; simpan pustaka material per akun dengan gambar.
+- [ ] Letakkan Rincian per Level sepanjang lebar halaman di bagian bawah dan hubungkan pilihan material tiap ruang ke pustaka.
+
 - [x] Tebalkan garis Dinamic Furniture menjadi 1,5, pusatkan tag per item, dan tambahkan kategori furniture yang dapat dikelola.
 
 - [x] Terapkan notasi tangga arsitektural pada slide Denah/Detail: potong 1 m, garis 45°, bagian atas putus-putus, arah naik/turun, bordes, dan lantai tipikal tengah.
