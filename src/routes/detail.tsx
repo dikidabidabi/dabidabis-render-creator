@@ -193,7 +193,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
       const sizes = JSON.parse(localStorage.getItem(CATALOG_SIZE_KEY) || "{}");
       if (sizes && typeof sizes === "object" && !Array.isArray(sizes)) setCatalogSizes(sizes);
       const storedCategories = JSON.parse(localStorage.getItem(CATEGORY_KEY) || "[]");
-      if (Array.isArray(storedCategories)) setCategories([...new Set(storedCategories.filter((value): value is string => typeof value === "string" && value.trim()).map((value) => value.trim()))]);
+      if (Array.isArray(storedCategories)) setCategories([...new Set(storedCategories.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))]);
     } catch { setLibrary([]); }
   }, []);
 
