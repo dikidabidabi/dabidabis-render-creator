@@ -401,7 +401,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange }: { sketch: Sketch; 
                   height={item.height}
                   fill="white"
                   stroke="#222"
-                  strokeWidth={0.05}
+                  strokeWidth={0.3}
                   vectorEffect="non-scaling-stroke"
                 />
               ) : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height} preserveAspectRatio="none" />}
