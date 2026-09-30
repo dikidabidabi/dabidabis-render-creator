@@ -119,7 +119,7 @@ export const Route = createFileRoute("/presentasi")({
 });
 
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
-import { furnitureForVisibleRooms, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
+import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -11118,6 +11118,7 @@ function Legend({ dotColor, label, pct }: { dotColor: string; label: string; pct
 // ---- Biaya ----
 function FurnitureBody({ sketch }: { sketch: Sketch }) {
   const levelOrder = new Map([...sketch.levels].sort((a, b) => a.mdpl - b.mdpl).map((level, index) => [level.id, index]));
+  const pxPerMeter = 80 / ({ "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 }[sketch.scale] ?? 1);
   const rows = (sketch.detailAreas ?? []).flatMap((area) => normalizeDetailFurniture(area.furniture).map((item) => ({ item, levelId: area.levelId })))
     .reduce<Array<{ item: DetailFurniture; levelId: string; quantity: number }>>((result, current) => {
       const match = result.find((row) => row.levelId === current.levelId && row.item.name === current.item.name && (row.item.category ?? "") === (current.item.category ?? "") && row.item.widthMm === current.item.widthMm && row.item.heightMm === current.item.heightMm && (row.item.price ?? 0) === (current.item.price ?? 0));
@@ -11125,12 +11126,16 @@ function FurnitureBody({ sketch }: { sketch: Sketch }) {
       return result;
     }, [])
     .sort((a, b) => (a.item.category ?? "Tanpa kategori").localeCompare(b.item.category ?? "Tanpa kategori", "id") || (levelOrder.get(a.levelId) ?? 999) - (levelOrder.get(b.levelId) ?? 999) || a.item.name.localeCompare(b.item.name, "id"));
-  const grouped = Map.groupBy(rows, (row) => row.item.category?.trim() || "Tanpa kategori");
+  const grouped = rows.reduce<Map<string, typeof rows>>((groups, row) => {
+    const category = row.item.category?.trim() || "Tanpa kategori";
+    groups.set(category, [...(groups.get(category) ?? []), row]);
+    return groups;
+  }, new Map());
   const total = rows.reduce((sum, row) => sum + (row.item.price ?? 0) * row.quantity, 0);
   return <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
     {rows.length === 0 ? <div style={{ border: "1px dashed #bbb", padding: 48, textAlign: "center", color: "#777" }}>Belum ada furniture pada kotak detail.</div> : [...grouped.entries()].map(([category, items]) => <section key={category}>
       <div style={{ background: "#0a0a0a", color: "#fff", padding: "7px 10px", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>{category}</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ color: "#777", borderBottom: "1px solid #ddd" }}><th style={ktd}>Level</th><th style={ktd}>Nama furniture</th><th style={ktd}>Ukuran</th><th style={ktd}>Jumlah</th><th style={ktd}>Harga per item</th><th style={ktd}>Harga total</th></tr></thead><tbody>{items.map(({ item, levelId, quantity }) => <tr key={`${levelId}-${item.id}`} style={{ borderBottom: "1px solid #eee" }}><td style={ktd}>{sketch.levels.find((level) => level.id === levelId)?.name ?? "Level"}</td><td style={{ ...ktd, fontWeight: 700 }}>{item.name}</td><td style={ktd}>{Math.round(item.widthMm ?? 0)} × {Math.round(item.heightMm ?? 0)} mm</td><td style={ktd}>{quantity}</td><td style={ktd}>{fmtRp(item.price ?? 0)}</td><td style={{ ...ktd, fontWeight: 700 }}>{fmtRp((item.price ?? 0) * quantity)}</td></tr>)}</tbody></table>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}><thead><tr style={{ color: "#777", borderBottom: "1px solid #ddd" }}><th style={ktd}>Level</th><th style={ktd}>Nama furniture</th><th style={ktd}>Ukuran</th><th style={ktd}>Jumlah</th><th style={ktd}>Harga per item</th><th style={ktd}>Harga total</th></tr></thead><tbody>{items.map(({ item, levelId, quantity }) => <tr key={`${levelId}-${item.id}`} style={{ borderBottom: "1px solid #eee" }}><td style={ktd}>{sketch.levels.find((level) => level.id === levelId)?.name ?? "Level"}</td><td style={{ ...ktd, fontWeight: 700 }}>{item.name}</td><td style={ktd}>{Math.round(item.widthMm ?? item.width / pxPerMeter * 1000)} × {Math.round(item.heightMm ?? item.height / pxPerMeter * 1000)} mm</td><td style={ktd}>{quantity}</td><td style={ktd}>{fmtRp(item.price ?? 0)}</td><td style={{ ...ktd, fontWeight: 700 }}>{fmtRp((item.price ?? 0) * quantity)}</td></tr>)}</tbody></table>
     </section>)}
     <div style={{ marginTop: "auto", borderTop: "2px solid #0a0a0a", paddingTop: 12, display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700 }}><span>Total furniture</span><span>{fmtRp(total)}</span></div>
   </div>;
