@@ -1,6 +1,8 @@
 # Roadmap
 
-- [ ] Atur furniture di bawah dinding, beton, grid, pintu, dan dimensi pada slide denah/detail; tambahkan name tag serta jadikan label ruang lapisan teratas.
+- [x] Terapkan notasi tangga arsitektural pada slide Denah/Detail: potong 1 m, garis 45°, bagian atas putus-putus, arah naik/turun, bordes, dan lantai tipikal tengah.
+
+- [x] Atur furniture di bawah dinding, beton, grid, pintu, dan dimensi pada slide denah/detail; tambahkan name tag serta jadikan label ruang lapisan teratas.
 
 - [x] Tetapkan tebal garis Dinamic Furniture sebesar 0,3 agar tidak berubah saat dimensinya diubah.
 

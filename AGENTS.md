@@ -5,3 +5,4 @@
 - Dinding standar 150 mm memakai notasi dinding solid tetapi kolom praktis 150 × 150 mm berisi putih polos dengan batas finishing 15 mm ke dalam agar berbeda dari kolom solid hitam.
 - Furniture Detail disimpan bersama kotak detail dengan ID ruang dan posisi relatif terhadap ruang; ukuran katalog/tabel dalam mm dikonversi memakai skala sketsa agar ikut bergeser ketika ruang berubah, sementara ceklis per kotak mengendalikan kemunculan di Presentasi.
 - Slide Denah/Detail menggambar furniture setelah bidang ruang tetapi sebelum notasi teknis, sedangkan label ruang ditaruh terakhir agar informasi ruang selalu terbaca.
+- Notasi tangga Slide Denah/Detail memakai bidang potong 1 m dengan garis batas 45°, bagian di atas bidang potong putus-putus, sisi dalam tegas, arah naik/turun mengikuti bordes, dan tangga tipikal tengah ditampilkan utuh.
