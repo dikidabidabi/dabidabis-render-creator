@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
+import { loadMaterialLibrary, type LibraryMaterial, type RoomMaterials } from "@/lib/material-library";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
@@ -133,13 +134,14 @@ type Layer = {
   hidden?: boolean;
   locked?: boolean;
   functionZoneId?: string;
+  roomMaterials?: RoomMaterials;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
 };
 type Sketch = {
@@ -4569,8 +4571,38 @@ function splitRoomLabel(name: string, maxChars: number): string[] {
   return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
 }
 
+function materialPlanColor(material: LibraryMaterial): string {
+  let hash = 2166136261;
+  for (const character of material.id) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  const hue = ((hash >>> 0) * 137.508) % 360;
+  return `hsl(${hue} 58% 76%)`;
+}
+
+function MaterialCodeSymbol({ code, kind, size }: { code: string; kind: "lantai" | "dinding"; size: number }) {
+  if (kind === "lantai") {
+    return <svg viewBox="0 0 36 36" width={size} height={size} aria-hidden="true">
+      <circle cx="18" cy="18" r="14" fill="#ffffff" stroke="#111111" strokeWidth="1.5" />
+      <text x="18" y="18" textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize="10" fontWeight="700" fill="#111111">{code}</text>
+    </svg>;
+  }
+  return <svg viewBox="0 0 36 36" width={size} height={size} aria-hidden="true">
+    <path d="M 5 30 L 18 5 L 31 30 Z" fill="#ffffff" stroke="#111111" strokeWidth="1.5" />
+    <text x="18" y="22" textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize="10" fontWeight="700" fill="#111111">{code}</text>
+  </svg>;
+}
+
 function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const { sketch, level, area } = slide;
+  const [materialLibrary, setMaterialLibrary] = useState<LibraryMaterial[]>([]);
+  useEffect(() => {
+    const reload = () => setMaterialLibrary(loadMaterialLibrary());
+    reload();
+    window.addEventListener("storage", reload);
+    return () => window.removeEventListener("storage", reload);
+  }, []);
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
   const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
   const detailMinX = Math.min(area.a.x, area.b.x), detailMaxX = Math.max(area.a.x, area.b.x);
@@ -4598,6 +4630,14 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     return Math.max(...xs) >= slide.bounds.minX && Math.min(...xs) <= slide.bounds.maxX
       && Math.max(...ys) >= slide.bounds.minY && Math.min(...ys) <= slide.bounds.maxY;
   });
+  const materialById = new Map(materialLibrary.map((material) => [material.id, material]));
+  const usedFloorMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.lantai).filter((id): id is string => Boolean(id))))
+    .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "lantai");
+  const usedWallMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.dinding).filter((id): id is string => Boolean(id))))
+    .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "dinding");
+  const floorCodeById = new Map(usedFloorMaterials.map((material, index) => [material.id, `L${index + 1}`]));
+  const wallCodeById = new Map(usedWallMaterials.map((material, index) => [material.id, `D${index + 1}`]));
+  const showMaterialMode = area.showMaterials === true;
   const functionZones = normalizeFunctionZones(sketch.functionZones);
   const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
   const detailZoneStats = functionZones.flatMap((zone) => {
@@ -5011,7 +5051,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   });
   return (
     <div style={{ width: "100%", height: "100%", position: "relative", background: "#ffffff", overflow: "hidden" }}>
-      <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+      <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode ? "80%" : "100%", height: "100%", display: "block" }}>
         <defs>
           <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
             <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
@@ -5020,8 +5060,11 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
         {rooms.map((room) => {
           const zone = room.functionZoneId ? functionZoneById.get(room.functionZoneId) : undefined;
+          const floorMaterial = room.roomMaterials?.lantai ? materialById.get(room.roomMaterials.lantai) : undefined;
           const fill = area.interiorDimensions || area.floorHatch
             ? "#ffffff"
+            : showMaterialMode && floorMaterial
+              ? materialPlanColor(floorMaterial)
             : zone
               ? functionZoneColor(zone.color, 0.28)
               : roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
@@ -5092,6 +5135,33 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           sw={sw}
           detailSolidLayers
         />
+        {showMaterialMode && rooms.flatMap((room) => {
+          const materialId = room.roomMaterials?.dinding;
+          const code = materialId ? wallCodeById.get(materialId) : undefined;
+          if (!code || room.points.length < 3) return [];
+          const signedArea = room.points.reduce((sum, point, index) => {
+            const next = room.points[(index + 1) % room.points.length];
+            return sum + point.x * next.y - next.x * point.y;
+          }, 0);
+          return room.points.flatMap((point, index) => {
+            const next = room.points[(index + 1) % room.points.length];
+            const length = Math.hypot(next.x - point.x, next.y - point.y);
+            if (length < pxPerM * 0.25) return [];
+            const ux = (next.x - point.x) / length;
+            const uy = (next.y - point.y) / length;
+            const nx = signedArea >= 0 ? -uy : uy;
+            const ny = signedArea >= 0 ? ux : -ux;
+            const middle = { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 };
+            const depth = Math.max(sw * 0.026, pxPerM * 0.22);
+            const halfBase = depth * 0.55;
+            const base = { x: middle.x + nx * depth, y: middle.y + ny * depth };
+            const label = { x: middle.x + nx * depth * 0.68, y: middle.y + ny * depth * 0.68 };
+            return <g key={`wall-code-${room.id}-${index}`} pointerEvents="none">
+              <polygon points={`${middle.x},${middle.y} ${base.x + ux * halfBase},${base.y + uy * halfBase} ${base.x - ux * halfBase},${base.y - uy * halfBase}`} fill="#ffffff" stroke="#111111" strokeWidth={Math.max(sw * 0.0007, 0.35)} />
+              <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize={depth * 0.38} fontWeight={700} fill="#111111">{code}</text>
+            </g>;
+          });
+        })}
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
         <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
         <SolidWallPracticalColumns
@@ -5111,6 +5181,17 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           </g>;
         })}
         {area.interiorDimensions && <g>{interiorDimensionMarks}{exteriorDimensionMarks}</g>}
+        {showMaterialMode && rooms.map((room) => {
+          const materialId = room.roomMaterials?.lantai;
+          const code = materialId ? floorCodeById.get(materialId) : undefined;
+          if (!code) return null;
+          const center = centroid(room.points);
+          const radius = Math.max(sw * 0.012, 5);
+          return <g key={`floor-code-${room.id}`} pointerEvents="none">
+            <circle cx={center.x} cy={center.y + sw * 0.032} r={radius} fill="#ffffff" stroke="#111111" strokeWidth={Math.max(sw * 0.0007, 0.35)} />
+            <text x={center.x} y={center.y + sw * 0.032} textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize={radius * 0.82} fontWeight={700} fill="#111111">{code}</text>
+          </g>;
+        })}
         {rooms.map((room) => {
           const c = centroid(room.points);
           const xs = room.points.map((point) => point.x);
@@ -5145,7 +5226,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>
-      {!area.floorHatch && !area.interiorDimensions && detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
+      {!showMaterialMode && !area.floorHatch && !area.interiorDimensions && detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
         <Donut segments={detailZoneStats.map((zone) => ({ value: zone.areaM2, color: zone.color }))} size={86} thickness={12} centerValue="100%" centerLabel="Zona" />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>Zona Fungsi · {level.name}</div>
@@ -5156,6 +5237,30 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           </div>)}
         </div>
       </div>}
+      {showMaterialMode && <aside style={{ position: "absolute", right: 24, top: 28, bottom: area.showKeyplan === false ? 24 : "20%", width: "18%", minWidth: 170, background: "rgba(255,255,255,0.97)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", padding: "14px 12px", overflow: "hidden", fontFamily: "Manrope, sans-serif" }}>
+        <div style={{ fontFamily: "Sora, sans-serif", fontSize: 14, fontWeight: 800, paddingBottom: 8, borderBottom: "2px solid #111111" }}>LEGENDA MATERIAL</div>
+        {([[
+          "Lantai",
+          usedFloorMaterials,
+          floorCodeById,
+          "lantai",
+        ], [
+          "Dinding",
+          usedWallMaterials,
+          wallCodeById,
+          "dinding",
+        ]] as const).map(([title, materials, codeMap, kind]) => <section key={kind} style={{ marginTop: 14 }}>
+          <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "#555555", marginBottom: 7 }}>{title}</div>
+          {materials.length === 0 ? <div style={{ fontSize: 10, color: "#777777" }}>Belum dipilih</div> : materials.map((material) => {
+            const code = codeMap.get(material.id) ?? "";
+            return <div key={material.id} style={{ display: "grid", gridTemplateColumns: "34px 30px minmax(0,1fr)", alignItems: "center", gap: 7, minHeight: 42, borderBottom: "1px solid #deded9", padding: "5px 0" }}>
+              <MaterialCodeSymbol code={code} kind={kind} size={32} />
+              {material.image ? <img src={material.image} alt="" style={{ width: 30, height: 30, objectFit: "cover", border: "1px solid #c8c8c3" }} /> : <span style={{ width: 30, height: 30, background: materialPlanColor(material), border: "1px solid #c8c8c3" }} />}
+              <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.25, fontWeight: 650, overflowWrap: "anywhere" }}>{material.name || "Tanpa nama"}</span>
+            </div>;
+          })}
+        </section>)}
+      </aside>}
       {area.showKeyplan !== false && <div style={{ position: "absolute", right: 28, bottom: 24, height: "16.666%", width: "15%", minWidth: 120, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 6 }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 12, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>KEY PLAN · {level.name}</div>
         <svg viewBox={`${keyPlanBounds.minX} ${keyPlanBounds.minY} ${keyPlanW} ${keyPlanH}`} preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0, width: "100%", display: "block", background: "#ffffff" }}>

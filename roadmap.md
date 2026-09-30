@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Tambahkan mode Material pada Pendetailan dengan warna lantai, kode bidang, dan legenda Slide Detail.
+
 - [x] Pisahkan Tabulasi dan List Material; simpan pustaka material per akun dengan gambar.
 - [x] Letakkan Rincian per Level sepanjang lebar halaman di bagian bawah dan hubungkan pilihan material tiap ruang ke pustaka.
 
