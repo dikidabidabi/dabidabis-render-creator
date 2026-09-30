@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { colorForRoomName } from "@/lib/room-color";
 import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
+import { loadMaterialLibrary, type LibraryMaterial, type RoomMaterials } from "@/lib/material-library";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SharePresentationDialog } from "@/components/share-presentation-dialog";
@@ -133,13 +134,14 @@ type Layer = {
   hidden?: boolean;
   locked?: boolean;
   functionZoneId?: string;
+  roomMaterials?: RoomMaterials;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
 };
 type Sketch = {
@@ -4569,8 +4571,38 @@ function splitRoomLabel(name: string, maxChars: number): string[] {
   return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
 }
 
+function materialPlanColor(material: LibraryMaterial): string {
+  let hash = 2166136261;
+  for (const character of material.id) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  const hue = ((hash >>> 0) * 137.508) % 360;
+  return `hsl(${hue} 58% 76%)`;
+}
+
+function MaterialCodeSymbol({ code, kind, size }: { code: string; kind: "lantai" | "dinding"; size: number }) {
+  if (kind === "lantai") {
+    return <svg viewBox="0 0 36 36" width={size} height={size} aria-hidden="true">
+      <circle cx="18" cy="18" r="14" fill="#ffffff" stroke="#111111" strokeWidth="1.5" />
+      <text x="18" y="18" textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize="10" fontWeight="700" fill="#111111">{code}</text>
+    </svg>;
+  }
+  return <svg viewBox="0 0 36 36" width={size} height={size} aria-hidden="true">
+    <path d="M 5 30 L 18 5 L 31 30 Z" fill="#ffffff" stroke="#111111" strokeWidth="1.5" />
+    <text x="18" y="22" textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize="10" fontWeight="700" fill="#111111">{code}</text>
+  </svg>;
+}
+
 function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const { sketch, level, area } = slide;
+  const [materialLibrary, setMaterialLibrary] = useState<LibraryMaterial[]>([]);
+  useEffect(() => {
+    const reload = () => setMaterialLibrary(loadMaterialLibrary());
+    reload();
+    window.addEventListener("storage", reload);
+    return () => window.removeEventListener("storage", reload);
+  }, []);
   const pxPerM = 1 / sketchMetersPerSketchPx(sketch.scale);
   const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
   const detailMinX = Math.min(area.a.x, area.b.x), detailMaxX = Math.max(area.a.x, area.b.x);
@@ -4598,6 +4630,14 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     return Math.max(...xs) >= slide.bounds.minX && Math.min(...xs) <= slide.bounds.maxX
       && Math.max(...ys) >= slide.bounds.minY && Math.min(...ys) <= slide.bounds.maxY;
   });
+  const materialById = new Map(materialLibrary.map((material) => [material.id, material]));
+  const usedFloorMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.lantai).filter((id): id is string => Boolean(id))))
+    .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "lantai");
+  const usedWallMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.dinding).filter((id): id is string => Boolean(id))))
+    .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "dinding");
+  const floorCodeById = new Map(usedFloorMaterials.map((material, index) => [material.id, `L${index + 1}`]));
+  const wallCodeById = new Map(usedWallMaterials.map((material, index) => [material.id, `D${index + 1}`]));
+  const showMaterialMode = area.showMaterials === true;
   const functionZones = normalizeFunctionZones(sketch.functionZones);
   const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
   const detailZoneStats = functionZones.flatMap((zone) => {
@@ -5020,8 +5060,11 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
         {rooms.map((room) => {
           const zone = room.functionZoneId ? functionZoneById.get(room.functionZoneId) : undefined;
+          const floorMaterial = room.roomMaterials?.lantai ? materialById.get(room.roomMaterials.lantai) : undefined;
           const fill = area.interiorDimensions || area.floorHatch
             ? "#ffffff"
+            : showMaterialMode && floorMaterial
+              ? materialPlanColor(floorMaterial)
             : zone
               ? functionZoneColor(zone.color, 0.28)
               : roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
@@ -5029,6 +5072,17 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           return <g key={room.id}>
             <polygon points={points} fill={fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />
             {area.floorHatch && !area.interiorDimensions && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
+          </g>;
+        })}
+        {showMaterialMode && rooms.map((room) => {
+          const materialId = room.roomMaterials?.lantai;
+          const code = materialId ? floorCodeById.get(materialId) : undefined;
+          if (!code) return null;
+          const center = centroid(room.points);
+          const radius = Math.max(sw * 0.012, 5);
+          return <g key={`floor-code-${room.id}`} pointerEvents="none">
+            <circle cx={center.x} cy={center.y + sw * 0.032} r={radius} fill="#ffffff" stroke="#111111" strokeWidth={Math.max(sw * 0.0007, 0.35)} />
+            <text x={center.x} y={center.y + sw * 0.032} textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize={radius * 0.82} fontWeight={700} fill="#111111">{code}</text>
           </g>;
         })}
         <SlideFurniture
@@ -5092,6 +5146,33 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           sw={sw}
           detailSolidLayers
         />
+        {showMaterialMode && rooms.flatMap((room) => {
+          const materialId = room.roomMaterials?.dinding;
+          const code = materialId ? wallCodeById.get(materialId) : undefined;
+          if (!code || room.points.length < 3) return [];
+          const signedArea = room.points.reduce((sum, point, index) => {
+            const next = room.points[(index + 1) % room.points.length];
+            return sum + point.x * next.y - next.x * point.y;
+          }, 0);
+          return room.points.flatMap((point, index) => {
+            const next = room.points[(index + 1) % room.points.length];
+            const length = Math.hypot(next.x - point.x, next.y - point.y);
+            if (length < pxPerM * 0.25) return [];
+            const ux = (next.x - point.x) / length;
+            const uy = (next.y - point.y) / length;
+            const nx = signedArea >= 0 ? -uy : uy;
+            const ny = signedArea >= 0 ? ux : -ux;
+            const middle = { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 };
+            const depth = Math.max(sw * 0.026, pxPerM * 0.22);
+            const halfBase = depth * 0.55;
+            const base = { x: middle.x + nx * depth, y: middle.y + ny * depth };
+            const label = { x: middle.x + nx * depth * 0.68, y: middle.y + ny * depth * 0.68 };
+            return <g key={`wall-code-${room.id}-${index}`} pointerEvents="none">
+              <polygon points={`${middle.x},${middle.y} ${base.x + ux * halfBase},${base.y + uy * halfBase} ${base.x - ux * halfBase},${base.y - uy * halfBase}`} fill="#ffffff" stroke="#111111" strokeWidth={Math.max(sw * 0.0007, 0.35)} />
+              <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize={depth * 0.38} fontWeight={700} fill="#111111">{code}</text>
+            </g>;
+          });
+        })}
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
         <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
         <SolidWallPracticalColumns
@@ -7306,7 +7387,7 @@ function MatahariBody({ slide }: { slide: Extract<Slide, { kind: "matahari" }> }
             Tapak · Arah matahari tengah hari
           </div>
           <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-            <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: "100%", display: "block" }}>
+      <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode ? "80%" : "100%", height: "100%", display: "block" }}>
               {lahanAll.map((l) => (
                 <polygon key={l.id} points={l.points.map((p) => `${p.x},${p.y}`).join(" ")}
                   fill="rgba(0,0,0,0.04)" stroke="rgba(0,0,0,0.45)"
