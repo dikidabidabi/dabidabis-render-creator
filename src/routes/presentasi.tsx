@@ -5152,7 +5152,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             const nx = signedArea >= 0 ? -uy : uy;
             const ny = signedArea >= 0 ? ux : -ux;
             const middle = { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 };
-            const depth = Math.max(sw * 0.026, pxPerM * 0.22);
+            const depth = Math.max(sw * 0.013, pxPerM * 0.11);
             const halfBase = depth * 0.55;
             const base = { x: middle.x + nx * depth, y: middle.y + ny * depth };
             const label = { x: middle.x + nx * depth * 0.68, y: middle.y + ny * depth * 0.68 };
@@ -5186,10 +5186,10 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           const code = materialId ? floorCodeById.get(materialId) : undefined;
           if (!code) return null;
           const center = centroid(room.points);
-          const radius = Math.max(sw * 0.012, 5);
+          const radius = Math.max(sw * 0.006, 2.5);
           return <g key={`floor-code-${room.id}`} pointerEvents="none">
-            <circle cx={center.x} cy={center.y + sw * 0.032} r={radius} fill="#ffffff" stroke="#111111" strokeWidth={Math.max(sw * 0.0007, 0.35)} />
-            <text x={center.x} y={center.y + sw * 0.032} textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize={radius * 0.82} fontWeight={700} fill="#111111">{code}</text>
+            <circle cx={center.x} cy={center.y} r={radius} fill="#ffffff" stroke="#111111" strokeWidth={Math.max(sw * 0.00035, 0.175)} />
+            <text x={center.x} y={center.y} textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize={radius * 0.82} fontWeight={700} fill="#111111">{code}</text>
           </g>;
         })}
         {rooms.map((room) => {
@@ -5253,8 +5253,8 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "#555555", marginBottom: 7 }}>{title}</div>
           {materials.length === 0 ? <div style={{ fontSize: 10, color: "#777777" }}>Belum dipilih</div> : materials.map((material) => {
             const code = codeMap.get(material.id) ?? "";
-            return <div key={material.id} style={{ display: "grid", gridTemplateColumns: "34px 30px minmax(0,1fr)", alignItems: "center", gap: 7, minHeight: 42, borderBottom: "1px solid #deded9", padding: "5px 0" }}>
-              <MaterialCodeSymbol code={code} kind={kind} size={32} />
+            return <div key={material.id} style={{ display: "grid", gridTemplateColumns: "18px 30px minmax(0,1fr)", alignItems: "center", gap: 7, minHeight: 42, borderBottom: "1px solid #deded9", padding: "5px 0" }}>
+              <MaterialCodeSymbol code={code} kind={kind} size={16} />
               {material.image ? <img src={material.image} alt="" style={{ width: 30, height: 30, objectFit: "cover", border: "1px solid #c8c8c3" }} /> : <span style={{ width: 30, height: 30, background: materialPlanColor(material), border: "1px solid #c8c8c3" }} />}
               <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.25, fontWeight: 650, overflowWrap: "anywhere" }}>{material.name || "Tanpa nama"}</span>
             </div>;
