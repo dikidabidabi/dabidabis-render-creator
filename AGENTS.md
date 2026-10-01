@@ -2,7 +2,7 @@
 
 - Pintu dan jendela terpasang diedit melalui sub-mode alat masing-masing agar seleksi, orientasi, dan drag endpoint tidak bentrok dengan alat global.
 - Dimensi interior Slide Detail mengukur bentang bersih permukaan-ke-permukaan tanpa interval ketebalan dinding, sejajar dinding acuan, dan menggeser 150 mm hanya rangkaian interval di bawah 200 mm yang berdampingan; dimensi luar hanya memproyeksikan muka material dan memakai aturan geser pendek yang sama, area tayang meluas 1 m, serta denah menjadi putih polos saat opsi aktif.
-- Dinding standar 150 mm memakai notasi dinding solid tetapi kolom praktis 150 × 150 mm berisi putih polos dengan batas finishing 15 mm ke dalam agar berbeda dari kolom solid hitam.
+- Ujung terbuka dan pertemuan Dinding Solid/standar 150 mm memakai kolom praktis 150 × 150 mm; solid hitam, standar putih dengan finishing 15 mm.
 - Furniture Detail disimpan bersama kotak detail dengan ID ruang, kategori, dan posisi relatif terhadap ruang; daftar kategori disimpan per akun, ukuran katalog/tabel dalam mm dikonversi memakai skala sketsa agar ikut bergeser ketika ruang berubah, sementara ceklis per kotak mengendalikan kemunculan di Presentasi.
 - Slide rekap Furniture diaktifkan per sketsa melalui `showFurnitureSlide`, mengambil seluruh furniture kotak detail, mengelompokkan kategori, dan mengurutkan level berdasarkan elevasi.
 - Slide Denah/Detail menggambar furniture setelah bidang ruang tetapi sebelum notasi teknis, sedangkan label ruang ditaruh terakhir agar informasi ruang selalu terbaca.
