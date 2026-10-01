@@ -8140,11 +8140,18 @@ function SolidWallPracticalColumns({
     addContainingDirections(segment.a, segment);
     addContainingDirections(segment.b, segment);
   }
-  const corners = [...nodes.values()].filter(({ directions }) => {
-    if (directions.length < 2) return false;
-    for (let i = 0; i < directions.length; i++) {
-      for (let j = i + 1; j < directions.length; j++) {
-        const dot = Math.abs(directions[i].x * directions[j].x + directions[i].y * directions[j].y);
+  const practicalColumnNodes = [...nodes.values()].filter(({ directions }) => {
+    const uniqueDirections = directions.filter((direction, index) => !directions.slice(0, index).some((candidate) =>
+      candidate.x * direction.x + candidate.y * direction.y > 0.999,
+    ));
+    // Satu arah berarti ujung dinding terbuka. Dua arah atau lebih tetap
+    // mengikuti aturan lama: kolom hanya muncul pada sudut/T, bukan pada
+    // sambungan lurus menerus.
+    if (uniqueDirections.length === 1) return true;
+    if (uniqueDirections.length < 2) return false;
+    for (let i = 0; i < uniqueDirections.length; i++) {
+      for (let j = i + 1; j < uniqueDirections.length; j++) {
+        const dot = Math.abs(uniqueDirections[i].x * uniqueDirections[j].x + uniqueDirections[i].y * uniqueDirections[j].y);
         if (dot < 0.985) return true;
       }
     }
@@ -8154,7 +8161,7 @@ function SolidWallPracticalColumns({
   const finish = 0.015 * pxPerM;
   return (
     <g pointerEvents="none">
-      {corners.map(({ point, standard }, index) => standard ? (
+      {practicalColumnNodes.map(({ point, standard }, index) => standard ? (
         <g key={`practical-column-${index}`}>
           <rect x={point.x - size / 2} y={point.y - size / 2} width={size} height={size} fill="#ffffff" stroke="#929292" strokeWidth={Math.max(0.2, pxPerM * 0.002)} />
           <rect x={point.x - size / 2 + finish} y={point.y - size / 2 + finish} width={size - finish * 2} height={size - finish * 2} fill="#ffffff" stroke="#929292" strokeWidth={Math.max(0.15, pxPerM * 0.0015)} />
