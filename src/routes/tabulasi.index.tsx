@@ -795,36 +795,63 @@ function DeviationRow({ dev, invert }: { dev: number; invert?: boolean }) {
 }
 
 
-function MaterialPicker({ kind, value, materials, onChange }: { kind: MaterialKind; value?: string; materials: LibraryMaterial[]; onChange: (value: string) => void }) {
+function MaterialPicker({
+  kind,
+  value,
+  materials,
+  onChange,
+  onFillStart,
+}: {
+  kind: MaterialKind;
+  value?: string;
+  materials: LibraryMaterial[];
+  onChange: (value: string) => void;
+  onFillStart?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const options = materials.filter((item) => item.kind === kind && item.name.trim());
   const selected = materials.find((item) => item.id === value);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={`Material ${kind}`} className="h-8 w-full min-w-0 justify-between px-2 text-left text-xs font-normal">
-          <span className="truncate">{selected?.name || (value ? "Material dihapus" : "Pilih material")}</span><ChevronDown className="shrink-0 opacity-60" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[240px] p-0">
-        <Command>
-          <CommandInput placeholder={`Cari material ${kind}…`} />
-          <CommandList>
-            <CommandEmpty>Material tidak ditemukan.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem value="Tanpa material" onSelect={() => { onChange(""); setOpen(false); }}>Tanpa material</CommandItem>
-              {options.map((item) => (
-                <CommandItem key={item.id} value={`${item.name} ${item.id}`} onSelect={() => { onChange(item.id); setOpen(false); }}>
-                  {item.image && <img src={item.image} alt="" className="h-7 w-7 shrink-0 rounded-sm object-cover" />}
-                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                  {value === item.id && <Check className="ml-auto" />}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <div className="group/material-picker relative">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={`Material ${kind}`} className={cn("h-8 w-full min-w-0 justify-between px-2 text-left text-xs font-normal", !value && "text-muted-foreground/50")}>
+            <span className="truncate">{selected?.name || (value ? "Material dihapus" : "Pilih material")}</span><ChevronDown className="shrink-0 opacity-60" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[240px] p-0">
+          <Command>
+            <CommandInput placeholder={`Cari material ${kind}…`} />
+            <CommandList>
+              <CommandEmpty>Material tidak ditemukan.</CommandEmpty>
+              <CommandGroup>
+                <CommandItem value="Tanpa material" onSelect={() => { onChange(""); setOpen(false); }}>Tanpa material</CommandItem>
+                {options.map((item) => (
+                  <CommandItem key={item.id} value={`${item.name} ${item.id}`} onSelect={() => { onChange(item.id); setOpen(false); }}>
+                    {item.image && <img src={item.image} alt="" className="h-7 w-7 shrink-0 rounded-sm object-cover" />}
+                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                    {value === item.id && <Check className="ml-auto" />}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value && onFillStart && (
+        <span
+          role="button"
+          aria-label={`Salin material ${kind} ke baris lain`}
+          title="Tarik untuk menyalin ke baris lain"
+          className="absolute -bottom-0.5 -right-0.5 z-10 h-2.5 w-2.5 cursor-ns-resize border border-background bg-primary touch-none opacity-70 transition-opacity group-hover/material-picker:opacity-100"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onFillStart();
+          }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -832,6 +859,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   const [zones, setZones] = useState<FunctionZone[]>(() => normalizeFunctionZones(sketch.functionZones));
   const [assignments, setAssignments] = useState<Record<string, string>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
   const [roomMaterials, setRoomMaterials] = useState<Record<string, RoomMaterials>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
+  const [fillDrag, setFillDrag] = useState<{ levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string } | null>(null);
   const materialSave = useRef<Promise<unknown>>(Promise.resolve());
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
@@ -879,6 +907,40 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
         : layer) : stored.layers,
     })));
   };
+  const finishFill = useCallback(() => {
+    if (!fillDrag) return;
+    const levelItems = ruang.filter((layer) => layer.levelId === fillDrag.levelId);
+    const first = Math.min(fillDrag.sourceIndex, fillDrag.targetIndex);
+    const last = Math.max(fillDrag.sourceIndex, fillDrag.targetIndex);
+    const roomIds = levelItems.slice(first, last + 1).map((layer) => layer.id);
+    setFillDrag(null);
+    if (roomIds.length < 2) return;
+    setRoomMaterials((current) => {
+      const next = { ...current };
+      roomIds.forEach((roomId) => {
+        next[roomId] = { ...next[roomId], [fillDrag.kind]: fillDrag.materialId };
+      });
+      return next;
+    });
+    materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({
+      ...stored,
+      layers: Array.isArray(stored.layers) ? stored.layers.map((layer: any) => roomIds.includes(String(layer.id))
+        ? { ...layer, roomMaterials: { ...layer.roomMaterials, [fillDrag.kind]: fillDrag.materialId } }
+        : layer) : stored.layers,
+    })));
+  }, [fillDrag, ruang, sketch.id]);
+  useEffect(() => {
+    if (!fillDrag) return;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointerup", finishFill, { once: true });
+    window.addEventListener("pointercancel", finishFill, { once: true });
+    return () => {
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointerup", finishFill);
+      window.removeEventListener("pointercancel", finishFill);
+    };
+  }, [fillDrag, finishFill]);
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
@@ -899,9 +961,9 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
             {items.length === 0 ? (
               <div className="px-2 py-2 text-xs text-muted-foreground">Belum ada ruang.</div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="detail-table-scroll max-h-96 overflow-auto">
               <table className="w-full min-w-[1020px] text-xs">
-                <thead className="text-muted-foreground">
+                <thead className="sticky top-0 z-20 bg-background text-muted-foreground shadow-sm">
                   <tr className="border-b border-border/60 bg-muted/20">
                     <th colSpan={5} className="px-2 py-1 text-left font-medium">Rincian Ruang</th>
                     <th colSpan={3} className="border-l border-border/60 px-2 py-1 text-center font-medium">Material</th>
@@ -916,14 +978,14 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((r) => {
+                  {items.map((r, rowIndex) => {
                     const coef = r.coefficient ?? 1;
                     return (
                       <tr key={r.id} className="border-b border-border/40 last:border-0">
                         <td className="px-2 py-1">{r.name}</td>
                         <td className="min-w-36 px-2 py-1">
                           <Select value={assignments[r.id] || "__none__"} onValueChange={(value) => assignZone(r.id, value)} disabled={zones.length === 0}>
-                            <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Belum dipilih" /></SelectTrigger>
+                            <SelectTrigger className={cn("h-7 text-xs", !assignments[r.id] && "text-muted-foreground/50")}><SelectValue placeholder="Belum dipilih" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none__">Belum dipilih</SelectItem>
                               {zones.map((zone) => <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>)}
@@ -933,7 +995,26 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{coef}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2)}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2 * coef)}</td>
-                        {MATERIAL_KINDS.map((kind) => <td key={kind} className="w-44 px-2 py-1"><MaterialPicker kind={kind} value={roomMaterials[r.id]?.[kind]} materials={materials} onChange={(id) => assignMaterial(r.id, kind, id)} /></td>)}
+                        {MATERIAL_KINDS.map((kind) => {
+                          const dragFirst = fillDrag ? Math.min(fillDrag.sourceIndex, fillDrag.targetIndex) : -1;
+                          const dragLast = fillDrag ? Math.max(fillDrag.sourceIndex, fillDrag.targetIndex) : -1;
+                          const inFillRange = fillDrag?.levelId === lv.id && fillDrag.kind === kind && rowIndex >= dragFirst && rowIndex <= dragLast;
+                          return (
+                            <td
+                              key={kind}
+                              className={cn("w-44 px-2 py-1 transition-colors", inFillRange && "bg-primary/10")}
+                              onPointerEnter={() => setFillDrag((current) => current && current.levelId === lv.id && current.kind === kind ? { ...current, targetIndex: rowIndex } : current)}
+                            >
+                              <MaterialPicker
+                                kind={kind}
+                                value={roomMaterials[r.id]?.[kind]}
+                                materials={materials}
+                                onChange={(id) => assignMaterial(r.id, kind, id)}
+                                onFillStart={roomMaterials[r.id]?.[kind] ? () => setFillDrag({ levelId: lv.id, kind, sourceIndex: rowIndex, targetIndex: rowIndex, materialId: roomMaterials[r.id]?.[kind] ?? "" }) : undefined}
+                              />
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
                   })}

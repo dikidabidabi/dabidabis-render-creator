@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Batasi tinggi tabel Rincian per Level, tambahkan gulir vertikal dan fill handle material, serta pudarkan dropdown yang belum dipilih.
+
 - [x] Pasang kolom praktis pada ujung terbuka Dinding Solid dan Dinding standar 150 mm sesuai notasi materialnya.
 
 - [x] Tambahkan mode Material pada Pendetailan dengan warna lantai, kode bidang, dan legenda Slide Detail.
