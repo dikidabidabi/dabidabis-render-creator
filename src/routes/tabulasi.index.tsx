@@ -806,7 +806,7 @@ function MaterialPicker({
   value?: string;
   materials: LibraryMaterial[];
   onChange: (value: string) => void;
-  onFillStart?: () => void;
+  onFillStart?: (event: React.PointerEvent<HTMLSpanElement>) => void;
 }) {
   const [open, setOpen] = useState(false);
   const options = materials.filter((item) => item.kind === kind && item.name.trim());
@@ -847,7 +847,7 @@ function MaterialPicker({
           onPointerDown={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            onFillStart();
+            onFillStart(event);
           }}
         />
       )}
@@ -861,6 +861,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   const [roomMaterials, setRoomMaterials] = useState<Record<string, RoomMaterials>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
   const [fillDrag, setFillDrag] = useState<{ levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string } | null>(null);
   const materialSave = useRef<Promise<unknown>>(Promise.resolve());
+  const fillCleanup = useRef<(() => void) | null>(null);
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   useEffect(() => {
@@ -907,40 +908,65 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
         : layer) : stored.layers,
     })));
   };
-  const finishFill = useCallback(() => {
-    if (!fillDrag) return;
-    const levelItems = ruang.filter((layer) => layer.levelId === fillDrag.levelId);
-    const first = Math.min(fillDrag.sourceIndex, fillDrag.targetIndex);
-    const last = Math.max(fillDrag.sourceIndex, fillDrag.targetIndex);
+  const applyFill = (drag: { levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
+    const levelItems = ruang.filter((layer) => layer.levelId === drag.levelId);
+    const first = Math.min(drag.sourceIndex, drag.targetIndex);
+    const last = Math.max(drag.sourceIndex, drag.targetIndex);
     const roomIds = levelItems.slice(first, last + 1).map((layer) => layer.id);
     setFillDrag(null);
     if (roomIds.length < 2) return;
     setRoomMaterials((current) => {
       const next = { ...current };
       roomIds.forEach((roomId) => {
-        next[roomId] = { ...next[roomId], [fillDrag.kind]: fillDrag.materialId };
+        next[roomId] = { ...next[roomId], [drag.kind]: drag.materialId };
       });
       return next;
     });
     materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({
       ...stored,
       layers: Array.isArray(stored.layers) ? stored.layers.map((layer: any) => roomIds.includes(String(layer.id))
-        ? { ...layer, roomMaterials: { ...layer.roomMaterials, [fillDrag.kind]: fillDrag.materialId } }
+        ? { ...layer, roomMaterials: { ...layer.roomMaterials, [drag.kind]: drag.materialId } }
         : layer) : stored.layers,
     })));
-  }, [fillDrag, ruang, sketch.id]);
-  useEffect(() => {
-    if (!fillDrag) return;
+  };
+  const beginFill = (event: React.PointerEvent<HTMLSpanElement>, initial: { levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
+    fillCleanup.current?.();
+    let current = initial;
     const previousUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = "none";
-    window.addEventListener("pointerup", finishFill, { once: true });
-    window.addEventListener("pointercancel", finishFill, { once: true });
-    return () => {
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointerup", finishFill);
-      window.removeEventListener("pointercancel", finishFill);
+    setFillDrag(initial);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const move = (moveEvent: PointerEvent) => {
+      const cell = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)?.closest<HTMLElement>("[data-fill-level][data-fill-kind][data-fill-index]");
+      if (!cell || cell.dataset.fillLevel !== initial.levelId || cell.dataset.fillKind !== initial.kind) return;
+      const targetIndex = Number(cell.dataset.fillIndex);
+      if (!Number.isInteger(targetIndex) || targetIndex === current.targetIndex) return;
+      current = { ...current, targetIndex };
+      setFillDrag(current);
     };
-  }, [fillDrag, finishFill]);
+    const cleanup = () => {
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      fillCleanup.current = null;
+    };
+    const up = () => {
+      cleanup();
+      applyFill(current);
+    };
+    const cancel = () => {
+      cleanup();
+      setFillDrag(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up, { once: true });
+    window.addEventListener("pointercancel", cancel, { once: true });
+    fillCleanup.current = cleanup;
+  };
+  useEffect(() => {
+    return () => fillCleanup.current?.();
+  }, []);
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
@@ -1002,15 +1028,17 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                           return (
                             <td
                               key={kind}
+                              data-fill-level={lv.id}
+                              data-fill-kind={kind}
+                              data-fill-index={rowIndex}
                               className={cn("w-44 px-2 py-1 transition-colors", inFillRange && "bg-primary/10")}
-                              onPointerEnter={() => setFillDrag((current) => current && current.levelId === lv.id && current.kind === kind ? { ...current, targetIndex: rowIndex } : current)}
                             >
                               <MaterialPicker
                                 kind={kind}
                                 value={roomMaterials[r.id]?.[kind]}
                                 materials={materials}
                                 onChange={(id) => assignMaterial(r.id, kind, id)}
-                                onFillStart={roomMaterials[r.id]?.[kind] ? () => setFillDrag({ levelId: lv.id, kind, sourceIndex: rowIndex, targetIndex: rowIndex, materialId: roomMaterials[r.id]?.[kind] ?? "" }) : undefined}
+                                onFillStart={roomMaterials[r.id]?.[kind] ? (event) => beginFill(event, { levelId: lv.id, kind, sourceIndex: rowIndex, targetIndex: rowIndex, materialId: roomMaterials[r.id]?.[kind] ?? "" }) : undefined}
                               />
                             </td>
                           );
