@@ -4,6 +4,7 @@ import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { TabulasiNavigation } from "@/components/tabulasi-navigation";
 import { loadMaterialLibrary, MATERIAL_KINDS, saveMaterialLibrary, type LibraryMaterial, type MaterialKind } from "@/lib/material-library";
 
@@ -61,7 +62,14 @@ function MaterialLibraryPage() {
     setMaterials(next);
     void saveMaterialLibrary(next).catch(() => toast.error("Material gagal disimpan."));
   };
-  const add = (kind: MaterialKind) => update([...materials, { id: crypto.randomUUID(), kind, name: "", image: null }]);
+  const add = (kind: MaterialKind) => update([...materials, {
+    id: crypto.randomUUID(),
+    kind,
+    name: "",
+    image: null,
+    description: "",
+    product: "",
+  }]);
   const change = (id: string, fields: Partial<LibraryMaterial>) => update(materials.map((m) => m.id === id ? { ...m, ...fields } : m));
   const handleUpload = async (file: File) => {
     if (!uploadId) return;
@@ -88,12 +96,18 @@ function MaterialLibraryPage() {
             </div>
             <div className="space-y-2">
               {materials.filter((m) => m.kind === kind).map((m) => (
-                <div key={m.id} className="flex items-center gap-2 rounded-md border border-border bg-surface/40 p-2">
-                  <Button type="button" variant="outline" size="icon" className="h-14 w-14 shrink-0 overflow-hidden p-0" title={`Unggah gambar ${m.name || kind}`} onClick={() => { setUploadId(m.id); uploadRef.current?.click(); }}>
-                    {m.image ? <img src={m.image} alt={m.name || "Material"} className="h-full w-full object-cover" /> : <ImagePlus className="text-muted-foreground" />}
-                  </Button>
-                  <Input aria-label={`Nama material ${kind}`} placeholder="Nama material" value={m.name} onChange={(event) => change(m.id, { name: event.target.value })} className="min-w-0 text-sm" />
-                  <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-destructive" title={`Hapus ${m.name || "material"}`} onClick={() => update(materials.filter((item) => item.id !== m.id))}><Trash2 /></Button>
+                <div key={m.id} className="rounded-md border border-border bg-surface/40 p-2">
+                  <div className="flex items-start gap-2">
+                    <Button type="button" variant="outline" size="icon" className="h-14 w-14 shrink-0 overflow-hidden p-0" title={`Unggah gambar ${m.name || kind}`} onClick={() => { setUploadId(m.id); uploadRef.current?.click(); }}>
+                      {m.image ? <img src={m.image} alt={m.name || "Material"} className="h-full w-full object-cover" /> : <ImagePlus className="text-muted-foreground" />}
+                    </Button>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Input aria-label={`Nama material ${kind}`} placeholder="Nama material" value={m.name} onChange={(event) => change(m.id, { name: event.target.value })} className="min-w-0 text-sm" />
+                      <Textarea aria-label={`Deskripsi material ${m.name || kind}`} placeholder="Deskripsi" value={m.description} onChange={(event) => change(m.id, { description: event.target.value })} className="min-h-20 resize-y text-sm" />
+                      <Textarea aria-label={`Produk material ${m.name || kind}`} placeholder="Produk" value={m.product} onChange={(event) => change(m.id, { product: event.target.value })} className="min-h-16 resize-y text-sm" />
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-destructive" title={`Hapus ${m.name || "material"}`} onClick={() => update(materials.filter((item) => item.id !== m.id))}><Trash2 /></Button>
+                  </div>
                 </div>
               ))}
               {!materials.some((m) => m.kind === kind) && <p className="py-5 text-center text-xs text-muted-foreground">Belum ada material.</p>}
