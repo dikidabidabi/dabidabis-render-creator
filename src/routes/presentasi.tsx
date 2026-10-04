@@ -1497,7 +1497,9 @@ type RincianSection = {
 };
 type TocEntry = { label: string; page: number };
 type SpecMaterialRef = { kind: "lantai" | "dinding" | "plafon"; materialId: string };
-type SpecMaterialPage = SpecMaterialRef[];
+type SpecLocation = { level: string; rooms: string[] };
+type SpecMaterialRow = { ref: SpecMaterialRef; locations: SpecLocation[] };
+type SpecMaterialPage = SpecMaterialRow[];
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
   | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
@@ -1524,7 +1526,7 @@ type Slide =
   | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "furniture"; id: string; title: string; sketch: Sketch }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
-  | { kind: "spec-outline"; id: string; title: string; sketch: Sketch; materialRefs: SpecMaterialRef[]; pageIndex: number; pageCount: number }
+  | { kind: "spec-outline"; id: string; title: string; sketch: Sketch; materialRows: SpecMaterialPage; pageIndex: number; pageCount: number }
   | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }
   | { kind: "siteplan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
   | { kind: "analisis-kawasan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
@@ -1575,38 +1577,75 @@ function specTextLines(value: string | undefined, charsPerLine: number) {
   return lines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
 }
 
+function specLocations(sketch: Sketch, ref: SpecMaterialRef): SpecLocation[] {
+  return [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl).flatMap((level) => {
+    const rooms = [...new Set((sketch.layers ?? [])
+      .filter((layer) => !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind] === ref.materialId)
+      .map((layer) => layer.name))].sort((a, b) => a.localeCompare(b, "id"));
+    return rooms.length ? [{ level: level.name, rooms }] : [];
+  });
+}
+
+function specRowHeight(row: SpecMaterialRow, material?: LibraryMaterial): number {
+  const locationHeight = row.locations.length
+    ? row.locations.reduce((total, location) => total + Math.max(32, 16 + 13.5 * specTextLines(location.rooms.join(", "), 38)), 0)
+    : 32;
+  return Math.max(84, 16 + 13.5 * specTextLines(material?.name, 22),
+    16 + 13.5 * specTextLines(material?.description, 32),
+    16 + 13.5 * specTextLines(material?.product, 22), locationHeight);
+}
+
 function paginateSpecMaterials(sketch: Sketch, refs: SpecMaterialRef[], materials: LibraryMaterial[]): SpecMaterialPage[] {
   const materialById = new Map(materials.map((material) => [material.id, material]));
-  const levels = sketch.levels ?? [];
   const pages: SpecMaterialPage[] = [];
   let page: SpecMaterialPage = [];
-  let usedUnits = 0;
-  const pageBudget = 23;
+  let usedHeight = 0;
+  // A3 landscape canvas, after margins, slide heading, table heading, and footer.
+  const pageBudget = 555;
+  const flush = () => {
+    if (page.length) pages.push(page);
+    page = [];
+    usedHeight = 0;
+  };
 
-  refs.forEach((ref) => {
+  for (const ref of refs) {
     const material = materialById.get(ref.materialId);
-    const locationUnits = levels.reduce((total, level) => {
-      const roomNames = [...new Set((sketch.layers ?? []).filter((layer) =>
-        !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind] === ref.materialId
-      ).map((layer) => layer.name))];
-      if (roomNames.length === 0) return total;
-      return total + Math.max(1, Math.ceil(roomNames.join(", ").length / 34));
-    }, 0);
-    const units = Math.max(
-      4,
-      specTextLines(material?.description, 32),
-      specTextLines(material?.product, 22),
-      locationUnits,
-    );
-    if (page.length > 0 && usedUnits + units > pageBudget) {
-      pages.push(page);
-      page = [];
-      usedUnits = 0;
+    const locations = specLocations(sketch, ref);
+    const newRow = (): SpecMaterialRow => ({ ref, locations: [] });
+    let row = newRow();
+    let rowHeight = specRowHeight(row, material);
+    if (page.length && usedHeight + rowHeight > pageBudget) flush();
+    page.push(row);
+    usedHeight += rowHeight;
+
+    for (const location of locations) {
+      for (const room of location.rooms) {
+        const last = row.locations[row.locations.length - 1];
+        const candidateLocations = last?.level === location.level
+          ? [...row.locations.slice(0, -1), { level: location.level, rooms: [...last.rooms, room] }]
+          : [...row.locations, { level: location.level, rooms: [room] }];
+        let nextHeight = specRowHeight({ ref, locations: candidateLocations }, material);
+        if (usedHeight - rowHeight + nextHeight > pageBudget && (row.locations.length || page.length > 1)) {
+          if (!row.locations.length) {
+            page.pop();
+            usedHeight -= rowHeight;
+          }
+          flush();
+          row = newRow();
+          page.push(row);
+          rowHeight = specRowHeight(row, material);
+          nextHeight = specRowHeight({ ref, locations: [{ level: location.level, rooms: [room] }] }, material);
+          row.locations = [{ level: location.level, rooms: [room] }];
+        } else {
+          row.locations = candidateLocations;
+          usedHeight -= rowHeight;
+        }
+        rowHeight = nextHeight;
+        usedHeight += rowHeight;
+      }
     }
-    page.push(ref);
-    usedUnits += Math.min(units, pageBudget);
-  });
-  if (page.length > 0) pages.push(page);
+  }
+  flush();
   return pages.length > 0 ? pages : [[]];
 }
 
@@ -1827,13 +1866,13 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     const materialRefs = collectSpecMaterialRefs(sk);
     const materialPages = paginateSpecMaterials(sk, materialRefs, materialLibrary);
     const pageCount = materialPages.length;
-    materialPages.forEach((pageRefs, pageIndex) => {
+    materialPages.forEach((materialRows, pageIndex) => {
       out.push({
         kind: "spec-outline",
         id: pageCount > 1 ? `spec-outline-${pageIndex + 1}` : "spec-outline",
         title: pageCount > 1 ? `Outline Spesifikasi (${pageIndex + 1}/${pageCount})` : "Outline Spesifikasi",
         sketch: sk,
-        materialRefs: pageRefs,
+        materialRows,
         pageIndex: pageIndex + 1,
         pageCount,
       });
@@ -2312,6 +2351,10 @@ function SlideContent({ slide }: { slide?: Slide }) {
 
       {isSpecial ? (
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {body}
+        </div>
+      ) : slide.kind === "spec-outline" ? (
+        <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
           {body}
         </div>
       ) : (
@@ -11414,17 +11457,8 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
     const prefix = kind === "lantai" ? "L" : kind === "dinding" ? "D" : "P";
     allRefs.filter((ref) => ref.kind === kind).forEach((ref, index) => codeByRef.set(`${kind}:${ref.materialId}`, `${prefix}${index + 1}`));
   });
-  const levels = [...(slide.sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-  const rows = slide.materialRefs.map((ref) => {
+  const rows = slide.materialRows.map(({ ref, locations }) => {
     const material = materialById.get(ref.materialId);
-    const locations = levels.flatMap((level) => {
-      const roomNames = (slide.sketch.layers ?? [])
-        .filter((layer) => !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind] === ref.materialId)
-        .map((layer) => layer.name)
-        .filter((name, index, names) => names.indexOf(name) === index)
-        .sort((a, b) => a.localeCompare(b, "id"));
-      return roomNames.length > 0 ? [{ level: level.name, rooms: roomNames }] : [];
-    });
     return { ref, material, locations, code: codeByRef.get(`${ref.kind}:${ref.materialId}`) ?? "—" };
   });
   const border = "1px solid #b8b8b3";
@@ -11437,7 +11471,7 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
         <tr><th rowSpan={2} style={headerStyle}>Item pekerjaan</th><th rowSpan={2} style={headerStyle}>Material</th><th rowSpan={2} style={headerStyle}>Deskripsi</th><th colSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Lokasi</th><th rowSpan={2} style={headerStyle}>Gambar</th><th rowSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Kode</th><th rowSpan={2} style={headerStyle}>Produk</th></tr>
         <tr><th style={headerStyle}>Lantai</th><th style={headerStyle}>Ruang</th></tr>
       </thead>
-      <tbody>{rows.map(({ ref, material, locations, code }) => <tr key={`${ref.kind}:${ref.materialId}`}>
+       <tbody>{rows.map(({ ref, material, locations, code }, index) => <tr key={`${ref.kind}:${ref.materialId}:${index}`}>
         <td style={{ ...cellStyle, fontWeight: 750, textTransform: "capitalize" }}>{ref.kind}</td>
         <td style={{ ...cellStyle, fontWeight: 700 }}>{material?.name || "Material tidak ditemukan"}</td>
         <td style={cellStyle}>{material?.description || "—"}</td>
