@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { TabulasiNavigation } from "@/components/tabulasi-navigation";
-import { loadMaterialLibrary, MATERIAL_KINDS, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
+import { EMPTY_GENERAL_MATERIALS, loadMaterialLibrary, normalizeGeneralMaterialSelections, ROOM_MATERIAL_KINDS, type FacadeDirection, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterialKind, type RoomMaterials } from "@/lib/material-library";
 import { patchStoredSketch } from "@/lib/sketch-store";
 import { newFunctionZone, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import {
@@ -78,6 +78,7 @@ type Sketch = {
   mmGridRotation?: number;
   functionZones?: FunctionZone[];
   showSpecOutlineSlide?: boolean;
+  generalMaterials?: GeneralMaterialSelections;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -861,9 +862,10 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   const [zones, setZones] = useState<FunctionZone[]>(() => normalizeFunctionZones(sketch.functionZones));
   const [assignments, setAssignments] = useState<Record<string, string>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
   const [roomMaterials, setRoomMaterials] = useState<Record<string, RoomMaterials>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
-  const [fillDrag, setFillDrag] = useState<{ levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string } | null>(null);
+  const [fillDrag, setFillDrag] = useState<{ levelId: string; kind: RoomMaterialKind; sourceIndex: number; targetIndex: number; materialId: string } | null>(null);
   const materialSave = useRef<Promise<unknown>>(Promise.resolve());
   const [sendToOutline, setSendToOutline] = useState(sketch.showSpecOutlineSlide === true);
+  const [generalMaterials, setGeneralMaterials] = useState(() => normalizeGeneralMaterialSelections(sketch.generalMaterials));
   const fillCleanup = useRef<(() => void) | null>(null);
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
@@ -872,6 +874,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
     setAssignments(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
     setRoomMaterials(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
     setSendToOutline(sketch.showSpecOutlineSlide === true);
+    setGeneralMaterials(normalizeGeneralMaterialSelections(sketch.generalMaterials));
   }, [sketch.id, sketch.updatedAt]);
   const toggleOutline = (checked: boolean) => {
     setSendToOutline(checked);
@@ -907,7 +910,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
     setAssignments(nextAssignments);
     void persist(zones, nextAssignments);
   };
-  const assignMaterial = (roomId: string, kind: MaterialKind, materialId: string) => {
+  const assignMaterial = (roomId: string, kind: RoomMaterialKind, materialId: string) => {
     setRoomMaterials((current) => ({ ...current, [roomId]: { ...current[roomId], [kind]: materialId } }));
     materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({
       ...stored,
@@ -916,7 +919,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
         : layer) : stored.layers,
     })));
   };
-  const applyFill = (drag: { levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
+  const applyFill = (drag: { levelId: string; kind: RoomMaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
     const levelItems = ruang.filter((layer) => layer.levelId === drag.levelId);
     const first = Math.min(drag.sourceIndex, drag.targetIndex);
     const last = Math.max(drag.sourceIndex, drag.targetIndex);
@@ -937,7 +940,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
         : layer) : stored.layers,
     })));
   };
-  const beginFill = (event: React.PointerEvent<HTMLSpanElement>, initial: { levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
+  const beginFill = (event: React.PointerEvent<HTMLSpanElement>, initial: { levelId: string; kind: RoomMaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
     fillCleanup.current?.();
     let current = initial;
     const previousUserSelect = document.body.style.userSelect;
@@ -975,6 +978,10 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   useEffect(() => {
     return () => fillCleanup.current?.();
   }, []);
+  const saveGeneralMaterials = (next: GeneralMaterialSelections) => {
+    setGeneralMaterials(next);
+    materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({ ...stored, generalMaterials: next })));
+  };
   if (levels.length === 0) {
     return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
   }
@@ -1000,7 +1007,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                 <thead className="sticky top-0 z-20 bg-background text-muted-foreground shadow-sm">
                   <tr className="border-b border-border/60 bg-muted/20">
                     <th colSpan={5} className="px-2 py-1 text-left font-medium">Rincian Ruang</th>
-                    <th colSpan={3} className="border-l border-border/60 px-2 py-1 font-medium">
+                    <th colSpan={ROOM_MATERIAL_KINDS.length} className="border-l border-border/60 px-2 py-1 font-medium">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span>Material</span>
                         <label className="flex cursor-pointer items-center gap-1.5 text-left text-[11px] font-normal text-foreground">
@@ -1016,7 +1023,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                     <th className="px-2 py-1 text-right font-normal">Koef.</th>
                     <th className="px-2 py-1 text-right font-normal">Luas</th>
                     <th className="px-2 py-1 text-right font-normal">Efektif</th>
-                    {MATERIAL_KINDS.map((kind) => <th key={kind} className="min-w-40 px-2 py-1 text-left font-normal capitalize">{kind}</th>)}
+                    {ROOM_MATERIAL_KINDS.map((kind) => <th key={kind} className="min-w-40 px-2 py-1 text-left font-normal capitalize">{kind}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -1037,7 +1044,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{coef}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2)}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2 * coef)}</td>
-                        {MATERIAL_KINDS.map((kind) => {
+                        {ROOM_MATERIAL_KINDS.map((kind) => {
                           const dragFirst = fillDrag ? Math.min(fillDrag.sourceIndex, fillDrag.targetIndex) : -1;
                           const dragLast = fillDrag ? Math.max(fillDrag.sourceIndex, fillDrag.targetIndex) : -1;
                           const inFillRange = fillDrag?.levelId === lv.id && fillDrag.kind === kind && rowIndex >= dragFirst && rowIndex <= dragLast;
@@ -1066,7 +1073,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                     <td className="px-2 py-1" colSpan={3}>Total</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalAsli)}</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalEfektif)}</td>
-                    <td colSpan={3} />
+                    <td colSpan={ROOM_MATERIAL_KINDS.length} />
                   </tr>
                 </tbody>
               </table>
@@ -1075,6 +1082,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
           </div>
         );
       })}
+      <GeneralMaterialsSection value={generalMaterials} materials={materials} onChange={saveGeneralMaterials} />
       <div className="rounded-md border border-border/60 p-2">
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-xs font-medium">Tipologi Zona Fungsi</span>
@@ -1100,6 +1108,30 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
       </div>
     </div>
   );
+}
+
+function GeneralMaterialList({ kind, values, materials, onChange }: { kind: MaterialKind; values: string[]; materials: LibraryMaterial[]; onChange: (values: string[]) => void }) {
+  return <div className="space-y-2">
+    {values.map((value, index) => <div key={`${value}-${index}`} className="flex items-center gap-2">
+      <MaterialPicker kind={kind} value={value} materials={materials} onChange={(materialId) => {
+        if (!materialId) onChange(values.filter((_, itemIndex) => itemIndex !== index));
+        else onChange(values.map((item, itemIndex) => itemIndex === index ? materialId : item));
+      }} />
+      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Hapus material" onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-3.5 w-3.5" /></Button>
+    </div>)}
+    <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => onChange([...values, ""])}><Plus className="h-3.5 w-3.5" />Tambahkan material</Button>
+  </div>;
+}
+
+function GeneralMaterialsSection({ value, materials, onChange }: { value: GeneralMaterialSelections; materials: LibraryMaterial[]; onChange: (value: GeneralMaterialSelections) => void }) {
+  const directions: FacadeDirection[] = ["barat", "timur", "utara", "selatan"];
+  return <div className="rounded-md border border-border/60 p-3">
+    <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Material Umum</div>
+    <div className="grid gap-5 lg:grid-cols-2">
+      <section><h3 className="mb-2 text-xs font-semibold">Pekerjaan Dasar</h3><GeneralMaterialList kind="pekerjaan dasar" values={value.foundation} materials={materials} onChange={(foundation) => onChange({ ...value, foundation })} /></section>
+      <section><h3 className="mb-2 text-xs font-semibold">Fasad</h3><div className="grid gap-3 sm:grid-cols-2">{directions.map((direction) => <div key={direction}><div className="mb-1 text-xs font-medium capitalize">{direction}</div><GeneralMaterialList kind="fasad" values={value.facades[direction]} materials={materials} onChange={(items) => onChange({ ...value, facades: { ...value.facades, [direction]: items } })} /></div>)}</div></section>
+    </div>
+  </div>;
 }
 
 // ---------- Excel export ----------
@@ -1169,7 +1201,7 @@ function downloadSketchExcel(sketch: Sketch, data: Stats, materials: LibraryMate
     const rows: (string | number)[][] = items.map((r) => {
       const coef = r.coefficient ?? 1;
       const zoneName = normalizeFunctionZones(sketch.functionZones).find((zone) => zone.id === r.functionZoneId)?.name ?? "";
-      return [r.name, zoneName, coef, Number(r.areaM2.toFixed(2)), Number((r.areaM2 * coef).toFixed(2)), ...MATERIAL_KINDS.map((kind) => materials.find((m) => m.id === r.roomMaterials?.[kind])?.name ?? "")];
+      return [r.name, zoneName, coef, Number(r.areaM2.toFixed(2)), Number((r.areaM2 * coef).toFixed(2)), ...ROOM_MATERIAL_KINDS.map((kind) => materials.find((m) => m.id === r.roomMaterials?.[kind])?.name ?? "")];
     });
     const totalAsli = items.reduce((s, l) => s + l.areaM2, 0);
     const totalEfektif = items.reduce((s, l) => s + l.areaM2 * (l.coefficient ?? 1), 0);
