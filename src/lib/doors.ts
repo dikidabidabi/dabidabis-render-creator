@@ -35,7 +35,11 @@ export type Door = {
 
 export type FoldingDoorGeometry = Pick<Door, "a" | "b" | "nx" | "ny" | "foldingSideMode" | "foldingSide" | "foldingLeafCount">;
 
-/** Segmen daun pintu lipat dalam denah. Setiap daun berselang-seling 45°. */
+/**
+ * Segmen daun pintu lipat dalam denah. Panjang fisik setiap daun tetap
+ * opening / jumlah daun; karena miring 45°, proyeksinya pada garis bukaan
+ * lebih pendek dan menyisakan jeda di kusen seberang atau di tengah.
+ */
 export function foldingDoorSegments(door: FoldingDoorGeometry): Array<[DoorPoint, DoorPoint]> {
   const dxRaw = door.b.x - door.a.x;
   const dyRaw = door.b.y - door.a.y;
@@ -48,26 +52,26 @@ export function foldingDoorSegments(door: FoldingDoorGeometry): Array<[DoorPoint
   const nx = wallNx * normalSign;
   const ny = wallNy * normalSign;
   const total = Math.max(2, Math.min(24, Math.round(door.foldingLeafCount ?? 4)));
+  const leafLength = length / total;
+  const projectedLeafLength = leafLength / Math.SQRT2;
   const groups = door.foldingSideMode === "two"
     ? [Math.ceil(total / 2), Math.floor(total / 2)].filter((count) => count > 0)
     : [total];
-  const spans = groups.map((count) => length * count / total);
   const segments: Array<[DoorPoint, DoorPoint]> = [];
   let cursor = door.foldingSideMode === "one" && door.foldingSide === "left" ? length : 0;
   const mainDirection = door.foldingSideMode === "one" && door.foldingSide === "left" ? -1 : 1;
 
-  const appendGroup = (start: number, span: number, count: number, direction: number, phase: number) => {
-    const step = span / count;
+  const appendGroup = (start: number, count: number, direction: number) => {
     let previous = {
       x: door.a.x + dx * start,
       y: door.a.y + dy * start,
     };
     for (let index = 0; index < count; index += 1) {
-      const along = start + direction * step * (index + 1);
-      const raised = (index + phase) % 2 === 0;
+      const along = start + direction * projectedLeafLength * (index + 1);
+      const raised = index % 2 === 0;
       const next = {
-        x: door.a.x + dx * along + nx * (raised ? step : 0),
-        y: door.a.y + dy * along + ny * (raised ? step : 0),
+        x: door.a.x + dx * along + nx * (raised ? projectedLeafLength : 0),
+        y: door.a.y + dy * along + ny * (raised ? projectedLeafLength : 0),
       };
       segments.push([previous, next]);
       previous = next;
@@ -75,10 +79,10 @@ export function foldingDoorSegments(door: FoldingDoorGeometry): Array<[DoorPoint
   };
 
   if (door.foldingSideMode === "two") {
-    appendGroup(0, spans[0], groups[0], 1, 0);
-    appendGroup(length, spans[1] ?? 0, groups[1] ?? 0, -1, 0);
+    appendGroup(0, groups[0], 1);
+    appendGroup(length, groups[1] ?? 0, -1);
   } else {
-    appendGroup(cursor, length, total, mainDirection, 0);
+    appendGroup(cursor, total, mainDirection);
   }
   return segments;
 }
