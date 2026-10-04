@@ -712,7 +712,14 @@ export function PresentasiBox({
     () => (linkedBuildingName ? { ...sketch, title: linkedBuildingName } : sketch),
     [sketch, linkedBuildingName],
   );
-  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard]);
+  const [materialLibrary, setMaterialLibrary] = useState<LibraryMaterial[]>([]);
+  useEffect(() => {
+    const reload = () => setMaterialLibrary(loadMaterialLibrary());
+    reload();
+    window.addEventListener("storage", reload);
+    return () => window.removeEventListener("storage", reload);
+  }, []);
+  const slides = useMemo(() => buildSlides(effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard, materialLibrary), [effectiveSketch, narasi, perspektif, masterPlan, mpAnalysis, masterplanTitle, moodboard, materialLibrary]);
 
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
@@ -1490,6 +1497,7 @@ type RincianSection = {
 };
 type TocEntry = { label: string; page: number };
 type SpecMaterialRef = { kind: "lantai" | "dinding" | "plafon"; materialId: string };
+type SpecMaterialPage = SpecMaterialRef[];
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
   | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
@@ -1562,7 +1570,46 @@ function collectSpecMaterialRefs(sketch: Sketch): SpecMaterialRef[] {
   return refs;
 }
 
-function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null, moodboard: MoodboardEntry | null = null): Slide[] {
+function specTextLines(value: string | undefined, charsPerLine: number) {
+  const lines = (value || "—").split(/\r?\n/);
+  return lines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+}
+
+function paginateSpecMaterials(sketch: Sketch, refs: SpecMaterialRef[], materials: LibraryMaterial[]): SpecMaterialPage[] {
+  const materialById = new Map(materials.map((material) => [material.id, material]));
+  const levels = sketch.levels ?? [];
+  const pages: SpecMaterialPage[] = [];
+  let page: SpecMaterialPage = [];
+  let usedUnits = 0;
+  const pageBudget = 23;
+
+  refs.forEach((ref) => {
+    const material = materialById.get(ref.materialId);
+    const locationUnits = levels.reduce((total, level) => {
+      const roomCount = new Set((sketch.layers ?? []).filter((layer) =>
+        !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind] === ref.materialId
+      ).map((layer) => layer.name)).size;
+      return total + roomCount;
+    }, 0);
+    const units = Math.max(
+      4,
+      specTextLines(material?.description, 32),
+      specTextLines(material?.product, 22),
+      locationUnits,
+    );
+    if (page.length > 0 && usedUnits + units > pageBudget) {
+      pages.push(page);
+      page = [];
+      usedUnits = 0;
+    }
+    page.push(ref);
+    usedUnits += Math.min(units, pageBudget);
+  });
+  if (page.length > 0) pages.push(page);
+  return pages.length > 0 ? pages : [[]];
+}
+
+function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null, moodboard: MoodboardEntry | null = null, materialLibrary: LibraryMaterial[] = []): Slide[] {
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);
@@ -1777,15 +1824,15 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
   if (sk.showSpecOutlineSlide) {
     const materialRefs = collectSpecMaterialRefs(sk);
-    const pageSize = 6;
-    const pageCount = Math.max(1, Math.ceil(materialRefs.length / pageSize));
-    Array.from({ length: pageCount }, (_, pageIndex) => {
+    const materialPages = paginateSpecMaterials(sk, materialRefs, materialLibrary);
+    const pageCount = materialPages.length;
+    materialPages.forEach((pageRefs, pageIndex) => {
       out.push({
         kind: "spec-outline",
         id: pageCount > 1 ? `spec-outline-${pageIndex + 1}` : "spec-outline",
         title: pageCount > 1 ? `Outline Spesifikasi (${pageIndex + 1}/${pageCount})` : "Outline Spesifikasi",
         sketch: sk,
-        materialRefs: materialRefs.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize),
+        materialRefs: pageRefs,
         pageIndex: pageIndex + 1,
         pageCount,
       });
@@ -2302,6 +2349,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
     : slide.kind === "infografis" ? "Tabulasi · Infografis"
     : slide.kind === "komposisi" ? "Tabulasi · Komposisi"
+    : slide.kind === "spec-outline" ? "Tabulasi · Outline Spesifikasi"
     : "Tabulasi · Estimasi";
   const titleStyle: React.CSSProperties = {
     fontFamily: theme.display,
@@ -11380,20 +11428,19 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
   });
   const border = "1px solid #b8b8b3";
   const headerStyle: React.CSSProperties = { border, padding: "8px 7px", background: "#1b1b1b", color: "#ffffff", fontSize: 10, fontWeight: 750, textAlign: "left", verticalAlign: "middle" };
-  const cellStyle: React.CSSProperties = { border, padding: "8px 7px", fontSize: 10, lineHeight: 1.35, verticalAlign: "top", color: "#202020", overflowWrap: "anywhere" };
-  return <div style={{ width: "100%", minHeight: 0 }}>
+  const cellStyle: React.CSSProperties = { border, padding: "8px 7px", fontSize: 10, lineHeight: 1.35, verticalAlign: "top", color: "#202020", overflowWrap: "anywhere", whiteSpace: "pre-wrap" };
+  return <div style={{ width: "100%", minWidth: A3_W - PAD * 2, minHeight: 0 }}>
     {rows.length === 0 ? <div style={{ border: "1px dashed #aaa", padding: 48, color: "#666", textAlign: "center" }}>Belum ada material yang dipilih pada Rincian per Level.</div> : <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse" }}>
       <colgroup><col style={{ width: "9%" }} /><col style={{ width: "14%" }} /><col style={{ width: "19%" }} /><col style={{ width: "10%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "13%" }} /></colgroup>
       <thead>
         <tr><th rowSpan={2} style={headerStyle}>Item pekerjaan</th><th rowSpan={2} style={headerStyle}>Material</th><th rowSpan={2} style={headerStyle}>Deskripsi</th><th colSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Lokasi</th><th rowSpan={2} style={headerStyle}>Gambar</th><th rowSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Kode</th><th rowSpan={2} style={headerStyle}>Produk</th></tr>
         <tr><th style={headerStyle}>Lantai</th><th style={headerStyle}>Ruang</th></tr>
       </thead>
-      <tbody>{rows.map(({ ref, material, locations, code }) => <tr key={`${ref.kind}:${ref.materialId}`} style={{ height: 104 }}>
+      <tbody>{rows.map(({ ref, material, locations, code }) => <tr key={`${ref.kind}:${ref.materialId}`}>
         <td style={{ ...cellStyle, fontWeight: 750, textTransform: "capitalize" }}>{ref.kind}</td>
         <td style={{ ...cellStyle, fontWeight: 700 }}>{material?.name || "Material tidak ditemukan"}</td>
         <td style={cellStyle}>{material?.description || "—"}</td>
-        <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd", fontWeight: 700 }}>{location.level}</div>) : "—"}</td>
-        <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd" }}>{location.rooms.join(", ")}</div>) : "—"}</td>
+        <td colSpan={2} style={{ ...cellStyle, padding: 0, whiteSpace: "normal" }}>{locations.length > 0 ? locations.flatMap((location) => location.rooms.map((room) => <div key={`${location.level}:${room}`} style={{ display: "grid", gridTemplateColumns: "35.714% 64.286%", borderBottom: "1px solid #e1e1dd" }}><div style={{ padding: "8px 7px", borderRight: border, fontWeight: 700 }}>{location.level}</div><div style={{ padding: "8px 7px" }}>{room}</div></div>)) : <div style={{ padding: "8px 7px" }}>—</div>}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{material?.image ? <img src={material.image} alt={material.name} style={{ width: 78, height: 66, objectFit: "cover", border: "1px solid #aaa", margin: "0 auto" }} /> : <span style={{ color: "#777" }}>—</span>}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{ref.kind === "lantai" || ref.kind === "dinding" ? <span style={{ display: "inline-flex" }}><MaterialCodeSymbol code={code} kind={ref.kind} size={30} /></span> : <span style={{ display: "inline-flex", width: 30, height: 30, alignItems: "center", justifyContent: "center", border: "1.5px solid #111", fontWeight: 800 }}>{code}</span>}</td>
         <td style={cellStyle}>{material?.product || "—"}</td>

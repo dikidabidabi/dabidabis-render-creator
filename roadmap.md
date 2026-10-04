@@ -1,6 +1,6 @@
 # Roadmap
 
-- [x] Tambahkan ceklis per sketsa untuk Outline Spesifikasi dan slide tabel material setelah Estimasi Biaya.
+- [x] Tambahkan ceklis per sketsa untuk Outline Spesifikasi dan slide tabel material setelah Estimasi Biaya; gunakan tabel lanskap penuh, pembagian halaman adaptif, teks multiline, dan pasangan lantai–ruang yang sejajar.
 
 - [x] Tambahkan deskripsi dan produk yang dapat diperbarui pada setiap material di pustaka akun.
 
