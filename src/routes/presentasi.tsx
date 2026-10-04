@@ -1586,11 +1586,10 @@ function paginateSpecMaterials(sketch: Sketch, refs: SpecMaterialRef[], material
   refs.forEach((ref) => {
     const material = materialById.get(ref.materialId);
     const locationUnits = levels.reduce((total, level) => {
-      const names = (sketch.layers ?? []).filter((layer) =>
+      const roomCount = new Set((sketch.layers ?? []).filter((layer) =>
         !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind] === ref.materialId
-      ).map((layer) => layer.name);
-      if (names.length === 0) return total;
-      return total + Math.max(1, Math.ceil(names.join(", ").length / 30));
+      ).map((layer) => layer.name)).size;
+      return total + roomCount;
     }, 0);
     const units = Math.max(
       4,
@@ -11441,7 +11440,7 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
         <td style={{ ...cellStyle, fontWeight: 750, textTransform: "capitalize" }}>{ref.kind}</td>
         <td style={{ ...cellStyle, fontWeight: 700 }}>{material?.name || "Material tidak ditemukan"}</td>
         <td style={cellStyle}>{material?.description || "—"}</td>
-        <td colSpan={2} style={{ ...cellStyle, padding: 0, whiteSpace: "normal" }}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ display: "grid", gridTemplateColumns: "35.714% 64.286%", borderBottom: "1px solid #e1e1dd" }}><div style={{ padding: "8px 7px", borderRight: border, fontWeight: 700 }}>{location.level}</div><div style={{ padding: "8px 7px" }}>{location.rooms.join(", ")}</div></div>) : <div style={{ padding: "8px 7px" }}>—</div>}</td>
+        <td colSpan={2} style={{ ...cellStyle, padding: 0, whiteSpace: "normal" }}>{locations.length > 0 ? locations.flatMap((location) => location.rooms.map((room) => <div key={`${location.level}:${room}`} style={{ display: "grid", gridTemplateColumns: "35.714% 64.286%", borderBottom: "1px solid #e1e1dd" }}><div style={{ padding: "8px 7px", borderRight: border, fontWeight: 700 }}>{location.level}</div><div style={{ padding: "8px 7px" }}>{room}</div></div>)) : <div style={{ padding: "8px 7px" }}>—</div>}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{material?.image ? <img src={material.image} alt={material.name} style={{ width: 78, height: 66, objectFit: "cover", border: "1px solid #aaa", margin: "0 auto" }} /> : <span style={{ color: "#777" }}>—</span>}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{ref.kind === "lantai" || ref.kind === "dinding" ? <span style={{ display: "inline-flex" }}><MaterialCodeSymbol code={code} kind={ref.kind} size={30} /></span> : <span style={{ display: "inline-flex", width: 30, height: 30, alignItems: "center", justifyContent: "center", border: "1.5px solid #111", fontWeight: 800 }}>{code}</span>}</td>
         <td style={cellStyle}>{material?.product || "—"}</td>
