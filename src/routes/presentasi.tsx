@@ -57,7 +57,7 @@ import {
   type EdgeMaterial,
   type EdgeSegment,
 } from "@/lib/edge-segments";
-import { type Door } from "@/lib/doors";
+import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { type Window } from "@/lib/windows";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
@@ -8414,6 +8414,21 @@ function DoorNotation({
           const leafHalf = ((leafThicknessMm / 1000) * pxPerM) / 2;
           return `${x1 + leafNx * leafHalf},${y1 + leafNy * leafHalf} ${x2 + leafNx * leafHalf},${y2 + leafNy * leafHalf} ${x2 - leafNx * leafHalf},${y2 - leafNy * leafHalf} ${x1 - leafNx * leafHalf},${y1 - leafNy * leafHalf}`;
         };
+        if (d.type === "folding") {
+          return (
+            <g key={d.id}>
+              <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+              {showJambs && <>
+                <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              </>}
+              {foldingDoorSegments(d).map(([from, to], index) => leafThicknessMm > 0
+                ? <polygon key={`folding-leaf-${index}`} points={leafPolygon(from.x, from.y, to.x, to.y)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                : <line key={`folding-leaf-${index}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />)}
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+            </g>
+          );
+        }
         if (d.type === "sliding") {
           const sideSign = d.nx * px + d.ny * py < 0 ? -1 : 1;
           const leafHalfDepth = 0.02 * pxPerM;
