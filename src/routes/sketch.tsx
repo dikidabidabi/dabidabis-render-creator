@@ -13543,29 +13543,43 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               const selected = (sketch.doors ?? []).find((door) => door.id === selectedDoorId);
               if (!selected) return <p className="text-[10px] text-muted-foreground">Tap pintu terpasang untuk menampilkan pegangan dan simbol orientasi.</p>;
               const resize = (value: number) => {
-                const widthCm = Math.max(70, Math.min(200, Math.round(value)));
+                const widthCm = Math.max(70, Math.min(selected.type === "folding" ? 800 : 200, Math.round(value)));
                 const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
                 const scale = widthCm / 100 * pxPerMeter / len;
                 onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, b: { x: door.a.x + (door.b.x - door.a.x) * scale, y: door.a.y + (door.b.y - door.a.y) * scale }, widthCm } : door) });
               };
               return <div className="space-y-2 border-t border-border/60 pt-2">
                 <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Pintu terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
-                <Slider min={70} max={200} step={1} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
-                <div className="grid grid-cols-2 gap-1.5">
-                  <Button size="sm" variant={selected.type !== "sliding" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "swing" } : door) }); }} className="h-7 text-xs">Swing</Button>
+                <Slider min={70} max={selected.type === "folding" ? 800 : 200} step={1} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
+                <div className="grid grid-cols-3 gap-1.5">
+                  <Button size="sm" variant={selected.type !== "sliding" && selected.type !== "folding" ? "default" : "outline"} onClick={() => { pushHistory(); resize(Math.min(selected.widthCm, 200)); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "swing", widthCm: Math.min(door.widthCm, 200) } : door) }); }} className="h-7 text-xs">Swing</Button>
                   <Button size="sm" variant={selected.type === "sliding" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "sliding" } : door) }); }} className="h-7 text-xs">Geser</Button>
+                  <Button size="sm" variant={selected.type === "folding" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "folding", foldingSideMode: door.foldingSideMode ?? "one", foldingSide: door.foldingSide ?? "left", foldingLeafCount: door.foldingLeafCount ?? 4 } : door) }); }} className="h-7 text-xs">Lipat</Button>
+                </div>
+                {selected.type === "folding" ? <>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button size="sm" variant={selected.foldingSideMode !== "two" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, foldingSideMode: "one" } : door) }); }} className="h-7 text-xs">Satu Sisi</Button>
+                    <Button size="sm" variant={selected.foldingSideMode === "two" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, foldingSideMode: "two" } : door) }); }} className="h-7 text-xs">Dua Sisi</Button>
+                  </div>
+                  {selected.foldingSideMode !== "two" && <div className="grid grid-cols-2 gap-1.5">
+                    <Button size="sm" variant={selected.foldingSide !== "right" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, foldingSide: "left" } : door) }); }} className="h-7 text-xs">Sisi Kiri</Button>
+                    <Button size="sm" variant={selected.foldingSide === "right" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, foldingSide: "right" } : door) }); }} className="h-7 text-xs">Sisi Kanan</Button>
+                  </div>}
+                  <div className="flex items-center justify-between gap-2"><Label className="text-[11px] text-muted-foreground">Jumlah daun</Label><Input type="number" min={2} max={24} value={selected.foldingLeafCount ?? 4} onFocus={() => pushHistory()} onChange={(event) => { const count = Math.max(2, Math.min(24, Math.round(Number(event.target.value) || 2))); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, foldingLeafCount: count } : door) }); }} className="h-7 w-20 text-xs" /></div>
+                </> : <div className="grid grid-cols-2 gap-1.5">
                   <Button size="sm" variant={selected.leaves === 1 ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, leaves: 1 } : door) }); }} className="h-7 text-xs">1 Daun</Button>
                   <Button size="sm" variant={selected.leaves === 2 ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, leaves: 2 } : door) }); }} className="h-7 text-xs">2 Daun</Button>
-                </div>
+                </div>}
                 <p className="text-[10px] text-muted-foreground">KD: engsel kiri, buka ke dalam; KL: kiri, ke luar; ND/NL: engsel kanan. Tarik lingkaran ujung untuk mengubah panjang.</p>
               </div>;
             })()}
             {!doorEditMode && <>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               <Button type="button" size="sm" variant={doorType === "swing" ? "default" : "outline"} onClick={() => setDoorType("swing")} className="h-8 text-xs">Swing</Button>
               <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => setDoorType("sliding")} className="h-8 text-xs">Geser</Button>
+              <Button type="button" size="sm" variant={doorType === "folding" ? "default" : "outline"} onClick={() => setDoorType("folding")} className="h-8 text-xs">Lipat</Button>
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
+            {doorType !== "folding" && <div className="grid grid-cols-2 gap-1.5">
               {([1, 2] as const).map((n) => (
                 <Button
                   key={n}
@@ -13578,7 +13592,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   {n === 1 ? "1 Daun" : "2 Daun"}
                 </Button>
               ))}
-            </div>
+            </div>}
             {doorType === "sliding" && doorLeaves === 1 && (
               <div className="grid grid-cols-2 gap-1.5">
                 <Button type="button" size="sm" variant={doorSlideDirection === "left" ? "default" : "outline"} onClick={() => setDoorSlideDirection("left")} className="h-8 text-xs">Geser Kiri</Button>
@@ -13588,19 +13602,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             {doorType === "sliding" && doorLeaves === 2 && (
               <p className="text-[10px] text-muted-foreground">Dua daun otomatis bergeser berlawanan ke kiri dan kanan.</p>
             )}
+            {doorType === "folding" && <>
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button type="button" size="sm" variant={doorFoldingSideMode === "one" ? "default" : "outline"} onClick={() => setDoorFoldingSideMode("one")} className="h-8 text-xs">Satu Sisi</Button>
+                <Button type="button" size="sm" variant={doorFoldingSideMode === "two" ? "default" : "outline"} onClick={() => setDoorFoldingSideMode("two")} className="h-8 text-xs">Dua Sisi</Button>
+              </div>
+              {doorFoldingSideMode === "one" && <div className="grid grid-cols-2 gap-1.5">
+                <Button type="button" size="sm" variant={doorFoldingSide === "left" ? "default" : "outline"} onClick={() => setDoorFoldingSide("left")} className="h-8 text-xs">Sisi Kiri</Button>
+                <Button type="button" size="sm" variant={doorFoldingSide === "right" ? "default" : "outline"} onClick={() => setDoorFoldingSide("right")} className="h-8 text-xs">Sisi Kanan</Button>
+              </div>}
+              <div className="flex items-center justify-between gap-2"><Label className="text-[11px] text-muted-foreground">Jumlah daun</Label><Input type="number" min={2} max={24} value={doorFoldingLeafCount} onChange={(event) => setDoorFoldingLeafCount(Math.max(2, Math.min(24, Math.round(Number(event.target.value) || 2))))} className="h-7 w-20 text-xs" /></div>
+              {doorFoldingSideMode === "two" && <p className="text-[10px] text-muted-foreground">Jumlah genap terbagi seimbang; jumlah ganjil berselisih satu daun.</p>}
+            </>}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-[11px] text-muted-foreground">Lebar (cm)</Label>
                 <Input
                   type="text" inputMode="decimal" pattern="-?[0-9]*\.?[0-9]*"
                   min={70}
-                  max={200}
+                  max={doorType === "folding" ? 800 : 200}
                   step={5}
                   value={doorWidthCm}
                   onChange={(e) => {
                     const v = Number(e.target.value);
                     if (!Number.isFinite(v)) return;
-                    setDoorWidthCm(Math.max(70, Math.min(200, Math.round(v))));
+                    setDoorWidthCm(Math.max(70, Math.min(doorType === "folding" ? 800 : 200, Math.round(v))));
                   }}
                   className="h-7 w-20 text-xs"
                 />
@@ -13608,7 +13634,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               <input
                 type="range"
                 min={70}
-                max={200}
+                max={doorType === "folding" ? 800 : 200}
                 step={1}
                 value={doorWidthCm}
                 onChange={(e) => setDoorWidthCm(Number(e.target.value))}
