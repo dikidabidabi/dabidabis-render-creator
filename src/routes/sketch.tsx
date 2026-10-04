@@ -13548,13 +13548,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 const scale = widthCm / 100 * pxPerMeter / len;
                 onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, b: { x: door.a.x + (door.b.x - door.a.x) * scale, y: door.a.y + (door.b.y - door.a.y) * scale }, widthCm } : door) });
               };
+              const changeType = (type: DoorType) => {
+                pushHistory();
+                const widthCm = Math.min(selected.widthCm, type === "folding" ? 800 : 200);
+                const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
+                const scale = widthCm / 100 * pxPerMeter / len;
+                onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? {
+                  ...door,
+                  type,
+                  widthCm,
+                  b: { x: door.a.x + (door.b.x - door.a.x) * scale, y: door.a.y + (door.b.y - door.a.y) * scale },
+                  ...(type === "folding" ? { foldingSideMode: door.foldingSideMode ?? "one", foldingSide: door.foldingSide ?? "left", foldingLeafCount: door.foldingLeafCount ?? 4 } : {}),
+                } : door) });
+              };
               return <div className="space-y-2 border-t border-border/60 pt-2">
                 <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Pintu terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
                 <Slider min={70} max={selected.type === "folding" ? 800 : 200} step={1} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
                 <div className="grid grid-cols-3 gap-1.5">
-                  <Button size="sm" variant={selected.type !== "sliding" && selected.type !== "folding" ? "default" : "outline"} onClick={() => { pushHistory(); resize(Math.min(selected.widthCm, 200)); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "swing", widthCm: Math.min(door.widthCm, 200) } : door) }); }} className="h-7 text-xs">Swing</Button>
-                  <Button size="sm" variant={selected.type === "sliding" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "sliding" } : door) }); }} className="h-7 text-xs">Geser</Button>
-                  <Button size="sm" variant={selected.type === "folding" ? "default" : "outline"} onClick={() => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map((door) => door.id === selected.id ? { ...door, type: "folding", foldingSideMode: door.foldingSideMode ?? "one", foldingSide: door.foldingSide ?? "left", foldingLeafCount: door.foldingLeafCount ?? 4 } : door) }); }} className="h-7 text-xs">Lipat</Button>
+                  <Button size="sm" variant={selected.type !== "sliding" && selected.type !== "folding" ? "default" : "outline"} onClick={() => changeType("swing")} className="h-7 text-xs">Swing</Button>
+                  <Button size="sm" variant={selected.type === "sliding" ? "default" : "outline"} onClick={() => changeType("sliding")} className="h-7 text-xs">Geser</Button>
+                  <Button size="sm" variant={selected.type === "folding" ? "default" : "outline"} onClick={() => changeType("folding")} className="h-7 text-xs">Lipat</Button>
                 </div>
                 {selected.type === "folding" ? <>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -13575,8 +13588,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             })()}
             {!doorEditMode && <>
             <div className="grid grid-cols-3 gap-1.5">
-              <Button type="button" size="sm" variant={doorType === "swing" ? "default" : "outline"} onClick={() => setDoorType("swing")} className="h-8 text-xs">Swing</Button>
-              <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => setDoorType("sliding")} className="h-8 text-xs">Geser</Button>
+              <Button type="button" size="sm" variant={doorType === "swing" ? "default" : "outline"} onClick={() => { setDoorType("swing"); setDoorWidthCm((width) => Math.min(width, 200)); }} className="h-8 text-xs">Swing</Button>
+              <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => { setDoorType("sliding"); setDoorWidthCm((width) => Math.min(width, 200)); }} className="h-8 text-xs">Geser</Button>
               <Button type="button" size="sm" variant={doorType === "folding" ? "default" : "outline"} onClick={() => setDoorType("folding")} className="h-8 text-xs">Lipat</Button>
             </div>
             {doorType !== "folding" && <div className="grid grid-cols-2 gap-1.5">
