@@ -166,6 +166,7 @@ type Sketch = {
   linkedMasterplan?: { rootLayerId: string };
   functionZones?: FunctionZone[];
   showFurnitureSlide?: boolean;
+  showSpecOutlineSlide?: boolean;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -1488,6 +1489,7 @@ type RincianSection = {
   totalEfPer: number;
 };
 type TocEntry = { label: string; page: number };
+type SpecMaterialRef = { kind: "lantai" | "dinding" | "plafon"; materialId: string };
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
   | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
@@ -1514,6 +1516,7 @@ type Slide =
   | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "furniture"; id: string; title: string; sketch: Sketch }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "spec-outline"; id: string; title: string; sketch: Sketch; materialRefs: SpecMaterialRef[]; pageIndex: number; pageCount: number }
   | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }
   | { kind: "siteplan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
   | { kind: "analisis-kawasan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
@@ -1540,6 +1543,23 @@ function computeBounds(sk: Sketch): Bounds {
   const w = maxX - minX, h = maxY - minY;
   const pad = Math.max(w, h, 1) * 0.08;
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+}
+
+function collectSpecMaterialRefs(sketch: Sketch): SpecMaterialRef[] {
+  const refs: SpecMaterialRef[] = [];
+  const seen = new Set<string>();
+  (["lantai", "dinding", "plafon"] as const).forEach((kind) => {
+    (sketch.layers ?? []).forEach((layer) => {
+      if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return;
+      const materialId = layer.roomMaterials?.[kind];
+      if (!materialId) return;
+      const key = `${kind}:${materialId}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      refs.push({ kind, materialId });
+    });
+  });
+  return refs;
 }
 
 function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null, moodboard: MoodboardEntry | null = null): Slide[] {
@@ -1755,6 +1775,22 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "komposisi", id: "komposisi", title: "Komposisi Ruang", sketch: sk, data });
   if (sk.showFurnitureSlide) out.push({ kind: "furniture", id: "furniture", title: "Furniture", sketch: sk });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
+  if (sk.showSpecOutlineSlide) {
+    const materialRefs = collectSpecMaterialRefs(sk);
+    const pageSize = 6;
+    const pageCount = Math.max(1, Math.ceil(materialRefs.length / pageSize));
+    Array.from({ length: pageCount }, (_, pageIndex) => {
+      out.push({
+        kind: "spec-outline",
+        id: pageCount > 1 ? `spec-outline-${pageIndex + 1}` : "spec-outline",
+        title: pageCount > 1 ? `Outline Spesifikasi (${pageIndex + 1}/${pageCount})` : "Outline Spesifikasi",
+        sketch: sk,
+        materialRefs: materialRefs.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize),
+        pageIndex: pageIndex + 1,
+        pageCount,
+      });
+    });
+  }
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
 
@@ -1783,6 +1819,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "komposisi": return "Komposisi Ruang";
       case "furniture": return "Furniture";
       case "biaya": return "Estimasi Biaya";
+      case "spec-outline": return "Outline Spesifikasi";
       case "closing": return "Penutup";
       case "masterplan": return "Master Plan";
       case "siteplan": return "Siteplan Kawasan";
@@ -2202,6 +2239,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "komposisi" && <KomposisiBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "furniture" && <FurnitureBody sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "spec-outline" && <SpecOutlineBody slide={slide} />}
       {slide.kind === "masterplan" && <MasterPlanBody plan={slide.plan} analysis={slide.analysis} />}
       {slide.kind === "siteplan" && <SiteplanBody analysis={slide.analysis} />}
       {slide.kind === "analisis-kawasan" && <AnalisisKawasanBody analysis={slide.analysis} />}
