@@ -19,7 +19,7 @@ import { colorForRoomName } from "@/lib/room-color";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
 import { axisPositions, collectGrids, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
-import type { Door } from "@/lib/doors";
+import { foldingDoorSegments, type Door } from "@/lib/doors";
 import type { Window } from "@/lib/windows";
 import {
   FURNITURE_CATALOG,
@@ -542,6 +542,7 @@ function DetailOpenings({ doors, windows, pxPerMeter }: { doors: Door[]; windows
     })}
     {doors.map((item) => {
       const width = item.widthCm / 100 * pxPerMeter;
+      if (item.type === "folding") return <g key={item.id}>{foldingDoorSegments(item).map(([from, to], index) => <line key={index} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#202020" strokeWidth={stroke} />)}</g>;
       if (item.type === "sliding") return <g key={item.id}><line x1={item.a.x} y1={item.a.y} x2={item.b.x} y2={item.b.y} stroke="#202020" strokeWidth={stroke * 2} /><line x1={item.a.x + item.nx * 0.04 * pxPerMeter} y1={item.a.y + item.ny * 0.04 * pxPerMeter} x2={item.b.x + item.nx * 0.04 * pxPerMeter} y2={item.b.y + item.ny * 0.04 * pxPerMeter} stroke="#202020" strokeWidth={stroke} /></g>;
       const leaf = { x: item.a.x + item.nx * width, y: item.a.y + item.ny * width };
       return <g key={item.id}><line x1={item.a.x} y1={item.a.y} x2={leaf.x} y2={leaf.y} stroke="#202020" strokeWidth={stroke} /><path d={`M ${leaf.x} ${leaf.y} A ${width} ${width} 0 0 1 ${item.b.x} ${item.b.y}`} fill="none" stroke="#202020" strokeWidth={stroke * 0.8} /></g>;
