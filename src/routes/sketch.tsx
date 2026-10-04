@@ -161,7 +161,7 @@ import {
   MATERIAL_COLORS,
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
-import { type Door, genDoorId, normalizeDoors } from "@/lib/doors";
+import { type Door, type DoorType, foldingDoorSegments, genDoorId, normalizeDoors } from "@/lib/doors";
 import { type Window, genWindowId, normalizeWindows } from "@/lib/windows";
 import {
   type ParkingArea,
@@ -3045,8 +3045,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   >(null);
   // Door tool — parameter & live draft (3-langkah gesture single drag).
   const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
-  const [doorType, setDoorType] = useState<"swing" | "sliding">("swing");
+  const [doorType, setDoorType] = useState<DoorType>("swing");
   const [doorSlideDirection, setDoorSlideDirection] = useState<"left" | "right">("left");
+  const [doorFoldingSideMode, setDoorFoldingSideMode] = useState<"one" | "two">("one");
+  const [doorFoldingSide, setDoorFoldingSide] = useState<"left" | "right">("left");
+  const [doorFoldingLeafCount, setDoorFoldingLeafCount] = useState(4);
   const [doorWidthCm, setDoorWidthCm] = useState<number>(100);
   const [doorDraft, setDoorDraft] = useState<
     | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
@@ -4796,7 +4799,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         // Daun pintu + arc / pintu geser 50% terbuka.
         ctx.strokeStyle = "#0a0a0a";
         ctx.lineWidth = 1.6 / s;
-        if (d.type === "sliding") {
+        if (d.type === "folding") {
+          ctx.lineWidth = Math.max(1.6 / s, 0.04 * pxPerMeter);
+          ctx.beginPath();
+          for (const [from, to] of foldingDoorSegments(d)) {
+            ctx.moveTo(from.x, from.y);
+            ctx.lineTo(to.x, to.y);
+          }
+          ctx.stroke();
+          ctx.lineWidth = 1.2 / s;
+          ctx.setLineDash([4 / s, 3 / s]);
+          ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (d.type === "sliding") {
           const centerNormal = thick * 0.5 + 0.04 * pxPerMeter + 0.02 * pxPerMeter;
           const normalSign = d.nx * pnx + d.ny * pny < 0 ? -1 : 1;
           ctx.lineWidth = Math.max(2 / s, 0.04 * pxPerMeter);
@@ -4904,7 +4919,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.setLineDash([3 / s, 3 / s]);
       ctx.lineWidth = 1.4 / s;
       ctx.strokeStyle = "rgba(232,93,58,0.7)";
-      if (doorType === "sliding") {
+      if (doorType === "folding") {
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        for (const [from, to] of foldingDoorSegments({
+          a: doorDraft.a,
+          b: doorDraft.b,
+          nx: doorDraft.nx,
+          ny: doorDraft.ny,
+          foldingSideMode: doorFoldingSideMode,
+          foldingSide: doorFoldingSide,
+          foldingLeafCount: doorFoldingLeafCount,
+        })) {
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(to.x, to.y);
+        }
+        ctx.stroke();
+      } else if (doorType === "sliding") {
         const len = Math.hypot(bx - ax, by - ay) || 1;
         const dx = (bx - ax) / len, dy = (by - ay) / len;
         const startAlong = doorSlideDirection === "right" ? widthPx * 0.5 : -widthPx * 0.5;
@@ -7449,7 +7480,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -10239,7 +10270,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const len = Math.hypot(door.b.x - door.a.x, door.b.y - door.a.y) || 1;
         const ux = (door.b.x - door.a.x) / len, uy = (door.b.y - door.a.y) / len;
         const signed = (raw.x - fixed.x) * ux + (raw.y - fixed.y) * uy;
-        const minPx = 0.7 * pxPerMeter, maxPx = 2 * pxPerMeter;
+        const minPx = 0.7 * pxPerMeter, maxPx = (door.type === "folding" ? 8 : 2) * pxPerMeter;
         const sign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
         const lengthPx = Math.max(minPx, Math.min(maxPx, signed * sign));
         const point = { x: fixed.x + ux * sign * lengthPx, y: fixed.y + uy * sign * lengthPx };
@@ -10973,11 +11004,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         leaves: doorLeaves,
         type: doorType,
         slideDirection: doorSlideDirection,
+        foldingSideMode: doorFoldingSideMode,
+        foldingSide: doorFoldingSide,
+        foldingLeafCount: doorFoldingLeafCount,
         widthCm: doorWidthCm,
       };
       const prev = sketch.doors ?? [];
       onChange({ doors: [...prev, door] });
-      toast.success(`Pintu ${doorType === "sliding" ? doorLeaves === 2 ? "geser 2 arah" : `geser ${doorSlideDirection === "left" ? "kiri" : "kanan"}` : doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
+      toast.success(`Pintu ${doorType === "folding" ? `lipat ${doorFoldingLeafCount} daun` : doorType === "sliding" ? doorLeaves === 2 ? "geser 2 arah" : `geser ${doorSlideDirection === "left" ? "kiri" : "kanan"}` : doorLeaves === 2 ? "2 daun" : "1 daun"} · ${doorWidthCm}cm ditambahkan`);
       return;
     }
     if (windowDraft) {
