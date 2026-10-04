@@ -1215,6 +1215,13 @@ function downloadSketchExcel(sketch: Sketch, data: Stats, materials: LibraryMate
     );
   }
 
+  const general = normalizeGeneralMaterialSelections(sketch.generalMaterials);
+  const materialName = (id: string) => materials.find((material) => material.id === id)?.name ?? "";
+  sections.push(tableHtml("Pekerjaan Dasar", ["Material"], general.foundation.map((id) => [materialName(id)])));
+  sections.push(tableHtml("Fasad", ["Sisi", "Material"], (["barat", "timur", "utara", "selatan"] as FacadeDirection[]).flatMap((direction) =>
+    general.facades[direction].map((id) => [direction[0].toUpperCase() + direction.slice(1), materialName(id)]),
+  )));
+
   // Distribusi per Level
   const totalAll = ruang.reduce((s, l) => s + l.areaM2, 0) || 1;
   const distRows: (string | number)[][] = levels.map((lv) => {

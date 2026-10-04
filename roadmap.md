@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan mode Plafon pada Pendetailan, kode material kustom, Pekerjaan Dasar/Fasad umum, dan perluas Outline Spesifikasi.
+- [x] Tambahkan mode Plafon pada Pendetailan, kode material kustom, Pekerjaan Dasar/Fasad umum, dan perluas Outline Spesifikasi.
 
 - [x] Cegah permintaan notifikasi saat sesi belum siap dan hentikan pengulangan pemanggilan akibat perubahan fungsi render.
 

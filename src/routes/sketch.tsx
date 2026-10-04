@@ -98,6 +98,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { normalizeGeneralMaterialSelections, type GeneralMaterialSelections } from "@/lib/material-library";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
 import {
@@ -473,7 +474,7 @@ type Sketch = {
   /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
   linkedMasterplan?: { rootLayerId: string };
   functionZones?: FunctionZone[];
-  generalMaterials?: import("@/lib/material-library").GeneralMaterialSelections;
+  generalMaterials?: GeneralMaterialSelections;
 };
 
 type ImageReference = {
@@ -1190,6 +1191,7 @@ function normalizeSketch(s: any): Sketch {
       }
       return out;
     })(),
+    generalMaterials: normalizeGeneralMaterialSelections(s?.generalMaterials),
     detailAreas: (() => {
       if (!Array.isArray(s?.detailAreas)) return [];
       const validLvl = new Set(levels.map((l) => l.id));
