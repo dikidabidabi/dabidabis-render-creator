@@ -11394,7 +11394,7 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
         <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd", fontWeight: 700 }}>{location.level}</div>) : "—"}</td>
         <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd" }}>{location.rooms.join(", ")}</div>) : "—"}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{material?.image ? <img src={material.image} alt={material.name} style={{ width: 78, height: 66, objectFit: "cover", border: "1px solid #aaa", margin: "0 auto" }} /> : <span style={{ color: "#777" }}>—</span>}</td>
-        <td style={{ ...cellStyle, textAlign: "center" }}><span style={{ display: "inline-flex", width: 30, height: 30, alignItems: "center", justifyContent: "center", border: ref.kind === "dinding" ? "none" : "1.5px solid #111", borderRadius: ref.kind === "lantai" ? "50%" : ref.kind === "plafon" ? 2 : 0, fontWeight: 800 }}>{code}</span></td>
+        <td style={{ ...cellStyle, textAlign: "center" }}>{ref.kind === "lantai" || ref.kind === "dinding" ? <span style={{ display: "inline-flex" }}><MaterialCodeSymbol code={code} kind={ref.kind} size={30} /></span> : <span style={{ display: "inline-flex", width: 30, height: 30, alignItems: "center", justifyContent: "center", border: "1.5px solid #111", fontWeight: 800 }}>{code}</span>}</td>
         <td style={cellStyle}>{material?.product || "—"}</td>
       </tr>)}</tbody>
     </table>}
