@@ -2353,6 +2353,10 @@ function SlideContent({ slide }: { slide?: Slide }) {
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {body}
         </div>
+      ) : slide.kind === "spec-outline" ? (
+        <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
+          {body}
+        </div>
       ) : (
         <ManualScaleBox slideId={slide.id} style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28 }}>
           {body}
