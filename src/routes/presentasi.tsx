@@ -4673,8 +4673,9 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "lantai");
   const usedWallMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.dinding).filter((id): id is string => Boolean(id))))
     .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "dinding");
-  const floorCodeById = new Map(usedFloorMaterials.map((material, index) => [material.id, `L${index + 1}`]));
-  const wallCodeById = new Map(usedWallMaterials.map((material, index) => [material.id, `D${index + 1}`]));
+  const projectMaterialRefs = collectSpecMaterialRefs(sketch);
+  const floorCodeById = new Map(projectMaterialRefs.filter((ref) => ref.kind === "lantai").map((ref, index) => [ref.materialId, `L${index + 1}`]));
+  const wallCodeById = new Map(projectMaterialRefs.filter((ref) => ref.kind === "dinding").map((ref, index) => [ref.materialId, `D${index + 1}`]));
   const showMaterialMode = area.showMaterials === true;
   const functionZones = normalizeFunctionZones(sketch.functionZones);
   const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
