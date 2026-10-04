@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car, Plus, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -76,6 +77,7 @@ type Sketch = {
   parkingAreas?: ParkingArea[];
   mmGridRotation?: number;
   functionZones?: FunctionZone[];
+  showSpecOutlineSlide?: boolean;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -861,6 +863,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   const [roomMaterials, setRoomMaterials] = useState<Record<string, RoomMaterials>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
   const [fillDrag, setFillDrag] = useState<{ levelId: string; kind: MaterialKind; sourceIndex: number; targetIndex: number; materialId: string } | null>(null);
   const materialSave = useRef<Promise<unknown>>(Promise.resolve());
+  const [sendToOutline, setSendToOutline] = useState(sketch.showSpecOutlineSlide === true);
   const fillCleanup = useRef<(() => void) | null>(null);
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
@@ -868,7 +871,12 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
     setZones(normalizeFunctionZones(sketch.functionZones));
     setAssignments(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
     setRoomMaterials(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
+    setSendToOutline(sketch.showSpecOutlineSlide === true);
   }, [sketch.id, sketch.updatedAt]);
+  const toggleOutline = (checked: boolean) => {
+    setSendToOutline(checked);
+    materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({ ...stored, showSpecOutlineSlide: checked })));
+  };
   const persist = useCallback(async (nextZones: FunctionZone[], nextAssignments: Record<string, string>) => {
     await patchStoredSketch(sketch.id, (stored) => ({
       ...stored,
@@ -992,7 +1000,15 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                 <thead className="sticky top-0 z-20 bg-background text-muted-foreground shadow-sm">
                   <tr className="border-b border-border/60 bg-muted/20">
                     <th colSpan={5} className="px-2 py-1 text-left font-medium">Rincian Ruang</th>
-                    <th colSpan={3} className="border-l border-border/60 px-2 py-1 text-center font-medium">Material</th>
+                    <th colSpan={3} className="border-l border-border/60 px-2 py-1 font-medium">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>Material</span>
+                        <label className="flex cursor-pointer items-center gap-1.5 text-left text-[11px] font-normal text-foreground">
+                          <Checkbox checked={sendToOutline} onCheckedChange={(value) => toggleOutline(value === true)} aria-label="Kirim ke slide Outline Spesifikasi" />
+                          Kirim ke slide Outline Spesifikasi
+                        </label>
+                      </div>
+                    </th>
                   </tr>
                   <tr className="border-b border-border/60">
                     <th className="px-2 py-1 text-left font-normal">Ruang</th>
