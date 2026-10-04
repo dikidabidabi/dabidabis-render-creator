@@ -405,6 +405,7 @@ type DetailArea = {
   showKeyplan: boolean;
   showFurniture: boolean;
   showMaterials: boolean;
+  showCeiling: boolean;
   createdAt: number;
   furniture?: DetailFurniture[];
 };
@@ -472,6 +473,7 @@ type Sketch = {
   /** Sketsa yang berasal dari ekspor bangunan masterplan (untuk sync dua arah). */
   linkedMasterplan?: { rootLayerId: string };
   functionZones?: FunctionZone[];
+  generalMaterials?: import("@/lib/material-library").GeneralMaterialSelections;
 };
 
 type ImageReference = {
@@ -1207,7 +1209,8 @@ function normalizeSketch(s: any): Sketch {
           floorHatch: area.floorHatch === true,
           showKeyplan: area.showKeyplan !== false,
           showFurniture: area.showFurniture !== false,
-          showMaterials: area.showMaterials === true,
+          showMaterials: area.showMaterials === true && area.showCeiling !== true,
+          showCeiling: area.showCeiling === true,
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
         }];
@@ -11245,6 +11248,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           showKeyplan: true,
           showFurniture: true,
           showMaterials: false,
+          showCeiling: false,
           createdAt: Date.now(),
         }],
       });
@@ -12287,11 +12291,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     ["showKeyplan", "Keyplan"],
                     ["showFurniture", "Furniture"],
                     ["showMaterials", "Material"],
+                    ["showCeiling", "Plafon"],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex items-center justify-between gap-3 py-1 text-[11px]">
                       <span>{label}</span>
                       <Switch checked={area[key]} onCheckedChange={(checked) => onChange({
-                        detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, [key]: checked } : item),
+                        detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? {
+                          ...item,
+                          [key]: checked,
+                          ...(checked && key === "showMaterials" ? { showCeiling: false } : {}),
+                          ...(checked && key === "showCeiling" ? { showMaterials: false } : {}),
+                        } : item),
                       })} />
                     </label>
                   ))}

@@ -11,9 +11,9 @@ import { loadMaterialLibrary, MATERIAL_KINDS, saveMaterialLibrary, type LibraryM
 export const Route = createFileRoute("/tabulasi/list-material")({
   head: () => ({ meta: [
     { title: "List Material — Dabidabi's" },
-    { name: "description", content: "Pustaka material lantai, dinding, dan plafon untuk proyek arsitektur Dabidabi's." },
+    { name: "description", content: "Pustaka material pekerjaan dasar, lantai, dinding, plafon, dan fasad untuk proyek Dabidabi's." },
     { property: "og:title", content: "List Material — Dabidabi's" },
-    { property: "og:description", content: "Kelola acuan material lantai, dinding, dan plafon untuk setiap proyek." },
+    { property: "og:description", content: "Kelola seluruh acuan material dan kode spesifikasi untuk setiap proyek." },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary" },
   ] }),
@@ -69,6 +69,7 @@ function MaterialLibraryPage() {
     image: null,
     description: "",
     product: "",
+    code: "",
   }]);
   const change = (id: string, fields: Partial<LibraryMaterial>) => update(materials.map((m) => m.id === id ? { ...m, ...fields } : m));
   const handleUpload = async (file: File) => {
@@ -87,7 +88,7 @@ function MaterialLibraryPage() {
       <p className="mb-6 text-sm text-muted-foreground">Acuan material untuk seluruh proyek dalam akun ini.</p>
       <TabulasiNavigation active="list-material" />
       <h2 className="mb-4 text-lg font-semibold">List Material</h2>
-      <div className="grid gap-5 md:grid-cols-3">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {MATERIAL_KINDS.map((kind) => (
           <section key={kind} className="min-w-0">
             <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
@@ -103,6 +104,7 @@ function MaterialLibraryPage() {
                     </Button>
                     <div className="min-w-0 flex-1 space-y-2">
                       <Input aria-label={`Nama material ${kind}`} placeholder="Nama material" value={m.name} onChange={(event) => change(m.id, { name: event.target.value })} className="min-w-0 text-sm" />
+                      <Input aria-label={`Kode material ${m.name || kind}`} placeholder="Kode material, contoh MR" value={m.code} onChange={(event) => change(m.id, { code: event.target.value.toUpperCase().replace(/\s+/g, "") })} className="min-w-0 font-mono text-sm uppercase" />
                       <Textarea aria-label={`Deskripsi material ${m.name || kind}`} placeholder="Deskripsi" value={m.description} onChange={(event) => change(m.id, { description: event.target.value })} className="min-h-20 resize-y text-sm" />
                       <Textarea aria-label={`Produk material ${m.name || kind}`} placeholder="Produk" value={m.product} onChange={(event) => change(m.id, { product: event.target.value })} className="min-h-16 resize-y text-sm" />
                     </div>
