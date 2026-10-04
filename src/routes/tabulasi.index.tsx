@@ -804,12 +804,14 @@ function MaterialPicker({
   materials,
   onChange,
   onFillStart,
+  addMode = false,
 }: {
   kind: MaterialKind;
   value?: string;
   materials: LibraryMaterial[];
   onChange: (value: string) => void;
   onFillStart?: (event: React.PointerEvent<HTMLSpanElement>) => void;
+  addMode?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const options = materials.filter((item) => item.kind === kind && item.name.trim());
@@ -818,8 +820,9 @@ function MaterialPicker({
     <div className="group/material-picker relative">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={`Material ${kind}`} className={cn("h-8 w-full min-w-0 justify-between px-2 text-left text-xs font-normal", !value && "text-muted-foreground/50")}>
-            <span className="truncate">{selected?.name || (value ? "Material dihapus" : "Pilih material")}</span><ChevronDown className="shrink-0 opacity-60" />
+          <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label={addMode ? `Tambahkan material ${kind}` : `Material ${kind}`} className={cn("h-8 w-full min-w-0 justify-between px-2 text-left text-xs font-normal", !value && !addMode && "text-muted-foreground/50")}>
+            {addMode && <Plus className="h-3.5 w-3.5 shrink-0" />}
+            <span className="truncate">{addMode ? "Tambahkan material" : selected?.name || (value ? "Material dihapus" : "Pilih material")}</span>{!addMode && <ChevronDown className="shrink-0 opacity-60" />}
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[240px] p-0">
@@ -983,7 +986,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
     materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({ ...stored, generalMaterials: next })));
   };
   if (levels.length === 0) {
-    return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
+    return <div className="space-y-4"><p className="text-xs text-muted-foreground">Belum ada level.</p><GeneralMaterialsSection value={generalMaterials} materials={materials} onChange={saveGeneralMaterials} /></div>;
   }
   return (
     <div className="space-y-5 text-sm">
@@ -1119,7 +1122,9 @@ function GeneralMaterialList({ kind, values, materials, onChange }: { kind: Mate
       }} />
       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Hapus material" onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}><Trash2 className="h-3.5 w-3.5" /></Button>
     </div>)}
-    <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => onChange([...values, ""])}><Plus className="h-3.5 w-3.5" />Tambahkan material</Button>
+    <MaterialPicker kind={kind} materials={materials} addMode onChange={(materialId) => {
+      if (materialId) onChange([...values, materialId]);
+    }} />
   </div>;
 }
 
