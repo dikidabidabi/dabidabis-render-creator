@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Perbaiki penambahan material Pekerjaan Dasar dan Fasad di Rincian per Level agar pilihan baru bertahan setelah disimpan.
+
 - [x] Tambahkan mode Plafon pada Pendetailan, kode material kustom, Pekerjaan Dasar/Fasad umum, dan perluas Outline Spesifikasi.
 
 - [x] Cegah permintaan notifikasi saat sesi belum siap dan hentikan pengulangan pemanggilan akibat perubahan fungsi render.
