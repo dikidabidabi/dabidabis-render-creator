@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Tambahkan ceklis per sketsa untuk Outline Spesifikasi dan slide tabel material setelah Estimasi Biaya.
+
 - [x] Tambahkan deskripsi dan produk yang dapat diperbarui pada setiap material di pustaka akun.
 
 - [x] Batasi tinggi tabel Rincian per Level, tambahkan gulir vertikal dan fill handle material, serta pudarkan dropdown yang belum dipilih.
