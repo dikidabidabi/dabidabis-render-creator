@@ -12,3 +12,5 @@
 - Pustaka material beserta nama, gambar, deskripsi, dan produk tersimpan per akun melalui penyimpanan proyek bersama, sedangkan pilihan material tiap ruang tersimpan pada layer sketsa dengan ID material agar perubahan data tetap tersinkron.
 - Mode Material pada setiap kotak detail memakai ID material ruang untuk warna dan kode lantai/dinding, dengan legenda pada rel kanan Slide Detail; nilai awalnya nonaktif agar presentasi lama tidak berubah.
 - Slide Outline Spesifikasi diaktifkan per sketsa dari kepala Material Rincian per Level, menggabungkan pemakaian pustaka material per jenis, memakai tabel A3 lanskap selebar bidang, serta mengalirkan baris lintas halaman menurut tinggi tersedia sambil mengulang identitas material pada sambungan daftar ruang agar tidak terpotong atau menyisakan halaman kosong.
+- Pekerjaan Dasar dan Fasad disimpan sebagai pilihan material umum per sketsa, terpisah dari material ruang; Fasad dibagi Barat, Timur, Utara, dan Selatan.
+- Mode Plafon per kotak detail saling eksklusif dengan mode Material dan memakai kode material bersama yang sama dengan Outline Spesifikasi.

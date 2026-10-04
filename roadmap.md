@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Tambahkan mode Plafon pada Pendetailan, kode material kustom, Pekerjaan Dasar/Fasad umum, dan perluas Outline Spesifikasi.
+
 - [x] Cegah permintaan notifikasi saat sesi belum siap dan hentikan pengulangan pemanggilan akibat perubahan fungsi render.
 
 - [x] Sambungkan tabel Outline Spesifikasi antarhalaman berdasarkan tinggi tersedia, termasuk sambungan daftar lantai dengan keterangan material yang diulang.
