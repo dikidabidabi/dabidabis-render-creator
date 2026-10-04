@@ -1,6 +1,7 @@
 # Roadmap
 
 - [x] Tambahkan pintu lipat satu/dua sisi, arah kiri/kanan, jumlah daun, lebar 800 cm, dan notasi 45° di seluruh tampilan serta DXF.
+- [x] Koreksi geometri pintu lipat agar panjang daun tetap nyata dan sisa lebar bukaan menjadi jeda di kusen seberang atau di tengah.
 
 - [x] Perbaiki penambahan material Pekerjaan Dasar dan Fasad di Rincian per Level agar pilihan baru bertahan setelah disimpan.
 
