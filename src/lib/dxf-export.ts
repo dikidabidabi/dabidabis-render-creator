@@ -3,6 +3,7 @@
 // (Y kanvas turun → Y CAD naik) supaya orientasi sesuai konvensi CAD.
 
 import type { ParkingArea, ParkingStall } from "@/lib/parking";
+import { foldingDoorSegments } from "@/lib/doors";
 
 export type DxfPoint = { x: number; y: number };
 
@@ -26,6 +27,10 @@ export type DxfDoor = {
   nx: number;
   ny: number; // arah ayun (unit normal)
   leaves: 1 | 2;
+  type?: "swing" | "sliding" | "folding";
+  foldingSideMode?: "one" | "two";
+  foldingSide?: "left" | "right";
+  foldingLeafCount?: number;
   widthCm: number;
 };
 
@@ -266,6 +271,12 @@ export function buildDxf(input: DxfExportInput): string {
     const ny = -d.ny;
     const nx = d.nx;
     const widthM = (d.widthCm / 100);
+    if (d.type === "folding") {
+      for (const [from, to] of foldingDoorSegments(d)) {
+        emitLine(buf, "DOOR", pxToM(from, ppm), pxToM(to, ppm));
+      }
+      continue;
+    }
     if (d.leaves === 2) {
       // dua daun setengah lebar dari kedua sisi (hinge a, hinge b)
       const half = widthM / 2;

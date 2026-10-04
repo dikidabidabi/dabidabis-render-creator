@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Tambahkan pintu lipat satu/dua sisi, arah kiri/kanan, jumlah daun, lebar 800 cm, dan notasi 45° di seluruh tampilan serta DXF.
+
 - [x] Perbaiki penambahan material Pekerjaan Dasar dan Fasad di Rincian per Level agar pilihan baru bertahan setelah disimpan.
 
 - [x] Tambahkan mode Plafon pada Pendetailan, kode material kustom, Pekerjaan Dasar/Fasad umum, dan perluas Outline Spesifikasi.

@@ -3,6 +3,7 @@
 - Polling notifikasi hanya berjalan saat sesi autentikasi memiliki token dan tidak bergantung pada identitas fungsi render, agar tidak mengirim permintaan tanpa izin atau mengulang tanpa henti.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
 - Pintu dan jendela terpasang diedit melalui sub-mode alat masing-masing agar seleksi, orientasi, dan drag endpoint tidak bentrok dengan alat global.
+- Pintu lipat menyimpan mode satu/dua sisi, arah sisi tunggal, dan jumlah panel; simbol denah memakai segmen 45° bergantian yang sama di Sketsa, Detail, Presentasi, dan DXF.
 - Dimensi interior Slide Detail mengukur bentang bersih permukaan-ke-permukaan tanpa interval ketebalan dinding, sejajar dinding acuan, dan menggeser 150 mm hanya rangkaian interval di bawah 200 mm yang berdampingan; dimensi luar hanya memproyeksikan muka material dan memakai aturan geser pendek yang sama, area tayang meluas 1 m, serta denah menjadi putih polos saat opsi aktif.
 - Ujung terbuka dan pertemuan Dinding Solid/standar 150 mm memakai kolom praktis 150 × 150 mm; solid hitam, standar putih dengan finishing 15 mm.
 - Furniture Detail disimpan bersama kotak detail dengan ID ruang, kategori, dan posisi relatif terhadap ruang; daftar kategori disimpan per akun, ukuran katalog/tabel dalam mm dikonversi memakai skala sketsa agar ikut bergeser ketika ruang berubah, sementara ceklis per kotak mengendalikan kemunculan di Presentasi.
