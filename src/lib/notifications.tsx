@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { getNotifications, markFeedSeen } from "@/lib/messages.functions";
@@ -27,9 +27,15 @@ const NotificationContext = createContext<NotifCtx>({
 });
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const fetchNotif = useServerFn(getNotifications);
   const seenFn = useServerFn(markFeedSeen);
+  const fetchNotifRef = useRef(fetchNotif);
+  fetchNotifRef.current = fetchNotif;
+  const seenFnRef = useRef(seenFn);
+  seenFnRef.current = seenFn;
+  const userId = user?.id;
+  const accessToken = session?.access_token;
   const [unreadMessages, setUnread] = useState(0);
   const [feedUpdates, setFeed] = useState(0);
   const [galleryComments, setGallery] = useState(0);
@@ -37,7 +43,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [feedTarget, setFeedTarget] = useState<FeedTarget | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    if (!userId || !accessToken) {
       setUnread(0);
       setFeed(0);
       setGallery(0);
@@ -46,7 +52,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const res = await fetchNotif({});
+      const res = await fetchNotifRef.current({});
       setUnread(res.unreadMessages);
       setFeed(res.feedUpdates);
       setGallery(res.galleryComments ?? 0);
@@ -55,27 +61,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     } catch {
       /* diam saja: notifikasi tidak kritis */
     }
-  }, [user, fetchNotif]);
+  }, [userId, accessToken]);
 
 
   const clearFeed = useCallback(async () => {
-    if (!user) return;
+    if (!userId || !accessToken) return;
     setFeed(0);
     setFeedTarget(null);
 
     try {
-      await seenFn({});
+      await seenFnRef.current({});
     } catch {
       /* ignore */
     }
-  }, [user, seenFn]);
+  }, [userId, accessToken]);
 
   useEffect(() => {
     void refresh();
-    if (!user) return;
+    if (!userId || !accessToken) return;
     const t = setInterval(() => void refresh(), 30_000);
     return () => clearInterval(t);
-  }, [user, refresh]);
+  }, [userId, accessToken, refresh]);
 
   return (
     <NotificationContext.Provider
