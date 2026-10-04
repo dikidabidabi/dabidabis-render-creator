@@ -166,6 +166,7 @@ type Sketch = {
   linkedMasterplan?: { rootLayerId: string };
   functionZones?: FunctionZone[];
   showFurnitureSlide?: boolean;
+  showSpecOutlineSlide?: boolean;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -1488,6 +1489,7 @@ type RincianSection = {
   totalEfPer: number;
 };
 type TocEntry = { label: string; page: number };
+type SpecMaterialRef = { kind: "lantai" | "dinding" | "plafon"; materialId: string };
 type Slide =
   | { kind: "title"; id: string; title: string; sketch: Sketch }
   | { kind: "toc"; id: string; title: string; sketch: Sketch; entries: TocEntry[] }
@@ -1514,6 +1516,7 @@ type Slide =
   | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "furniture"; id: string; title: string; sketch: Sketch }
   | { kind: "biaya"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "spec-outline"; id: string; title: string; sketch: Sketch; materialRefs: SpecMaterialRef[]; pageIndex: number; pageCount: number }
   | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }
   | { kind: "siteplan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
   | { kind: "analisis-kawasan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
@@ -1540,6 +1543,23 @@ function computeBounds(sk: Sketch): Bounds {
   const w = maxX - minX, h = maxY - minY;
   const pad = Math.max(w, h, 1) * 0.08;
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+}
+
+function collectSpecMaterialRefs(sketch: Sketch): SpecMaterialRef[] {
+  const refs: SpecMaterialRef[] = [];
+  const seen = new Set<string>();
+  (["lantai", "dinding", "plafon"] as const).forEach((kind) => {
+    (sketch.layers ?? []).forEach((layer) => {
+      if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return;
+      const materialId = layer.roomMaterials?.[kind];
+      if (!materialId) return;
+      const key = `${kind}:${materialId}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      refs.push({ kind, materialId });
+    });
+  });
+  return refs;
 }
 
 function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null, moodboard: MoodboardEntry | null = null): Slide[] {
@@ -1755,6 +1775,22 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   out.push({ kind: "komposisi", id: "komposisi", title: "Komposisi Ruang", sketch: sk, data });
   if (sk.showFurnitureSlide) out.push({ kind: "furniture", id: "furniture", title: "Furniture", sketch: sk });
   out.push({ kind: "biaya", id: "biaya", title: "Estimasi Biaya", sketch: sk, data });
+  if (sk.showSpecOutlineSlide) {
+    const materialRefs = collectSpecMaterialRefs(sk);
+    const pageSize = 6;
+    const pageCount = Math.max(1, Math.ceil(materialRefs.length / pageSize));
+    Array.from({ length: pageCount }, (_, pageIndex) => {
+      out.push({
+        kind: "spec-outline",
+        id: pageCount > 1 ? `spec-outline-${pageIndex + 1}` : "spec-outline",
+        title: pageCount > 1 ? `Outline Spesifikasi (${pageIndex + 1}/${pageCount})` : "Outline Spesifikasi",
+        sketch: sk,
+        materialRefs: materialRefs.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize),
+        pageIndex: pageIndex + 1,
+        pageCount,
+      });
+    });
+  }
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
 
@@ -1783,6 +1819,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "komposisi": return "Komposisi Ruang";
       case "furniture": return "Furniture";
       case "biaya": return "Estimasi Biaya";
+      case "spec-outline": return "Outline Spesifikasi";
       case "closing": return "Penutup";
       case "masterplan": return "Master Plan";
       case "siteplan": return "Siteplan Kawasan";
@@ -2202,6 +2239,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "komposisi" && <KomposisiBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "furniture" && <FurnitureBody sketch={slide.sketch} />}
       {slide.kind === "biaya" && <BiayaBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "spec-outline" && <SpecOutlineBody slide={slide} />}
       {slide.kind === "masterplan" && <MasterPlanBody plan={slide.plan} analysis={slide.analysis} />}
       {slide.kind === "siteplan" && <SiteplanBody analysis={slide.analysis} />}
       {slide.kind === "analisis-kawasan" && <AnalisisKawasanBody analysis={slide.analysis} />}
@@ -4635,8 +4673,9 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "lantai");
   const usedWallMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.dinding).filter((id): id is string => Boolean(id))))
     .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "dinding");
-  const floorCodeById = new Map(usedFloorMaterials.map((material, index) => [material.id, `L${index + 1}`]));
-  const wallCodeById = new Map(usedWallMaterials.map((material, index) => [material.id, `D${index + 1}`]));
+  const projectMaterialRefs = collectSpecMaterialRefs(sketch);
+  const floorCodeById = new Map(projectMaterialRefs.filter((ref) => ref.kind === "lantai").map((ref, index) => [ref.materialId, `L${index + 1}`]));
+  const wallCodeById = new Map(projectMaterialRefs.filter((ref) => ref.kind === "dinding").map((ref, index) => [ref.materialId, `D${index + 1}`]));
   const showMaterialMode = area.showMaterials === true;
   const functionZones = normalizeFunctionZones(sketch.functionZones);
   const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
@@ -11309,6 +11348,58 @@ function BiayaBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       </div>
     </div>
   );
+}
+
+function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outline" }> }) {
+  const [materials, setMaterials] = useState<LibraryMaterial[]>([]);
+  useEffect(() => {
+    const reload = () => setMaterials(loadMaterialLibrary());
+    reload();
+    window.addEventListener("storage", reload);
+    return () => window.removeEventListener("storage", reload);
+  }, []);
+  const materialById = new Map(materials.map((material) => [material.id, material]));
+  const allRefs = collectSpecMaterialRefs(slide.sketch);
+  const codeByRef = new Map<string, string>();
+  (["lantai", "dinding", "plafon"] as const).forEach((kind) => {
+    const prefix = kind === "lantai" ? "L" : kind === "dinding" ? "D" : "P";
+    allRefs.filter((ref) => ref.kind === kind).forEach((ref, index) => codeByRef.set(`${kind}:${ref.materialId}`, `${prefix}${index + 1}`));
+  });
+  const levels = [...(slide.sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const rows = slide.materialRefs.map((ref) => {
+    const material = materialById.get(ref.materialId);
+    const locations = levels.flatMap((level) => {
+      const roomNames = (slide.sketch.layers ?? [])
+        .filter((layer) => !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind] === ref.materialId)
+        .map((layer) => layer.name)
+        .filter((name, index, names) => names.indexOf(name) === index)
+        .sort((a, b) => a.localeCompare(b, "id"));
+      return roomNames.length > 0 ? [{ level: level.name, rooms: roomNames }] : [];
+    });
+    return { ref, material, locations, code: codeByRef.get(`${ref.kind}:${ref.materialId}`) ?? "—" };
+  });
+  const border = "1px solid #b8b8b3";
+  const headerStyle: React.CSSProperties = { border, padding: "8px 7px", background: "#1b1b1b", color: "#ffffff", fontSize: 10, fontWeight: 750, textAlign: "left", verticalAlign: "middle" };
+  const cellStyle: React.CSSProperties = { border, padding: "8px 7px", fontSize: 10, lineHeight: 1.35, verticalAlign: "top", color: "#202020", overflowWrap: "anywhere" };
+  return <div style={{ width: "100%", minHeight: 0 }}>
+    {rows.length === 0 ? <div style={{ border: "1px dashed #aaa", padding: 48, color: "#666", textAlign: "center" }}>Belum ada material yang dipilih pada Rincian per Level.</div> : <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse" }}>
+      <colgroup><col style={{ width: "9%" }} /><col style={{ width: "14%" }} /><col style={{ width: "19%" }} /><col style={{ width: "10%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "13%" }} /></colgroup>
+      <thead>
+        <tr><th rowSpan={2} style={headerStyle}>Item pekerjaan</th><th rowSpan={2} style={headerStyle}>Material</th><th rowSpan={2} style={headerStyle}>Deskripsi</th><th colSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Lokasi</th><th rowSpan={2} style={headerStyle}>Gambar</th><th rowSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Kode</th><th rowSpan={2} style={headerStyle}>Produk</th></tr>
+        <tr><th style={headerStyle}>Lantai</th><th style={headerStyle}>Ruang</th></tr>
+      </thead>
+      <tbody>{rows.map(({ ref, material, locations, code }) => <tr key={`${ref.kind}:${ref.materialId}`} style={{ height: 104 }}>
+        <td style={{ ...cellStyle, fontWeight: 750, textTransform: "capitalize" }}>{ref.kind}</td>
+        <td style={{ ...cellStyle, fontWeight: 700 }}>{material?.name || "Material tidak ditemukan"}</td>
+        <td style={cellStyle}>{material?.description || "—"}</td>
+        <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd", fontWeight: 700 }}>{location.level}</div>) : "—"}</td>
+        <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd" }}>{location.rooms.join(", ")}</div>) : "—"}</td>
+        <td style={{ ...cellStyle, textAlign: "center" }}>{material?.image ? <img src={material.image} alt={material.name} style={{ width: 78, height: 66, objectFit: "cover", border: "1px solid #aaa", margin: "0 auto" }} /> : <span style={{ color: "#777" }}>—</span>}</td>
+        <td style={{ ...cellStyle, textAlign: "center" }}>{ref.kind === "lantai" || ref.kind === "dinding" ? <span style={{ display: "inline-flex" }}><MaterialCodeSymbol code={code} kind={ref.kind} size={30} /></span> : <span style={{ display: "inline-flex", width: 30, height: 30, alignItems: "center", justifyContent: "center", border: "1.5px solid #111", fontWeight: 800 }}>{code}</span>}</td>
+        <td style={cellStyle}>{material?.product || "—"}</td>
+      </tr>)}</tbody>
+    </table>}
+  </div>;
 }
 
 
