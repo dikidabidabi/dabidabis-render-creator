@@ -986,7 +986,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
     materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({ ...stored, generalMaterials: next })));
   };
   if (levels.length === 0) {
-    return <p className="text-xs text-muted-foreground">Belum ada level.</p>;
+    return <div className="space-y-4"><p className="text-xs text-muted-foreground">Belum ada level.</p><GeneralMaterialsSection value={generalMaterials} materials={materials} onChange={saveGeneralMaterials} /></div>;
   }
   return (
     <div className="space-y-5 text-sm">
