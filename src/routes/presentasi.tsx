@@ -1497,7 +1497,7 @@ type RincianSection = {
   totalEfPer: number;
 };
 type TocEntry = { label: string; page: number };
-type SpecMaterialRef = { kind: MaterialKind; materialId: string; locationLabel?: string };
+type SpecMaterialRef = { kind: MaterialKind; materialId: string };
 type SpecLocation = { level: string; rooms: string[] };
 type SpecMaterialRow = { ref: SpecMaterialRef; locations: SpecLocation[] };
 type SpecMaterialPage = SpecMaterialRow[];
@@ -1562,7 +1562,7 @@ function collectSpecMaterialRefs(sketch: Sketch): SpecMaterialRef[] {
   const general = normalizeGeneralMaterialSelections(sketch.generalMaterials);
   general.foundation.forEach((materialId) => {
     const key = `pekerjaan dasar:${materialId}`;
-    if (!seen.has(key) && materialId) { seen.add(key); refs.push({ kind: "pekerjaan dasar", materialId, locationLabel: "Umum" }); }
+    if (!seen.has(key) && materialId) { seen.add(key); refs.push({ kind: "pekerjaan dasar", materialId }); }
   });
   (["lantai", "dinding", "plafon"] as const).forEach((kind) => {
     (sketch.layers ?? []).forEach((layer) => {
@@ -1577,8 +1577,8 @@ function collectSpecMaterialRefs(sketch: Sketch): SpecMaterialRef[] {
   });
   (["barat", "timur", "utara", "selatan"] as const).forEach((direction) => {
     general.facades[direction].forEach((materialId) => {
-      const key = `fasad:${materialId}:${direction}`;
-      if (!seen.has(key) && materialId) { seen.add(key); refs.push({ kind: "fasad", materialId, locationLabel: direction[0].toUpperCase() + direction.slice(1) }); }
+      const key = `fasad:${materialId}`;
+      if (!seen.has(key) && materialId) { seen.add(key); refs.push({ kind: "fasad", materialId }); }
     });
   });
   return refs;
@@ -1591,7 +1591,11 @@ function specTextLines(value: string | undefined, charsPerLine: number) {
 
 function specLocations(sketch: Sketch, ref: SpecMaterialRef): SpecLocation[] {
   if (ref.kind === "pekerjaan dasar") return [{ level: "Umum", rooms: ["Seluruh bangunan"] }];
-  if (ref.kind === "fasad") return [{ level: ref.locationLabel || "Fasad", rooms: ["Fasad"] }];
+  if (ref.kind === "fasad") {
+    const general = normalizeGeneralMaterialSelections(sketch.generalMaterials);
+    return (["barat", "timur", "utara", "selatan"] as const).filter((direction) => general.facades[direction].includes(ref.materialId))
+      .map((direction) => ({ level: direction[0].toUpperCase() + direction.slice(1), rooms: ["Fasad"] }));
+  }
   return [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl).flatMap((level) => {
     const rooms = [...new Set((sketch.layers ?? [])
       .filter((layer) => !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind as keyof RoomMaterials] === ref.materialId)
@@ -4790,6 +4794,12 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const codeById = materialCodes(materialLibrary);
   const showCeilingMode = area.showCeiling === true;
   const showMaterialMode = area.showMaterials === true && !showCeilingMode;
+  const legendSections: { title: string; materials: LibraryMaterial[]; kind: "lantai" | "dinding" | "plafon" }[] = showCeilingMode
+    ? [{ title: "Plafon", materials: usedCeilingMaterials, kind: "plafon" }]
+    : [
+        { title: "Lantai", materials: usedFloorMaterials, kind: "lantai" },
+        { title: "Dinding", materials: usedWallMaterials, kind: "dinding" },
+      ];
   const functionZones = normalizeFunctionZones(sketch.functionZones);
   const functionZoneById = new Map(functionZones.map((zone) => [zone.id, zone]));
   const detailZoneStats = functionZones.flatMap((zone) => {
@@ -5405,15 +5415,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       </div>}
       {(showMaterialMode || showCeilingMode) && <aside style={{ position: "absolute", right: 24, top: 28, bottom: area.showKeyplan === false ? 24 : "20%", width: "18%", minWidth: 170, background: "rgba(255,255,255,0.97)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", padding: "14px 12px", overflow: "hidden", fontFamily: "Manrope, sans-serif" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 14, fontWeight: 800, paddingBottom: 8, borderBottom: "2px solid #111111" }}>{showCeilingMode ? "LEGENDA PLAFON" : "LEGENDA MATERIAL"}</div>
-        {(showCeilingMode ? [["Plafon", usedCeilingMaterials, "plafon"]] : [[
-          "Lantai",
-          usedFloorMaterials,
-          "lantai",
-        ], [
-          "Dinding",
-          usedWallMaterials,
-          "dinding",
-        ]] as const).map(([title, materials, kind]) => <section key={kind} style={{ marginTop: 14 }}>
+        {legendSections.map(({ title, materials, kind }) => <section key={kind} style={{ marginTop: 14 }}>
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "#555555", marginBottom: 7 }}>{title}</div>
           {materials.length === 0 ? <div style={{ fontSize: 10, color: "#777777" }}>Belum dipilih</div> : materials.map((material) => {
             const code = codeById.get(material.id) ?? "";
