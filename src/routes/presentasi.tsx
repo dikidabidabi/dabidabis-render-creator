@@ -11349,6 +11349,58 @@ function BiayaBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
   );
 }
 
+function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outline" }> }) {
+  const [materials, setMaterials] = useState<LibraryMaterial[]>([]);
+  useEffect(() => {
+    const reload = () => setMaterials(loadMaterialLibrary());
+    reload();
+    window.addEventListener("storage", reload);
+    return () => window.removeEventListener("storage", reload);
+  }, []);
+  const materialById = new Map(materials.map((material) => [material.id, material]));
+  const allRefs = collectSpecMaterialRefs(slide.sketch);
+  const codeByRef = new Map<string, string>();
+  (["lantai", "dinding", "plafon"] as const).forEach((kind) => {
+    const prefix = kind === "lantai" ? "L" : kind === "dinding" ? "D" : "P";
+    allRefs.filter((ref) => ref.kind === kind).forEach((ref, index) => codeByRef.set(`${kind}:${ref.materialId}`, `${prefix}${index + 1}`));
+  });
+  const levels = [...(slide.sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const rows = slide.materialRefs.map((ref) => {
+    const material = materialById.get(ref.materialId);
+    const locations = levels.flatMap((level) => {
+      const roomNames = (slide.sketch.layers ?? [])
+        .filter((layer) => !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind] === ref.materialId)
+        .map((layer) => layer.name)
+        .filter((name, index, names) => names.indexOf(name) === index)
+        .sort((a, b) => a.localeCompare(b, "id"));
+      return roomNames.length > 0 ? [{ level: level.name, rooms: roomNames }] : [];
+    });
+    return { ref, material, locations, code: codeByRef.get(`${ref.kind}:${ref.materialId}`) ?? "—" };
+  });
+  const border = "1px solid #b8b8b3";
+  const headerStyle: React.CSSProperties = { border, padding: "8px 7px", background: "#1b1b1b", color: "#ffffff", fontSize: 10, fontWeight: 750, textAlign: "left", verticalAlign: "middle" };
+  const cellStyle: React.CSSProperties = { border, padding: "8px 7px", fontSize: 10, lineHeight: 1.35, verticalAlign: "top", color: "#202020", overflowWrap: "anywhere" };
+  return <div style={{ width: "100%", minHeight: 0 }}>
+    {rows.length === 0 ? <div style={{ border: "1px dashed #aaa", padding: 48, color: "#666", textAlign: "center" }}>Belum ada material yang dipilih pada Rincian per Level.</div> : <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse" }}>
+      <colgroup><col style={{ width: "9%" }} /><col style={{ width: "14%" }} /><col style={{ width: "19%" }} /><col style={{ width: "10%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "13%" }} /></colgroup>
+      <thead>
+        <tr><th rowSpan={2} style={headerStyle}>Item pekerjaan</th><th rowSpan={2} style={headerStyle}>Material</th><th rowSpan={2} style={headerStyle}>Deskripsi</th><th colSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Lokasi</th><th rowSpan={2} style={headerStyle}>Gambar</th><th rowSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Kode</th><th rowSpan={2} style={headerStyle}>Produk</th></tr>
+        <tr><th style={headerStyle}>Lantai</th><th style={headerStyle}>Ruang</th></tr>
+      </thead>
+      <tbody>{rows.map(({ ref, material, locations, code }) => <tr key={`${ref.kind}:${ref.materialId}`} style={{ height: 104 }}>
+        <td style={{ ...cellStyle, fontWeight: 750, textTransform: "capitalize" }}>{ref.kind}</td>
+        <td style={{ ...cellStyle, fontWeight: 700 }}>{material?.name || "Material tidak ditemukan"}</td>
+        <td style={cellStyle}>{material?.description || "—"}</td>
+        <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd", fontWeight: 700 }}>{location.level}</div>) : "—"}</td>
+        <td style={cellStyle}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ minHeight: 20, paddingBottom: 5, marginBottom: 5, borderBottom: "1px solid #e1e1dd" }}>{location.rooms.join(", ")}</div>) : "—"}</td>
+        <td style={{ ...cellStyle, textAlign: "center" }}>{material?.image ? <img src={material.image} alt={material.name} style={{ width: 78, height: 66, objectFit: "cover", border: "1px solid #aaa", margin: "0 auto" }} /> : <span style={{ color: "#777" }}>—</span>}</td>
+        <td style={{ ...cellStyle, textAlign: "center" }}><span style={{ display: "inline-flex", width: 30, height: 30, alignItems: "center", justifyContent: "center", border: ref.kind === "dinding" ? "none" : "1.5px solid #111", borderRadius: ref.kind === "lantai" ? "50%" : ref.kind === "plafon" ? 2 : 0, fontWeight: 800 }}>{code}</span></td>
+        <td style={cellStyle}>{material?.product || "—"}</td>
+      </tr>)}</tbody>
+    </table>}
+  </div>;
+}
+
 
 // ---- Charts ----
 function Donut({
