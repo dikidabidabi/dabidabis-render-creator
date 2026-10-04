@@ -1625,7 +1625,7 @@ function paginateSpecMaterials(sketch: Sketch, refs: SpecMaterialRef[], material
           ? [...row.locations.slice(0, -1), { level: location.level, rooms: [...last.rooms, room] }]
           : [...row.locations, { level: location.level, rooms: [room] }];
         let nextHeight = specRowHeight({ ref, locations: candidateLocations }, material);
-        if (usedHeight - rowHeight + nextHeight > pageBudget && row.locations.length) {
+        if (usedHeight - rowHeight + nextHeight > pageBudget && (row.locations.length || page.length > 1)) {
           flush();
           row = newRow();
           page.push(row);
