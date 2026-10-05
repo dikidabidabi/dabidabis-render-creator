@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Atur dimensi luar ruang di bawah 400 mm yang berurutan pada jalur berulang 400, 550, dan 700 mm dari kotak detail.
+
 - [x] Tambahkan pintu lipat satu/dua sisi, arah kiri/kanan, jumlah daun, lebar 800 cm, dan notasi 45° di seluruh tampilan serta DXF.
 - [x] Koreksi geometri pintu lipat agar panjang daun tetap nyata dan sisa lebar bukaan menjadi jeda di kusen seberang atau di tengah.
 

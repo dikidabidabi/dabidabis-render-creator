@@ -5176,8 +5176,8 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     if (values.length < 2) return null;
     const horizontal = side === "top" || side === "bottom";
     const near = side === "top" || side === "left";
-    const baseRail = (horizontal ? (near ? boxBounds.minY : boxBounds.maxY) : (near ? boxBounds.minX : boxBounds.maxX)) + (near ? -1 : 1) * pxPerM * 0.5;
-    const intervals = values.slice(0, -1).map((value, index) => ({ value, end: values[index + 1], short: values[index + 1] - value < pxPerM * 0.2 }));
+    const baseRail = (horizontal ? (near ? boxBounds.minY : boxBounds.maxY) : (near ? boxBounds.minX : boxBounds.maxX)) + (near ? -1 : 1) * pxPerM * 0.4;
+    const intervals = values.slice(0, -1).map((value, index) => ({ value, end: values[index + 1], short: values[index + 1] - value < pxPerM * 0.4 }));
     const shortOffsets = new Map<number, number>();
     for (let start = 0; start < intervals.length;) {
       if (!intervals[start].short) { start += 1; continue; }
@@ -5185,7 +5185,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       while (end < intervals.length && intervals[end].short) end += 1;
       if (end - start >= 2) {
         for (let index = start; index < end; index++) {
-          if ((index - start) % 2 === 0) shortOffsets.set(index, pxPerM * 0.15);
+          shortOffsets.set(index, pxPerM * 0.15 * ((index - start) % 3));
         }
       }
       start = end;
