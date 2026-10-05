@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Hilangkan simbol segitiga arah panel dari tengah jendela pada Sketsa dan Presentasi.
+
 - [x] Atur dimensi luar ruang di bawah 400 mm yang berurutan pada jalur berulang 400, 550, dan 700 mm dari kotak detail.
 
 - [x] Tambahkan pintu lipat satu/dua sisi, arah kiri/kanan, jumlah daun, lebar 800 cm, dan notasi 45° di seluruh tampilan serta DXF.

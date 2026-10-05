@@ -5001,16 +5001,6 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.lineTo(cx - nx * halfDepth, cy - ny * halfDepth);
         ctx.stroke();
       }
-      // Tanda arah panel: dari sisi engsel A menuju sisi bukaan pada normal tersimpan.
-      const centerX = (ax + bx) / 2, centerY = (ay + by) / 2;
-      const orientationLength = Math.min(len * 0.18, 0.18 * pxPerMeter);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.1 / s;
-      ctx.beginPath();
-      ctx.moveTo(centerX - dx * orientationLength * 0.4, centerY - dy * orientationLength * 0.4);
-      ctx.lineTo(centerX + window.nx * orientationLength, centerY + window.ny * orientationLength);
-      ctx.lineTo(centerX + dx * orientationLength * 0.4, centerY + dy * orientationLength * 0.4);
-      ctx.stroke();
       ctx.restore();
     };
     for (const window of sketch.windows ?? []) {
