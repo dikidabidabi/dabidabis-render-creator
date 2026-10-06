@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Tambahkan lingkaran warna dan total luasan lantai, dinding, serta plafon pada legenda Slide Detail.
+
 - [x] Hilangkan simbol segitiga arah panel dari tengah jendela pada Sketsa dan Presentasi.
 
 - [x] Atur dimensi luar ruang di bawah 400 mm yang berurutan pada jalur berulang 400, 550, dan 700 mm dari kotak detail.

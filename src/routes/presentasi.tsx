@@ -4791,6 +4791,24 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "dinding");
   const usedCeilingMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.plafon).filter((id): id is string => Boolean(id))))
     .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "plafon");
+  const materialAreaByKind = {
+    lantai: new Map<string, number>(),
+    dinding: new Map<string, number>(),
+    plafon: new Map<string, number>(),
+  };
+  detailRooms.forEach((room) => {
+    const roomAreaM2 = Math.max(0, Number(room.areaM2) || 0);
+    const perimeterM = room.points.reduce((sum, point, index) => {
+      const next = room.points[(index + 1) % room.points.length];
+      return sum + Math.hypot(next.x - point.x, next.y - point.y) / pxPerM;
+    }, 0);
+    const floorId = room.roomMaterials?.lantai;
+    const wallId = room.roomMaterials?.dinding;
+    const ceilingId = room.roomMaterials?.plafon;
+    if (floorId) materialAreaByKind.lantai.set(floorId, (materialAreaByKind.lantai.get(floorId) ?? 0) + roomAreaM2);
+    if (wallId) materialAreaByKind.dinding.set(wallId, (materialAreaByKind.dinding.get(wallId) ?? 0) + perimeterM * 3);
+    if (ceilingId) materialAreaByKind.plafon.set(ceilingId, (materialAreaByKind.plafon.get(ceilingId) ?? 0) + roomAreaM2);
+  });
   const codeById = materialCodes(materialLibrary);
   const showCeilingMode = area.showCeiling === true;
   const showMaterialMode = area.showMaterials === true && !showCeilingMode;
@@ -5419,10 +5437,15 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", color: "#555555", marginBottom: 7 }}>{title}</div>
           {materials.length === 0 ? <div style={{ fontSize: 10, color: "#777777" }}>Belum dipilih</div> : materials.map((material) => {
             const code = codeById.get(material.id) ?? "";
-            return <div key={material.id} style={{ display: "grid", gridTemplateColumns: "18px 30px minmax(0,1fr)", alignItems: "center", gap: 7, minHeight: 42, borderBottom: "1px solid #deded9", padding: "5px 0" }}>
+            const materialAreaM2 = materialAreaByKind[kind].get(material.id) ?? 0;
+            return <div key={material.id} style={{ display: "grid", gridTemplateColumns: "18px 12px 30px minmax(0,1fr)", alignItems: "center", gap: 6, minHeight: 42, borderBottom: "1px solid #deded9", padding: "5px 0" }}>
               <MaterialCodeSymbol code={code} kind={kind} size={16} />
+              <span aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: materialPlanColor(material), border: "1px solid #777777" }} />
               {material.image ? <img src={material.image} alt="" style={{ width: 30, height: 30, objectFit: "cover", border: "1px solid #c8c8c3" }} /> : <span style={{ width: 30, height: 30, background: materialPlanColor(material), border: "1px solid #c8c8c3" }} />}
-              <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.25, fontWeight: 650, overflowWrap: "anywhere" }}>{material.name || "Tanpa nama"}</span>
+              <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1.25, fontWeight: 650, overflowWrap: "anywhere" }}>
+                <span style={{ display: "block" }}>{material.name || "Tanpa nama"}</span>
+                <span style={{ display: "block", marginTop: 2, color: "#555555", fontSize: 9, fontWeight: 700 }}>{fmt(materialAreaM2, 2)} m²</span>
+              </span>
             </div>;
           })}
         </section>)}
