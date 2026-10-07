@@ -127,6 +127,7 @@ function MaterialLibraryPage() {
               {!materials.some((m) => m.kind === kind) && <p className="py-5 text-center text-xs text-muted-foreground">Belum ada material.</p>}
             </div>
           </section>
+        ))}
         </div>
         {maxScroll > 0 && (
           <input
