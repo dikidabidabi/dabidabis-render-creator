@@ -51,11 +51,22 @@ function MaterialLibraryPage() {
   const [materials, setMaterials] = useState<LibraryMaterial[]>([]);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploadId, setUploadId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollPos, setScrollPos] = useState(0);
+  const [maxScroll, setMaxScroll] = useState(0);
   useEffect(() => {
     const reload = () => setMaterials(loadMaterialLibrary());
     reload();
     window.addEventListener("storage", reload);
     return () => window.removeEventListener("storage", reload);
+  }, []);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setMaxScroll(Math.max(0, el.scrollWidth - el.clientWidth));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   const update = (next: LibraryMaterial[]) => {
@@ -88,9 +99,10 @@ function MaterialLibraryPage() {
       <p className="mb-6 text-sm text-muted-foreground">Acuan material untuk seluruh proyek dalam akun ini.</p>
       <TabulasiNavigation active="list-material" />
       <h2 className="mb-4 text-lg font-semibold">List Material</h2>
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="overflow-hidden">
+        <div ref={scrollRef} onScroll={(event) => setScrollPos(event.currentTarget.scrollLeft)} className="flex gap-5 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {MATERIAL_KINDS.map((kind) => (
-          <section key={kind} className="min-w-0">
+          <section key={kind} className="w-80 min-w-0 shrink-0">
             <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-sm font-semibold capitalize">{kind}</h3>
               <Button size="sm" variant="outline" onClick={() => add(kind)}><Plus />Tambah material</Button>
@@ -114,8 +126,22 @@ function MaterialLibraryPage() {
               ))}
               {!materials.some((m) => m.kind === kind) && <p className="py-5 text-center text-xs text-muted-foreground">Belum ada material.</p>}
             </div>
-          </section>
-        ))}
+        </div>
+        {maxScroll > 0 && (
+          <input
+            type="range"
+            aria-label="Geser daftar material"
+            min={0}
+            max={maxScroll}
+            value={Math.min(scrollPos, maxScroll)}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              setScrollPos(value);
+              if (scrollRef.current) scrollRef.current.scrollLeft = value;
+            }}
+            className="mt-3 w-full accent-primary"
+          />
+        )}
       </div>
       <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void handleUpload(file); }} />
     </main>
