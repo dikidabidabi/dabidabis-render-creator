@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Tambahkan subkolom Luas pada Lokasi Outline Spesifikasi untuk total Lantai, Dinding, dan Plafon seluruh level.
+
 - [x] Tambahkan lingkaran warna dan total luasan lantai, dinding, serta plafon pada legenda Slide Detail.
 
 - [x] Hilangkan simbol segitiga arah panel dari tengah jendela pada Sketsa dan Presentasi.
