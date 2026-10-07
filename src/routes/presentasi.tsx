@@ -11524,25 +11524,40 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
   }, []);
   const materialById = new Map(materials.map((material) => [material.id, material]));
   const codeById = materialCodes(materials);
+  const pxPerM = 1 / sketchMetersPerSketchPx(slide.sketch.scale);
+  const areaFor = (ref: SpecMaterialRef): number | null => {
+    if (ref.kind !== "lantai" && ref.kind !== "dinding" && ref.kind !== "plafon") return null;
+    return (slide.sketch.layers ?? []).reduce((sum, layer) => {
+      if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return sum;
+      if (layer.roomMaterials?.[ref.kind as keyof RoomMaterials] !== ref.materialId) return sum;
+      if (ref.kind !== "dinding") return sum + Math.max(0, Number(layer.areaM2) || 0);
+      const perimeterM = layer.points.reduce((total, point, index) => {
+        const next = layer.points[(index + 1) % layer.points.length];
+        return total + Math.hypot(next.x - point.x, next.y - point.y) / pxPerM;
+      }, 0);
+      return sum + perimeterM * 3;
+    }, 0);
+  };
   const rows = slide.materialRows.map(({ ref, locations }) => {
     const material = materialById.get(ref.materialId);
-    return { ref, material, locations, code: codeById.get(ref.materialId) ?? "—" };
+    return { ref, material, locations, code: codeById.get(ref.materialId) ?? "—", areaM2: areaFor(ref) };
   });
   const border = "1px solid #b8b8b3";
   const headerStyle: React.CSSProperties = { border, padding: "8px 7px", background: "#1b1b1b", color: "#ffffff", fontSize: 10, fontWeight: 750, textAlign: "left", verticalAlign: "middle" };
   const cellStyle: React.CSSProperties = { border, padding: "8px 7px", fontSize: 10, lineHeight: 1.35, verticalAlign: "top", color: "#202020", overflowWrap: "anywhere", whiteSpace: "pre-wrap" };
   return <div style={{ width: "100%", minWidth: A3_W - PAD * 2, minHeight: 0 }}>
     {rows.length === 0 ? <div style={{ border: "1px dashed #aaa", padding: 48, color: "#666", textAlign: "center" }}>Belum ada material yang dipilih pada Rincian per Level.</div> : <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse" }}>
-      <colgroup><col style={{ width: "9%" }} /><col style={{ width: "14%" }} /><col style={{ width: "19%" }} /><col style={{ width: "10%" }} /><col style={{ width: "18%" }} /><col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "13%" }} /></colgroup>
+      <colgroup><col style={{ width: "9%" }} /><col style={{ width: "14%" }} /><col style={{ width: "17%" }} /><col style={{ width: "9%" }} /><col style={{ width: "15%" }} /><col style={{ width: "6%" }} /><col style={{ width: "10%" }} /><col style={{ width: "7%" }} /><col style={{ width: "13%" }} /></colgroup>
       <thead>
-        <tr><th rowSpan={2} style={headerStyle}>Item pekerjaan</th><th rowSpan={2} style={headerStyle}>Material</th><th rowSpan={2} style={headerStyle}>Deskripsi</th><th colSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Lokasi</th><th rowSpan={2} style={headerStyle}>Gambar</th><th rowSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Kode</th><th rowSpan={2} style={headerStyle}>Produk</th></tr>
-        <tr><th style={headerStyle}>Lantai</th><th style={headerStyle}>Ruang</th></tr>
+        <tr><th rowSpan={2} style={headerStyle}>Item pekerjaan</th><th rowSpan={2} style={headerStyle}>Material</th><th rowSpan={2} style={headerStyle}>Deskripsi</th><th colSpan={3} style={{ ...headerStyle, textAlign: "center" }}>Lokasi</th><th rowSpan={2} style={headerStyle}>Gambar</th><th rowSpan={2} style={{ ...headerStyle, textAlign: "center" }}>Kode</th><th rowSpan={2} style={headerStyle}>Produk</th></tr>
+        <tr><th style={headerStyle}>Lantai</th><th style={headerStyle}>Ruang</th><th style={{ ...headerStyle, textAlign: "right" }}>Luas</th></tr>
       </thead>
-       <tbody>{rows.map(({ ref, material, locations, code }, index) => <tr key={`${ref.kind}:${ref.materialId}:${index}`}>
+       <tbody>{rows.map(({ ref, material, locations, code, areaM2 }, index) => <tr key={`${ref.kind}:${ref.materialId}:${index}`}>
         <td style={{ ...cellStyle, fontWeight: 750, textTransform: "capitalize" }}>{ref.kind}</td>
         <td style={{ ...cellStyle, fontWeight: 700 }}>{material?.name || "Material tidak ditemukan"}</td>
         <td style={cellStyle}>{material?.description || "—"}</td>
-        <td colSpan={2} style={{ ...cellStyle, padding: 0, whiteSpace: "normal" }}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ display: "grid", gridTemplateColumns: "35.714% 64.286%", borderBottom: "1px solid #e1e1dd" }}><div style={{ padding: "8px 7px", borderRight: border, fontWeight: 700 }}>{location.level}</div><div style={{ padding: "8px 7px" }}>{location.rooms.join(", ")}</div></div>) : <div style={{ padding: "8px 7px" }}>—</div>}</td>
+        <td colSpan={2} style={{ ...cellStyle, padding: 0, whiteSpace: "normal" }}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ display: "grid", gridTemplateColumns: "37.5% 62.5%", borderBottom: "1px solid #e1e1dd" }}><div style={{ padding: "8px 7px", borderRight: border, fontWeight: 700 }}>{location.level}</div><div style={{ padding: "8px 7px" }}>{location.rooms.join(", ")}</div></div>) : <div style={{ padding: "8px 7px" }}>—</div>}</td>
+        <td style={{ ...cellStyle, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{areaM2 === null ? "—" : `${fmt(areaM2, 2)} m²`}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{material?.image ? <img src={material.image} alt={material.name} style={{ width: 78, height: 66, objectFit: "cover", border: "1px solid #aaa", margin: "0 auto" }} /> : <span style={{ color: "#777" }}>—</span>}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{ref.kind === "lantai" || ref.kind === "dinding" || ref.kind === "plafon" ? <span style={{ display: "inline-flex" }}><MaterialCodeSymbol code={code} kind={ref.kind} size={30} /></span> : <span style={{ display: "inline-flex", minWidth: 30, height: 30, padding: "0 4px", alignItems: "center", justifyContent: "center", border: "1.5px solid #111", fontWeight: 800 }}>{code}</span>}</td>
         <td style={cellStyle}>{material?.product || "—"}</td>
