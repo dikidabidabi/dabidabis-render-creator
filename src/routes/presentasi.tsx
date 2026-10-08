@@ -59,6 +59,7 @@ import {
 } from "@/lib/edge-segments";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { type Window } from "@/lib/windows";
+import { roomWallSpans } from "@/lib/room-wall-spans";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -4785,6 +4786,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
       && Math.max(...ys) >= slide.bounds.minY && Math.min(...ys) <= slide.bounds.maxY;
   });
   const materialById = new Map(materialLibrary.map((material) => [material.id, material]));
+  const wallSpansByRoom = new Map(levelLayers.map((room) => [room.id, roomWallSpans(room.points, sketch.lines ?? [], level.id)]));
   const usedFloorMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.lantai).filter((id): id is string => Boolean(id))))
     .map((id) => materialById.get(id)).filter((material): material is LibraryMaterial => material?.kind === "lantai");
   const usedWallMaterials = Array.from(new Set(detailRooms.map((room) => room.roomMaterials?.dinding).filter((id): id is string => Boolean(id))))
@@ -4798,10 +4800,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   };
   detailRooms.forEach((room) => {
     const roomAreaM2 = Math.max(0, Number(room.areaM2) || 0);
-    const perimeterM = room.points.reduce((sum, point, index) => {
-      const next = room.points[(index + 1) % room.points.length];
-      return sum + Math.hypot(next.x - point.x, next.y - point.y) / pxPerM;
-    }, 0);
+    const perimeterM = (wallSpansByRoom.get(room.id) ?? []).reduce((sum, span) => sum + span.length / pxPerM, 0);
     const floorId = room.roomMaterials?.lantai;
     const wallId = room.roomMaterials?.dinding;
     const ceilingId = room.roomMaterials?.plafon;
@@ -5326,9 +5325,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             const next = room.points[(index + 1) % room.points.length];
             return sum + point.x * next.y - next.x * point.y;
           }, 0);
-          return room.points.flatMap((point, index) => {
-            const next = room.points[(index + 1) % room.points.length];
-            const length = Math.hypot(next.x - point.x, next.y - point.y);
+          return (wallSpansByRoom.get(room.id) ?? []).flatMap(({ a: point, b: next, length }, index) => {
             if (length < pxPerM * 0.25) return [];
             const ux = (next.x - point.x) / length;
             const uy = (next.y - point.y) / length;
@@ -11531,10 +11528,8 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
       if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return sum;
       if (layer.roomMaterials?.[ref.kind as keyof RoomMaterials] !== ref.materialId) return sum;
       if (ref.kind !== "dinding") return sum + Math.max(0, Number(layer.areaM2) || 0);
-      const perimeterM = layer.points.reduce((total, point, index) => {
-        const next = layer.points[(index + 1) % layer.points.length];
-        return total + Math.hypot(next.x - point.x, next.y - point.y) / pxPerM;
-      }, 0);
+      const perimeterM = roomWallSpans(layer.points, slide.sketch.lines ?? [], layer.levelId)
+        .reduce((total, span) => total + span.length / pxPerM, 0);
       return sum + perimeterM * 3;
     }, 0);
   };
