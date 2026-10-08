@@ -1,4 +1,4 @@
-import polygonClipping from "polygon-clipping";
+import { freeStairPlan } from "./free-stair-geometry";
 
 export type Point = { x: number; y: number };
 
