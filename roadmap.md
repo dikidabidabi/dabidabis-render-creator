@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Kecualikan perimeter ruang tanpa garis dinding dari simbol material dan luas dinding pada legenda Detail serta Outline Spesifikasi.
+
 - [x] Tambahkan subkolom Luas pada Lokasi Outline Spesifikasi untuk total Lantai, Dinding, dan Plafon seluruh level.
 
 - [x] Tambahkan lingkaran warna dan total luasan lantai, dinding, serta plafon pada legenda Slide Detail.
