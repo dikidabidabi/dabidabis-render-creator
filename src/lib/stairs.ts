@@ -1,6 +1,8 @@
+import polygonClipping from "polygon-clipping";
+
 export type Point = { x: number; y: number };
 
-export type StairKind = "lurus" | "u" | "lingkar";
+export type StairKind = "lurus" | "u" | "lingkar" | "bebas";
 
 export type Stair = {
   id: string;
@@ -16,6 +18,8 @@ export type Stair = {
   innerRadiusM: number;
   rotationDeg: number;
   createdAt: number;
+  pathPoints?: Point[];
+  offsetSide?: "center" | "left" | "right";
 };
 
 export type StairSectionSurface = {
@@ -61,7 +65,9 @@ export function normalizeStairs(raw: unknown, validLevelIds: Set<string>): Stair
       id: typeof value.id === "string" && value.id ? value.id : genStairId(),
       levelId: value.levelId,
       toLevelId: value.toLevelId,
-      kind: value.kind === "u" || value.kind === "lingkar" ? value.kind : "lurus",
+      kind: value.kind === "u" || value.kind === "lingkar" || value.kind === "bebas" ? value.kind : "lurus",
+      pathPoints: Array.isArray(value.pathPoints) ? value.pathPoints.filter((p: Point) => p && Number.isFinite(p.x) && Number.isFinite(p.y)).map((p: Point) => ({ x: p.x, y: p.y })) : undefined,
+      offsetSide: value.offsetSide === "left" || value.offsetSide === "right" ? value.offsetSide : "center",
       a: { x: ax, y: ay }, b: { x: bx, y: by },
       widthM: Math.max(0.6, finite(value.widthM, DEFAULT_STAIR_WIDTH_M)),
       stepCount: Math.max(2, Math.round(finite(value.stepCount, DEFAULT_STAIR_STEPS))),
@@ -88,6 +94,7 @@ function frame(stair: Stair) {
 }
 
 export function stairPlanGeometry(stair: Stair, pxPerMeter: number): StairPlan {
+  if (stair.kind === "bebas") return freeStairPlan(stair, pxPerMeter);
   const count = Math.max(2, stair.stepCount);
   const { lengthPx, at } = frame(stair);
   const widthPx = Math.max(1, stair.widthM * pxPerMeter);
@@ -172,12 +179,17 @@ export function stairMetrics(stair: Stair, levels: Array<{ id: string; mdpl: num
 }
 
 export function translateStair(stair: Stair, dx: number, dy: number): Stair {
-  return { ...stair, a: { x: stair.a.x + dx, y: stair.a.y + dy }, b: { x: stair.b.x + dx, y: stair.b.y + dy } };
+  return { ...stair, a: { x: stair.a.x + dx, y: stair.a.y + dy }, b: { x: stair.b.x + dx, y: stair.b.y + dy }, pathPoints: stair.pathPoints?.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
 }
 
 export function rotateStair(stair: Stair, rotationDeg: number): Stair {
   const length = Math.max(1, Math.hypot(stair.b.x - stair.a.x, stair.b.y - stair.a.y));
   const radians = rotationDeg * Math.PI / 180;
+  if (stair.kind === "bebas" && stair.pathPoints?.length) {
+    const delta = (rotationDeg - stair.rotationDeg) * Math.PI / 180;
+    const pathPoints = stair.pathPoints.map((p) => ({ x: stair.a.x + (p.x - stair.a.x) * Math.cos(delta) - (p.y - stair.a.y) * Math.sin(delta), y: stair.a.y + (p.x - stair.a.x) * Math.sin(delta) + (p.y - stair.a.y) * Math.cos(delta) }));
+    return { ...stair, rotationDeg, pathPoints, a: pathPoints[0], b: pathPoints[pathPoints.length - 1] };
+  }
   return {
     ...stair,
     rotationDeg,
