@@ -1499,7 +1499,7 @@ type RincianSection = {
 };
 type TocEntry = { label: string; page: number };
 type SpecMaterialRef = { kind: MaterialKind; materialId: string };
-type SpecLocation = { level: string; rooms: string[] };
+type SpecLocation = { level: string; rooms: string[]; areaM2?: number };
 type SpecMaterialRow = { ref: SpecMaterialRef; locations: SpecLocation[] };
 type SpecMaterialPage = SpecMaterialRow[];
 type Slide =
@@ -1590,6 +1590,24 @@ function specTextLines(value: string | undefined, charsPerLine: number) {
   return lines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
 }
 
+function specMaterialArea(sketch: Sketch, ref: SpecMaterialRef, levelId?: string): number | null {
+  if (ref.kind !== "lantai" && ref.kind !== "dinding" && ref.kind !== "plafon") return null;
+  const metersPerPx = sketchMetersPerSketchPx(sketch.scale);
+  return (sketch.layers ?? []).reduce((sum, layer) => {
+    if (levelId !== undefined && layer.levelId !== levelId) return sum;
+    if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return sum;
+    if (layer.roomMaterials?.[ref.kind as keyof RoomMaterials] !== ref.materialId) return sum;
+    if (ref.kind !== "dinding") return sum + Math.max(0, Number(layer.areaM2) || 0);
+    return sum + roomWallSpans(layer.points, sketch.lines ?? [], layer.levelId)
+      .reduce((total, span) => total + span.length * metersPerPx, 0) * 3;
+  }, 0);
+}
+
+function specLocationText(location: SpecLocation): string {
+  const rooms = location.rooms.join(", ");
+  return location.areaM2 === undefined ? rooms : `${rooms} (${fmt(location.areaM2, 2)} m²)`;
+}
+
 function specLocations(sketch: Sketch, ref: SpecMaterialRef): SpecLocation[] {
   if (ref.kind === "pekerjaan dasar") return [{ level: "Umum", rooms: ["Seluruh bangunan"] }];
   if (ref.kind === "fasad") {
@@ -1601,13 +1619,13 @@ function specLocations(sketch: Sketch, ref: SpecMaterialRef): SpecLocation[] {
     const rooms = [...new Set((sketch.layers ?? [])
       .filter((layer) => !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind as keyof RoomMaterials] === ref.materialId)
       .map((layer) => layer.name))].sort((a, b) => a.localeCompare(b, "id"));
-    return rooms.length ? [{ level: level.name, rooms }] : [];
+    return rooms.length ? [{ level: level.name, rooms, areaM2: specMaterialArea(sketch, ref, level.id) ?? undefined }] : [];
   });
 }
 
 function specRowHeight(row: SpecMaterialRow, material?: LibraryMaterial): number {
   const locationHeight = row.locations.length
-    ? row.locations.reduce((total, location) => total + Math.max(32, 16 + 13.5 * specTextLines(location.rooms.join(", "), 38)), 0)
+    ? row.locations.reduce((total, location) => total + Math.max(32, 16 + 13.5 * specTextLines(specLocationText(location), 38)), 0)
     : 32;
   return Math.max(84, 16 + 13.5 * specTextLines(material?.name, 22),
     16 + 13.5 * specTextLines(material?.description, 32),
@@ -1641,8 +1659,8 @@ function paginateSpecMaterials(sketch: Sketch, refs: SpecMaterialRef[], material
       for (const room of location.rooms) {
         const last = row.locations[row.locations.length - 1];
         const candidateLocations = last?.level === location.level
-          ? [...row.locations.slice(0, -1), { level: location.level, rooms: [...last.rooms, room] }]
-          : [...row.locations, { level: location.level, rooms: [room] }];
+          ? [...row.locations.slice(0, -1), { ...location, rooms: [...last.rooms, room] }]
+          : [...row.locations, { ...location, rooms: [room] }];
         let nextHeight = specRowHeight({ ref, locations: candidateLocations }, material);
         if (usedHeight - rowHeight + nextHeight > pageBudget && (row.locations.length || page.length > 1)) {
           if (!row.locations.length) {
@@ -1653,8 +1671,8 @@ function paginateSpecMaterials(sketch: Sketch, refs: SpecMaterialRef[], material
           row = newRow();
           page.push(row);
           rowHeight = specRowHeight(row, material);
-          nextHeight = specRowHeight({ ref, locations: [{ level: location.level, rooms: [room] }] }, material);
-          row.locations = [{ level: location.level, rooms: [room] }];
+          nextHeight = specRowHeight({ ref, locations: [{ ...location, rooms: [room] }] }, material);
+          row.locations = [{ ...location, rooms: [room] }];
         } else {
           row.locations = candidateLocations;
           usedHeight -= rowHeight;
@@ -11521,21 +11539,9 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
   }, []);
   const materialById = new Map(materials.map((material) => [material.id, material]));
   const codeById = materialCodes(materials);
-  const pxPerM = 1 / sketchMetersPerSketchPx(slide.sketch.scale);
-  const areaFor = (ref: SpecMaterialRef): number | null => {
-    if (ref.kind !== "lantai" && ref.kind !== "dinding" && ref.kind !== "plafon") return null;
-    return (slide.sketch.layers ?? []).reduce((sum, layer) => {
-      if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return sum;
-      if (layer.roomMaterials?.[ref.kind as keyof RoomMaterials] !== ref.materialId) return sum;
-      if (ref.kind !== "dinding") return sum + Math.max(0, Number(layer.areaM2) || 0);
-      const perimeterM = roomWallSpans(layer.points, slide.sketch.lines ?? [], layer.levelId)
-        .reduce((total, span) => total + span.length / pxPerM, 0);
-      return sum + perimeterM * 3;
-    }, 0);
-  };
   const rows = slide.materialRows.map(({ ref, locations }) => {
     const material = materialById.get(ref.materialId);
-    return { ref, material, locations, code: codeById.get(ref.materialId) ?? "—", areaM2: areaFor(ref) };
+    return { ref, material, locations, code: codeById.get(ref.materialId) ?? "—", areaM2: specMaterialArea(slide.sketch, ref) };
   });
   const border = "1px solid #b8b8b3";
   const headerStyle: React.CSSProperties = { border, padding: "8px 7px", background: "#1b1b1b", color: "#ffffff", fontSize: 10, fontWeight: 750, textAlign: "left", verticalAlign: "middle" };
@@ -11551,7 +11557,7 @@ function SpecOutlineBody({ slide }: { slide: Extract<Slide, { kind: "spec-outlin
         <td style={{ ...cellStyle, fontWeight: 750, textTransform: "capitalize" }}>{ref.kind}</td>
         <td style={{ ...cellStyle, fontWeight: 700 }}>{material?.name || "Material tidak ditemukan"}</td>
         <td style={cellStyle}>{material?.description || "—"}</td>
-        <td colSpan={2} style={{ ...cellStyle, padding: 0, whiteSpace: "normal" }}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ display: "grid", gridTemplateColumns: "37.5% 62.5%", borderBottom: "1px solid #e1e1dd" }}><div style={{ padding: "8px 7px", borderRight: border, fontWeight: 700 }}>{location.level}</div><div style={{ padding: "8px 7px" }}>{location.rooms.join(", ")}</div></div>) : <div style={{ padding: "8px 7px" }}>—</div>}</td>
+        <td colSpan={2} style={{ ...cellStyle, padding: 0, whiteSpace: "normal" }}>{locations.length > 0 ? locations.map((location) => <div key={location.level} style={{ display: "grid", gridTemplateColumns: "37.5% 62.5%", borderBottom: "1px solid #e1e1dd" }}><div style={{ padding: "8px 7px", borderRight: border, fontWeight: 700 }}>{location.level}</div><div style={{ padding: "8px 7px" }}>{specLocationText(location)}</div></div>) : <div style={{ padding: "8px 7px" }}>—</div>}</td>
         <td style={{ ...cellStyle, textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>{areaM2 === null ? "—" : `${fmt(areaM2, 2)} m²`}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{material?.image ? <img src={material.image} alt={material.name} style={{ width: 78, height: 66, objectFit: "cover", border: "1px solid #aaa", margin: "0 auto" }} /> : <span style={{ color: "#777" }}>—</span>}</td>
         <td style={{ ...cellStyle, textAlign: "center" }}>{ref.kind === "lantai" || ref.kind === "dinding" || ref.kind === "plafon" ? <span style={{ display: "inline-flex" }}><MaterialCodeSymbol code={code} kind={ref.kind} size={30} /></span> : <span style={{ display: "inline-flex", minWidth: 30, height: 30, padding: "0 4px", alignItems: "center", justifyContent: "center", border: "1.5px solid #111", fontWeight: 800 }}>{code}</span>}</td>

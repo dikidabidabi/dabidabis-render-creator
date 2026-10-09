@@ -18,3 +18,4 @@
 - Pekerjaan Dasar dan Fasad disimpan sebagai pilihan material umum per sketsa, terpisah dari material ruang; Fasad dibagi Barat, Timur, Utara, dan Selatan.
 - Mode Plafon per kotak detail saling eksklusif dengan mode Material dan memakai kode material bersama yang sama dengan Outline Spesifikasi.
 - Detail wall symbols, legend wall areas, and Outline Specification wall totals share roomWallSpans to match each room perimeter against actual same-level sketch lines, merge duplicate overlaps, and exclude unlined boundaries consistently.
+- Outline Specification per-level location areas and all-level totals share specMaterialArea; location fragments retain the full level area and pagination measures the displayed room-and-area text to prevent clipping.
