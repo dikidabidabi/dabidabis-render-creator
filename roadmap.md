@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Tambahkan luas material per lantai setelah daftar ruang pada Lokasi Outline Spesifikasi, dengan rumus dan sambungan halaman yang konsisten.
+
 - [x] Tambahkan Tangga Bebas: jalur garis bersudut bebas, offset lebar, bordes otomatis, edit dan simpan.
 - [x] Sinkronkan geometri Tangga Bebas ke denah/detail Presentasi dan ekspor/impor serta uji hasilnya.
 
