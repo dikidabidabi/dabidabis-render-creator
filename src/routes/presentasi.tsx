@@ -7993,7 +7993,7 @@ function ArchitecturalStairNotation({
             <circle cx={stair.a.x} cy={stair.a.y} r={outer - railOffset - railThickness / 2} fill="none" stroke={RAILING_COLOR} strokeWidth={railThickness} />
           </>;
         } else {
-          const edges = [0, 2].flatMap((index) => {
+          const edges = (stair.kind === "bebas" ? plan.footprint.map((_, index) => index) : [0, 2]).flatMap((index) => {
             const a = plan.footprint[index];
             const b = plan.footprint[(index + 1) % plan.footprint.length];
             return a && b ? [{ a, b }] : [];

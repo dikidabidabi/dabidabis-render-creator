@@ -2772,8 +2772,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [stairRotationInput, setStairRotationInput] = useState("");
   const [stairLanding, setStairLanding] = useState(true);
   const [stairSelectedId, setStairSelectedId] = useState<string | null>(null);
-  const [stairEndpointDrag, setStairEndpointDrag] = useState<{ id: string; endpoint: "a" | "b" } | null>(null);
+  const [stairEndpointDrag, setStairEndpointDrag] = useState<{ id: string; endpoint: "a" | "b"; index?: number } | null>(null);
   const [stairMoveDrag, setStairMoveDrag] = useState<{ id: string; start: Point; original: Stair } | null>(null);
+  const [freeStairDraft, setFreeStairDraft] = useState<{ points: Point[]; cursor: Point } | null>(null);
+  const [stairOffsetSide, setStairOffsetSide] = useState<"center" | "left" | "right">("center");
   const stairWidthM = Math.max(0.6, Number(stairWidthInput) || DEFAULT_STAIR_WIDTH_M);
   const stairSteps = Math.max(2, Math.round(Number(stairStepsInput) || DEFAULT_STAIR_STEPS));
   const stairOffsetM = Math.max(0, Number(stairOffsetInput) || 0);
@@ -3487,6 +3489,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ...stair,
       a: sp(stair.a),
       b: sp(stair.b),
+      pathPoints: stair.pathPoints?.map(sp),
     }));
     const nextImageReferences = (sketch.imageReferences || []).map((ref) => ({
       ...ref,
@@ -6660,6 +6663,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           }, draftRotation));
         }
       }
+      if (freeStairDraft && tool === "tangga" && stairKind === "bebas" && stairSub === "gambar" && activeLvlId) {
+        const above = sortedLv[sortedLv.findIndex((l) => l.id === activeLvlId) + 1];
+        const points = [...freeStairDraft.points];
+        const last = points[points.length - 1];
+        if (last && dist(last, freeStairDraft.cursor) > 1) points.push(freeStairDraft.cursor);
+        if (above && points.length >= 2) stairs.push({ id: "__stair_draft__", kind: "bebas", levelId: activeLvlId, toLevelId: above.id, a: points[0], b: points[points.length - 1], pathPoints: points, offsetSide: stairOffsetSide, widthM: stairWidthM, stepCount: stairSteps, landing: true, offsetM: 0, innerRadiusM: stairInnerRadiusM, rotationDeg: 0, createdAt: 0 });
+      }
       ctx.save();
       ctx.translate(view.tx, view.ty);
       ctx.rotate(view.r);
@@ -6708,7 +6718,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.lineTo(tip.x - ux * h + uy * h * 0.55, tip.y - uy * h - ux * h * 0.55); ctx.closePath(); ctx.fill();
         }
         if (tool === "tangga" && selected && (stairSub === "edit" || stairSub === "geser")) {
-          for (const p of [stair.a, stair.b]) {
+          for (const p of (stair.kind === "bebas" ? stair.pathPoints ?? [stair.a, stair.b] : [stair.a, stair.b])) {
             ctx.beginPath(); ctx.arc(p.x, p.y, 5 / view.s, 0, Math.PI * 2); ctx.fillStyle = "#ffffff"; ctx.fill(); ctx.strokeStyle = "#e85d3a"; ctx.stroke();
           }
         }
@@ -7470,7 +7480,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -8698,6 +8708,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
         const i = sorted.findIndex((level) => level.id === activeLvlId);
         if (i < 0 || i === sorted.length - 1) { toast.error("Tangga membutuhkan level lantai di atasnya"); return; }
+        if (stairKind === "bebas") {
+          setFreeStairDraft((draft) => !draft ? { points: [p], cursor: p } : dist(draft.points[draft.points.length - 1], p) < 1 ? draft : { points: [...draft.points, p], cursor: p });
+          return;
+        }
         setDrawing({ a: p, b: p });
         return;
       }
@@ -8705,7 +8719,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       if (!hit) { setStairSelectedId(null); return; }
       setStairSelectedId(hit.id);
       setStairKind(hit.kind); setStairWidthInput(String(hit.widthM)); setStairStepsInput(String(hit.stepCount));
-      setStairLanding(hit.landing); setStairOffsetInput(String(hit.offsetM)); setStairRadiusInput(String(hit.innerRadiusM));
+      setStairOffsetSide(hit.offsetSide ?? "center"); setStairLanding(hit.landing); setStairOffsetInput(String(hit.offsetM)); setStairRadiusInput(String(hit.innerRadiusM));
       setStairRotationInput(String(Math.round((hit.rotationDeg ?? Math.atan2(hit.b.y - hit.a.y, hit.b.x - hit.a.x) * 180 / Math.PI) * 10) / 10));
       if (stairSub === "hapus") {
         pushHistory(); onChange({ stairs: (sketch.stairs ?? []).filter((stair) => stair.id !== hit.id) });
@@ -8715,7 +8729,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         pushHistory(); setStairMoveDrag({ id: hit.id, start: raw, original: hit }); return;
       }
       const endpoint = dist(raw, hit.a) <= dist(raw, hit.b) ? "a" : "b";
-      pushHistory(); setStairEndpointDrag({ id: hit.id, endpoint }); return;
+      const points = hit.kind === "bebas" ? hit.pathPoints ?? [hit.a, hit.b] : [];
+      const index = points.length ? points.reduce((best, point, i) => dist(raw, point) < dist(raw, points[best]) ? i : best, 0) : undefined;
+      pushHistory(); setStairEndpointDrag({ id: hit.id, endpoint, index }); return;
     }
 
     // ===== Ramp tool interactions =====
@@ -10251,6 +10267,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       updateGesture();
       return;
     }
+    if (tool === "tangga" && stairSub === "gambar" && stairKind === "bebas" && freeStairDraft) {
+      setFreeStairDraft({ ...freeStairDraft, cursor: getWorldPos(e) });
+      return;
+    }
     if (doorEndpointDrag) {
       const raw = getWorldPosRaw(e);
       onChange({ doors: (sketch.doors ?? []).map((door) => {
@@ -10306,6 +10326,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const p = getWorldPos(e);
   onChange({ stairs: (sketch.stairs ?? []).map((stair) => {
     if (stair.id !== stairEndpointDrag.id) return stair;
+    if (stair.kind === "bebas" && stairEndpointDrag.index !== undefined) {
+      const pathPoints = (stair.pathPoints ?? [stair.a, stair.b]).map((point, i) => i === stairEndpointDrag.index ? p : point);
+      return { ...stair, pathPoints, a: pathPoints[0], b: pathPoints[pathPoints.length - 1] };
+    }
     const next = { ...stair, [stairEndpointDrag.endpoint]: p };
     return { ...next, rotationDeg: Math.atan2(next.b.y - next.a.y, next.b.x - next.a.x) * 180 / Math.PI };
   }) });
@@ -10744,6 +10768,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (tool === "tangga" && stairKind === "bebas" && stairSub === "gambar") { endPointer(e); return; }
     if (doorEndpointDrag || windowEndpointDrag) {
       setDoorEndpointDrag(null);
       setWindowEndpointDrag(null);
@@ -13193,16 +13218,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {tool === "tangga" && (
           <div className="rounded-lg border border-border/60 bg-card/60 p-3 space-y-3">
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Alat Tangga</div>
-            <div className="grid grid-cols-3 gap-1">
-              {(["lurus", "u", "lingkar"] as StairKind[]).map((kind) => (
+            <div className="grid grid-cols-2 gap-1">
+              {(["lurus", "u", "lingkar", "bebas"] as StairKind[]).map((kind) => (
                 <Button key={kind} size="sm" variant={stairKind === kind ? "default" : "outline"}
-                  onClick={() => setStairKind(kind)} className="capitalize">{kind === "u" ? "U" : kind}</Button>
+                  onClick={() => { setStairKind(kind); setFreeStairDraft(null); setDrawing(null); }} className="capitalize">{kind === "u" ? "U" : kind === "bebas" ? "Tangga Bebas" : kind}</Button>
               ))}
             </div>
             <div className="grid grid-cols-4 gap-1">
               {(["gambar", "edit", "geser", "hapus"] as const).map((mode) => (
                 <Button key={mode} size="sm" variant={stairSub === mode ? "default" : "outline"}
-                  className="px-1 text-[11px] capitalize" onClick={() => { setStairSub(mode); setDrawing(null); }}>
+                  className="px-1 text-[11px] capitalize" onClick={() => { setStairSub(mode); setDrawing(null); setFreeStairDraft(null); }}>
                   {mode}
                 </Button>
               ))}
@@ -13214,7 +13239,23 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               {stairKind === "lingkar" && <div><Label className="text-xs">Radius dalam (m)</Label><Input type="number" min="0.1" step="0.1" value={stairRadiusInput} onChange={(e) => setStairRadiusInput(e.target.value)} /></div>}
               <div><Label className="text-xs">Rotasi (°)</Label><Input type="number" step="1" placeholder="Ikuti arah drag" value={stairRotationInput} onChange={(e) => setStairRotationInput(e.target.value)} /></div>
             </div>
-            {stairKind !== "lingkar" && <label className="flex items-center gap-2 text-xs"><Switch checked={stairLanding} onCheckedChange={setStairLanding} /> Aktifkan bordes</label>}
+            {stairKind !== "lingkar" && stairKind !== "bebas" && <label className="flex items-center gap-2 text-xs"><Switch checked={stairLanding} onCheckedChange={setStairLanding} /> Aktifkan bordes</label>}
+            {stairKind === "bebas" && <div className="space-y-2">
+              <Label className="text-xs">Offset lebar tangga</Label>
+              <div className="grid grid-cols-3 gap-1">{(["left", "center", "right"] as const).map((side) => <Button key={side} size="sm" variant={stairOffsetSide === side ? "default" : "outline"} onClick={() => setStairOffsetSide(side)}>{side === "left" ? "Kiri" : side === "right" ? "Kanan" : "Tengah"}</Button>)}</div>
+              {freeStairDraft && <div className="flex gap-1">
+                <Button size="sm" variant="outline" onClick={() => setFreeStairDraft(null)}>Batal</Button>
+                <Button size="sm" disabled={freeStairDraft.points.length < 2} onClick={() => {
+                  const points = freeStairDraft.points;
+                  const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+                  const above = sorted[sorted.findIndex((l) => l.id === activeLvlId) + 1];
+                  if (!activeLvlId || !above || points.length < 2) return;
+                  const rotationDeg = Math.atan2(points[1].y - points[0].y, points[1].x - points[0].x) * 180 / Math.PI;
+                  const stair: Stair = { id: genStairId(), kind: "bebas", levelId: activeLvlId, toLevelId: above.id, a: points[0], b: points[points.length - 1], pathPoints: points, offsetSide: stairOffsetSide, widthM: stairWidthM, stepCount: Math.max(stairSteps, points.length - 1), landing: true, offsetM: 0, innerRadiusM: stairInnerRadiusM, rotationDeg, createdAt: Date.now() };
+                  pushHistory(); onChange({ stairs: [...(sketch.stairs ?? []), stair] }); setFreeStairDraft(null); setStairSelectedId(stair.id); setStairRotationInput(String(rotationDeg)); toast.success("Tangga bebas disimpan");
+                }}><Save className="mr-1 h-3.5 w-3.5" />Simpan Jalur</Button>
+              </div>}
+            </div>}
             <div className="grid grid-cols-2 gap-2">
               <Button size="sm" variant="outline" disabled={!stairSelectedId} onClick={() => {
                 const selected = (sketch.stairs ?? []).find((stair) => stair.id === stairSelectedId);
@@ -13245,6 +13286,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 onChange({ stairs: [...(sketch.stairs ?? []), pasted] });
                 setStairSelectedId(pasted.id);
                 setStairKind(pasted.kind);
+                setStairOffsetSide(pasted.offsetSide ?? "center");
                 setStairWidthInput(String(pasted.widthM));
                 setStairStepsInput(String(pasted.stepCount));
                 setStairOffsetInput(String(pasted.offsetM));
@@ -13260,7 +13302,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               const selected = (sketch.stairs ?? []).find((stair) => stair.id === stairSelectedId);
               if (!selected) return <p className="text-[11px] text-muted-foreground">Drag stylus dari kaki tangga menuju arah naik. Pilih Edit atau Geser untuk mengubah tangga.</p>;
               const selectedRotation = stairRotationDeg ?? selected.rotationDeg ?? Math.atan2(selected.b.y - selected.a.y, selected.b.x - selected.a.x) * 180 / Math.PI;
-              const preview = rotateStair({ ...selected, kind: stairKind, widthM: stairWidthM, stepCount: stairSteps, landing: stairLanding, offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM }, selectedRotation);
+              const preview = rotateStair({ ...selected, kind: stairKind, offsetSide: stairOffsetSide, widthM: stairWidthM, stepCount: stairKind === "bebas" ? Math.max(stairSteps, (selected.pathPoints?.length ?? 2) - 1) : stairSteps, landing: stairKind === "bebas" || stairLanding, offsetM: stairOffsetM, innerRadiusM: stairInnerRadiusM }, selectedRotation);
               const metrics = stairMetrics(preview, levels, pxPerMeter);
               return <div className="space-y-2">
                 <p className="text-[11px] text-muted-foreground">Naik {metrics.heightM.toFixed(2)} m · tinggi anak tangga {(metrics.riserM * 100).toFixed(1)} cm · pijakan {(metrics.treadM * 100).toFixed(1)} cm</p>

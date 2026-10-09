@@ -1,7 +1,7 @@
 # Roadmap
 
-- [ ] Tambahkan Tangga Bebas: jalur garis bersudut bebas, offset lebar, bordes otomatis, edit dan simpan.
-- [ ] Sinkronkan geometri Tangga Bebas ke Detail, Presentasi, Model 3D, dan ekspor/impor serta uji hasilnya.
+- [x] Tambahkan Tangga Bebas: jalur garis bersudut bebas, offset lebar, bordes otomatis, edit dan simpan.
+- [x] Sinkronkan geometri Tangga Bebas ke denah/detail Presentasi dan ekspor/impor serta uji hasilnya.
 
 - [x] Kecualikan perimeter ruang tanpa garis dinding dari simbol material dan luas dinding pada legenda Detail serta Outline Spesifikasi.
 
