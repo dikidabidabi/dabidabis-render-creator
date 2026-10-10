@@ -407,6 +407,7 @@ type DetailArea = {
   showFurniture: boolean;
   showMaterials: boolean;
   showCeiling: boolean;
+  showArchitectural?: boolean;
   createdAt: number;
   furniture?: DetailFurniture[];
 };
@@ -1207,12 +1208,13 @@ function normalizeSketch(s: any): Sketch {
           number: Math.max(1, Math.round(Number(area.number) || index + 1)),
           showOnSlide: area.showOnSlide !== false,
           dimensions: area.dimensions !== false,
-          interiorDimensions: area.interiorDimensions === true,
+          interiorDimensions: area.interiorDimensions === true && area.showArchitectural !== true,
           floorHatch: area.floorHatch === true,
           showKeyplan: area.showKeyplan !== false,
           showFurniture: area.showFurniture !== false,
-          showMaterials: area.showMaterials === true && area.showCeiling !== true,
-          showCeiling: area.showCeiling === true,
+          showMaterials: area.showMaterials === true && area.showCeiling !== true && area.showArchitectural !== true,
+          showCeiling: area.showCeiling === true && area.showArchitectural !== true,
+          showArchitectural: area.showArchitectural === true,
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
         }];
@@ -11300,6 +11302,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           showFurniture: true,
           showMaterials: false,
           showCeiling: false,
+          showArchitectural: false,
           createdAt: Date.now(),
         }],
       });
@@ -12343,15 +12346,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     ["showFurniture", "Furniture"],
                     ["showMaterials", "Material"],
                     ["showCeiling", "Plafon"],
+                    ["showArchitectural", "Arsitektural"],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex items-center justify-between gap-3 py-1 text-[11px]">
                       <span>{label}</span>
-                      <Switch checked={area[key]} onCheckedChange={(checked) => onChange({
+                      <Switch checked={area[key] === true} onCheckedChange={(checked) => onChange({
                         detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? {
                           ...item,
                           [key]: checked,
                           ...(checked && key === "showMaterials" ? { showCeiling: false } : {}),
                           ...(checked && key === "showCeiling" ? { showMaterials: false } : {}),
+                          ...(checked && key === "showArchitectural" ? { showMaterials: false, showCeiling: false, interiorDimensions: false } : {}),
+                          ...(checked && (key === "showMaterials" || key === "showCeiling" || key === "interiorDimensions") ? { showArchitectural: false } : {}),
                         } : item),
                       })} />
                     </label>
