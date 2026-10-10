@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan ceklis Arsitektural eksklusif pada Pendetailan dan denah gradien dengan dinding putih serta bayangan lembut 45°; verifikasi tampilan dan penyimpanan.
+- [x] Tambahkan ceklis Arsitektural eksklusif pada Pendetailan dan denah gradien dengan dinding putih serta bayangan lembut 45°; verifikasi tampilan dan penyimpanan.
 
 - [x] Tambahkan luas material per lantai setelah daftar ruang pada Lokasi Outline Spesifikasi, dengan rumus dan sambungan halaman yang konsisten.
 

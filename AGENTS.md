@@ -1,5 +1,7 @@
 # Architecture decisions
 
+- Architectural detail is a persisted optional per-area mode; normalization enforces exclusion with material, ceiling and interior dimensions, while Presentation reuses merged wall-band geometry with token-based gradients and a wall-only SVG shadow so technical views remain unchanged.
+
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
 
 - Polling notifikasi hanya berjalan saat sesi autentikasi memiliki token dan tidak bergantung pada identitas fungsi render, agar tidak mengirim permintaan tanpa izin atau mengulang tanpa henti.
