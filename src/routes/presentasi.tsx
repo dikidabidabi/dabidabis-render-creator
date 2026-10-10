@@ -142,7 +142,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showCeiling?: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
 };
 type Sketch = {
@@ -4768,7 +4768,9 @@ function MaterialCodeSymbol({ code, kind, size }: { code: string; kind: "lantai"
 }
 
 function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
-  const { sketch, level, area } = slide;
+  const { sketch, level } = slide;
+  const architectural = slide.area.showArchitectural === true;
+  const area = architectural ? { ...slide.area, showMaterials: false, showCeiling: false, interiorDimensions: false, floorHatch: false } : slide.area;
   const [materialLibrary, setMaterialLibrary] = useState<LibraryMaterial[]>([]);
   useEffect(() => {
     const reload = () => setMaterialLibrary(loadMaterialLibrary());
@@ -5247,19 +5249,23 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     </g>;
   });
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative", background: "#ffffff", overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-light)" : "#ffffff", overflow: "hidden" }}>
       <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode ? "80%" : "100%", height: "100%", display: "block" }}>
         <defs>
+          {architectural && <>
+            <linearGradient id={`architectural-bg-${patternId}`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="var(--architectural-background-light)" /><stop offset="1" stopColor="var(--architectural-background-deep)" /></linearGradient>
+            <linearGradient id={`architectural-floor-${patternId}`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></linearGradient>
+          </>}
           <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
             <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
           </pattern>
         </defs>
-        <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />
+        <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill={architectural ? `url(#architectural-bg-${patternId})` : "#ffffff"} />
         {rooms.map((room) => {
           const zone = room.functionZoneId ? functionZoneById.get(room.functionZoneId) : undefined;
           const floorMaterial = room.roomMaterials?.lantai ? materialById.get(room.roomMaterials.lantai) : undefined;
           const ceilingMaterial = room.roomMaterials?.plafon ? materialById.get(room.roomMaterials.plafon) : undefined;
-          const fill = area.interiorDimensions || area.floorHatch
+          const fill = architectural ? `url(#architectural-floor-${patternId})` : area.interiorDimensions || area.floorHatch
             ? "#ffffff"
             : showCeilingMode && ceilingMaterial
               ? materialPlanColor(ceilingMaterial)
@@ -5270,7 +5276,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
               : roomFillOverride(room.name, "0.18") ?? (colorForRoomName(room.name) ?? room.color).replace("ALPHA", "0.12");
           const points = room.points.map((p) => `${p.x},${p.y}`).join(" ");
           return <g key={room.id}>
-            <polygon points={points} fill={fill} stroke="rgba(0,0,0,0.2)" strokeWidth={sw * 0.00035} />
+            <polygon points={points} fill={fill} stroke={architectural ? "var(--architectural-edge)" : "rgba(0,0,0,0.2)"} strokeWidth={sw * 0.00035} />
             {area.floorHatch && !area.interiorDimensions && <polygon points={points} fill={`url(#floor-grid-${patternId})`} stroke="none" />}
           </g>;
         })}
@@ -5278,7 +5284,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           items={area.showFurniture === false ? [] : furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY)}
           sw={sw} prefix="detail-furniture"
         />}
-        {gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
+        {!architectural && gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
           const dash = `${sw * 0.004} ${sw * 0.003}`;
           const xStart = xs[0], xEnd = xs[xs.length - 1];
@@ -5292,7 +5298,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             </g>
           );
         })}
-        {area.dimensions && <>
+        {!architectural && area.dimensions && <>
           {renderHorizontalDimension("room-top", roomXsTop, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.75)}
           {renderHorizontalDimension("room-bottom", roomXsBottom, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.75)}
           {renderVerticalDimension("room-left", roomYsLeft, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.75)}
@@ -5334,6 +5340,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           pxPerM={pxPerM}
           sw={sw}
           detailSolidLayers
+          architectural={architectural}
         />
         {showMaterialMode && rooms.flatMap((room) => {
           const materialId = room.roomMaterials?.dinding;
@@ -5362,19 +5369,19 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         })}
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
         <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
-        <SolidWallPracticalColumns
+        {!architectural && <SolidWallPracticalColumns
           lines={lines}
           segmentationLines={sketch.lines ?? []}
           levelId={level.id}
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
-        />
+        />}
         {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
             {xs.flatMap((x, i) => ys.map((y, j) => {
               if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return null;
-              return <rect key={`detail-column-${i}-${j}`} x={x - colPx / 2} y={y - colPx / 2} width={colPx} height={colPx} fill="#0a0a0a" />;
+              return <rect key={`detail-column-${i}-${j}`} x={x - colPx / 2} y={y - colPx / 2} width={colPx} height={colPx} fill={architectural ? "var(--architectural-wall-light)" : "#0a0a0a"} stroke={architectural ? "var(--architectural-edge)" : undefined} strokeWidth={sw * 0.00035} />;
             }))}
           </g>;
         })}
@@ -5409,25 +5416,25 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           const roomH = Math.max(...ys) - Math.min(...ys);
           const baseNameFont = sw * 0.0144;
           const maxChars = Math.max(5, Math.floor((roomW * 0.82) / (baseNameFont * 0.58)));
-          const nameLines = splitRoomLabel(room.name, maxChars).slice(0, 2);
+          const nameLines = splitRoomLabel(architectural ? room.name.toLocaleUpperCase("id-ID") : room.name, maxChars).slice(0, 2);
           const longestLine = Math.max(...nameLines.map((line) => line.length), 1);
           const widthFit = (roomW * 0.82) / (longestLine * 0.58);
           const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
           const nameFont = Math.max(sw * 0.006, Math.min(baseNameFont, widthFit, heightFit));
           const lineHeight = nameFont * 1.08;
-          const firstY = c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
+          const firstY = architectural ? c.y - lineHeight * (nameLines.length - 1) / 2 : c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
           const infoFont = Math.min(sw * 0.01, nameFont * 0.78);
           const clipId = `detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
           return <g key={`label-${room.id}`} clipPath={`url(#${clipId})`} pointerEvents="none">
-            <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
+            <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill={architectural ? "var(--architectural-ink)" : "#0a0a0a"} style={architectural ? undefined : { paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
               {nameLines.map((line, index) => <tspan key={`${room.id}-${index}`} x={c.x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>)}
             </text>
-            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+            {!architectural && <><text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {fmt(room.areaM2 || 0, 2)} m²
             </text>
             <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {elevation}
-            </text>
+            </text></>}
           </g>;
         })}
       </svg>
@@ -5435,7 +5442,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>
-      {!showMaterialMode && !showCeilingMode && !area.floorHatch && !area.interiorDimensions && detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
+      {!architectural && !showMaterialMode && !showCeilingMode && !area.floorHatch && !area.interiorDimensions && detailZoneStats.length > 0 && <div style={{ position: "absolute", left: 28, bottom: 24, width: 270, padding: "12px 14px", background: "rgba(255,255,255,0.94)", border: "1px solid #d7d7d2", boxShadow: "0 4px 16px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
         <Donut segments={detailZoneStats.map((zone) => ({ value: zone.areaM2, color: zone.color }))} size={86} thickness={12} centerValue="100%" centerLabel="Zona" />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: 11, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>Zona Fungsi · {level.name}</div>
@@ -8055,6 +8062,7 @@ function MaterialEdges({
   sw,
   mode = "all",
   detailSolidLayers = false,
+  architectural = false,
 }: {
   lines: Line[];
   /** Selalu gunakan seluruh garis sketsa untuk membentuk ID segmen yang sama
@@ -8069,6 +8077,7 @@ function MaterialEdges({
   mode?: "base" | "overlay" | "all";
   /** Detail arsitektur: finishing 15 mm di kedua sisi dinding solid. */
   detailSolidLayers?: boolean;
+  architectural?: boolean;
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
   const curved = lines
@@ -8132,6 +8141,32 @@ function MaterialEdges({
         strokeWidth={stroke} strokeLinejoin="miter" strokeLinecap="square" />}
     </g>
   );
+  if (architectural) {
+    const bands = segs.flatMap((segment) => {
+      const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
+      if (material === "railing" || material === "window" || material === "curtain") return [];
+      const half = ((material ? WALL_THICK_MM[material] : 150) / 1000) * pxPerM / 2;
+      return [wallBandPolygon(segment, half, half)];
+    });
+    const wallPath = wallUnionPath(unionWallBands(bands));
+    return <g data-architectural-walls="true">
+      <defs>
+        <linearGradient id={`architectural-wall-${patternId}`} x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.55" stopColor="var(--architectural-wall-mid)" /><stop offset="1" stopColor="var(--architectural-wall-deep)" />
+        </linearGradient>
+        <filter id={`architectural-shadow-${patternId}`} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
+          <feGaussianBlur in="SourceAlpha" stdDeviation={pxPerM * 0.09} result="blur" />
+          <feOffset in="blur" dx={pxPerM * 0.16} dy={pxPerM * 0.16} result="offset" />
+          <feFlood floodColor="var(--architectural-shadow)" floodOpacity="0.38" />
+          <feComposite in2="offset" operator="in" /><feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      <g filter={`url(#architectural-shadow-${patternId})`}>
+        <path d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd" stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.008)} strokeLinejoin="miter" />
+        {curved.map(({ ln, i }) => <path key={i} d={linePath(ln)} fill="none" stroke="var(--architectural-wall-light)" strokeWidth={pxPerM * 0.15} />)}
+      </g>
+    </g>;
+  }
   return (
     <g>
       <defs>
