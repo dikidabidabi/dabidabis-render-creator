@@ -8188,7 +8188,7 @@ function MaterialEdges({
           ? { x: u*u*ln.a.x + 2*u*t*control.x + t*t*ln.b.x, y: u*u*ln.a.y + 2*u*t*control.y + t*t*ln.b.y }
           : { x: u**3*ln.a.x + 3*u*u*t*c1.x + 3*u*t*t*c2.x + t**3*ln.b.x,
               y: u**3*ln.a.y + 3*u*u*t*c1.y + 3*u*t*t*c2.y + t**3*ln.b.y };
-        bands.push(wallBandPolygon({ id: `${ln.id}-${i}`, a: previous, b: next, sourceLineIndex: 0 }, half, half));
+        bands.push(wallBandPolygon({ id: `curve-${i}`, a: previous, b: next, sourceLineIndex: 0 }, half, half));
         previous = next;
       }
     }
