@@ -60,6 +60,7 @@ import {
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { type Window } from "@/lib/windows";
 import { roomWallSpans } from "@/lib/room-wall-spans";
+import { architecturalWallUnion, architecturalShadowSweep, architecturalBevels } from "@/lib/architectural-plan";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -4885,6 +4886,18 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
   const dimFont = sw * 0.012;
   const dimStroke = sw * 0.0001625;
   const gridStroke = Math.max(sw * 0.00028, 0.12);
+  const architecturalColumns = gridData.flatMap(({ grid, spansX, spansY, xs, ys, rotation }) => {
+    const half = grid.colSizeCm / 200 * pxPerM;
+    const angle = rotation * Math.PI / 180;
+    return xs.flatMap((x, i) => ys.flatMap((y, j) => {
+      if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return [];
+      return [[{ x: x - half, y: y - half }, { x: x + half, y: y - half },
+        { x: x + half, y: y + half }, { x: x - half, y: y + half }].map((p) => ({
+          x: grid.origin.x + (p.x - grid.origin.x) * Math.cos(angle) - (p.y - grid.origin.y) * Math.sin(angle),
+          y: grid.origin.y + (p.x - grid.origin.x) * Math.sin(angle) + (p.y - grid.origin.y) * Math.cos(angle),
+        }))];
+    }));
+  });
   const roomDimensionSegments = computeStraightSegments(lines.map((line) => ({
     a: line.a,
     b: line.b,
@@ -5249,19 +5262,23 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
     </g>;
   });
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-light)" : "#ffffff", overflow: "hidden" }}>
+    <div style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-gradient)" : "#ffffff", overflow: "hidden" }}>
       <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode ? "80%" : "100%", height: "100%", display: "block" }}>
         <defs>
           {architectural && <>
             <linearGradient id={`architectural-bg-${patternId}`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="var(--architectural-background-light)" /><stop offset="1" stopColor="var(--architectural-background-deep)" /></linearGradient>
-            <linearGradient id={`architectural-floor-${patternId}`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></linearGradient>
+            <linearGradient id={`architectural-floor-${patternId}`} gradientUnits="userSpaceOnUse" x1={bounds.minX} y1={bounds.minY} x2={bounds.maxX} y2={bounds.maxY}><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></linearGradient>
           </>}
           <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
             <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
           </pattern>
         </defs>
-        <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill={architectural ? `url(#architectural-bg-${patternId})` : "#ffffff"} />
-        {rooms.map((room) => {
+        {!architectural && <rect x={bounds.minX} y={bounds.minY} width={w} height={h} fill="#ffffff" />}
+        {architectural && <path data-architectural-floor="true" d={wallUnionPath(unionWallBands([
+          ...rooms.map((room) => room.points),
+          ...doors.map((door) => wallBandPolygon({ ...door, sourceLineIndex: 0 }, pxPerM * 0.2, 0)),
+        ]))} fill={`url(#architectural-floor-${patternId})`} fillRule="evenodd" stroke="none" />}
+        {!architectural && rooms.map((room) => {
           const zone = room.functionZoneId ? functionZoneById.get(room.functionZoneId) : undefined;
           const floorMaterial = room.roomMaterials?.lantai ? materialById.get(room.roomMaterials.lantai) : undefined;
           const ceilingMaterial = room.roomMaterials?.plafon ? materialById.get(room.roomMaterials.plafon) : undefined;
@@ -5284,7 +5301,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           items={area.showFurniture === false ? [] : furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY)}
           sw={sw} prefix="detail-furniture"
         />}
-        {!architectural && gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
+        {(!architectural || area.dimensions) && gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
           const dash = `${sw * 0.004} ${sw * 0.003}`;
           const xStart = xs[0], xEnd = xs[xs.length - 1];
@@ -5298,7 +5315,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             </g>
           );
         })}
-        {!architectural && area.dimensions && <>
+        {area.dimensions && <g data-detail-dimensions="true">
           {renderHorizontalDimension("room-top", roomXsTop, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.75)}
           {renderHorizontalDimension("room-bottom", roomXsBottom, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.75)}
           {renderVerticalDimension("room-left", roomYsLeft, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.75)}
@@ -5317,7 +5334,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
               renderVerticalDimension(`grid-right-${gridIndex}`, verticalCoordinates, verticalLabels, perimeterBounds.maxX + gridOffset, perimeterBounds.maxX, false),
             ];
           })}
-        </>}
+        </g>}
         <DetailVoidNotation
           voids={levelLayers.filter((layer) => isVoid(layer.name)).map((layer) => ({ id: layer.id, points: layer.points }))}
           floorHoles={(sketch.floors ?? []).filter((floor) => floor.levelId === level.id).flatMap((floor) =>
@@ -5341,6 +5358,8 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           sw={sw}
           detailSolidLayers
           architectural={architectural}
+          architecturalDoors={doors}
+          architecturalColumns={architecturalColumns}
         />
         {showMaterialMode && rooms.flatMap((room) => {
           const materialId = room.roomMaterials?.dinding;
@@ -5367,7 +5386,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
             </g>;
           });
         })}
-        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} />
+        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs={!architectural} leafThicknessMm={architectural ? 0 : 40} architectural={architectural} />
         <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
         {!architectural && <SolidWallPracticalColumns
           lines={lines}
@@ -5376,7 +5395,7 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />}
-        {gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+        {!architectural && gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
             {xs.flatMap((x, i) => ys.map((y, j) => {
@@ -5422,19 +5441,19 @@ function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
           const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
           const nameFont = Math.max(sw * 0.006, Math.min(baseNameFont, widthFit, heightFit));
           const lineHeight = nameFont * 1.08;
-          const firstY = architectural ? c.y - lineHeight * (nameLines.length - 1) / 2 : c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
+          const firstY = c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
           const infoFont = Math.min(sw * 0.01, nameFont * 0.78);
           const clipId = `detail-room-${patternId}-${room.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
           return <g key={`label-${room.id}`} clipPath={`url(#${clipId})`} pointerEvents="none">
             <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill={architectural ? "var(--architectural-ink)" : "#0a0a0a"} style={architectural ? undefined : { paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
               {nameLines.map((line, index) => <tspan key={`${room.id}-${index}`} x={c.x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>)}
             </text>
-            {!architectural && <><text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+            <text data-room-area="true" x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill={architectural ? "var(--architectural-ink)" : "#222222"} style={architectural ? undefined : { paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {fmt(room.areaM2 || 0, 2)} m²
             </text>
-            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+            {!architectural && <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {elevation}
-            </text></>}
+            </text>}
           </g>;
         })}
       </svg>
@@ -8063,6 +8082,8 @@ function MaterialEdges({
   mode = "all",
   detailSolidLayers = false,
   architectural = false,
+  architecturalDoors = [],
+  architecturalColumns = [],
 }: {
   lines: Line[];
   /** Selalu gunakan seluruh garis sketsa untuk membentuk ID segmen yang sama
@@ -8078,6 +8099,8 @@ function MaterialEdges({
   /** Detail arsitektur: finishing 15 mm di kedua sisi dinding solid. */
   detailSolidLayers?: boolean;
   architectural?: boolean;
+  architecturalDoors?: Door[];
+  architecturalColumns?: Point[][];
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
   const curved = lines
@@ -8144,25 +8167,68 @@ function MaterialEdges({
   if (architectural) {
     const bands = segs.flatMap((segment) => {
       const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
-      const half = ((material ? WALL_THICK_MM[material] : 150) / 1000) * pxPerM / 2;
+      if (!material) return [];
+      const half = WALL_THICK_MM[material] / 1000 * pxPerM / 2;
       return [wallBandPolygon(segment, half, half)];
     });
-    const wallPath = wallUnionPath(unionWallBands(bands));
+    // Tessellate curved picked lines so openings, unions and shadows share their geometry.
+    for (const { ln } of curved) {
+      const material = edgeMaterialForSegment(edgeAttrs, ln);
+      if (!material) continue;
+      const half = WALL_THICK_MM[material] / 1000 * pxPerM / 2;
+      const dx = ln.b.x - ln.a.x, dy = ln.b.y - ln.a.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const control = { x: (ln.a.x + ln.b.x) / 2 - 2 * dy / length * (ln.bulge ?? 0),
+        y: (ln.a.y + ln.b.y) / 2 + 2 * dx / length * (ln.bulge ?? 0) };
+      let previous = ln.a;
+      for (let i = 1; i <= 48; i++) {
+        const t = i / 48, u = 1 - t;
+        const c1 = ln.c1 ?? ln.a, c2 = ln.c2 ?? ln.b;
+        const next = ln.kind === "arc"
+          ? { x: u*u*ln.a.x + 2*u*t*control.x + t*t*ln.b.x, y: u*u*ln.a.y + 2*u*t*control.y + t*t*ln.b.y }
+          : { x: u**3*ln.a.x + 3*u*u*t*c1.x + 3*u*t*t*c2.x + t**3*ln.b.x,
+              y: u**3*ln.a.y + 3*u*u*t*c1.y + 3*u*t*t*c2.y + t**3*ln.b.y };
+        bands.push(wallBandPolygon({ id: `curve-${i}`, a: previous, b: next, sourceLineIndex: 0 }, half, half));
+        previous = next;
+      }
+    }
+    const openings = architecturalDoors.map((door) => wallBandPolygon({ ...door, sourceLineIndex: 0 }, pxPerM * 0.35, 0));
+    const walls = architecturalWallUnion([...bands, ...architecturalColumns], openings);
+    const wallPath = wallUnionPath(walls);
+    const bevels = architecturalBevels(walls, pxPerM * 0.02);
+    const shadowSteps = Array.from({ length: 16 }, (_, i) => {
+      const fraction = (16 - i) / 16;
+      return { distance: 1.5 * fraction * pxPerM, blur: pxPerM * (0.015 + 0.18 * fraction ** 2) };
+    });
     return <g data-architectural-walls="true">
       <defs>
         <linearGradient id={`architectural-wall-${patternId}`} x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.8" stopColor="var(--architectural-wall-light)" /><stop offset="1" stopColor="var(--architectural-wall-mid)" />
         </linearGradient>
-        <filter id={`architectural-shadow-${patternId}`} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur in="SourceAlpha" stdDeviation={pxPerM * 0.09} result="blur" />
-          <feOffset in="blur" dx={pxPerM * 0.16} dy={pxPerM * 0.16} result="offset" />
-          <feFlood floodColor="var(--architectural-shadow)" floodOpacity="0.38" />
-          <feComposite in2="offset" operator="in" /><feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
+        <clipPath id={`architectural-wall-clip-${patternId}`}><path d={wallPath} clipRule="evenodd" /></clipPath>
+        {shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} x="-200%" y="-200%" width="500%" height="500%">
+          <feGaussianBlur stdDeviation={step.blur} />
+        </filter>)}
+        {bevels.map((bevel, i) => <linearGradient key={i} id={`architectural-bevel-${patternId}-${i}`} gradientUnits="userSpaceOnUse"
+          x1={(bevel.a.x + bevel.b.x) / 2} y1={(bevel.a.y + bevel.b.y) / 2} x2={bevel.inner.x} y2={bevel.inner.y}>
+          <stop stopColor={bevel.light ? "var(--architectural-wall-light)" : "var(--architectural-bevel-dark)"} />
+          <stop offset="1" stopColor="var(--architectural-wall-light)" stopOpacity="0" />
+        </linearGradient>)}
       </defs>
-      <g filter={`url(#architectural-shadow-${patternId})`}>
-        <path d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd" stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.012)} strokeLinejoin="miter" />
-        {curved.map(({ ln, i }) => <path key={i} d={linePath(ln)} fill="none" stroke="var(--architectural-wall-light)" strokeWidth={pxPerM * 0.15} />)}
+      <g data-architectural-shadow-distance="1500">
+        {shadowSteps.map((step, i) => <path key={i} d={wallUnionPath(architecturalShadowSweep(walls, step.distance))}
+          fill="var(--architectural-shadow)" fillRule="evenodd" opacity={1 - Math.pow(1 - 0.456, 1 / 16)}
+          filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
+      </g>
+      <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd"
+        stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.004)} strokeLinejoin="miter" />
+      <g clipPath={`url(#architectural-wall-clip-${patternId})`} data-architectural-bevel-mm="20">
+        {bevels.map((bevel, i) => <polygon key={i} points={pointsValue(bevel.points)} fill={`url(#architectural-bevel-${patternId}-${i})`} />)}
+      </g>
+      <g data-architectural-unpicked-lines="true" fill="none" stroke="var(--architectural-line)" strokeWidth={stroke}>
+        {segs.filter((segment) => !materialForEdgeSegment(segment, segmentSource, edgeAttrs)).map((segment) =>
+          <path key={segment.id} d={`M ${segment.a.x} ${segment.a.y} L ${segment.b.x} ${segment.b.y}`} />)}
+        {curved.filter(({ ln }) => !edgeMaterialForSegment(edgeAttrs, ln)).map(({ ln, i }) => <path key={i} d={linePath(ln)} />)}
       </g>
     </g>;
   }
@@ -8419,6 +8485,7 @@ function DoorNotation({
   edgeAttrs,
   showJambs = false,
   leafThicknessMm = 0,
+  architectural = false,
 }: {
   doors: Door[];
   pxPerM: number;
@@ -8427,6 +8494,7 @@ function DoorNotation({
   edgeAttrs?: Record<string, EdgeMaterial>;
   showJambs?: boolean;
   leafThicknessMm?: number;
+  architectural?: boolean;
 }) {
   if (!doors.length) return null;
   const stroke = sw * 0.0006;
@@ -8489,7 +8557,7 @@ function DoorNotation({
         if (d.type === "folding") {
           return (
             <g key={d.id}>
-              <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
               {showJambs && <>
                 <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
                 <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
@@ -8527,12 +8595,12 @@ function DoorNotation({
               })();
           return (
             <g key={d.id}>
-              <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
               {showJambs && <>
                 <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
                 <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
               </>}
-              {slidingLeaves.map(([x1, y1, x2, y2], index) => <polygon key={`sliding-leaf-${index}`} points={leafPolygon(x1, y1, x2, y2)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />)}
+              {slidingLeaves.map(([x1, y1, x2, y2], index) => <polygon key={`sliding-leaf-${index}`} points={leafPolygon(x1, y1, x2, y2)} fill={architectural ? "none" : "#ffffff"} stroke="#0a0a0a" strokeWidth={stroke} />)}
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
             </g>
           );
@@ -8550,7 +8618,7 @@ function DoorNotation({
           const largeArc = Math.abs(delta) > Math.PI ? 1 : 0;
           return (
             <g key={d.id}>
-              <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
               {showJambs && <>
                 <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
                 <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
@@ -8583,7 +8651,7 @@ function DoorNotation({
         const swB = db < 0 ? 0 : 1;
         return (
           <g key={d.id}>
-            <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />
+            {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
             {showJambs && <>
               <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
               <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />

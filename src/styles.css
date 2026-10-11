@@ -45,16 +45,19 @@
 
 :root {
   --radius: 0.5rem;
-  --architectural-background-light: #d5e9e7;
-  --architectural-background-deep: #bedbd8;
-  --architectural-floor-light: #becfcd;
-  --architectural-floor-deep: #97afac;
+  --architectural-background-light: color-mix(in srgb, #d5e9e7 80%, white);
+  --architectural-background-deep: color-mix(in srgb, #bedbd8 80%, white);
+  --architectural-background-gradient: linear-gradient(135deg, var(--architectural-background-light), var(--architectural-background-deep));
+  --architectural-floor-light: oklch(0.81 0.019 180);
+  --architectural-floor-deep: oklch(0.80 0.019 180);
   --architectural-wall-light: #ffffff;
   --architectural-wall-mid: #edf0f1;
   --architectural-wall-deep: #cbd1d5;
   --architectural-edge: #788d8c;
   --architectural-ink: #283b3a;
   --architectural-shadow: #344b49;
+  --architectural-line: oklch(0.16 0 0);
+  --architectural-bevel-dark: oklch(0.59 0.014 180);
 
   /* Light theme — very soft gray + white dominant, teal primary, ember accent */
   --background: oklch(0.995 0.002 280);
