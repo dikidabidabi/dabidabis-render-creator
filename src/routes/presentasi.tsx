@@ -8144,7 +8144,6 @@ function MaterialEdges({
   if (architectural) {
     const bands = segs.flatMap((segment) => {
       const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
-      if (material === "railing" || material === "window" || material === "curtain") return [];
       const half = ((material ? WALL_THICK_MM[material] : 150) / 1000) * pxPerM / 2;
       return [wallBandPolygon(segment, half, half)];
     });
@@ -8152,7 +8151,7 @@ function MaterialEdges({
     return <g data-architectural-walls="true">
       <defs>
         <linearGradient id={`architectural-wall-${patternId}`} x1="0" y1="0" x2="1" y2="1">
-          <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.55" stopColor="var(--architectural-wall-mid)" /><stop offset="1" stopColor="var(--architectural-wall-deep)" />
+          <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.8" stopColor="var(--architectural-wall-light)" /><stop offset="1" stopColor="var(--architectural-wall-mid)" />
         </linearGradient>
         <filter id={`architectural-shadow-${patternId}`} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceAlpha" stdDeviation={pxPerM * 0.09} result="blur" />
@@ -8162,7 +8161,7 @@ function MaterialEdges({
         </filter>
       </defs>
       <g filter={`url(#architectural-shadow-${patternId})`}>
-        <path d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd" stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.008)} strokeLinejoin="miter" />
+        <path d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd" stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.012)} strokeLinejoin="miter" />
         {curved.map(({ ln, i }) => <path key={i} d={linePath(ln)} fill="none" stroke="var(--architectural-wall-light)" strokeWidth={pxPerM * 0.15} />)}
       </g>
     </g>;
