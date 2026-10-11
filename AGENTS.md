@@ -1,6 +1,6 @@
 # Architecture decisions
 
-- Architectural detail is a persisted optional per-area mode; normalization enforces exclusion with material, ceiling and interior dimensions, while Presentation reuses merged wall-band geometry with token-based gradients and a wall-only SVG shadow so technical views remain unchanged.
+- Architectural detail is an exclusive persisted per-area mode; its pure architectural-plan geometry merges picked walls with columns and subtracts door openings before shadow sweeps and perimeter bevels, while unpicked lines and technical views retain sketch notation.
 
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
 
