@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Perbaiki sisa kegagalan membuka slide Arsitektural dan uji denah kompleks serta geometri fallback.
+
 - [x] Perbaiki Response notifikasi saat sesi hilang/kedaluwarsa; sesi valid, hilang, dan tidak valid teruji tanpa layar kosong, serta penandaan feed tanpa sesi ditolak.
 
 - [x] Perbaiki slide Arsitektural gagal dibuka akibat geometri bayangan dinding miring; 17 pengujian lolos dan slide berhasil dibuka di browser.
