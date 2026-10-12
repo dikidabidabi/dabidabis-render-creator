@@ -6,6 +6,7 @@
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
 
 - Polling notifikasi hanya berjalan saat sesi autentikasi memiliki token dan tidak bergantung pada identitas fungsi render, agar tidak mengirim permintaan tanpa izin atau mengulang tanpa henti.
+- Background notification reads and feed-seen writes verify bearer claims through notification-session.server before any user-scoped RLS query; unavailable sessions return serializable empty/no-op results rather than thrown Responses so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
 - Pintu dan jendela terpasang diedit melalui sub-mode alat masing-masing agar seleksi, orientasi, dan drag endpoint tidak bentrok dengan alat global.
 - Pintu lipat menyimpan mode satu/dua sisi, arah sisi tunggal, dan jumlah panel; panjang fisik daun dipertahankan saat diproyeksikan 45° sehingga sisa bukaan berada di kusen seberang atau di tengah, konsisten di Sketsa, Detail, Presentasi, dan DXF.
