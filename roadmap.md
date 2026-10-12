@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Perbaiki slide Arsitektural gagal dibuka akibat geometri bayangan dinding miring; 17 pengujian lolos dan slide berhasil dibuka di browser.
+
 - [x] Sesuaikan Detail Arsitektural: lantai gradien menyatu, garis tanpa material tipis, luas dan dimensi, bukaan pintu pada dinding/bayangan, kolom menyatu, bevel 2 cm, bayangan 150 cm gradual, dan latar penuh lebih terang; verifikasi.
 
 - [x] Tambahkan ceklis Arsitektural eksklusif pada Pendetailan dan denah gradien dengan dinding putih serta bayangan lembut 45°; verifikasi tampilan dan penyimpanan.

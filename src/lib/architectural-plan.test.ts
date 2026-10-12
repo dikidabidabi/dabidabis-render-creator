@@ -34,4 +34,23 @@ describe("architectural walls", () => {
     }
     assert.deepEqual(architecturalWallUnion([], []), []);
   });
+  test("45 degree walls render all shadow layers without output-ring errors", () => {
+    const walls = architecturalWallUnion([[
+      { x: 0, y: 0 }, { x: 100, y: 100 }, { x: 102, y: 98 }, { x: 2, y: -2 },
+    ]], []);
+    for (let i = 1; i <= 16; i++) {
+      const shadow = architecturalShadowSweep(walls, i * 1.5);
+      assert.ok(shadow.length > 0);
+      assert.ok(shadow.flat(2).every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)));
+    }
+  });
+  test("invalid and zero-area bands do not crash the slide", () => {
+    const walls = architecturalWallUnion([
+      rect(0, 0, 10, 0.15), rect(0, 0, 0, 2), rect(Number.NaN, 0, 2, 2),
+    ], [rect(4, -1, 2, 2), rect(0, 0, 0, 1)]);
+    assert.equal(walls.length, 2);
+    assert.ok(Math.abs(area(walls) - 1.2) < 1e-6);
+    assert.deepEqual(architecturalShadowSweep(walls, 0), []);
+    assert.deepEqual(architecturalShadowSweep(walls, Number.NaN), []);
+  });
 });

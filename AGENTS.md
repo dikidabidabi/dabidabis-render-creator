@@ -1,6 +1,7 @@
 # Architecture decisions
 
 - Architectural detail is an exclusive persisted per-area mode; its pure architectural-plan geometry merges picked walls with columns and subtracts door openings before shadow sweeps and perimeter bevels, while unpicked lines and technical views retain sketch notation.
+- Architectural clipping rounds sub-pixel coordinates, rejects invalid or zero-area bands, and retains valid geometry on clipping failure so diagonal shadow sweeps cannot crash a slide.
 
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
 
