@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Perbaiki Response notifikasi saat sesi hilang/kedaluwarsa; pertahankan verifikasi akses dan uji sesi valid/tidak valid.
+- [x] Perbaiki Response notifikasi saat sesi hilang/kedaluwarsa; sesi valid, hilang, dan tidak valid teruji tanpa layar kosong, serta penandaan feed tanpa sesi ditolak.
 
 - [x] Perbaiki slide Arsitektural gagal dibuka akibat geometri bayangan dinding miring; 17 pengujian lolos dan slide berhasil dibuka di browser.
 
