@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Perbaiki Response notifikasi saat sesi hilang/kedaluwarsa; sesi valid, hilang, dan tidak valid teruji tanpa layar kosong, serta penandaan feed tanpa sesi ditolak.
+
 - [x] Perbaiki slide Arsitektural gagal dibuka akibat geometri bayangan dinding miring; 17 pengujian lolos dan slide berhasil dibuka di browser.
 
 - [x] Sesuaikan Detail Arsitektural: lantai gradien menyatu, garis tanpa material tipis, luas dan dimensi, bukaan pintu pada dinding/bayangan, kolom menyatu, bevel 2 cm, bayangan 150 cm gradual, dan latar penuh lebih terang; verifikasi.

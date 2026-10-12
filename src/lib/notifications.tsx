@@ -27,7 +27,7 @@ const NotificationContext = createContext<NotifCtx>({
 });
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { user, session } = useAuth();
+  const { user, session, loading } = useAuth();
   const fetchNotif = useServerFn(getNotifications);
   const seenFn = useServerFn(markFeedSeen);
   const fetchNotifRef = useRef(fetchNotif);
@@ -36,6 +36,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   seenFnRef.current = seenFn;
   const userId = user?.id;
   const accessToken = session?.access_token;
+  const expiresAt = session?.expires_at;
+  const sessionRef = useRef({ userId, accessToken });
+  sessionRef.current = { userId, accessToken };
+  const inFlightRef = useRef<string | null>(null);
   const [unreadMessages, setUnread] = useState(0);
   const [feedUpdates, setFeed] = useState(0);
   const [galleryComments, setGallery] = useState(0);
@@ -43,7 +47,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [feedTarget, setFeedTarget] = useState<FeedTarget | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!userId || !accessToken) {
+    if (loading || !userId || !accessToken || (expiresAt && expiresAt * 1000 <= Date.now())) {
       setUnread(0);
       setFeed(0);
       setGallery(0);
@@ -51,8 +55,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setFeedTarget(null);
       return;
     }
+    if (inFlightRef.current === accessToken) return;
+    inFlightRef.current = accessToken;
     try {
       const res = await fetchNotifRef.current({});
+      if (sessionRef.current.userId !== userId || sessionRef.current.accessToken !== accessToken) return;
+      if (!res || typeof res.unreadMessages !== "number") return;
       setUnread(res.unreadMessages);
       setFeed(res.feedUpdates);
       setGallery(res.galleryComments ?? 0);
@@ -60,12 +68,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setFeedTarget((res.feedTarget as FeedTarget | null) ?? null);
     } catch {
       /* diam saja: notifikasi tidak kritis */
+    } finally {
+      if (inFlightRef.current === accessToken) inFlightRef.current = null;
     }
-  }, [userId, accessToken]);
+  }, [userId, accessToken, expiresAt, loading]);
 
 
   const clearFeed = useCallback(async () => {
-    if (!userId || !accessToken) return;
+    if (loading || !userId || !accessToken || (expiresAt && expiresAt * 1000 <= Date.now())) return;
     setFeed(0);
     setFeedTarget(null);
 
@@ -74,14 +84,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, [userId, accessToken]);
+  }, [userId, accessToken, expiresAt, loading]);
 
   useEffect(() => {
     void refresh();
-    if (!userId || !accessToken) return;
+    if (loading || !userId || !accessToken) return;
     const t = setInterval(() => void refresh(), 30_000);
     return () => clearInterval(t);
-  }, [userId, accessToken, refresh]);
+  }, [userId, accessToken, loading, refresh]);
 
   return (
     <NotificationContext.Provider

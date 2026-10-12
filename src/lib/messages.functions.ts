@@ -250,9 +250,14 @@ export const sendMessage = createServerFn({ method: "POST" })
   });
 
 export const getNotifications = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
+  .handler(async () => {
+    const { notificationSession } = await import("@/lib/notification-session.server");
+    const auth = await notificationSession();
+    if (!auth) return {
+      unreadMessages: 0, feedUpdates: 0, galleryComments: 0,
+      galleryTarget: null, feedTarget: null,
+    };
+    const { supabase, userId } = auth;
     const [{ count: unreadMessages }, { data: seen }] = await Promise.all([
       supabase
         .from("direct_messages")
@@ -354,9 +359,11 @@ export const getNotifications = createServerFn({ method: "GET" })
 
 
 export const markFeedSeen = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
+  .handler(async () => {
+    const { notificationSession } = await import("@/lib/notification-session.server");
+    const auth = await notificationSession();
+    if (!auth) return { ok: false, error: "Sesi akun belum tersedia." };
+    const { supabase, userId } = auth;
     const now = new Date().toISOString();
     const { error } = await supabase
       .from("feed_seen")
