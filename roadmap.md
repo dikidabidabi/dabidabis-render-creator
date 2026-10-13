@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Tambahkan pilihan style Arsitektural Tosca/Coklat/Biru per kotak detail, gradien sesuai referensi dan teks putih untuk Coklat/Biru; verifikasi penyimpanan dan slide.
+
 - [x] Perbaiki beban filter bayangan slide 13 Detail 2 LT 1 proyek GEDUNG TMM RS SOERADJI (13 Okt) SIMULASI: enam lapisan dengan batas area detail; 18 uji geometri lolos.
 - [x] Verifikasi cadangan Cloud terbaru 13 Oktober 03:58:58 UTC tanpa mengubah opsi detail: slide 13 Arsitektural terbuka di tampilan biasa dan layar penuh, tanpa fallback atau kesalahan.
 
