@@ -5368,7 +5368,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           const yStart = ys[0], yEnd = ys[ys.length - 1];
           return (
             <g key={`detail-grid-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
-              <g stroke="#555555" strokeWidth={gridStroke} strokeDasharray={dash} opacity={0.72}>
+              <g data-detail-grid="true" stroke={architectural ? "var(--architectural-grid-ink)" : "#555555"} strokeWidth={gridStroke} strokeDasharray={dash} opacity={0.72}>
                 {xs.map((x, index) => <line key={`gx-${index}`} x1={x} y1={yStart} x2={x} y2={yEnd} />)}
                 {ys.map((y, index) => <line key={`gy-${index}`} x1={xStart} y1={y} x2={xEnd} y2={y} />)}
               </g>
@@ -5447,7 +5447,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
             </g>;
           });
         })}
-        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs={!architectural} leafThicknessMm={architectural ? 0 : 40} architectural={architectural} />
+        <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} architectural={architectural} />
         <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
         {!architectural && <SolidWallPracticalColumns
           lines={lines}
@@ -8685,7 +8685,7 @@ function DoorNotation({
   const stroke = sw * 0.0006;
   const thick = 0.15 * pxPerM; // 150mm wall thickness mask
   return (
-    <g>
+    <g data-door-notation="true" color={architectural ? "var(--architectural-door-ink)" : "var(--detail-opening-ink)"}>
       {doors.map((d) => {
         const ax = d.a.x, ay = d.a.y, bx = d.b.x, by = d.b.y;
         const len = Math.hypot(bx - ax, by - ay) || 1;
@@ -8741,16 +8741,16 @@ function DoorNotation({
         };
         if (d.type === "folding") {
           return (
-            <g key={d.id}>
-              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
+            <g key={d.id} data-door-type={d.type ?? "swing"} data-jamb-width-mm={showJambs ? 50 : undefined} data-wall-depth-mm={showJambs ? (attachedMaterial ? WALL_THICK_MM[attachedMaterial] : 150) : undefined} data-leaf-thickness-mm={leafThicknessMm}>
+              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="var(--detail-opening-fill)" stroke="none" />}
               {showJambs && <>
-                <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
-                <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                <polygon points={jambA} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
+                <polygon points={jambB} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
               </>}
               {foldingDoorSegments(d).map(([from, to], index) => leafThicknessMm > 0
-                ? <polygon key={`folding-leaf-${index}`} points={leafPolygon(from.x, from.y, to.x, to.y)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
-                : <line key={`folding-leaf-${index}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />)}
-              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+                ? <polygon key={`folding-leaf-${index}`} points={leafPolygon(from.x, from.y, to.x, to.y)} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
+                : <line key={`folding-leaf-${index}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" />)}
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="currentColor" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
             </g>
           );
         }
@@ -8779,14 +8779,14 @@ function DoorNotation({
                 return [[sx, sy, sx + dx * widthPx, sy + dy * widthPx]];
               })();
           return (
-            <g key={d.id}>
-              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
+            <g key={d.id} data-door-type={d.type ?? "swing"} data-jamb-width-mm={showJambs ? 50 : undefined} data-wall-depth-mm={showJambs ? (attachedMaterial ? WALL_THICK_MM[attachedMaterial] : 150) : undefined} data-leaf-thickness-mm={leafThicknessMm}>
+              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="var(--detail-opening-fill)" stroke="none" />}
               {showJambs && <>
-                <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
-                <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                <polygon points={jambA} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
+                <polygon points={jambB} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
               </>}
-              {slidingLeaves.map(([x1, y1, x2, y2], index) => <polygon key={`sliding-leaf-${index}`} points={leafPolygon(x1, y1, x2, y2)} fill={architectural ? "none" : "#ffffff"} stroke="#0a0a0a" strokeWidth={stroke} />)}
-              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+              {slidingLeaves.map(([x1, y1, x2, y2], index) => <polygon key={`sliding-leaf-${index}`} points={leafPolygon(x1, y1, x2, y2)} fill={architectural ? "none" : "var(--detail-opening-fill)"} stroke="currentColor" strokeWidth={stroke} />)}
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="currentColor" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
             </g>
           );
         }
@@ -8802,20 +8802,20 @@ function DoorNotation({
           const sweep = delta < 0 ? 0 : 1;
           const largeArc = Math.abs(delta) > Math.PI ? 1 : 0;
           return (
-            <g key={d.id}>
-              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
+            <g key={d.id} data-door-type={d.type ?? "swing"} data-jamb-width-mm={showJambs ? 50 : undefined} data-wall-depth-mm={showJambs ? (attachedMaterial ? WALL_THICK_MM[attachedMaterial] : 150) : undefined} data-leaf-thickness-mm={leafThicknessMm}>
+              {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="var(--detail-opening-fill)" stroke="none" />}
               {showJambs && <>
-                <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
-                <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+                <polygon points={jambA} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
+                <polygon points={jambB} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
               </>}
               {leafThicknessMm > 0
-                ? <polygon points={leafPolygon(ax, ay, lx, ly)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
-                : <line x1={ax} y1={ay} x2={lx} y2={ly} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />}
+                ? <polygon points={leafPolygon(ax, ay, lx, ly)} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
+                : <line x1={ax} y1={ay} x2={lx} y2={ly} stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" />}
               <path
                 d={`M ${lx} ${ly} A ${widthPx} ${widthPx} 0 ${largeArc} ${sweep} ${bx} ${by}`}
-                fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7}
+                fill="none" stroke="currentColor" strokeWidth={stroke * 0.7}
               />
-              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#0a0a0a" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="currentColor" strokeWidth={stroke * 0.4} strokeDasharray={`${sw * 0.004} ${sw * 0.003}`} />
             </g>
           );
         }
@@ -8835,21 +8835,21 @@ function DoorNotation({
         while (db < -Math.PI) db += Math.PI * 2;
         const swB = db < 0 ? 0 : 1;
         return (
-          <g key={d.id}>
-            {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="#ffffff" stroke="none" />}
+          <g key={d.id} data-door-type={d.type ?? "swing"} data-jamb-width-mm={showJambs ? 50 : undefined} data-wall-depth-mm={showJambs ? (attachedMaterial ? WALL_THICK_MM[attachedMaterial] : 150) : undefined} data-leaf-thickness-mm={leafThicknessMm}>
+            {!architectural && <polygon points={`${m1} ${m2} ${m3} ${m4}`} fill="var(--detail-opening-fill)" stroke="none" />}
             {showJambs && <>
-              <polygon points={jambA} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
-              <polygon points={jambB} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              <polygon points={jambA} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
+              <polygon points={jambB} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
             </>}
             {leafThicknessMm > 0 ? <>
-              <polygon points={leafPolygon(ax, ay, la.x, la.y)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
-              <polygon points={leafPolygon(bx, by, lb.x, lb.y)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
+              <polygon points={leafPolygon(ax, ay, la.x, la.y)} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
+              <polygon points={leafPolygon(bx, by, lb.x, lb.y)} fill="var(--detail-opening-fill)" stroke="currentColor" strokeWidth={stroke} />
             </> : <>
-              <line x1={ax} y1={ay} x2={la.x} y2={la.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
-              <line x1={bx} y1={by} x2={lb.x} y2={lb.y} stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round" />
+              <line x1={ax} y1={ay} x2={la.x} y2={la.y} stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" />
+              <line x1={bx} y1={by} x2={lb.x} y2={lb.y} stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" />
             </>}
-            <path d={`M ${la.x} ${la.y} A ${halfW} ${halfW} 0 0 ${swA} ${mxp} ${myp}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7} />
-            <path d={`M ${lb.x} ${lb.y} A ${halfW} ${halfW} 0 0 ${swB} ${mxp} ${myp}`} fill="none" stroke="#0a0a0a" strokeWidth={stroke * 0.7} />
+            <path d={`M ${la.x} ${la.y} A ${halfW} ${halfW} 0 0 ${swA} ${mxp} ${myp}`} fill="none" stroke="currentColor" strokeWidth={stroke * 0.7} />
+            <path d={`M ${lb.x} ${lb.y} A ${halfW} ${halfW} 0 0 ${swB} ${mxp} ${myp}`} fill="none" stroke="currentColor" strokeWidth={stroke * 0.7} />
           </g>
         );
       })}
