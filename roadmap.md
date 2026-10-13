@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan style Bata: gradien merah bata sesuai referensi, dinding emas, garis/dimensi/teks/pintu putih; verifikasi pilihan dan penyimpanan.
+- [x] Tambahkan style Bata: gradien merah bata sesuai referensi, dinding emas, garis/dimensi/teks/pintu putih; pilihan bertahan setelah muat ulang dan slide detail teruji di browser dengan denah contoh.
 
 - [x] Putihkan grid dan pintu Arsitektural Coklat/Biru; ketiga style teruji pada slide 13 cadangan Cloud terbaru, 88 pintu memakai kusen 50 mm, kedalaman mengikuti material dinding, dan daun 40 mm.
 
