@@ -50,14 +50,13 @@ export function freeStairPlan(stair: Stair, pxPerMeter: number): StairPlan {
     if (next) {
       const p = f.b;
       const square = [f.at(f.length - half, -half), f.at(f.length + half, -half), f.at(f.length + half, half), f.at(f.length - half, half)];
-      const union = polygonClipping.union([square.map((q) => [q.x, q.y] as [number, number])], [[f.at(f.end, -half), p, next.at(next.start, -half), next.at(next.start, half), f.at(f.end, half)].map((q) => [q.x, q.y] as [number, number])]);
+      const union = safeUnion([square, [f.at(f.end, -half), p, next.at(next.start, -half), next.at(next.start, half), f.at(f.end, half)]]);
       const landing = union[0]?.[0]?.map(([x, y]) => ({ x, y })) ?? square;
       landings.push(landing); landingSurfaces.push({ polygon: landing, elevationRatio: completed / count, kind: "landing" });
     }
   });
   const polygons = [...treads.map((s) => s.polygon), ...landings];
-  const first = polygons[0];
-  const union = first ? polygonClipping.union([first.map((p) => [p.x, p.y] as [number, number])], ...polygons.slice(1).map((poly) => [poly.map((p) => [p.x, p.y] as [number, number])])) : [];
-  const footprint = union[0]?.[0]?.map(([x, y]) => ({ x, y })) ?? [];
+  const union = safeUnion(polygons);
+  const footprint = union[0]?.[0]?.map(([x, y]) => ({ x, y })) ?? convexHull(polygons.flat());
   return { footprint, stepLines, innerLines: [], path, landings, sectionSurfaces: [...treads, ...landingSurfaces], totalRunM: total / pxPerMeter };
 }
