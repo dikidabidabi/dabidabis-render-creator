@@ -8341,12 +8341,12 @@ function MaterialEdges({
           strokeLinecap="round"
         />
       ))}
-       {mode !== "overlay" && segs.map((s) => {
+       {mode !== "overlay" && segs.map((s, si) => {
          const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
         if (mat) return null;
         return (
           <line
-            key={`s-${s.id}`}
+            key={`s-${s.id}-${si}`}
             x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
             stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
           />
@@ -8355,7 +8355,7 @@ function MaterialEdges({
       {/* Lapisan solid berada di bawah seluruh material lain. */}
       {mode !== "base" && renderWallLayer(solidBands, solidPaths)}
       {/* Material non-masif tetap dirender per segmen. */}
-      {mode !== "base" && materialSegments.map((s) => {
+      {mode !== "base" && materialSegments.map((s, si) => {
         const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
         if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
@@ -8376,7 +8376,7 @@ function MaterialEdges({
         if (mat === "concept") {
           // Dinding konsep hanya dibedakan di denah: bidang hitam penuh 150 mm.
           return (
-            <polygon key={`s-${s.id}`} points={pts} fill="#0a0a0a" stroke="none" />
+            <polygon key={`s-${s.id}-${si}`} points={pts} fill="#0a0a0a" stroke="none" />
           );
         }
         if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
@@ -8388,7 +8388,7 @@ function MaterialEdges({
         if (mat === "curtain") {
           // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.
           return (
-            <g key={`s-${s.id}`}>
+            <g key={`s-${s.id}-${si}`}>
               <polygon points={pts} fill="#ffffff" stroke="none" />
               <polygon points={pts} fill="rgba(34,211,238,0.22)" stroke="none" />
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
@@ -8415,7 +8415,7 @@ function MaterialEdges({
         if (mat === "railing") {
           // Railing: 2 garis tipis berjarak 100 mm, warna coklat (tanpa fill/hatch).
           return (
-            <g key={`s-${s.id}`}>
+            <g key={`s-${s.id}-${si}`}>
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
                 stroke={RAILING_COLOR} strokeWidth={strokeFine} />
               <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y}
@@ -8432,7 +8432,7 @@ function MaterialEdges({
         const eMid1 = { x: (a1.x + a2.x) / 2, y: (a1.y + a2.y) / 2 };
         const eMid2 = { x: (b1.x + b2.x) / 2, y: (b1.y + b2.y) / 2 };
         return (
-          <g key={`s-${s.id}`}>
+          <g key={`s-${s.id}-${si}`}>
             <polygon points={pts} fill="#ffffff" stroke="none" />
             <polygon points={pts} fill={`url(#hatch45-${patternId})`} stroke="none" opacity={0.55} />
             <polygon points={pts} fill="none"
