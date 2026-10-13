@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Putihkan grid dan pintu Arsitektural Coklat/Biru serta samakan kusen dan tebal daun di semua style; verifikasi tampilan.
+
 - [x] Tambahkan pilihan style Arsitektural Tosca/Coklat/Biru per kotak detail, gradien sesuai referensi dan teks putih untuk Coklat/Biru; ketiga pilihan tersimpan setelah muat ulang dan slide 13 teruji tanpa kesalahan.
 
 - [x] Perbaiki beban filter bayangan slide 13 Detail 2 LT 1 proyek GEDUNG TMM RS SOERADJI (13 Okt) SIMULASI: enam lapisan dengan batas area detail; 18 uji geometri lolos.

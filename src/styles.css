@@ -59,6 +59,10 @@
   --architectural-ink: #283b3a;
   --architectural-shadow: #344b49;
   --architectural-line: oklch(0.16 0 0);
+  --detail-opening-ink: #0a0a0a;
+  --detail-opening-fill: #ffffff;
+  --architectural-door-ink: var(--detail-opening-ink);
+  --architectural-grid-ink: #555555;
   --architectural-bevel-dark: oklch(0.59 0.014 180);
   --architectural-style-tosca: #b1c2be;
   --architectural-style-brown: #79796c;
@@ -227,6 +231,8 @@
 
 /* Scoped palettes preserve the original Tosca slide and white wall geometry. */
 [data-architectural-style="brown"] {
+  --architectural-door-ink: var(--architectural-wall-light);
+  --architectural-grid-ink: var(--architectural-wall-light);
   --architectural-background-radial-light: color-mix(in srgb, #b6b3a8 30%, white);
   --architectural-background-deep: #777b6b;
   --architectural-background-gradient: radial-gradient(ellipse farthest-corner at top left, var(--architectural-background-radial-light), var(--architectural-background-deep));
@@ -239,6 +245,8 @@
   --architectural-caption-ink: #ffffff;
 }
 [data-architectural-style="blue"] {
+  --architectural-door-ink: var(--architectural-wall-light);
+  --architectural-grid-ink: var(--architectural-wall-light);
   --architectural-background-radial-light: color-mix(in srgb, #526c8c 30%, white);
   --architectural-background-deep: #1c3346;
   --architectural-background-gradient: radial-gradient(ellipse farthest-corner at top left, var(--architectural-background-radial-light), var(--architectural-background-deep));
