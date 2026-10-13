@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Naikkan kecerahan gradien lantai Arsitektural di kiri atas 30% lagi; terukur pada denah lokal di browser.
+
 - [x] Naikkan lagi kecerahan puncak gradien radial latar Arsitektural 50% di kiri atas; terukur pada denah lokal di browser.
 
 - [x] Naikkan lagi kecerahan gradien radial latar Arsitektural di kiri atas sebesar 50%; terukur pada denah lokal di browser.
