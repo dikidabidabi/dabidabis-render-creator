@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Putihkan grid dan pintu Arsitektural Coklat/Biru serta samakan kusen dan tebal daun di semua style; verifikasi tampilan.
+- [x] Putihkan grid dan pintu Arsitektural Coklat/Biru; ketiga style teruji pada slide 13 cadangan Cloud terbaru, 88 pintu memakai kusen 50 mm, kedalaman mengikuti material dinding, dan daun 40 mm.
 
 - [x] Tambahkan pilihan style Arsitektural Tosca/Coklat/Biru per kotak detail, gradien sesuai referensi dan teks putih untuk Coklat/Biru; ketiga pilihan tersimpan setelah muat ulang dan slide 13 teruji tanpa kesalahan.
 
