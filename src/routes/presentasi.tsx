@@ -4704,8 +4704,8 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 function SlideFurniture({ items, sw, prefix, architectural = false, pxPerM = 1 }: { items: DetailFurniture[]; sw: number; prefix: string; architectural?: boolean; pxPerM?: number }) {
   const shadowId = `${prefix}-architectural-shadow`;
   const tintId = `${prefix}-architectural-tint`;
-  const shadowSteps = Array.from({ length: 16 }, (_, i) => {
-    const fraction = (16 - i) / 16;
+  const shadowSteps = Array.from({ length: 6 }, (_, i) => {
+    const fraction = (6 - i) / 6;
     return { offset: pxPerM * 0.15 * fraction / Math.SQRT2, blur: pxPerM * (0.0015 + 0.018 * fraction ** 2) };
   });
   return <g pointerEvents="none">
@@ -4721,11 +4721,11 @@ function SlideFurniture({ items, sw, prefix, architectural = false, pxPerM = 1 }
         <feComposite in2="SourceAlpha" operator="in" result="tint" />
         <feBlend in="linework" in2="tint" mode="multiply" />
       </filter>
-      <filter id={shadowId} x="-200%" y="-200%" width="500%" height="500%" colorInterpolationFilters="sRGB">
+      <filter id={shadowId} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
         {shadowSteps.map((step, i) => <Fragment key={i}>
           <feGaussianBlur in="SourceAlpha" stdDeviation={step.blur} />
           <feOffset dx={step.offset} dy={step.offset} result={`offset-${i}`} />
-          <feFlood floodColor="var(--architectural-shadow)" floodOpacity={1 - Math.pow(1 - 0.456, 1 / 16)} />
+          <feFlood floodColor="var(--architectural-shadow)" floodOpacity={1 - Math.pow(1 - 0.456, 1 / shadowSteps.length)} />
           <feComposite in2={`offset-${i}`} operator="in" result={`shadow-${i}`} />
         </Fragment>)}
         <feMerge>{shadowSteps.map((_, i) => <feMergeNode key={i} in={`shadow-${i}`} />)}<feMergeNode in="SourceGraphic" /></feMerge>
@@ -5419,6 +5419,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           architectural={architectural}
           architecturalDoors={doors}
           architecturalColumns={architecturalColumns}
+          architecturalBounds={bounds}
         />
         {showMaterialMode && rooms.flatMap((room) => {
           const materialId = room.roomMaterials?.dinding;
@@ -8143,6 +8144,7 @@ function MaterialEdges({
   architectural = false,
   architecturalDoors = [],
   architecturalColumns = [],
+  architecturalBounds,
 }: {
   lines: Line[];
   /** Selalu gunakan seluruh garis sketsa untuk membentuk ID segmen yang sama
@@ -8160,6 +8162,7 @@ function MaterialEdges({
   architectural?: boolean;
   architecturalDoors?: Door[];
   architecturalColumns?: Point[][];
+  architecturalBounds?: { minX: number; minY: number; maxX: number; maxY: number };
 }) {
   // Segmen non-lurus: render utuh via linePath (tidak dipecah).
   const curved = lines
@@ -8255,8 +8258,17 @@ function MaterialEdges({
     const walls = architecturalWallUnion([...bands, ...architecturalColumns], openings);
     const wallPath = wallUnionPath(walls);
     const bevels = architecturalBevels(walls, pxPerM * 0.02);
-    const shadowSteps = Array.from({ length: 16 }, (_, i) => {
-      const fraction = (16 - i) / 16;
+    // Bound blur textures to the visible detail, not five times the entire level.
+    const shadowPadding = pxPerM * 0.6;
+    const shadowRegion = architecturalBounds ? {
+      filterUnits: "userSpaceOnUse" as const,
+      x: architecturalBounds.minX - shadowPadding,
+      y: architecturalBounds.minY - shadowPadding,
+      width: architecturalBounds.maxX - architecturalBounds.minX + shadowPadding * 2,
+      height: architecturalBounds.maxY - architecturalBounds.minY + shadowPadding * 2,
+    } : { x: "-50%", y: "-50%", width: "200%", height: "200%" };
+    const shadowSteps = Array.from({ length: 6 }, (_, i) => {
+      const fraction = (6 - i) / 6;
       return { distance: 1.5 * fraction * pxPerM, blur: pxPerM * (0.015 + 0.18 * fraction ** 2) };
     });
     return <g data-architectural-walls="true">
@@ -8265,7 +8277,7 @@ function MaterialEdges({
           <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.8" stopColor="var(--architectural-wall-light)" /><stop offset="1" stopColor="var(--architectural-wall-mid)" />
         </linearGradient>
         <clipPath id={`architectural-wall-clip-${patternId}`}><path d={wallPath} clipRule="evenodd" /></clipPath>
-        {shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} x="-200%" y="-200%" width="500%" height="500%">
+        {shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} {...shadowRegion}>
           <feGaussianBlur stdDeviation={step.blur} />
         </filter>)}
         {bevels.map((bevel, i) => <linearGradient key={i} id={`architectural-bevel-${patternId}-${i}`} gradientUnits="userSpaceOnUse"
@@ -8276,7 +8288,7 @@ function MaterialEdges({
       </defs>
       <g data-architectural-shadow-distance="1500">
         {shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}
-          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={1 - Math.pow(1 - 0.456, 1 / 16)}
+          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={1 - Math.pow(1 - 0.456, 1 / shadowSteps.length)}
           filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
       </g>
       <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd"

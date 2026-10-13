@@ -1,7 +1,7 @@
 # Architecture decisions
 
 - Architectural detail is an exclusive persisted per-area mode; its pure architectural-plan geometry merges picked walls with columns and subtracts door openings before shadow sweeps and perimeter bevels, while unpicked lines and technical views retain sketch notation.
-- Architectural clipping rounds sub-pixel coordinates, rejects invalid bands, and keeps valid geometry on failure; shadows render as uniformly oriented nonzero strips instead of clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode before showing a message so one bad shape cannot blank a slide.
+- Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Blur filters use detail-viewport bounds and six opacity-normalized layers to avoid graphics-memory exhaustion on cropped/zoomed plans.
 
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
 
