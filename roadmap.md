@@ -120,3 +120,5 @@
 - [x] Tambahkan tabel furniture dengan ukuran, jumlah, harga dan duplikasi; tautkan posisi furniture ke ruang untuk denah Presentasi sesuai ceklis.
 - [x] Tambahkan ceklis kirim ke presentasi, slide Furniture per kategori dan level, serta elemen konstruksi pada gambar Detail.
 
+
+- [x] Slide 13 Detail 2 LT 1 gagal di Galaxy Tab (Chrome): bevel dinding jadi bitmap, union dinding di-cache
