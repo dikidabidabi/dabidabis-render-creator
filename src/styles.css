@@ -260,8 +260,8 @@
   --architectural-caption-ink: #ffffff;
 }
 [data-architectural-style="bata"] {
-  --architectural-background-radial-light: #b17b80;
-  --architectural-background-deep: #673e43;
+  --architectural-background-radial-light: color-mix(in srgb, #c8a3a6 50%, white);
+  --architectural-background-deep: #95787b;
   --architectural-background-gradient: radial-gradient(ellipse farthest-corner at top left, var(--architectural-background-radial-light), var(--architectural-background-deep));
   --architectural-floor-light: #a57177;
   --architectural-floor-deep: #73484e;

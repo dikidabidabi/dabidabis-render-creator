@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Terangkan gradien latar style Bata 30% pada seluruh gradien lalu sudut kiri atasnya 50% lagi; terukur di browser: sudut rgb(228,209,211) dan ujung rgb(149,120,123).
+
 - [x] Tambahkan style Bata: gradien merah bata sesuai referensi, dinding emas, garis/dimensi/teks/pintu putih; pilihan bertahan setelah muat ulang dan slide detail teruji di browser dengan denah contoh.
 
 - [x] Putihkan grid dan pintu Arsitektural Coklat/Biru; ketiga style teruji pada slide 13 cadangan Cloud terbaru, 88 pintu memakai kusen 50 mm, kedalaman mengikuti material dinding, dan daun 40 mm.
