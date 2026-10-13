@@ -14,7 +14,7 @@
 - Ujung terbuka dan pertemuan Dinding Solid/standar 150 mm memakai kolom praktis 150 × 150 mm; solid hitam, standar putih dengan finishing 15 mm.
 - Furniture Detail disimpan bersama kotak detail dengan ID ruang, kategori, dan posisi relatif terhadap ruang; daftar kategori disimpan per akun, ukuran katalog/tabel dalam mm dikonversi memakai skala sketsa agar ikut bergeser ketika ruang berubah, sementara ceklis per kotak mengendalikan kemunculan di Presentasi.
 - Slide rekap Furniture diaktifkan per sketsa melalui `showFurnitureSlide`, mengambil seluruh furniture kotak detail, mengelompokkan kategori, dan mengurutkan level berdasarkan elevasi.
-- Slide Denah/Detail menggambar furniture setelah bidang ruang tetapi sebelum notasi teknis, sedangkan label ruang ditaruh terakhir agar informasi ruang selalu terbaca.
+- Furniture renders before notation and room labels; Architectural mode uses scale-aware layered alpha shadows and image tint preserving transparency and linework, while other modes remain unchanged.
 - Notasi tangga Slide Denah/Detail memakai bidang potong 1 m dengan garis batas 45°, bagian di atas bidang potong putus-putus, sisi dalam tegas, arah naik/turun mengikuti bordes, dan tangga tipikal tengah ditampilkan utuh.
 - Pustaka material beserta nama, gambar, deskripsi, dan produk tersimpan per akun melalui penyimpanan proyek bersama, sedangkan pilihan material tiap ruang tersimpan pada layer sketsa dengan ID material agar perubahan data tetap tersinkron.
 - Mode Material pada setiap kotak detail memakai ID material ruang untuk warna dan kode lantai/dinding, dengan legenda pada rel kanan Slide Detail; nilai awalnya nonaktif agar presentasi lama tidak berubah.
