@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { architecturalWallUnion, architecturalShadowSweep, architecturalBevels } from "./architectural-plan";
+import { architecturalWallUnion, architecturalShadowSweep, architecturalShadowStrips, architecturalBevels } from "./architectural-plan";
 
 const rect = (x: number, y: number, w: number, h: number) => [
   { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h },
@@ -52,5 +52,15 @@ describe("architectural walls", () => {
     assert.ok(Math.abs(area(walls) - 1.2) < 1e-6);
     assert.deepEqual(architecturalShadowSweep(walls, 0), []);
     assert.deepEqual(architecturalShadowSweep(walls, Number.NaN), []);
+  });
+  test("shadow strips share orientation and skip degenerate edges", () => {
+    const walls = architecturalWallUnion([rect(0, 0, 10, 0.15), [{ x: 0, y: 0 }, { x: 5, y: 5 }, { x: 5.1, y: 4.9 }, { x: 0.1, y: -0.1 }]], []);
+    const strips = architecturalShadowStrips(walls, 1.5);
+    assert.ok(strips.length > 0);
+    for (const strip of strips) {
+      const signed = strip.reduce((sum, p, i) => sum + p.x * strip[(i + 1) % strip.length].y - strip[(i + 1) % strip.length].x * p.y, 0);
+      assert.ok(signed > 0);
+    }
+    assert.deepEqual(architecturalShadowStrips(walls, 0), []);
   });
 });
