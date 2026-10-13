@@ -227,10 +227,10 @@
 
 /* Scoped palettes preserve the original Tosca slide and white wall geometry. */
 [data-architectural-style="brown"] {
-  --architectural-background-radial-light: #b6b3a8;
+  --architectural-background-radial-light: color-mix(in srgb, #b6b3a8 30%, white);
   --architectural-background-deep: #777b6b;
   --architectural-background-gradient: radial-gradient(ellipse farthest-corner at top left, var(--architectural-background-radial-light), var(--architectural-background-deep));
-  --architectural-floor-light: #959488;
+  --architectural-floor-light: color-mix(in srgb, #959488 70%, white);
   --architectural-floor-deep: #6d7163;
   --architectural-furniture: color-mix(in srgb, var(--architectural-floor-light) 50%, white);
   --architectural-ink: #ffffff;
@@ -239,10 +239,10 @@
   --architectural-caption-ink: #ffffff;
 }
 [data-architectural-style="blue"] {
-  --architectural-background-radial-light: #526c8c;
+  --architectural-background-radial-light: color-mix(in srgb, #526c8c 30%, white);
   --architectural-background-deep: #1c3346;
   --architectural-background-gradient: radial-gradient(ellipse farthest-corner at top left, var(--architectural-background-radial-light), var(--architectural-background-deep));
-  --architectural-floor-light: #3d5473;
+  --architectural-floor-light: color-mix(in srgb, #3d5473 70%, white);
   --architectural-floor-deep: #23384f;
   --architectural-furniture: color-mix(in srgb, var(--architectural-floor-light) 50%, white);
   --architectural-ink: #ffffff;
