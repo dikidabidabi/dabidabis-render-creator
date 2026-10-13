@@ -47,9 +47,9 @@
   --radius: 0.5rem;
   --architectural-background-light: color-mix(in srgb, #d5e9e7 80%, white);
   --architectural-background-deep: color-mix(in srgb, #bedbd8 80%, white);
-  --architectural-background-radial-light: color-mix(in srgb, var(--architectural-background-light) 70%, white);
+  --architectural-background-radial-light: color-mix(in srgb, var(--architectural-background-light) 49%, white);
   --architectural-background-gradient: radial-gradient(ellipse farthest-corner at top left, var(--architectural-background-radial-light), var(--architectural-background-deep));
-  --architectural-floor-light: color-mix(in srgb, oklch(0.81 0.019 180) 85%, white);
+  --architectural-floor-light: color-mix(in srgb, oklch(0.81 0.019 180) 68%, white);
   --architectural-furniture: color-mix(in srgb, var(--architectural-floor-light) 50%, white);
   --architectural-floor-deep: oklch(0.80 0.019 180);
   --architectural-wall-light: #ffffff;
