@@ -8132,6 +8132,108 @@ function ArchitecturalStairNotation({
   );
 }
 
+// ---------- Architectural shadow raster ----------
+// Live SVG blur filters over complex wall outlines can exhaust graphics memory
+// on some devices, leaving the slide blank. The shadow is therefore painted
+// once into a bounded bitmap and embedded as a single image.
+type ShadowRegion = { x: number; y: number; width: number; height: number };
+type ShadowStep = { distance: number; blur: number };
+const shadowRasterCache = new Map<string, string>();
+const SHADOW_RASTER_MAX_SIDE = 2048;
+
+function hashText(text: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
+
+function resolveCssColor(value: string, fallback: string): string {
+  try {
+    const probe = document.createElement("span");
+    probe.style.color = value;
+    probe.style.display = "none";
+    document.body.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function paintShadowRaster(walls: Point[][][], steps: ShadowStep[], region: ShadowRegion, opacity: number): string | null {
+  const side = Math.max(region.width, region.height);
+  if (!(side > 0) || !Number.isFinite(side)) return null;
+  const scale = Math.min(SHADOW_RASTER_MAX_SIDE / side, 16);
+  const width = Math.max(1, Math.round(region.width * scale));
+  const height = Math.max(1, Math.round(region.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const color = resolveCssColor("var(--architectural-shadow)", "#344b49");
+  const supportsFilter = typeof (ctx as CanvasRenderingContext2D & { filter?: unknown }).filter === "string";
+  for (const step of steps) {
+    const strips = architecturalShadowStrips(walls, step.distance);
+    if (!strips.length) continue;
+    const blurPx = step.blur * scale;
+    // Without canvas filters, approximate blur by painting at reduced resolution and upscaling smoothly.
+    const reduce = supportsFilter ? 1 : Math.max(1, Math.min(24, blurPx / 1.5));
+    const layer = document.createElement("canvas");
+    layer.width = Math.max(1, Math.round(width / reduce));
+    layer.height = Math.max(1, Math.round(height / reduce));
+    const lctx = layer.getContext("2d");
+    if (!lctx) continue;
+    const k = scale / reduce;
+    lctx.setTransform(k, 0, 0, k, -region.x * k, -region.y * k);
+    lctx.fillStyle = color;
+    lctx.beginPath();
+    for (const strip of strips) {
+      if (strip.length < 3) continue;
+      lctx.moveTo(strip[0].x, strip[0].y);
+      for (let i = 1; i < strip.length; i++) lctx.lineTo(strip[i].x, strip[i].y);
+      lctx.closePath();
+    }
+    lctx.fill("nonzero");
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    if (supportsFilter && blurPx > 0.3) ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(layer, 0, 0, width, height);
+    ctx.restore();
+  }
+  try {
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+function ArchitecturalShadowRaster({ walls, wallPath, steps, region, opacity }: {
+  walls: Point[][][]; wallPath: string; steps: ShadowStep[]; region: ShadowRegion; opacity: number;
+}) {
+  const key = `${hashText(wallPath)}:${wallPath.length}:${region.x.toFixed(2)},${region.y.toFixed(2)},${region.width.toFixed(2)},${region.height.toFixed(2)}:${steps.map((s) => `${s.distance.toFixed(3)}/${s.blur.toFixed(3)}`).join(";")}:${opacity.toFixed(4)}`;
+  const [src, setSrc] = useState<string | null>(() => shadowRasterCache.get(key) ?? null);
+  useEffect(() => {
+    const cached = shadowRasterCache.get(key);
+    if (cached) { setSrc(cached); return; }
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      let url: string | null = null;
+      try { url = paintShadowRaster(walls, steps, region, opacity); } catch (error) { console.warn("Architectural shadow raster failed", error); }
+      if (cancelled || !url) return;
+      if (shadowRasterCache.size > 16) shadowRasterCache.delete(shadowRasterCache.keys().next().value as string);
+      shadowRasterCache.set(key, url);
+      setSrc(url);
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(handle); };
+    // walls/steps/region are fully described by key
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (!src) return null;
+  return <image data-architectural-shadow-raster="true" href={src} x={region.x} y={region.y} width={region.width} height={region.height} preserveAspectRatio="none" />;
+}
+
 function MaterialEdges({
   lines,
   segmentationLines,
@@ -8271,13 +8373,18 @@ function MaterialEdges({
       const fraction = (6 - i) / 6;
       return { distance: 1.5 * fraction * pxPerM, blur: pxPerM * (0.015 + 0.18 * fraction ** 2) };
     });
+    const shadowOpacity = 1 - Math.pow(1 - 0.456, 1 / shadowSteps.length);
+    const rasterRegion = typeof document !== "undefined" && architecturalBounds ? {
+      x: shadowRegion.x as number, y: shadowRegion.y as number,
+      width: shadowRegion.width as number, height: shadowRegion.height as number,
+    } : null;
     return <g data-architectural-walls="true">
       <defs>
         <linearGradient id={`architectural-wall-${patternId}`} x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.8" stopColor="var(--architectural-wall-light)" /><stop offset="1" stopColor="var(--architectural-wall-mid)" />
         </linearGradient>
         <clipPath id={`architectural-wall-clip-${patternId}`}><path d={wallPath} clipRule="evenodd" /></clipPath>
-        {shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} {...shadowRegion}>
+        {!rasterRegion && shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} {...shadowRegion}>
           <feGaussianBlur stdDeviation={step.blur} />
         </filter>)}
         {bevels.map((bevel, i) => <linearGradient key={i} id={`architectural-bevel-${patternId}-${i}`} gradientUnits="userSpaceOnUse"
@@ -8287,8 +8394,9 @@ function MaterialEdges({
         </linearGradient>)}
       </defs>
       <g data-architectural-shadow-distance="1500">
-        {shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}
-          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={1 - Math.pow(1 - 0.456, 1 / shadowSteps.length)}
+        {rasterRegion && <ArchitecturalShadowRaster walls={walls} wallPath={wallPath} steps={shadowSteps} region={rasterRegion} opacity={shadowOpacity} />}
+        {!rasterRegion && shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}
+          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={shadowOpacity}
           filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
       </g>
       <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd"
@@ -8297,8 +8405,8 @@ function MaterialEdges({
         {bevels.map((bevel, i) => <polygon key={i} points={pointsValue(bevel.points)} fill={`url(#architectural-bevel-${patternId}-${i})`} />)}
       </g>
       <g data-architectural-unpicked-lines="true" fill="none" stroke="var(--architectural-line)" strokeWidth={stroke}>
-        {segs.filter((segment) => !materialForEdgeSegment(segment, segmentSource, edgeAttrs)).map((segment) =>
-          <path key={segment.id} d={`M ${segment.a.x} ${segment.a.y} L ${segment.b.x} ${segment.b.y}`} />)}
+        {segs.filter((segment) => !materialForEdgeSegment(segment, segmentSource, edgeAttrs)).map((segment, si) =>
+          <path key={`${segment.id}-${si}`} d={`M ${segment.a.x} ${segment.a.y} L ${segment.b.x} ${segment.b.y}`} />)}
         {curved.filter(({ ln }) => !edgeMaterialForSegment(edgeAttrs, ln)).map(({ ln, i }) => <path key={i} d={linePath(ln)} />)}
       </g>
     </g>;
@@ -8341,12 +8449,12 @@ function MaterialEdges({
           strokeLinecap="round"
         />
       ))}
-       {mode !== "overlay" && segs.map((s) => {
+       {mode !== "overlay" && segs.map((s, si) => {
          const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
         if (mat) return null;
         return (
           <line
-            key={`s-${s.id}`}
+            key={`s-${s.id}-${si}`}
             x1={s.a.x} y1={s.a.y} x2={s.b.x} y2={s.b.y}
             stroke="#0a0a0a" strokeWidth={stroke} strokeLinecap="round"
           />
@@ -8355,7 +8463,7 @@ function MaterialEdges({
       {/* Lapisan solid berada di bawah seluruh material lain. */}
       {mode !== "base" && renderWallLayer(solidBands, solidPaths)}
       {/* Material non-masif tetap dirender per segmen. */}
-      {mode !== "base" && materialSegments.map((s) => {
+      {mode !== "base" && materialSegments.map((s, si) => {
         const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
         if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
@@ -8376,7 +8484,7 @@ function MaterialEdges({
         if (mat === "concept") {
           // Dinding konsep hanya dibedakan di denah: bidang hitam penuh 150 mm.
           return (
-            <polygon key={`s-${s.id}`} points={pts} fill="#0a0a0a" stroke="none" />
+            <polygon key={`s-${s.id}-${si}`} points={pts} fill="#0a0a0a" stroke="none" />
           );
         }
         if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
@@ -8388,7 +8496,7 @@ function MaterialEdges({
         if (mat === "curtain") {
           // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.
           return (
-            <g key={`s-${s.id}`}>
+            <g key={`s-${s.id}-${si}`}>
               <polygon points={pts} fill="#ffffff" stroke="none" />
               <polygon points={pts} fill="rgba(34,211,238,0.22)" stroke="none" />
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
@@ -8415,7 +8523,7 @@ function MaterialEdges({
         if (mat === "railing") {
           // Railing: 2 garis tipis berjarak 100 mm, warna coklat (tanpa fill/hatch).
           return (
-            <g key={`s-${s.id}`}>
+            <g key={`s-${s.id}-${si}`}>
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y}
                 stroke={RAILING_COLOR} strokeWidth={strokeFine} />
               <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y}
@@ -8432,7 +8540,7 @@ function MaterialEdges({
         const eMid1 = { x: (a1.x + a2.x) / 2, y: (a1.y + a2.y) / 2 };
         const eMid2 = { x: (b1.x + b2.x) / 2, y: (b1.y + b2.y) / 2 };
         return (
-          <g key={`s-${s.id}`}>
+          <g key={`s-${s.id}-${si}`}>
             <polygon points={pts} fill="#ffffff" stroke="none" />
             <polygon points={pts} fill={`url(#hatch45-${patternId})`} stroke="none" opacity={0.55} />
             <polygon points={pts} fill="none"
