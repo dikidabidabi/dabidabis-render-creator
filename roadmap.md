@@ -1,6 +1,7 @@
 # Roadmap
 
 - [ ] Reproduksi khusus slide 13 Detail 2 LT 1 proyek GEDUNG TMM RS SOERADJI (13 Okt) SIMULASI, perbaiki penyebab kegagalan, dan uji slide tersebut.
+- [ ] Ambil pembaruan Cloud yang dikirim pengguna pukul 04:01 UTC dan verifikasi ulang slide 13 tanpa mengubah opsi detail.
 
 - [x] Diagnosis dan perbaiki slide Arsitektural LT 1 dan LT 2 proyek GEDUNG TMM RS SOERADJI (13 Okt) SIMULASI; menunggu ekspor data terbaru dari pengguna karena cadangan Cloud terakhir 22 September tidak memuat proyek 13 Oktober. (terverifikasi: 95/95 slide terbuka, seluruh slide arsitektural LT 1–5 tampil)
 
