@@ -1,7 +1,7 @@
 # Architecture decisions
 
 - Architectural detail is an exclusive persisted per-area mode; its pure architectural-plan geometry merges picked walls with columns and subtracts door openings before shadow sweeps and perimeter bevels, while unpicked lines and technical views retain sketch notation.
-- Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as one cached viewport-bounded bitmap (max 2048 px), since live SVG blurs exhausted GPU memory on some devices.
+- Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows and 2 cm bevels render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions, since live SVG blurs and clipped gradients exhausted GPU memory on Android tablets.
 
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
 
