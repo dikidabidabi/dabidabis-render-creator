@@ -8461,11 +8461,11 @@ function MaterialEdges({
         <linearGradient id={`architectural-wall-${patternId}`} x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.8" stopColor="var(--architectural-wall-light)" /><stop offset="1" stopColor="var(--architectural-wall-mid)" />
         </linearGradient>
-        <clipPath id={`architectural-wall-clip-${patternId}`}><path d={wallPath} clipRule="evenodd" /></clipPath>
+        {!rasterRegion && <clipPath id={`architectural-wall-clip-${patternId}`}><path d={wallPath} clipRule="evenodd" /></clipPath>}
         {!rasterRegion && shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} {...shadowRegion}>
           <feGaussianBlur stdDeviation={step.blur} />
         </filter>)}
-        {bevels.map((bevel, i) => <linearGradient key={i} id={`architectural-bevel-${patternId}-${i}`} gradientUnits="userSpaceOnUse"
+        {!rasterRegion && bevels.map((bevel, i) => <linearGradient key={i} id={`architectural-bevel-${patternId}-${i}`} gradientUnits="userSpaceOnUse"
           x1={(bevel.a.x + bevel.b.x) / 2} y1={(bevel.a.y + bevel.b.y) / 2} x2={bevel.inner.x} y2={bevel.inner.y}>
           <stop stopColor={bevel.light ? "var(--architectural-wall-light)" : "var(--architectural-bevel-dark)"} />
           <stop offset="1" stopColor="var(--architectural-wall-light)" stopOpacity="0" />
@@ -8477,11 +8477,16 @@ function MaterialEdges({
           fill="var(--architectural-shadow)" fillRule="nonzero" opacity={shadowOpacity}
           filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
       </g>
-      <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd"
-        stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.004)} strokeLinejoin="miter" />
-      <g clipPath={`url(#architectural-wall-clip-${patternId})`} data-architectural-bevel-mm="20">
-        {bevels.map((bevel, i) => <polygon key={i} points={pointsValue(bevel.points)} fill={`url(#architectural-bevel-${patternId}-${i})`} />)}
+      <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd" stroke="none" />
+      <g data-architectural-bevel-mm="20">
+        {rasterRegion
+          ? <ArchitecturalBevelRaster bevels={bevels} wallPath={wallPath} region={rasterRegion} />
+          : <g clipPath={`url(#architectural-wall-clip-${patternId})`}>
+            {bevels.map((bevel, i) => <polygon key={i} points={pointsValue(bevel.points)} fill={`url(#architectural-bevel-${patternId}-${i})`} />)}
+          </g>}
       </g>
+      <path d={wallPath} fill="none" fillRule="evenodd"
+        stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.004)} strokeLinejoin="miter" />
       <g data-architectural-unpicked-lines="true" fill="none" stroke="var(--architectural-line)" strokeWidth={stroke}>
         {segs.filter((segment) => !materialForEdgeSegment(segment, segmentSource, edgeAttrs)).map((segment, si) =>
           <path key={`${segment.id}-${si}`} d={`M ${segment.a.x} ${segment.a.y} L ${segment.b.x} ${segment.b.y}`} />)}
