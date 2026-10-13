@@ -77,3 +77,27 @@ export function architecturalBevels(walls: PlanPolygons, width: number) {
     });
   }));
 }
+/** Shadow strips for direct SVG rendering. All strips share one orientation so a
+ * single nonzero-filled path paints their union without expensive clipping. */
+export function architecturalShadowStrips(walls: PlanPolygons, distance: number): Point[][] {
+  if (!Number.isFinite(distance) || distance <= 0) return [];
+  const shift = distance / Math.SQRT2;
+  const strips: Point[][] = [];
+  for (const polygon of walls) {
+    for (const ring of polygon) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const a = ring[i], b = ring[i + 1];
+        if (Math.abs((b.x - a.x) - (b.y - a.y)) < 1e-8) continue;
+        const strip = [a, b, { x: b.x + shift, y: b.y + shift }, { x: a.x + shift, y: a.y + shift }];
+        if (validBand(strip)) strips.push(strip);
+      }
+    }
+  }
+  return strips.map((strip) => {
+    const area = strip.reduce((sum, p, i) => {
+      const q = strip[(i + 1) % strip.length];
+      return sum + p.x * q.y - q.x * p.y;
+    }, 0);
+    return area < 0 ? [...strip].reverse() : strip;
+  });
+}

@@ -50,14 +50,46 @@ export function freeStairPlan(stair: Stair, pxPerMeter: number): StairPlan {
     if (next) {
       const p = f.b;
       const square = [f.at(f.length - half, -half), f.at(f.length + half, -half), f.at(f.length + half, half), f.at(f.length - half, half)];
-      const union = polygonClipping.union([square.map((q) => [q.x, q.y] as [number, number])], [[f.at(f.end, -half), p, next.at(next.start, -half), next.at(next.start, half), f.at(f.end, half)].map((q) => [q.x, q.y] as [number, number])]);
+      const union = safeUnion([square, [f.at(f.end, -half), p, next.at(next.start, -half), next.at(next.start, half), f.at(f.end, half)]]);
       const landing = union[0]?.[0]?.map(([x, y]) => ({ x, y })) ?? square;
       landings.push(landing); landingSurfaces.push({ polygon: landing, elevationRatio: completed / count, kind: "landing" });
     }
   });
   const polygons = [...treads.map((s) => s.polygon), ...landings];
-  const first = polygons[0];
-  const union = first ? polygonClipping.union([first.map((p) => [p.x, p.y] as [number, number])], ...polygons.slice(1).map((poly) => [poly.map((p) => [p.x, p.y] as [number, number])])) : [];
-  const footprint = union[0]?.[0]?.map(([x, y]) => ({ x, y })) ?? [];
+  const union = safeUnion(polygons);
+  const footprint = union[0]?.[0]?.map(([x, y]) => ({ x, y })) ?? convexHull(polygons.flat());
   return { footprint, stepLines, innerLines: [], path, landings, sectionSurfaces: [...treads, ...landingSurfaces], totalRunM: total / pxPerMeter };
+}
+const validPolygon = (points: Point[]) => points.length >= 3
+  && points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+  && Math.abs(points.reduce((sum, a, i) => {
+    const b = points[(i + 1) % points.length];
+    return sum + a.x * b.y - b.x * a.y;
+  }, 0)) > 1e-8;
+
+/** Clipping precision failures must not stop a plan or slide from rendering. */
+function safeUnion(polygons: Point[][]) {
+  const inputs = polygons.filter(validPolygon).map((polygon) => [polygon.map((p) => [
+    Math.round(p.x * 1e7) / 1e7, Math.round(p.y * 1e7) / 1e7,
+  ] as [number, number])]);
+  if (!inputs[0]) return [];
+  try {
+    return polygonClipping.union(inputs[0], ...inputs.slice(1));
+  } catch {
+    return [];
+  }
+}
+
+function convexHull(points: Point[]): Point[] {
+  const sorted = points.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+    .sort((a, b) => a.x - b.x || a.y - b.y);
+  if (sorted.length < 3) return sorted;
+  const cross = (o: Point, a: Point, b: Point) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const build = (list: Point[]) => list.reduce<Point[]>((hull, p) => {
+    while (hull.length >= 2 && cross(hull[hull.length - 2], hull[hull.length - 1], p) <= 0) hull.pop();
+    hull.push(p);
+    return hull;
+  }, []);
+  const lower = build(sorted), upper = build([...sorted].reverse());
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }

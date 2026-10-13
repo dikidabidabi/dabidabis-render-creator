@@ -60,7 +60,7 @@ import {
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { type Window } from "@/lib/windows";
 import { roomWallSpans } from "@/lib/room-wall-spans";
-import { architecturalWallUnion, architecturalShadowSweep, architecturalBevels } from "@/lib/architectural-plan";
+import { architecturalWallUnion, architecturalShadowStrips, architecturalBevels } from "@/lib/architectural-plan";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -2343,7 +2343,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "toc" && <TocBody slide={slide} />}
       {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
-      {slide.kind === "detail" && <DetailBody slide={slide} />}
+      {slide.kind === "detail" && <DetailSlideBoundary key={slide.id} slide={slide} />}
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
@@ -4768,7 +4768,37 @@ function MaterialCodeSymbol({ code, kind, size }: { code: string; kind: "lantai"
   </svg>;
 }
 
-function DetailBody({ slide }: { slide: Extract<Slide, { kind: "detail" }> }) {
+type DetailSlide = Extract<Slide, { kind: "detail" }>;
+
+/** Satu bentuk denah yang tidak valid tidak boleh membuat slide kosong.
+ *  Jika mode Arsitektural gagal, slide tetap dibuka dengan denah detail biasa. */
+class DetailSlideBoundary extends React.Component<{ slide: DetailSlide }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: unknown) { console.warn("Detail slide fallback", error); }
+  render() {
+    const { slide } = this.props;
+    if (!this.state.failed) return <DetailBody slide={slide} />;
+    if (slide.area.showArchitectural) {
+      return <DetailFallbackBoundary><DetailBody slide={{ ...slide, area: { ...slide.area, showArchitectural: false } }} /></DetailFallbackBoundary>;
+    }
+    return <DetailFallbackMessage />;
+  }
+}
+
+class DetailFallbackBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? <DetailFallbackMessage /> : this.props.children; }
+}
+
+function DetailFallbackMessage() {
+  return <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", background: "#ffffff", color: "#444444", fontFamily: "Manrope, sans-serif", fontSize: 18 }}>
+    Denah detail ini memiliki bentuk garis yang perlu dirapikan di Sketsa.
+  </div>;
+}
+
+function DetailBody({ slide }: { slide: DetailSlide }) {
   const { sketch, level } = slide;
   const architectural = slide.area.showArchitectural === true;
   const area = architectural ? { ...slide.area, showMaterials: false, showCeiling: false, interiorDimensions: false, floorHatch: false } : slide.area;
@@ -8216,8 +8246,8 @@ function MaterialEdges({
         </linearGradient>)}
       </defs>
       <g data-architectural-shadow-distance="1500">
-        {shadowSteps.map((step, i) => <path key={i} d={wallUnionPath(architecturalShadowSweep(walls, step.distance))}
-          fill="var(--architectural-shadow)" fillRule="evenodd" opacity={1 - Math.pow(1 - 0.456, 1 / 16)}
+        {shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}
+          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={1 - Math.pow(1 - 0.456, 1 / 16)}
           filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
       </g>
       <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd"
