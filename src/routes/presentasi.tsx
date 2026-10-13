@@ -4701,8 +4701,36 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 }
 
 // ---- Level body ----
-function SlideFurniture({ items, sw, prefix }: { items: DetailFurniture[]; sw: number; prefix: string }) {
+function SlideFurniture({ items, sw, prefix, architectural = false, pxPerM = 1 }: { items: DetailFurniture[]; sw: number; prefix: string; architectural?: boolean; pxPerM?: number }) {
+  const shadowId = `${prefix}-architectural-shadow`;
+  const tintId = `${prefix}-architectural-tint`;
+  const shadowSteps = Array.from({ length: 16 }, (_, i) => {
+    const fraction = (16 - i) / 16;
+    return { offset: pxPerM * 0.15 * fraction / Math.SQRT2, blur: pxPerM * (0.0015 + 0.018 * fraction ** 2) };
+  });
   return <g pointerEvents="none">
+    {architectural && <defs>
+      <filter id={tintId} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+        <feColorMatrix type="saturate" values="0" />
+        <feComponentTransfer result="linework">
+          <feFuncR type="linear" slope="0.18" intercept="0.82" />
+          <feFuncG type="linear" slope="0.18" intercept="0.82" />
+          <feFuncB type="linear" slope="0.18" intercept="0.82" />
+        </feComponentTransfer>
+        <feFlood floodColor="var(--architectural-furniture)" />
+        <feComposite in2="SourceAlpha" operator="in" result="tint" />
+        <feBlend in="linework" in2="tint" mode="multiply" />
+      </filter>
+      <filter id={shadowId} x="-200%" y="-200%" width="500%" height="500%" colorInterpolationFilters="sRGB">
+        {shadowSteps.map((step, i) => <Fragment key={i}>
+          <feGaussianBlur in="SourceAlpha" stdDeviation={step.blur} />
+          <feOffset dx={step.offset} dy={step.offset} result={`offset-${i}`} />
+          <feFlood floodColor="var(--architectural-shadow)" floodOpacity={1 - Math.pow(1 - 0.456, 1 / 16)} />
+          <feComposite in2={`offset-${i}`} operator="in" result={`shadow-${i}`} />
+        </Fragment>)}
+        <feMerge>{shadowSteps.map((_, i) => <feMergeNode key={i} in={`shadow-${i}`} />)}<feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
+    </defs>}
     {items.map((item) => {
       const name = item.name.trim() || "Furniture";
       const font = Math.max(sw * 0.0045, Math.min(sw * 0.008, item.width / Math.max(4, name.length * 0.58)));
@@ -4710,10 +4738,12 @@ function SlideFurniture({ items, sw, prefix }: { items: DetailFurniture[]; sw: n
       const tagHeight = font * 1.55;
       const tagY = item.y - tagHeight / 2;
       return <g key={`${prefix}-${item.id}`}>
+        <g data-architectural-furniture={architectural || undefined} data-shadow-distance-mm={architectural ? 150 : undefined} filter={architectural ? `url(#${shadowId})` : undefined}>
         {item.catalogId === "dinamic" ? <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
-          fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
+          fill={architectural ? "var(--architectural-furniture)" : "var(--surface-elevated)"} stroke={architectural ? "var(--architectural-edge)" : "var(--foreground)"} strokeWidth={1.5} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
           : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
-            width={item.width} height={item.height} preserveAspectRatio="none" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />}
+            width={item.width} height={item.height} preserveAspectRatio="none" filter={architectural ? `url(#${tintId})` : undefined} transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />}
+        </g>
         <rect x={item.x - tagWidth / 2} y={tagY} width={tagWidth} height={tagHeight}
           fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={sw * 0.00035} />
         <text x={item.x} y={tagY + tagHeight / 2} textAnchor="middle" dominantBaseline="central"
@@ -5296,8 +5326,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
       <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode ? "80%" : "100%", height: "100%", display: "block" }}>
         <defs>
           {architectural && <>
-            <linearGradient id={`architectural-bg-${patternId}`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="var(--architectural-background-light)" /><stop offset="1" stopColor="var(--architectural-background-deep)" /></linearGradient>
-            <linearGradient id={`architectural-floor-${patternId}`} gradientUnits="userSpaceOnUse" x1={bounds.minX} y1={bounds.minY} x2={bounds.maxX} y2={bounds.maxY}><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></linearGradient>
+            <radialGradient id={`architectural-floor-${patternId}`} gradientUnits="userSpaceOnUse" cx={bounds.minX} cy={bounds.minY} r={Math.hypot(w, h)}><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></radialGradient>
           </>}
           <pattern id={`floor-grid-${patternId}`} width={0.6 * pxPerM} height={0.6 * pxPerM} patternUnits="userSpaceOnUse">
             <path d={`M ${0.6 * pxPerM} 0 L 0 0 0 ${0.6 * pxPerM}`} fill="none" stroke="#555555" strokeWidth={Math.max(sw * 0.00018, 0.08)} opacity={0.55} />
@@ -5329,7 +5358,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
         })}
         {!showCeilingMode && <SlideFurniture
           items={area.showFurniture === false ? [] : furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY)}
-          sw={sw} prefix="detail-furniture"
+          sw={sw} prefix={`detail-furniture-${patternId}`} architectural={architectural} pxPerM={pxPerM}
         />}
         {(!architectural || area.dimensions) && gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
           if (!xs.length || !ys.length) return null;
