@@ -145,7 +145,7 @@ type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
-  architecturalStyle?: "tosca" | "brown" | "blue";
+  architecturalStyle?: "tosca" | "brown" | "blue" | "bata";
 };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
