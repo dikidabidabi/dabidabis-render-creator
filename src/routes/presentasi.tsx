@@ -60,7 +60,7 @@ import {
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { type Window } from "@/lib/windows";
 import { roomWallSpans } from "@/lib/room-wall-spans";
-import { architecturalWallUnion, architecturalShadowStrips, architecturalBevels } from "@/lib/architectural-plan";
+import { architecturalWallUnion, architecturalShadowStrips } from "@/lib/architectural-plan";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -8234,79 +8234,16 @@ function ArchitecturalShadowRaster({ walls, wallPath, steps, region, opacity }: 
   return <image data-architectural-shadow-raster="true" href={src} x={region.x} y={region.y} width={region.width} height={region.height} preserveAspectRatio="none" />;
 }
 
-type BevelStrip = ReturnType<typeof architecturalBevels>[number];
-const bevelRasterCache = new Map<string, string>();
-
-/** Bevel 2 cm dilukis ke satu bitmap: ratusan gradien SVG ber-clipPath
- *  melampaui memori grafis tablet Android dan membuat slide gagal dibuka. */
-function paintBevelRaster(bevels: BevelStrip[], wallPath: string, region: ShadowRegion): string | null {
-  const side = Math.max(region.width, region.height);
-  if (!(side > 0) || !Number.isFinite(side)) return null;
-  const scale = Math.min(SHADOW_RASTER_MAX_SIDE / side, 16);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(region.width * scale));
-  canvas.height = Math.max(1, Math.round(region.height * scale));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  const light = resolveCssColor("var(--architectural-wall-light)", "#ffffff");
-  const dark = resolveCssColor("var(--architectural-bevel-dark)", "#7d8b89");
-  const transparent = (color: string) => {
-    const m = color.match(/rgba?\(([^)]+)\)/);
-    if (!m) return "rgba(255,255,255,0)";
-    const [r, g, b] = m[1].split(",").map((v) => v.trim());
-    return `rgba(${r},${g},${b},0)`;
-  };
-  ctx.setTransform(scale, 0, 0, scale, -region.x * scale, -region.y * scale);
-  try { ctx.clip(new Path2D(wallPath), "evenodd"); } catch { /* draw unclipped */ }
-  for (const bevel of bevels) {
-    if (bevel.points.length < 3) continue;
-    const mx = (bevel.a.x + bevel.b.x) / 2, my = (bevel.a.y + bevel.b.y) / 2;
-    const gradient = ctx.createLinearGradient(mx, my, bevel.inner.x, bevel.inner.y);
-    gradient.addColorStop(0, bevel.light ? light : dark);
-    gradient.addColorStop(1, transparent(light));
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(bevel.points[0].x, bevel.points[0].y);
-    for (let i = 1; i < bevel.points.length; i++) ctx.lineTo(bevel.points[i].x, bevel.points[i].y);
-    ctx.closePath();
-    ctx.fill();
-  }
-  try { return canvas.toDataURL("image/png"); } catch { return null; }
-}
-
-function ArchitecturalBevelRaster({ bevels, wallPath, region }: { bevels: BevelStrip[]; wallPath: string; region: ShadowRegion }) {
-  const key = `${hashText(wallPath)}:${wallPath.length}:${bevels.length}:${region.x.toFixed(2)},${region.y.toFixed(2)},${region.width.toFixed(2)},${region.height.toFixed(2)}`;
-  const [src, setSrc] = useState<string | null>(() => bevelRasterCache.get(key) ?? null);
-  useEffect(() => {
-    const cached = bevelRasterCache.get(key);
-    if (cached) { setSrc(cached); return; }
-    let cancelled = false;
-    const handle = window.setTimeout(() => {
-      let url: string | null = null;
-      try { url = paintBevelRaster(bevels, wallPath, region); } catch (error) { console.warn("Architectural bevel raster failed", error); }
-      if (cancelled || !url) return;
-      if (bevelRasterCache.size > 16) bevelRasterCache.delete(bevelRasterCache.keys().next().value as string);
-      bevelRasterCache.set(key, url);
-      setSrc(url);
-    }, 0);
-    return () => { cancelled = true; window.clearTimeout(handle); };
-    // bevels/wallPath/region are fully described by key
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  if (!src) return null;
-  return <image data-architectural-bevel-raster="true" href={src} x={region.x} y={region.y} width={region.width} height={region.height} preserveAspectRatio="none" />;
-}
-
 /** Union dinding arsitektural mahal; simpan hasil per geometri agar render ulang tidak menghitung ulang. */
-const architecturalGeometryCache = new Map<string, { walls: Point[][][]; wallPath: string; bevels: BevelStrip[] }>();
-function architecturalGeometry(bands: Point[][], openings: Point[][], bevelWidth: number) {
+const architecturalGeometryCache = new Map<string, { walls: Point[][][]; wallPath: string }>();
+function architecturalGeometry(bands: Point[][], openings: Point[][]) {
   const r = (v: number) => Math.round(v * 100);
   const sig = (polys: Point[][]) => polys.map((poly) => poly.map((p) => `${r(p.x)},${r(p.y)}`).join(" ")).join("|");
-  const key = hashText(`${sig(bands)}#${sig(openings)}#${bevelWidth.toFixed(4)}`) + `:${bands.length}:${openings.length}`;
+  const key = hashText(`${sig(bands)}#${sig(openings)}`) + `:${bands.length}:${openings.length}`;
   const cached = architecturalGeometryCache.get(key);
   if (cached) return cached;
   const walls = architecturalWallUnion(bands, openings);
-  const result = { walls, wallPath: wallUnionPath(walls), bevels: architecturalBevels(walls, bevelWidth) };
+  const result = { walls, wallPath: wallUnionPath(walls) };
   if (architecturalGeometryCache.size > 12) architecturalGeometryCache.delete(architecturalGeometryCache.keys().next().value as string);
   architecturalGeometryCache.set(key, result);
   return result;
@@ -8435,7 +8372,7 @@ function MaterialEdges({
       }
     }
     const openings = architecturalDoors.map((door) => wallBandPolygon({ ...door, sourceLineIndex: 0 }, pxPerM * 0.35, 0));
-    const { walls, wallPath, bevels } = architecturalGeometry([...bands, ...architecturalColumns], openings, pxPerM * 0.02);
+    const { walls, wallPath } = architecturalGeometry([...bands, ...architecturalColumns], openings);
     // Bound blur textures to the visible detail, not five times the entire level.
     const shadowPadding = pxPerM * 0.6;
     const shadowRegion = architecturalBounds ? {
@@ -8459,15 +8396,9 @@ function MaterialEdges({
         <linearGradient id={`architectural-wall-${patternId}`} x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.8" stopColor="var(--architectural-wall-light)" /><stop offset="1" stopColor="var(--architectural-wall-mid)" />
         </linearGradient>
-        {!rasterRegion && <clipPath id={`architectural-wall-clip-${patternId}`}><path d={wallPath} clipRule="evenodd" /></clipPath>}
         {!rasterRegion && shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} {...shadowRegion}>
           <feGaussianBlur stdDeviation={step.blur} />
         </filter>)}
-        {!rasterRegion && bevels.map((bevel, i) => <linearGradient key={i} id={`architectural-bevel-${patternId}-${i}`} gradientUnits="userSpaceOnUse"
-          x1={(bevel.a.x + bevel.b.x) / 2} y1={(bevel.a.y + bevel.b.y) / 2} x2={bevel.inner.x} y2={bevel.inner.y}>
-          <stop stopColor={bevel.light ? "var(--architectural-wall-light)" : "var(--architectural-bevel-dark)"} />
-          <stop offset="1" stopColor="var(--architectural-wall-light)" stopOpacity="0" />
-        </linearGradient>)}
       </defs>
       <g data-architectural-shadow-distance="1500">
         {rasterRegion && <ArchitecturalShadowRaster walls={walls} wallPath={wallPath} steps={shadowSteps} region={rasterRegion} opacity={shadowOpacity} />}
@@ -8476,13 +8407,6 @@ function MaterialEdges({
           filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
       </g>
       <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd" stroke="none" />
-      <g data-architectural-bevel-mm="20">
-        {rasterRegion
-          ? <ArchitecturalBevelRaster bevels={bevels} wallPath={wallPath} region={rasterRegion} />
-          : <g clipPath={`url(#architectural-wall-clip-${patternId})`}>
-            {bevels.map((bevel, i) => <polygon key={i} points={pointsValue(bevel.points)} fill={`url(#architectural-bevel-${patternId}-${i})`} />)}
-          </g>}
-      </g>
       <path d={wallPath} fill="none" fillRule="evenodd"
         stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.004)} strokeLinejoin="miter" />
       <g data-architectural-unpicked-lines="true" fill="none" stroke="var(--architectural-line)" strokeWidth={stroke}>
