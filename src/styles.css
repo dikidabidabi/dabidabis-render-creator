@@ -289,3 +289,18 @@
 .architectural-swatch-brown { background: var(--architectural-style-brown); }
 .architectural-swatch-blue { background: var(--architectural-style-blue); }
 .architectural-swatch-bata { background: var(--architectural-style-bata); }
+
+/* Bata recolors shared detail notation without changing its geometry. */
+[data-architectural-style="bata"] :is([data-detail-secondary-notation], [data-detail-window-notation]) [stroke]:not([stroke="none"]) {
+  stroke: var(--architectural-ink);
+}
+[data-architectural-style="bata"] [data-detail-secondary-notation] [fill="#0a0a0a"],
+[data-architectural-style="bata"] [data-detail-secondary-notation] text {
+  fill: var(--architectural-ink);
+}
+[data-architectural-style="bata"] [data-detail-secondary-notation] [fill="#ffffff"] {
+  fill: var(--architectural-floor-light);
+}
+[data-architectural-style="bata"] [data-detail-secondary-notation] text {
+  stroke: none;
+}

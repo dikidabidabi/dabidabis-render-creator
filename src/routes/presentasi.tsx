@@ -5395,6 +5395,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
             ];
           })}
         </g>}
+        <g data-detail-secondary-notation="true">
         <DetailVoidNotation
           voids={levelLayers.filter((layer) => isVoid(layer.name)).map((layer) => ({ id: layer.id, points: layer.points }))}
           floorHoles={(sketch.floors ?? []).filter((floor) => floor.levelId === level.id).flatMap((floor) =>
@@ -5409,6 +5410,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           pxPerM={pxPerM}
           sw={sw}
         />
+        </g>
         <MaterialEdges
           lines={lines}
           segmentationLines={sketch.lines ?? []}
@@ -5448,7 +5450,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           });
         })}
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} architectural={architectural} />
-        <WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed />
+        <g data-detail-window-notation="true"><WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed /></g>
         {!architectural && <SolidWallPracticalColumns
           lines={lines}
           segmentationLines={sketch.lines ?? []}
