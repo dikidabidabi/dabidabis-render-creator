@@ -8373,13 +8373,18 @@ function MaterialEdges({
       const fraction = (6 - i) / 6;
       return { distance: 1.5 * fraction * pxPerM, blur: pxPerM * (0.015 + 0.18 * fraction ** 2) };
     });
+    const shadowOpacity = 1 - Math.pow(1 - 0.456, 1 / shadowSteps.length);
+    const rasterRegion = typeof document !== "undefined" && architecturalBounds ? {
+      x: shadowRegion.x as number, y: shadowRegion.y as number,
+      width: shadowRegion.width as number, height: shadowRegion.height as number,
+    } : null;
     return <g data-architectural-walls="true">
       <defs>
         <linearGradient id={`architectural-wall-${patternId}`} x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="var(--architectural-wall-light)" /><stop offset="0.8" stopColor="var(--architectural-wall-light)" /><stop offset="1" stopColor="var(--architectural-wall-mid)" />
         </linearGradient>
         <clipPath id={`architectural-wall-clip-${patternId}`}><path d={wallPath} clipRule="evenodd" /></clipPath>
-        {shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} {...shadowRegion}>
+        {!rasterRegion && shadowSteps.map((step, i) => <filter key={i} id={`architectural-shadow-${patternId}-${i}`} {...shadowRegion}>
           <feGaussianBlur stdDeviation={step.blur} />
         </filter>)}
         {bevels.map((bevel, i) => <linearGradient key={i} id={`architectural-bevel-${patternId}-${i}`} gradientUnits="userSpaceOnUse"
@@ -8389,8 +8394,9 @@ function MaterialEdges({
         </linearGradient>)}
       </defs>
       <g data-architectural-shadow-distance="1500">
-        {shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}
-          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={1 - Math.pow(1 - 0.456, 1 / shadowSteps.length)}
+        {rasterRegion && <ArchitecturalShadowRaster walls={walls} wallPath={wallPath} steps={shadowSteps} region={rasterRegion} opacity={shadowOpacity} />}
+        {!rasterRegion && shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}
+          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={shadowOpacity}
           filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
       </g>
       <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd"
@@ -8399,8 +8405,8 @@ function MaterialEdges({
         {bevels.map((bevel, i) => <polygon key={i} points={pointsValue(bevel.points)} fill={`url(#architectural-bevel-${patternId}-${i})`} />)}
       </g>
       <g data-architectural-unpicked-lines="true" fill="none" stroke="var(--architectural-line)" strokeWidth={stroke}>
-        {segs.filter((segment) => !materialForEdgeSegment(segment, segmentSource, edgeAttrs)).map((segment) =>
-          <path key={segment.id} d={`M ${segment.a.x} ${segment.a.y} L ${segment.b.x} ${segment.b.y}`} />)}
+        {segs.filter((segment) => !materialForEdgeSegment(segment, segmentSource, edgeAttrs)).map((segment, si) =>
+          <path key={`${segment.id}-${si}`} d={`M ${segment.a.x} ${segment.a.y} L ${segment.b.x} ${segment.b.y}`} />)}
         {curved.filter(({ ln }) => !edgeMaterialForSegment(edgeAttrs, ln)).map(({ ln, i }) => <path key={i} d={linePath(ln)} />)}
       </g>
     </g>;
