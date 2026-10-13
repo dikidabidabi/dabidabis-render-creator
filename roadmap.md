@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Diagnosis dan perbaiki slide Arsitektural LT 1 dan LT 2 proyek GEDUNG TMM RS SOERADJI (13 Okt) SIMULASI; menunggu ekspor data terbaru dari pengguna karena cadangan Cloud terakhir 22 September tidak memuat proyek 13 Oktober.
+
 - [x] Naikkan kecerahan gradien lantai Arsitektural di kiri atas 30% lagi; terukur pada denah lokal di browser.
 
 - [x] Naikkan lagi kecerahan puncak gradien radial latar Arsitektural 50% di kiri atas; terukur pada denah lokal di browser.
