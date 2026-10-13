@@ -8435,9 +8435,7 @@ function MaterialEdges({
       }
     }
     const openings = architecturalDoors.map((door) => wallBandPolygon({ ...door, sourceLineIndex: 0 }, pxPerM * 0.35, 0));
-    const walls = architecturalWallUnion([...bands, ...architecturalColumns], openings);
-    const wallPath = wallUnionPath(walls);
-    const bevels = architecturalBevels(walls, pxPerM * 0.02);
+    const { walls, wallPath, bevels } = architecturalGeometry([...bands, ...architecturalColumns], openings, pxPerM * 0.02);
     // Bound blur textures to the visible detail, not five times the entire level.
     const shadowPadding = pxPerM * 0.6;
     const shadowRegion = architecturalBounds ? {
