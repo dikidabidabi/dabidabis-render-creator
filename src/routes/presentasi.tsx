@@ -145,6 +145,7 @@ type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
+  architecturalStyle?: "tosca" | "brown" | "blue";
 };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
@@ -5225,7 +5226,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
     extensionY: number,
     labelAbove: boolean,
     fontScale = 1,
-  ) => coordinates.length >= 2 ? <g key={key} fill="#111111" stroke="#111111" strokeWidth={dimStroke} pointerEvents="none">
+  ) => coordinates.length >= 2 ? <g key={key} fill={architectural ? "var(--architectural-ink)" : "#111111"} stroke={architectural ? "var(--architectural-ink)" : "#111111"} strokeWidth={dimStroke} pointerEvents="none">
     {coordinates.slice(0, -1).map((x, index) => {
       const nextX = coordinates[index + 1];
       const label = labels[index] ?? Math.round((Math.abs(nextX - x) / pxPerM) * 1000);
@@ -5247,7 +5248,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
     extensionX: number,
     labelLeft: boolean,
     fontScale = 1,
-  ) => coordinates.length >= 2 ? <g key={key} fill="#111111" stroke="#111111" strokeWidth={dimStroke} pointerEvents="none">
+  ) => coordinates.length >= 2 ? <g key={key} fill={architectural ? "var(--architectural-ink)" : "#111111"} stroke={architectural ? "var(--architectural-ink)" : "#111111"} strokeWidth={dimStroke} pointerEvents="none">
     {coordinates.slice(0, -1).map((y, index) => {
       const nextY = coordinates[index + 1];
       const label = labels[index] ?? Math.round((Math.abs(nextY - y) / pxPerM) * 1000);
@@ -5322,7 +5323,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
     </g>;
   });
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-gradient)" : "#ffffff", overflow: "hidden" }}>
+    <div data-architectural-style={architectural ? area.architecturalStyle ?? "tosca" : undefined} style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-gradient)" : "#ffffff", overflow: "hidden" }}>
       <svg viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode ? "80%" : "100%", height: "100%", display: "block" }}>
         <defs>
           {architectural && <>
@@ -5517,7 +5518,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           </g>;
         })}
       </svg>
-      <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
+      <div style={{ position: "absolute", left: 52, top: 44, background: architectural ? "var(--architectural-caption-surface)" : "rgba(255,255,255,0.92)", color: architectural ? "var(--architectural-caption-ink)" : undefined, borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL {area.number}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>{level.name}</div>
       </div>

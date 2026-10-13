@@ -60,6 +60,11 @@
   --architectural-shadow: #344b49;
   --architectural-line: oklch(0.16 0 0);
   --architectural-bevel-dark: oklch(0.59 0.014 180);
+  --architectural-style-tosca: #b1c2be;
+  --architectural-style-brown: #79796c;
+  --architectural-style-blue: #253e5c;
+  --architectural-caption-surface: rgba(255,255,255,0.92);
+  --architectural-caption-ink: #283b3a;
 
   /* Light theme — very soft gray + white dominant, teal primary, ember accent */
   --background: oklch(0.995 0.002 280);

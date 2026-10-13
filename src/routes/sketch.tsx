@@ -408,6 +408,7 @@ type DetailArea = {
   showMaterials: boolean;
   showCeiling: boolean;
   showArchitectural?: boolean;
+  architecturalStyle?: "tosca" | "brown" | "blue";
   createdAt: number;
   furniture?: DetailFurniture[];
 };
@@ -1215,6 +1216,7 @@ function normalizeSketch(s: any): Sketch {
           showMaterials: area.showMaterials === true && area.showCeiling !== true && area.showArchitectural !== true,
           showCeiling: area.showCeiling === true && area.showArchitectural !== true,
           showArchitectural: area.showArchitectural === true,
+          architecturalStyle: area.architecturalStyle === "brown" || area.architecturalStyle === "blue" ? area.architecturalStyle : "tosca",
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
         }];
@@ -12362,6 +12364,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                       })} />
                     </label>
                   ))}
+                  {area.showArchitectural && <div className="mt-2 space-y-1.5">
+                    <span className="text-[11px] text-muted-foreground">Style</span>
+                    <div role="radiogroup" aria-label={`Style Arsitektural Detail ${area.number}`} className="flex flex-wrap gap-1">
+                      {([
+                        ["tosca", "Hijau Tosca"],
+                        ["brown", "Coklat"],
+                        ["blue", "Biru"],
+                      ] as const).map(([style, label]) => <Button
+                        key={style} role="radio" aria-checked={(area.architecturalStyle ?? "tosca") === style}
+                        variant={(area.architecturalStyle ?? "tosca") === style ? "secondary" : "ghost"}
+                        size="sm" className="h-7 gap-1.5 px-2 text-[10px]"
+                        onClick={() => onChange({ detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, architecturalStyle: style } : item) })}
+                      ><span aria-hidden="true" className={`architectural-swatch architectural-swatch-${style}`} />{label}</Button>)}
+                    </div>
+                  </div>}
                 </div>
               ))}
               {(sketch.detailAreas ?? []).filter((area) => area.levelId === activeLvlId).length === 0 && (
