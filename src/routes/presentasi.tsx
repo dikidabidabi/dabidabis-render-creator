@@ -8132,6 +8132,108 @@ function ArchitecturalStairNotation({
   );
 }
 
+// ---------- Architectural shadow raster ----------
+// Live SVG blur filters over complex wall outlines can exhaust graphics memory
+// on some devices, leaving the slide blank. The shadow is therefore painted
+// once into a bounded bitmap and embedded as a single image.
+type ShadowRegion = { x: number; y: number; width: number; height: number };
+type ShadowStep = { distance: number; blur: number };
+const shadowRasterCache = new Map<string, string>();
+const SHADOW_RASTER_MAX_SIDE = 2048;
+
+function hashText(text: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
+}
+
+function resolveCssColor(value: string, fallback: string): string {
+  try {
+    const probe = document.createElement("span");
+    probe.style.color = value;
+    probe.style.display = "none";
+    document.body.appendChild(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function paintShadowRaster(walls: Point[][][], steps: ShadowStep[], region: ShadowRegion, opacity: number): string | null {
+  const side = Math.max(region.width, region.height);
+  if (!(side > 0) || !Number.isFinite(side)) return null;
+  const scale = Math.min(SHADOW_RASTER_MAX_SIDE / side, 16);
+  const width = Math.max(1, Math.round(region.width * scale));
+  const height = Math.max(1, Math.round(region.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const color = resolveCssColor("var(--architectural-shadow)", "#344b49");
+  const supportsFilter = typeof (ctx as CanvasRenderingContext2D & { filter?: unknown }).filter === "string";
+  for (const step of steps) {
+    const strips = architecturalShadowStrips(walls, step.distance);
+    if (!strips.length) continue;
+    const blurPx = step.blur * scale;
+    // Without canvas filters, approximate blur by painting at reduced resolution and upscaling smoothly.
+    const reduce = supportsFilter ? 1 : Math.max(1, Math.min(24, blurPx / 1.5));
+    const layer = document.createElement("canvas");
+    layer.width = Math.max(1, Math.round(width / reduce));
+    layer.height = Math.max(1, Math.round(height / reduce));
+    const lctx = layer.getContext("2d");
+    if (!lctx) continue;
+    const k = scale / reduce;
+    lctx.setTransform(k, 0, 0, k, -region.x * k, -region.y * k);
+    lctx.fillStyle = color;
+    lctx.beginPath();
+    for (const strip of strips) {
+      if (strip.length < 3) continue;
+      lctx.moveTo(strip[0].x, strip[0].y);
+      for (let i = 1; i < strip.length; i++) lctx.lineTo(strip[i].x, strip[i].y);
+      lctx.closePath();
+    }
+    lctx.fill("nonzero");
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    if (supportsFilter && blurPx > 0.3) ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(layer, 0, 0, width, height);
+    ctx.restore();
+  }
+  try {
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+function ArchitecturalShadowRaster({ walls, wallPath, steps, region, opacity }: {
+  walls: Point[][][]; wallPath: string; steps: ShadowStep[]; region: ShadowRegion; opacity: number;
+}) {
+  const key = `${hashText(wallPath)}:${wallPath.length}:${region.x.toFixed(2)},${region.y.toFixed(2)},${region.width.toFixed(2)},${region.height.toFixed(2)}:${steps.map((s) => `${s.distance.toFixed(3)}/${s.blur.toFixed(3)}`).join(";")}:${opacity.toFixed(4)}`;
+  const [src, setSrc] = useState<string | null>(() => shadowRasterCache.get(key) ?? null);
+  useEffect(() => {
+    const cached = shadowRasterCache.get(key);
+    if (cached) { setSrc(cached); return; }
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      let url: string | null = null;
+      try { url = paintShadowRaster(walls, steps, region, opacity); } catch (error) { console.warn("Architectural shadow raster failed", error); }
+      if (cancelled || !url) return;
+      if (shadowRasterCache.size > 16) shadowRasterCache.delete(shadowRasterCache.keys().next().value as string);
+      shadowRasterCache.set(key, url);
+      setSrc(url);
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(handle); };
+    // walls/steps/region are fully described by key
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (!src) return null;
+  return <image data-architectural-shadow-raster="true" href={src} x={region.x} y={region.y} width={region.width} height={region.height} preserveAspectRatio="none" />;
+}
+
 function MaterialEdges({
   lines,
   segmentationLines,
