@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Sesuaikan gradien radial latar/lantai Arsitektural dan furniture lebih terang dengan bayangan gradual 15 cm; uji tampilan.
+- [x] Sesuaikan gradien radial latar/lantai Arsitektural dan furniture lebih terang dengan bayangan gradual 15 cm; teruji pada denah lokal di browser, 13 pengujian geometri lolos.
 
 - [x] Perbaiki sisa kegagalan membuka slide Arsitektural dan uji denah kompleks serta geometri fallback.
 
