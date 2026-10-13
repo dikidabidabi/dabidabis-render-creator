@@ -85,7 +85,6 @@ export function architecturalShadowStrips(walls: PlanPolygons, distance: number)
   const strips: Point[][] = [];
   for (const polygon of walls) {
     for (const ring of polygon) {
-      if (ring.length >= 3 && validBand(ring)) strips.push(ring);
       for (let i = 0; i < ring.length - 1; i++) {
         const a = ring[i], b = ring[i + 1];
         if (Math.abs((b.x - a.x) - (b.y - a.y)) < 1e-8) continue;

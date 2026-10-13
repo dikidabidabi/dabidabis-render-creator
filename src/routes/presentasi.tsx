@@ -60,7 +60,7 @@ import {
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { type Window } from "@/lib/windows";
 import { roomWallSpans } from "@/lib/room-wall-spans";
-import { architecturalWallUnion, architecturalShadowSweep, architecturalBevels } from "@/lib/architectural-plan";
+import { architecturalWallUnion, architecturalShadowStrips, architecturalBevels } from "@/lib/architectural-plan";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -8246,8 +8246,8 @@ function MaterialEdges({
         </linearGradient>)}
       </defs>
       <g data-architectural-shadow-distance="1500">
-        {shadowSteps.map((step, i) => <path key={i} d={wallUnionPath(architecturalShadowSweep(walls, step.distance))}
-          fill="var(--architectural-shadow)" fillRule="evenodd" opacity={1 - Math.pow(1 - 0.456, 1 / 16)}
+        {shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}
+          fill="var(--architectural-shadow)" fillRule="nonzero" opacity={1 - Math.pow(1 - 0.456, 1 / 16)}
           filter={`url(#architectural-shadow-${patternId}-${i})`} />)}
       </g>
       <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd"
