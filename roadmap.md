@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Naikkan lagi kecerahan gradien radial latar Arsitektural di kiri atas sebesar 50%; terukur pada denah lokal di browser.
+
 - [x] Terangi lagi gradien radial latar Arsitektural 30% dan gradien lantai 20% di kiri atas; teruji pada denah lokal di browser.
 
 - [x] Sesuaikan gradien radial latar/lantai Arsitektural dan furniture lebih terang dengan bayangan gradual 15 cm; teruji pada denah lokal di browser, 13 pengujian geometri lolos.
