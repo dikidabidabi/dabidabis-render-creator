@@ -291,7 +291,7 @@
 .architectural-swatch-bata { background: var(--architectural-style-bata); }
 
 /* Bata recolors shared detail notation without changing its geometry. */
-[data-architectural-style="bata"] :is([data-detail-secondary-notation], [data-detail-window-notation]) [stroke]:not([stroke="none"]) {
+[data-architectural-style="bata"] [data-detail-secondary-notation] [stroke]:not([stroke="none"]) {
   stroke: var(--architectural-ink);
 }
 [data-architectural-style="bata"] [data-detail-secondary-notation] [fill="#0a0a0a"],
