@@ -5514,9 +5514,9 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
             <text data-room-area="true" x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill={architectural ? "var(--architectural-ink)" : "#222222"} style={architectural ? undefined : { paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {fmt(room.areaM2 || 0, 2)} m²
             </text>
-            {!architectural && <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
+            <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill={architectural ? "var(--architectural-ink)" : "#222222"} style={architectural ? undefined : { paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
               {elevation}
-            </text>}
+            </text>
           </g>;
         })}
       </svg>
