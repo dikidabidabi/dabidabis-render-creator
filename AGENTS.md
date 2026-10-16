@@ -5,7 +5,7 @@
 
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
 
-- Polling notifikasi hanya berjalan saat sesi autentikasi memiliki token dan tidak bergantung pada identitas fungsi render, agar tidak mengirim permintaan tanpa izin atau mengulang tanpa henti.
+- Notification polling requires a session token and stable dependencies to prevent unauthorized/repeated requests.
 - Background notification reads and feed-seen writes verify bearer claims through notification-session.server before any user-scoped RLS query; unavailable sessions return serializable empty/no-op results rather than thrown Responses so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
 - Pintu dan jendela terpasang diedit melalui sub-mode alat masing-masing agar seleksi, orientasi, dan drag endpoint tidak bentrok dengan alat global.
@@ -13,7 +13,8 @@
 - Dimensi interior Slide Detail mengukur bentang bersih permukaan-ke-permukaan tanpa interval ketebalan dinding, sejajar dinding acuan, dan menggeser 150 mm hanya rangkaian interval di bawah 200 mm yang berdampingan; dimensi luar hanya memproyeksikan muka material dan menempatkan rangkaian interval di bawah 400 mm pada jalur berulang 400/550/700 mm dari kotak detail, area tayang meluas 1 m, serta denah menjadi putih polos saat opsi aktif.
 - Ujung terbuka dan pertemuan Dinding Solid/standar 150 mm memakai kolom praktis 150 × 150 mm; solid hitam, standar putih dengan finishing 15 mm.
 - Furniture Detail disimpan bersama kotak detail dengan ID ruang, kategori, dan posisi relatif terhadap ruang; daftar kategori disimpan per akun, ukuran katalog/tabel dalam mm dikonversi memakai skala sketsa agar ikut bergeser ketika ruang berubah, sementara ceklis per kotak mengendalikan kemunculan di Presentasi.
-- Slide rekap Furniture diaktifkan per sketsa melalui `showFurnitureSlide`, mengambil seluruh furniture kotak detail, mengelompokkan kategori, dan mengurutkan level berdasarkan elevasi.
+- Furniture recap uses per-sketch showFurnitureSlide, grouping all detail furniture by category and elevation.
+- Shared renumberDetailAreas orders labels by elevation on sketch loads/updates and Detail/Presentation reads, preserving IDs and furniture links.
 - Furniture renders before notation and room labels; Architectural mode uses scale-aware layered alpha shadows and image tint preserving transparency and linework, while other modes remain unchanged.
 - Notasi tangga Slide Denah/Detail memakai bidang potong 1 m dengan garis batas 45°, bagian di atas bidang potong putus-putus, sisi dalam tegas, arah naik/turun mengikuti bordes, dan tangga tipikal tengah ditampilkan utuh.
 - Pustaka material beserta nama, gambar, deskripsi, dan produk tersimpan per akun melalui penyimpanan proyek bersama, sedangkan pilihan material tiap ruang tersimpan pada layer sketsa dengan ID material agar perubahan data tetap tersinkron.

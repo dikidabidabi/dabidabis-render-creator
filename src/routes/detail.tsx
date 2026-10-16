@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { colorForRoomName } from "@/lib/room-color";
+import { renumberDetailAreas } from "@/lib/detail-numbering";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
 import { axisPositions, collectGrids, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
@@ -91,7 +92,7 @@ function DetailPage() {
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null") as StoreShape | null;
       if (!parsed || !Array.isArray(parsed.sketches)) return;
-      const next = { ...parsed, sketches: parsed.sketches.map((sketch) => ({ ...sketch, detailAreas: (sketch.detailAreas ?? []).map((area) => ({ ...area, furniture: normalizeDetailFurniture(area.furniture) })) })) };
+      const next = { ...parsed, sketches: parsed.sketches.map((sketch) => ({ ...sketch, detailAreas: renumberDetailAreas((sketch.detailAreas ?? []).map((area) => ({ ...area, furniture: normalizeDetailFurniture(area.furniture) })), sketch.levels ?? []) })) };
       setStore(next);
       setOpenSketches((current) => current.size > 0 ? current : new Set(next.sketches.map((sketch) => sketch.id)));
       setActive((current) => {

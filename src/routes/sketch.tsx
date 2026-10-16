@@ -98,6 +98,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { renumberDetailAreas } from "@/lib/detail-numbering";
 import { normalizeGeneralMaterialSelections, type GeneralMaterialSelections } from "@/lib/material-library";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
@@ -1197,7 +1198,7 @@ function normalizeSketch(s: any): Sketch {
     detailAreas: (() => {
       if (!Array.isArray(s?.detailAreas)) return [];
       const validLvl = new Set(levels.map((l) => l.id));
-      return s.detailAreas.flatMap((area: any, index: number): DetailArea[] => {
+      return renumberDetailAreas(s.detailAreas.flatMap((area: any, index: number): DetailArea[] => {
         const ax = Number(area?.a?.x), ay = Number(area?.a?.y);
         const bx = Number(area?.b?.x), by = Number(area?.b?.y);
         if (![ax, ay, bx, by].every(Number.isFinite)) return [];
@@ -1220,7 +1221,7 @@ function normalizeSketch(s: any): Sketch {
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
         }];
-      });
+      }), levels);
     })(),
     parkingAreas: (() => {
       const mmRotDeg = Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0;
@@ -1759,7 +1760,7 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
         if (s.id !== id) return s;
         const merged = { ...s, ...patch, updatedAt: Date.now() };
         const bound = bindLahanLayersToMdplZero(merged.levels, merged.layers);
-        return { ...merged, levels: bound.levels, layers: bound.layers };
+        return { ...merged, levels: bound.levels, layers: bound.layers, detailAreas: renumberDetailAreas(merged.detailAreas ?? [], bound.levels) };
       }),
     );
   }, []);
@@ -11288,10 +11289,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       if (!activeLvlId || Math.abs(b.x - a.x) < MINOR_PX || Math.abs(b.y - a.y) < MINOR_PX) return;
       const existing = sketch.detailAreas ?? [];
       const number = existing.reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
+      const newAreaId = `DETAIL${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       pushHistory();
-      onChange({
-        detailAreas: [...existing, {
-          id: `DETAIL${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      const detailAreas = renumberDetailAreas([...existing, {
+          id: newAreaId,
           levelId: activeLvlId,
           a: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) },
           b: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) },
@@ -11306,9 +11307,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           showCeiling: false,
           showArchitectural: false,
           createdAt: Date.now(),
-        }],
-      });
-      toast.success(`Detail ${number} dibuat dan ditambahkan ke Presentasi`);
+        }], levels);
+      onChange({ detailAreas });
+      toast.success(`Detail ${detailAreas.find((area) => area.id === newAreaId)?.number ?? number} dibuat dan ditambahkan ke Presentasi`);
       return;
     }
 
