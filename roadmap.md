@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Urutkan nomor detail dari elevasi lantai terendah, geser nomor otomatis saat ditambah, dan pertahankan furniture; uji alur dan penyimpanan.
+- [x] Urutkan nomor detail dari elevasi lantai terendah; penambahan di LT 1 menggeser LT 2, furniture tetap utuh setelah muat ulang, dan nomor Presentasi teruji dengan sesi aktif; empat uji lolos.
 
 - [x] Terangkan gradien latar style Bata 30% pada seluruh gradien lalu sudut kiri atasnya 50% lagi; terukur di browser: sudut rgb(228,209,211) dan ujung rgb(149,120,123).
 

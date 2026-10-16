@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { renumberDetailAreas } from "@/lib/detail-numbering";
 import { colorForRoomName } from "@/lib/room-color";
 import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { loadMaterialLibrary, materialCodes, normalizeGeneralMaterialSelections, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
@@ -1689,6 +1690,7 @@ function paginateSpecMaterials(sketch: Sketch, refs: SpecMaterialRef[], material
 }
 
 function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: PerspektifItem[] = [], plan: import("@/lib/masterplan").MasterPlan | null = null, analysis: MasterplanAnalysis | null = null, masterplanTitle: string | null = null, moodboard: MoodboardEntry | null = null, materialLibrary: LibraryMaterial[] = []): Slide[] {
+  sk = { ...sk, detailAreas: renumberDetailAreas(sk.detailAreas ?? [], sk.levels ?? []) };
   const bounds = computeBounds(sk);
   const levels = [...(sk.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const data = computeStats(sk);

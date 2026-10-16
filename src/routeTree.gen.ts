@@ -9,84 +9,29 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SketchRouteImport } from './routes/sketch'
-import { Route as ProjectRouteImport } from './routes/project'
-import { Route as PresentasiKirimanRouteImport } from './routes/presentasi-kiriman'
-import { Route as PresentasiRouteImport } from './routes/presentasi'
-import { Route as PesanRouteImport } from './routes/pesan'
-import { Route as NarasiRouteImport } from './routes/narasi'
-import { Route as Model3dRouteImport } from './routes/model3d'
-import { Route as MasterplanRouteImport } from './routes/masterplan'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as GalleryRouteImport } from './routes/gallery'
-import { Route as FeedRouteImport } from './routes/feed'
-import { Route as DetailRouteImport } from './routes/detail'
-import { Route as AkunRouteImport } from './routes/akun'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
+import { Route as AkunRouteImport } from './routes/akun'
+import { Route as DetailRouteImport } from './routes/detail'
+import { Route as FeedRouteImport } from './routes/feed'
+import { Route as GalleryRouteImport } from './routes/gallery'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MasterplanRouteImport } from './routes/masterplan'
+import { Route as Model3dRouteImport } from './routes/model3d'
+import { Route as NarasiRouteImport } from './routes/narasi'
+import { Route as PesanRouteImport } from './routes/pesan'
+import { Route as PresentasiRouteImport } from './routes/presentasi'
+import { Route as PresentasiKirimanRouteImport } from './routes/presentasi-kiriman'
+import { Route as ProjectRouteImport } from './routes/project'
+import { Route as SketchRouteImport } from './routes/sketch'
 import { Route as StudioIndexRouteImport } from './routes/studio.index'
-import { Route as TabulasiRumusRouteImport } from './routes/tabulasi.rumus'
-import { Route as TabulasiListMaterialRouteImport } from './routes/tabulasi.list-material'
 import { Route as StudioPustakaPromptRouteImport } from './routes/studio.pustaka-prompt'
+import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
+import { Route as TabulasiListMaterialRouteImport } from './routes/tabulasi.list-material'
+import { Route as TabulasiRumusRouteImport } from './routes/tabulasi.rumus'
 
-const SketchRoute = SketchRouteImport.update({
-  id: '/sketch',
-  path: '/sketch',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProjectRoute = ProjectRouteImport.update({
-  id: '/project',
-  path: '/project',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PresentasiKirimanRoute = PresentasiKirimanRouteImport.update({
-  id: '/presentasi-kiriman',
-  path: '/presentasi-kiriman',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PresentasiRoute = PresentasiRouteImport.update({
-  id: '/presentasi',
-  path: '/presentasi',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PesanRoute = PesanRouteImport.update({
-  id: '/pesan',
-  path: '/pesan',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NarasiRoute = NarasiRouteImport.update({
-  id: '/narasi',
-  path: '/narasi',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const Model3dRoute = Model3dRouteImport.update({
-  id: '/model3d',
-  path: '/model3d',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MasterplanRoute = MasterplanRouteImport.update({
-  id: '/masterplan',
-  path: '/masterplan',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GalleryRoute = GalleryRouteImport.update({
-  id: '/gallery',
-  path: '/gallery',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FeedRoute = FeedRouteImport.update({
-  id: '/feed',
-  path: '/feed',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DetailRoute = DetailRouteImport.update({
-  id: '/detail',
-  path: '/detail',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AkunRoute = AkunRouteImport.update({
@@ -94,14 +39,64 @@ const AkunRoute = AkunRouteImport.update({
   path: '/akun',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const DetailRoute = DetailRouteImport.update({
+  id: '/detail',
+  path: '/detail',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TabulasiIndexRoute = TabulasiIndexRouteImport.update({
-  id: '/tabulasi/',
-  path: '/tabulasi/',
+const FeedRoute = FeedRouteImport.update({
+  id: '/feed',
+  path: '/feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GalleryRoute = GalleryRouteImport.update({
+  id: '/gallery',
+  path: '/gallery',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MasterplanRoute = MasterplanRouteImport.update({
+  id: '/masterplan',
+  path: '/masterplan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Model3dRoute = Model3dRouteImport.update({
+  id: '/model3d',
+  path: '/model3d',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NarasiRoute = NarasiRouteImport.update({
+  id: '/narasi',
+  path: '/narasi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PesanRoute = PesanRouteImport.update({
+  id: '/pesan',
+  path: '/pesan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PresentasiRoute = PresentasiRouteImport.update({
+  id: '/presentasi',
+  path: '/presentasi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PresentasiKirimanRoute = PresentasiKirimanRouteImport.update({
+  id: '/presentasi-kiriman',
+  path: '/presentasi-kiriman',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectRoute = ProjectRouteImport.update({
+  id: '/project',
+  path: '/project',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SketchRoute = SketchRouteImport.update({
+  id: '/sketch',
+  path: '/sketch',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudioIndexRoute = StudioIndexRouteImport.update({
@@ -109,9 +104,14 @@ const StudioIndexRoute = StudioIndexRouteImport.update({
   path: '/studio/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TabulasiRumusRoute = TabulasiRumusRouteImport.update({
-  id: '/tabulasi/rumus',
-  path: '/tabulasi/rumus',
+const StudioPustakaPromptRoute = StudioPustakaPromptRouteImport.update({
+  id: '/studio/pustaka-prompt',
+  path: '/studio/pustaka-prompt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TabulasiIndexRoute = TabulasiIndexRouteImport.update({
+  id: '/tabulasi/',
+  path: '/tabulasi/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TabulasiListMaterialRoute = TabulasiListMaterialRouteImport.update({
@@ -119,9 +119,9 @@ const TabulasiListMaterialRoute = TabulasiListMaterialRouteImport.update({
   path: '/tabulasi/list-material',
   getParentRoute: () => rootRouteImport,
 } as any)
-const StudioPustakaPromptRoute = StudioPustakaPromptRouteImport.update({
-  id: '/studio/pustaka-prompt',
-  path: '/studio/pustaka-prompt',
+const TabulasiRumusRoute = TabulasiRumusRouteImport.update({
+  id: '/tabulasi/rumus',
+  path: '/tabulasi/rumus',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -279,88 +279,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sketch': {
-      id: '/sketch'
-      path: '/sketch'
-      fullPath: '/sketch'
-      preLoaderRoute: typeof SketchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/project': {
-      id: '/project'
-      path: '/project'
-      fullPath: '/project'
-      preLoaderRoute: typeof ProjectRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/presentasi-kiriman': {
-      id: '/presentasi-kiriman'
-      path: '/presentasi-kiriman'
-      fullPath: '/presentasi-kiriman'
-      preLoaderRoute: typeof PresentasiKirimanRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/presentasi': {
-      id: '/presentasi'
-      path: '/presentasi'
-      fullPath: '/presentasi'
-      preLoaderRoute: typeof PresentasiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pesan': {
-      id: '/pesan'
-      path: '/pesan'
-      fullPath: '/pesan'
-      preLoaderRoute: typeof PesanRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/narasi': {
-      id: '/narasi'
-      path: '/narasi'
-      fullPath: '/narasi'
-      preLoaderRoute: typeof NarasiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/model3d': {
-      id: '/model3d'
-      path: '/model3d'
-      fullPath: '/model3d'
-      preLoaderRoute: typeof Model3dRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/masterplan': {
-      id: '/masterplan'
-      path: '/masterplan'
-      fullPath: '/masterplan'
-      preLoaderRoute: typeof MasterplanRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gallery': {
-      id: '/gallery'
-      path: '/gallery'
-      fullPath: '/gallery'
-      preLoaderRoute: typeof GalleryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/feed': {
-      id: '/feed'
-      path: '/feed'
-      fullPath: '/feed'
-      preLoaderRoute: typeof FeedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/detail': {
-      id: '/detail'
-      path: '/detail'
-      fullPath: '/detail'
-      preLoaderRoute: typeof DetailRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/akun': {
@@ -370,18 +293,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AkunRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/detail': {
+      id: '/detail'
+      path: '/detail'
+      fullPath: '/detail'
+      preLoaderRoute: typeof DetailRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tabulasi/': {
-      id: '/tabulasi/'
-      path: '/tabulasi'
-      fullPath: '/tabulasi/'
-      preLoaderRoute: typeof TabulasiIndexRouteImport
+    '/feed': {
+      id: '/feed'
+      path: '/feed'
+      fullPath: '/feed'
+      preLoaderRoute: typeof FeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gallery': {
+      id: '/gallery'
+      path: '/gallery'
+      fullPath: '/gallery'
+      preLoaderRoute: typeof GalleryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/masterplan': {
+      id: '/masterplan'
+      path: '/masterplan'
+      fullPath: '/masterplan'
+      preLoaderRoute: typeof MasterplanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/model3d': {
+      id: '/model3d'
+      path: '/model3d'
+      fullPath: '/model3d'
+      preLoaderRoute: typeof Model3dRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/narasi': {
+      id: '/narasi'
+      path: '/narasi'
+      fullPath: '/narasi'
+      preLoaderRoute: typeof NarasiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pesan': {
+      id: '/pesan'
+      path: '/pesan'
+      fullPath: '/pesan'
+      preLoaderRoute: typeof PesanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/presentasi': {
+      id: '/presentasi'
+      path: '/presentasi'
+      fullPath: '/presentasi'
+      preLoaderRoute: typeof PresentasiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/presentasi-kiriman': {
+      id: '/presentasi-kiriman'
+      path: '/presentasi-kiriman'
+      fullPath: '/presentasi-kiriman'
+      preLoaderRoute: typeof PresentasiKirimanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/project': {
+      id: '/project'
+      path: '/project'
+      fullPath: '/project'
+      preLoaderRoute: typeof ProjectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sketch': {
+      id: '/sketch'
+      path: '/sketch'
+      fullPath: '/sketch'
+      preLoaderRoute: typeof SketchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/studio/': {
@@ -391,11 +384,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudioIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tabulasi/rumus': {
-      id: '/tabulasi/rumus'
-      path: '/tabulasi/rumus'
-      fullPath: '/tabulasi/rumus'
-      preLoaderRoute: typeof TabulasiRumusRouteImport
+    '/studio/pustaka-prompt': {
+      id: '/studio/pustaka-prompt'
+      path: '/studio/pustaka-prompt'
+      fullPath: '/studio/pustaka-prompt'
+      preLoaderRoute: typeof StudioPustakaPromptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tabulasi/': {
+      id: '/tabulasi/'
+      path: '/tabulasi'
+      fullPath: '/tabulasi/'
+      preLoaderRoute: typeof TabulasiIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tabulasi/list-material': {
@@ -405,11 +405,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TabulasiListMaterialRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/studio/pustaka-prompt': {
-      id: '/studio/pustaka-prompt'
-      path: '/studio/pustaka-prompt'
-      fullPath: '/studio/pustaka-prompt'
-      preLoaderRoute: typeof StudioPustakaPromptRouteImport
+    '/tabulasi/rumus': {
+      id: '/tabulasi/rumus'
+      path: '/tabulasi/rumus'
+      fullPath: '/tabulasi/rumus'
+      preLoaderRoute: typeof TabulasiRumusRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
