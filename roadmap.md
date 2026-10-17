@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Tambahkan subceklis Legenda Arsitektural default mati, nomor ruang dan legenda kanan tanpa kotak sesuai warna style, nama/elevasi level serta luas ruang; tiga uji lolos, penyimpanan setelah muat ulang dan keempat style teruji di browser dengan sesi aktif.
+
 - [x] Urutkan nomor detail dari elevasi lantai terendah; penambahan di LT 1 menggeser LT 2, furniture tetap utuh setelah muat ulang, dan nomor Presentasi teruji dengan sesi aktif; empat uji lolos.
 
 - [x] Terangkan gradien latar style Bata 30% pada seluruh gradien lalu sudut kiri atasnya 50% lagi; terukur di browser: sudut rgb(228,209,211) dan ujung rgb(149,120,123).
