@@ -409,6 +409,7 @@ type DetailArea = {
   showMaterials: boolean;
   showCeiling: boolean;
   showArchitectural?: boolean;
+  showArchitecturalLegend?: boolean;
   architecturalStyle?: "tosca" | "brown" | "blue" | "bata";
   createdAt: number;
   furniture?: DetailFurniture[];
@@ -1217,6 +1218,7 @@ function normalizeSketch(s: any): Sketch {
           showMaterials: area.showMaterials === true && area.showCeiling !== true && area.showArchitectural !== true,
           showCeiling: area.showCeiling === true && area.showArchitectural !== true,
           showArchitectural: area.showArchitectural === true,
+          showArchitecturalLegend: area.showArchitecturalLegend === true,
           architecturalStyle: area.architecturalStyle === "brown" || area.architecturalStyle === "blue" || area.architecturalStyle === "bata" ? area.architecturalStyle : "tosca",
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
@@ -11306,6 +11308,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           showMaterials: false,
           showCeiling: false,
           showArchitectural: false,
+          showArchitecturalLegend: false,
           createdAt: Date.now(),
         }], levels);
       onChange({ detailAreas });
@@ -12366,6 +12369,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     </label>
                   ))}
                   {area.showArchitectural && <div className="mt-2 space-y-1.5">
+                    <label className="ml-3 flex items-center justify-between gap-3 py-1 text-[11px]">
+                      <span>Legenda</span>
+                      <Switch aria-label={`Legenda Arsitektural Detail ${area.number}`} checked={area.showArchitecturalLegend === true}
+                        onCheckedChange={(checked) => onChange({ detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, showArchitecturalLegend: checked } : item) })} />
+                    </label>
                     <span className="text-[11px] text-muted-foreground">Style</span>
                     <div role="radiogroup" aria-label={`Style Arsitektural Detail ${area.number}`} className="flex flex-wrap gap-1">
                       {([
