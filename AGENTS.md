@@ -1,6 +1,6 @@
 # Architecture decisions
 
-- Architectural mode/style persist per area; scoped tokens and notation groups theme walls/ink without changing geometry or defaults. Shared DoorNotation retains detail dimensions. Architectural-plan merges picked walls/columns, subtracts doors before shadows, and retains unpicked lines.
+- Architectural mode/style and legends persist per area. Shared room numbering links plan labels to a transparent fitted legend inheriting style ink. DoorNotation retains dimensions; architectural-plan merges picked walls/columns, subtracts doors before shadows, and retains unpicked lines.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions; wall fills omit bevel computation and rendering to reduce Android tablet graphics load.
 
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
