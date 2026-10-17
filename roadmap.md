@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan subceklis Legenda Arsitektural default mati, nomor ruang dan legenda kanan tanpa kotak sesuai warna style, nama/elevasi level serta luas ruang; uji penyimpanan dan slide.
+- [x] Tambahkan subceklis Legenda Arsitektural default mati, nomor ruang dan legenda kanan tanpa kotak sesuai warna style, nama/elevasi level serta luas ruang; tiga uji lolos, penyimpanan setelah muat ulang dan keempat style teruji di browser dengan sesi aktif.
 
 - [x] Urutkan nomor detail dari elevasi lantai terendah; penambahan di LT 1 menggeser LT 2, furniture tetap utuh setelah muat ulang, dan nomor Presentasi teruji dengan sesi aktif; empat uji lolos.
 
