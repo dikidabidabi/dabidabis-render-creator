@@ -4853,7 +4853,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   const showArchitecturalLegend = architecturalLegendEnabled(area);
   const numberedRooms = architecturalLegendRooms(detailRooms);
   const roomNumberById = new Map(numberedRooms.map(({ room, number }) => [room.id, number]));
-  const architecturalLegendBox = { width: A3_W * ARCHITECTURAL_LEGEND_WIDTH_RATIO, height: A3_H * (1 - 0.12 - (area.showKeyplan === false ? 0.04 : 0.21)) };
+  const architecturalLegendBox = { width: A3_W * ARCHITECTURAL_LEGEND_WIDTH_RATIO, height: A3_H * (1 - 0.04 - (area.showKeyplan === false ? 0.04 : 0.21)) };
   const architecturalLegend = architecturalLegendLayout(detailRooms, architecturalLegendBox, level.name);
   const levelFloors = (sketch.floors ?? []).filter((floor) => floor.levelId === level.id && floor.outer.length >= 3);
   const floorPerimeterPoints = levelFloors.length > 0
@@ -5549,7 +5549,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           </div>)}
         </div>
       </div>}
-      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" className="absolute right-[1%] top-[12%] overflow-hidden" style={{ width: `${ARCHITECTURAL_LEGEND_WIDTH_RATIO * 100}%`, bottom: area.showKeyplan === false ? "4%" : "21%" }}>
+      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" className="absolute right-[2%] top-[4%] overflow-hidden" style={{ width: `${ARCHITECTURAL_LEGEND_WIDTH_RATIO * 100}%`, bottom: area.showKeyplan === false ? "4%" : "21%" }}>
         <svg viewBox={`0 0 ${architecturalLegendBox.width} ${architecturalLegendBox.height}`} preserveAspectRatio="xMinYMin meet" className="block h-full w-full" fill="var(--architectural-ink)" fontFamily="Manrope, sans-serif">
           <g transform={`scale(${architecturalLegend.scale})`}>
             <text x="0" y="40" fontFamily="Sora, sans-serif" fontSize={architecturalLegend.levelFont} fontWeight={700}>{level.name}</text>
