@@ -5798,16 +5798,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
-          <SlideFurniture
-            items={furnitureForVisibleRooms(
-              sketch.detailAreas ?? [],
-              level.id,
-              layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)),
-              layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)),
-            )}
-            sw={sw}
-            prefix="level-furniture"
-          />
+          {/* Slide Denah hanya menampilkan nomor ruang (rujukan legenda di kanan);
+              furniture tidak digambar pada slide denah biasa. */}
+
           {/* ===== Atap (pelana/limasan) — hanya pada level tempat digambar ===== */}
           {(sketch.roofs ?? []).filter((rf) => rf.levelId === level.id).map((rf) => {
             const g = roofPlanGeometry(rf, pxPerM);
