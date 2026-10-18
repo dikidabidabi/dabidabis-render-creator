@@ -53,12 +53,12 @@ export function architecturalLegendLayout<T extends { id: string; name: string; 
     90,
     (box.width - ARCHITECTURAL_LEGEND_COLUMN_GAP * (ARCHITECTURAL_LEGEND_COLUMNS - 1)) / ARCHITECTURAL_LEGEND_COLUMNS,
   );
-  let maxChars = Math.max(6, Math.floor((colW - ARCHITECTURAL_LEGEND_NUMBER_PREFIX) / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
+  let maxChars = Math.max(1, Math.floor((colW - ARCHITECTURAL_LEGEND_NUMBER_PREFIX) / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
   // Reflow before shrinking: dense legends must use the entire right-hand rail.
   let fitScale = 1;
   for (let pass = 0; pass < 60; pass += 1) {
     colW = Math.max(90, (box.width / fitScale - ARCHITECTURAL_LEGEND_COLUMN_GAP) / ARCHITECTURAL_LEGEND_COLUMNS);
-    maxChars = Math.max(6, Math.floor((colW - ARCHITECTURAL_LEGEND_NUMBER_PREFIX) / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
+    maxChars = Math.max(1, Math.floor((colW - ARCHITECTURAL_LEGEND_NUMBER_PREFIX) / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
     const heights = rooms.map((room) => Math.max(92, wrapArchitecturalLegendName(room.name, maxChars).length * ARCHITECTURAL_LEGEND_LINE_HEIGHT + 52));
     let bestHeight = Infinity;
     for (let split = 0; split <= heights.length; split += 1) {
