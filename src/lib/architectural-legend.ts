@@ -10,7 +10,7 @@ export function architecturalLegendRooms<T extends { id: string; name: string; a
 /** Two side-by-side columns keep the legend short enough to stay inside the slide. */
 export const ARCHITECTURAL_LEGEND_COLUMNS = 2;
 export const ARCHITECTURAL_LEGEND_COLUMN_GAP = 36;
-export const ARCHITECTURAL_LEGEND_WIDTH_RATIO = 0.28;
+export const ARCHITECTURAL_LEGEND_WIDTH_RATIO = 0.3;
 export const ARCHITECTURAL_LEGEND_LINE_HEIGHT = 40;
 export const ARCHITECTURAL_LEGEND_HEADER_HEIGHT = 112;
 /** Space the "12." prefix always occupies on the first line of a room row. */

@@ -5549,7 +5549,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           </div>)}
         </div>
       </div>}
-      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" className="absolute right-[2%] top-[12%] overflow-hidden" style={{ width: `${ARCHITECTURAL_LEGEND_WIDTH_RATIO * 100}%`, bottom: area.showKeyplan === false ? "4%" : "21%" }}>
+      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" className="absolute right-[1%] top-[12%] overflow-hidden" style={{ width: `${ARCHITECTURAL_LEGEND_WIDTH_RATIO * 100}%`, bottom: area.showKeyplan === false ? "4%" : "21%" }}>
         <svg viewBox={`0 0 ${architecturalLegendBox.width} ${architecturalLegendBox.height}`} preserveAspectRatio="xMinYMin meet" className="block h-full w-full" fill="var(--architectural-ink)" fontFamily="Manrope, sans-serif">
           <g transform={`scale(${architecturalLegend.scale})`}>
             <text x="0" y="40" fontFamily="Sora, sans-serif" fontSize={architecturalLegend.levelFont} fontWeight={700}>{level.name}</text>
