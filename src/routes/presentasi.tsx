@@ -5798,16 +5798,9 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
-          <SlideFurniture
-            items={furnitureForVisibleRooms(
-              sketch.detailAreas ?? [],
-              level.id,
-              layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)),
-              layers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)),
-            )}
-            sw={sw}
-            prefix="level-furniture"
-          />
+          {/* Slide Denah hanya menampilkan nomor ruang (rujukan legenda di kanan);
+              furniture tidak digambar pada slide denah biasa. */}
+
           {/* ===== Atap (pelana/limasan) — hanya pada level tempat digambar ===== */}
           {(sketch.roofs ?? []).filter((rf) => rf.levelId === level.id).map((rf) => {
             const g = roofPlanGeometry(rf, pxPerM);
@@ -6602,35 +6595,32 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               </g>
             );
           })}
-          {/* Informasi ruang selalu menjadi lapisan paling atas pada Slide Denah. */}
-          {layers.filter((room) => !isLahan(room.name) && !isVoid(room.name) && room.points.length >= 3).map((room) => {
-            const c = centroid(room.points);
-            const xs = room.points.map((point) => point.x);
-            const ys = room.points.map((point) => point.y);
-            const roomW = Math.max(...xs) - Math.min(...xs);
-            const roomH = Math.max(...ys) - Math.min(...ys);
-            const baseNameFont = sw * 0.0144;
-            const maxChars = Math.max(5, Math.floor((roomW * 0.82) / (baseNameFont * 0.58)));
-            const nameLines = splitRoomLabel(room.name, maxChars).slice(0, 2);
-            const longestLine = Math.max(...nameLines.map((line) => line.length), 1);
-            const widthFit = (roomW * 0.82) / (longestLine * 0.58);
-            const heightFit = (roomH * 0.52) / (nameLines.length * 1.05 + 2.5);
-            const nameFont = Math.max(sw * 0.006, Math.min(baseNameFont, widthFit, heightFit));
-            const lineHeight = nameFont * 1.08;
-            const firstY = c.y - lineHeight * (nameLines.length === 2 ? 1.25 : 0.72);
-            const infoFont = Math.min(sw * 0.01, nameFont * 0.78);
-            return <g key={`level-room-label-${room.id}`} pointerEvents="none">
-              <text x={c.x} y={firstY} textAnchor="middle" fontFamily="Sora, sans-serif" fontSize={nameFont} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
-                {nameLines.map((line, index) => <tspan key={`${room.id}-${index}`} x={c.x} dy={index === 0 ? 0 : lineHeight}>{line}</tspan>)}
-              </text>
-              <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 0.75} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont} fontWeight={600} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
-                {fmt(room.areaM2 || 0, 2)} m²
-              </text>
-              <text x={c.x} y={firstY + lineHeight * nameLines.length + infoFont * 2.05} textAnchor="middle" fontFamily="Manrope, sans-serif" fontSize={infoFont * 0.92} fontWeight={700} fill="#222222" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0025 }}>
-                {level.mdpl >= 0 ? "+" : ""}{fmt(level.mdpl, 2)} Elev
-              </text>
-            </g>;
-          })}
+          {/* Nomor ruang mengikuti penomoran legenda di kanan (ruang dengan nama saja);
+              nama, luas, dan elevasi cukup pada legenda. */}
+          {(() => {
+            const legendRooms = layers.filter((l) => !isLahan(l.name));
+            const legendIndex = new Map<string, number>(legendRooms.map((l, i) => [l.id, i + 1]));
+            return layers.filter((room) => !isLahan(room.name) && !isVoid(room.name) && room.points.length >= 3).map((room) => {
+              const num = legendIndex.get(room.id);
+              if (num == null) return null;
+              const c = centroid(room.points);
+              const xs = room.points.map((point) => point.x);
+              const ys = room.points.map((point) => point.y);
+              const roomW = Math.max(...xs) - Math.min(...xs);
+              const roomH = Math.max(...ys) - Math.min(...ys);
+              const baseNumFont = sw * 0.0144;
+              const digits = String(num).length;
+              const widthFit = (roomW * 0.82) / (digits * 0.58);
+              const heightFit = (roomH * 0.52) / 1.05;
+              const numFont = Math.max(sw * 0.006, Math.min(baseNumFont, widthFit, heightFit));
+              return <g key={`level-room-label-${room.id}`} pointerEvents="none">
+                <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="central" fontFamily="Sora, sans-serif" fontSize={numFont} fontWeight={700} fill="#0a0a0a" style={{ paintOrder: "stroke", stroke: "#ffffff", strokeWidth: sw * 0.0032 }}>
+                  {num}
+                </text>
+              </g>;
+            });
+          })()}
+
         </svg>
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
