@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Batasi pangkasan Arsitektural tepat ke bingkai jendela tanpa mengurangi dinding/kolom di luarnya; uji geometri dan slide.
+- [x] Batasi pangkasan Arsitektural tepat ke bingkai jendela tanpa mengurangi dinding/kolom di luarnya; 13 uji lolos dan slide dengan sesi aktif menunjukkan potongan tepat sama dengan bingkai serta dinding berdekatan tetap utuh.
 
 - [x] Pangkas dinding di jendela Arsitektural, alas putih dan bayangan gradual 45° 20 cm di bawah bayangan dinding; 11 uji lolos dan keempat style teruji di browser dengan akun aktif.
 
