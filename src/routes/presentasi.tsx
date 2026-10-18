@@ -60,7 +60,7 @@ import {
   type EdgeSegment,
 } from "@/lib/edge-segments";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
-import { type Window } from "@/lib/windows";
+import { windowPlanGeometry, type Window } from "@/lib/windows";
 import { roomWallSpans } from "@/lib/room-wall-spans";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
@@ -8407,7 +8407,11 @@ function MaterialEdges({
       }
     }
     const openings = architecturalDoors.map((door) => wallBandPolygon({ ...door, sourceLineIndex: 0 }, pxPerM * 0.35, 0));
-    const windowOpenings = architecturalWindows.map((window) => wallBandPolygon({ ...window, sourceLineIndex: 0 }, pxPerM * 0.35, 0));
+    const windowWalls = windowWallCandidates(lines, edgeAttrs);
+    const windowOpenings = architecturalWindows.flatMap((window) => {
+      const geometry = windowPlanGeometry(window, pxPerM, windowWalls);
+      return geometry ? [geometry.footprint] : [];
+    });
     const fullBands = [...bands, ...architecturalColumns];
     const { walls, wallPath } = architecturalGeometry(fullBands, [...openings, ...windowOpenings]);
     const windowBases = architecturalWindowBases(architecturalGeometry(fullBands, openings).walls, windowOpenings);
@@ -8901,6 +8905,14 @@ function DoorNotation({
   );
 }
 
+function windowWallCandidates(lines?: Line[], edgeAttrs?: Record<string, EdgeMaterial>) {
+  if (!lines || !edgeAttrs) return [];
+  return computeStraightSegments(lines).flatMap((segment) => {
+    const material = materialForEdgeSegment(segment, lines, edgeAttrs);
+    return material ? [{ a: segment.a, b: segment.b, thicknessMm: WALL_THICK_MM[material] }] : [];
+  });
+}
+
 function WindowNotation({
   windows,
   pxPerM,
@@ -8918,32 +8930,13 @@ function WindowNotation({
 }) {
   if (!windows.length) return null;
   const stroke = Math.max(sw * 0.00055, 0.08);
+  const windowWalls = windowWallCandidates(lines, edgeAttrs);
   return <g pointerEvents="none">
     {windows.map((window) => {
       const ax = window.a.x, ay = window.a.y, bx = window.b.x, by = window.b.y;
-      const length = Math.hypot(bx - ax, by - ay) || 1;
-      const dx = (bx - ax) / length, dy = (by - ay) / length;
-      const nx = -dy, ny = dx;
-      const midpoint = { x: (ax + bx) / 2, y: (ay + by) / 2 };
-      let attachedMaterial: EdgeMaterial | undefined;
-      let closestDistance = Infinity;
-      if (lines && edgeAttrs) {
-        const segments = computeStraightSegments(lines);
-        for (const segment of segments) {
-          const material = materialForEdgeSegment(segment, lines, edgeAttrs);
-          if (!material) continue;
-          const segmentDx = segment.b.x - segment.a.x, segmentDy = segment.b.y - segment.a.y;
-          const segmentLength = Math.hypot(segmentDx, segmentDy);
-          if (segmentLength < 1e-6) continue;
-          const alignment = Math.abs((segmentDx / segmentLength) * dx + (segmentDy / segmentLength) * dy);
-          if (alignment < 0.94) continue;
-          const t = Math.max(0, Math.min(1, ((midpoint.x - segment.a.x) * segmentDx + (midpoint.y - segment.a.y) * segmentDy) / (segmentLength * segmentLength)));
-          const distance = Math.hypot(midpoint.x - (segment.a.x + segmentDx * t), midpoint.y - (segment.a.y + segmentDy * t));
-          if (distance < closestDistance) { closestDistance = distance; attachedMaterial = material; }
-        }
-      }
-      const wallDepth = (((attachedMaterial && closestDistance <= 0.35 * pxPerM) ? WALL_THICK_MM[attachedMaterial] : 150) / 1000) * pxPerM;
-      const halfDepth = wallDepth / 2;
+      const geometry = windowPlanGeometry(window, pxPerM, windowWalls);
+      if (!geometry) return null;
+      const { dx, dy, nx, ny, halfDepth, footprint } = geometry;
       const jambWidth = 0.05 * pxPerM;
       const glassStroke = detailed ? Math.max(stroke * 0.72, 0.06) : stroke;
       const glassOffset = 0.005 * pxPerM;
@@ -8955,7 +8948,7 @@ function WindowNotation({
       ].join(" ");
       const leaves = Math.max(1, Math.round(window.leaves));
       return <g key={window.id}>
-        <polygon points={`${ax + nx * halfDepth},${ay + ny * halfDepth} ${bx + nx * halfDepth},${by + ny * halfDepth} ${bx - nx * halfDepth},${by - ny * halfDepth} ${ax - nx * halfDepth},${ay - ny * halfDepth}`} fill="#ffffff" stroke="none" />
+        <polygon points={footprint.map((point) => `${point.x},${point.y}`).join(" ")} fill="#ffffff" stroke="none" />
         <polygon points={jamb(ax, ay, 1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
         <polygon points={jamb(bx, by, -1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
         {[-1, 1].map((side) => <line key={`glass-${side}`} x1={ax + dx * jambWidth + nx * glassOffset * side} y1={ay + dy * jambWidth + ny * glassOffset * side} x2={bx - dx * jambWidth + nx * glassOffset * side} y2={by - dy * jambWidth + ny * glassOffset * side} stroke="#0a0a0a" strokeWidth={glassStroke} />)}
