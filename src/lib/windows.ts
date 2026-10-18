@@ -16,6 +16,34 @@ export type Window = {
   widthCm: number;
 };
 
+/** Exact frame bounds shared by notation and architectural cuts. */
+export function windowPlanGeometry(window: Pick<Window, "a" | "b">, pxPerM: number,
+  walls: { a: WindowPoint; b: WindowPoint; thicknessMm: number }[] = []) {
+  const length = Math.hypot(window.b.x - window.a.x, window.b.y - window.a.y);
+  if (!Number.isFinite(length) || length < 1e-6 || !Number.isFinite(pxPerM) || pxPerM <= 0) return null;
+  const dx = (window.b.x - window.a.x) / length, dy = (window.b.y - window.a.y) / length;
+  const nx = -dy, ny = dx;
+  const midpoint = { x: (window.a.x + window.b.x) / 2, y: (window.a.y + window.b.y) / 2 };
+  let thicknessMm = 150, closestDistance = Infinity;
+  for (const wall of walls) {
+    const wx = wall.b.x - wall.a.x, wy = wall.b.y - wall.a.y;
+    const wallLength = Math.hypot(wx, wy);
+    if (!Number.isFinite(wallLength) || wallLength < 1e-6 || !Number.isFinite(wall.thicknessMm) || wall.thicknessMm <= 0) continue;
+    if (Math.abs(wx / wallLength * dx + wy / wallLength * dy) < 0.94) continue;
+    const t = Math.max(0, Math.min(1, ((midpoint.x - wall.a.x) * wx + (midpoint.y - wall.a.y) * wy) / wallLength ** 2));
+    const distance = Math.hypot(midpoint.x - (wall.a.x + wx * t), midpoint.y - (wall.a.y + wy * t));
+    if (distance < closestDistance) { closestDistance = distance; thicknessMm = wall.thicknessMm; }
+  }
+  const halfDepth = (closestDistance <= 0.35 * pxPerM ? thicknessMm : 150) / 1000 * pxPerM / 2;
+  const footprint = [
+    { x: window.a.x + nx * halfDepth, y: window.a.y + ny * halfDepth },
+    { x: window.b.x + nx * halfDepth, y: window.b.y + ny * halfDepth },
+    { x: window.b.x - nx * halfDepth, y: window.b.y - ny * halfDepth },
+    { x: window.a.x - nx * halfDepth, y: window.a.y - ny * halfDepth },
+  ];
+  return { dx, dy, nx, ny, halfDepth, footprint };
+}
+
 export function genWindowId(): string {
   return `W${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }

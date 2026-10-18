@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Batasi pangkasan Arsitektural tepat ke bingkai jendela tanpa mengurangi dinding/kolom di luarnya; uji geometri dan slide.
+
 - [x] Pangkas dinding di jendela Arsitektural, alas putih dan bayangan gradual 45° 20 cm di bawah bayangan dinding; 11 uji lolos dan keempat style teruji di browser dengan akun aktif.
 
 - [x] Besarkan teks legenda Arsitektural dua kali dan susun dua kolom vertikal; delapan uji lolos, dua kolom tanpa tabrakan teks serta keempat style dan kondisi mati teruji di browser.
