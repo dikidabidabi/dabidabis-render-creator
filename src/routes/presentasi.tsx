@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
-import { architecturalLegendEnabled, architecturalLegendRooms } from "@/lib/architectural-legend";
+import { ARCHITECTURAL_LEGEND_COLUMN_GAP, ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, architecturalLegendEnabled, architecturalLegendLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
 import { colorForRoomName } from "@/lib/room-color";
 import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { loadMaterialLibrary, materialCodes, normalizeGeneralMaterialSelections, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
@@ -4853,19 +4853,8 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   const showArchitecturalLegend = architecturalLegendEnabled(area);
   const numberedRooms = architecturalLegendRooms(detailRooms);
   const roomNumberById = new Map(numberedRooms.map(({ room, number }) => [room.id, number]));
-  let legendRowY = 88;
-  const architecturalLegendRows = numberedRooms.map(({ room, number }) => {
-    const nameLines: string[] = [];
-    let line = "";
-    for (const word of room.name.split(/\s+/)) {
-      if (line && `${line} ${word}`.length > 25) { nameLines.push(line); line = word; }
-      else line = line ? `${line} ${word}` : word;
-    }
-    nameLines.push(line);
-    const y = legendRowY;
-    legendRowY += Math.max(46, nameLines.length * 20 + 23);
-    return { room, number, nameLines, y };
-  });
+  const architecturalLegendBox = { width: A3_W * ARCHITECTURAL_LEGEND_WIDTH_RATIO, height: A3_H * (1 - 0.12 - (area.showKeyplan === false ? 0.04 : 0.21)) };
+  const architecturalLegend = architecturalLegendLayout(detailRooms, architecturalLegendBox, level.name);
   const levelFloors = (sketch.floors ?? []).filter((floor) => floor.levelId === level.id && floor.outer.length >= 3);
   const floorPerimeterPoints = levelFloors.length > 0
     ? levelFloors.flatMap((floor) => floor.outer)
@@ -5344,7 +5333,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   });
   return (
     <div data-architectural-style={architectural ? area.architecturalStyle ?? "tosca" : undefined} style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-gradient)" : "#ffffff", overflow: "hidden" }}>
-      <svg data-detail-plan="true" viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showArchitecturalLegend ? "74%" : showMaterialMode || showCeilingMode ? "80%" : "100%", height: "100%", display: "block" }}>
+      <svg data-detail-plan="true" viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showArchitecturalLegend ? "56%" : showMaterialMode || showCeilingMode ? "80%" : "100%", height: "100%", display: "block" }}>
         <defs>
           {architectural && <>
             <radialGradient id={`architectural-floor-${patternId}`} gradientUnits="userSpaceOnUse" cx={bounds.minX} cy={bounds.minY} r={Math.hypot(w, h)}><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></radialGradient>
@@ -5560,15 +5549,18 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           </div>)}
         </div>
       </div>}
-      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" className="absolute right-[2%] top-[12%] w-[24%]" style={{ bottom: area.showKeyplan === false ? "4%" : "21%" }}>
-        <svg viewBox={`0 0 300 ${Math.max(legendRowY, 180)}`} preserveAspectRatio="xMinYMin meet" className="block h-full w-full" fill="var(--architectural-ink)" fontFamily="Manrope, sans-serif">
-          <text x="0" y="22" fontFamily="Sora, sans-serif" fontSize="20" fontWeight={700} textLength={level.name.length > 22 ? 290 : undefined} lengthAdjust="spacingAndGlyphs">{level.name}</text>
-          <text x="0" y="48" fontSize="16" fontWeight={600}>Elevasi {elevation} mm</text>
-          {architecturalLegendRows.map(({ room, number, nameLines, y }) => <g key={room.id} data-architectural-legend-room={room.id}>
-            <text x="0" y={y} fontSize="18" fontWeight={700}>{number}.</text>
-            <text x="36" y={y} fontSize="17" fontWeight={600}>{nameLines.map((line, index) => <tspan key={index} x="36" dy={index === 0 ? 0 : 20} textLength={line.length > 25 ? 260 : undefined} lengthAdjust="spacingAndGlyphs">{line}</tspan>)}</text>
-            <text x="36" y={y + nameLines.length * 20} fontSize="15">{fmt(room.areaM2 || 0, 2)} m²</text>
-          </g>)}
+      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" className="absolute right-[2%] top-[12%] overflow-hidden" style={{ width: `${ARCHITECTURAL_LEGEND_WIDTH_RATIO * 100}%`, bottom: area.showKeyplan === false ? "4%" : "21%" }}>
+        <svg viewBox={`0 0 ${architecturalLegendBox.width} ${architecturalLegendBox.height}`} preserveAspectRatio="xMinYMin meet" className="block h-full w-full" fill="var(--architectural-ink)" fontFamily="Manrope, sans-serif">
+          <g transform={`scale(${architecturalLegend.scale})`}>
+            <text x="0" y="40" fontFamily="Sora, sans-serif" fontSize={architecturalLegend.levelFont} fontWeight={700}>{level.name}</text>
+            <text x="0" y="92" fontSize={ARCHITECTURAL_LEGEND_FONTS.elevation} fontWeight={600}>Elevasi {elevation} mm</text>
+            {architecturalLegend.columns.map((column, columnIndex) => <g key={`legend-col-${columnIndex}`} transform={`translate(${columnIndex * (architecturalLegend.colW + ARCHITECTURAL_LEGEND_COLUMN_GAP)} ${ARCHITECTURAL_LEGEND_HEADER_HEIGHT})`}>
+              {column.map(({ room, number, nameLines, top }) => <g key={room.id} data-architectural-legend-room={room.id}>
+                <text x="0" y={top} fontSize={ARCHITECTURAL_LEGEND_FONTS.name} fontWeight={600}><tspan fontSize={ARCHITECTURAL_LEGEND_FONTS.number} fontWeight={700}>{number}.{" "}</tspan>{nameLines.map((line, index) => <tspan key={index} x={index === 0 ? undefined : 0} dy={index === 0 ? 0 : ARCHITECTURAL_LEGEND_LINE_HEIGHT}>{line}</tspan>)}</text>
+                <text x="0" y={top + (nameLines.length - 1) * ARCHITECTURAL_LEGEND_LINE_HEIGHT + 38} fontSize={ARCHITECTURAL_LEGEND_FONTS.area}>{fmt(room.areaM2 || 0, 2)} m²</text>
+              </g>)}
+            </g>)}
+          </g>
         </svg>
       </aside>}
       {(showMaterialMode || showCeilingMode) && <aside style={{ position: "absolute", right: 24, top: 28, bottom: area.showKeyplan === false ? 24 : "20%", width: "18%", minWidth: 170, background: "rgba(255,255,255,0.97)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", padding: "14px 12px", overflow: "hidden", fontFamily: "Manrope, sans-serif" }}>
