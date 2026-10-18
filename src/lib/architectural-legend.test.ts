@@ -56,6 +56,7 @@ test("long room names wrap inside their column", () => {
   const row = layout.columns.flat()[0];
   assert.ok(row.nameLines.length > 1);
   for (const line of row.nameLines) assert.ok(line.length <= layout.maxChars, line);
+  assert.ok(row.nameLines[0].length * ARCHITECTURAL_LEGEND_FONTS.name * 0.55 + ARCHITECTURAL_LEGEND_NUMBER_PREFIX <= layout.colW);
   assert.equal(wrapArchitecturalLegendName("", 12).join(""), "Ruang");
 });
 

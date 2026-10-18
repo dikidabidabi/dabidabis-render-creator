@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
-import { ARCHITECTURAL_LEGEND_COLUMN_GAP, ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_NUMBER_INDENT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, architecturalLegendEnabled, architecturalLegendLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
+import { ARCHITECTURAL_LEGEND_COLUMN_GAP, ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, architecturalLegendEnabled, architecturalLegendLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
 import { colorForRoomName } from "@/lib/room-color";
 import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { loadMaterialLibrary, materialCodes, normalizeGeneralMaterialSelections, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
@@ -5556,9 +5556,8 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
             <text x="0" y="92" fontSize={ARCHITECTURAL_LEGEND_FONTS.elevation} fontWeight={600}>Elevasi {elevation} mm</text>
             {architecturalLegend.columns.map((column, columnIndex) => <g key={`legend-col-${columnIndex}`} transform={`translate(${columnIndex * (architecturalLegend.colW + ARCHITECTURAL_LEGEND_COLUMN_GAP)} ${ARCHITECTURAL_LEGEND_HEADER_HEIGHT})`}>
               {column.map(({ room, number, nameLines, top }) => <g key={room.id} data-architectural-legend-room={room.id}>
-                <text x="0" y={top} fontSize={ARCHITECTURAL_LEGEND_FONTS.number} fontWeight={700}>{number}.</text>
-                <text x={ARCHITECTURAL_LEGEND_NUMBER_INDENT} y={top} fontSize={ARCHITECTURAL_LEGEND_FONTS.name} fontWeight={600}>{nameLines.map((line, index) => <tspan key={index} x={ARCHITECTURAL_LEGEND_NUMBER_INDENT} dy={index === 0 ? 0 : ARCHITECTURAL_LEGEND_LINE_HEIGHT}>{line}</tspan>)}</text>
-                <text x={ARCHITECTURAL_LEGEND_NUMBER_INDENT} y={top + (nameLines.length - 1) * ARCHITECTURAL_LEGEND_LINE_HEIGHT + 38} fontSize={ARCHITECTURAL_LEGEND_FONTS.area}>{fmt(room.areaM2 || 0, 2)} m²</text>
+                <text x="0" y={top} fontSize={ARCHITECTURAL_LEGEND_FONTS.name} fontWeight={600}><tspan fontSize={ARCHITECTURAL_LEGEND_FONTS.number} fontWeight={700}>{number}.{" "}</tspan>{nameLines.map((line, index) => <tspan key={index} x={index === 0 ? undefined : 0} dy={index === 0 ? 0 : ARCHITECTURAL_LEGEND_LINE_HEIGHT}>{line}</tspan>)}</text>
+                <text x="0" y={top + (nameLines.length - 1) * ARCHITECTURAL_LEGEND_LINE_HEIGHT + 38} fontSize={ARCHITECTURAL_LEGEND_FONTS.area}>{fmt(room.areaM2 || 0, 2)} m²</text>
               </g>)}
             </g>)}
           </g>
