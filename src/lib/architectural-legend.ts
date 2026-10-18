@@ -20,7 +20,11 @@ export const ARCHITECTURAL_LEGEND_NUMBER_PREFIX = 46;
 export const ARCHITECTURAL_LEGEND_FONTS = { level: 40, elevation: 32, number: 36, name: 34, area: 30 };
 
 export function wrapArchitecturalLegendName(name: string, maxChars: number): string[] {
-  const words = (name || "").trim().split(/\s+/).filter(Boolean);
+  const words = (name || "").trim().split(/\s+/).filter(Boolean).flatMap((word) => {
+    const parts: string[] = [];
+    for (let start = 0; start < word.length; start += Math.max(1, maxChars)) parts.push(word.slice(start, start + Math.max(1, maxChars)));
+    return parts;
+  });
   if (words.length === 0) return ["Ruang"];
   const lines: string[] = [];
   let line = "";
