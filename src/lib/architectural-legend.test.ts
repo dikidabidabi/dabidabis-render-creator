@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 import {
   ARCHITECTURAL_LEGEND_COLUMNS,
   ARCHITECTURAL_LEGEND_FONTS,
+  ARCHITECTURAL_LEGEND_NUMBER_PREFIX,
   ARCHITECTURAL_LEGEND_WIDTH_RATIO,
   architecturalLegendEnabled,
   architecturalLegendLayout,
