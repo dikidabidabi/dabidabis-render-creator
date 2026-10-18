@@ -38,6 +38,16 @@ export function architecturalWallUnion(bands: Point[][], openings: Point[][]): P
   }
 }
 
+/** Retain the lower window base only within the actual wall footprint. */
+export function architecturalWindowBases(walls: PlanPolygons, openings: Point[][]): PlanPolygons {
+  if (!walls.length) return [];
+  const inputs: MultiPolygon = walls.map((polygon) => polygon.map((ring) => ring.map(({ x, y }) => [x, y])));
+  return openings.filter(validBand).flatMap((opening) => {
+    try { return fromMultiPolygon(polygonClipping.intersection(inputs, toPolygon(opening))); }
+    catch { return []; }
+  });
+}
+
 /** Continuous projected shadow from the wall to the requested distance at 45 degrees. */
 export function architecturalShadowSweep(walls: PlanPolygons, distance: number): PlanPolygons {
   if (!Number.isFinite(distance) || distance <= 0) return [];

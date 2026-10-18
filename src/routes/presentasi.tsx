@@ -62,7 +62,8 @@ import {
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { type Window } from "@/lib/windows";
 import { roomWallSpans } from "@/lib/room-wall-spans";
-import { architecturalWallUnion, architecturalShadowStrips } from "@/lib/architectural-plan";
+import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
+import { architecturalShadowProfile } from "@/lib/architectural-shadow";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
@@ -5430,6 +5431,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           detailSolidLayers
           architectural={architectural}
           architecturalDoors={doors}
+          architecturalWindows={windows}
           architecturalColumns={architecturalColumns}
           architecturalBounds={bounds}
         />
@@ -5459,7 +5461,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           });
         })}
         <DoorNotation doors={doors} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} showJambs leafThicknessMm={40} architectural={architectural} />
-        <g data-detail-window-notation="true"><WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed /></g>
+        {!architectural && <g data-detail-window-notation="true"><WindowNotation windows={windows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={sketch.edgeAttrs ?? {}} detailed /></g>}
         {!architectural && <SolidWallPracticalColumns
           lines={lines}
           segmentationLines={sketch.lines ?? []}
@@ -8291,6 +8293,7 @@ function MaterialEdges({
   detailSolidLayers = false,
   architectural = false,
   architecturalDoors = [],
+  architecturalWindows = [],
   architecturalColumns = [],
   architecturalBounds,
 }: {
@@ -8309,6 +8312,7 @@ function MaterialEdges({
   detailSolidLayers?: boolean;
   architectural?: boolean;
   architecturalDoors?: Door[];
+  architecturalWindows?: Window[];
   architecturalColumns?: Point[][];
   architecturalBounds?: { minX: number; minY: number; maxX: number; maxY: number };
 }) {
@@ -8403,7 +8407,11 @@ function MaterialEdges({
       }
     }
     const openings = architecturalDoors.map((door) => wallBandPolygon({ ...door, sourceLineIndex: 0 }, pxPerM * 0.35, 0));
-    const { walls, wallPath } = architecturalGeometry([...bands, ...architecturalColumns], openings);
+    const windowOpenings = architecturalWindows.map((window) => wallBandPolygon({ ...window, sourceLineIndex: 0 }, pxPerM * 0.35, 0));
+    const fullBands = [...bands, ...architecturalColumns];
+    const { walls, wallPath } = architecturalGeometry(fullBands, [...openings, ...windowOpenings]);
+    const windowBases = architecturalWindowBases(architecturalGeometry(fullBands, openings).walls, windowOpenings);
+    const windowPath = wallUnionPath(windowBases);
     // Bound blur textures to the visible detail, not five times the entire level.
     const shadowPadding = pxPerM * 0.6;
     const shadowRegion = architecturalBounds ? {
@@ -8413,11 +8421,8 @@ function MaterialEdges({
       width: architecturalBounds.maxX - architecturalBounds.minX + shadowPadding * 2,
       height: architecturalBounds.maxY - architecturalBounds.minY + shadowPadding * 2,
     } : { x: "-50%", y: "-50%", width: "200%", height: "200%" };
-    const shadowSteps = Array.from({ length: 6 }, (_, i) => {
-      const fraction = (6 - i) / 6;
-      return { distance: 1.5 * fraction * pxPerM, blur: pxPerM * (0.015 + 0.18 * fraction ** 2) };
-    });
-    const shadowOpacity = 1 - Math.pow(1 - 0.456, 1 / shadowSteps.length);
+    const { steps: shadowSteps, opacity: shadowOpacity } = architecturalShadowProfile(pxPerM, 1.5);
+    const { steps: windowShadowSteps } = architecturalShadowProfile(pxPerM, 0.2);
     const rasterRegion = typeof document !== "undefined" && architecturalBounds ? {
       x: shadowRegion.x as number, y: shadowRegion.y as number,
       width: shadowRegion.width as number, height: shadowRegion.height as number,
@@ -8431,6 +8436,15 @@ function MaterialEdges({
           <feGaussianBlur stdDeviation={step.blur} />
         </filter>)}
       </defs>
+      <g data-architectural-window-shadow-distance="200">
+        {windowPath && rasterRegion && <ArchitecturalShadowRaster walls={windowBases} wallPath={windowPath} steps={windowShadowSteps} region={rasterRegion} opacity={shadowOpacity} />}
+        {windowPath && !rasterRegion && windowShadowSteps.map((step, i) => <g key={i}>
+          <defs><filter id={`architectural-window-shadow-${patternId}-${i}`} {...shadowRegion}><feGaussianBlur stdDeviation={step.blur} /></filter></defs>
+          <path d={architecturalShadowStrips(windowBases, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")} fill="var(--architectural-shadow)" fillRule="nonzero" opacity={shadowOpacity} filter={`url(#architectural-window-shadow-${patternId}-${i})`} />
+        </g>)}
+      </g>
+      <path data-architectural-window-base="true" d={windowPath} fill="var(--detail-opening-fill)" fillRule="evenodd" stroke="none" />
+      <g data-detail-window-notation="true"><WindowNotation windows={architecturalWindows} pxPerM={pxPerM} sw={sw} lines={lines} edgeAttrs={edgeAttrs} detailed /></g>
       <g data-architectural-shadow-distance="1500">
         {rasterRegion && <ArchitecturalShadowRaster walls={walls} wallPath={wallPath} steps={shadowSteps} region={rasterRegion} opacity={shadowOpacity} />}
         {!rasterRegion && shadowSteps.map((step, i) => <path key={i} d={architecturalShadowStrips(walls, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")}

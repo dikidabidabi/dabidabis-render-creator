@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { architecturalWallUnion, architecturalShadowSweep, architecturalShadowStrips, architecturalBevels } from "./architectural-plan";
+import { architecturalWallUnion, architecturalShadowSweep, architecturalShadowStrips, architecturalBevels, architecturalWindowBases } from "./architectural-plan";
 
 const rect = (x: number, y: number, w: number, h: number) => [
   { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h },
@@ -12,6 +12,19 @@ const area = (polygons: ReturnType<typeof architecturalWallUnion>) => polygons.r
   }, 0) / 2, 0), 0);
 
 describe("architectural walls", () => {
+  test("window trims both ends and retains its lower footprint", () => {
+    const bands = [rect(0, 0, 10, 0.15)], opening = rect(4, -1, 2, 2);
+    const walls = architecturalWallUnion(bands, [opening]);
+    const bases = architecturalWindowBases(architecturalWallUnion(bands, []), [opening]);
+    assert.equal(walls.length, 2);
+    assert.ok(Math.abs(area(walls) - 1.2) < 1e-6);
+    assert.ok(Math.abs(area(bases) - 0.3) < 1e-6);
+    assert.deepEqual([...new Set(bases.flat(2).map(p => p.x))].sort(), [4, 6]);
+  });
+  test("wall end casts onto the lower window footprint", () => {
+    const shadow = architecturalShadowSweep(architecturalWallUnion([rect(0, 0, 10, 0.15)], [rect(4, -1, 2, 2)]), 1.5);
+    assert.ok(area(architecturalWindowBases(shadow, [rect(4, 0, 2, 0.15)])) > 0);
+  });
   test("door opening splits the wall and column overlaps are merged", () => {
     const walls = architecturalWallUnion([rect(0, 0, 10, 0.15), rect(0, 0, 0.3, 0.3)], [rect(4, -1, 2, 2)]);
     assert.equal(walls.length, 2);
