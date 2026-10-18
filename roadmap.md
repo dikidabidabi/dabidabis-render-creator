@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Pangkas dinding di jendela Arsitektural, alas putih dan bayangan gradual 45° 20 cm di bawah bayangan dinding; verifikasi.
+
 - [x] Besarkan teks legenda Arsitektural dua kali dan susun dua kolom vertikal; delapan uji lolos, dua kolom tanpa tabrakan teks serta keempat style dan kondisi mati teruji di browser.
 
 - [x] Tambahkan subceklis Legenda Arsitektural default mati, nomor ruang dan legenda kanan tanpa kotak sesuai warna style, nama/elevasi level serta luas ruang; tiga uji lolos, penyimpanan setelah muat ulang dan keempat style teruji di browser dengan sesi aktif.
