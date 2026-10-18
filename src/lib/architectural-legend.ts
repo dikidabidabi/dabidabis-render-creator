@@ -13,7 +13,8 @@ export const ARCHITECTURAL_LEGEND_COLUMN_GAP = 36;
 export const ARCHITECTURAL_LEGEND_WIDTH_RATIO = 0.4;
 export const ARCHITECTURAL_LEGEND_LINE_HEIGHT = 40;
 export const ARCHITECTURAL_LEGEND_HEADER_HEIGHT = 112;
-export const ARCHITECTURAL_LEGEND_NUMBER_INDENT = 68;
+/** Space the "12." prefix always occupies on the first line of a room row. */
+export const ARCHITECTURAL_LEGEND_NUMBER_PREFIX = 46;
 
 /** Every size is exactly double the single-column legend it replaces. */
 export const ARCHITECTURAL_LEGEND_FONTS = { level: 40, elevation: 32, number: 36, name: 34, area: 30 };
@@ -48,7 +49,7 @@ export function architecturalLegendLayout<T extends { id: string; name: string; 
     90,
     (box.width - ARCHITECTURAL_LEGEND_COLUMN_GAP * (ARCHITECTURAL_LEGEND_COLUMNS - 1)) / ARCHITECTURAL_LEGEND_COLUMNS,
   );
-  const maxChars = Math.max(6, Math.floor(colW / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
+  const maxChars = Math.max(6, Math.floor((colW - ARCHITECTURAL_LEGEND_NUMBER_PREFIX) / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
   const rows = architecturalLegendRooms(rooms).map(({ room, number }) => {
     const nameLines = wrapArchitecturalLegendName(room.name, maxChars);
     return { room, number, nameLines, height: Math.max(92, nameLines.length * ARCHITECTURAL_LEGEND_LINE_HEIGHT + 52) };
