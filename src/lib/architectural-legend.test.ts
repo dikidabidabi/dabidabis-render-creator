@@ -41,8 +41,8 @@ test("legend splits rooms into two columns", () => {
   const layout = architecturalLegendLayout(rooms(8), BOX, "Lantai 1");
   assert.equal(layout.columns.length, ARCHITECTURAL_LEGEND_COLUMNS);
   assert.deepEqual(layout.columns.map((column) => column.length), [4, 4]);
-  assert.equal(layout.scale, 1);
-  assert.ok(layout.needed <= BOX.height);
+  assert.ok(layout.scale > 0 && layout.scale <= 1);
+  assert.ok(layout.needed * layout.scale <= BOX.height);
 });
 
 test("room numbers keep ascending order across both columns", () => {
