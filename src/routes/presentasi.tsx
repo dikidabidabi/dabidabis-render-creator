@@ -61,7 +61,7 @@ import {
 } from "@/lib/edge-segments";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { windowPlanGeometry, type Window } from "@/lib/windows";
-import { roomWallSpans } from "@/lib/room-wall-spans";
+import { roomWallSpans, roomWallSurfacePoint } from "@/lib/room-wall-spans";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
@@ -4988,6 +4988,9 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
     minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y),
     maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y),
   };
+  const materialSymbolWallFaces = wallFaces.filter(({ segment }) =>
+    Boolean(materialForEdgeSegment(segment, sketch.lines ?? [], sketch.edgeAttrs ?? {})),
+  );
   const interiorRoomDimensions = area.interiorDimensions ? rooms.flatMap((room) => {
     const points = room.points;
     if (points.length < 3) return [];
@@ -5449,12 +5452,12 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
             const uy = (next.y - point.y) / length;
             const nx = signedArea >= 0 ? -uy : uy;
             const ny = signedArea >= 0 ? ux : -ux;
-            const middle = { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 };
+            const middle = roomWallSurfacePoint({ a: point, b: next }, signedArea, materialSymbolWallFaces);
             const depth = Math.max(sw * 0.013, pxPerM * 0.11);
             const halfBase = depth * 0.55;
             const base = { x: middle.x + nx * depth, y: middle.y + ny * depth };
             const label = { x: middle.x + nx * depth * 0.68, y: middle.y + ny * depth * 0.68 };
-            return <g key={`wall-code-${room.id}-${index}`} pointerEvents="none">
+            return <g key={`wall-code-${room.id}-${index}`} data-wall-material-symbol="true" pointerEvents="none">
               <polygon points={`${middle.x},${middle.y} ${base.x + ux * halfBase},${base.y + uy * halfBase} ${base.x - ux * halfBase},${base.y - uy * halfBase}`} fill="#ffffff" stroke="#111111" strokeWidth={Math.max(sw * 0.0007, 0.35)} />
               <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="central" fontFamily="Manrope, sans-serif" fontSize={depth * 0.38} fontWeight={700} fill="#111111">{code}</text>
             </g>;

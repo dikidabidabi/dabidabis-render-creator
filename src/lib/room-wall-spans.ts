@@ -3,6 +3,32 @@ import type { Point, StraightLineInput } from "./edge-segments";
 type BoundaryLine = StraightLineInput & { bulge?: number; c1?: Point; c2?: Point };
 export type RoomWallSpan = { a: Point; b: Point; sideIndex: number; length: number };
 
+/** Anchor on the room-facing wall surface; all values use sketch units. */
+export function roomWallSurfacePoint(
+  span: Pick<RoomWallSpan, "a" | "b">,
+  signedArea: number,
+  faces: Array<{ segment: { a: Point; b: Point }; half: number }>,
+  tolerance = 0.001,
+): Point {
+  const middle = { x: (span.a.x + span.b.x) / 2, y: (span.a.y + span.b.y) / 2 };
+  const length = Math.hypot(span.b.x - span.a.x, span.b.y - span.a.y);
+  if (length <= 1e-6) return middle;
+  const ux = (span.b.x - span.a.x) / length, uy = (span.b.y - span.a.y) / length;
+  const nx = signedArea >= 0 ? -uy : uy, ny = signedArea >= 0 ? ux : -ux;
+  let offset = 0;
+  for (const { segment, half } of faces) {
+    const dx = segment.b.x - segment.a.x, dy = segment.b.y - segment.a.y;
+    const wallLength = Math.hypot(dx, dy);
+    if (wallLength <= 1e-6 || Math.abs((dx * uy - dy * ux) / wallLength) > 0.001) continue;
+    const along = ((middle.x - segment.a.x) * dx + (middle.y - segment.a.y) * dy) / wallLength;
+    if (along < -tolerance || along > wallLength + tolerance) continue;
+    const axisOffset = (segment.a.x - middle.x) * nx + (segment.a.y - middle.y) * ny;
+    if (Math.abs(axisOffset) > tolerance) continue;
+    offset = Math.max(offset, axisOffset + half);
+  }
+  return { x: middle.x + nx * offset, y: middle.y + ny * offset };
+}
+
 /** Match the 24-step curve tessellation used when Sketch builds room polygons. */
 function linePoints(line: BoundaryLine): Point[] {
   if ((line.kind ?? "straight") === "straight") return [line.a, line.b];
