@@ -1,10 +1,41 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { roomWallSpans } from "./room-wall-spans";
+import { roomWallSpans, roomWallSurfacePoint } from "./room-wall-spans";
 
 const points = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }];
 const lines = points.map((a, index) => ({ a, b: points[(index + 1) % points.length], levelId: "L1" }));
 const total = (input: typeof lines) => roomWallSpans(points, input, "L1").reduce((sum, span) => sum + span.length, 0);
+
+describe("wall material symbol surface anchor", () => {
+  const span = { a: { x: 0, y: 0 }, b: { x: 4, y: 0 } };
+  test("tip touches the room-facing surface for each wall thickness", () => {
+    for (const thicknessMm of [80, 100, 150, 200, 300]) {
+      const half = thicknessMm / 2000;
+      assert.deepEqual(roomWallSurfacePoint(span, 24, [{ segment: span, half }]), { x: 2, y: half });
+    }
+  });
+  test("reversed winding keeps the tip on the same interior surface", () => {
+    assert.deepEqual(roomWallSurfacePoint({ a: span.b, b: span.a }, -24, [{ segment: span, half: 0.075 }]), { x: 2, y: 0.075 });
+  });
+  test("split and overlapping walls use the outermost matching surface", () => {
+    const faces = [
+      { segment: { a: { x: 0, y: 0 }, b: { x: 2, y: 0 } }, half: 0.075 },
+      { segment: { a: { x: 2, y: 0 }, b: { x: 4, y: 0 } }, half: 0.15 },
+      { segment: { a: { x: 2, y: -1 }, b: { x: 2, y: 1 } }, half: 0.5 },
+      { segment: { a: { x: 0, y: 0.1 }, b: { x: 4, y: 0.1 } }, half: 0.5 },
+    ];
+    assert.deepEqual(roomWallSurfacePoint(span, 24, faces), { x: 2, y: 0.15 });
+  });
+  test("unpicked line retains its zero-thickness axis", () => {
+    assert.deepEqual(roomWallSurfacePoint(span, 24, []), { x: 2, y: 0 });
+  });
+  test("diagonal wall offsets perpendicular to its surface", () => {
+    const diagonal = { a: { x: 0, y: 0 }, b: { x: 4, y: 4 } };
+    const result = roomWallSurfacePoint(diagonal, 1, [{ segment: diagonal, half: 0.15 }]);
+    assert.ok(Math.abs(result.x - (2 - 0.15 / Math.SQRT2)) < 1e-9);
+    assert.ok(Math.abs(result.y - (2 + 0.15 / Math.SQRT2)) < 1e-9);
+  });
+});
 
 describe("actual lined room perimeter", () => {
   test("full perimeter and wall surface", () => {
