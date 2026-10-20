@@ -66,3 +66,17 @@ test("many rooms shrink to fit without overflowing the box", () => {
   assert.ok(layout.scale < 1);
   assert.ok(layout.needed * layout.scale <= BOX.height + 0.01);
 });
+
+test("legend position defaults to right with two columns", async () => {
+  const { architecturalLegendPosition, architecturalLegendColumnCount } = await import("./architectural-legend");
+  assert.equal(architecturalLegendPosition({}), "right");
+  assert.equal(architecturalLegendColumnCount("right"), 2);
+});
+
+test("bottom legend uses four ascending columns", async () => {
+  const { architecturalLegendPosition, architecturalLegendColumnCount } = await import("./architectural-legend");
+  assert.equal(architecturalLegendPosition({ architecturalLegendPosition: "bottom" }), "bottom");
+  const layout = architecturalLegendLayout(rooms(8), { width: 1100, height: 220 }, "Lantai 1", architecturalLegendColumnCount("bottom"));
+  assert.equal(layout.columns.length, 4);
+  assert.deepEqual(layout.columns.map((c) => c.map((r) => r.number)), [[1, 2], [3, 4], [5, 6], [7, 8]]);
+});

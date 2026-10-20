@@ -410,6 +410,7 @@ type DetailArea = {
   showCeiling: boolean;
   showArchitectural?: boolean;
   showArchitecturalLegend?: boolean;
+  architecturalLegendPosition?: "right" | "bottom";
   architecturalStyle?: "tosca" | "brown" | "blue" | "bata";
   createdAt: number;
   furniture?: DetailFurniture[];
@@ -1219,6 +1220,7 @@ function normalizeSketch(s: any): Sketch {
           showCeiling: area.showCeiling === true && area.showArchitectural !== true,
           showArchitectural: area.showArchitectural === true,
           showArchitecturalLegend: area.showArchitecturalLegend === true,
+          architecturalLegendPosition: area.architecturalLegendPosition === "bottom" ? "bottom" : "right",
           architecturalStyle: area.architecturalStyle === "brown" || area.architecturalStyle === "blue" || area.architecturalStyle === "bata" ? area.architecturalStyle : "tosca",
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
@@ -12372,8 +12374,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     <label className="ml-3 flex items-center justify-between gap-3 py-1 text-[11px]">
                       <span>Legenda</span>
                       <Switch aria-label={`Legenda Arsitektural Detail ${area.number}`} checked={area.showArchitecturalLegend === true}
-                        onCheckedChange={(checked) => onChange({ detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, showArchitecturalLegend: checked } : item) })} />
+                        onCheckedChange={(checked) => onChange({ detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, showArchitecturalLegend: checked, ...(checked ? { architecturalLegendPosition: "right" as const } : {}) } : item) })} />
                     </label>
+                    {area.showArchitecturalLegend === true && <div role="radiogroup" aria-label={`Posisi Legenda Detail ${area.number}`} className="ml-6 flex gap-1">
+                      {([["right", "Kanan"], ["bottom", "Bawah"]] as const).map(([value, label]) => {
+                        const active = (area.architecturalLegendPosition === "bottom" ? "bottom" : "right") === value;
+                        return <button key={value} type="button" role="radio" aria-checked={active}
+                          className={`rounded border px-2 py-0.5 text-[11px] ${active ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground"}`}
+                          onClick={() => onChange({ detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, architecturalLegendPosition: value } : item) })}>{label}</button>;
+                      })}
+                    </div>}
                     <span className="text-[11px] text-muted-foreground">Style</span>
                     <div role="radiogroup" aria-label={`Style Arsitektural Detail ${area.number}`} className="flex flex-wrap gap-1">
                       {([
