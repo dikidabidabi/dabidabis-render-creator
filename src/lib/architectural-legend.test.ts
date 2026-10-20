@@ -7,6 +7,7 @@ import {
   ARCHITECTURAL_LEGEND_WIDTH_RATIO,
   architecturalLegendEnabled,
   architecturalLegendLayout,
+  architecturalLegendPositionLayout,
   architecturalLegendRooms,
   wrapArchitecturalLegendName,
 } from "./architectural-legend";
@@ -73,10 +74,29 @@ test("legend position defaults to right with two columns", async () => {
   assert.equal(architecturalLegendColumnCount("right"), 2);
 });
 
-test("bottom legend uses four ascending columns", async () => {
+test("bottom legend defaults to five ascending columns", async () => {
   const { architecturalLegendPosition, architecturalLegendColumnCount } = await import("./architectural-legend");
   assert.equal(architecturalLegendPosition({ architecturalLegendPosition: "bottom" }), "bottom");
-  const layout = architecturalLegendLayout(rooms(8), { width: 1100, height: 220 }, "Lantai 1", architecturalLegendColumnCount("bottom"));
-  assert.equal(layout.columns.length, 4);
-  assert.deepEqual(layout.columns.map((c) => c.map((r) => r.number)), [[1, 2], [3, 4], [5, 6], [7, 8]]);
+  assert.equal(architecturalLegendColumnCount("bottom"), 5);
+  const layout = architecturalLegendPositionLayout(rooms(10), { width: 1100, height: 220 }, "Lantai 1", "bottom");
+  assert.equal(layout.columns.length, 5);
+  assert.deepEqual(layout.columns.map((c) => c.map((r) => r.number)), [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]);
+});
+
+test("bottom legend picks six columns when they allow larger text", () => {
+  const box = { width: 1100, height: 210 };
+  const layout = architecturalLegendPositionLayout(rooms(12), box, "Lantai 1", "bottom");
+  const previous = architecturalLegendLayout(rooms(12), box, "Lantai 1", 4);
+  assert.equal(layout.columns.length, 6);
+  assert.ok(layout.scale > previous.scale);
+  assert.deepEqual(layout.columns.flat().map((row) => row.number), Array.from({ length: 12 }, (_, i) => i + 1));
+});
+
+test("bottom legend uses tighter gaps while right legend remains unchanged", () => {
+  const box = { width: 1100, height: 210 };
+  const bottom = architecturalLegendPositionLayout(rooms(12), box, "Lantai 1", "bottom");
+  const right = architecturalLegendPositionLayout(rooms(12), box, "Lantai 1", "right");
+  assert.equal(bottom.columnGap, 18);
+  assert.equal(right.columnGap, 36);
+  assert.equal(right.columns.length, 2);
 });
