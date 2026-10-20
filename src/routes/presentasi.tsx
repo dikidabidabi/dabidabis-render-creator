@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
-import { ARCHITECTURAL_LEGEND_COLUMN_GAP, ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, architecturalLegendEnabled, architecturalLegendLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
+import { ARCHITECTURAL_LEGEND_COLUMN_GAP, ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO, architecturalLegendColumnCount, architecturalLegendPosition, architecturalLegendEnabled, architecturalLegendLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
 import { colorForRoomName } from "@/lib/room-color";
 import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { loadMaterialLibrary, materialCodes, normalizeGeneralMaterialSelections, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
@@ -150,6 +150,7 @@ type DetailArea = {
   furniture?: DetailFurniture[];
   architecturalStyle?: "tosca" | "brown" | "blue" | "bata";
   showArchitecturalLegend?: boolean;
+  architecturalLegendPosition?: "right" | "bottom";
 };
 type Sketch = {
   id: string; title: string; createdAt: number; updatedAt: number; scale: string;
@@ -4854,8 +4855,13 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   const showArchitecturalLegend = architecturalLegendEnabled(area);
   const numberedRooms = architecturalLegendRooms(detailRooms);
   const roomNumberById = new Map(numberedRooms.map(({ room, number }) => [room.id, number]));
-  const architecturalLegendBox = { width: A3_W * ARCHITECTURAL_LEGEND_WIDTH_RATIO, height: A3_H * (1 - 0.04 - (area.showKeyplan === false ? 0.04 : 0.21)) };
-  const architecturalLegend = architecturalLegendLayout(detailRooms, architecturalLegendBox, level.name);
+  const legendPosition = architecturalLegendPosition(area);
+  const legendBottom = showArchitecturalLegend && legendPosition === "bottom";
+  const legendBottomWidthRatio = area.showKeyplan === false ? 0.96 : 0.79;
+  const architecturalLegendBox = legendBottom
+    ? { width: A3_W * legendBottomWidthRatio, height: A3_H * (ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO - 0.03) }
+    : { width: A3_W * ARCHITECTURAL_LEGEND_WIDTH_RATIO, height: A3_H * (1 - 0.04 - (area.showKeyplan === false ? 0.04 : 0.21)) };
+  const architecturalLegend = architecturalLegendLayout(detailRooms, architecturalLegendBox, level.name, architecturalLegendColumnCount(legendPosition));
   const levelFloors = (sketch.floors ?? []).filter((floor) => floor.levelId === level.id && floor.outer.length >= 3);
   const floorPerimeterPoints = levelFloors.length > 0
     ? levelFloors.flatMap((floor) => floor.outer)
@@ -5337,7 +5343,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   });
   return (
     <div data-architectural-style={architectural ? area.architecturalStyle ?? "tosca" : undefined} style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-gradient)" : "#ffffff", overflow: "hidden" }}>
-      <svg data-detail-plan="true" viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode ? "80%" : "100%", height: "100%", display: "block", marginInline: architectural ? "auto" : undefined }}>
+      <svg data-detail-plan="true" viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode ? "80%" : "100%", height: legendBottom ? `${(1 - ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO) * 100}%` : "100%", display: "block", marginInline: architectural ? "auto" : undefined }}>
         <defs>
           {architectural && <>
             <radialGradient id={`architectural-floor-${patternId}`} gradientUnits="userSpaceOnUse" cx={bounds.minX} cy={bounds.minY} r={Math.hypot(w, h)}><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></radialGradient>
@@ -5554,7 +5560,9 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           </div>)}
         </div>
       </div>}
-      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" className="absolute right-[2%] top-[4%] overflow-hidden" style={{ width: `${ARCHITECTURAL_LEGEND_WIDTH_RATIO * 100}%`, bottom: area.showKeyplan === false ? "4%" : "21%" }}>
+      {showArchitecturalLegend && <aside aria-label="Legenda ruang arsitektural" data-architectural-legend="true" data-architectural-legend-position={legendPosition} className="absolute overflow-hidden" style={legendBottom
+        ? { left: "2%", bottom: "1.5%", width: `${legendBottomWidthRatio * 100}%`, height: `${(ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO - 0.03) * 100}%` }
+        : { right: "2%", top: "4%", width: `${ARCHITECTURAL_LEGEND_WIDTH_RATIO * 100}%`, bottom: area.showKeyplan === false ? "4%" : "21%" }}>
         <svg viewBox={`0 0 ${architecturalLegendBox.width} ${architecturalLegendBox.height}`} preserveAspectRatio="xMinYMin meet" className="block h-full w-full" fill="var(--architectural-ink)" fontFamily="Manrope, sans-serif">
           <g transform={`scale(${architecturalLegend.scale})`}>
             <text x="0" y="40" fontFamily="Sora, sans-serif" fontSize={architecturalLegend.levelFont} fontWeight={700}>{level.name}</text>
