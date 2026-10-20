@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Sesuaikan legenda bawah otomatis 5–6 kolom dengan jarak rapat dan verifikasi tampilan.
+
 - [x] Tambahkan pilihan posisi Legenda Arsitektural Kanan (2 kolom, default) dan Bawah (4 kolom); 10 uji lolos.
 
 - [x] Batasi pangkasan Arsitektural tepat ke bingkai jendela tanpa mengurangi dinding/kolom di luarnya; 13 uji lolos dan slide dengan sesi aktif menunjukkan potongan tepat sama dengan bingkai serta dinding berdekatan tetap utuh.

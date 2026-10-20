@@ -1,11 +1,12 @@
 export type ArchitecturalLegendPosition = "right" | "bottom";
-/** Right is the default; bottom spreads the rooms over four columns. */
+/** Right is the default; bottom adapts between five and six columns. */
 export function architecturalLegendPosition(area: { architecturalLegendPosition?: string }): ArchitecturalLegendPosition {
   return area.architecturalLegendPosition === "bottom" ? "bottom" : "right";
 }
 export function architecturalLegendColumnCount(position: ArchitecturalLegendPosition): number {
-  return position === "bottom" ? 4 : ARCHITECTURAL_LEGEND_COLUMNS;
+  return position === "bottom" ? 5 : ARCHITECTURAL_LEGEND_COLUMNS;
 }
+export const ARCHITECTURAL_LEGEND_BOTTOM_COLUMN_GAP = 18;
 export const ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO = 0.24;
 
 export function architecturalLegendEnabled(area: { showArchitectural?: boolean; showArchitecturalLegend?: boolean }): boolean {
@@ -59,17 +60,18 @@ export function architecturalLegendLayout<T extends { id: string; name: string; 
   box: { width: number; height: number },
   levelName = "",
   columnCount: number = ARCHITECTURAL_LEGEND_COLUMNS,
+  columnGap: number = ARCHITECTURAL_LEGEND_COLUMN_GAP,
 ) {
   const N = Math.max(1, Math.round(columnCount));
   let colW = Math.max(
     90,
-    (box.width - ARCHITECTURAL_LEGEND_COLUMN_GAP * (N - 1)) / N,
+    (box.width - columnGap * (N - 1)) / N,
   );
   let maxChars = Math.max(1, Math.floor((colW - ARCHITECTURAL_LEGEND_NUMBER_PREFIX) / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
   // Reflow before shrinking: dense legends must use the entire right-hand rail.
   let fitScale = 1;
   for (let pass = 0; pass < 60; pass += 1) {
-    colW = Math.max(90, (box.width / fitScale - ARCHITECTURAL_LEGEND_COLUMN_GAP * (N - 1)) / N);
+    colW = Math.max(90, (box.width / fitScale - columnGap * (N - 1)) / N);
     maxChars = Math.max(1, Math.floor((colW - ARCHITECTURAL_LEGEND_NUMBER_PREFIX) / (ARCHITECTURAL_LEGEND_FONTS.name * 0.55)));
     const heights = rooms.map((room) => Math.max(92, wrapArchitecturalLegendName(room.name, maxChars).length * ARCHITECTURAL_LEGEND_LINE_HEIGHT + 52));
     const bestHeight = Math.max(0, ...splitColumns(heights, N).map((col) => col.reduce((x, y) => x + y, 0)));
@@ -96,13 +98,26 @@ export function architecturalLegendLayout<T extends { id: string; name: string; 
   const contentHeight = Math.max(1, ...columns.map((column) => column.reduce((sum, row) => sum + row.height, 0)));
   const needed = ARCHITECTURAL_LEGEND_HEADER_HEIGHT + contentHeight;
   const scale = Math.min(fitScale, box.height / needed);
-  colW = (box.width / scale - ARCHITECTURAL_LEGEND_COLUMN_GAP * (N - 1)) / N;
+  colW = (box.width / scale - columnGap * (N - 1)) / N;
   const levelFont = Math.min(
     ARCHITECTURAL_LEGEND_FONTS.level,
     ((box.width / scale) * 0.98) / Math.max(1, (levelName || "").length * 0.62),
   );
 
-  return { columns, colW, maxChars, scale, needed, fonts: ARCHITECTURAL_LEGEND_FONTS, levelFont };
+  return { columns, colW, columnGap, maxChars, scale, needed, fonts: ARCHITECTURAL_LEGEND_FONTS, levelFont };
+}
+
+/** Choose the bottom arrangement with the largest fitted text; ties keep wider columns. */
+export function architecturalLegendPositionLayout<T extends { id: string; name: string; areaM2: number }>(
+  rooms: readonly T[],
+  box: { width: number; height: number },
+  levelName: string,
+  position: ArchitecturalLegendPosition,
+) {
+  if (position === "right") return architecturalLegendLayout(rooms, box, levelName);
+  const five = architecturalLegendLayout(rooms, box, levelName, 5, ARCHITECTURAL_LEGEND_BOTTOM_COLUMN_GAP);
+  const six = architecturalLegendLayout(rooms, box, levelName, 6, ARCHITECTURAL_LEGEND_BOTTOM_COLUMN_GAP);
+  return six.scale > five.scale + 0.0001 ? six : five;
 }
 
 /** Contiguous split minimising the tallest column (keeps numbers ascending left to right). */

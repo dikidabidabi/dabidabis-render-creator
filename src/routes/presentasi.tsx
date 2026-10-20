@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
-import { ARCHITECTURAL_LEGEND_COLUMN_GAP, ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO, architecturalLegendColumnCount, architecturalLegendPosition, architecturalLegendEnabled, architecturalLegendLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
+import { ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO, architecturalLegendPosition, architecturalLegendEnabled, architecturalLegendPositionLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
 import { colorForRoomName } from "@/lib/room-color";
 import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { loadMaterialLibrary, materialCodes, normalizeGeneralMaterialSelections, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
@@ -4861,7 +4861,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   const architecturalLegendBox = legendBottom
     ? { width: A3_W * legendBottomWidthRatio, height: A3_H * (ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO - 0.03) }
     : { width: A3_W * ARCHITECTURAL_LEGEND_WIDTH_RATIO, height: A3_H * (1 - 0.04 - (area.showKeyplan === false ? 0.04 : 0.21)) };
-  const architecturalLegend = architecturalLegendLayout(detailRooms, architecturalLegendBox, level.name, architecturalLegendColumnCount(legendPosition));
+  const architecturalLegend = architecturalLegendPositionLayout(detailRooms, architecturalLegendBox, level.name, legendPosition);
   const levelFloors = (sketch.floors ?? []).filter((floor) => floor.levelId === level.id && floor.outer.length >= 3);
   const floorPerimeterPoints = levelFloors.length > 0
     ? levelFloors.flatMap((floor) => floor.outer)
@@ -5567,7 +5567,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
           <g transform={`scale(${architecturalLegend.scale})`}>
             <text x="0" y="40" fontFamily="Sora, sans-serif" fontSize={architecturalLegend.levelFont} fontWeight={700}>{level.name}</text>
             <text x="0" y="92" fontSize={ARCHITECTURAL_LEGEND_FONTS.elevation} fontWeight={600}>Elevasi {elevation} mm</text>
-            {architecturalLegend.columns.map((column, columnIndex) => <g key={`legend-col-${columnIndex}`} transform={`translate(${columnIndex * (architecturalLegend.colW + ARCHITECTURAL_LEGEND_COLUMN_GAP)} ${ARCHITECTURAL_LEGEND_HEADER_HEIGHT})`}>
+            {architecturalLegend.columns.map((column, columnIndex) => <g key={`legend-col-${columnIndex}`} data-architectural-legend-column={columnIndex + 1} transform={`translate(${columnIndex * (architecturalLegend.colW + architecturalLegend.columnGap)} ${ARCHITECTURAL_LEGEND_HEADER_HEIGHT})`}>
               {column.map(({ room, number, nameLines, top }) => <g key={room.id} data-architectural-legend-room={room.id}>
                 <text x="0" y={top} fontSize={ARCHITECTURAL_LEGEND_FONTS.name} fontWeight={600}><tspan fontSize={ARCHITECTURAL_LEGEND_FONTS.number} fontWeight={700}>{number}.{" "}</tspan>{nameLines.map((line, index) => <tspan key={index} x={index === 0 ? undefined : 0} dy={index === 0 ? 0 : ARCHITECTURAL_LEGEND_LINE_HEIGHT}>{line}</tspan>)}</text>
                 <text x="0" y={top + (nameLines.length - 1) * ARCHITECTURAL_LEGEND_LINE_HEIGHT + 38} fontSize={ARCHITECTURAL_LEGEND_FONTS.area}>{fmt(room.areaM2 || 0, 2)} m²</text>
