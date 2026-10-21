@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Sesuaikan legenda bawah otomatis 5–6 kolom dengan jarak rapat dan verifikasi tampilan.
+- [x] Sesuaikan legenda bawah otomatis 5–6 kolom dengan jarak rapat; 12 pengujian lolos dan build OK. Pemeriksaan visual akhir belum selesai karena berkas sesi pengujian sementara hilang.
 
 - [x] Tambahkan pilihan posisi Legenda Arsitektural Kanan (2 kolom, default) dan Bawah (4 kolom); 10 uji lolos.
 
