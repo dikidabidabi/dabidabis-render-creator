@@ -14,7 +14,35 @@ export type Window = {
   leaves: number;
   /** Lebar total bukaan, 50–600 cm. */
   widthCm: number;
+  kind?: "regular" | "dynamic";
+  dividerSpacingCm?: number;
+  endToleranceCm?: number;
 };
+
+export const DYNAMIC_WINDOW_INITIAL_CM = 50;
+
+/** Dynamic lengths are not subject to the regular window's 600 cm maximum. */
+export function windowLengthCm(value: number, kind?: Window["kind"]): number {
+  const length = Number.isFinite(value) ? value : DYNAMIC_WINDOW_INITIAL_CM;
+  return Math.max(50, kind === "dynamic" ? length : Math.min(600, length));
+}
+
+/** Interior mullion centers, measured from the fixed A endpoint in real cm. */
+export function windowDividerFractions(window: Pick<Window, "a" | "b" | "leaves" | "kind" | "dividerSpacingCm" | "endToleranceCm">, pxPerM: number): number[] {
+  if (window.kind !== "dynamic") {
+    const leaves = Math.max(1, Math.min(24, Math.round(window.leaves)));
+    return Array.from({ length: leaves - 1 }, (_, i) => (i + 1) / leaves);
+  }
+  const lengthCm = Math.hypot(window.b.x - window.a.x, window.b.y - window.a.y) / pxPerM * 100;
+  const spacing = window.dividerSpacingCm ?? 100;
+  const tolerance = Math.max(0, window.endToleranceCm ?? 20);
+  if (!Number.isFinite(lengthCm) || lengthCm <= 0 || !Number.isFinite(spacing) || spacing <= 0 || !Number.isFinite(tolerance)) return [];
+  const fractions: number[] = [];
+  for (let index = 1; index * spacing < lengthCm - tolerance - 1e-7; index++) {
+    fractions.push(index * spacing / lengthCm);
+  }
+  return fractions;
+}
 
 /** Exact frame bounds shared by notation and architectural cuts. */
 export function windowPlanGeometry(window: Pick<Window, "a" | "b">, pxPerM: number,
@@ -63,6 +91,8 @@ export function normalizeWindow(raw: any): Window | null {
   const ny = Number.isFinite(rawNx) && Number.isFinite(rawNy) && normalLength > 1e-6 ? rawNy / normalLength : fallbackNy;
   const widthRaw = Number(raw.widthCm);
   const leavesRaw = Number(raw.leaves);
+  const kind = raw.kind === "dynamic" ? "dynamic" : "regular";
+  const spacingRaw = Number(raw.dividerSpacingCm), toleranceRaw = Number(raw.endToleranceCm);
   return {
     id: typeof raw.id === "string" && raw.id ? raw.id : genWindowId(),
     levelId: typeof raw.levelId === "string" ? raw.levelId : undefined,
@@ -71,7 +101,12 @@ export function normalizeWindow(raw: any): Window | null {
     nx,
     ny,
     leaves: Number.isFinite(leavesRaw) ? Math.max(1, Math.min(24, Math.round(leavesRaw))) : 1,
-    widthCm: Number.isFinite(widthRaw) ? Math.max(50, Math.min(600, widthRaw)) : 120,
+    widthCm: windowLengthCm(Number.isFinite(widthRaw) ? widthRaw : kind === "dynamic" ? 50 : 120, kind),
+    kind,
+    ...(kind === "dynamic" ? {
+      dividerSpacingCm: Number.isFinite(spacingRaw) ? Math.max(5, spacingRaw) : 100,
+      endToleranceCm: Number.isFinite(toleranceRaw) ? Math.max(0, toleranceRaw) : 20,
+    } : {}),
   };
 }
 

@@ -60,7 +60,7 @@ import {
   type EdgeSegment,
 } from "@/lib/edge-segments";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
-import { windowPlanGeometry, type Window } from "@/lib/windows";
+import { windowPlanGeometry, windowDividerFractions, type Window } from "@/lib/windows";
 import { roomWallSpans, roomWallSurfacePoint } from "@/lib/room-wall-spans";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
@@ -8947,14 +8947,13 @@ function WindowNotation({
         `${cx - nx * halfDepth + dx * jambWidth * direction},${cy - ny * halfDepth + dy * jambWidth * direction}`,
         `${cx + nx * halfDepth + dx * jambWidth * direction},${cy + ny * halfDepth + dy * jambWidth * direction}`,
       ].join(" ");
-      const leaves = Math.max(1, Math.round(window.leaves));
-      return <g key={window.id}>
+      const dividers = windowDividerFractions(window, pxPerM);
+      return <g key={window.id} data-window-kind={window.kind ?? "regular"}>
         <polygon points={footprint.map((point) => `${point.x},${point.y}`).join(" ")} fill="#ffffff" stroke="none" />
         <polygon points={jamb(ax, ay, 1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
         <polygon points={jamb(bx, by, -1)} fill="#ffffff" stroke="#0a0a0a" strokeWidth={stroke} />
         {[-1, 1].map((side) => <line key={`glass-${side}`} x1={ax + dx * jambWidth + nx * glassOffset * side} y1={ay + dy * jambWidth + ny * glassOffset * side} x2={bx - dx * jambWidth + nx * glassOffset * side} y2={by - dy * jambWidth + ny * glassOffset * side} stroke="#0a0a0a" strokeWidth={glassStroke} />)}
-        {Array.from({ length: Math.max(0, leaves - 1) }, (_, index) => {
-          const t = (index + 1) / leaves;
+        {dividers.map((t, index) => {
           const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
           const halfJamb = jambWidth / 2;
           const points = [
