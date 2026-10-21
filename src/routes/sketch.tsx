@@ -163,7 +163,8 @@ import {
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
 import { type Door, type DoorType, foldingDoorSegments, genDoorId, normalizeDoors } from "@/lib/doors";
-import { type Window, genWindowId, normalizeWindows } from "@/lib/windows";
+import { type Window, genWindowId, normalizeWindows, windowDividerFractions, windowLengthCm, DYNAMIC_WINDOW_INITIAL_CM } from "@/lib/windows";
+import { DynamicWindowSettings } from "@/components/dynamic-window-settings";
 import {
   type ParkingArea,
   type ParkingPath,
@@ -3073,6 +3074,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [doorEndpointDrag, setDoorEndpointDrag] = useState<{ id: string; endpoint: "a" | "b" } | null>(null);
   const [windowLeaves, setWindowLeaves] = useState(1);
   const [windowWidthCm, setWindowWidthCm] = useState(120);
+  const [windowKind, setWindowKind] = useState<"regular" | "dynamic">("regular");
+  const [windowDividerSpacingCm, setWindowDividerSpacingCm] = useState(100);
+  const [windowEndToleranceCm, setWindowEndToleranceCm] = useState(20);
   const [windowDraft, setWindowDraft] = useState<
     | { a: Point; dirX: number; dirY: number; b: Point; nx: number; ny: number; levelId?: string }
     | null
@@ -5004,13 +5008,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.stroke();
       }
       ctx.setLineDash([]);
-      const leaves = Math.max(1, Math.round(window.leaves));
-      for (let index = 0; index <= leaves; index++) {
-        const t = index / leaves;
+      for (const t of [0, ...windowDividerFractions(window, pxPerMeter), 1]) {
         const cx = ax + (bx - ax) * t, cy = ay + (by - ay) * t;
         ctx.beginPath();
-        ctx.moveTo(cx + nx * halfDepth, cy + ny * halfDepth);
-        ctx.lineTo(cx - nx * halfDepth, cy - ny * halfDepth);
+        if (window.kind === "dynamic") {
+          const jamb = 0.05 * pxPerMeter;
+          const start = t === 0 ? 0 : t === 1 ? -jamb : -jamb / 2;
+          ctx.moveTo(cx + dx * start + nx * halfDepth, cy + dy * start + ny * halfDepth);
+          ctx.lineTo(cx + dx * (start + jamb) + nx * halfDepth, cy + dy * (start + jamb) + ny * halfDepth);
+          ctx.lineTo(cx + dx * (start + jamb) - nx * halfDepth, cy + dy * (start + jamb) - ny * halfDepth);
+          ctx.lineTo(cx + dx * start - nx * halfDepth, cy + dy * start - ny * halfDepth);
+          ctx.closePath(); ctx.fill();
+        } else {
+          ctx.moveTo(cx + nx * halfDepth, cy + ny * halfDepth);
+          ctx.lineTo(cx - nx * halfDepth, cy - ny * halfDepth);
+        }
         ctx.stroke();
       }
       ctx.restore();
@@ -5022,6 +5034,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawWindow({
         id: "window-draft", levelId: windowDraft.levelId, a: windowDraft.a, b: windowDraft.b,
         nx: windowDraft.nx, ny: windowDraft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
+        kind: windowKind, dividerSpacingCm: windowDividerSpacingCm, endToleranceCm: windowEndToleranceCm,
       }, "rgba(232,93,58,0.95)", true);
     }
 
@@ -5038,11 +5051,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       ctx.setLineDash([6 / s, 4 / s]);
       ctx.beginPath(); ctx.moveTo(opening.a.x, opening.a.y); ctx.lineTo(opening.b.x, opening.b.y); ctx.stroke();
       ctx.setLineDash([]);
-      for (const point of [opening.a, opening.b]) {
+      for (const point of kind === "window" && "kind" in opening && opening.kind === "dynamic" ? [opening.b] : [opening.a, opening.b]) {
         ctx.beginPath(); ctx.arc(point.x, point.y, 6 / s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
       ctx.font = `700 ${6.5 / s}px var(--font-display), sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      if (kind === "window" && "kind" in opening && opening.kind === "dynamic") { ctx.restore(); return; }
       const axis = openingAxis(opening);
       const currentHinge = axis.aFirst ? "left" : "right";
       const currentSide = (opening.nx * -axis.dy + opening.ny * axis.dx) * insideSign >= 0 ? "inside" : "outside";
@@ -7489,7 +7503,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -9944,7 +9958,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         if (selected) {
           if (dist(raw, selected.a) <= handleTol || dist(raw, selected.b) <= handleTol) {
             pushHistory();
-            setDoorEndpointDrag({ id: selected.id, endpoint: dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
+            setDoorEndpointDrag({ id: selected.id, endpoint: selected.kind !== "dynamic" && dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
             return;
           }
           const insideSign = openingInteriorSign(selected);
@@ -10036,13 +10050,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const selected = windows.find((window) => window.id === selectedWindowId);
         const handleTol = 14 / view.s;
         if (selected) {
-          if (dist(raw, selected.a) <= handleTol || dist(raw, selected.b) <= handleTol) {
+          if ((selected.kind !== "dynamic" && dist(raw, selected.a) <= handleTol) || dist(raw, selected.b) <= handleTol) {
             pushHistory();
-            setWindowEndpointDrag({ id: selected.id, endpoint: dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
+            setWindowEndpointDrag({ id: selected.id, endpoint: selected.kind !== "dynamic" && dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
             return;
           }
           const insideSign = openingInteriorSign(selected);
-          for (const hinge of ["left", "right"] as const) for (const side of ["inside", "outside"] as const) {
+          for (const hinge of (selected.kind === "dynamic" ? [] : ["left", "right"]) as ("left" | "right")[]) for (const side of ["inside", "outside"] as const) {
             if (dist(raw, openingChoicePoint(selected, insideSign, hinge, side, view.s)) > 12 / view.s) continue;
             pushHistory();
             const { left, right, dx, dy } = openingAxis(selected);
@@ -10306,7 +10320,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const len = Math.hypot(window.b.x - window.a.x, window.b.y - window.a.y) || 1;
         const ux = (window.b.x - window.a.x) / len, uy = (window.b.y - window.a.y) / len;
         const signed = (raw.x - fixed.x) * ux + (raw.y - fixed.y) * uy;
-        const minPx = 0.5 * pxPerMeter, maxPx = 6 * pxPerMeter;
+        const minPx = 0.5 * pxPerMeter, maxPx = window.kind === "dynamic" ? Infinity : 6 * pxPerMeter;
         const sign = (moving.x - fixed.x) * ux + (moving.y - fixed.y) * uy < 0 ? -1 : 1;
         const lengthPx = Math.max(minPx, Math.min(maxPx, signed * sign));
         const point = { x: fixed.x + ux * sign * lengthPx, y: fixed.y + uy * sign * lengthPx };
@@ -11045,9 +11059,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const window: Window = {
         id: genWindowId(), levelId: draft.levelId, a: draft.a, b: draft.b,
         nx: draft.nx, ny: draft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
+        kind: windowKind, dividerSpacingCm: windowDividerSpacingCm, endToleranceCm: windowEndToleranceCm,
       };
       onChange({ windows: [...(sketch.windows ?? []), window] });
-      toast.success(`Jendela ${windowLeaves} daun · ${windowWidthCm}cm ditambahkan`);
+      if (windowKind === "dynamic") { setWindowEditMode(true); setSelectedWindowId(window.id); }
+      toast.success(`Jendela ${windowKind === "dynamic" ? "dinamis" : `${windowLeaves} daun`} · ${windowWidthCm}cm ditambahkan`);
       return;
     }
     if (circleDraft && tool === "circle") {
@@ -13826,19 +13842,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               const selected = (sketch.windows ?? []).find((window) => window.id === selectedWindowId);
               if (!selected) return <p className="text-[10px] text-muted-foreground">Tap jendela terpasang untuk menampilkan pegangan dan simbol orientasi.</p>;
               const resize = (value: number) => {
-                const widthCm = Math.max(50, Math.min(600, Math.round(value)));
+                const widthCm = windowLengthCm(Math.round(value), selected.kind);
                 const len = Math.hypot(selected.b.x - selected.a.x, selected.b.y - selected.a.y) || 1;
                 const scale = widthCm / 100 * pxPerMeter / len;
                 onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, b: { x: window.a.x + (window.b.x - window.a.x) * scale, y: window.a.y + (window.b.y - window.a.y) * scale }, widthCm } : window) });
               };
               return <div className="space-y-2 border-t border-border/60 pt-2">
                 <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Jendela terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
-                <Slider min={50} max={600} step={5} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
-                <div className="flex items-center justify-between gap-3"><Label className="text-[11px] text-muted-foreground">Jumlah daun</Label><Input type="number" min={1} max={24} value={selected.leaves} onFocus={() => pushHistory()} onChange={(event) => { const leaves = Math.max(1, Math.min(24, Math.round(Number(event.target.value) || 1))); onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, leaves } : window) }); }} className="h-7 w-20 text-xs" /></div>
-                <p className="text-[10px] text-muted-foreground">KD/KL: bukaan kiri ke dalam/luar; ND/NL: bukaan kanan. Tarik lingkaran ujung untuk mengubah panjang.</p>
+                {selected.kind === "dynamic" ? <>
+                  <div className="flex items-center justify-between gap-2"><Label htmlFor="dynamic-window-length" className="text-[11px] text-muted-foreground">Panjang (cm)</Label><Input id="dynamic-window-length" type="number" min={50} step={5} value={selected.widthCm} onFocus={() => pushHistory()} onChange={e => resize(Number(e.target.value))} className="h-7 w-24 text-xs" /></div>
+                  <DynamicWindowSettings spacing={selected.dividerSpacingCm ?? 100} tolerance={selected.endToleranceCm ?? 20} onEditStart={() => pushHistory()} onChange={values => onChange({ windows: (sketch.windows ?? []).map(window => window.id === selected.id ? { ...window, ...values } : window) })} />
+                </> : <>
+                  <Slider min={50} max={600} step={5} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
+                  <div className="flex items-center justify-between gap-3"><Label className="text-[11px] text-muted-foreground">Jumlah daun</Label><Input type="number" min={1} max={24} value={selected.leaves} onFocus={() => pushHistory()} onChange={(event) => { const leaves = Math.max(1, Math.min(24, Math.round(Number(event.target.value) || 1))); onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, leaves } : window) }); }} className="h-7 w-20 text-xs" /></div>
+                  <p className="text-[10px] text-muted-foreground">KD/KL: bukaan kiri ke dalam/luar; ND/NL: bukaan kanan. Tarik lingkaran ujung untuk mengubah panjang.</p>
+                </>}
               </div>;
             })()}
             {!windowEditMode && <>
+            <div className="grid grid-cols-2 gap-1.5">
+              <Button type="button" size="sm" variant={windowKind === "regular" ? "default" : "outline"} onClick={() => { setWindowKind("regular"); setWindowWidthCm(120); }} className="h-8 text-xs">Jendela Biasa</Button>
+              <Button type="button" size="sm" variant={windowKind === "dynamic" ? "default" : "outline"} onClick={() => { setWindowKind("dynamic"); setWindowWidthCm(DYNAMIC_WINDOW_INITIAL_CM); }} className="h-auto min-h-8 whitespace-normal text-xs">Jendela Dinamis</Button>
+            </div>
+            {windowKind === "dynamic" ? <DynamicWindowSettings spacing={windowDividerSpacingCm} tolerance={windowEndToleranceCm} onChange={values => { if (values.dividerSpacingCm !== undefined) setWindowDividerSpacingCm(values.dividerSpacingCm); if (values.endToleranceCm !== undefined) setWindowEndToleranceCm(values.endToleranceCm); }} /> : <>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">
                 <Label className="text-[11px] text-muted-foreground">Jumlah daun</Label>
@@ -13886,9 +13912,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 className="w-full accent-primary"
               />
             </div>
-            <p className="text-[10px] leading-snug text-muted-foreground">
+            </>}
+            {windowKind === "regular" && <p className="text-[10px] leading-snug text-muted-foreground">
               Tap pada garis dinding, geser searah dinding untuk menentukan orientasi, lalu lepas untuk menempatkan jendela.
-            </p>
+            </p>}
             </>}
             {(sketch.windows?.length ?? 0) > 0 && (
               <div className="space-y-1.5 border-t border-border/60 pt-2">
