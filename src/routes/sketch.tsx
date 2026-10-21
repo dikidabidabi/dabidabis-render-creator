@@ -9958,7 +9958,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         if (selected) {
           if (dist(raw, selected.a) <= handleTol || dist(raw, selected.b) <= handleTol) {
             pushHistory();
-            setDoorEndpointDrag({ id: selected.id, endpoint: selected.kind !== "dynamic" && dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
+            setDoorEndpointDrag({ id: selected.id, endpoint: dist(raw, selected.a) <= dist(raw, selected.b) ? "a" : "b" });
             return;
           }
           const insideSign = openingInteriorSign(selected);

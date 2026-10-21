@@ -21,7 +21,7 @@ import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
 import { axisPositions, collectGrids, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
-import type { Window } from "@/lib/windows";
+import { windowDividerFractions, type Window } from "@/lib/windows";
 import {
   FURNITURE_CATALOG,
   anchorFurniture,
@@ -539,7 +539,12 @@ function DetailOpenings({ doors, windows, pxPerMeter }: { doors: Door[]; windows
     {windows.map((item) => {
       const dx = item.b.x - item.a.x, dy = item.b.y - item.a.y, length = Math.hypot(dx, dy) || 1;
       const nx = -dy / length, ny = dx / length, half = 0.075 * pxPerMeter;
-      return <g key={item.id}><polygon points={`${item.a.x + nx * half},${item.a.y + ny * half} ${item.b.x + nx * half},${item.b.y + ny * half} ${item.b.x - nx * half},${item.b.y - ny * half} ${item.a.x - nx * half},${item.a.y - ny * half}`} fill="#ffffff" stroke="#202020" strokeWidth={stroke} /><line x1={item.a.x} y1={item.a.y} x2={item.b.x} y2={item.b.y} stroke="#202020" strokeWidth={stroke} /></g>;
+      return <g key={item.id}><polygon points={`${item.a.x + nx * half},${item.a.y + ny * half} ${item.b.x + nx * half},${item.b.y + ny * half} ${item.b.x - nx * half},${item.b.y - ny * half} ${item.a.x - nx * half},${item.a.y - ny * half}`} fill="#ffffff" stroke="#202020" strokeWidth={stroke} /><line x1={item.a.x} y1={item.a.y} x2={item.b.x} y2={item.b.y} stroke="#202020" strokeWidth={stroke} />{item.kind === "dynamic" && [0, ...windowDividerFractions(item, pxPerMeter), 1].map((t, index) => {
+        const width = 0.05 * pxPerMeter;
+        const start = t === 0 ? 0 : t === 1 ? -width : -width / 2;
+        const x = item.a.x + dx * t + dx / length * start, y = item.a.y + dy * t + dy / length * start;
+        return <polygon key={index} points={`${x + nx * half},${y + ny * half} ${x + dx / length * width + nx * half},${y + dy / length * width + ny * half} ${x + dx / length * width - nx * half},${y + dy / length * width - ny * half} ${x - nx * half},${y - ny * half}`} fill="#ffffff" stroke="#202020" strokeWidth={stroke} />;
+      })}</g>;
     })}
     {doors.map((item) => {
       const width = item.widthCm / 100 * pxPerMeter;
