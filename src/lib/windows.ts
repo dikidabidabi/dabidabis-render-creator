@@ -72,6 +72,38 @@ export function windowPlanGeometry(window: Pick<Window, "a" | "b">, pxPerM: numb
   return { dx, dy, nx, ny, halfDepth, footprint };
 }
 
+/** Kusen ujung dan kusen pembatas sebagai poligon selebar kedalaman dinding,
+ *  dipakai sebagai pelempar bayangan 45° pada slide arsitektural. */
+export function windowFramePolygons(
+  window: Pick<Window, "a" | "b" | "leaves" | "kind" | "dividerSpacingCm" | "endToleranceCm">,
+  pxPerM: number,
+  walls: { a: WindowPoint; b: WindowPoint; thicknessMm: number }[] = [],
+): WindowPoint[][] {
+  const geometry = windowPlanGeometry(window, pxPerM, walls);
+  if (!geometry) return [];
+  const { dx, dy, nx, ny, halfDepth } = geometry;
+  const jambWidth = 0.05 * pxPerM;
+  const jamb = (cx: number, cy: number, direction: number): WindowPoint[] => [
+    { x: cx + nx * halfDepth, y: cy + ny * halfDepth },
+    { x: cx - nx * halfDepth, y: cy - ny * halfDepth },
+    { x: cx - nx * halfDepth + dx * jambWidth * direction, y: cy - ny * halfDepth + dy * jambWidth * direction },
+    { x: cx + nx * halfDepth + dx * jambWidth * direction, y: cy + ny * halfDepth + dy * jambWidth * direction },
+  ];
+  const polygons = [jamb(window.a.x, window.a.y, 1), jamb(window.b.x, window.b.y, -1)];
+  const halfJamb = jambWidth / 2;
+  for (const t of windowDividerFractions(window, pxPerM)) {
+    const cx = window.a.x + (window.b.x - window.a.x) * t;
+    const cy = window.a.y + (window.b.y - window.a.y) * t;
+    polygons.push([
+      { x: cx - dx * halfJamb + nx * halfDepth, y: cy - dy * halfJamb + ny * halfDepth },
+      { x: cx + dx * halfJamb + nx * halfDepth, y: cy + dy * halfJamb + ny * halfDepth },
+      { x: cx + dx * halfJamb - nx * halfDepth, y: cy + dy * halfJamb - ny * halfDepth },
+      { x: cx - dx * halfJamb - nx * halfDepth, y: cy - dy * halfJamb - ny * halfDepth },
+    ]);
+  }
+  return polygons;
+}
+
 export function genWindowId(): string {
   return `W${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
