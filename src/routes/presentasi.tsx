@@ -60,7 +60,7 @@ import {
   type EdgeSegment,
 } from "@/lib/edge-segments";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
-import { windowPlanGeometry, windowDividerFractions, type Window } from "@/lib/windows";
+import { windowPlanGeometry, windowDividerFractions, windowFramePolygons, type Window } from "@/lib/windows";
 import { roomWallSpans, roomWallSurfacePoint } from "@/lib/room-wall-spans";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
@@ -8417,6 +8417,9 @@ function MaterialEdges({
     const { walls, wallPath } = architecturalGeometry(fullBands, [...openings, ...windowOpenings]);
     const windowBases = architecturalWindowBases(architecturalGeometry(fullBands, openings).walls, windowOpenings);
     const windowPath = wallUnionPath(windowBases);
+    // Kusen dan kusen pembatas melempar bayangan 45° sejauh 150 cm seperti dinding.
+    const windowFrames = architecturalWindows.flatMap((window) => windowFramePolygons(window, pxPerM, windowWalls).map((polygon) => [polygon]));
+    const windowFramePath = wallUnionPath(windowFrames);
     // Bound blur textures to the visible detail, not five times the entire level.
     const shadowPadding = pxPerM * 0.6;
     const shadowRegion = architecturalBounds ? {
