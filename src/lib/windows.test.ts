@@ -36,4 +36,22 @@ describe("dynamic windows", () => {
   test("regular and dynamic windows use identical frame bounds", () => {
     assert.deepEqual(windowPlanGeometry(dynamic(50), 80), windowPlanGeometry({ a: { x: 0, y: 0 }, b: { x: 40, y: 0 } }, 80));
   });
+  test("frame polygons cover both jambs across the full wall depth", () => {
+    const frames = windowFramePolygons({ a: { x: 0, y: 0 }, b: { x: 80, y: 0 }, leaves: 1 }, 80,
+      [{ a: { x: -10, y: 0 }, b: { x: 90, y: 0 }, thicknessMm: 150 }]);
+    assert.equal(frames.length, 2);
+    for (const frame of frames) {
+      const depths = frame.map((p) => p.y);
+      assert.ok(Math.abs(Math.max(...depths) - 6) < 1e-8);
+      assert.ok(Math.abs(Math.min(...depths) + 6) < 1e-8);
+    }
+    assert.ok(Math.abs(Math.min(...frames[0].map((p) => p.x))) < 1e-8);
+    assert.ok(Math.abs(Math.max(...frames[1].map((p) => p.x)) - 80) < 1e-8);
+  });
+  test("dynamic dividers add one frame polygon per mullion", () => {
+    const frames = windowFramePolygons(dynamic(450), 80);
+    assert.equal(frames.length, 6);
+    const centers = frames.slice(2).map((frame) => (frame[0].x + frame[2].x) / 2);
+    assert.deepEqual(centers.map((x) => Math.round(x)), [80, 160, 240, 320]);
+  });
 });
