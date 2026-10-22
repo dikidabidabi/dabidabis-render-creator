@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { DYNAMIC_WINDOW_INITIAL_CM, normalizeWindow, windowDividerFractions, windowLengthCm, windowPlanGeometry } from "./windows";
+import { DYNAMIC_WINDOW_INITIAL_CM, normalizeWindow, windowDividerFractions, windowFramePolygons, windowLengthCm, windowPlanGeometry } from "./windows";
 
 const dynamic = (lengthCm: number, tolerance = 20) => ({
   a: { x: 0, y: 0 }, b: { x: lengthCm / 100 * 80, y: 0 },
