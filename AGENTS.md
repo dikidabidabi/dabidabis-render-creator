@@ -1,6 +1,6 @@
 # Architecture decisions
 
-- Architectural settings persist per area; plans stay centered/full-size; legends share numbering/ink. Bottom legends select the largest fitted layout and its gaps. Walls subtract openings before shadows. Window cuts/notation share windowPlanGeometry bounds; bases, frames and mullions cast wall shadow profile. DoorNotation retains dimensions.
+- Architectural settings persist per area; plans stay centered/full-size; legends share numbering/ink. Bottom legends select the largest fitted layout and its gaps. Walls subtract openings before shadows. Window cuts/notation share windowPlanGeometry bounds; bases cast short and frames/mullions long shadows with wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions; wall fills omit bevel computation and rendering to reduce Android tablet graphics load.
 
 - Free stairs store a polyline and width-offset side, with shared free-stair-geometry generating flights and automatic bend landings for Sketch and Presentation; this keeps arbitrary turns and elevations consistent across views and file transforms.
