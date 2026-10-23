@@ -8418,8 +8418,8 @@ function MaterialEdges({
     const windowBases = architecturalWindowBases(architecturalGeometry(fullBands, openings).walls, windowOpenings);
     const windowPath = wallUnionPath(windowBases);
     // Kusen dan kusen pembatas melempar bayangan 45° sejauh 150 cm seperti dinding.
-    // Alas jendela + kusen + kusen pembatas, semuanya bayangan 150 cm.
-    const windowFrames = [...windowBases, ...architecturalWindows.flatMap((window) => windowFramePolygons(window, pxPerM, windowWalls).map((polygon) => [polygon]))];
+    // Alas jendela tetap berbayangan 20 cm; kusen dan pembatas 150 cm.
+    const windowFrames = architecturalWindows.flatMap((window) => windowFramePolygons(window, pxPerM, windowWalls).map((polygon) => [polygon]));
     const windowFramePath = wallUnionPath(windowFrames);
     // Bound blur textures to the visible detail, not five times the entire level.
     const shadowPadding = pxPerM * 0.6;
@@ -8431,6 +8431,7 @@ function MaterialEdges({
       height: architecturalBounds.maxY - architecturalBounds.minY + shadowPadding * 2,
     } : { x: "-50%", y: "-50%", width: "200%", height: "200%" };
     const { steps: shadowSteps, opacity: shadowOpacity } = architecturalShadowProfile(pxPerM, 1.5);
+    const { steps: windowBaseShadowSteps } = architecturalShadowProfile(pxPerM, 0.2);
     const rasterRegion = typeof document !== "undefined" && architecturalBounds ? {
       x: shadowRegion.x as number, y: shadowRegion.y as number,
       width: shadowRegion.width as number, height: shadowRegion.height as number,
@@ -8444,6 +8445,13 @@ function MaterialEdges({
           <feGaussianBlur stdDeviation={step.blur} />
         </filter>)}
       </defs>
+      <g data-architectural-window-base-shadow-distance="200">
+        {windowPath && rasterRegion && <ArchitecturalShadowRaster walls={windowBases} wallPath={windowPath} steps={windowBaseShadowSteps} region={rasterRegion} opacity={shadowOpacity} />}
+        {windowPath && !rasterRegion && windowBaseShadowSteps.map((step, i) => <g key={i}>
+          <defs><filter id={`architectural-window-base-shadow-${patternId}-${i}`} {...shadowRegion}><feGaussianBlur stdDeviation={step.blur} /></filter></defs>
+          <path d={architecturalShadowStrips(windowBases, step.distance).map((strip) => `M ${strip.map((point) => `${point.x} ${point.y}`).join(" L ")} Z`).join(" ")} fill="var(--architectural-shadow)" fillRule="nonzero" opacity={shadowOpacity} filter={`url(#architectural-window-base-shadow-${patternId}-${i})`} />
+        </g>)}
+      </g>
       <g data-architectural-window-shadow-distance="1500">
         {windowFramePath && rasterRegion && <ArchitecturalShadowRaster walls={windowFrames} wallPath={windowFramePath} steps={shadowSteps} region={rasterRegion} opacity={shadowOpacity} />}
         {windowFramePath && !rasterRegion && shadowSteps.map((step, i) => <g key={i}>
