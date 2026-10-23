@@ -9,7 +9,9 @@ export type EdgeMaterial =
   | "standard150"
   | "concrete150"
   | "concrete200"
+  | "concrete250"
   | "concrete300"
+  | "concrete350"
   | "concept"
   | "curtain"
   | "window"
@@ -187,7 +189,9 @@ export const MATERIAL_COLORS: Record<EdgeMaterial, string> = {
   standard150: "#929292",
   concrete150: "#929292",
   concrete200: "#737373",
+  concrete250: "#616161",
   concrete300: "#525252",
+  concrete350: "#3f3f3f",
   concept: "#000000",
   curtain: "#22d3ee",
   window: "#1e3a8a",
@@ -199,7 +203,9 @@ export const MATERIAL_LABELS: Record<EdgeMaterial, string> = {
   standard150: "Dinding standar 150 mm",
   concrete150: "Dinding Beton · 150 mm",
   concrete200: "Dinding Beton · 200 mm",
+  concrete250: "Dinding Beton · 250 mm",
   concrete300: "Dinding Beton · 300 mm",
+  concrete350: "Dinding Beton · 350 mm",
   concept: "Dinding Konsep · 150 mm",
   curtain: "Curtain Wall",
   window: "Window Wall",
