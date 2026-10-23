@@ -8418,7 +8418,8 @@ function MaterialEdges({
     const windowBases = architecturalWindowBases(architecturalGeometry(fullBands, openings).walls, windowOpenings);
     const windowPath = wallUnionPath(windowBases);
     // Kusen dan kusen pembatas melempar bayangan 45° sejauh 150 cm seperti dinding.
-    const windowFrames = architecturalWindows.flatMap((window) => windowFramePolygons(window, pxPerM, windowWalls).map((polygon) => [polygon]));
+    // Alas jendela + kusen + kusen pembatas, semuanya bayangan 150 cm.
+    const windowFrames = [...windowBases, ...architecturalWindows.flatMap((window) => windowFramePolygons(window, pxPerM, windowWalls).map((polygon) => [polygon]))];
     const windowFramePath = wallUnionPath(windowFrames);
     // Bound blur textures to the visible detail, not five times the entire level.
     const shadowPadding = pxPerM * 0.6;
