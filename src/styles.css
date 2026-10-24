@@ -366,3 +366,19 @@
 .schedule-critical-link { color: var(--destructive); }
 .schedule-critical-link .schedule-link-line { stroke-width: 2.5; }
 .schedule-s-curve .recharts-wrapper { font-family: var(--font-sans); }
+
+/* Cetak PDF jadwal & Kurva S: A4 lanskap, muat kiri-kanan, baris mengalir ke halaman berikutnya */
+@page { size: A4 landscape; margin: 10mm; }
+@media print {
+  .schedule-page { padding: 0 !important; gap: 0 !important; }
+  html.print-schedule .schedule-page > aside,
+  html.print-schedule .schedule-s-curve,
+  html.print-scurve .schedule-page > aside,
+  html.print-scurve .schedule-main > *:not(.schedule-s-curve) { display: none !important; }
+  .schedule-scroll { overflow: visible !important; border: none !important; }
+  html.print-scurve .schedule-s-curve .overflow-x-auto { overflow: visible !important; }
+  html.print-scurve .schedule-s-curve .max-h-64 { max-height: none !important; overflow: visible !important; }
+  html.print-scurve .schedule-s-curve { border: none !important; margin-top: 0 !important; padding: 0 !important; }
+  [data-task-id], .schedule-s-curve table tr { break-inside: avoid; }
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
