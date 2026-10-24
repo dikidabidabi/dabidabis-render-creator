@@ -1,5 +1,7 @@
 # Architecture decisions
 
+- Build scripts preserve NODE_OPTIONS and reserve a 6 GiB Node heap because client/SSR/Nitro bundling exceeds the default heap; runtime bundling stays unchanged.
+
 - Schedule data uses the shared owner-scoped project storage bridge as a per-sketch map keyed by sketch ID (legacy flat arrays migrate into the active sketch); pure helpers derive progress, durations and dependency dates. Stable numeric task IDs are separate from WBS; predecessor links store UUIDs, preserve duration, propagate before writes and reject missing references/cycles.
   Gantt bars/cables share bounds and visible rows; owner-scoped per-sketch view settings store WBS folding, CPM/slack and dated weighted progress observations. Pure schedule-analysis derives read-only generalized CPM and duration-weighted S curves excluding duplicate summary work; actual history starts at observations, never fabricated past progress.
 
