@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Pindahkan pengisian progres bertanggal ke tiap pekerjaan; hubungkan realisasi Kurva S dan progres tabel/bar dengan durasi mulai–tenggat, uji penyimpanan dan riwayat.
+- [x] Pindahkan pengisian progres bertanggal ke tiap pekerjaan; realisasi Kurva S berbobot durasi mulai–tenggat, 31 uji lolos, dua pekerjaan menghasilkan 60% sesuai bobot, riwayat tersimpan setelah muat ulang dan dapat dihapus; teruji pada akun aktif tanpa kesalahan halaman.
 
 - [x] Tambahkan pengisian progres manual bertanggal sebagai acuan Kurva S; entri tersimpan, tampil pada garis Realisasi, bertahan setelah muat ulang, dan dapat dihapus — 24 uji lolos, teruji di browser dengan akun aktif.
 - [x] Lipat hierarki WBS dan bentuk bar tahap ringkasan sesuai gambar; lipat/buka dan muat ulang teruji.
