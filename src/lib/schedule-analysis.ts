@@ -98,6 +98,18 @@ export function actualProgressAt(tasks: ScheduleTask[], date: string): number | 
   return total ? leaves.reduce((sum, task) => sum + weight(task) * (taskProgressAt(task, date) ?? 0), 0) / total : null;
 }
 
+/**
+ * Rentang keterlambatan: dari tenggat hingga tanggal progres pertama mencapai 100%,
+ * atau hingga hari ini bila belum 100%. Tanpa catatan bertanggal, progres 100%
+ * dianggap selesai tepat waktu karena tanggal selesainya tidak diketahui.
+ */
+export function delayBarRange(task: ScheduleTask, today: string, currentProgress?: number): { start: string; end: string } | null {
+  const completion = (task.progressEntries ?? []).filter((point) => point.actual >= 100).map((point) => point.date).sort()[0];
+  if (!completion && currentProgress !== undefined && currentProgress >= 100) return null;
+  const end = completion ?? today;
+  return end > task.due ? { start: task.due, end } : null;
+}
+
 export function plannedProgress(tasks: ScheduleTask[], date: string) {
   const leaves = scheduleLeaves(tasks);
   const total = leaves.reduce((sum, task) => sum + Math.max(1, scheduleDuration(task.start, task.due)), 0);
