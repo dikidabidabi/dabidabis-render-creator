@@ -14,6 +14,7 @@ import { Route as AkunRouteImport } from './routes/akun'
 import { Route as DetailRouteImport } from './routes/detail'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as GalleryRouteImport } from './routes/gallery'
+import { Route as JadwalRouteImport } from './routes/jadwal'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MasterplanRouteImport } from './routes/masterplan'
 import { Route as Model3dRouteImport } from './routes/model3d'
@@ -52,6 +53,11 @@ const FeedRoute = FeedRouteImport.update({
 const GalleryRoute = GalleryRouteImport.update({
   id: '/gallery',
   path: '/gallery',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JadwalRoute = JadwalRouteImport.update({
+  id: '/jadwal',
+  path: '/jadwal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/detail': typeof DetailRoute
   '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
+  '/jadwal': typeof JadwalRoute
   '/login': typeof LoginRoute
   '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/detail': typeof DetailRoute
   '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
+  '/jadwal': typeof JadwalRoute
   '/login': typeof LoginRoute
   '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
@@ -174,6 +182,7 @@ export interface FileRoutesById {
   '/detail': typeof DetailRoute
   '/feed': typeof FeedRoute
   '/gallery': typeof GalleryRoute
+  '/jadwal': typeof JadwalRoute
   '/login': typeof LoginRoute
   '/masterplan': typeof MasterplanRoute
   '/model3d': typeof Model3dRoute
@@ -197,6 +206,7 @@ export interface FileRouteTypes {
     | '/detail'
     | '/feed'
     | '/gallery'
+    | '/jadwal'
     | '/login'
     | '/masterplan'
     | '/model3d'
@@ -218,6 +228,7 @@ export interface FileRouteTypes {
     | '/detail'
     | '/feed'
     | '/gallery'
+    | '/jadwal'
     | '/login'
     | '/masterplan'
     | '/model3d'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/detail'
     | '/feed'
     | '/gallery'
+    | '/jadwal'
     | '/login'
     | '/masterplan'
     | '/model3d'
@@ -261,6 +273,7 @@ export interface RootRouteChildren {
   DetailRoute: typeof DetailRoute
   FeedRoute: typeof FeedRoute
   GalleryRoute: typeof GalleryRoute
+  JadwalRoute: typeof JadwalRoute
   LoginRoute: typeof LoginRoute
   MasterplanRoute: typeof MasterplanRoute
   Model3dRoute: typeof Model3dRoute
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       path: '/gallery'
       fullPath: '/gallery'
       preLoaderRoute: typeof GalleryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/jadwal': {
+      id: '/jadwal'
+      path: '/jadwal'
+      fullPath: '/jadwal'
+      preLoaderRoute: typeof JadwalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -421,6 +441,7 @@ const rootRouteChildren: RootRouteChildren = {
   DetailRoute: DetailRoute,
   FeedRoute: FeedRoute,
   GalleryRoute: GalleryRoute,
+  JadwalRoute: JadwalRoute,
   LoginRoute: LoginRoute,
   MasterplanRoute: MasterplanRoute,
   Model3dRoute: Model3dRoute,
