@@ -3737,7 +3737,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                         </g>
                       );
                     }
-                    if (h.mat === "concrete150" || h.mat === "concrete200" || h.mat === "concrete300") {
+                    if (h.mat === "concrete150" || h.mat === "concrete200" || h.mat === "concrete250" || h.mat === "concrete300" || h.mat === "concrete350") {
                       const finishPx = Math.min(bandW / 2, 0.015 * scalePxPerM);
                       const coreW = Math.max(0, bandW - finishPx * 2);
                       return (
@@ -7923,7 +7923,9 @@ const WALL_THICK_MM: Record<EdgeMaterial, number> = {
   standard150: 150,
   concrete150: 150,
   concrete200: 200,
+  concrete250: 250,
   concrete300: 300,
+  concrete350: 350,
   concept: 150,
   curtain: 80,
   window: 150,
@@ -7933,7 +7935,7 @@ const RAILING_COLOR = "#8b5a2b";
 
 type WallBandGeometry = {
   segment: EdgeSegment;
-  material: "solid" | "standard150" | "concrete150" | "concrete200" | "concrete300";
+  material: "solid" | "standard150" | "concrete150" | "concrete200" | "concrete250" | "concrete300" | "concrete350";
   outer: Point[];
   core: Point[];
 };
@@ -8344,7 +8346,7 @@ function MaterialEdges({
   });
   const wallBands: WallBandGeometry[] = mode === "base" ? [] : materialSegments.flatMap((segment) => {
     const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
-    if (material !== "solid" && material !== "standard150" && material !== "concrete150" && material !== "concrete200" && material !== "concrete300") return [];
+    if (material !== "solid" && material !== "standard150" && material !== "concrete150" && material !== "concrete200" && material !== "concrete250" && material !== "concrete300" && material !== "concrete350") return [];
     const half = (WALL_THICK_MM[material] / 1000) * pxPerM * 0.5;
     const coreHalf = (material === "solid" || material === "standard150") && !detailSolidLayers
       ? half
@@ -8553,7 +8555,7 @@ function MaterialEdges({
             <polygon key={`s-${s.id}-${si}`} points={pts} fill="#0a0a0a" stroke="none" />
           );
         }
-        if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
+        if (mat === "concrete150" || mat === "concrete200" || mat === "concrete250" || mat === "concrete300" || mat === "concrete350") {
           return null;
         }
         if (mat === "solid" || mat === "standard150") {
