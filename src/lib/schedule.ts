@@ -220,3 +220,14 @@ export function normalizeScheduleStore(value: unknown, fallbackSketchId?: string
   }
   return out;
 }
+
+/**
+ * Salin jadwal milik sketsa sumber ke sketsa hasil duplikat.
+ * ID pekerjaan dipertahankan karena acuan predecessor bersifat lokal per sketsa.
+ * Mengembalikan store baru; store sumber tidak berubah.
+ */
+export function copyScheduleEntry(store: ScheduleStore, sourceId: string, targetId: string): ScheduleStore {
+  const tasks = store[sourceId];
+  if (!tasks?.length || sourceId === targetId) return store;
+  return { ...store, [targetId]: tasks.map((task) => ({ ...task, checks: task.checks.map((check) => ({ ...check })), ...(task.progressEntries ? { progressEntries: task.progressEntries.map((entry) => ({ ...entry })) } : {}), ...(task.predecessor ? { predecessor: { ...task.predecessor } } : {}) })) };
+}

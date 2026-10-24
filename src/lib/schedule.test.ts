@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { upsertTaskProgress, normalizeSchedule, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask } from "./schedule";
+import { upsertTaskProgress, normalizeSchedule, normalizeScheduleStore, copyScheduleEntry, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask, type ScheduleStore } from "./schedule";
 
 const task: ScheduleTask = { id: "task", wbs: "1.1", title: "Survei", owner: "", start: "2026-09-02", due: "2026-09-30", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "a", title: "Ukur", done: true }, { id: "b", title: "Catat", done: false }] };
 describe("Jadwal pekerjaan", () => {
@@ -132,5 +132,26 @@ describe("Hubungan predecessor", () => {
     assert.equal(nextTaskNumber(list), 4);
     assert.equal(parsePredecessor("", successor, list), undefined);
     assert.deepEqual(normalizeSchedule([task, { ...task, id: "old2" }]).map((t) => t.taskNumber), [1, 2]);
+  });
+});
+
+describe("copyScheduleEntry", () => {
+  test("menyalin jadwal ke sketsa baru tanpa mengubah sumber", () => {
+    const store: ScheduleStore = {
+      A: [
+        { ...task, id: "t1", taskNumber: 1, checks: [{ id: "c1", title: "Cek", done: true }] },
+        { ...task, id: "t2", taskNumber: 2, predecessor: { taskId: "t1", type: "FS", lag: 3 }, progressEntries: [{ date: "2026-10-12", actual: 40 }] },
+      ],
+    };
+    const next = copyScheduleEntry(store, "A", "B");
+    assert.equal(next.B?.length, 2);
+    assert.equal(next.B?.[1]?.predecessor?.taskId, "t1");
+    assert.equal(next.B?.[1]?.progressEntries?.[0]?.actual, 40);
+    // salinan dalam: mengubah hasil tidak memengaruhi sumber
+    next.B![0]!.checks[0]!.done = false;
+    assert.equal(store.A![0]!.checks[0]!.done, true);
+    // sumber kosong atau sama dengan target tidak menambah entri
+    assert.equal(copyScheduleEntry(store, "ZZ", "C").C, undefined);
+    assert.equal(copyScheduleEntry(store, "A", "A"), store);
   });
 });
