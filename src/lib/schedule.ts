@@ -7,6 +7,7 @@ export type ScheduleColor = (typeof SCHEDULE_COLORS)[number];
 export const SCHEDULE_STATUSES = ["belum", "berjalan", "berisiko", "tertunda", "selesai"] as const;
 export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
 export type ScheduleCheck = { id: string; title: string; done: boolean };
+export type TaskProgressEntry = { date: string; actual: number; note?: string };
 export const PREDECESSOR_TYPES = ["FS", "SS", "FF", "SF"] as const;
 export type PredecessorType = (typeof PREDECESSOR_TYPES)[number];
 export const PREDECESSOR_LABELS = { FS: "Selesai → Mulai", SS: "Mulai → Mulai", FF: "Selesai → Selesai", SF: "Mulai → Selesai" };
@@ -24,6 +25,7 @@ export type ScheduleTask = {
   color: ScheduleColor;
   stage: boolean;
   checks: ScheduleCheck[];
+  progressEntries?: TaskProgressEntry[];
 };
 
 export function validScheduleDate(value: string): boolean {
@@ -47,12 +49,35 @@ export function taskChecks(task: ScheduleTask, tasks: ScheduleTask[]): ScheduleC
   return children.length ? children.flatMap((child) => child.checks) : task.checks;
 }
 
-export function scheduleProgress(task: ScheduleTask, tasks: ScheduleTask[]): number {
+export function taskProgressAt(task: ScheduleTask, date: string): number | null {
+  const entry = (task.progressEntries ?? []).filter((point) => point.date <= date).sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  return entry?.actual ?? null;
+}
+
+export function upsertTaskProgress(entries: TaskProgressEntry[], entry: TaskProgressEntry): TaskProgressEntry[] {
+  if (!validScheduleDate(entry.date) || !Number.isFinite(entry.actual) || entry.actual < 0 || entry.actual > 100) throw new Error("Isi tanggal yang valid dan progres antara 0–100%.");
+  const note = entry.note?.trim();
+  return [...entries.filter((point) => point.date !== entry.date), { date: entry.date, actual: entry.actual, ...(note ? { note } : {}) }].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function scheduleProgress(task: ScheduleTask, tasks: ScheduleTask[], date = format(new Date(), "yyyy-MM-dd")): number {
+  const children = tasks.filter((child) => child.id !== task.id && child.wbs.startsWith(`${task.wbs.trim().replace(/\.+$/, "")}.`));
+  if (children.length && tasks.some((item) => item.progressEntries?.length)) {
+    const leaves = children.filter((child) => !children.some((other) => other.id !== child.id && other.wbs.startsWith(`${child.wbs}.`)));
+    const total = leaves.reduce((sum, child) => sum + Math.max(1, scheduleDuration(child.start, child.due)), 0);
+    return Math.round(leaves.reduce((sum, child) => sum + Math.max(1, scheduleDuration(child.start, child.due)) * scheduleProgress(child, [], date), 0) / total * 10) / 10;
+  }
+  if (task.progressEntries?.length) return taskProgressAt(task, date) ?? 0;
   const checks = taskChecks(task, tasks);
   return checks.length ? Math.round(checks.filter((check) => check.done).length / checks.length * 1000) / 10 : 0;
 }
 
 export function totalScheduleProgress(tasks: ScheduleTask[]): number {
+  if (tasks.some((task) => task.progressEntries?.length)) {
+    const leaves = tasks.filter((task) => !tasks.some((child) => child.id !== task.id && child.wbs.startsWith(`${task.wbs.trim().replace(/\.+$/, "")}.`)));
+    const total = leaves.reduce((sum, task) => sum + Math.max(1, scheduleDuration(task.start, task.due)), 0);
+    return total ? Math.round(leaves.reduce((sum, task) => sum + Math.max(1, scheduleDuration(task.start, task.due)) * scheduleProgress(task, tasks), 0) / total * 10) / 10 : 0;
+  }
   // Jangan hitung ulang ceklis anak yang sudah tercakup dalam tahap.
   const checks = tasks.filter((task) => !task.stage || !tasks.some((child) => !child.stage && child.wbs.startsWith(`${task.wbs}.`))).flatMap((task) => task.checks);
   return checks.length ? Math.round(checks.filter((check) => check.done).length / checks.length * 1000) / 10 : 0;
@@ -69,8 +94,12 @@ export function normalizeSchedule(value: unknown): ScheduleTask[] {
       return [{ id: entry.id, title: entry.title, done: entry.done === true }];
     }) : [];
     const p = t.predecessor as Record<string, unknown> | undefined;
+    const progressEntries = Array.isArray(t.progressEntries) ? t.progressEntries.reduce<TaskProgressEntry[]>((entries, entry) => {
+      if (!entry || typeof entry !== "object" || typeof entry.date !== "string" || !validScheduleDate(entry.date) || typeof entry.actual !== "number" || !Number.isFinite(entry.actual) || entry.actual < 0 || entry.actual > 100) return entries;
+      return upsertTaskProgress(entries, { date: entry.date, actual: entry.actual, note: typeof entry.note === "string" ? entry.note : undefined });
+    }, []) : undefined;
     const predecessor = p && typeof p.taskId === "string" && PREDECESSOR_TYPES.includes(p.type as PredecessorType) ? { taskId: p.taskId, type: p.type as PredecessorType } : undefined;
-    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, predecessor, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks }];
+    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, predecessor, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks, ...(progressEntries ? { progressEntries } : {}) }];
   });
   const used = new Set<number>();
   let next = Math.max(0, ...normalized.map((t) => t.taskNumber ?? 0)) + 1;
