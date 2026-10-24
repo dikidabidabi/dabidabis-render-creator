@@ -165,3 +165,5 @@
 
 
 - [x] Slide 13 Detail 2 LT 1 gagal di Galaxy Tab (Chrome): bevel dinding jadi bitmap, union dinding di-cache
+
+- [x] Tombol Unduh PDF di kanan atas jadwal dan Kurva S; cetak A4 lanskap muat kiri-kanan, multi halaman.
