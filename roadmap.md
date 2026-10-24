@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tampilkan kabel hubungan antarbar Gantt pada ujung sesuai FS/SS/FF/SF dengan warna berbeda; verifikasi perubahan tipe dan skala.
+- [x] Tampilkan kabel hubungan antarbar Gantt pada ujung sesuai FS/SS/FF/SF dengan warna berbeda; 19 uji lolos, empat tipe dan dua skala teruji pada akun aktif, edit bar tetap berfungsi, hubungan bertahan setelah muat ulang, pekerjaan uji dihapus.
 
 - [x] Tambahkan ID pekerjaan dan kolom Predecessor FS/SS/FF/SF; 15 uji lolos, keempat hubungan, pilihan jenis, perubahan tanggal berantai, penyimpanan ulang dan penolakan siklus teruji melalui akun aktif; pekerjaan uji dihapus.
 
