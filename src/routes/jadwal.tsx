@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ScheduleDatePicker } from "@/components/schedule-date-picker";
-import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
+import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessor, resolveScheduleDependencies, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useAuth } from "@/lib/auth";
 
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/jadwal")({
 
 const STATUS_LABELS = { belum: "Belum mulai", berjalan: "Berjalan", berisiko: "Berisiko", tertunda: "Tertunda", selesai: "Selesai" };
 const COLOR_LABELS = { stage: "Jingga", lavender: "Lavender", green: "Hijau", yellow: "Kuning", neutral: "Netral" };
-const TABLE_WIDTH = 1180;
+const TABLE_WIDTH = 1480;
 
 function SchedulePage() {
   const { user } = useAuth();
@@ -47,6 +47,8 @@ function ScheduleWorkspace() {
   const [draft, setDraft] = useState<ScheduleTask | null>(null);
   const [deleting, setDeleting] = useState<ScheduleTask | null>(null);
   const [error, setError] = useState("");
+  const [predecessorInput, setPredecessorInput] = useState("");
+  const [predecessorType, setPredecessorType] = useState<PredecessorType>("FS");
   const [saving, setSaving] = useState(false);
   const queue = useRef(Promise.resolve());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -73,19 +75,30 @@ function ScheduleWorkspace() {
   const activeSketch = sketches.find((s) => s.id === activeId) ?? null;
 
   function commit(next: ScheduleTask[]) {
-    if (!activeId) return;
+    if (!activeId) return false;
+    try { next = resolveScheduleDependencies(next); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Hubungan tidak valid."); return false; }
     const nextStore = { ...store, [activeId]: next };
     setStore(nextStore);
     setSaving(true);
     const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_KEY, JSON.stringify(nextStore)));
     queue.current = write;
     void write.then(() => { if (queue.current === write) setSaving(false); }, () => { setSaving(false); toast.error("Jadwal belum tersimpan. Silakan coba lagi."); });
+    return true;
+  }
+
+  function openTask(task: ScheduleTask) {
+    setError("");
+    setPredecessorInput(predecessorText(task, tasks));
+    setPredecessorType(task.predecessor?.type ?? "FS");
+    setDraft(structuredClone(task));
   }
 
   function newTask(stage = false) {
     const date = format(today, "yyyy-MM-dd");
     setError("");
-    setDraft({ id: crypto.randomUUID(), wbs: "", title: "", owner: "", start: date, due: scheduleDue(date, 7), status: "belum", component: "", color: stage ? "stage" : "lavender", stage, checks: [] });
+    setPredecessorInput("");
+    setPredecessorType("FS");
+    setDraft({ id: crypto.randomUUID(), taskNumber: nextTaskNumber(tasks), wbs: "", title: "", owner: "", start: date, due: scheduleDue(date, 7), status: "belum", component: "", color: stage ? "stage" : "lavender", stage, checks: [] });
   }
 
   const dates = useMemo(() => {
@@ -114,8 +127,12 @@ function ScheduleWorkspace() {
     if (!draft.wbs.trim() || !draft.title.trim()) { setError("Isi nomor WBS dan judul pekerjaan."); return; }
     if (tasks.some((t) => t.id !== draft.id && t.wbs.trim() === draft.wbs.trim())) { setError("Nomor WBS sudah dipakai pekerjaan lain."); return; }
     if (draft.due < draft.start) { setError("Tenggat tidak boleh sebelum tanggal mulai."); return; }
-    const clean = { ...draft, title: draft.title.trim(), wbs: draft.wbs.trim(), checks: draft.checks.filter((c) => c.title.trim()).map((c) => ({ ...c, title: c.title.trim() })) };
-    commit(tasks.some((t) => t.id === draft.id) ? tasks.map((t) => t.id === draft.id ? clean : t) : [...tasks, clean].sort((a, b) => a.wbs.localeCompare(b.wbs, undefined, { numeric: true })));
+    let predecessor: ScheduleTask["predecessor"];
+    try { predecessor = parsePredecessor(predecessorInput, draft, tasks, predecessorType); } catch (cause) { setError(cause instanceof Error ? cause.message : "Hubungan tidak valid."); return; }
+    const clean = { ...draft, predecessor, title: draft.title.trim(), wbs: draft.wbs.trim(), checks: draft.checks.filter((c) => c.title.trim()).map((c) => ({ ...c, title: c.title.trim() })) };
+    const next = tasks.some((t) => t.id === draft.id) ? tasks.map((t) => t.id === draft.id ? clean : t) : [...tasks, clean].sort((a, b) => a.wbs.localeCompare(b.wbs, undefined, { numeric: true }));
+    try { resolveScheduleDependencies(next); } catch (cause) { setError(cause instanceof Error ? cause.message : "Hubungan tidak valid."); return; }
+    if (!commit(next)) return;
     setDraft(null);
   }
   const update = (value: Partial<ScheduleTask>) => setDraft((current) => current ? { ...current, ...value } : null);
@@ -149,7 +166,7 @@ function ScheduleWorkspace() {
     <div ref={scrollRef} className="schedule-scroll overflow-auto border border-border bg-background" aria-label="Tabel dan diagram jadwal">
       <div className="relative" style={{ width: totalWidth, minHeight: 350 }}>
         <div className="sticky top-0 z-20 flex border-b border-border bg-surface" style={{ height: 70 }}>
-          {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs font-semibold" style={{ width: TABLE_WIDTH }} role="row">{["WBS", "Judul pekerjaan", "Penanggung jawab", "Tanggal mulai", "Tenggat", "Durasi", "% Selesai", "Status", "Komponen", "Progres", ""].map((label, i) => <div key={i} className="px-2" role="columnheader">{label}</div>)}</div>}
+          {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs font-semibold" style={{ width: TABLE_WIDTH }} role="row">{["ID", "WBS", "Judul pekerjaan", "Penanggung jawab", "Tanggal mulai", "Tenggat", "Durasi", "Predecessor", "% Selesai", "Status", "Komponen", "Progres", ""].map((label, i) => <div key={i} className="px-2" role="columnheader">{label}</div>)}</div>}
           {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}>{months.map((month) => <div key={month.toISOString()} className="absolute bottom-0 top-0 border-l border-border px-3 py-3" style={{ left: offset(month), width: (differenceInCalendarDays(endOfMonth(month), month) + 1) * dayWidth }}><span className="block text-xs text-muted-foreground">{format(month, "yyyy")}</span><span className="text-sm font-medium">{format(month, "MMM", { locale: localeId })}</span></div>)}{scale === "week" && Array.from({ length: Math.ceil(days / 7) }, (_, n) => <span key={n} className="absolute bottom-1 text-[10px] text-muted-foreground" style={{ left: n * 7 * dayWidth + 5 }}>{format(addDays(dates.start, n * 7), "d MMM", { locale: localeId })}</span>)}</div>}
         </div>
         {showTimeline && <div className="pointer-events-none absolute bottom-0 top-[70px]" style={{ left: showTable ? TABLE_WIDTH : 0, width: timelineWidth }}>{months.map((month) => <div key={month.toISOString()} className="absolute bottom-0 top-0 border-l border-border" style={{ left: offset(month) }} />)}<div className="schedule-today absolute bottom-0 top-0 z-10" style={{ left: todayX }} title={format(today, "d MMMM yyyy", { locale: localeId })}><span className="schedule-today-dot" /></div></div>}
@@ -157,11 +174,12 @@ function ScheduleWorkspace() {
           const progress = scheduleProgress(task, tasks);
           return <div key={task.id} className={`relative flex border-b border-border/60 ${task.stage ? "bg-muted/70" : ""}`} style={{ height: 58 }} data-task-id={task.id}>
             {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs" style={{ width: TABLE_WIDTH }}>
+              <div className="px-2 text-muted-foreground">{task.taskNumber}</div>
               <div className="px-1" style={{ paddingLeft: 4 + (wbsLevel(task.wbs) - 1) * 10 }}><span className={`schedule-wbs schedule-wbs-level-${wbsLevel(task.wbs)} inline-block rounded px-2 py-1.5 font-semibold`} title={WBS_LEVEL_LABELS[wbsLevel(task.wbs)]}>{task.wbs}</span></div>
-              <Button variant="ghost" className={`h-full justify-start whitespace-normal px-2 text-left text-xs ${task.stage ? "font-semibold" : "font-normal"}`} onClick={() => { setError(""); setDraft(structuredClone(task)); }} title={task.title}><span className="line-clamp-2">{task.title}</span></Button>
-              <div className="truncate px-2" title={task.owner}>{task.owner || "—"}</div><div className="px-2">{format(parseISO(task.start), "d/M/yy")}</div><div className="px-2">{format(parseISO(task.due), "d/M/yy")}</div><div className="px-2">{scheduleDuration(task.start, task.due)} hari</div><div className="px-2 font-semibold text-primary">{progress}%</div><div className="px-1"><span className={`schedule-status schedule-status-${task.status}`}>{STATUS_LABELS[task.status]}</span></div><div className="truncate px-2" title={task.component}>{task.component || "—"}</div><div className="px-2"><div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Progres ${task.title}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div className="h-full bg-primary" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-[10px] text-muted-foreground">{progress}%</p></div><Button size="icon" variant="ghost" className="size-7" aria-label={`Edit ${task.title}`} onClick={() => { setError(""); setDraft(structuredClone(task)); }}><Pencil className="size-3.5" /></Button>
+              <Button variant="ghost" className={`h-full justify-start whitespace-normal px-2 text-left text-xs ${task.stage ? "font-semibold" : "font-normal"}`} onClick={() => { openTask(task); }} title={task.title}><span className="line-clamp-2">{task.title}</span></Button>
+              <div className="truncate px-2" title={task.owner}>{task.owner || "—"}</div><div className="px-2">{format(parseISO(task.start), "d/M/yy")}</div><div className="px-2">{format(parseISO(task.due), "d/M/yy")}</div><div className="px-2">{scheduleDuration(task.start, task.due)} hari</div><div className="px-1"><Input key={predecessorText(task, tasks)} className="h-8 text-xs" aria-label={`Predecessor ${task.title}`} defaultValue={predecessorText(task, tasks)} placeholder="—" onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} onBlur={(event) => { const text = event.currentTarget.value; if (text === predecessorText(task, tasks)) return; try { const predecessor = parsePredecessor(text, task, tasks); if (!commit(tasks.map((t) => t.id === task.id ? { ...t, predecessor } : t))) event.currentTarget.value = predecessorText(task, tasks); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Hubungan tidak valid."); event.currentTarget.value = predecessorText(task, tasks); } }} /></div><div className="px-2 font-semibold text-primary">{progress}%</div><div className="px-1"><span className={`schedule-status schedule-status-${task.status}`}>{STATUS_LABELS[task.status]}</span></div><div className="truncate px-2" title={task.component}>{task.component || "—"}</div><div className="px-2"><div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Progres ${task.title}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div className="h-full bg-primary" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-[10px] text-muted-foreground">{progress}%</p></div><Button size="icon" variant="ghost" className="size-7" aria-label={`Edit ${task.title}`} onClick={() => { openTask(task); }}><Pencil className="size-3.5" /></Button>
             </div>}
-            {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}><Button variant="ghost" className={`schedule-bar schedule-color-${task.color} absolute top-3 h-8 justify-start rounded-lg p-0 text-left text-xs font-normal`} style={{ left: offset(parseISO(task.start)) + 2, width: Math.max(8, (scheduleDuration(task.start, task.due) + 1) * dayWidth - 4) }} onClick={() => { setError(""); setDraft(structuredClone(task)); }} aria-label={`Jadwal ${task.title}`} title={`${task.wbs} · ${task.title} · ${progress}%`}><span className="schedule-bar-progress absolute inset-y-0 left-0" style={{ width: `${progress}%` }} /><span className="relative truncate px-2">{task.title}</span></Button></div>}
+            {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}><Button variant="ghost" className={`schedule-bar schedule-color-${task.color} absolute top-3 h-8 justify-start rounded-lg p-0 text-left text-xs font-normal`} style={{ left: offset(parseISO(task.start)) + 2, width: Math.max(8, (scheduleDuration(task.start, task.due) + 1) * dayWidth - 4) }} onClick={() => { openTask(task); }} aria-label={`Jadwal ${task.title}`} title={`${task.wbs} · ${task.title} · ${progress}%`}><span className="schedule-bar-progress absolute inset-y-0 left-0" style={{ width: `${progress}%` }} /><span className="relative truncate px-2">{task.title}</span></Button></div>}
           </div>;
         })}
         {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">{activeId ? "Belum ada pekerjaan pada sketsa ini." : "Pilih sketsa untuk mengelola jadwalnya."}</p>{activeId && <Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button>}</div>}
@@ -172,11 +190,12 @@ function ScheduleWorkspace() {
 
     <Dialog open={!!draft} onOpenChange={(open) => { if (!open) setDraft(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{draft && tasks.some((t) => t.id === draft.id) ? "Edit pekerjaan" : draft?.stage ? "Tambah tahap" : "Tambah pekerjaan"}</DialogTitle></DialogHeader>{draft && <form onSubmit={(e) => { e.preventDefault(); saveDraft(); }} className="space-y-5">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="wbs">Nomor WBS</Label><Input id="wbs" value={draft.wbs} onChange={(e) => update({ wbs: e.target.value })} placeholder="1.1" /></div><div className="space-y-2"><Label htmlFor="owner">Penanggung jawab</Label><Input id="owner" value={draft.owner} onChange={(e) => update({ owner: e.target.value })} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="task-title">Judul pekerjaan</Label><Input id="task-title" value={draft.title} onChange={(e) => update({ title: e.target.value })} /></div><div className="space-y-2"><Label>Tanggal mulai</Label><ScheduleDatePicker label="Tanggal mulai" value={draft.start} onChange={(start) => update({ start, due: scheduleDue(start, scheduleDuration(draft.start, draft.due)) })} /></div><div className="space-y-2"><Label>Tenggat</Label><ScheduleDatePicker label="Tenggat" value={draft.due} min={draft.start} onChange={(due) => update({ due })} /></div><div className="space-y-2"><Label htmlFor="duration">Durasi (hari)</Label><Input id="duration" type="number" min={0} max={36500} value={scheduleDuration(draft.start, draft.due)} onChange={(e) => update({ due: scheduleDue(draft.start, Math.min(36500, Number(e.target.value))) })} /></div><div className="space-y-2"><Label>Status</Label><Select value={draft.status} onValueChange={(status) => update({ status: status as ScheduleTask["status"] })}><SelectTrigger aria-label="Status"><SelectValue /></SelectTrigger><SelectContent>{SCHEDULE_STATUSES.map((status) => <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="component">Komponen</Label><Input id="component" value={draft.component} onChange={(e) => update({ component: e.target.value })} /></div><div className="space-y-2"><Label>Warna bar</Label><ToggleGroup type="single" value={draft.color} onValueChange={(color) => { if (color) update({ color: color as ScheduleTask["color"] }); }} className="justify-start" aria-label="Warna bar">{SCHEDULE_COLORS.map((color) => <ToggleGroupItem key={color} value={color} aria-label={COLOR_LABELS[color]} title={COLOR_LABELS[color]} className="size-9 p-1 data-[state=on]:ring-2 data-[state=on]:ring-ring"><span className={`schedule-color-${color} size-5 rounded`} /></ToggleGroupItem>)}</ToggleGroup></div></div>
+      <div className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="predecessor">Predecessor</Label><Input id="predecessor" value={predecessorInput} placeholder="2 atau 2FS" onChange={(event) => { const value = event.target.value; setPredecessorInput(value); const code = /(FS|SS|FF|SF)$/i.exec(value.trim())?.[1]?.toUpperCase(); if (code) setPredecessorType(code as PredecessorType); }} list="predecessor-options" /><datalist id="predecessor-options">{tasks.filter((task) => task.id !== draft.id).map((task) => <option key={task.id} value={`${task.taskNumber}${predecessorType}`}>{task.title}</option>)}</datalist></div><div className="space-y-2"><Label>Jenis hubungan</Label><Select value={predecessorType} onValueChange={(type) => { setPredecessorType(type as PredecessorType); setPredecessorInput((current) => current.replace(/(FS|SS|FF|SF)$/i, "") + (current.trim() ? type : "")); }}><SelectTrigger aria-label="Jenis hubungan"><SelectValue /></SelectTrigger><SelectContent>{PREDECESSOR_TYPES.map((type) => <SelectItem key={type} value={type}>{type} · {PREDECESSOR_LABELS[type]}</SelectItem>)}</SelectContent></Select></div></div>
       <div className="flex items-center gap-2"><Checkbox id="is-stage" checked={draft.stage} onCheckedChange={(checked) => update({ stage: checked === true })} /><Label htmlFor="is-stage">Tahap / kelompok WBS</Label></div>
       <section className="border-t border-border pt-4"><div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 text-sm font-semibold"><CheckCheck className="size-4 text-primary" />Subpekerjaan</h2><span className="text-sm font-semibold text-primary">{scheduleProgress(draft, tasks.map((t) => t.id === draft.id ? draft : t))}%</span></div><div className="space-y-2">{draft.checks.map((check, index) => <div key={check.id} className="flex items-center gap-2"><Checkbox checked={check.done} aria-label={`Selesai ${check.title || `subpekerjaan ${index + 1}`}`} onCheckedChange={(done) => update({ checks: draft.checks.map((c) => c.id === check.id ? { ...c, done: done === true } : c) })} /><Input aria-label={`Subpekerjaan ${index + 1}`} value={check.title} onChange={(e) => update({ checks: draft.checks.map((c) => c.id === check.id ? { ...c, title: e.target.value } : c) })} /><Button type="button" variant="ghost" size="icon" aria-label={`Hapus subpekerjaan ${index + 1}`} onClick={() => update({ checks: draft.checks.filter((c) => c.id !== check.id) })}><Trash2 className="size-4" /></Button></div>)}</div><Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => update({ checks: [...draft.checks, { id: crypto.randomUUID(), title: "", done: false }] })}><Plus />Subpekerjaan</Button></section>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <DialogFooter className="gap-2">{tasks.some((t) => t.id === draft.id) && <Button type="button" variant="ghost" className="mr-auto text-destructive" onClick={() => setDeleting(draft)}><Trash2 />Hapus</Button>}<Button type="button" variant="outline" onClick={() => setDraft(null)}>Batal</Button><Button type="submit">Simpan</Button></DialogFooter>
     </form>}</DialogContent></Dialog>
-    <Dialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }}><DialogContent><DialogHeader><DialogTitle>Hapus pekerjaan?</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">{deleting?.title}</p><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button><Button variant="destructive" onClick={() => { commit(tasks.filter((t) => t.id !== deleting?.id)); setDeleting(null); setDraft(null); }}>Hapus</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }}><DialogContent><DialogHeader><DialogTitle>Hapus pekerjaan?</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">{deleting?.title}</p><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button><Button variant="destructive" onClick={() => { if (commit(tasks.filter((t) => t.id !== deleting?.id))) { setDeleting(null); setDraft(null); } }}>Hapus</Button></DialogFooter></DialogContent></Dialog>
   </main>;
 }
