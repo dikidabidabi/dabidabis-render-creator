@@ -350,3 +350,14 @@
 [data-architectural-style="bata"] [data-detail-secondary-notation] text {
   stroke: none;
 }
+
+.schedule-summary-bar { border-radius: 0; background: transparent; overflow: visible; box-shadow: none; color: var(--foreground); }
+.schedule-summary-bar::before { content: ""; position: absolute; inset: 0; background: var(--schedule-stage); clip-path: polygon(0 0, 100% 0, 100% 100%, calc(100% - 9px) 9px, 9px 9px, 0 100%); }
+.schedule-summary-bar > span { top: 6px; }
+.schedule-summary-bar.schedule-critical-bar { background: transparent; color: var(--destructive); }
+.schedule-summary-bar.schedule-critical-bar::before { background: var(--destructive); }
+.schedule-summary-bar .schedule-bar-progress { display: none; }
+.schedule-critical-bar { background-color: var(--destructive); color: var(--destructive-foreground); }
+.schedule-critical-link { color: var(--destructive); }
+.schedule-critical-link .schedule-link-line { stroke-width: 2.5; }
+.schedule-s-curve .recharts-wrapper { font-family: var(--font-sans); }

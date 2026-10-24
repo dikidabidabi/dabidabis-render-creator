@@ -1,5 +1,9 @@
 # Roadmap
 
+- [x] Lipat hierarki WBS dan bentuk bar tahap ringkasan sesuai gambar; lipat/buka dan muat ulang teruji.
+- [x] Tambahkan CPM merah dengan ambang slack default 0 hari; sorotan bar/kabel dan perubahan slack 0/5 teruji.
+- [x] Tambahkan Kurva S rencana/realisasi berbobot durasi dan tabel angka periodik; 26 uji lolos, realisasi 40% dan penyimpanan teruji pada akun aktif tanpa kesalahan.
+
 - [x] Tampilkan kabel hubungan antarbar Gantt pada ujung sesuai FS/SS/FF/SF dengan warna berbeda; 19 uji lolos, empat tipe dan dua skala teruji pada akun aktif, edit bar tetap berfungsi, hubungan bertahan setelah muat ulang, pekerjaan uji dihapus.
 
 - [x] Tambahkan ID pekerjaan dan kolom Predecessor FS/SS/FF/SF; 15 uji lolos, keempat hubungan, pilihan jenis, perubahan tanggal berantai, penyimpanan ulang dan penolakan siklus teruji melalui akun aktif; pekerjaan uji dihapus.

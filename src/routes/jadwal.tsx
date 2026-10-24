@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, differenceInCalendarDays, eachMonthOfInterval, format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { id as localeId } from "date-fns/locale";
-import { CalendarDays, CheckCheck, ChevronLeft, ChevronRight, ListChecks, Pencil, PenTool, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ListChecks, Pencil, PenTool, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ScheduleDatePicker } from "@/components/schedule-date-picker";
 import { ScheduleDependencyLinks } from "@/components/schedule-dependency-links";
+import { ScheduleSCurve } from "@/components/schedule-s-curve";
+import { normalizeScheduleViews, criticalPath, descendants, visibleSchedule, recordObservation, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
 import { scheduleBarBounds, SCHEDULE_ROW_HEIGHT } from "@/lib/schedule-connectors";
 import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessor, resolveScheduleDependencies, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
@@ -42,6 +44,7 @@ function ScheduleWorkspace() {
   const [sketches, setSketches] = useState<SketchRef[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [store, setStore] = useState<ScheduleStore>({});
+  const [viewStore, setViewStore] = useState<Record<string, ScheduleView>>({});
   const [ready, setReady] = useState(false);
   const [today, setToday] = useState(() => new Date());
   const [view, setView] = useState("combined");
@@ -62,6 +65,8 @@ function ScheduleWorkspace() {
         setSketches(sketchStore.sketches);
         const fallbackId = sketchStore.openId && sketchStore.sketches.some((s) => s.id === sketchStore.openId) ? sketchStore.openId : sketchStore.sketches[0]?.id ?? null;
         setActiveId((current) => current && sketchStore.sketches.some((s) => s.id === current) ? current : fallbackId);
+        const savedView = JSON.parse(localStorage.getItem(SCHEDULE_VIEW_KEY) || "{}");
+        setViewStore(normalizeScheduleViews(savedView));
         setStore(normalizeScheduleStore(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"), fallbackId));
       } catch { toast.error("Data jadwal tidak dapat dibaca."); }
       setReady(true);
@@ -74,13 +79,29 @@ function ScheduleWorkspace() {
   }, []);
 
   const tasks = activeId ? store[activeId] ?? [] : [];
+  const settings = { ...DEFAULT_SCHEDULE_VIEW, ...(activeId ? viewStore[activeId] : {}) };
+  const visibleTasks = visibleSchedule(tasks, settings.collapsed);
+  const cpm = useMemo(() => criticalPath(tasks, settings.slack), [tasks, settings.slack]);
   const activeSketch = sketches.find((s) => s.id === activeId) ?? null;
+
+  function saveSettings(next: ScheduleView) {
+    if (!activeId) return;
+    const nextStore = { ...viewStore, [activeId]: next };
+    setViewStore(nextStore);
+    const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_VIEW_KEY, JSON.stringify(nextStore)));
+    queue.current = write;
+    void write.catch(() => toast.error("Pilihan jadwal belum tersimpan."));
+  }
+  function toggleHierarchy(task: ScheduleTask) {
+    saveSettings({ ...settings, collapsed: settings.collapsed.includes(task.id) ? settings.collapsed.filter((id) => id !== task.id) : [...settings.collapsed, task.id] });
+  }
 
   function commit(next: ScheduleTask[]) {
     if (!activeId) return false;
     try { next = resolveScheduleDependencies(next); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Hubungan tidak valid."); return false; }
     const nextStore = { ...store, [activeId]: next };
     setStore(nextStore);
+    saveSettings({ ...settings, observations: recordObservation(settings.observations, next, today) });
     setSaving(true);
     const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_KEY, JSON.stringify(nextStore)));
     queue.current = write;
@@ -139,10 +160,10 @@ function ScheduleWorkspace() {
   }
   const update = (value: Partial<ScheduleTask>) => setDraft((current) => current ? { ...current, ...value } : null);
 
-  return <main className="schedule-page flex gap-6 px-4 py-7 sm:px-6">
-    <aside className="w-52 shrink-0" aria-label="Daftar sketsa">
+  return <main className="schedule-page flex flex-col gap-6 px-4 lg:flex-row py-7 sm:px-6">
+    <aside className="w-full shrink-0 lg:w-52" aria-label="Daftar sketsa">
       <p className="mb-3 text-xs font-medium uppercase text-ember">Sketsa</p>
-      <div className="space-y-1">
+      <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1">
         {sketches.map((sketch) => {
           const list = store[sketch.id] ?? [];
           const pct = totalScheduleProgress(list);
@@ -159,11 +180,11 @@ function ScheduleWorkspace() {
     <div className="min-w-0 flex-1">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div><p className="mb-2 text-xs font-medium uppercase text-ember">Project · Jadwal</p><h1 className="font-display text-3xl font-semibold">Jadwal</h1><p className="mt-2 text-sm text-muted-foreground">{activeSketch ? <span className="font-medium text-foreground">{activeSketch.title}</span> : "Tanpa sketsa"}<span className="mx-2">·</span>{format(today, "EEEE, d MMMM yyyy", { locale: localeId })}<span className="mx-2">·</span>{tasks.length} pekerjaan<span className="mx-2">·</span>{saving ? "Menyimpan…" : "Tersimpan"}</p></div>
-      <div className="flex items-center gap-5"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border" /><Button variant="outline" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
+      <div className="flex flex-wrap items-center gap-3"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border" /><Button variant="outline" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
     </header>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
-      <ToggleGroup type="single" value={view} onValueChange={(v) => { if (v) setView(v); }} aria-label="Tampilan jadwal"><ToggleGroupItem value="combined">Tabel & Gantt</ToggleGroupItem><ToggleGroupItem value="table">Tabel</ToggleGroupItem><ToggleGroupItem value="timeline">Gantt</ToggleGroupItem></ToggleGroup>
-      <div className="flex items-center gap-2"><ToggleGroup type="single" value={scale} onValueChange={(v) => { if (v) setScale(v); }} aria-label="Skala waktu"><ToggleGroupItem value="week">Minggu</ToggleGroupItem><ToggleGroupItem value="month">Bulan</ToggleGroupItem></ToggleGroup><Button size="icon" variant="ghost" title="Waktu sebelumnya" aria-label="Waktu sebelumnya" onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}><ChevronLeft /></Button><Button variant="outline" onClick={goToday}><CalendarDays />Hari ini</Button><Button size="icon" variant="ghost" title="Waktu berikutnya" aria-label="Waktu berikutnya" onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}><ChevronRight /></Button></div>
+      <div className="flex flex-wrap items-center gap-5"><div className="space-y-2"><div className="flex items-center gap-2"><Checkbox id="critical-path" checked={settings.cpm} onCheckedChange={(checked) => saveSettings({ ...settings, cpm: checked === true })} /><Label htmlFor="critical-path">Jalur kritis (CPM)</Label></div><div className="flex items-center gap-2"><Label htmlFor="slack" className="text-xs">Slack (hari)</Label><Input id="slack" type="number" min={0} step={1} className="h-8 w-20" value={settings.slack} onChange={(event) => saveSettings({ ...settings, slack: Math.max(0, Math.trunc(Number(event.target.value) || 0)) })} /></div></div><ToggleGroup type="single" value={view} onValueChange={(v) => { if (v) setView(v); }} aria-label="Tampilan jadwal"><ToggleGroupItem value="combined">Tabel & Gantt</ToggleGroupItem><ToggleGroupItem value="table">Tabel</ToggleGroupItem><ToggleGroupItem value="timeline">Gantt</ToggleGroupItem></ToggleGroup></div>
+      <div className="flex flex-wrap items-center gap-2"><ToggleGroup type="single" value={scale} onValueChange={(v) => { if (v) setScale(v); }} aria-label="Skala waktu"><ToggleGroupItem value="week">Minggu</ToggleGroupItem><ToggleGroupItem value="month">Bulan</ToggleGroupItem></ToggleGroup><Button size="icon" variant="ghost" title="Waktu sebelumnya" aria-label="Waktu sebelumnya" onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}><ChevronLeft /></Button><Button variant="outline" onClick={goToday}><CalendarDays />Hari ini</Button><Button size="icon" variant="ghost" title="Waktu berikutnya" aria-label="Waktu berikutnya" onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}><ChevronRight /></Button></div>
     </div>
     <div ref={scrollRef} className="schedule-scroll overflow-auto border border-border bg-background" aria-label="Tabel dan diagram jadwal">
       <div className="relative" style={{ width: totalWidth, minHeight: 350 }}>
@@ -172,25 +193,29 @@ function ScheduleWorkspace() {
           {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}>{months.map((month) => <div key={month.toISOString()} className="absolute bottom-0 top-0 border-l border-border px-3 py-3" style={{ left: offset(month), width: (differenceInCalendarDays(endOfMonth(month), month) + 1) * dayWidth }}><span className="block text-xs text-muted-foreground">{format(month, "yyyy")}</span><span className="text-sm font-medium">{format(month, "MMM", { locale: localeId })}</span></div>)}{scale === "week" && Array.from({ length: Math.ceil(days / 7) }, (_, n) => <span key={n} className="absolute bottom-1 text-[10px] text-muted-foreground" style={{ left: n * 7 * dayWidth + 5 }}>{format(addDays(dates.start, n * 7), "d MMM", { locale: localeId })}</span>)}</div>}
         </div>
         {showTimeline && <div className="pointer-events-none absolute bottom-0 top-[70px]" style={{ left: showTable ? TABLE_WIDTH : 0, width: timelineWidth }}>{months.map((month) => <div key={month.toISOString()} className="absolute bottom-0 top-0 border-l border-border" style={{ left: offset(month) }} />)}<div className="schedule-today absolute bottom-0 top-0 z-10" style={{ left: todayX }} title={format(today, "d MMMM yyyy", { locale: localeId })}><span className="schedule-today-dot" /></div></div>}
-        {tasks.map((task) => {
+        {visibleTasks.map((task) => {
+          const children = descendants(task, tasks);
+          const summary = wbsLevel(task.wbs) === 1;
+          const isCritical = settings.cpm && cpm.critical.has(task.id);
           const progress = scheduleProgress(task, tasks);
           const bar = scheduleBarBounds(task, dates.start, dayWidth);
           return <div key={task.id} className={`relative flex border-b border-border/60 ${task.stage ? "bg-muted/70" : ""}`} style={{ height: SCHEDULE_ROW_HEIGHT }} data-task-id={task.id}>
             {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs" style={{ width: TABLE_WIDTH }}>
               <div className="px-2 text-muted-foreground">{task.taskNumber}</div>
-              <div className="px-1" style={{ paddingLeft: 4 + (wbsLevel(task.wbs) - 1) * 10 }}><span className={`schedule-wbs schedule-wbs-level-${wbsLevel(task.wbs)} inline-block rounded px-2 py-1.5 font-semibold`} title={WBS_LEVEL_LABELS[wbsLevel(task.wbs)]}>{task.wbs}</span></div>
+              <div className="relative h-full flex items-start pt-1 px-1" style={{ paddingLeft: 4 + (wbsLevel(task.wbs) - 1) * 10 }}><span className={`schedule-wbs schedule-wbs-level-${wbsLevel(task.wbs)} inline-block rounded px-2 py-1.5 font-semibold`} title={WBS_LEVEL_LABELS[wbsLevel(task.wbs)]}>{task.wbs}</span>{children.length > 0 && <Button size="icon" variant="ghost" className="absolute bottom-0 left-1 size-5" aria-label={`${settings.collapsed.includes(task.id) ? "Buka" : "Sembunyikan"} detail ${task.title}`} title="Buka / sembunyikan hierarki" aria-expanded={!settings.collapsed.includes(task.id)} onClick={() => toggleHierarchy(task)}>{settings.collapsed.includes(task.id) ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>}</div>
               <Button variant="ghost" className={`h-full justify-start whitespace-normal px-2 text-left text-xs ${task.stage ? "font-semibold" : "font-normal"}`} onClick={() => { openTask(task); }} title={task.title}><span className="line-clamp-2">{task.title}</span></Button>
               <div className="truncate px-2" title={task.owner}>{task.owner || "—"}</div><div className="px-2">{format(parseISO(task.start), "d/M/yy")}</div><div className="px-2">{format(parseISO(task.due), "d/M/yy")}</div><div className="px-2">{scheduleDuration(task.start, task.due)} hari</div><div className="px-1"><Input key={predecessorText(task, tasks)} className="h-8 text-xs" aria-label={`Predecessor ${task.title}`} defaultValue={predecessorText(task, tasks)} placeholder="—" onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} onBlur={(event) => { const text = event.currentTarget.value; if (text === predecessorText(task, tasks)) return; try { const predecessor = parsePredecessor(text, task, tasks); if (!commit(tasks.map((t) => t.id === task.id ? { ...t, predecessor } : t))) event.currentTarget.value = predecessorText(task, tasks); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Hubungan tidak valid."); event.currentTarget.value = predecessorText(task, tasks); } }} /></div><div className="px-2 font-semibold text-primary">{progress}%</div><div className="px-1"><span className={`schedule-status schedule-status-${task.status}`}>{STATUS_LABELS[task.status]}</span></div><div className="truncate px-2" title={task.component}>{task.component || "—"}</div><div className="px-2"><div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Progres ${task.title}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div className="h-full bg-primary" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-[10px] text-muted-foreground">{progress}%</p></div><Button size="icon" variant="ghost" className="size-7" aria-label={`Edit ${task.title}`} onClick={() => { openTask(task); }}><Pencil className="size-3.5" /></Button>
             </div>}
-            {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}><Button variant="ghost" className={`schedule-bar schedule-color-${task.color} absolute top-3 z-10 h-8 justify-start rounded-lg p-0 text-left text-xs font-normal`} style={{ left: bar.left, width: bar.right - bar.left }} onClick={() => { openTask(task); }} aria-label={`Jadwal ${task.title}`} title={`${task.wbs} · ${task.title} · ${progress}%`}><span className="schedule-bar-progress absolute inset-y-0 left-0" style={{ width: `${progress}%` }} /><span className="relative truncate px-2">{task.title}</span></Button></div>}
+            {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}><Button variant="ghost" className={`schedule-bar schedule-color-${summary ? "stage" : task.color} ${summary ? "schedule-summary-bar" : ""} ${isCritical ? "schedule-critical-bar" : ""} absolute top-3 z-10 h-8 justify-start rounded-lg p-0 text-left text-xs font-normal`} style={{ left: bar.left, width: bar.right - bar.left }} onClick={() => { openTask(task); }} aria-label={`Jadwal ${task.title}`} title={`${task.wbs} · ${task.title} · ${progress}%`}><span className="schedule-bar-progress absolute inset-y-0 left-0" style={{ width: `${progress}%` }} /><span className="relative truncate px-2">{task.title}</span></Button>{children.length > 0 && !showTable && <Button variant="ghost" size="icon" className="absolute bottom-0 z-10 size-5" style={{ left: bar.left }} aria-label={`${settings.collapsed.includes(task.id) ? "Buka" : "Sembunyikan"} detail ${task.title}`} aria-expanded={!settings.collapsed.includes(task.id)} onClick={() => toggleHierarchy(task)}>{settings.collapsed.includes(task.id) ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>}</div>}
           </div>;
         })}
-        {showTimeline && <ScheduleDependencyLinks tasks={tasks} start={dates.start} dayWidth={dayWidth} width={timelineWidth} left={showTable ? TABLE_WIDTH : 0} />}
+        {showTimeline && <ScheduleDependencyLinks tasks={visibleTasks} critical={settings.cpm ? cpm.critical : undefined} start={dates.start} dayWidth={dayWidth} width={timelineWidth} left={showTable ? TABLE_WIDTH : 0} />}
         {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">{activeId ? "Belum ada pekerjaan pada sketsa ini." : "Pilih sketsa untuk mengelola jadwalnya."}</p>{activeId && <Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button>}</div>}
       </div>
     </div>
     {showTimeline && tasks.some((task) => task.predecessor) && <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs" aria-label="Legenda hubungan predecessor">{PREDECESSOR_TYPES.map((type) => <span key={type} className={`schedule-link-${type} flex items-center gap-2`} title={PREDECESSOR_LABELS[type]}><span className="schedule-link-key h-0.5 w-5" /><span>{type} · {PREDECESSOR_LABELS[type]}</span></span>)}</div>}
     <footer className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">{([1, 2, 3, 4] as const).map((level) => <span key={level} className="flex items-center gap-2"><span className={`schedule-wbs-level-${level} rounded px-1.5 py-0.5 text-[10px] font-semibold`}>{["1", "1.1", "1.1.1", "1.1.1.1"][level - 1]}</span>{WBS_LEVEL_LABELS[level]}</span>)}<span className="h-4 w-px bg-border" />{SCHEDULE_COLORS.map((color) => <span key={color} className="flex items-center gap-2"><span className={`schedule-color-${color} size-3 rounded-sm`} />{COLOR_LABELS[color]}</span>)}<span className="ml-auto flex items-center gap-2"><span className="schedule-today-key h-3 w-0.5" />Hari ini</span></footer>
+    <ScheduleSCurve tasks={tasks} observations={settings.observations} today={today} />
     </div>
 
     <Dialog open={!!draft} onOpenChange={(open) => { if (!open) setDraft(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{draft && tasks.some((t) => t.id === draft.id) ? "Edit pekerjaan" : draft?.stage ? "Tambah tahap" : "Tambah pekerjaan"}</DialogTitle></DialogHeader>{draft && <form onSubmit={(e) => { e.preventDefault(); saveDraft(); }} className="space-y-5">
