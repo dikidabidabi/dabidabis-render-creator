@@ -358,6 +358,8 @@
 .schedule-summary-bar.schedule-critical-bar::before { background: var(--destructive); }
 .schedule-summary-bar .schedule-bar-progress { display: none; }
 .schedule-critical-bar { background-color: var(--destructive); color: var(--destructive-foreground); }
+.schedule-delay-bar { position: absolute; top: 44px; height: 8px; border-radius: 9999px; background: var(--destructive); opacity: 0.9; pointer-events: none; }
+.schedule-delay-key { width: 18px; height: 6px; border-radius: 9999px; background: var(--destructive); }
 .schedule-critical-link { color: var(--destructive); }
 .schedule-critical-link .schedule-link-line { stroke-width: 2.5; }
 .schedule-s-curve .recharts-wrapper { font-family: var(--font-sans); }
