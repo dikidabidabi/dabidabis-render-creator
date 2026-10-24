@@ -12,6 +12,7 @@ import {
   Table2,
   FileText,
   Armchair,
+  CalendarDays,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -45,6 +46,7 @@ const TOOLS = [
   { to: "/narasi", label: "Narasi", desc: "Naskah konsep desain", icon: FileText },
   { to: "/presentasi", label: "Presentasi", desc: "Slide paparan otomatis", icon: Presentation },
   { to: "/model3d", label: "Model 3D", desc: "Massa 3D & library screenshot", icon: Box },
+  { to: "/jadwal", label: "Jadwal", desc: "Jadwal pekerjaan & progres proyek", icon: CalendarDays },
 ] as const;
 
 function ProjectPage() {
