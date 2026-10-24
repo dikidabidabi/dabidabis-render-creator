@@ -107,6 +107,7 @@ const PROJECT_LINKS = [
   { to: "/narasi", label: "Narasi" },
   { to: "/presentasi", label: "Presentasi" },
   { to: "/model3d", label: "Model 3D" },
+  { to: "/jadwal", label: "Jadwal" },
 ] as const;
 
 const linkClass =

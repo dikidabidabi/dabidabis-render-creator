@@ -17,6 +17,7 @@ const PRIVATE_PREFIXES = [
   "/presentasi",
   "/presentasi-kiriman",
   "/model3d",
+  "/jadwal",
 ] as const;
 
 export function isPrivatePath(pathname: string): boolean {
