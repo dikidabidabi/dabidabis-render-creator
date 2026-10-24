@@ -7,8 +7,13 @@ export type ScheduleColor = (typeof SCHEDULE_COLORS)[number];
 export const SCHEDULE_STATUSES = ["belum", "berjalan", "berisiko", "tertunda", "selesai"] as const;
 export type ScheduleStatus = (typeof SCHEDULE_STATUSES)[number];
 export type ScheduleCheck = { id: string; title: string; done: boolean };
+export const PREDECESSOR_TYPES = ["FS", "SS", "FF", "SF"] as const;
+export type PredecessorType = (typeof PREDECESSOR_TYPES)[number];
+export const PREDECESSOR_LABELS = { FS: "Selesai → Mulai", SS: "Mulai → Mulai", FF: "Selesai → Selesai", SF: "Mulai → Selesai" };
 export type ScheduleTask = {
   id: string;
+  taskNumber?: number;
+  predecessor?: { taskId: string; type: PredecessorType };
   wbs: string;
   title: string;
   owner: string;
@@ -55,7 +60,7 @@ export function totalScheduleProgress(tasks: ScheduleTask[]): number {
 
 export function normalizeSchedule(value: unknown): ScheduleTask[] {
   if (!Array.isArray(value)) return [];
-  return value.flatMap((item): ScheduleTask[] => {
+  const normalized = value.flatMap((item): ScheduleTask[] => {
     if (!item || typeof item !== "object") return [];
     const t = item as Record<string, unknown>;
     if (typeof t.id !== "string" || typeof t.title !== "string" || typeof t.start !== "string" || typeof t.due !== "string" || !validScheduleDate(t.start) || !validScheduleDate(t.due) || t.due < t.start) return [];
@@ -63,8 +68,71 @@ export function normalizeSchedule(value: unknown): ScheduleTask[] {
       if (!entry || typeof entry !== "object" || typeof entry.id !== "string" || typeof entry.title !== "string") return [];
       return [{ id: entry.id, title: entry.title, done: entry.done === true }];
     }) : [];
-    return [{ id: t.id, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks }];
+    const p = t.predecessor as Record<string, unknown> | undefined;
+    const predecessor = p && typeof p.taskId === "string" && PREDECESSOR_TYPES.includes(p.type as PredecessorType) ? { taskId: p.taskId, type: p.type as PredecessorType } : undefined;
+    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, predecessor, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks }];
   });
+  const used = new Set<number>();
+  let next = Math.max(0, ...normalized.map((t) => t.taskNumber ?? 0)) + 1;
+  return normalized.map((t, index) => {
+    let number = t.taskNumber ?? index + 1;
+    if (used.has(number)) number = next++;
+    used.add(number);
+    return { ...t, taskNumber: number };
+  });
+}
+
+export function nextTaskNumber(tasks: ScheduleTask[]): number {
+  return Math.max(0, ...tasks.map((t) => t.taskNumber ?? 0)) + 1;
+}
+
+export function predecessorText(task: ScheduleTask, tasks: ScheduleTask[]): string {
+  if (!task.predecessor) return "";
+  const previous = tasks.find((t) => t.id === task.predecessor?.taskId);
+  return previous ? `${previous.taskNumber}${task.predecessor.type}` : "";
+}
+
+export function parsePredecessor(text: string, task: ScheduleTask, tasks: ScheduleTask[], defaultType: PredecessorType = "FS"): ScheduleTask["predecessor"] {
+  if (!text.trim()) return undefined;
+  const match = /^(\d+)\s*(FS|SS|FF|SF)?$/i.exec(text.trim());
+  if (!match) throw new Error("Predecessor tidak valid. Gunakan ID pekerjaan dan FS, SS, FF, atau SF.");
+  const previous = tasks.find((t) => t.taskNumber === Number(match[1]));
+  if (!previous) throw new Error("ID pekerjaan pendahulu tidak ditemukan pada sketsa ini.");
+  if (previous.id === task.id) throw new Error("Pekerjaan tidak dapat mendahului dirinya sendiri.");
+  return { taskId: previous.id, type: (match[2]?.toUpperCase() ?? defaultType) as PredecessorType };
+}
+
+/** Resolve a dependency graph before saving; durations stay unchanged, references use stable UUIDs. */
+export function resolveScheduleDependencies(tasks: ScheduleTask[]): ScheduleTask[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const resolved = new Map<string, ScheduleTask>();
+  const visiting = new Set<string>();
+  function resolve(task: ScheduleTask): ScheduleTask {
+    const cached = resolved.get(task.id);
+    if (cached) return cached;
+    if (visiting.has(task.id)) throw new Error("Hubungan pekerjaan membentuk siklus. Pilih pendahulu lain.");
+    visiting.add(task.id);
+    let result = task;
+    if (task.predecessor) {
+      const source = byId.get(task.predecessor.taskId);
+      if (!source) throw new Error("Pekerjaan pendahulu masih digunakan dan tidak dapat dihapus.");
+      const previous = resolve(source);
+      const duration = scheduleDuration(task.start, task.due);
+      const type = task.predecessor.type;
+      if (type === "FS" || type === "SS") {
+        const start = type === "FS" ? previous.due : previous.start;
+        result = { ...task, start, due: scheduleDue(start, duration) };
+      } else {
+        const due = type === "FF" ? previous.due : previous.start;
+        result = { ...task, due, start: format(addDays(parseISO(due), -duration), "yyyy-MM-dd") };
+      }
+    }
+    if (!validScheduleDate(result.start) || !validScheduleDate(result.due)) throw new Error("Tanggal hasil hubungan berada di luar rentang yang didukung.");
+    visiting.delete(task.id);
+    resolved.set(task.id, result);
+    return result;
+  }
+  return tasks.map(resolve);
 }
 
 /** Level hierarki WBS: 1 = tahapan, 2 = disiplin, 3 = rincian, 4 = rincian terkecil. */
