@@ -1,6 +1,7 @@
 import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 
 export const SCHEDULE_KEY = "dabidabis_jadwal_v1";
+export const SKETCH_STORE_KEY = "dabidabis_sketch_v2";
 export const SCHEDULE_COLORS = ["stage", "lavender", "green", "yellow", "neutral"] as const;
 export type ScheduleColor = (typeof SCHEDULE_COLORS)[number];
 export const SCHEDULE_STATUSES = ["belum", "berjalan", "berisiko", "tertunda", "selesai"] as const;
@@ -64,4 +65,45 @@ export function normalizeSchedule(value: unknown): ScheduleTask[] {
     }) : [];
     return [{ id: t.id, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks }];
   });
+}
+
+export type SketchRef = { id: string; title: string };
+
+/** Daftar sketsa dari store Sketsa, beserta sketsa yang sedang dibuka. */
+export function readSketchStore(raw: string | null): { sketches: SketchRef[]; openId: string | null } {
+  if (!raw) return { sketches: [], openId: null };
+  try {
+    const parsed = JSON.parse(raw) as { sketches?: unknown; openId?: unknown } | null;
+    if (!parsed || !Array.isArray(parsed.sketches)) return { sketches: [], openId: null };
+    const sketches = parsed.sketches.flatMap((item): SketchRef[] => {
+      if (!item || typeof item !== "object") return [];
+      const s = item as Record<string, unknown>;
+      if (typeof s.id !== "string" || !s.id) return [];
+      const title = typeof s.title === "string" && s.title.trim() ? s.title.trim() : "Sketsa tanpa judul";
+      return [{ id: s.id, title }];
+    });
+    return { sketches, openId: typeof parsed.openId === "string" ? parsed.openId : null };
+  } catch {
+    return { sketches: [], openId: null };
+  }
+}
+
+export type ScheduleStore = Record<string, ScheduleTask[]>;
+
+/**
+ * Store jadwal berbentuk map per sketsa `{ [sketchId]: ScheduleTask[] }`.
+ * Format lama (satu daftar untuk semua) dipindahkan ke sketsa aktif.
+ */
+export function normalizeScheduleStore(value: unknown, fallbackSketchId?: string | null): ScheduleStore {
+  if (Array.isArray(value)) {
+    const tasks = normalizeSchedule(value);
+    return tasks.length && fallbackSketchId ? { [fallbackSketchId]: tasks } : {};
+  }
+  if (!value || typeof value !== "object") return {};
+  const out: ScheduleStore = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    const tasks = normalizeSchedule(entry);
+    if (tasks.length) out[key] = tasks;
+  }
+  return out;
 }

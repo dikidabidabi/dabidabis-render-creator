@@ -1,8 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDays, differenceInCalendarDays, eachMonthOfInterval, format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { id as localeId } from "date-fns/locale";
-import { CalendarDays, CheckCheck, ChevronLeft, ChevronRight, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCheck, ChevronLeft, ChevronRight, ListChecks, Pencil, PenTool, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ScheduleDatePicker } from "@/components/schedule-date-picker";
-import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, normalizeSchedule, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, type ScheduleTask } from "@/lib/schedule";
+import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useAuth } from "@/lib/auth";
 
@@ -20,9 +20,9 @@ export const Route = createFileRoute("/jadwal")({
   component: SchedulePage,
   head: () => ({ meta: [
     { title: "Jadwal — Pekerjaan & Progres | Dabidabi's" },
-    { name: "description", content: "Kelola WBS, jadwal pekerjaan, penanggung jawab, dan progres subpekerjaan dalam tabel dan diagram Gantt privat Dabidabi's." },
+    { name: "description", content: "Kelola WBS, jadwal pekerjaan, penanggung jawab, dan progres subpekerjaan per sketsa dalam tabel dan diagram Gantt privat Dabidabi's." },
     { property: "og:title", content: "Jadwal — Pekerjaan & Progres | Dabidabi's" },
-    { property: "og:description", content: "Jadwal proyek dengan bar waktu, progres ceklis, dan penanda hari berjalan." },
+    { property: "og:description", content: "Jadwal proyek per sketsa dengan bar waktu, progres ceklis, dan penanda hari berjalan." },
     { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" },
   ] }),
 });
@@ -37,7 +37,9 @@ function SchedulePage() {
 }
 
 function ScheduleWorkspace() {
-  const [tasks, setTasks] = useState<ScheduleTask[]>([]);
+  const [sketches, setSketches] = useState<SketchRef[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [store, setStore] = useState<ScheduleStore>({});
   const [ready, setReady] = useState(false);
   const [today, setToday] = useState(() => new Date());
   const [view, setView] = useState("combined");
@@ -50,17 +52,32 @@ function ScheduleWorkspace() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try { setTasks(normalizeSchedule(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "[]"))); }
-    catch { toast.error("Data jadwal tidak dapat dibaca."); }
-    setReady(true);
+    function load() {
+      try {
+        const sketchStore = readSketchStore(localStorage.getItem(SKETCH_STORE_KEY));
+        setSketches(sketchStore.sketches);
+        const fallbackId = sketchStore.openId && sketchStore.sketches.some((s) => s.id === sketchStore.openId) ? sketchStore.openId : sketchStore.sketches[0]?.id ?? null;
+        setActiveId((current) => current && sketchStore.sketches.some((s) => s.id === current) ? current : fallbackId);
+        setStore(normalizeScheduleStore(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"), fallbackId));
+      } catch { toast.error("Data jadwal tidak dapat dibaca."); }
+      setReady(true);
+    }
+    load();
+    const onStorage = (event: StorageEvent) => { if (event.key === SKETCH_STORE_KEY) load(); };
+    window.addEventListener("storage", onStorage);
     const timer = window.setInterval(() => setToday(new Date()), 60_000);
-    return () => window.clearInterval(timer);
+    return () => { window.removeEventListener("storage", onStorage); window.clearInterval(timer); };
   }, []);
 
+  const tasks = activeId ? store[activeId] ?? [] : [];
+  const activeSketch = sketches.find((s) => s.id === activeId) ?? null;
+
   function commit(next: ScheduleTask[]) {
-    setTasks(next);
+    if (!activeId) return;
+    const nextStore = { ...store, [activeId]: next };
+    setStore(nextStore);
     setSaving(true);
-    const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_KEY, JSON.stringify(next)));
+    const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_KEY, JSON.stringify(nextStore)));
     queue.current = write;
     void write.then(() => { if (queue.current === write) setSaving(false); }, () => { setSaving(false); toast.error("Jadwal belum tersimpan. Silakan coba lagi."); });
   }
@@ -103,10 +120,27 @@ function ScheduleWorkspace() {
   }
   const update = (value: Partial<ScheduleTask>) => setDraft((current) => current ? { ...current, ...value } : null);
 
-  return <main className="schedule-page px-4 py-7 sm:px-6">
+  return <main className="schedule-page flex gap-6 px-4 py-7 sm:px-6">
+    <aside className="w-52 shrink-0" aria-label="Daftar sketsa">
+      <p className="mb-3 text-xs font-medium uppercase text-ember">Sketsa</p>
+      <div className="space-y-1">
+        {sketches.map((sketch) => {
+          const list = store[sketch.id] ?? [];
+          const pct = totalScheduleProgress(list);
+          const active = sketch.id === activeId;
+          return <button key={sketch.id} type="button" onClick={() => { setActiveId(sketch.id); setDraft(null); setDeleting(null); }} aria-current={active ? "true" : undefined} className={`flex w-full flex-col gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-primary bg-primary/10" : "border-border bg-background hover:bg-muted/60"}`}>
+            <span className="truncate text-sm font-medium" title={sketch.title}>{sketch.title}</span>
+            <span className="text-[11px] text-muted-foreground">{list.length} pekerjaan · {pct}%</span>
+          </button>;
+        })}
+      </div>
+      {!sketches.length && ready && <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground"><p>Belum ada sketsa.</p><Link to="/sketch" className="mt-2 inline-flex items-center gap-1 font-medium text-primary hover:underline"><PenTool className="size-3" />Buka halaman Sketsa</Link></div>}
+    </aside>
+
+    <div className="min-w-0 flex-1">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div><p className="mb-2 text-xs font-medium uppercase text-ember">Project · Jadwal</p><h1 className="font-display text-3xl font-semibold">Jadwal</h1><p className="mt-2 text-sm text-muted-foreground">{format(today, "EEEE, d MMMM yyyy", { locale: localeId })}<span className="mx-2">·</span>{tasks.length} pekerjaan<span className="mx-2">·</span>{saving ? "Menyimpan…" : "Tersimpan"}</p></div>
-      <div className="flex items-center gap-5"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border" /><Button variant="outline" onClick={() => newTask(true)} disabled={!ready}><Plus />Tahap</Button><Button onClick={() => newTask()} disabled={!ready}><Plus />Pekerjaan</Button></div>
+      <div><p className="mb-2 text-xs font-medium uppercase text-ember">Project · Jadwal</p><h1 className="font-display text-3xl font-semibold">Jadwal</h1><p className="mt-2 text-sm text-muted-foreground">{activeSketch ? <span className="font-medium text-foreground">{activeSketch.title}</span> : "Tanpa sketsa"}<span className="mx-2">·</span>{format(today, "EEEE, d MMMM yyyy", { locale: localeId })}<span className="mx-2">·</span>{tasks.length} pekerjaan<span className="mx-2">·</span>{saving ? "Menyimpan…" : "Tersimpan"}</p></div>
+      <div className="flex items-center gap-5"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border" /><Button variant="outline" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
     </header>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
       <ToggleGroup type="single" value={view} onValueChange={(v) => { if (v) setView(v); }} aria-label="Tampilan jadwal"><ToggleGroupItem value="combined">Tabel & Gantt</ToggleGroupItem><ToggleGroupItem value="table">Tabel</ToggleGroupItem><ToggleGroupItem value="timeline">Gantt</ToggleGroupItem></ToggleGroup>
@@ -130,10 +164,11 @@ function ScheduleWorkspace() {
             {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}><Button variant="ghost" className={`schedule-bar schedule-color-${task.color} absolute top-3 h-8 justify-start rounded-lg p-0 text-left text-xs font-normal`} style={{ left: offset(parseISO(task.start)) + 2, width: Math.max(8, (scheduleDuration(task.start, task.due) + 1) * dayWidth - 4) }} onClick={() => { setError(""); setDraft(structuredClone(task)); }} aria-label={`Jadwal ${task.title}`} title={`${task.wbs} · ${task.title} · ${progress}%`}><span className="schedule-bar-progress absolute inset-y-0 left-0" style={{ width: `${progress}%` }} /><span className="relative truncate px-2">{task.title}</span></Button></div>}
           </div>;
         })}
-        {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">Belum ada pekerjaan.</p><Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button></div>}
+        {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">{activeId ? "Belum ada pekerjaan pada sketsa ini." : "Pilih sketsa untuk mengelola jadwalnya."}</p>{activeId && <Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button>}</div>}
       </div>
     </div>
     <footer className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">{SCHEDULE_COLORS.map((color) => <span key={color} className="flex items-center gap-2"><span className={`schedule-color-${color} size-3 rounded-sm`} />{COLOR_LABELS[color]}</span>)}<span className="ml-auto flex items-center gap-2"><span className="schedule-today-key h-3 w-0.5" />Hari ini</span></footer>
+    </div>
 
     <Dialog open={!!draft} onOpenChange={(open) => { if (!open) setDraft(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{draft && tasks.some((t) => t.id === draft.id) ? "Edit pekerjaan" : draft?.stage ? "Tambah tahap" : "Tambah pekerjaan"}</DialogTitle></DialogHeader>{draft && <form onSubmit={(e) => { e.preventDefault(); saveDraft(); }} className="space-y-5">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="wbs">Nomor WBS</Label><Input id="wbs" value={draft.wbs} onChange={(e) => update({ wbs: e.target.value })} placeholder="1.1" /></div><div className="space-y-2"><Label htmlFor="owner">Penanggung jawab</Label><Input id="owner" value={draft.owner} onChange={(e) => update({ owner: e.target.value })} /></div><div className="space-y-2 sm:col-span-2"><Label htmlFor="task-title">Judul pekerjaan</Label><Input id="task-title" value={draft.title} onChange={(e) => update({ title: e.target.value })} /></div><div className="space-y-2"><Label>Tanggal mulai</Label><ScheduleDatePicker label="Tanggal mulai" value={draft.start} onChange={(start) => update({ start, due: scheduleDue(start, scheduleDuration(draft.start, draft.due)) })} /></div><div className="space-y-2"><Label>Tenggat</Label><ScheduleDatePicker label="Tenggat" value={draft.due} min={draft.start} onChange={(due) => update({ due })} /></div><div className="space-y-2"><Label htmlFor="duration">Durasi (hari)</Label><Input id="duration" type="number" min={0} max={36500} value={scheduleDuration(draft.start, draft.due)} onChange={(e) => update({ due: scheduleDue(draft.start, Math.min(36500, Number(e.target.value))) })} /></div><div className="space-y-2"><Label>Status</Label><Select value={draft.status} onValueChange={(status) => update({ status: status as ScheduleTask["status"] })}><SelectTrigger aria-label="Status"><SelectValue /></SelectTrigger><SelectContent>{SCHEDULE_STATUSES.map((status) => <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label htmlFor="component">Komponen</Label><Input id="component" value={draft.component} onChange={(e) => update({ component: e.target.value })} /></div><div className="space-y-2"><Label>Warna bar</Label><ToggleGroup type="single" value={draft.color} onValueChange={(color) => { if (color) update({ color: color as ScheduleTask["color"] }); }} className="justify-start" aria-label="Warna bar">{SCHEDULE_COLORS.map((color) => <ToggleGroupItem key={color} value={color} aria-label={COLOR_LABELS[color]} title={COLOR_LABELS[color]} className="size-9 p-1 data-[state=on]:ring-2 data-[state=on]:ring-ring"><span className={`schedule-color-${color} size-5 rounded`} /></ToggleGroupItem>)}</ToggleGroup></div></div>
