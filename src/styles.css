@@ -307,7 +307,7 @@
 .schedule-page { letter-spacing: 0; }
 .schedule-page h1, .schedule-page h2 { letter-spacing: 0; }
 .schedule-scroll { max-height: 68vh; scrollbar-gutter: stable; }
-.schedule-table-grid { display: grid; grid-template-columns: 45px 95px 260px 125px 90px 90px 70px 125px 75px 110px 140px 110px 45px; }
+.schedule-table-grid { display: grid; grid-template-columns: 45px 95px 260px 125px 100px 100px 70px 125px 75px 110px 140px 100px 100px 110px 45px; }
 .schedule-color-stage { background-color: var(--schedule-stage); color: var(--schedule-ink); }
 .schedule-color-lavender { background-color: var(--schedule-lavender); color: var(--schedule-ink); }
 .schedule-color-green { background-color: var(--schedule-green); color: var(--schedule-ink); }
@@ -360,6 +360,9 @@
 .schedule-critical-bar { background-color: var(--destructive); color: var(--destructive-foreground); }
 .schedule-delay-bar { position: absolute; top: 44px; height: 8px; border-radius: 9999px; background: var(--destructive); opacity: 0.9; pointer-events: none; }
 .schedule-delay-key { width: 18px; height: 6px; border-radius: 9999px; background: var(--destructive); }
+.schedule-actual-bar { position: absolute; top: 44px; height: 8px; border-radius: 9999px; background: var(--schedule-today); pointer-events: none; }
+.schedule-actual-bar-late { background: var(--destructive); }
+.schedule-actual-key { width: 18px; height: 6px; border-radius: 9999px; background: var(--schedule-today); }
 .schedule-critical-link { color: var(--destructive); }
 .schedule-critical-link .schedule-link-line { stroke-width: 2.5; }
 .schedule-s-curve .recharts-wrapper { font-family: var(--font-sans); }

@@ -14,7 +14,9 @@ export const PREDECESSOR_LABELS = { FS: "Selesai → Mulai", SS: "Mulai → Mula
 export type ScheduleTask = {
   id: string;
   taskNumber?: number;
-  predecessor?: { taskId: string; type: PredecessorType };
+  predecessor?: { taskId: string; type: PredecessorType; lag?: number };
+  actualStart?: string;
+  actualFinish?: string;
   wbs: string;
   title: string;
   owner: string;
@@ -98,8 +100,10 @@ export function normalizeSchedule(value: unknown): ScheduleTask[] {
       if (!entry || typeof entry !== "object" || typeof entry.date !== "string" || !validScheduleDate(entry.date) || typeof entry.actual !== "number" || !Number.isFinite(entry.actual) || entry.actual < 0 || entry.actual > 100) return entries;
       return upsertTaskProgress(entries, { date: entry.date, actual: entry.actual, note: typeof entry.note === "string" ? entry.note : undefined });
     }, []) : undefined;
-    const predecessor = p && typeof p.taskId === "string" && PREDECESSOR_TYPES.includes(p.type as PredecessorType) ? { taskId: p.taskId, type: p.type as PredecessorType } : undefined;
-    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, predecessor, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks, ...(progressEntries ? { progressEntries } : {}) }];
+    const predecessor = p && typeof p.taskId === "string" && PREDECESSOR_TYPES.includes(p.type as PredecessorType) ? { taskId: p.taskId, type: p.type as PredecessorType, ...(typeof p.lag === "number" && Number.isSafeInteger(p.lag) && p.lag !== 0 ? { lag: p.lag } : {}) } : undefined;
+    const actualStart = typeof t.actualStart === "string" && validScheduleDate(t.actualStart) ? t.actualStart : undefined;
+    const actualFinish = typeof t.actualFinish === "string" && validScheduleDate(t.actualFinish) && (!actualStart || t.actualFinish >= actualStart) ? t.actualFinish : undefined;
+    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, predecessor, actualStart, actualFinish, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks, ...(progressEntries ? { progressEntries } : {}) }];
   });
   const used = new Set<number>();
   let next = Math.max(0, ...normalized.map((t) => t.taskNumber ?? 0)) + 1;
@@ -118,17 +122,20 @@ export function nextTaskNumber(tasks: ScheduleTask[]): number {
 export function predecessorText(task: ScheduleTask, tasks: ScheduleTask[]): string {
   if (!task.predecessor) return "";
   const previous = tasks.find((t) => t.id === task.predecessor?.taskId);
-  return previous ? `${previous.taskNumber}${task.predecessor.type}` : "";
+  const lag = task.predecessor.lag ?? 0;
+  return previous ? `${previous.taskNumber}${task.predecessor.type}${lag ? `${lag > 0 ? "+" : ""}${lag}` : ""}` : "";
 }
 
 export function parsePredecessor(text: string, task: ScheduleTask, tasks: ScheduleTask[], defaultType: PredecessorType = "FS"): ScheduleTask["predecessor"] {
   if (!text.trim()) return undefined;
-  const match = /^(\d+)\s*(FS|SS|FF|SF)?$/i.exec(text.trim());
-  if (!match) throw new Error("Predecessor tidak valid. Gunakan ID pekerjaan dan FS, SS, FF, atau SF.");
+  const match = /^(\d+)\s*(FS|SS|FF|SF)?\s*([+-]\s*\d+)?$/i.exec(text.trim());
+  if (!match) throw new Error("Predecessor tidak valid. Gunakan contoh 2FS+3 atau 4FF-5.");
   const previous = tasks.find((t) => t.taskNumber === Number(match[1]));
   if (!previous) throw new Error("ID pekerjaan pendahulu tidak ditemukan pada sketsa ini.");
   if (previous.id === task.id) throw new Error("Pekerjaan tidak dapat mendahului dirinya sendiri.");
-  return { taskId: previous.id, type: (match[2]?.toUpperCase() ?? defaultType) as PredecessorType };
+  const lag = Number(match[3]?.replace(/\s/g, "") ?? 0);
+  if (!Number.isSafeInteger(lag)) throw new Error("Offset hari tidak valid.");
+  return { taskId: previous.id, type: (match[2]?.toUpperCase() ?? defaultType) as PredecessorType, ...(lag ? { lag } : {}) };
 }
 
 /** Resolve a dependency graph before saving; durations stay unchanged, references use stable UUIDs. */
@@ -148,11 +155,13 @@ export function resolveScheduleDependencies(tasks: ScheduleTask[]): ScheduleTask
       const previous = resolve(source);
       const duration = scheduleDuration(task.start, task.due);
       const type = task.predecessor.type;
+      const lag = task.predecessor.lag ?? 0;
+      if (!Number.isSafeInteger(lag)) throw new Error("Offset hari tidak valid.");
       if (type === "FS" || type === "SS") {
-        const start = type === "FS" ? previous.due : previous.start;
+        const start = format(addDays(parseISO(type === "FS" ? previous.due : previous.start), lag), "yyyy-MM-dd");
         result = { ...task, start, due: scheduleDue(start, duration) };
       } else {
-        const due = type === "FF" ? previous.due : previous.start;
+        const due = format(addDays(parseISO(type === "FF" ? previous.due : previous.start), lag), "yyyy-MM-dd");
         result = { ...task, due, start: format(addDays(parseISO(due), -duration), "yyyy-MM-dd") };
       }
     }

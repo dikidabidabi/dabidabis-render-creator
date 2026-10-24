@@ -1,10 +1,24 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { actualProgressAt, criticalPath, delayBarRange, visibleSchedule, plannedProgress, weightedProgress, recordObservation, upsertObservation, removeObservation } from "./schedule-analysis";
+import { actualBarRanges, actualProgressAt, criticalPath, delayBarRange, visibleSchedule, plannedProgress, weightedProgress, recordObservation, upsertObservation, removeObservation } from "./schedule-analysis";
 import type { ScheduleTask } from "./schedule";
 const task = (id: string, wbs: string, start: string, due: string): ScheduleTask => ({ id, wbs, start, due, title: id, owner: "", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "check", title: "Selesai", done: false }] });
 const a = task("a", "1.1", "2026-10-01", "2026-10-11");
 const b = { ...task("b", "1.2", "2026-10-11", "2026-10-16"), predecessor: { taskId: "a", type: "FS" as const } };
+test("bar aktual biru sampai tenggat dan merah hingga aktual selesai", () => {
+  assert.deepEqual(actualBarRanges({ ...a, actualStart: "2026-10-05", actualFinish: "2026-10-20" }, "2026-10-24"), [{ start: "2026-10-05", end: "2026-10-11", late: false }, { start: "2026-10-11", end: "2026-10-20", late: true }]);
+});
+test("aktual mulai setelah tenggat membuat seluruh bar merah", () => {
+  assert.deepEqual(actualBarRanges({ ...a, actualStart: "2026-10-12" }, "2026-10-24"), [{ start: "2026-10-12", end: "2026-10-24", late: true }]);
+});
+test("bar aktual berhenti pada progres 100% dan tidak tampil tanpa aktual mulai", () => {
+  assert.deepEqual(actualBarRanges({ ...a, actualStart: "2026-10-05", progressEntries: [{ date: "2026-10-10", actual: 100 }] }, "2026-10-24", 100), [{ start: "2026-10-05", end: "2026-10-10", late: false }]);
+  assert.deepEqual(actualBarRanges(a, "2026-10-24"), []);
+});
+test("CPM turut memperhitungkan offset FS+3", () => {
+  const next = { ...b, predecessor: { taskId: "a", type: "FS" as const, lag: 3 } };
+  assert.equal(criticalPath([a, next]).duration, 18);
+});
 test("lipat semua turunan tanpa menyembunyikan WBS 10 dan keadaan lipat anak tetap ada", () => {
   const parent = task("p", "1", a.start, b.due), child = task("c", "1.1.1", a.start, a.due), other = task("o", "10.1", a.start, a.due);
   assert.deepEqual(visibleSchedule([parent, a, child, other], ["p", "a"]).map((t) => t.id), ["p", "o"]);

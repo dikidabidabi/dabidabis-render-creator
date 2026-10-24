@@ -39,11 +39,12 @@ export function criticalPath(tasks: ScheduleTask[], threshold = 0) {
   const day = (date: string) => differenceInCalendarDays(parseISO(date), parseISO(origin));
   const duration = (task: ScheduleTask) => scheduleDuration(task.start, task.due);
   const lag = (source: ScheduleTask, target: ScheduleTask) => {
+    const offset = target.predecessor?.lag ?? 0;
     switch (target.predecessor?.type) {
-      case "SS": return 0;
-      case "FF": return duration(source) - duration(target);
-      case "SF": return -duration(target);
-      default: return duration(source);
+      case "SS": return offset;
+      case "FF": return duration(source) - duration(target) + offset;
+      case "SF": return -duration(target) + offset;
+      default: return duration(source) + offset;
     }
   };
   function forward(task: ScheduleTask): number {
@@ -104,10 +105,22 @@ export function actualProgressAt(tasks: ScheduleTask[], date: string): number | 
  * dianggap selesai tepat waktu karena tanggal selesainya tidak diketahui.
  */
 export function delayBarRange(task: ScheduleTask, today: string, currentProgress?: number): { start: string; end: string } | null {
-  const completion = (task.progressEntries ?? []).filter((point) => point.actual >= 100).map((point) => point.date).sort()[0];
+  const completion = task.actualFinish ?? (task.progressEntries ?? []).filter((point) => point.actual >= 100).map((point) => point.date).sort()[0];
   if (!completion && currentProgress !== undefined && currentProgress >= 100) return null;
   const end = completion ?? today;
   return end > task.due ? { start: task.due, end } : null;
+}
+
+/** Explicit actual dates take priority; unfinished work tracks today. Split at planned due. */
+export function actualBarRanges(task: ScheduleTask, today: string, currentProgress?: number) {
+  if (!task.actualStart) return [];
+  const completion = task.actualFinish ?? (task.progressEntries ?? []).filter((point) => point.actual >= 100).map((point) => point.date).sort()[0];
+  const end = completion ?? (currentProgress !== undefined && currentProgress >= 100 ? (task.progressEntries ?? []).map((point) => point.date).sort().at(-1) ?? task.actualStart : today);
+  if (end < task.actualStart) return [];
+  const ranges: { start: string; end: string; late: boolean }[] = [];
+  if (task.actualStart <= task.due) ranges.push({ start: task.actualStart, end: end < task.due ? end : task.due, late: false });
+  if (end > task.due) ranges.push({ start: task.actualStart > task.due ? task.actualStart : task.due, end, late: true });
+  return ranges;
 }
 
 export function plannedProgress(tasks: ScheduleTask[], date: string) {

@@ -62,6 +62,32 @@ test("level WBS mengikuti jumlah segmen nomor", () => {
 const previous: ScheduleTask = { ...task, id: "A", taskNumber: 2, start: "2026-10-10", due: "2026-10-20" };
 const successor: ScheduleTask = { ...task, id: "B", taskNumber: 3, start: "2026-10-01", due: "2026-10-04" };
 describe("Hubungan predecessor", () => {
+  test("2FS+3 mundur tiga hari dari selesai pendahulu", () => {
+    const p = parsePredecessor("2FS+3", successor, [previous]);
+    const next = resolveScheduleDependencies([previous, { ...successor, predecessor: p }])[1];
+    assert.equal(next?.start, "2026-10-23");
+    assert.equal(next?.due, "2026-10-26");
+    assert.equal(predecessorText({ ...successor, predecessor: p }, [previous]), "2FS+3");
+    assert.equal(normalizeSchedule([{ ...successor, predecessor: p }])[0]?.predecessor?.lag, 3);
+  });
+  test("4FF-5 maju lima hari dari selesai dan offset bertahan pada rantai", () => {
+    const source = { ...previous, taskNumber: 4 };
+    const p = parsePredecessor("4FF-5", successor, [source]);
+    const next = resolveScheduleDependencies([source, { ...successor, predecessor: p }])[1];
+    assert.equal(next?.due, "2026-10-15");
+    assert.equal(next?.start, "2026-10-12");
+    assert.equal(predecessorText({ ...successor, predecessor: p }, [source]), "4FF-5");
+  });
+  for (const type of ["SS", "SF"] as const) test(`${type} memakai offset bertanda`, () => {
+    const p = parsePredecessor(`2${type}-5`, successor, [previous]);
+    const next = resolveScheduleDependencies([previous, { ...successor, predecessor: p }])[1];
+    assert.equal(type === "SS" ? next?.start : next?.due, "2026-10-05");
+  });
+  test("tanggal aktual tetap tersimpan tanpa mengubah progres bertanggal", () => {
+    const next = normalizeSchedule([{ ...task, actualStart: "2026-10-03", actualFinish: "2026-10-23" }])[0];
+    assert.equal(next?.actualStart, "2026-10-03");
+    assert.equal(next?.actualFinish, "2026-10-23");
+  });
   test("2 dan 2FS memakai Finish to Start secara default", () => {
     for (const text of ["2", "2FS"]) {
       const p = parsePredecessor(text, successor, [previous, successor]);

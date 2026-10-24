@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { addDays, differenceInCalendarDays, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { id as localeId } from "date-fns/locale";
-import { actualProgressAt, plannedProgress, scheduleLeaves, weightedProgress } from "@/lib/schedule-analysis";
+import { actualBarRanges, actualProgressAt, plannedProgress, scheduleLeaves, weightedProgress } from "@/lib/schedule-analysis";
 import { scheduleDuration, type ScheduleTask } from "@/lib/schedule";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -14,7 +14,7 @@ export function ScheduleSCurve({ tasks, today }: { tasks: ScheduleTask[]; today:
     if (!start || !end) return [];
     const days = differenceInCalendarDays(parseISO(end), parseISO(start));
     const step = Math.max(7, Math.ceil(days / 260));
-    const dates = new Set([start, end, current, ...leaves.flatMap((task) => [task.start, task.due]), ...leaves.flatMap((task) => (task.progressEntries ?? []).map((point) => point.date))]);
+    const dates = new Set([start, end, current, ...leaves.flatMap((task) => [task.start, task.due, ...(task.actualStart ? [task.actualStart] : []), ...(task.actualFinish ? [task.actualFinish] : [])]), ...leaves.flatMap((task) => (task.progressEntries ?? []).map((point) => point.date))]);
     for (let d = step; d < days; d += step) dates.add(format(addDays(parseISO(start), d), "yyyy-MM-dd"));
     return [...dates].sort().map((date) => {
       const actual = date > current ? null : actualProgressAt(tasks, date);
@@ -39,12 +39,14 @@ const AXIS_ROW = 22, NAME_WIDTH = 220;
 /** Gantt superimposition: plan bar start→due; realization bar start→first 100% entry or latest dated entry. */
 function realizationEnd(task: ScheduleTask) {
   const entries = [...(task.progressEntries ?? [])].sort((a, b) => a.date.localeCompare(b.date));
-  return entries.find((point) => point.actual >= 100)?.date ?? entries.at(-1)?.date ?? null;
+  return task.actualFinish ?? entries.find((point) => point.actual >= 100)?.date ?? entries.at(-1)?.date ?? null;
 }
 
 function SCurveChart({ tasks, data, current, number }: { tasks: ScheduleTask[]; data: CurvePoint[]; current: string; number: (value: number) => string }) {
   const [gantt, setGantt] = useState(false);
-  const first = parseISO(data[0].date), last = parseISO(data.at(-1)!.date);
+  const firstPoint = data[0], lastPoint = data.at(-1);
+  if (!firstPoint || !lastPoint) return null;
+  const first = parseISO(firstPoint.date), last = parseISO(lastPoint.date);
   const start = startOfWeek(first, { weekStartsOn: 1 }), end = addDays(endOfWeek(last, { weekStartsOn: 1 }), 1);
   const days = Math.max(7, differenceInCalendarDays(end, start));
   const dayW = Math.max(4, 900 / days), width = days * dayW;
@@ -58,14 +60,15 @@ function SCurveChart({ tasks, data, current, number }: { tasks: ScheduleTask[]; 
     const out: { key: string; label: string; from: number; to: number }[] = [];
     for (let d = 0; d < days; d++) {
       const date = addDays(start, d), k = format(date, key);
-      if (out.at(-1)?.key === k) out.at(-1)!.to = (d + 1) * dayW; else out.push({ key: k, label: label(date), from: d * dayW, to: (d + 1) * dayW });
+      const previous = out.at(-1);
+      if (previous?.key === k) previous.to = (d + 1) * dayW; else out.push({ key: k, label: label(date), from: d * dayW, to: (d + 1) * dayW });
     }
     return out;
   };
   const months = spans("yyyy-MM", (date) => format(date, "MMM", { locale: localeId })), years = spans("yyyy", (date) => format(date, "yyyy"));
   const line = (points: { date: string; value: number }[]) => points.map((point) => `${x(point.date).toFixed(1)},${y(point.value).toFixed(1)}`).join(" ");
   const plan = data.map((point) => ({ date: point.date, value: point.plan }));
-  const actual = data.filter((point) => point.actual !== null).map((point) => ({ date: point.date, value: point.actual! }));
+  const actual = data.flatMap((point) => point.actual === null ? [] : [{ date: point.date, value: point.actual }]);
   const axisLabels = ["Minggu", "Bulan", "Tahun"];
   return <div className="mt-5">
     <label className="mb-3 flex w-fit items-center gap-2 text-sm"><Checkbox checked={gantt} onCheckedChange={(value) => setGantt(value === true)} />Munculkan gantt chart</label>
@@ -78,7 +81,7 @@ function SCurveChart({ tasks, data, current, number }: { tasks: ScheduleTask[]; 
       <svg width={width + 44} height={height + AXIS_ROW * 3} className="shrink-0 text-xs" role="img" aria-label="Grafik Kurva S">
         {[0, 20, 40, 60, 80, 100].map((value) => <g key={value}><line x1={0} x2={width} y1={y(value)} y2={y(value)} stroke="var(--border)" /><text x={width + 4} y={y(value) + 4} fill="var(--muted-foreground)" fontSize={11}>{value}%</text></g>)}
         {weeks.map((week) => <line key={week.toISOString()} x1={x(week)} x2={x(week)} y1={0} y2={height} stroke="var(--muted-foreground)" strokeOpacity={0.5} strokeDasharray="3 4" />)}
-        {rows.map((task, index) => { const top = index * rowH, realized = realizationEnd(task); return <g key={task.id} opacity={0.5}><line x1={0} x2={width} y1={top + rowH} y2={top + rowH} stroke="var(--border)" /><rect x={x(task.start)} y={top + rowH * 0.22} width={Math.max(2, x(addDays(parseISO(task.due), 1)) - x(task.start))} height={rowH * 0.32} fill="var(--muted-foreground)" /><title>{`${task.title}: ${task.start} – ${task.due}`}</title>{realized && <rect x={x(task.start)} y={top + rowH * 0.62} width={Math.max(2, x(addDays(parseISO(realized), 1)) - x(task.start))} height={Math.max(3, rowH * 0.12)} fill="var(--schedule-link-ss)" />}</g>; })}
+        {rows.map((task, index) => { const top = index * rowH, realized = realizationEnd(task), ranges = actualBarRanges(task, current); return <g key={task.id} opacity={0.5}><line x1={0} x2={width} y1={top + rowH} y2={top + rowH} stroke="var(--border)" /><rect x={x(task.start)} y={top + rowH * 0.22} width={Math.max(2, x(addDays(parseISO(task.due), 1)) - x(task.start))} height={rowH * 0.32} fill="var(--muted-foreground)" /><title>{`${task.title}: ${task.start} – ${task.due}`}</title>{ranges.map((range) => <rect key={`${range.start}-${range.late}`} x={x(range.start)} y={top + rowH * 0.62} width={Math.max(2, x(addDays(parseISO(range.end), 1)) - x(range.start))} height={Math.max(3, rowH * 0.12)} rx={3} fill={range.late ? "var(--destructive)" : "var(--schedule-today)"} />)}{!ranges.length && realized && <rect x={x(task.start)} y={top + rowH * 0.62} width={Math.max(2, x(addDays(parseISO(realized), 1)) - x(task.start))} height={Math.max(3, rowH * 0.12)} fill="var(--schedule-link-ss)" />}</g>; })}
         <line x1={x(current)} x2={x(current)} y1={0} y2={height} stroke="var(--schedule-today)" strokeDasharray="4 4" />
         <polyline points={line(plan)} fill="none" stroke="var(--schedule-link-fs)" strokeWidth={2.5} />
         {actual.length > 0 && <polyline points={line(actual)} fill="none" stroke="var(--schedule-link-ss)" strokeWidth={2.5} />}
