@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { criticalPath, visibleSchedule, plannedProgress, weightedProgress, recordObservation, upsertObservation, removeObservation } from "./schedule-analysis";
+import { actualProgressAt, criticalPath, visibleSchedule, plannedProgress, weightedProgress, recordObservation, upsertObservation, removeObservation } from "./schedule-analysis";
 import type { ScheduleTask } from "./schedule";
 const task = (id: string, wbs: string, start: string, due: string): ScheduleTask => ({ id, wbs, start, due, title: id, owner: "", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "check", title: "Selesai", done: false }] });
 const a = task("a", "1.1", "2026-10-01", "2026-10-11");
@@ -50,4 +50,21 @@ test("tanggal induk tidak memperpanjang proyek CPM dan induk mengikuti anak krit
   const result = criticalPath([parent, a, b]);
   assert.equal(result.duration, 15);
   assert.deepEqual([...result.critical].sort(), ["a", "b", "p"]);
+});
+test("realisasi per pekerjaan bertanggal berbobot tanggal mulai–tenggat tanpa menghitung induk", () => {
+  const first = { ...a, progressEntries: [{ date: "2026-10-06", actual: 40 }, { date: "2026-10-12", actual: 80 }] };
+  const second = { ...b, progressEntries: [{ date: "2026-10-12", actual: 20 }] };
+  const parent = { ...task("p", "1", "2026-10-01", "2026-12-01"), progressEntries: [{ date: "2026-10-01", actual: 100 }] };
+  const tasks = [parent, first, second];
+  assert.equal(actualProgressAt(tasks, "2026-10-05"), null);
+  assert.equal(actualProgressAt(tasks, "2026-10-06"), 400 / 15);
+  assert.equal(actualProgressAt(tasks, "2026-10-12"), 60);
+  assert.equal(plannedProgress(tasks, "2026-10-12"), 1100 / 15);
+  assert.equal(weightedProgress(tasks, "2026-10-12"), 60);
+});
+test("progres terlambat tetap mengikuti tanggal catatan bukan dipaksa selesai saat tenggat", () => {
+  const late = { ...a, progressEntries: [{ date: "2026-10-20", actual: 65 }] };
+  assert.equal(plannedProgress([late], "2026-10-20"), 100);
+  assert.equal(actualProgressAt([late], "2026-10-19"), null);
+  assert.equal(actualProgressAt([late], "2026-10-20"), 65);
 });

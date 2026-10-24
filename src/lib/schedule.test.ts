@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { normalizeSchedule, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask } from "./schedule";
+import { upsertTaskProgress, normalizeSchedule, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask } from "./schedule";
 
 const task: ScheduleTask = { id: "task", wbs: "1.1", title: "Survei", owner: "", start: "2026-09-02", due: "2026-09-30", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "a", title: "Ukur", done: true }, { id: "b", title: "Catat", done: false }] };
 describe("Jadwal pekerjaan", () => {
@@ -43,6 +43,18 @@ describe("Jadwal pekerjaan", () => {
   });
 });
 import { wbsLevel } from "./schedule";
+test("progres bertanggal tersimpan per pekerjaan, mengganti tanggal sama dan menolak di luar 0–100", () => {
+  let entries = upsertTaskProgress([], { date: "2026-10-12", actual: 25 });
+  entries = upsertTaskProgress(entries, { date: "2026-10-06", actual: 10 });
+  entries = upsertTaskProgress(entries, { date: "2026-10-12", actual: 60 });
+  const saved = normalizeSchedule([{ ...task, progressEntries: entries }])[0];
+  assert.deepEqual(saved?.progressEntries, [{ date: "2026-10-06", actual: 10 }, { date: "2026-10-12", actual: 60 }]);
+  if (!saved) throw new Error("Pekerjaan tidak terbaca");
+  assert.equal(scheduleProgress(saved, [saved], "2026-10-10"), 10);
+  assert.equal(scheduleProgress(saved, [saved], "2026-10-12"), 60);
+  for (const actual of [-1, 101, NaN]) assert.throws(() => upsertTaskProgress(entries, { date: "2026-10-12", actual }));
+  assert.throws(() => upsertTaskProgress(entries, { date: "2026-02-30", actual: 40 }));
+});
 test("level WBS mengikuti jumlah segmen nomor", () => {
   assert.deepEqual(["1", "1.1", "1.1.1", "1.1.1.1"].map(wbsLevel), [1, 2, 3, 4]);
 });

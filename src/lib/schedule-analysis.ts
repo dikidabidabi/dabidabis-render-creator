@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
-import { scheduleDuration, scheduleProgress, type ScheduleTask } from "./schedule";
+import { scheduleDuration, scheduleProgress, taskProgressAt, type ScheduleTask } from "./schedule";
 
 export const SCHEDULE_VIEW_KEY = "dabidabis_jadwal_view_v1";
 export type ProgressObservation = { date: string; actual: number; note?: string };
@@ -82,11 +82,20 @@ export function criticalPath(tasks: ScheduleTask[], threshold = 0) {
   return { critical, floats, duration: finish };
 }
 
-export function weightedProgress(tasks: ScheduleTask[]) {
+export function weightedProgress(tasks: ScheduleTask[], date = format(new Date(), "yyyy-MM-dd")) {
   const leaves = scheduleLeaves(tasks);
   const weight = (task: ScheduleTask) => Math.max(1, scheduleDuration(task.start, task.due));
   const total = leaves.reduce((sum, task) => sum + weight(task), 0);
-  return total ? leaves.reduce((sum, task) => sum + weight(task) * scheduleProgress(task, tasks), 0) / total : 0;
+  return total ? leaves.reduce((sum, task) => sum + weight(task) * scheduleProgress(task, tasks, date), 0) / total : 0;
+}
+
+/** Historical realization uses dated leaf records, never today's checklist for past dates. */
+export function actualProgressAt(tasks: ScheduleTask[], date: string): number | null {
+  const leaves = scheduleLeaves(tasks);
+  if (!leaves.some((task) => taskProgressAt(task, date) !== null)) return null;
+  const weight = (task: ScheduleTask) => Math.max(1, scheduleDuration(task.start, task.due));
+  const total = leaves.reduce((sum, task) => sum + weight(task), 0);
+  return total ? leaves.reduce((sum, task) => sum + weight(task) * (taskProgressAt(task, date) ?? 0), 0) / total : null;
 }
 
 export function plannedProgress(tasks: ScheduleTask[], date: string) {
