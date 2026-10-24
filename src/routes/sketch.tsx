@@ -1802,9 +1802,26 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
       const next = [...prev];
       next.splice(idx + 1, 0, clone);
       setOpenId(clone.id);
+      duplicateSketchSchedule(id, clone.id);
       return next;
     });
     toast.success("Sketsa disalin — data progres tetap utuh");
+  };
+
+  // Jadwal dan pengaturan tampilannya (lipatan WBS, CPM, slack) ikut tersalin
+  // ke sketsa hasil duplikat agar halaman Jadwal langsung menampilkan susunan yang sama.
+  const duplicateSketchSchedule = (sourceId: string, targetId: string) => {
+    try {
+      const store = normalizeScheduleStore(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"));
+      const nextStore = copyScheduleEntry(store, sourceId, targetId);
+      if (nextStore !== store) void setProjectItem(SCHEDULE_KEY, JSON.stringify(nextStore));
+      const views = JSON.parse(localStorage.getItem(SCHEDULE_VIEW_KEY) || "{}") as Record<string, unknown>;
+      if (views && typeof views === "object" && views[sourceId]) {
+        void setProjectItem(SCHEDULE_VIEW_KEY, JSON.stringify({ ...views, [targetId]: views[sourceId] }));
+      }
+    } catch {
+      /* abaikan — jadwal sumber tetap utuh */
+    }
   };
 
   const deleteSketch = (id: string) => {
