@@ -29,7 +29,7 @@ export const Route = createFileRoute("/jadwal")({
 
 const STATUS_LABELS = { belum: "Belum mulai", berjalan: "Berjalan", berisiko: "Berisiko", tertunda: "Tertunda", selesai: "Selesai" };
 const COLOR_LABELS = { stage: "Jingga", lavender: "Lavender", green: "Hijau", yellow: "Kuning", neutral: "Netral" };
-const TABLE_WIDTH = 1480;
+const TABLE_WIDTH = 1380;
 
 function SchedulePage() {
   const { user } = useAuth();

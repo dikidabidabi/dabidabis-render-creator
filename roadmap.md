@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan ID pekerjaan dan kolom Predecessor FS/SS/FF/SF, penyesuaian tanggal berantai, validasi hubungan, dan pengujian.
+- [x] Tambahkan ID pekerjaan dan kolom Predecessor FS/SS/FF/SF; 15 uji lolos, keempat hubungan, pilihan jenis, perubahan tanggal berantai, penyimpanan ulang dan penolakan siklus teruji melalui akun aktif; pekerjaan uji dihapus.
 
 - [x] Jadwal per sketsa: daftar judul sketsa di sisi kiri, masing-masing menyimpan jadwal sendiri; 7 uji lolos dan teruji di browser (daftar, perpindahan sketsa, penyimpanan per sketsa).
 
