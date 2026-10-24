@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Kalender tabel dan fill handle empat kolom tanggal; aktual mulai/selesai dan bar aktual biru/merah; offset predecessor positif/negatif, pengujian dan verifikasi.
+
 - [x] Bar merah keterlambatan tipis membulat dari tenggat hingga tanggal progres 100% atau garis hari bila belum 100%; hanya pekerjaan daun, 32 uji lolos, terverifikasi visual di Gantt dengan akun aktif.
 - [x] Pindahkan pengisian progres bertanggal ke tiap pekerjaan; realisasi Kurva S berbobot durasi mulai–tenggat, 31 uji lolos, dua pekerjaan menghasilkan 60% sesuai bobot, riwayat tersimpan setelah muat ulang dan dapat dihapus; teruji pada akun aktif tanpa kesalahan halaman.
 
