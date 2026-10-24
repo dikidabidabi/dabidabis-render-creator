@@ -1,16 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, test } from "node:test";
+import { strict as assert } from "node:assert";
 import { PRINTABLE_WIDTH_PX, printZoom } from "./schedule-print";
 
 describe("printZoom", () => {
-  it("mengecilkan konten lebar agar muat kiri-kanan kertas A4 lanskap", () => {
-    expect(printZoom(1600)).toBeCloseTo(PRINTABLE_WIDTH_PX / 1600);
-    expect(printZoom(2092)).toBeCloseTo(0.5);
+  test("mengecilkan konten lebar agar muat kiri-kanan kertas A4 lanskap", () => {
+    assert.ok(Math.abs(printZoom(1600) - PRINTABLE_WIDTH_PX / 1600) < 1e-9);
+    assert.ok(Math.abs(printZoom(2092) - 0.5) < 1e-9);
   });
 
-  it("tidak pernah membesar melebihi 100% dan menolak lebar tidak valid", () => {
-    expect(printZoom(800)).toBe(1);
-    expect(printZoom(PRINTABLE_WIDTH_PX)).toBe(1);
-    expect(printZoom(0)).toBe(1);
-    expect(printZoom(Number.NaN)).toBe(1);
+  test("tidak pernah membesar melebihi 100% dan menolak lebar tidak valid", () => {
+    assert.equal(printZoom(800), 1);
+    assert.equal(printZoom(PRINTABLE_WIDTH_PX), 1);
+    assert.equal(printZoom(0), 1);
+    assert.equal(printZoom(Number.NaN), 1);
   });
 });
