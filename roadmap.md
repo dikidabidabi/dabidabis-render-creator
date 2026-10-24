@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Pindahkan pengisian progres bertanggal ke tiap pekerjaan; hubungkan realisasi Kurva S dan progres tabel/bar dengan durasi mulai–tenggat, uji penyimpanan dan riwayat.
+
 - [x] Tambahkan pengisian progres manual bertanggal sebagai acuan Kurva S; entri tersimpan, tampil pada garis Realisasi, bertahan setelah muat ulang, dan dapat dihapus — 24 uji lolos, teruji di browser dengan akun aktif.
 - [x] Lipat hierarki WBS dan bentuk bar tahap ringkasan sesuai gambar; lipat/buka dan muat ulang teruji.
 - [x] Tambahkan CPM merah dengan ambang slack default 0 hari; sorotan bar/kabel dan perubahan slack 0/5 teruji.
