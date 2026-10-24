@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { criticalPath, visibleSchedule, plannedProgress, weightedProgress, recordObservation } from "./schedule-analysis";
+import { criticalPath, visibleSchedule, plannedProgress, weightedProgress, recordObservation, upsertObservation, removeObservation } from "./schedule-analysis";
 import type { ScheduleTask } from "./schedule";
 const task = (id: string, wbs: string, start: string, due: string): ScheduleTask => ({ id, wbs, start, due, title: id, owner: "", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "check", title: "Selesai", done: false }] });
 const a = task("a", "1.1", "2026-10-01", "2026-10-11");
@@ -36,6 +36,14 @@ test("riwayat progres hanya mencatat tanggal pengamatan dan mengganti hari sama"
   const first = recordObservation([], [a], new Date("2026-10-24T12:00:00"));
   const updated = recordObservation(first, [{ ...a, checks: a.checks.map((c) => ({ ...c, done: true })) }], new Date("2026-10-24T12:00:00"));
   assert.deepEqual(updated, [{ date: "2026-10-24", actual: 100 }]);
+});
+test("pengisian manual bertanggal diurutkan, tanggal sama diganti, nilai dijepit 0–100", () => {
+  let list = upsertObservation([], { date: "2026-10-20", actual: 25, note: "  Minggu 1  " });
+  list = upsertObservation(list, { date: "2026-10-10", actual: 10 });
+  list = upsertObservation(list, { date: "2026-10-20", actual: 40 });
+  assert.deepEqual(list, [{ date: "2026-10-10", actual: 10 }, { date: "2026-10-20", actual: 40 }]);
+  assert.deepEqual(upsertObservation(list, { date: "2026-10-25", actual: 140 }).at(-1)?.actual, 100);
+  assert.deepEqual(removeObservation(list, "2026-10-10"), [{ date: "2026-10-20", actual: 40 }]);
 });
 test("tanggal induk tidak memperpanjang proyek CPM dan induk mengikuti anak kritis", () => {
   const parent = task("p", "1", "2026-10-01", "2026-12-01");

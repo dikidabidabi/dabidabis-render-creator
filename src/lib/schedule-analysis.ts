@@ -2,7 +2,7 @@ import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import { scheduleDuration, scheduleProgress, type ScheduleTask } from "./schedule";
 
 export const SCHEDULE_VIEW_KEY = "dabidabis_jadwal_view_v1";
-export type ProgressObservation = { date: string; actual: number };
+export type ProgressObservation = { date: string; actual: number; note?: string };
 export type ScheduleView = { collapsed: string[]; cpm: boolean; slack: number; observations: ProgressObservation[] };
 export const DEFAULT_SCHEDULE_VIEW: ScheduleView = { collapsed: [], cpm: false, slack: 0, observations: [] };
 
@@ -103,4 +103,15 @@ export function plannedProgress(tasks: ScheduleTask[], date: string) {
 export function recordObservation(observations: ProgressObservation[], tasks: ScheduleTask[], today: Date) {
   const date = format(today, "yyyy-MM-dd");
   return [...observations.filter((point) => point.date !== date), { date, actual: weightedProgress(tasks) }].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Pengisian progres manual bertanggal; tanggal sama menggantikan entri sebelumnya. */
+export function upsertObservation(observations: ProgressObservation[], entry: ProgressObservation) {
+  const actual = Math.max(0, Math.min(100, entry.actual));
+  const note = entry.note?.trim() || undefined;
+  return [...observations.filter((point) => point.date !== entry.date), { date: entry.date, actual, ...(note ? { note } : {}) }].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function removeObservation(observations: ProgressObservation[], date: string) {
+  return observations.filter((point) => point.date !== date);
 }
