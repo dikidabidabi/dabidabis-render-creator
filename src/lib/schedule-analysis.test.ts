@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { actualProgressAt, criticalPath, visibleSchedule, plannedProgress, weightedProgress, recordObservation, upsertObservation, removeObservation } from "./schedule-analysis";
+import { actualProgressAt, criticalPath, delayBarRange, visibleSchedule, plannedProgress, weightedProgress, recordObservation, upsertObservation, removeObservation } from "./schedule-analysis";
 import type { ScheduleTask } from "./schedule";
 const task = (id: string, wbs: string, start: string, due: string): ScheduleTask => ({ id, wbs, start, due, title: id, owner: "", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "check", title: "Selesai", done: false }] });
 const a = task("a", "1.1", "2026-10-01", "2026-10-11");
@@ -67,4 +67,15 @@ test("progres terlambat tetap mengikuti tanggal catatan bukan dipaksa selesai sa
   assert.equal(plannedProgress([late], "2026-10-20"), 100);
   assert.equal(actualProgressAt([late], "2026-10-19"), null);
   assert.equal(actualProgressAt([late], "2026-10-20"), 65);
+});
+test("bar keterlambatan membentang dari tenggat hingga tanggal progres 100% atau hari ini", () => {
+  const lateDone = { ...a, progressEntries: [{ date: "2026-10-20", actual: 100 }] };
+  assert.deepEqual(delayBarRange(lateDone, "2026-10-24"), { start: "2026-10-11", end: "2026-10-20" });
+  const onTime = { ...a, progressEntries: [{ date: "2026-10-10", actual: 100 }] };
+  assert.equal(delayBarRange(onTime, "2026-10-24"), null);
+  const running = { ...a, progressEntries: [{ date: "2026-10-12", actual: 60 }] };
+  assert.deepEqual(delayBarRange(running, "2026-10-24"), { start: "2026-10-11", end: "2026-10-24" });
+  assert.equal(delayBarRange(running, "2026-10-11"), null);
+  assert.equal(delayBarRange(a, "2026-10-24", 100), null);
+  assert.deepEqual(delayBarRange(a, "2026-10-24", 40), { start: "2026-10-11", end: "2026-10-24" });
 });
