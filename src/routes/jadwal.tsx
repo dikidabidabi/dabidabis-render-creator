@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ScheduleDatePicker } from "@/components/schedule-date-picker";
-import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
+import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { useAuth } from "@/lib/auth";
 
@@ -157,7 +157,7 @@ function ScheduleWorkspace() {
           const progress = scheduleProgress(task, tasks);
           return <div key={task.id} className={`relative flex border-b border-border/60 ${task.stage ? "bg-muted/70" : ""}`} style={{ height: 58 }} data-task-id={task.id}>
             {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs" style={{ width: TABLE_WIDTH }}>
-              <div className={`schedule-wbs schedule-color-${task.color} mx-1 rounded px-2 py-2 font-semibold`}>{task.wbs}</div>
+              <div className="px-1" style={{ paddingLeft: 4 + (wbsLevel(task.wbs) - 1) * 10 }}><span className={`schedule-wbs schedule-wbs-level-${wbsLevel(task.wbs)} inline-block rounded px-2 py-1.5 font-semibold`} title={WBS_LEVEL_LABELS[wbsLevel(task.wbs)]}>{task.wbs}</span></div>
               <Button variant="ghost" className={`h-full justify-start whitespace-normal px-2 text-left text-xs ${task.stage ? "font-semibold" : "font-normal"}`} onClick={() => { setError(""); setDraft(structuredClone(task)); }} title={task.title}><span className="line-clamp-2">{task.title}</span></Button>
               <div className="truncate px-2" title={task.owner}>{task.owner || "—"}</div><div className="px-2">{format(parseISO(task.start), "d/M/yy")}</div><div className="px-2">{format(parseISO(task.due), "d/M/yy")}</div><div className="px-2">{scheduleDuration(task.start, task.due)} hari</div><div className="px-2 font-semibold text-primary">{progress}%</div><div className="px-1"><span className={`schedule-status schedule-status-${task.status}`}>{STATUS_LABELS[task.status]}</span></div><div className="truncate px-2" title={task.component}>{task.component || "—"}</div><div className="px-2"><div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`Progres ${task.title}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div className="h-full bg-primary" style={{ width: `${progress}%` }} /></div><p className="mt-1 text-[10px] text-muted-foreground">{progress}%</p></div><Button size="icon" variant="ghost" className="size-7" aria-label={`Edit ${task.title}`} onClick={() => { setError(""); setDraft(structuredClone(task)); }}><Pencil className="size-3.5" /></Button>
             </div>}
@@ -167,7 +167,7 @@ function ScheduleWorkspace() {
         {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">{activeId ? "Belum ada pekerjaan pada sketsa ini." : "Pilih sketsa untuk mengelola jadwalnya."}</p>{activeId && <Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button>}</div>}
       </div>
     </div>
-    <footer className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">{SCHEDULE_COLORS.map((color) => <span key={color} className="flex items-center gap-2"><span className={`schedule-color-${color} size-3 rounded-sm`} />{COLOR_LABELS[color]}</span>)}<span className="ml-auto flex items-center gap-2"><span className="schedule-today-key h-3 w-0.5" />Hari ini</span></footer>
+    <footer className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">{([1, 2, 3, 4] as const).map((level) => <span key={level} className="flex items-center gap-2"><span className={`schedule-wbs-level-${level} rounded px-1.5 py-0.5 text-[10px] font-semibold`}>{["1", "1.1", "1.1.1", "1.1.1.1"][level - 1]}</span>{WBS_LEVEL_LABELS[level]}</span>)}<span className="h-4 w-px bg-border" />{SCHEDULE_COLORS.map((color) => <span key={color} className="flex items-center gap-2"><span className={`schedule-color-${color} size-3 rounded-sm`} />{COLOR_LABELS[color]}</span>)}<span className="ml-auto flex items-center gap-2"><span className="schedule-today-key h-3 w-0.5" />Hari ini</span></footer>
     </div>
 
     <Dialog open={!!draft} onOpenChange={(open) => { if (!open) setDraft(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{draft && tasks.some((t) => t.id === draft.id) ? "Edit pekerjaan" : draft?.stage ? "Tambah tahap" : "Tambah pekerjaan"}</DialogTitle></DialogHeader>{draft && <form onSubmit={(e) => { e.preventDefault(); saveDraft(); }} className="space-y-5">

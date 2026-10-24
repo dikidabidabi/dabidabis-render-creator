@@ -67,6 +67,13 @@ export function normalizeSchedule(value: unknown): ScheduleTask[] {
   });
 }
 
+/** Level hierarki WBS: 1 = tahapan, 2 = disiplin, 3 = rincian, 4 = rincian terkecil. */
+export function wbsLevel(wbs: string): 1 | 2 | 3 | 4 {
+  const parts = wbs.trim().replace(/\.+$/, "").split(".").filter(Boolean).length;
+  return Math.min(4, Math.max(1, parts)) as 1 | 2 | 3 | 4;
+}
+export const WBS_LEVEL_LABELS = { 1: "Tahapan", 2: "Disiplin / pekerjaan utama", 3: "Rincian pekerjaan", 4: "Rincian terkecil" } as const;
+
 export type SketchRef = { id: string; title: string };
 
 /** Daftar sketsa dari store Sketsa, beserta sketsa yang sedang dibuka. */

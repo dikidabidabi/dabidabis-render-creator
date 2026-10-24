@@ -309,6 +309,10 @@
 .schedule-color-green { background-color: var(--schedule-green); color: var(--schedule-ink); }
 .schedule-color-yellow { background-color: var(--schedule-yellow); color: var(--schedule-ink); }
 .schedule-color-neutral { background-color: var(--schedule-neutral); color: var(--schedule-ink); }
+.schedule-wbs-level-1 { background-color: var(--schedule-stage); color: var(--schedule-ink); }
+.schedule-wbs-level-2 { background-color: var(--schedule-lavender); color: var(--schedule-ink); }
+.schedule-wbs-level-3 { background-color: var(--schedule-green); color: var(--schedule-ink); }
+.schedule-wbs-level-4 { background-color: var(--schedule-yellow); color: var(--schedule-ink); }
 .schedule-bar { overflow: hidden; box-shadow: var(--shadow-soft); }
 .schedule-bar:hover { filter: brightness(0.97); }
 .schedule-bar-progress { background: var(--schedule-progress); }
