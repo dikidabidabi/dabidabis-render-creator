@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { normalizeSchedule, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, type ScheduleTask } from "./schedule";
+import { normalizeSchedule, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, type ScheduleTask } from "./schedule";
 
 const task: ScheduleTask = { id: "task", wbs: "1.1", title: "Survei", owner: "", start: "2026-09-02", due: "2026-09-30", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "a", title: "Ukur", done: true }, { id: "b", title: "Catat", done: false }] };
 describe("Jadwal pekerjaan", () => {
@@ -22,5 +22,23 @@ describe("Jadwal pekerjaan", () => {
   });
   test("data tidak valid ditolak saat pemuatan", () => {
     assert.equal(normalizeSchedule([task, { ...task, start: "2026-02-30" }, { ...task, due: "2026-09-01" }]).length, 1);
+  });
+  test("jadwal tersimpan terpisah per sketsa", () => {
+    const store = normalizeScheduleStore({ a: [task], b: [{ ...task, id: "lain", wbs: "2.1" }] });
+    assert.equal(store.a?.length, 1);
+    assert.equal(store.b?.[0]?.id, "lain");
+    assert.equal(normalizeScheduleStore({ a: "rusak" }).a, undefined);
+  });
+  test("jadwal format lama dipindahkan ke sketsa aktif", () => {
+    const store = normalizeScheduleStore([task], "sketsa-1");
+    assert.equal(store["sketsa-1"]?.length, 1);
+    assert.deepEqual(normalizeScheduleStore([task], null), {});
+  });
+  test("daftar judul sketsa dibaca dari store sketsa", () => {
+    const raw = JSON.stringify({ sketches: [{ id: "s1", title: "Rumah A" }, { id: "s2" }, { title: "tanpa id" }], openId: "s2" });
+    const store = readSketchStore(raw);
+    assert.deepEqual(store.sketches, [{ id: "s1", title: "Rumah A" }, { id: "s2", title: "Sketsa tanpa judul" }]);
+    assert.equal(store.openId, "s2");
+    assert.deepEqual(readSketchStore("bukan json"), { sketches: [], openId: null });
   });
 });
