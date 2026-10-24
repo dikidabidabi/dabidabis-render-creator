@@ -134,3 +134,24 @@ describe("Hubungan predecessor", () => {
     assert.deepEqual(normalizeSchedule([task, { ...task, id: "old2" }]).map((t) => t.taskNumber), [1, 2]);
   });
 });
+
+describe("copyScheduleEntry", () => {
+  test("menyalin jadwal ke sketsa baru tanpa mengubah sumber", () => {
+    const store: ScheduleStore = {
+      A: [
+        { ...task, id: "t1", taskNumber: 1, checks: [{ id: "c1", title: "Cek", done: true }] },
+        { ...task, id: "t2", taskNumber: 2, predecessor: { taskId: "t1", type: "FS", lag: 3 }, progressEntries: [{ date: "2026-10-12", actual: 40 }] },
+      ],
+    };
+    const next = copyScheduleEntry(store, "A", "B");
+    assert.equal(next.B?.length, 2);
+    assert.equal(next.B?.[1]?.predecessor?.taskId, "t1");
+    assert.equal(next.B?.[1]?.progressEntries?.[0]?.actual, 40);
+    // salinan dalam: mengubah hasil tidak memengaruhi sumber
+    next.B![0]!.checks[0]!.done = false;
+    assert.equal(store.A![0]!.checks[0]!.done, true);
+    // sumber kosong atau sama dengan target tidak menambah entri
+    assert.equal(copyScheduleEntry(store, "ZZ", "C").C, undefined);
+    assert.equal(copyScheduleEntry(store, "A", "A"), store);
+  });
+});
