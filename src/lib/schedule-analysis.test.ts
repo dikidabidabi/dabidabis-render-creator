@@ -37,3 +37,9 @@ test("riwayat progres hanya mencatat tanggal pengamatan dan mengganti hari sama"
   const updated = recordObservation(first, [{ ...a, checks: a.checks.map((c) => ({ ...c, done: true })) }], new Date("2026-10-24T12:00:00"));
   assert.deepEqual(updated, [{ date: "2026-10-24", actual: 100 }]);
 });
+test("tanggal induk tidak memperpanjang proyek CPM dan induk mengikuti anak kritis", () => {
+  const parent = task("p", "1", "2026-10-01", "2026-12-01");
+  const result = criticalPath([parent, a, b]);
+  assert.equal(result.duration, 15);
+  assert.deepEqual([...result.critical].sort(), ["a", "b", "p"]);
+});
