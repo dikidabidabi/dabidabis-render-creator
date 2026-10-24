@@ -160,10 +160,10 @@ function ScheduleWorkspace() {
   }
   const update = (value: Partial<ScheduleTask>) => setDraft((current) => current ? { ...current, ...value } : null);
 
-  return <main className="schedule-page flex gap-6 px-4 py-7 sm:px-6">
-    <aside className="w-52 shrink-0" aria-label="Daftar sketsa">
+  return <main className="schedule-page flex flex-col gap-6 px-4 lg:flex-row py-7 sm:px-6">
+    <aside className="w-full shrink-0 lg:w-52" aria-label="Daftar sketsa">
       <p className="mb-3 text-xs font-medium uppercase text-ember">Sketsa</p>
-      <div className="space-y-1">
+      <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1">
         {sketches.map((sketch) => {
           const list = store[sketch.id] ?? [];
           const pct = totalScheduleProgress(list);
@@ -180,11 +180,11 @@ function ScheduleWorkspace() {
     <div className="min-w-0 flex-1">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div><p className="mb-2 text-xs font-medium uppercase text-ember">Project · Jadwal</p><h1 className="font-display text-3xl font-semibold">Jadwal</h1><p className="mt-2 text-sm text-muted-foreground">{activeSketch ? <span className="font-medium text-foreground">{activeSketch.title}</span> : "Tanpa sketsa"}<span className="mx-2">·</span>{format(today, "EEEE, d MMMM yyyy", { locale: localeId })}<span className="mx-2">·</span>{tasks.length} pekerjaan<span className="mx-2">·</span>{saving ? "Menyimpan…" : "Tersimpan"}</p></div>
-      <div className="flex items-center gap-5"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border" /><Button variant="outline" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
+      <div className="flex flex-wrap items-center gap-3"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border" /><Button variant="outline" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
     </header>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
       <div className="flex flex-wrap items-center gap-5"><div className="space-y-2"><div className="flex items-center gap-2"><Checkbox id="critical-path" checked={settings.cpm} onCheckedChange={(checked) => saveSettings({ ...settings, cpm: checked === true })} /><Label htmlFor="critical-path">Jalur kritis (CPM)</Label></div><div className="flex items-center gap-2"><Label htmlFor="slack" className="text-xs">Slack (hari)</Label><Input id="slack" type="number" min={0} step={1} className="h-8 w-20" value={settings.slack} onChange={(event) => saveSettings({ ...settings, slack: Math.max(0, Math.trunc(Number(event.target.value) || 0)) })} /></div></div><ToggleGroup type="single" value={view} onValueChange={(v) => { if (v) setView(v); }} aria-label="Tampilan jadwal"><ToggleGroupItem value="combined">Tabel & Gantt</ToggleGroupItem><ToggleGroupItem value="table">Tabel</ToggleGroupItem><ToggleGroupItem value="timeline">Gantt</ToggleGroupItem></ToggleGroup></div>
-      <div className="flex items-center gap-2"><ToggleGroup type="single" value={scale} onValueChange={(v) => { if (v) setScale(v); }} aria-label="Skala waktu"><ToggleGroupItem value="week">Minggu</ToggleGroupItem><ToggleGroupItem value="month">Bulan</ToggleGroupItem></ToggleGroup><Button size="icon" variant="ghost" title="Waktu sebelumnya" aria-label="Waktu sebelumnya" onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}><ChevronLeft /></Button><Button variant="outline" onClick={goToday}><CalendarDays />Hari ini</Button><Button size="icon" variant="ghost" title="Waktu berikutnya" aria-label="Waktu berikutnya" onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}><ChevronRight /></Button></div>
+      <div className="flex flex-wrap items-center gap-2"><ToggleGroup type="single" value={scale} onValueChange={(v) => { if (v) setScale(v); }} aria-label="Skala waktu"><ToggleGroupItem value="week">Minggu</ToggleGroupItem><ToggleGroupItem value="month">Bulan</ToggleGroupItem></ToggleGroup><Button size="icon" variant="ghost" title="Waktu sebelumnya" aria-label="Waktu sebelumnya" onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}><ChevronLeft /></Button><Button variant="outline" onClick={goToday}><CalendarDays />Hari ini</Button><Button size="icon" variant="ghost" title="Waktu berikutnya" aria-label="Waktu berikutnya" onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}><ChevronRight /></Button></div>
     </div>
     <div ref={scrollRef} className="schedule-scroll overflow-auto border border-border bg-background" aria-label="Tabel dan diagram jadwal">
       <div className="relative" style={{ width: totalWidth, minHeight: 350 }}>

@@ -13,7 +13,7 @@ export function ScheduleSCurve({ tasks, observations, today }: { tasks: Schedule
     if (!start || !end) return [];
     const days = differenceInCalendarDays(parseISO(end), parseISO(start));
     const step = Math.max(7, Math.ceil(days / 260));
-    const dates = new Set([start, end, current, ...observations.map((point) => point.date)]);
+    const dates = new Set([start, end, current, ...leaves.flatMap((task) => [task.start, task.due]), ...observations.map((point) => point.date)]);
     for (let d = step; d < days; d += step) dates.add(format(addDays(parseISO(start), d), "yyyy-MM-dd"));
     return [...dates].sort().map((date) => {
       const observation = observations.filter((point) => point.date <= date).at(-1);
