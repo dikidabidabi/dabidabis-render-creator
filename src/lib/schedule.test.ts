@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { normalizeSchedule, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, type ScheduleTask } from "./schedule";
+import { normalizeSchedule, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask } from "./schedule";
 
 const task: ScheduleTask = { id: "task", wbs: "1.1", title: "Survei", owner: "", start: "2026-09-02", due: "2026-09-30", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "a", title: "Ukur", done: true }, { id: "b", title: "Catat", done: false }] };
 describe("Jadwal pekerjaan", () => {
@@ -45,4 +45,54 @@ describe("Jadwal pekerjaan", () => {
 import { wbsLevel } from "./schedule";
 test("level WBS mengikuti jumlah segmen nomor", () => {
   assert.deepEqual(["1", "1.1", "1.1.1", "1.1.1.1"].map(wbsLevel), [1, 2, 3, 4]);
+});
+
+const previous: ScheduleTask = { ...task, id: "A", taskNumber: 2, start: "2026-10-10", due: "2026-10-20" };
+const successor: ScheduleTask = { ...task, id: "B", taskNumber: 3, start: "2026-10-01", due: "2026-10-04" };
+describe("Hubungan predecessor", () => {
+  test("2 dan 2FS memakai Finish to Start secara default", () => {
+    for (const text of ["2", "2FS"]) {
+      const p = parsePredecessor(text, successor, [previous, successor]);
+      assert.deepEqual(p, { taskId: "A", type: "FS" });
+      const result = resolveScheduleDependencies([previous, { ...successor, predecessor: p }])[1];
+      assert.equal(result?.start, "2026-10-20");
+      assert.equal(result?.due, "2026-10-23");
+    }
+  });
+  test("2SS menyamakan tanggal mulai", () => {
+    const result = resolveScheduleDependencies([previous, { ...successor, predecessor: parsePredecessor("2SS", successor, [previous]) }])[1];
+    assert.equal(result?.start, "2026-10-10");
+    assert.equal(result?.due, "2026-10-13");
+  });
+  test("2FF menyamakan tanggal selesai", () => {
+    const result = resolveScheduleDependencies([previous, { ...successor, predecessor: parsePredecessor("2FF", successor, [previous]) }])[1];
+    assert.equal(result?.start, "2026-10-17");
+    assert.equal(result?.due, "2026-10-20");
+  });
+  test("2SF menghubungkan mulai pendahulu dengan selesai penerus", () => {
+    const result = resolveScheduleDependencies([previous, { ...successor, predecessor: parsePredecessor("2SF", successor, [previous]) }])[1];
+    assert.equal(result?.start, "2026-10-07");
+    assert.equal(result?.due, "2026-10-10");
+  });
+  test("perubahan pendahulu merambat melalui rantai dan mempertahankan durasi", () => {
+    const b = { ...successor, predecessor: { taskId: "A", type: "FS" as const } };
+    const c = { ...successor, id: "C", taskNumber: 4, predecessor: { taskId: "B", type: "FS" as const } };
+    const result = resolveScheduleDependencies([c, b, { ...previous, due: "2026-10-25" }]);
+    assert.equal(result[0]?.start, "2026-10-28");
+    assert.equal(result[0]?.due, "2026-10-31");
+    assert.equal(result[1]?.start, "2026-10-25");
+  });
+  test("ID tidak dikenal, diri sendiri, format salah, siklus dan hapus pendahulu ditolak", () => {
+    for (const text of ["99", "3", "2XX", "1.1FS"]) assert.throws(() => parsePredecessor(text, successor, [previous, successor]));
+    assert.throws(() => resolveScheduleDependencies([{ ...previous, predecessor: { taskId: "B", type: "FS" } }, { ...successor, predecessor: { taskId: "A", type: "SS" } }]), /siklus/);
+    assert.throws(() => resolveScheduleDependencies([{ ...successor, predecessor: { taskId: "A", type: "FS" } }]), /dihapus/);
+  });
+  test("tautan tetap mengikuti ID meski WBS diubah dan hubungan bisa dilepas", () => {
+    const b = { ...successor, predecessor: parsePredecessor("2FF", successor, [previous]) };
+    const list = normalizeSchedule([{ ...previous, wbs: "4.3" }, b]);
+    assert.equal(predecessorText(list[1] as ScheduleTask, list), "2FF");
+    assert.equal(nextTaskNumber(list), 4);
+    assert.equal(parsePredecessor("", successor, list), undefined);
+    assert.deepEqual(normalizeSchedule([task, { ...task, id: "old2" }]).map((t) => t.taskNumber), [1, 2]);
+  });
 });
