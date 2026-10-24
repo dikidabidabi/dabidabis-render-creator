@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Tambahkan halaman Jadwal privat dengan isian WBS, tabel/Gantt berwarna, ceklis subpekerjaan, progres otomatis, garis hari berjalan, dan verifikasi penyimpanan.
+- [x] Tambahkan halaman Jadwal privat dengan isian WBS, tabel/Gantt berwarna, ceklis subpekerjaan, progres otomatis, dan garis hari berjalan; 4 uji lolos, progres 50% tersimpan setelah muat ulang dan berubah 100% lewat ceklis, kalender terpilih, bar tampil, serta pekerjaan uji dihapus.
 
 - [x] Tambahkan Jendela Dinamis 50 cm, ujung tarik tanpa batas, jarak pembatas/toleransi; 7 uji lolos, pemasangan 50 cm dan panjang 1200 cm tersimpan setelah muat ulang.
 
