@@ -126,6 +126,10 @@
   --schedule-progress: rgba(25, 69, 54, 0.13);
   --schedule-risk: #ffedaa;
   --schedule-risk-ink: #795300;
+  --schedule-link-fs: #1673c5;
+  --schedule-link-ss: #16834b;
+  --schedule-link-ff: #b07808;
+  --schedule-link-sf: #c43f70;
 }
 
 @layer base {
@@ -316,6 +320,14 @@
 .schedule-bar { overflow: hidden; box-shadow: var(--shadow-soft); }
 .schedule-bar:hover { filter: brightness(0.97); }
 .schedule-bar-progress { background: var(--schedule-progress); }
+.schedule-dependency-layer { overflow: hidden; }
+.schedule-link-FS { color: var(--schedule-link-fs); }
+.schedule-link-SS { color: var(--schedule-link-ss); }
+.schedule-link-FF { color: var(--schedule-link-ff); }
+.schedule-link-SF { color: var(--schedule-link-sf); }
+.schedule-link-line { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.schedule-link-origin { fill: currentColor; }
+.schedule-link-key { background: currentColor; }
 .schedule-today { width: 1px; background: var(--schedule-today); }
 .schedule-today-key { background: var(--schedule-today); }
 .schedule-today-dot { position: absolute; top: -5px; left: -5px; width: 11px; height: 11px; border-radius: 50%; background: var(--schedule-today); }

@@ -1,6 +1,7 @@
 # Architecture decisions
 
 - Schedule data uses the shared owner-scoped project storage bridge as a per-sketch map keyed by sketch ID (legacy flat arrays migrate into the active sketch); pure helpers derive progress, durations and dependency dates. Stable numeric task IDs are separate from WBS; predecessor links store UUIDs, preserve duration, propagate before writes and reject missing references/cycles.
+  Gantt bars and predecessor cables share schedule-connectors bounds; a non-interactive SVG overlay connects the type's start/finish edges so scale and row positions stay aligned without changing schedule data.
 
 - Architectural settings persist per area; plans stay centered/full-size; legends share numbering/ink. Bottom legends select the largest fitted layout and its gaps. Walls subtract openings before shadows. Window cuts/notation share windowPlanGeometry bounds; bases cast short and frames/mullions long shadows with wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions; wall fills omit bevel computation and rendering to reduce Android tablet graphics load.
