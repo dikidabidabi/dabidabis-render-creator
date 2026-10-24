@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { addDays, differenceInCalendarDays, eachMonthOfInterval, format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { id as localeId } from "date-fns/locale";
-import { CalendarDays, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, ListChecks, Pencil, PenTool, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, FileDown, ListChecks, Pencil, PenTool, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { normalizeScheduleViews, criticalPath, actualBarRanges, delayBarRange, d
 import { scheduleBarBounds, SCHEDULE_ROW_HEIGHT } from "@/lib/schedule-connectors";
 import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessor, resolveScheduleDependencies, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
+import { printScheduleSection } from "@/lib/schedule-print";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/jadwal")({
@@ -63,6 +64,7 @@ function ScheduleWorkspace() {
   const fillCleanup = useRef<(() => void) | null>(null);
   useEffect(() => () => fillCleanup.current?.(), []);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function load() {
@@ -208,7 +210,7 @@ function ScheduleWorkspace() {
   const update = (value: Partial<ScheduleTask>) => setDraft((current) => current ? { ...current, ...value } : null);
 
   return <main className="schedule-page flex flex-col gap-6 px-4 lg:flex-row py-7 sm:px-6">
-    <aside className="w-full shrink-0 lg:w-52" aria-label="Daftar sketsa">
+    <aside className="w-full shrink-0 lg:w-52 print:hidden" aria-label="Daftar sketsa">
       <p className="mb-3 text-xs font-medium uppercase text-ember">Sketsa</p>
       <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1">
         {sketches.map((sketch) => {
@@ -224,17 +226,17 @@ function ScheduleWorkspace() {
       {!sketches.length && ready && <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground"><p>Belum ada sketsa.</p><Link to="/sketch" className="mt-2 inline-flex items-center gap-1 font-medium text-primary hover:underline"><PenTool className="size-3" />Buka halaman Sketsa</Link></div>}
     </aside>
 
-    <div className="min-w-0 flex-1">
+    <div className="schedule-main min-w-0 flex-1">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div><p className="mb-2 text-xs font-medium uppercase text-ember">Project · Jadwal</p><h1 className="font-display text-3xl font-semibold">Jadwal</h1><p className="mt-2 text-sm text-muted-foreground">{activeSketch ? <span className="font-medium text-foreground">{activeSketch.title}</span> : "Tanpa sketsa"}<span className="mx-2">·</span>{format(today, "EEEE, d MMMM yyyy", { locale: localeId })}<span className="mx-2">·</span>{tasks.length} pekerjaan<span className="mx-2">·</span>{saving ? "Menyimpan…" : "Tersimpan"}</p></div>
-      <div className="flex flex-wrap items-center gap-3"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border" /><Button variant="outline" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
+      <div className="flex flex-wrap items-center gap-3"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border print:hidden" /><Button variant="outline" className="print:hidden" onClick={() => printScheduleSection(printRef.current, "schedule")} disabled={!ready || !activeId || !tasks.length} title="Unduh jadwal sebagai PDF lanskap"><FileDown />Unduh PDF</Button><Button variant="outline" className="print:hidden" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button className="print:hidden" onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
     </header>
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3">
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3 print:hidden">
       <div className="flex flex-wrap items-center gap-5"><div className="space-y-2"><div className="flex items-center gap-2"><Checkbox id="critical-path" checked={settings.cpm} onCheckedChange={(checked) => saveSettings({ ...settings, cpm: checked === true })} /><Label htmlFor="critical-path">Jalur kritis (CPM)</Label></div><div className="flex items-center gap-2"><Label htmlFor="slack" className="text-xs">Slack (hari)</Label><Input id="slack" type="number" min={0} step={1} className="h-8 w-20" value={settings.slack} onChange={(event) => saveSettings({ ...settings, slack: Math.max(0, Math.trunc(Number(event.target.value) || 0)) })} /></div></div><ToggleGroup type="single" value={view} onValueChange={(v) => { if (v) setView(v); }} aria-label="Tampilan jadwal"><ToggleGroupItem value="combined">Tabel & Gantt</ToggleGroupItem><ToggleGroupItem value="table">Tabel</ToggleGroupItem><ToggleGroupItem value="timeline">Gantt</ToggleGroupItem></ToggleGroup></div>
       <div className="flex flex-wrap items-center gap-2"><ToggleGroup type="single" value={scale} onValueChange={(v) => { if (v) setScale(v); }} aria-label="Skala waktu"><ToggleGroupItem value="week">Minggu</ToggleGroupItem><ToggleGroupItem value="month">Bulan</ToggleGroupItem></ToggleGroup><Button size="icon" variant="ghost" title="Waktu sebelumnya" aria-label="Waktu sebelumnya" onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}><ChevronLeft /></Button><Button variant="outline" onClick={goToday}><CalendarDays />Hari ini</Button><Button size="icon" variant="ghost" title="Waktu berikutnya" aria-label="Waktu berikutnya" onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}><ChevronRight /></Button></div>
     </div>
     <div ref={scrollRef} className="schedule-scroll overflow-auto border border-border bg-background" aria-label="Tabel dan diagram jadwal">
-      <div className="relative" style={{ width: totalWidth, minHeight: 350 }}>
+      <div ref={printRef} className="relative" style={{ width: totalWidth, minHeight: 350 }}>
         <div className="sticky top-0 z-20 flex border-b border-border bg-surface" style={{ height: 70 }}>
           {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs font-semibold" style={{ width: TABLE_WIDTH }} role="row">{["ID", "WBS", "Judul pekerjaan", "Penanggung jawab", "Tanggal mulai", "Tenggat", "Durasi", "Predecessor", "% Selesai", "Status", "Komponen", "Aktual mulai", "Aktual selesai", "Progres", ""].map((label, i) => <div key={i} className="px-2" role="columnheader">{label}</div>)}</div>}
           {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}>{months.map((month) => <div key={month.toISOString()} className="absolute bottom-0 top-0 border-l border-border px-3 py-3" style={{ left: offset(month), width: (differenceInCalendarDays(endOfMonth(month), month) + 1) * dayWidth }}><span className="block text-xs text-muted-foreground">{format(month, "yyyy")}</span><span className="text-sm font-medium">{format(month, "MMM", { locale: localeId })}</span></div>)}{scale === "week" && Array.from({ length: Math.ceil(days / 7) }, (_, n) => <span key={n} className="absolute bottom-1 text-[10px] text-muted-foreground" style={{ left: n * 7 * dayWidth + 5 }}>{format(addDays(dates.start, n * 7), "d MMM", { locale: localeId })}</span>)}</div>}
