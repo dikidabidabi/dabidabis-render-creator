@@ -6,6 +6,15 @@ export type ProgressObservation = { date: string; actual: number };
 export type ScheduleView = { collapsed: string[]; cpm: boolean; slack: number; observations: ProgressObservation[] };
 export const DEFAULT_SCHEDULE_VIEW: ScheduleView = { collapsed: [], cpm: false, slack: 0, observations: [] };
 
+export function normalizeScheduleViews(value: unknown): Record<string, ScheduleView> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).flatMap(([id, entry]) => {
+    if (!entry || typeof entry !== "object") return [];
+    const item = entry as Partial<ScheduleView>;
+    return [[id, { collapsed: Array.isArray(item.collapsed) ? item.collapsed.filter((id) => typeof id === "string") : [], cpm: item.cpm === true, slack: typeof item.slack === "number" && Number.isFinite(item.slack) ? Math.max(0, Math.trunc(item.slack)) : 0, observations: Array.isArray(item.observations) ? item.observations.filter((point) => point && /^\d{4}-\d{2}-\d{2}$/.test(point.date) && typeof point.actual === "number" && Number.isFinite(point.actual) && point.actual >= 0 && point.actual <= 100).sort((a, b) => a.date.localeCompare(b.date)) : [] }]];
+  }));
+}
+
 export function descendants(task: ScheduleTask, tasks: ScheduleTask[]) {
   const prefix = task.wbs.trim().replace(/\.+$/, "") + ".";
   return tasks.filter((child) => child.id !== task.id && child.wbs.trim().startsWith(prefix));
@@ -49,13 +58,14 @@ export function criticalPath(tasks: ScheduleTask[], threshold = 0) {
     return start;
   }
   tasks.forEach(forward);
-  const finish = Math.max(0, ...tasks.map((task) => forward(task) + duration(task)));
+  const leafIds = new Set(scheduleLeaves(tasks).map((task) => task.id));
+  const finish = Math.max(0, ...tasks.filter((task) => leafIds.has(task.id)).map((task) => forward(task) + duration(task)));
   const latest = new Map<string, number>();
   function backward(task: ScheduleTask): number {
     const cached = latest.get(task.id);
     if (cached !== undefined) return cached;
     const children = tasks.filter((next) => next.predecessor?.taskId === task.id);
-    const value = Math.min(finish - duration(task), ...children.map((next) => backward(next) - lag(task, next)));
+    const value = Math.min(leafIds.has(task.id) ? finish - duration(task) : Infinity, ...children.map((next) => backward(next) - lag(task, next)));
     latest.set(task.id, value);
     return value;
   }
