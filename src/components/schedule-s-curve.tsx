@@ -26,7 +26,9 @@ export function ScheduleSCurve({ tasks, observations, today, onChange }: { tasks
     for (let d = step; d < days; d += step) dates.add(format(addDays(parseISO(start), d), "yyyy-MM-dd"));
     return [...dates].sort().map((date) => {
       const observation = observations.filter((point) => point.date <= date).at(-1);
-      return { date, time: parseISO(date).getTime(), plan: plannedProgress(tasks, date), actual: date === current ? weightedProgress(tasks) : date > current || !observation ? null : observation.actual };
+      // Realisasi mengikuti pengisian manual terakhir; bila belum ada, hari ini memakai progres ceklis.
+      const actual = date > current ? null : observation ? observation.actual : date === current ? weightedProgress(tasks) : null;
+      return { date, time: parseISO(date).getTime(), plan: plannedProgress(tasks, date), actual };
     });
   }, [tasks, observations, current]);
   const plan = plannedProgress(tasks, current), actual = weightedProgress(tasks), deviation = actual - plan;
