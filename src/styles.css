@@ -116,6 +116,16 @@
   --shadow-primary: 0 20px 50px -20px oklch(0.58 0.13 195 / 0.35);
   --shadow-elevated: 0 24px 50px -28px oklch(0.22 0.01 60 / 0.25);
   --shadow-soft: 0 8px 24px -12px oklch(0.22 0.01 60 / 0.15);
+  --schedule-stage: #ff9f00;
+  --schedule-lavender: #e0d6ee;
+  --schedule-green: #a1efa7;
+  --schedule-yellow: #fff1c9;
+  --schedule-neutral: #e6e6d8;
+  --schedule-ink: #292d30;
+  --schedule-today: #0085db;
+  --schedule-progress: rgba(25, 69, 54, 0.13);
+  --schedule-risk: #ffedaa;
+  --schedule-risk-ink: #795300;
 }
 
 @layer base {
@@ -289,6 +299,26 @@
 .architectural-swatch-brown { background: var(--architectural-style-brown); }
 .architectural-swatch-blue { background: var(--architectural-style-blue); }
 .architectural-swatch-bata { background: var(--architectural-style-bata); }
+
+.schedule-page { letter-spacing: 0; }
+.schedule-page h1, .schedule-page h2 { letter-spacing: 0; }
+.schedule-scroll { max-height: 68vh; scrollbar-gutter: stable; }
+.schedule-table-grid { display: grid; grid-template-columns: 65px 260px 125px 90px 90px 70px 75px 110px 140px 110px 45px; }
+.schedule-color-stage { background-color: var(--schedule-stage); color: var(--schedule-ink); }
+.schedule-color-lavender { background-color: var(--schedule-lavender); color: var(--schedule-ink); }
+.schedule-color-green { background-color: var(--schedule-green); color: var(--schedule-ink); }
+.schedule-color-yellow { background-color: var(--schedule-yellow); color: var(--schedule-ink); }
+.schedule-color-neutral { background-color: var(--schedule-neutral); color: var(--schedule-ink); }
+.schedule-bar { overflow: hidden; box-shadow: var(--shadow-soft); }
+.schedule-bar:hover { filter: brightness(0.97); }
+.schedule-bar-progress { background: var(--schedule-progress); }
+.schedule-today { width: 1px; background: var(--schedule-today); }
+.schedule-today-key { background: var(--schedule-today); }
+.schedule-today-dot { position: absolute; top: -5px; left: -5px; width: 11px; height: 11px; border-radius: 50%; background: var(--schedule-today); }
+.schedule-status { display: inline-block; max-width: 100%; border-radius: 999px; padding: 3px 8px; white-space: nowrap; font-size: 10px; background: var(--muted); color: var(--muted-foreground); }
+.schedule-status-berisiko { background: var(--schedule-risk); color: var(--schedule-risk-ink); }
+.schedule-status-berjalan, .schedule-status-selesai { background: var(--schedule-green); color: var(--schedule-ink); }
+.schedule-status-tertunda { background: var(--destructive); color: var(--destructive-foreground); }
 
 /* Bata recolors shared detail notation without changing its geometry. */
 [data-architectural-style="bata"] [data-detail-secondary-notation] [stroke]:not([stroke="none"]) {
