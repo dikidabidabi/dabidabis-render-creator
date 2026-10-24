@@ -8555,7 +8555,7 @@ function MaterialEdges({
             <polygon key={`s-${s.id}-${si}`} points={pts} fill="#0a0a0a" stroke="none" />
           );
         }
-        if (mat === "concrete150" || mat === "concrete200" || mat === "concrete300") {
+        if (mat === "concrete150" || mat === "concrete200" || mat === "concrete250" || mat === "concrete300" || mat === "concrete350") {
           return null;
         }
         if (mat === "solid" || mat === "standard150") {
