@@ -15,7 +15,7 @@ import { ScheduleDatePicker } from "@/components/schedule-date-picker";
 import { ScheduleDependencyLinks } from "@/components/schedule-dependency-links";
 import { ScheduleTaskProgress } from "@/components/schedule-task-progress";
 import { ScheduleSCurve } from "@/components/schedule-s-curve";
-import { normalizeScheduleViews, criticalPath, descendants, visibleSchedule, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
+import { normalizeScheduleViews, criticalPath, delayBarRange, descendants, visibleSchedule, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
 import { scheduleBarBounds, SCHEDULE_ROW_HEIGHT } from "@/lib/schedule-connectors";
 import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessor, resolveScheduleDependencies, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
@@ -199,6 +199,9 @@ function ScheduleWorkspace() {
           const isCritical = settings.cpm && cpm.critical.has(task.id);
           const progress = scheduleProgress(task, tasks, format(today, "yyyy-MM-dd"));
           const bar = scheduleBarBounds(task, dates.start, dayWidth);
+          const delay = children.length ? null : delayBarRange(task, format(today, "yyyy-MM-dd"), progress);
+          const delayLeft = delay ? differenceInCalendarDays(parseISO(delay.start), dates.start) * dayWidth : 0;
+          const delayWidth = delay ? (differenceInCalendarDays(parseISO(delay.end), parseISO(delay.start)) + 1) * dayWidth : 0;
           return <div key={task.id} className={`relative flex border-b border-border/60 ${task.stage ? "bg-muted/70" : ""}`} style={{ height: SCHEDULE_ROW_HEIGHT }} data-task-id={task.id}>
             {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs" style={{ width: TABLE_WIDTH }}>
               <div className="px-2 text-muted-foreground">{task.taskNumber}</div>
