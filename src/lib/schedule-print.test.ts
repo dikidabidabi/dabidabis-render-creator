@@ -5,7 +5,7 @@ import { PRINTABLE_WIDTH_PX, printZoom } from "./schedule-print";
 describe("printZoom", () => {
   test("mengecilkan konten lebar agar muat kiri-kanan kertas A4 lanskap", () => {
     assert.ok(Math.abs(printZoom(1600) - PRINTABLE_WIDTH_PX / 1600) < 1e-6);
-    assert.ok(Math.abs(printZoom(2092) - 0.5) < 1e-6);
+    assert.ok(Math.abs(printZoom(2092) - PRINTABLE_WIDTH_PX / 2092) < 1e-9);
   });
 
   test("tidak pernah membesar melebihi 100% dan menolak lebar tidak valid", () => {
