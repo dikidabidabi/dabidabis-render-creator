@@ -14,7 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ScheduleDatePicker } from "@/components/schedule-date-picker";
 import { ScheduleDependencyLinks } from "@/components/schedule-dependency-links";
 import { ScheduleSCurve } from "@/components/schedule-s-curve";
-import { criticalPath, descendants, visibleSchedule, recordObservation, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
+import { normalizeScheduleViews, criticalPath, descendants, visibleSchedule, recordObservation, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
 import { scheduleBarBounds, SCHEDULE_ROW_HEIGHT } from "@/lib/schedule-connectors";
 import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessor, resolveScheduleDependencies, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
@@ -66,7 +66,7 @@ function ScheduleWorkspace() {
         const fallbackId = sketchStore.openId && sketchStore.sketches.some((s) => s.id === sketchStore.openId) ? sketchStore.openId : sketchStore.sketches[0]?.id ?? null;
         setActiveId((current) => current && sketchStore.sketches.some((s) => s.id === current) ? current : fallbackId);
         const savedView = JSON.parse(localStorage.getItem(SCHEDULE_VIEW_KEY) || "{}");
-        setViewStore(savedView && typeof savedView === "object" ? savedView : {});
+        setViewStore(normalizeScheduleViews(savedView));
         setStore(normalizeScheduleStore(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"), fallbackId));
       } catch { toast.error("Data jadwal tidak dapat dibaca."); }
       setReady(true);
