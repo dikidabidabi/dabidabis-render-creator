@@ -497,7 +497,7 @@ function DetailWorkspace({ sketch, area, onFurnitureChange, onFurnitureSlideChan
   </section>;
 }
 
-const WALL_MM: Record<EdgeMaterial, number> = { solid: 150, standard150: 150, concrete150: 150, concrete200: 200, concrete300: 300, concept: 150, curtain: 80, window: 150, railing: 100 };
+const WALL_MM: Record<EdgeMaterial, number> = { solid: 150, standard150: 150, concrete150: 150, concrete200: 200, concrete250: 250, concrete300: 300, concrete350: 350, concept: 150, curtain: 80, window: 150, railing: 100 };
 
 function DetailConstruction({ sketch, levelId, lines, pxPerMeter }: { sketch: Sketch; levelId: string; lines: Line[]; pxPerMeter: number }) {
   const attrs = sketch.edgeAttrs ?? {};
