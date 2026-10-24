@@ -183,6 +183,8 @@ import {
   distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
+import { SCHEDULE_KEY, copyScheduleEntry, normalizeScheduleStore } from "@/lib/schedule";
+import { SCHEDULE_VIEW_KEY } from "@/lib/schedule-analysis";
 import { normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { normalizeDetailFurniture, type DetailFurniture } from "@/lib/detail-furniture";
 import { MasterplanSketch3DPreview } from "@/components/masterplan-sketch-3d-preview";
