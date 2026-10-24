@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { upsertTaskProgress, normalizeSchedule, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask } from "./schedule";
+import { upsertTaskProgress, normalizeSchedule, normalizeScheduleStore, copyScheduleEntry, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask, type ScheduleStore } from "./schedule";
 
 const task: ScheduleTask = { id: "task", wbs: "1.1", title: "Survei", owner: "", start: "2026-09-02", due: "2026-09-30", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "a", title: "Ukur", done: true }, { id: "b", title: "Catat", done: false }] };
 describe("Jadwal pekerjaan", () => {
