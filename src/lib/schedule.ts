@@ -1,6 +1,7 @@
 import { addDays, differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 
 export const SCHEDULE_KEY = "dabidabis_jadwal_v1";
+export const SKETCH_STORE_KEY = "dabidabis_sketch_v2";
 export const SCHEDULE_COLORS = ["stage", "lavender", "green", "yellow", "neutral"] as const;
 export type ScheduleColor = (typeof SCHEDULE_COLORS)[number];
 export const SCHEDULE_STATUSES = ["belum", "berjalan", "berisiko", "tertunda", "selesai"] as const;
