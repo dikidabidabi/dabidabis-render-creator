@@ -42,3 +42,7 @@ describe("Jadwal pekerjaan", () => {
     assert.deepEqual(readSketchStore("bukan json"), { sketches: [], openId: null });
   });
 });
+import { wbsLevel } from "./schedule";
+test("level WBS mengikuti jumlah segmen nomor", () => {
+  assert.deepEqual(["1", "1.1", "1.1.1", "1.1.1.1"].map(wbsLevel), [1, 2, 3, 4]);
+});
