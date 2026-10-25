@@ -10,11 +10,13 @@ export type ScheduleCheck = { id: string; title: string; done: boolean };
 export type TaskProgressEntry = { date: string; actual: number; note?: string };
 export const PREDECESSOR_TYPES = ["FS", "SS", "FF", "SF"] as const;
 export type PredecessorType = (typeof PREDECESSOR_TYPES)[number];
+export type SchedulePredecessor = { taskId: string; type: PredecessorType; lag?: number };
 export const PREDECESSOR_LABELS = { FS: "Selesai → Mulai", SS: "Mulai → Mulai", FF: "Selesai → Selesai", SF: "Mulai → Selesai" };
 export type ScheduleTask = {
   id: string;
   taskNumber?: number;
-  predecessor?: { taskId: string; type: PredecessorType; lag?: number };
+  predecessor?: SchedulePredecessor;
+  predecessors?: SchedulePredecessor[];
   actualStart?: string;
   actualFinish?: string;
   wbs: string;
@@ -32,6 +34,16 @@ export type ScheduleTask = {
 
 export function validScheduleDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && isValid(parseISO(value)) && format(parseISO(value), "yyyy-MM-dd") === value;
+}
+
+/** Read legacy single links and canonical multiple links through one boundary. */
+export function taskPredecessors(task: ScheduleTask): SchedulePredecessor[] {
+  return task.predecessors ?? (task.predecessor ? [task.predecessor] : []);
+}
+
+export function predecessorStartOffset(source: ScheduleTask, target: ScheduleTask, link: SchedulePredecessor): number {
+  return (link.type[0] === "F" ? scheduleDuration(source.start, source.due) : 0)
+    - (link.type[1] === "F" ? scheduleDuration(target.start, target.due) : 0) + (link.lag ?? 0);
 }
 
 // Durasi adalah selisih hari kalender, sesuai contoh 2–30 September = 28 hari.
@@ -101,9 +113,14 @@ export function normalizeSchedule(value: unknown): ScheduleTask[] {
       return upsertTaskProgress(entries, { date: entry.date, actual: entry.actual, note: typeof entry.note === "string" ? entry.note : undefined });
     }, []) : undefined;
     const predecessor = p && typeof p.taskId === "string" && PREDECESSOR_TYPES.includes(p.type as PredecessorType) ? { taskId: p.taskId, type: p.type as PredecessorType, ...(typeof p.lag === "number" && Number.isSafeInteger(p.lag) && p.lag !== 0 ? { lag: p.lag } : {}) } : undefined;
+    const predecessors = Array.isArray(t.predecessors) ? t.predecessors.flatMap((entry): SchedulePredecessor[] => {
+      if (!entry || typeof entry !== "object" || typeof entry.taskId !== "string" || !PREDECESSOR_TYPES.includes(entry.type)) return [];
+      if (entry.lag !== undefined && !Number.isSafeInteger(entry.lag)) return [];
+      return [{ taskId: entry.taskId, type: entry.type, ...(entry.lag ? { lag: entry.lag } : {}) }];
+    }) : undefined;
     const actualStart = typeof t.actualStart === "string" && validScheduleDate(t.actualStart) ? t.actualStart : undefined;
     const actualFinish = typeof t.actualFinish === "string" && validScheduleDate(t.actualFinish) && (!actualStart || t.actualFinish >= actualStart) ? t.actualFinish : undefined;
-    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, predecessor, actualStart, actualFinish, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks, ...(progressEntries ? { progressEntries } : {}) }];
+    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, ...(predecessors ? { predecessors } : { predecessor }), actualStart, actualFinish, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks, ...(progressEntries ? { progressEntries } : {}) }];
   });
   const used = new Set<number>();
   let next = Math.max(0, ...normalized.map((t) => t.taskNumber ?? 0)) + 1;
@@ -120,10 +137,21 @@ export function nextTaskNumber(tasks: ScheduleTask[]): number {
 }
 
 export function predecessorText(task: ScheduleTask, tasks: ScheduleTask[]): string {
-  if (!task.predecessor) return "";
-  const previous = tasks.find((t) => t.id === task.predecessor?.taskId);
-  const lag = task.predecessor.lag ?? 0;
-  return previous ? `${previous.taskNumber}${task.predecessor.type}${lag ? `${lag > 0 ? "+" : ""}${lag}` : ""}` : "";
+  return taskPredecessors(task).map((link) => {
+    const previous = tasks.find((t) => t.id === link.taskId);
+    const lag = link.lag ?? 0;
+    return previous ? `${previous.taskNumber}${link.type}${lag ? `${lag > 0 ? "+" : ""}${lag}` : ""}` : "";
+  }).filter(Boolean).join(";");
+}
+
+export function parsePredecessors(text: string, task: ScheduleTask, tasks: ScheduleTask[], defaultType: PredecessorType = "FS"): SchedulePredecessor[] {
+  if (!text.trim()) return [];
+  const tokens = text.trim().replace(/^\((.*)\)$/, "$1").split(";");
+  const links = tokens.map((token) => {
+    if (!token.trim()) throw new Error("Setiap predecessor harus berisi ID pekerjaan.");
+    return parsePredecessor(token, task, tasks, defaultType);
+  }).filter((link): link is SchedulePredecessor => link !== undefined);
+  return links.filter((link, index) => links.findIndex((other) => other.taskId === link.taskId && other.type === link.type && (other.lag ?? 0) === (link.lag ?? 0)) === index);
 }
 
 export function parsePredecessor(text: string, task: ScheduleTask, tasks: ScheduleTask[], defaultType: PredecessorType = "FS"): ScheduleTask["predecessor"] {
@@ -149,21 +177,19 @@ export function resolveScheduleDependencies(tasks: ScheduleTask[]): ScheduleTask
     if (visiting.has(task.id)) throw new Error("Hubungan pekerjaan membentuk siklus. Pilih pendahulu lain.");
     visiting.add(task.id);
     let result = task;
-    if (task.predecessor) {
-      const source = byId.get(task.predecessor.taskId);
-      if (!source) throw new Error("Pekerjaan pendahulu masih digunakan dan tidak dapat dihapus.");
-      const previous = resolve(source);
-      const duration = scheduleDuration(task.start, task.due);
-      const type = task.predecessor.type;
-      const lag = task.predecessor.lag ?? 0;
-      if (!Number.isSafeInteger(lag)) throw new Error("Offset hari tidak valid.");
-      if (type === "FS" || type === "SS") {
-        const start = format(addDays(parseISO(type === "FS" ? previous.due : previous.start), lag), "yyyy-MM-dd");
-        result = { ...task, start, due: scheduleDue(start, duration) };
-      } else {
-        const due = format(addDays(parseISO(type === "FF" ? previous.due : previous.start), lag), "yyyy-MM-dd");
-        result = { ...task, due, start: format(addDays(parseISO(due), -duration), "yyyy-MM-dd") };
-      }
+    const links = taskPredecessors(task);
+    if (links.length) {
+      const starts = links.map((link) => {
+        const source = byId.get(link.taskId);
+        if (!source) throw new Error("Pekerjaan pendahulu masih digunakan dan tidak dapat dihapus.");
+        if (!Number.isSafeInteger(link.lag ?? 0)) throw new Error("Offset hari tidak valid.");
+        const previous = resolve(source);
+        const start = format(addDays(parseISO(previous.start), predecessorStartOffset(previous, task, link)), "yyyy-MM-dd");
+        if (!validScheduleDate(start)) throw new Error("Tanggal hasil hubungan berada di luar rentang yang didukung.");
+        return start;
+      });
+      const start = starts.sort().at(-1);
+      if (start) result = { ...task, start, due: scheduleDue(start, scheduleDuration(task.start, task.due)) };
     }
     if (!validScheduleDate(result.start) || !validScheduleDate(result.due)) throw new Error("Tanggal hasil hubungan berada di luar rentang yang didukung.");
     visiting.delete(task.id);
@@ -229,5 +255,5 @@ export function normalizeScheduleStore(value: unknown, fallbackSketchId?: string
 export function copyScheduleEntry(store: ScheduleStore, sourceId: string, targetId: string): ScheduleStore {
   const tasks = store[sourceId];
   if (!tasks?.length || sourceId === targetId) return store;
-  return { ...store, [targetId]: tasks.map((task) => ({ ...task, checks: task.checks.map((check) => ({ ...check })), ...(task.progressEntries ? { progressEntries: task.progressEntries.map((entry) => ({ ...entry })) } : {}), ...(task.predecessor ? { predecessor: { ...task.predecessor } } : {}) })) };
+  return { ...store, [targetId]: tasks.map((task) => ({ ...task, checks: task.checks.map((check) => ({ ...check })), ...(task.progressEntries ? { progressEntries: task.progressEntries.map((entry) => ({ ...entry })) } : {}), ...(task.predecessor ? { predecessor: { ...task.predecessor } } : {}), ...(task.predecessors ? { predecessors: task.predecessors.map((link) => ({ ...link })) } : {}) })) };
 }
