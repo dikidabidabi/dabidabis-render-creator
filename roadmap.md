@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Predecessor majemuk dipisahkan “;”, tipe/offset per hubungan, tanggal memenuhi semua acuan, kabel setiap hubungan, serta pengujian dan penyimpanan ulang.
+
 - [x] Kalender tabel dan fill handle empat kolom tanggal; aktual mulai/selesai dan bar aktual biru/merah; offset predecessor positif/negatif. 46 uji lolos; kalender, drag tiga baris, bar biru/merah, FS+3 dan muat ulang teruji pada akun aktif; data uji dibersihkan.
 
 - [x] Bar merah keterlambatan tipis membulat dari tenggat hingga tanggal progres 100% atau garis hari bila belum 100%; hanya pekerjaan daun, 32 uji lolos, terverifikasi visual di Gantt dengan akun aktif.
