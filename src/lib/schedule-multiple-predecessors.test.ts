@@ -67,7 +67,7 @@ test("CPM memperhitungkan semua hubungan masuk dan keluar", () => {
   const tasks = resolve("2SS+1;3FS-2");
   const result = criticalPath(tasks);
   assert.equal(result.duration, 17);
-  assert.equal(result.floats.get("t2"), 11);
+  assert.equal(result.floats.get("t2"), 8);
   assert.equal(result.floats.get("t3"), 0);
   assert.equal(result.floats.get("t5"), 0);
 });
