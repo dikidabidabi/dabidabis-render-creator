@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, format, parseISO } from "date-fns";
-import { scheduleDuration, scheduleProgress, taskProgressAt, type ScheduleTask } from "./schedule";
+import { scheduleDuration, scheduleProgress, taskProgressAt, taskPredecessors, predecessorStartOffset, type ScheduleTask } from "./schedule";
 
 export const SCHEDULE_VIEW_KEY = "dabidabis_jadwal_view_v1";
 export type ProgressObservation = { date: string; actual: number; note?: string };
@@ -38,22 +38,15 @@ export function criticalPath(tasks: ScheduleTask[], threshold = 0) {
   if (!origin) return { critical: new Set<string>(), floats: new Map<string, number>(), duration: 0 };
   const day = (date: string) => differenceInCalendarDays(parseISO(date), parseISO(origin));
   const duration = (task: ScheduleTask) => scheduleDuration(task.start, task.due);
-  const lag = (source: ScheduleTask, target: ScheduleTask) => {
-    const offset = target.predecessor?.lag ?? 0;
-    switch (target.predecessor?.type) {
-      case "SS": return offset;
-      case "FF": return duration(source) - duration(target) + offset;
-      case "SF": return -duration(target) + offset;
-      default: return duration(source) + offset;
-    }
-  };
   function forward(task: ScheduleTask): number {
     const cached = early.get(task.id);
     if (cached !== undefined) return cached;
     if (visiting.has(task.id)) throw new Error("Hubungan pekerjaan membentuk siklus.");
     visiting.add(task.id);
-    const source = task.predecessor ? byId.get(task.predecessor.taskId) : undefined;
-    const start = Math.max(day(task.start), source ? forward(source) + lag(source, task) : day(task.start));
+    const start = Math.max(day(task.start), ...taskPredecessors(task).map((link) => {
+      const source = byId.get(link.taskId);
+      return source ? forward(source) + predecessorStartOffset(source, task, link) : day(task.start);
+    }));
     early.set(task.id, start);
     visiting.delete(task.id);
     return start;
@@ -65,8 +58,8 @@ export function criticalPath(tasks: ScheduleTask[], threshold = 0) {
   function backward(task: ScheduleTask): number {
     const cached = latest.get(task.id);
     if (cached !== undefined) return cached;
-    const children = tasks.filter((next) => next.predecessor?.taskId === task.id);
-    const value = Math.min(leafIds.has(task.id) ? finish - duration(task) : Infinity, ...children.map((next) => backward(next) - lag(task, next)));
+    const children = tasks.flatMap((next) => taskPredecessors(next).filter((link) => link.taskId === task.id).map((link) => ({ next, link })));
+    const value = Math.min(leafIds.has(task.id) ? finish - duration(task) : Infinity, ...children.map(({ next, link }) => backward(next) - predecessorStartOffset(task, next, link)));
     latest.set(task.id, value);
     return value;
   }

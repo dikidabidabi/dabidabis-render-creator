@@ -1,5 +1,5 @@
 import { differenceInCalendarDays, parseISO } from "date-fns";
-import { scheduleDuration, type PredecessorType, type ScheduleTask } from "./schedule";
+import { scheduleDuration, taskPredecessors, type PredecessorType, type ScheduleTask } from "./schedule";
 
 export const SCHEDULE_ROW_HEIGHT = 58;
 
@@ -32,10 +32,9 @@ function roundedPath(points: Point[]) {
 
 export function scheduleConnectors(tasks: ScheduleTask[], timelineStart: Date, dayWidth: number) {
   const rows = new Map(tasks.map((task, index) => [task.id, { task, index }]));
-  return tasks.flatMap((task, index) => {
-    const predecessor = task.predecessor;
-    const previous = predecessor ? rows.get(predecessor.taskId) : undefined;
-    if (!predecessor || !previous || previous.index === index) return [];
+  return tasks.flatMap((task, index) => taskPredecessors(task).flatMap((predecessor) => {
+    const previous = rows.get(predecessor.taskId);
+    if (!previous || previous.index === index) return [];
     const sides = dependencySides(predecessor.type);
     const sourceBounds = scheduleBarBounds(previous.task, timelineStart, dayWidth);
     const targetBounds = scheduleBarBounds(task, timelineStart, dayWidth);
@@ -57,6 +56,7 @@ export function scheduleConnectors(tasks: ScheduleTask[], timelineStart: Date, d
       const gutter = index * SCHEDULE_ROW_HEIGHT + (index > previous.index ? 4 : 54);
       points = [source, { x: sourceStub, y: source.y }, { x: sourceStub, y: gutter }, { x: targetStub, y: gutter }, { x: targetStub, y: target.y }, target];
     }
-    return [{ id: task.id, type: predecessor.type, source, target, path: roundedPath(points), arrow: `M ${target.x + targetDirection * 5} ${target.y - 4} L ${target.x} ${target.y} L ${target.x + targetDirection * 5} ${target.y + 4}`, label: `${previous.task.title} → ${task.title} · ${predecessor.type}` }];
-  });
+    const lag = predecessor.lag ?? 0;
+    return [{ id: JSON.stringify([previous.task.id, task.id, predecessor.type, lag]), sourceId: previous.task.id, targetId: task.id, type: predecessor.type, lag, source, target, path: roundedPath(points), arrow: `M ${target.x + targetDirection * 5} ${target.y - 4} L ${target.x} ${target.y} L ${target.x + targetDirection * 5} ${target.y + 4}`, label: `${previous.task.title} → ${task.title} · ${predecessor.type}${lag ? `${lag > 0 ? "+" : ""}${lag}` : ""}` }];
+  }));
 }

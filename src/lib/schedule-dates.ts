@@ -1,4 +1,4 @@
-import { validScheduleDate, type ScheduleTask } from "./schedule";
+import { validScheduleDate, taskPredecessors, type ScheduleTask } from "./schedule";
 
 export const SCHEDULE_DATE_LABELS = { start: "Tanggal mulai", due: "Tenggat", actualStart: "Aktual mulai", actualFinish: "Aktual selesai" } as const;
 export type ScheduleDateField = keyof typeof SCHEDULE_DATE_LABELS;
@@ -10,7 +10,7 @@ export function fillScheduleDates(tasks: ScheduleTask[], ids: string[], field: S
   const selected = new Set(ids);
   return tasks.map((task) => {
     if (!selected.has(task.id)) return task;
-    if ((field === "start" || field === "due") && task.predecessor) throw new Error(`Tanggal ${task.title} mengikuti predecessor. Ubah acuan atau offsetnya terlebih dahulu.`);
+    if ((field === "start" || field === "due") && taskPredecessors(task).length) throw new Error(`Tanggal ${task.title} mengikuti predecessor. Ubah acuan atau offsetnya terlebih dahulu.`);
     const next = { ...task, [field]: value || undefined };
     if (next.due < next.start) throw new Error(`Tenggat ${task.title} tidak boleh sebelum tanggal mulai.`);
     if (next.actualStart && next.actualFinish && next.actualFinish < next.actualStart) throw new Error(`Aktual selesai ${task.title} tidak boleh sebelum aktual mulai.`);
