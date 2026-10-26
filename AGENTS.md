@@ -1,6 +1,6 @@
 # Architecture decisions
 
-- Build scripts preserve NODE_OPTIONS and reserve a 6 GiB Node heap because client/SSR/Nitro bundling exceeds the default heap; runtime bundling stays unchanged.
+- Build scripts preserve NODE_OPTIONS and reserve 6 GiB heap for client/SSR/Nitro bundling; runtime bundling is unchanged.
 
 - Schedules are owner/sketch scoped; legacy arrays migrate to the active sketch; duplication copies schedules/views. UUID predecessor arrays use taskPredecessors for legacy compatibility: maximum incoming start bound, preserved duration, every edge/cycle validated, signed weights shared with CPM, stable connector IDs. Bars/cables share bounds/visible rows. Views store WBS folding and CPM/slack. Atomic date fills stay in one column/visible rows; reject invalid ranges and predecessor-controlled plan dates. CPM uses leaf completion; S curves use duration-weighted dated progress, never fabricated. Thin actual bars split blue/red at due; explicit finish overrides first 100% entry, else track today; without actual start, retain delay bars.
 
