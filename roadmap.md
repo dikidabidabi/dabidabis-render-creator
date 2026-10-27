@@ -171,3 +171,5 @@
 - [x] Tombol Unduh PDF di kanan atas jadwal dan Kurva S; cetak A4 lanskap muat kiri-kanan, multi halaman.
 
 - [x] Tombol Salin sketsa juga menyalin jadwal dan pengaturan tampilannya ke sketsa hasil salinan.
+
+- [x] Tambahkan style Arsitektural Oranye Terang: tone dan sifat sama persis dengan Monokrom, dinding oranye bata; 3 uji lolos, 118 uji total lolos, warna dinding terukur di pratinjau.
