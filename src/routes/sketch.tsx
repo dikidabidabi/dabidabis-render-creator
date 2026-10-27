@@ -414,7 +414,7 @@ type DetailArea = {
   showArchitectural?: boolean;
   showArchitecturalLegend?: boolean;
   architecturalLegendPosition?: "right" | "bottom";
-  architecturalStyle?: "tosca" | "brown" | "blue" | "bata";
+  architecturalStyle?: "tosca" | "brown" | "blue" | "bata" | "mono";
   createdAt: number;
   furniture?: DetailFurniture[];
 };
@@ -1224,7 +1224,7 @@ function normalizeSketch(s: any): Sketch {
           showArchitectural: area.showArchitectural === true,
           showArchitecturalLegend: area.showArchitecturalLegend === true,
           architecturalLegendPosition: area.architecturalLegendPosition === "bottom" ? "bottom" : "right",
-          architecturalStyle: area.architecturalStyle === "brown" || area.architecturalStyle === "blue" || area.architecturalStyle === "bata" ? area.architecturalStyle : "tosca",
+          architecturalStyle: area.architecturalStyle === "brown" || area.architecturalStyle === "blue" || area.architecturalStyle === "bata" || area.architecturalStyle === "mono" ? area.architecturalStyle : "tosca",
           createdAt: Number.isFinite(Number(area.createdAt)) ? Number(area.createdAt) : Date.now(),
           furniture: normalizeDetailFurniture(area.furniture),
         }];
@@ -12426,6 +12426,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         ["brown", "Coklat"],
                         ["blue", "Biru"],
                         ["bata", "Bata"],
+                        ["mono", "Monokrom"],
                       ] as const).map(([style, label]) => <Button
                         key={style} role="radio" aria-checked={(area.architecturalStyle ?? "tosca") === style}
                         variant={(area.architecturalStyle ?? "tosca") === style ? "secondary" : "ghost"}
