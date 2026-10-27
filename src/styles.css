@@ -69,6 +69,8 @@
   --architectural-style-blue: #253e5c;
   --architectural-style-bata: #834d53;
   --architectural-style-mono: #9a9a9a;
+  --architectural-style-lightorange: #bd5b28;
+
   --architectural-caption-surface: rgba(255,255,255,0.92);
   --architectural-caption-ink: #283b3a;
 
@@ -314,6 +316,27 @@
 [data-architectural-style="mono"] [data-detail-secondary-notation] [stroke]:not([stroke="none"]) { stroke: #4a4a4a; }
 [data-architectural-style="mono"] [data-detail-secondary-notation] [fill="#0a0a0a"],
 [data-architectural-style="mono"] [data-detail-secondary-notation] text { fill: #4a4a4a; stroke: none; }
+/* Oranye Terang: tone dan sifat sama persis dengan Monokrom, hanya warna dindingnya oranye bata. */
+[data-architectural-style="lightorange"] {
+  --architectural-door-ink: #4a4a4a;
+  --architectural-grid-ink: #4a4a4a;
+  --architectural-wall-light: #bd5b28;
+  --architectural-wall-mid: #bd5b28;
+  --architectural-wall-deep: #bd5b28;
+  --architectural-background-gradient: #ffffff;
+  --architectural-floor-light: #f5f5f5;
+  --architectural-floor-deep: #e1e1e1;
+  --architectural-furniture: #f7f7f7;
+  --architectural-ink: #4a4a4a;
+  --architectural-edge: #4a4a4a;
+  --architectural-line: #4a4a4a;
+  --architectural-caption-surface: #ffffff;
+  --architectural-caption-ink: #4a4a4a;
+}
+[data-architectural-style="lightorange"] [data-detail-secondary-notation] [stroke]:not([stroke="none"]) { stroke: #4a4a4a; }
+[data-architectural-style="lightorange"] [data-detail-secondary-notation] [fill="#0a0a0a"],
+[data-architectural-style="lightorange"] [data-detail-secondary-notation] text { fill: #4a4a4a; stroke: none; }
+
 .architectural-swatch {
   width: 10px;
   height: 10px;
@@ -326,6 +349,8 @@
 .architectural-swatch-blue { background: var(--architectural-style-blue); }
 .architectural-swatch-bata { background: var(--architectural-style-bata); }
 .architectural-swatch-mono { background: var(--architectural-style-mono); }
+.architectural-swatch-lightorange { background: var(--architectural-style-lightorange); }
+
 
 .schedule-page { letter-spacing: 0; }
 .schedule-page h1, .schedule-page h2 { letter-spacing: 0; }
