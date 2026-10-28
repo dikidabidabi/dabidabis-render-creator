@@ -173,3 +173,5 @@
 - [x] Tombol Salin sketsa juga menyalin jadwal dan pengaturan tampilannya ke sketsa hasil salinan.
 
 - [x] Tambahkan style Arsitektural Oranye Terang: tone dan sifat sama persis dengan Monokrom, dinding oranye bata; 3 uji lolos, 118 uji total lolos, warna dinding terukur di pratinjau.
+- [x] Perimeter furniture slide Arsitektural = garis biasa (warna & ketebalan sama, termasuk furniture gambar); sudut kiri atas gradien lantai Monokrom/Oranye Terang diperterang 50% lagi (#fafafa); 119 uji lolos.
+
