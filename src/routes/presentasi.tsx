@@ -4715,10 +4715,7 @@ function SlideFurniture({ items, sw, prefix, architectural = false, pxPerM = 1 }
     const fraction = (6 - i) / 6;
     return { offset: pxPerM * 0.15 * fraction / Math.SQRT2, blur: pxPerM * (0.0015 + 0.018 * fraction ** 2) };
   });
-  // Perimeter furniture setebal garis biasa pada denah arsitektural.
-  const furnitureStroke = sw * 0.00028;
   return <g pointerEvents="none">
-
     {architectural && <defs>
       <filter id={tintId} x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
         <feColorMatrix type="saturate" values="0" />
@@ -4750,14 +4747,9 @@ function SlideFurniture({ items, sw, prefix, architectural = false, pxPerM = 1 }
       return <g key={`${prefix}-${item.id}`}>
         <g data-architectural-furniture={architectural || undefined} data-shadow-distance-mm={architectural ? 150 : undefined} filter={architectural ? `url(#${shadowId})` : undefined}>
         {item.catalogId === "dinamic" ? <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
-          fill={architectural ? "var(--architectural-furniture)" : "var(--surface-elevated)"} stroke={architectural ? "var(--architectural-line)" : "var(--foreground)"} strokeWidth={architectural ? furnitureStroke : 1.5} vectorEffect={architectural ? undefined : "non-scaling-stroke"} transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
-          : <>
-            <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
-            width={item.width} height={item.height} preserveAspectRatio="none" filter={architectural ? `url(#${tintId})` : undefined} transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
-            {architectural && <rect x={item.x - item.width / 2} y={item.y - item.height / 2} width={item.width} height={item.height}
-              fill="none" stroke="var(--architectural-line)" strokeWidth={furnitureStroke} transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />}
-          </>}
-
+          fill={architectural ? "var(--architectural-furniture)" : "var(--surface-elevated)"} stroke={architectural ? "var(--architectural-edge)" : "var(--foreground)"} strokeWidth={1.5} vectorEffect="non-scaling-stroke" transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />
+          : <image href={item.imageUrl} x={item.x - item.width / 2} y={item.y - item.height / 2}
+            width={item.width} height={item.height} preserveAspectRatio="none" filter={architectural ? `url(#${tintId})` : undefined} transform={`rotate(${item.rotation} ${item.x} ${item.y})`} />}
         </g>
         <rect x={item.x - tagWidth / 2} y={tagY} width={tagWidth} height={tagHeight}
           fill="var(--surface-elevated)" stroke="var(--foreground)" strokeWidth={sw * 0.00035} />

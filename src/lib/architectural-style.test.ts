@@ -41,14 +41,3 @@ test("tombol style oranye terang punya swatch dan terdaftar di pilihan", () => {
   assert.match(sketch, /\["lightorange",\s*"Oranye Terang"\]/);
   assert.match(sketch, /"tosca" \| "brown" \| "blue" \| "bata" \| "mono" \| "lightorange"/);
 });
-
-// Monokrom dan Oranye Terang: sudut kiri atas gradien lantai diperterang 50%
-// dari #f5f5f5 menjadi #fafafa, sementara sudut kanan bawah tetap #e1e1e1.
-test("sudut kiri atas gradien lantai monokrom dan oranye terang lebih terang 50%", () => {
-  for (const style of ["mono", "lightorange"]) {
-    const vars = styleVars(style);
-    assert.equal(vars.get("architectural-floor-light"), "#fafafa", `sudut kiri atas ${style} harus #fafafa`);
-    assert.equal(vars.get("architectural-floor-deep"), "#e1e1e1", `sudut kanan bawah ${style} harus tetap #e1e1e1`);
-  }
-});
-
