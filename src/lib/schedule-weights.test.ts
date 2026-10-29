@@ -37,4 +37,12 @@ test("bobot manual dipertahankan saat muat ulang dan salin sketsa", () => {
   const tasks = normalizeSchedule([task("1", 35)]);
   assert.equal(tasks[0]?.weight, 35);
   assert.equal(copyScheduleEntry({ source: tasks }, "source", "target").target[0]?.weight, 35);
+});import { weeklyActualWeights, weightedActualAt } from "./schedule-weights";
+test("bobot rencana 10% dengan realisasi 20% di minggu ke-2 menghasilkan bobot realisasi 2%", () => {
+  const t: ScheduleTask = { ...task("1", 10), progressEntries: [{ date: "2026-10-09", actual: 20 }] };
+  const weeks = weeklyActualWeights(t, 10, [t], "2026-10-20");
+  assert.equal(weeks.length, 1);
+  assert.equal(weeks[0].start, "2026-10-08");
+  assert.ok(Math.abs(weeks[0].weight - 2) < 1e-9);
+  assert.ok(Math.abs(weightedActualAt([t], new Map([["1", 10]]), "2026-10-20", "2026-10-20") - 2) < 1e-9);
 });
