@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Kembalikan garis PDF Jadwal tanpa kotak tambahan per sel; pertahankan garis pemisah setipis tampilan aplikasi dan periksa PDF.
+- [x] Kembalikan garis PDF Jadwal tanpa kotak tambahan per sel; garis asli memakai strip tipis agar tidak dibulatkan menjadi tebal. PDF uji 42 pekerjaan/2 halaman diperiksa visual sebelum/sesudah, 2 uji cetak lolos; data jadwal akun tidak tersedia di browser pengujian baru, tanpa mengubah data Cloud.
 
 - [x] Tambahkan Bobot manual WBS utama, pembagian rata bertingkat, dan ceklis default mati untuk angka bobot mingguan berwarna; 66 uji lolos, 35/5=7% dan bobot 14% selama 14 hari=7% per minggu teruji pada akun aktif, termasuk lipat/buka, muat ulang, isolasi sketsa, serta pemulihan bar biasa; tanpa kesalahan halaman.
 
