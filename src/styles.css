@@ -432,9 +432,24 @@
   html.print-scurve .schedule-s-curve .max-h-64 { max-height: none !important; overflow: visible !important; }
   html.print-scurve .schedule-s-curve { border: none !important; margin-top: 0 !important; padding: 0 !important; }
   [data-task-id], .schedule-s-curve table tr { break-inside: avoid; }
-  html.print-schedule .schedule-scroll .border-l { border-left-width: 0.5px !important; }
-  html.print-schedule .schedule-scroll .border-b { border-bottom-width: 0.5px !important; }
-  html.print-schedule .schedule-scroll .border-r { border-right-width: 0.5px !important; }
-  html.print-schedule .schedule-table-grid > * { border-width: 0.5px !important; }
+  /* Background strips retain subpixel thickness under fit-width zoom. PDF borders
+     otherwise round up to a device pixel; only existing separators are drawn. */
+  html.print-schedule .schedule-scroll .border-b {
+    border-bottom: none !important;
+    background-image: linear-gradient(var(--border), var(--border));
+    background-size: 100% 1px;
+    background-position: left bottom;
+    background-repeat: no-repeat;
+  }
+  html.print-schedule .schedule-table-grid.border-b {
+    background-image: linear-gradient(color-mix(in oklab, var(--border) 60%, transparent), color-mix(in oklab, var(--border) 60%, transparent));
+  }
+  html.print-schedule .schedule-scroll .border-l {
+    border-left: none !important;
+    background-image: linear-gradient(var(--border), var(--border));
+    background-size: 1px 100%;
+    background-position: left top;
+    background-repeat: no-repeat;
+  }
   * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
