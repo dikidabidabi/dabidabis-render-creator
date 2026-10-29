@@ -10,9 +10,9 @@ export function normalizeScheduleViews(value: unknown): Record<string, ScheduleV
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).flatMap(([id, entry]) => {
     if (!entry || typeof entry !== "object") return [];
-    const item = { ...entry, weights: (entry as Partial<ScheduleView>).weights === true } as Partial<ScheduleView>;
-    return [[id, { collapsed: Array.isArray(item.collapsed) ? item.collapsed.filter((id) => typeof id === "string") : [], cpm: item.cpm === true, slack: typeof item.slack === "number" && Number.isFinite(item.slack) ? Math.max(0, Math.trunc(item.slack)) : 0, observations: Array.isArray(item.observations) ? item.observations.filter((point) => point && /^\d{4}-\d{2}-\d{2}$/.test(point.date) && typeof point.actual === "number" && Number.isFinite(point.actual) && point.actual >= 0 && point.actual <= 100).sort((a, b) => a.date.localeCompare(b.date)) : [] }]];
-  })).map(([id, settings]) => [id, { ...settings, weights: (value as Record<string, Partial<ScheduleView>>)[id]?.weights === true }]);
+    const item = entry as Partial<ScheduleView>;
+    return [[id, { collapsed: Array.isArray(item.collapsed) ? item.collapsed.filter((id) => typeof id === "string") : [], cpm: item.cpm === true, weights: item.weights === true, slack: typeof item.slack === "number" && Number.isFinite(item.slack) ? Math.max(0, Math.trunc(item.slack)) : 0, observations: Array.isArray(item.observations) ? item.observations.filter((point) => point && /^\d{4}-\d{2}-\d{2}$/.test(point.date) && typeof point.actual === "number" && Number.isFinite(point.actual) && point.actual >= 0 && point.actual <= 100).sort((a, b) => a.date.localeCompare(b.date)) : [] }]];
+  }));
 }
 
 export function descendants(task: ScheduleTask, tasks: ScheduleTask[]) {

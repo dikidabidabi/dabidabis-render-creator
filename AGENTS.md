@@ -28,3 +28,5 @@
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
 - Outline Specification per-level location areas and all-level totals share specMaterialArea; location fragments retain the full level area and pagination measures the displayed room-and-area text to prevent clipping.
 - Schedule/S-curve PDF: window.print with html print-schedule/print-scurve + fit-width zoom (schedule-print); A4 landscape, rows avoid breaks.
+
+- Schedule weights are stored only on root WBS tasks and derived recursively from all immediate siblings; weekly labels share task dates and existing bar colors without changing S-curve progress weighting, so folding and edits cannot distort allocations.
