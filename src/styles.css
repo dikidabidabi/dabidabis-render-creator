@@ -413,7 +413,13 @@
 .schedule-delay-bar { position: absolute; top: 44px; height: 8px; border-radius: 9999px; background: var(--destructive); opacity: 0.9; pointer-events: none; }
 .schedule-delay-key { width: 18px; height: 6px; border-radius: 9999px; background: var(--destructive); }
 .schedule-actual-bar { position: absolute; top: 44px; height: 8px; border-radius: 9999px; background: var(--schedule-today); pointer-events: none; }
-.schedule-week-actual { position: absolute; top: 45px; z-index: 10; height: 10px; border-radius: 4px; font-size: 8px; line-height: 10px; font-weight: 600; text-align: center; overflow: hidden; white-space: nowrap; opacity: 0.85; pointer-events: auto; }
+.schedule-week-actual { position: absolute; top: 45px; z-index: 10; height: 10px; border-radius: 4px; font-size: 8px; line-height: 10px; font-weight: 600; text-align: center; overflow: hidden; white-space: nowrap; color: var(--schedule-title-ink); pointer-events: auto; }
+.schedule-curve-plan { fill: var(--schedule-neutral); }
+.schedule-curve-plan.schedule-color-stage { fill: var(--schedule-stage); }
+.schedule-curve-plan.schedule-color-lavender { fill: var(--schedule-lavender); }
+.schedule-curve-plan.schedule-color-green { fill: var(--schedule-green); }
+.schedule-curve-plan.schedule-color-yellow { fill: var(--schedule-yellow); }
+.schedule-curve-plan.schedule-critical-bar { fill: var(--destructive); }
 .schedule-actual-bar-late { background: var(--destructive); }
 .schedule-actual-key { width: 18px; height: 6px; border-radius: 9999px; background: var(--schedule-today); }
 .schedule-critical-link { color: var(--destructive); }
