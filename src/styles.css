@@ -451,5 +451,10 @@
     background-position: left top;
     background-repeat: no-repeat;
   }
+  /* Garis pemisah bulan hanya berupa border pada kotak tanpa lebar: beri lebar
+     1px saat cetak agar strip latar di atas ikut tergambar setipis pemisah lain. */
+  html.print-schedule .schedule-month-line {
+    width: 1px;
+  }
   * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
