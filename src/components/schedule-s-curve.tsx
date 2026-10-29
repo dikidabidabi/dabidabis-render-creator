@@ -83,8 +83,8 @@ function SCurveChart({ tasks, data, current, number, weights, showWeights, criti
   return <div className="mt-5">
     <label className="mb-3 flex w-fit items-center gap-2 text-sm print:hidden"><Checkbox checked={gantt} onCheckedChange={(value) => setGantt(value === true)} />Munculkan gantt chart</label>
     <div className="flex flex-wrap gap-4 text-xs text-muted-foreground"><span className="flex items-center gap-2"><span className="h-0.5 w-5 bg-[var(--schedule-link-fs)]" />Rencana</span><span className="flex items-center gap-2"><span className="h-0.5 w-5 bg-[var(--schedule-link-ss)]" />Realisasi</span>{gantt && showWeights && <><span className="flex items-center gap-2 font-semibold">7%<span className="font-normal">Bobot rencana</span></span><span className="flex items-center gap-2 font-semibold text-[var(--schedule-link-ss)]">2%<span className="font-normal">Bobot realisasi</span></span></>}{gantt && !showWeights && <><span className="flex items-center gap-2"><span className="h-2 w-5 bg-muted-foreground opacity-50" />Bar rencana</span><span className="flex items-center gap-2"><span className="h-1 w-5 bg-[var(--schedule-link-ss)] opacity-50" />Bar realisasi</span></>}<span className="flex items-center gap-2"><span className="h-3 w-0.5 bg-[var(--schedule-today)]" />Hari ini</span></div>
-    <div className="mt-3 flex overflow-x-auto">
-      <div className="sticky left-0 z-10 shrink-0 bg-background text-xs" style={{ width: gantt ? NAME_WIDTH : 64 }}>
+    <div className="schedule-curve-chart mt-3 flex overflow-x-auto">
+      <div className="schedule-curve-labels sticky left-0 z-10 shrink-0 bg-background text-xs" style={{ width: gantt ? NAME_WIDTH : 64 }}>
         <div style={{ height }}>{rows.map((task) => <div key={task.id} className="flex items-center truncate border-b border-border bg-surface px-2" style={{ height: rowH }} title={task.title}><span className="truncate">{task.wbs} {task.title}</span></div>)}</div>
         {axisLabels.map((label) => <div key={label} className="flex items-center justify-end pr-2 text-muted-foreground" style={{ height: AXIS_ROW }}>{label}</div>)}
       </div>
