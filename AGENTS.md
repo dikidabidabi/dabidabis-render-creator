@@ -29,4 +29,4 @@
 - Outline Specification per-level location areas and all-level totals share specMaterialArea; location fragments retain the full level area and pagination measures the displayed room-and-area text to prevent clipping.
 - Schedule/S-curve PDF: window.print with print-schedule/print-scurve and fit-width zoom; A4 landscape, rows avoid breaks. Schedule separators use background strips at existing row/month boundaries to avoid PDF border rounding; never border unbordered cells.
 
-- Schedule weights are stored only on root WBS tasks and derived recursively from all immediate siblings; weekly labels share task dates and existing bar colors without changing S-curve progress weighting, so folding and edits cannot distort allocations.
+- Schedule weights are stored only on root WBS tasks and derived recursively from all immediate siblings; weekly labels share task dates, plan colors and a shared due-date-split actual fill across Schedule and S-curve; S-curve uses leaf weights when supplied and duration weighting otherwise, so folding and edits cannot distort allocations.
