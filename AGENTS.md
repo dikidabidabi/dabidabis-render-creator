@@ -26,6 +26,6 @@
 - Mode Plafon per kotak detail saling eksklusif dengan mode Material dan memakai kode material bersama yang sama dengan Outline Spesifikasi.
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
 - Outline Specification per-level location areas and all-level totals share specMaterialArea; location fragments retain the full level area and pagination measures the displayed room-and-area text to prevent clipping.
-- Schedule/S-curve PDF: window.print with print-schedule/print-scurve and fit-width zoom; A4 landscape, rows avoid breaks. Schedule separators use background strips at existing row/month boundaries to avoid PDF border rounding; never border unbordered cells.
+- Schedule PDFs use window.print, A4 landscape and fit-width zoom. S-curve chunks pair labels with SVG row slices, reserving heading space. Schedule separators use thin background strips only at existing row/month borders.
 
 - Schedule weights are stored only on root WBS tasks and derived recursively from all immediate siblings; weekly labels share task dates, plan colors and a shared due-date-split actual fill across Schedule and S-curve; S-curve uses leaf weights when supplied and duration weighting otherwise, so folding and edits cannot distort allocations.

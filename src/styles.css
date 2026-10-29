@@ -425,6 +425,7 @@
 .schedule-critical-link { color: var(--destructive); }
 .schedule-critical-link .schedule-link-line { stroke-width: 2.5; }
 .schedule-s-curve .recharts-wrapper { font-family: var(--font-sans); }
+.schedule-curve-print { display: none; }
 
 /* Cetak PDF jadwal & Kurva S: A4 lanskap, muat kiri-kanan, baris mengalir ke halaman berikutnya */
 @page { size: A4 landscape; margin: 10mm; }
@@ -438,6 +439,11 @@
   html.print-scurve .schedule-s-curve .overflow-x-auto { overflow: visible !important; }
   html.print-scurve .schedule-s-curve .max-h-64 { max-height: none !important; overflow: visible !important; }
   html.print-scurve .schedule-s-curve { border: none !important; margin-top: 0 !important; padding: 0 !important; }
+  html.print-scurve .schedule-curve-chart { display: none !important; }
+  html.print-scurve .schedule-curve-print { display: block; margin-top: 12px; }
+  html.print-scurve .schedule-curve-print-page { display: flex; break-inside: avoid; }
+  html.print-scurve .schedule-curve-print-page + .schedule-curve-print-page { break-before: page; }
+  html.print-scurve .schedule-curve-labels { position: static !important; }
   [data-task-id], .schedule-s-curve table tr { break-inside: avoid; }
   /* Background strips retain subpixel thickness under fit-width zoom. PDF borders
      otherwise round up to a device pixel; only existing separators are drawn. */

@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { PRINTABLE_WIDTH_PX, printZoom } from "./schedule-print";
+import { curvePrintSlices, PRINTABLE_WIDTH_PX, printZoom } from "./schedule-print";
 
 describe("printZoom", () => {
   test("mengecilkan konten lebar agar muat kiri-kanan kertas A4 lanskap", () => {
@@ -13,5 +13,19 @@ describe("printZoom", () => {
     assert.equal(printZoom(PRINTABLE_WIDTH_PX), 1);
     assert.equal(printZoom(0), 1);
     assert.equal(printZoom(Number.NaN), 1);
+  });
+});
+
+describe("curvePrintSlices", () => {
+  test("42 task labels and chart rows share complete page slices without a blank first page", () => {
+    const slices = curvePrintSlices(42, 34, 1428, 66, 600, 720);
+    assert.deepEqual(slices.map(({ from, to }) => [from, to]), [[0, 17], [17, 38], [38, 42]]);
+    assert.deepEqual(slices.map(({ offset }) => offset), [0, 578, 1292]);
+    assert.equal(slices.reduce((sum, slice) => sum + slice.height, 0), 1494);
+    assert.equal(slices[2]?.axes, true);
+    assert.ok(slices.every((slice, index) => slice.height <= (index ? 720 : 600)));
+  });
+  test("a compact curve stays immediately below its heading on the first page", () => {
+    assert.deepEqual(curvePrintSlices(0, 0, 320, 66, 600, 720), [{ from: 0, to: 0, offset: 0, height: 386, axes: true }]);
   });
 });
