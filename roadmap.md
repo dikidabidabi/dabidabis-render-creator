@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Rapatkan grafik PDF Kurva S ke judul/keterangan dan satukan pemenggalan judul pekerjaan dengan bar/kurva; periksa PDF multi-halaman.
+
 - [x] Pertahankan bar bobot realisasi biru/merah dengan angka putih; bar bobot Kurva S mengikuti warna Jadwal dan opacity 50%; 25 uji lolos, tampilan teruji dengan data sementara lokal pada sesi aktif (data akun tidak tersedia di browser baru).
 
 - [x] Kembalikan garis PDF Jadwal tanpa kotak tambahan per sel; garis asli memakai strip tipis agar tidak dibulatkan menjadi tebal. PDF uji 42 pekerjaan/2 halaman diperiksa visual sebelum/sesudah, 2 uji cetak lolos; data jadwal akun tidak tersedia di browser pengujian baru, tanpa mengubah data Cloud.
