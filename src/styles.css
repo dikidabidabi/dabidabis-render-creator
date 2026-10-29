@@ -356,7 +356,7 @@
 .schedule-page { letter-spacing: 0; }
 .schedule-page h1, .schedule-page h2 { letter-spacing: 0; }
 .schedule-scroll { max-height: 68vh; scrollbar-gutter: stable; }
-.schedule-table-grid { display: grid; grid-template-columns: 45px 95px 260px 125px 100px 100px 70px 125px 75px 110px 140px 100px 100px 110px 45px; }
+.schedule-table-grid { display: grid; grid-template-columns: 45px 95px 260px 125px 100px 100px 70px 125px 75px 110px 140px 100px 100px 110px 95px 45px; }
 .schedule-color-stage { background-color: var(--schedule-stage); color: var(--schedule-ink); }
 .schedule-color-lavender { background-color: var(--schedule-lavender); color: var(--schedule-ink); }
 .schedule-color-green { background-color: var(--schedule-green); color: var(--schedule-ink); }
