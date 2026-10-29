@@ -130,6 +130,7 @@
   --schedule-risk: #ffedaa;
   --schedule-risk-ink: #795300;
   --schedule-title-ink: #ffffff;
+  --schedule-title-bg: #1f8a84;
   --schedule-link-fs: #1673c5;
   --schedule-link-ss: #16834b;
   --schedule-link-ff: #b07808;
@@ -367,7 +368,7 @@
 .schedule-wbs-level-2 { background-color: var(--schedule-lavender); color: var(--schedule-ink); }
 .schedule-wbs-level-3 { background-color: var(--schedule-green); color: var(--schedule-ink); }
 .schedule-wbs-level-4 { background-color: var(--schedule-yellow); color: var(--schedule-ink); }
-.schedule-title-box { background-color: var(--architectural-style-tosca, #1f8a84); display: block; width: 100%; border-radius: 10px; padding: 4px 10px; color: var(--schedule-title-ink); font-weight: 700; font-size: 13px; line-height: 1.35; box-shadow: var(--shadow-soft); }
+.schedule-title-box { background-color: var(--schedule-title-bg); display: block; width: 100%; border-radius: 10px; padding: 4px 10px; color: var(--schedule-title-ink); font-weight: 700; font-size: 13px; line-height: 1.35; box-shadow: var(--shadow-soft); }
 .schedule-bar { overflow: hidden; box-shadow: var(--shadow-soft); }
 .schedule-bar:hover { filter: brightness(0.97); }
 .schedule-bar-progress { background: var(--schedule-progress); }
