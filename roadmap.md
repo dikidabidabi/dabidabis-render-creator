@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Tambahkan Bobot manual WBS utama, pembagian rata bertingkat, dan ceklis default mati untuk angka bobot mingguan berwarna; uji rumus serta penyimpanan/tampilan.
+
 - [x] Predecessor majemuk dipisahkan “;”, tipe/offset per hubungan, tanggal memenuhi semua acuan, kabel setiap hubungan; 60 uji lolos, ketiga contoh dan kabel berwarna serta formulir/penyimpanan ulang/penghapusan teruji pada akun aktif.
 
 - [x] Kalender tabel dan fill handle empat kolom tanggal; aktual mulai/selesai dan bar aktual biru/merah; offset predecessor positif/negatif. 46 uji lolos; kalender, drag tiga baris, bar biru/merah, FS+3 dan muat ulang teruji pada akun aktif; data uji dibersihkan.
