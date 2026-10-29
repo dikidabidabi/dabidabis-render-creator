@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Pertahankan bar bobot realisasi biru/merah dengan angka putih; bar bobot Kurva S mengikuti warna Jadwal dan opacity 50%; 25 uji lolos, tampilan teruji dengan data sementara lokal pada sesi aktif (data akun tidak tersedia di browser baru).
+
 - [x] Kembalikan garis PDF Jadwal tanpa kotak tambahan per sel; garis asli memakai strip tipis agar tidak dibulatkan menjadi tebal. PDF uji 42 pekerjaan/2 halaman diperiksa visual sebelum/sesudah, 2 uji cetak lolos; data jadwal akun tidak tersedia di browser pengujian baru, tanpa mengubah data Cloud.
 
 - [x] Tambahkan Bobot manual WBS utama, pembagian rata bertingkat, dan ceklis default mati untuk angka bobot mingguan berwarna; 66 uji lolos, 35/5=7% dan bobot 14% selama 14 hari=7% per minggu teruji pada akun aktif, termasuk lipat/buka, muat ulang, isolasi sketsa, serta pemulihan bar biasa; tanpa kesalahan halaman.
