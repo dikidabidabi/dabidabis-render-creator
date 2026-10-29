@@ -129,6 +129,7 @@
   --schedule-progress: rgba(25, 69, 54, 0.13);
   --schedule-risk: #ffedaa;
   --schedule-risk-ink: #795300;
+  --schedule-title-ink: #ffffff;
   --schedule-link-fs: #1673c5;
   --schedule-link-ss: #16834b;
   --schedule-link-ff: #b07808;
@@ -366,6 +367,13 @@
 .schedule-wbs-level-2 { background-color: var(--schedule-lavender); color: var(--schedule-ink); }
 .schedule-wbs-level-3 { background-color: var(--schedule-green); color: var(--schedule-ink); }
 .schedule-wbs-level-4 { background-color: var(--schedule-yellow); color: var(--schedule-ink); }
+.schedule-wbs { background-color: var(--schedule-stage); color: var(--schedule-ink); }
+.schedule-title-box { display: block; width: 100%; border-radius: 10px; padding: 4px 10px; color: var(--schedule-title-ink); font-weight: 700; font-size: 13px; line-height: 1.35; box-shadow: var(--shadow-soft); }
+.schedule-title-box.schedule-color-stage { background-color: color-mix(in srgb, var(--schedule-stage) 68%, var(--schedule-ink)); color: var(--schedule-title-ink); }
+.schedule-title-box.schedule-color-lavender { background-color: color-mix(in srgb, var(--schedule-lavender) 68%, var(--schedule-ink)); color: var(--schedule-title-ink); }
+.schedule-title-box.schedule-color-green { background-color: color-mix(in srgb, var(--schedule-green) 68%, var(--schedule-ink)); color: var(--schedule-title-ink); }
+.schedule-title-box.schedule-color-yellow { background-color: color-mix(in srgb, var(--schedule-yellow) 68%, var(--schedule-ink)); color: var(--schedule-title-ink); }
+.schedule-title-box.schedule-color-neutral { background-color: color-mix(in srgb, var(--schedule-neutral) 68%, var(--schedule-ink)); color: var(--schedule-title-ink); }
 .schedule-bar { overflow: hidden; box-shadow: var(--shadow-soft); }
 .schedule-bar:hover { filter: brightness(0.97); }
 .schedule-bar-progress { background: var(--schedule-progress); }
