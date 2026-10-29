@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Kembalikan garis PDF Jadwal tanpa kotak tambahan per sel; pertahankan garis pemisah setipis tampilan aplikasi dan periksa PDF.
+
 - [x] Tambahkan Bobot manual WBS utama, pembagian rata bertingkat, dan ceklis default mati untuk angka bobot mingguan berwarna; 66 uji lolos, 35/5=7% dan bobot 14% selama 14 hari=7% per minggu teruji pada akun aktif, termasuk lipat/buka, muat ulang, isolasi sketsa, serta pemulihan bar biasa; tanpa kesalahan halaman.
 
 - [x] Predecessor majemuk dipisahkan “;”, tipe/offset per hubungan, tanggal memenuhi semua acuan, kabel setiap hubungan; 60 uji lolos, ketiga contoh dan kabel berwarna serta formulir/penyimpanan ulang/penghapusan teruji pada akun aktif.
