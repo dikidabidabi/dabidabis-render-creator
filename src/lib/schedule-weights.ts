@@ -1,5 +1,5 @@
-import { addDays, format, parseISO } from "date-fns";
-import { scheduleDuration, type ScheduleTask } from "./schedule";
+import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
+import { scheduleDuration, scheduleProgress, type ScheduleTask } from "./schedule";
 
 const code = (task: ScheduleTask) => task.wbs.trim().replace(/\.+$/, "");
 const parentCode = (wbs: string) => wbs.slice(0, wbs.lastIndexOf("."));
@@ -40,3 +40,50 @@ export function weeklyTaskWeights(task: ScheduleTask, weight: number) {
 }
 
 export const formatScheduleWeight = (weight: number) => `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(weight)}%`;
+/** Realized percent of a task on a date: dated entries when present, else current checklist from today on. */
+export function realizedProgressAt(task: ScheduleTask, tasks: ScheduleTask[], date: string, today: string) {
+  const dated = tasks.some((item) => item.progressEntries?.length);
+  if (dated) return scheduleProgress(task, tasks, date);
+  return date >= today ? scheduleProgress(task, tasks, today) : 0;
+}
+
+/** Weekly realized weight = plan weight × progress gained that week, on the plan's 7-day grid. */
+export function weeklyActualWeights(task: ScheduleTask, weight: number, tasks: ScheduleTask[], today: string) {
+  const origin = parseISO(task.start);
+  const earliest = [task.start, task.actualStart, ...(task.progressEntries ?? []).map((entry) => entry.date)].filter(Boolean).sort()[0] as string;
+  const first = Math.min(0, Math.floor(differenceInCalendarDays(parseISO(earliest), origin) / 7));
+  const out: { start: string; days: number; weight: number; progress: number }[] = [];
+  let previous = 0;
+  for (let index = first; index < first + 520; index++) {
+    const weekStart = addDays(origin, index * 7);
+    const start = format(weekStart, "yyyy-MM-dd");
+    if (start > today) break;
+    const end = format(addDays(weekStart, 6), "yyyy-MM-dd");
+    const progress = realizedProgressAt(task, tasks, end < today ? end : today, today);
+    const gained = progress - previous;
+    if (gained > 0) out.push({ start, days: 7, weight: weight * gained / 100, progress: gained });
+    previous = Math.max(previous, progress);
+    if (previous >= 100) break;
+  }
+  return out;
+}
+
+/** Weight-based S-curve: plan = Σ weight × elapsed share; realization = Σ weight × realized percent. */
+export function weightedPlanAt(tasks: ScheduleTask[], weights: Map<string, number>, date: string) {
+  return leavesOf(tasks).reduce((sum, task) => {
+    const duration = scheduleDuration(task.start, task.due);
+    const elapsed = differenceInCalendarDays(parseISO(date), parseISO(task.start));
+    const fraction = duration ? Math.max(0, Math.min(1, elapsed / duration)) : date >= task.due ? 1 : 0;
+    return sum + (weights.get(task.id) ?? 0) * fraction;
+  }, 0);
+}
+
+export function weightedActualAt(tasks: ScheduleTask[], weights: Map<string, number>, date: string, today: string) {
+  return leavesOf(tasks).reduce((sum, task) => sum + (weights.get(task.id) ?? 0) * realizedProgressAt(task, tasks, date, today) / 100, 0);
+}
+
+export const hasScheduleWeights = (weights: Map<string, number>) => [...weights.values()].some((value) => value > 0);
+
+function leavesOf(tasks: ScheduleTask[]) {
+  return tasks.filter((task) => !tasks.some((child) => child.id !== task.id && child.wbs.startsWith(`${code(task)}.`)));
+}
