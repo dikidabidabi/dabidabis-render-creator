@@ -84,6 +84,38 @@ export function weightedActualAt(tasks: ScheduleTask[], weights: Map<string, num
 
 export const hasScheduleWeights = (weights: Map<string, number>) => [...weights.values()].some((value) => value > 0);
 
+export const WEEKLY_SUMMARY_ROWS = [
+  { key: "plan", label: "Bobot rencana" },
+  { key: "planCumulative", label: "Akumulasi bobot rencana" },
+  { key: "actual", label: "Bobot realisasi" },
+  { key: "actualCumulative", label: "Akumulasi bobot realisasi" },
+] as const;
+
+/** Same leaf allocations as the curve, with duration fallback for unweighted schedules. */
+export function curveAllocationWeights(tasks: ScheduleTask[], weights: Map<string, number>) {
+  if (hasScheduleWeights(weights)) return weights;
+  const leaves = leavesOf(tasks);
+  const total = leaves.reduce((sum, task) => sum + Math.max(1, scheduleDuration(task.start, task.due)), 0);
+  return new Map(leaves.map((task) => [task.id, total ? Math.max(1, scheduleDuration(task.start, task.due)) * 100 / total : 0]));
+}
+
+/** Calendar-week totals; parent rows never double-count their leaf work. */
+export function weeklyScheduleSummary(tasks: ScheduleTask[], weights: Map<string, number>, weeks: Date[], today: string) {
+  const allocations = curveAllocationWeights(tasks, weights);
+  const clean = (value: number) => Math.abs(value) < 1e-9 ? 0 : Math.round(value * 1e10) / 1e10;
+  return weeks.map((week) => {
+    const start = format(week, "yyyy-MM-dd");
+    const before = format(addDays(week, -1), "yyyy-MM-dd");
+    const next = format(addDays(week, 7), "yyyy-MM-dd");
+    const end = format(addDays(week, 6), "yyyy-MM-dd");
+    const planCumulative = weightedPlanAt(tasks, allocations, next);
+    const actualCumulative = start > today ? null : weightedActualAt(tasks, allocations, end < today ? end : today, today);
+    return { start, plan: clean(planCumulative - weightedPlanAt(tasks, allocations, start)), planCumulative: clean(planCumulative),
+      actual: actualCumulative === null ? null : clean(actualCumulative - weightedActualAt(tasks, allocations, before, today)),
+      actualCumulative: actualCumulative === null ? null : clean(actualCumulative) };
+  });
+}
+
 function leavesOf(tasks: ScheduleTask[]) {
   return tasks.filter((task) => !tasks.some((child) => child.id !== task.id && child.wbs.startsWith(`${code(task)}.`)));
 }
