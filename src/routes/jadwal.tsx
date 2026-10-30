@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { addDays, differenceInCalendarDays, eachMonthOfInterval, format, parseISO, startOfMonth, endOfMonth } from "date-fns";
+import { addDays, differenceInCalendarDays, eachMonthOfInterval, format, parseISO, startOfMonth, endOfMonth, startOfWeek } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 import { CalendarDays, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, FileDown, ListChecks, Pencil, PenTool, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,12 +18,13 @@ import { ScheduleDependencyLinks } from "@/components/schedule-dependency-links"
 import { ScheduleTaskProgress } from "@/components/schedule-task-progress";
 import { ScheduleSCurve } from "@/components/schedule-s-curve";
 import { ScheduleActualWeightFill } from "@/components/schedule-actual-weight-fill";
+import { ScheduleWeeklySummary } from "@/components/schedule-weekly-summary";
 import { normalizeScheduleViews, criticalPath, actualBarRanges, delayBarRange, descendants, visibleSchedule, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
 import { scheduleBarBounds, SCHEDULE_ROW_HEIGHT } from "@/lib/schedule-connectors";
 import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessors, taskPredecessors, resolveScheduleDependencies, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { printScheduleSection } from "@/lib/schedule-print";
-import { isWeightRoot, scheduleWeights, weeklyTaskWeights, weeklyActualWeights, formatScheduleWeight } from "@/lib/schedule-weights";
+import { isWeightRoot, scheduleWeights, weeklyTaskWeights, weeklyActualWeights, formatScheduleWeight, weeklyScheduleSummary } from "@/lib/schedule-weights";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/jadwal")({
@@ -188,13 +189,17 @@ function ScheduleWorkspace() {
   const months = eachMonthOfInterval(dates);
   const showTable = view !== "timeline";
   const showTimeline = view !== "table";
-  const totalWidth = (showTable ? TABLE_WIDTH : 0) + (showTimeline ? timelineWidth : 0);
+  const timelineLeft = showTable ? TABLE_WIDTH : 220;
+  const totalWidth = timelineLeft + (showTimeline ? timelineWidth : 0);
+  const weekOrigin = startOfWeek(dates.start, { weekStartsOn: 1 });
+  const summaryWeeks = Array.from({ length: Math.ceil((differenceInCalendarDays(dates.end, weekOrigin) + 1) / 7) }, (_, index) => addDays(weekOrigin, index * 7));
+  const weeklySummary = weeklyScheduleSummary(tasks, weights, summaryWeeks, format(today, "yyyy-MM-dd"));
   const todayX = offset(today) + dayWidth / 2;
   const percentage = totalScheduleProgress(tasks);
 
   function goToday() {
     const scroll = scrollRef.current;
-    if (scroll) scroll.scrollTo({ left: (showTable ? TABLE_WIDTH : 0) + todayX - scroll.clientWidth / 2, behavior: "smooth" });
+    if (scroll) scroll.scrollTo({ left: timelineLeft + todayX - scroll.clientWidth / 2, behavior: "smooth" });
   }
   function saveDraft() {
     if (!draft) return;
@@ -241,10 +246,11 @@ function ScheduleWorkspace() {
     <div ref={scrollRef} className="schedule-scroll overflow-auto border border-border bg-background" aria-label="Tabel dan diagram jadwal">
       <div ref={printRef} className="relative" style={{ width: totalWidth, minHeight: 350 }}>
         <div className="sticky top-0 z-20 flex border-b border-border bg-surface" style={{ height: 70 }}>
+          {!showTable && <div className="shrink-0" style={{ width: timelineLeft }} />}
           {showTable && <div className="schedule-table-grid shrink-0 items-center text-xs font-semibold" style={{ width: TABLE_WIDTH }} role="row">{["ID", "WBS", "Judul pekerjaan", "Penanggung jawab", "Tanggal mulai", "Tenggat", "Durasi", "Predecessor", "% Selesai", "Status", "Komponen", "Aktual mulai", "Aktual selesai", "Progres", "Bobot", ""].map((label, i) => <div key={i} className="px-2" role="columnheader">{label}</div>)}</div>}
           {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}>{months.map((month) => <div key={month.toISOString()} className="absolute bottom-0 top-0 border-l border-border px-3 py-3" style={{ left: offset(month), width: (differenceInCalendarDays(endOfMonth(month), month) + 1) * dayWidth }}><span className="block text-xs text-muted-foreground">{format(month, "yyyy")}</span><span className="text-sm font-medium">{format(month, "MMM", { locale: localeId })}</span></div>)}{scale === "week" && Array.from({ length: Math.ceil(days / 7) }, (_, n) => <span key={n} className="absolute bottom-1 text-[10px] text-muted-foreground" style={{ left: n * 7 * dayWidth + 5 }}>{format(addDays(dates.start, n * 7), "d MMM", { locale: localeId })}</span>)}</div>}
         </div>
-        {showTimeline && <div className="pointer-events-none absolute bottom-0 top-[70px]" style={{ left: showTable ? TABLE_WIDTH : 0, width: timelineWidth }}>{months.map((month) => <div key={month.toISOString()} className="schedule-month-line absolute bottom-0 top-0 border-l border-border" style={{ left: offset(month) }} />)}<div className="schedule-today absolute bottom-0 top-0 z-10" style={{ left: todayX }} title={format(today, "d MMMM yyyy", { locale: localeId })}><span className="schedule-today-dot" /></div></div>}
+        {showTimeline && <div className="pointer-events-none absolute top-[70px]" style={{ left: timelineLeft, width: timelineWidth, height: visibleTasks.length * SCHEDULE_ROW_HEIGHT }}>{months.map((month) => <div key={month.toISOString()} className="schedule-month-line absolute bottom-0 top-0 border-l border-border" style={{ left: offset(month) }} />)}<div className="schedule-today absolute bottom-0 top-0 z-10" style={{ left: todayX }} title={format(today, "d MMMM yyyy", { locale: localeId })}><span className="schedule-today-dot" /></div></div>}
         {visibleTasks.map((task, rowIndex) => {
           const children = descendants(task, tasks);
           const summary = wbsLevel(task.wbs) === 1;
@@ -256,6 +262,7 @@ function ScheduleWorkspace() {
           const delayLeft = delay ? differenceInCalendarDays(parseISO(delay.start), dates.start) * dayWidth : 0;
           const delayWidth = delay ? (differenceInCalendarDays(parseISO(delay.end), parseISO(delay.start)) + 1) * dayWidth : 0;
           return <div key={task.id} className={`relative flex ${task.stage ? "bg-muted/70" : ""}`} style={{ height: SCHEDULE_ROW_HEIGHT }} data-task-id={task.id}>
+            {!showTable && <div className="flex shrink-0 items-center bg-surface px-2 text-xs" style={{ width: timelineLeft }}><span className="truncate">{task.wbs} {task.title}</span></div>}
             {showTable && <div className="schedule-table-grid shrink-0 items-center border-b border-border/60 text-xs" style={{ width: TABLE_WIDTH }}>
               <div className="px-2 text-muted-foreground">{task.taskNumber}</div>
               <div className="relative h-full flex items-start pt-1 px-1" style={{ paddingLeft: 4 + (wbsLevel(task.wbs) - 1) * 10 }}><span className={`schedule-wbs-level-${wbsLevel(task.wbs)} inline-block rounded px-2 py-1.5 font-semibold`} title={WBS_LEVEL_LABELS[wbsLevel(task.wbs)]}>{task.wbs}</span>{children.length > 0 && <Button size="icon" variant="ghost" className="absolute bottom-0 left-1 size-5" aria-label={`${settings.collapsed.includes(task.id) ? "Buka" : "Sembunyikan"} detail ${task.title}`} title="Buka / sembunyikan hierarki" aria-expanded={!settings.collapsed.includes(task.id)} onClick={() => toggleHierarchy(task)}>{settings.collapsed.includes(task.id) ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>}</div>
@@ -265,7 +272,8 @@ function ScheduleWorkspace() {
             {showTimeline && <div className="relative shrink-0 overflow-hidden" style={{ width: timelineWidth }}>{settings.weights ? weeklyTaskWeights(task, weights.get(task.id) ?? 0).map((week) => <Button key={week.start} variant="ghost" className={`schedule-week-weight schedule-color-${summary ? "stage" : task.color} ${isCritical ? "schedule-critical-bar" : ""} absolute top-3 z-10 h-8 rounded px-0 text-[10px] font-semibold tabular-nums`} style={{ left: offset(parseISO(week.start)), width: Math.max(dayWidth, week.days * dayWidth) - 1 }} aria-label={`Bobot mingguan ${task.title} ${week.start}`} title={`${task.title} · ${format(parseISO(week.start), "d MMM yyyy", { locale: localeId })} · ${formatScheduleWeight(week.weight)}`} onClick={() => openTask(task)}>{formatScheduleWeight(week.weight)}</Button>) : <Button variant="ghost" className={`schedule-bar schedule-color-${summary ? "stage" : task.color} ${summary ? "schedule-summary-bar" : ""} ${isCritical ? "schedule-critical-bar" : ""} absolute top-3 z-10 h-8 justify-start rounded-lg p-0 text-left text-xs font-normal`} style={{ left: bar.left, width: bar.right - bar.left }} onClick={() => { openTask(task); }} aria-label={`Jadwal ${task.title}`} title={`${task.wbs} · ${task.title} · ${progress}%`}><span className="schedule-bar-progress absolute inset-y-0 left-0" style={{ width: `${progress}%` }} /><span className="relative truncate px-2">{task.title}</span></Button>}{settings.weights && weeklyActualWeights(task, weights.get(task.id) ?? 0, tasks, format(today, "yyyy-MM-dd")).map((week) => <span key={`a-${week.start}`} className="schedule-week-actual" style={{ left: offset(parseISO(week.start)), width: Math.max(dayWidth, week.days * dayWidth) - 1 }} aria-label={`Bobot realisasi ${task.title} ${week.start}`} title={`Realisasi ${task.title} · minggu ${format(parseISO(week.start), "d MMM yyyy", { locale: localeId })} · ${formatScheduleWeight(week.progress)} dari bobot ${formatScheduleWeight(weights.get(task.id) ?? 0)} = ${formatScheduleWeight(week.weight)}`}><svg className="absolute inset-0 h-full w-full" aria-hidden="true" viewBox={`0 0 ${Math.max(dayWidth, week.days * dayWidth) - 1} 10`} preserveAspectRatio="none"><ScheduleActualWeightFill start={week.start} days={week.days} due={task.due} width={Math.max(dayWidth, week.days * dayWidth) - 1} height={10} /></svg><span className="relative">{formatScheduleWeight(week.weight)}</span></span>)}{!settings.weights && delay && <span className="schedule-delay-bar" style={{ left: delayLeft, width: delayWidth }} title={`Terlambat hingga ${format(parseISO(delay.end), "d MMM yyyy", { locale: localeId })}`} />}{!settings.weights && actualRanges.map((range) => <span key={`${range.start}-${range.late}`} className={`schedule-actual-bar ${range.late ? "schedule-actual-bar-late" : ""}`} data-actual-late={range.late} style={{ left: offset(parseISO(range.start)), width: Math.max(4, (differenceInCalendarDays(parseISO(range.end), parseISO(range.start)) + (range.late || range.end < task.due ? 1 : 0)) * dayWidth) }} title={`Aktual ${task.title}: ${range.start} – ${range.end}${range.late ? " · Terlambat" : ""}`} />)}{children.length > 0 && !showTable && <Button variant="ghost" size="icon" className="absolute bottom-0 z-10 size-5" style={{ left: bar.left }} aria-label={`${settings.collapsed.includes(task.id) ? "Buka" : "Sembunyikan"} detail ${task.title}`} aria-expanded={!settings.collapsed.includes(task.id)} onClick={() => toggleHierarchy(task)}>{settings.collapsed.includes(task.id) ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}</Button>}</div>}
           </div>;
         })}
-        {showTimeline && <ScheduleDependencyLinks tasks={visibleTasks} critical={settings.cpm ? cpm.critical : undefined} start={dates.start} dayWidth={dayWidth} width={timelineWidth} left={showTable ? TABLE_WIDTH : 0} />}
+        {showTimeline && <ScheduleDependencyLinks tasks={visibleTasks} critical={settings.cpm ? cpm.critical : undefined} start={dates.start} dayWidth={dayWidth} width={timelineWidth} left={timelineLeft} />}
+        {showTimeline && tasks.length > 0 && <ScheduleWeeklySummary summary={weeklySummary} labelWidth={timelineLeft} width={timelineWidth} dayWidth={dayWidth} offset={(start) => offset(parseISO(start))} />}
         {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">{activeId ? "Belum ada pekerjaan pada sketsa ini." : "Pilih sketsa untuk mengelola jadwalnya."}</p>{activeId && <Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button>}</div>}
       </div>
     </div>
