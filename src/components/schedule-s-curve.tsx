@@ -6,15 +6,17 @@ import { addDays, differenceInCalendarDays, endOfWeek, format, parseISO, startOf
 import { id as localeId } from "date-fns/locale";
 import { actualBarRanges, actualProgressAt, plannedProgress, scheduleLeaves, weightedProgress } from "@/lib/schedule-analysis";
 import { ScheduleActualWeightFill } from "@/components/schedule-actual-weight-fill";
+import { SUMMARY_ROW_HEIGHT } from "@/components/schedule-weekly-summary";
 import { scheduleDuration, wbsLevel, type ScheduleTask } from "@/lib/schedule";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatScheduleWeight, hasScheduleWeights, weeklyActualWeights, weeklyTaskWeights, weightedActualAt, weightedPlanAt } from "@/lib/schedule-weights";
+import { curveAllocationWeights, formatScheduleWeight, hasScheduleWeights, weeklyActualWeights, weeklyTaskWeights, weeklyScheduleSummary, WEEKLY_SUMMARY_ROWS, weightedActualAt, weightedPlanAt } from "@/lib/schedule-weights";
 
 export function ScheduleSCurve({ tasks, today, weights = new Map(), showWeights = false, critical }: { critical?: Set<string>; tasks: ScheduleTask[]; today: Date; weights?: Map<string, number>; showWeights?: boolean }) {
   const current = format(today, "yyyy-MM-dd");
   const byWeight = hasScheduleWeights(weights);
+  const allocations = curveAllocationWeights(tasks, weights);
   const planAt = (date: string) => byWeight ? weightedPlanAt(tasks, weights, date) : plannedProgress(tasks, date);
-  const actualAt = (date: string) => byWeight ? weightedActualAt(tasks, weights, date, current) : actualProgressAt(tasks, date);
+  const actualAt = (date: string) => weightedActualAt(tasks, allocations, date, current);
   const data = useMemo(() => {
     const leaves = scheduleLeaves(tasks);
     const start = leaves.map((task) => task.start).sort()[0];
@@ -66,6 +68,8 @@ function SCurveChart({ tasks, data, current, number, weights, showWeights, criti
   const x = (date: string | Date) => differenceInCalendarDays(typeof date === "string" ? parseISO(date) : date, start) * dayW;
   const y = (value: number) => height - (value / 100) * height;
   const weeks = Array.from({ length: Math.ceil(days / 7) }, (_, index) => addDays(start, index * 7));
+  const weeklySummary = weeklyScheduleSummary(tasks, weights, weeks, current);
+  const axisTop = height + SUMMARY_ROW_HEIGHT * WEEKLY_SUMMARY_ROWS.length;
   const spans = (key: string, label: (date: Date) => string) => {
     const out: { key: string; label: string; from: number; to: number }[] = [];
     for (let d = 0; d < days; d++) {
@@ -84,11 +88,12 @@ function SCurveChart({ tasks, data, current, number, weights, showWeights, criti
     <label className="mb-3 flex w-fit items-center gap-2 text-sm print:hidden"><Checkbox checked={gantt} onCheckedChange={(value) => setGantt(value === true)} />Munculkan gantt chart</label>
     <div className="flex flex-wrap gap-4 text-xs text-muted-foreground"><span className="flex items-center gap-2"><span className="h-0.5 w-5 bg-[var(--schedule-link-fs)]" />Rencana</span><span className="flex items-center gap-2"><span className="h-0.5 w-5 bg-[var(--schedule-link-ss)]" />Realisasi</span>{gantt && showWeights && <><span className="flex items-center gap-2 font-semibold">7%<span className="font-normal">Bobot rencana</span></span><span className="flex items-center gap-2 font-semibold text-[var(--schedule-link-ss)]">2%<span className="font-normal">Bobot realisasi</span></span></>}{gantt && !showWeights && <><span className="flex items-center gap-2"><span className="h-2 w-5 bg-muted-foreground opacity-50" />Bar rencana</span><span className="flex items-center gap-2"><span className="h-1 w-5 bg-[var(--schedule-link-ss)] opacity-50" />Bar realisasi</span></>}<span className="flex items-center gap-2"><span className="h-3 w-0.5 bg-[var(--schedule-today)]" />Hari ini</span></div>
     <div className="schedule-curve-chart mt-3 flex overflow-x-auto">
-      <div className="schedule-curve-labels sticky left-0 z-10 shrink-0 bg-background text-xs" style={{ width: gantt ? NAME_WIDTH : 64 }}>
+      <div className="schedule-curve-labels sticky left-0 z-10 shrink-0 bg-background text-xs" style={{ width: NAME_WIDTH }}>
         <div style={{ height }}>{rows.map((task) => <div key={task.id} className="flex items-center truncate border-b border-border bg-surface px-2" style={{ height: rowH }} title={task.title}><span className="truncate">{task.wbs} {task.title}</span></div>)}</div>
+        {WEEKLY_SUMMARY_ROWS.map((row) => <div key={row.key} className="flex items-center justify-end border-b border-border bg-surface pr-2 text-[10px] font-semibold" style={{ height: SUMMARY_ROW_HEIGHT }}>{row.label}</div>)}
         {axisLabels.map((label) => <div key={label} className="flex items-center justify-end pr-2 text-muted-foreground" style={{ height: AXIS_ROW }}>{label}</div>)}
       </div>
-      <svg width={width + 44} height={height + AXIS_ROW * 3} className="shrink-0 text-xs" role="img" aria-label="Grafik Kurva S">
+      <svg width={width + 44} height={axisTop + AXIS_ROW * 3} className="shrink-0 text-xs" role="img" aria-label="Grafik Kurva S">
         {[0, 20, 40, 60, 80, 100].map((value) => <g key={value}><line x1={0} x2={width} y1={y(value)} y2={y(value)} stroke="var(--border)" /><text x={width + 4} y={y(value) + 4} fill="var(--muted-foreground)" fontSize={11}>{value}%</text></g>)}
         {weeks.map((week) => <line key={week.toISOString()} x1={x(week)} x2={x(week)} y1={0} y2={height} stroke="var(--muted-foreground)" strokeOpacity={0.5} strokeDasharray="3 4" />)}
         {rows.map((task, index) => {
@@ -125,8 +130,9 @@ function SCurveChart({ tasks, data, current, number, weights, showWeights, criti
         {actual.length > 0 && <polyline points={line(actual)} fill="none" stroke="var(--schedule-link-ss)" strokeWidth={2.5} />}
         {actual.map((point) => <circle key={point.date} cx={x(point.date)} cy={y(point.value)} r={3} fill="var(--schedule-link-ss)"><title>{`${point.date}: ${number(point.value)}%`}</title></circle>)}
         <rect x={0} y={0} width={width} height={height} fill="none" stroke="var(--border)" />
-        {weeks.map((week, index) => <g key={week.toISOString()}><rect x={x(week)} y={height} width={7 * dayW} height={AXIS_ROW} fill="none" stroke="var(--border)" /><text x={x(week) + 3} y={height + 15} fill="var(--foreground)" fontSize={11}>{index + 1}</text></g>)}
-        {[months, years].map((segments, row) => segments.map((segment) => <g key={segment.key}><rect x={segment.from} y={height + AXIS_ROW * (row + 1)} width={segment.to - segment.from} height={AXIS_ROW} fill="none" stroke="var(--border)" /><text x={segment.from + 4} y={height + AXIS_ROW * (row + 1) + 15} fill="var(--foreground)" fontSize={11}>{segment.to - segment.from > 24 ? segment.label : ""}</text></g>))}
+        {WEEKLY_SUMMARY_ROWS.map((row, index) => weeklySummary.map((week) => <g key={`${row.key}-${week.start}`} aria-label={`${row.label} ${week.start}`}><rect x={x(week.start)} y={height + index * SUMMARY_ROW_HEIGHT} width={7 * dayW} height={SUMMARY_ROW_HEIGHT} fill="var(--background)" stroke="var(--border)" /><text x={x(week.start) + 3.5 * dayW} y={height + index * SUMMARY_ROW_HEIGHT + SUMMARY_ROW_HEIGHT / 2} dominantBaseline="central" textAnchor="middle" fill="var(--foreground)" fontSize={10}>{week[row.key] === null ? "—" : formatScheduleWeight(week[row.key] ?? 0)}</text></g>))}
+        {weeks.map((week, index) => <g key={week.toISOString()}><rect x={x(week)} y={axisTop} width={7 * dayW} height={AXIS_ROW} fill="none" stroke="var(--border)" /><text x={x(week) + 3} y={axisTop + 15} fill="var(--foreground)" fontSize={11}>{index + 1}</text></g>)}
+        {[months, years].map((segments, row) => segments.map((segment) => <g key={segment.key}><rect x={segment.from} y={axisTop + AXIS_ROW * (row + 1)} width={segment.to - segment.from} height={AXIS_ROW} fill="none" stroke="var(--border)" /><text x={segment.from + 4} y={axisTop + AXIS_ROW * (row + 1) + 15} fill="var(--foreground)" fontSize={11}>{segment.to - segment.from > 24 ? segment.label : ""}</text></g>))}
       </svg>
     </div>
   </div>;
