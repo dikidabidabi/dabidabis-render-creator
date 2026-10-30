@@ -28,4 +28,12 @@ describe("curvePrintSlices", () => {
   test("a compact curve stays immediately below its heading on the first page", () => {
     assert.deepEqual(curvePrintSlices(0, 0, 320, 66, 600, 720), [{ from: 0, to: 0, offset: 0, height: 386, axes: true }]);
   });
+  test("four weekly summary rows stay with the final curve slice and axes", () => {
+    const footer = 4 * 28 + 3 * 22;
+    const slices = curvePrintSlices(42, 34, 1428, footer, 600, 720);
+    assert.equal(slices.reduce((sum, slice) => sum + slice.height, 0), 1428 + footer);
+    assert.equal(slices.filter((slice) => slice.axes).length, 1);
+    assert.equal(slices.at(-1)?.axes, true);
+    assert.ok(slices.every((slice, index) => slice.height <= (index ? 720 : 600)));
+  });
 });

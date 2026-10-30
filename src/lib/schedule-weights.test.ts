@@ -69,3 +69,9 @@ test("realisasi belum selesai tidak dipaksakan 100% dan minggu mendatang belum m
   assert.equal(weeks[0].actualCumulative, 20);
   assert.equal(weeks[1].actualCumulative, null);
 });
+test("ringkasan tanpa bobot manual memakai pembobotan durasi yang sama dengan kurva", () => {
+  const tasks = [{ ...task("1"), start: "2026-10-05", due: "2026-10-19" }];
+  const weeks = weeklyScheduleSummary(tasks, scheduleWeights(tasks), [new Date("2026-10-05"), new Date("2026-10-12")], "2026-10-30");
+  assert.deepEqual(weeks.map((week) => week.plan), [50, 50]);
+  assert.equal(weeks.at(-1)?.planCumulative, 100);
+});

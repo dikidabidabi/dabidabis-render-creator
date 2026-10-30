@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { printScheduleSection } from "@/lib/schedule-print";
 import { addDays, differenceInCalendarDays, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { id as localeId } from "date-fns/locale";
-import { actualBarRanges, actualProgressAt, plannedProgress, scheduleLeaves, weightedProgress } from "@/lib/schedule-analysis";
+import { actualBarRanges, plannedProgress, scheduleLeaves, weightedProgress } from "@/lib/schedule-analysis";
 import { ScheduleActualWeightFill } from "@/components/schedule-actual-weight-fill";
 import { SUMMARY_ROW_HEIGHT } from "@/components/schedule-weekly-summary";
 import { scheduleDuration, wbsLevel, type ScheduleTask } from "@/lib/schedule";

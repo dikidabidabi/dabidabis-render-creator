@@ -199,7 +199,7 @@ function ScheduleWorkspace() {
 
   function goToday() {
     const scroll = scrollRef.current;
-    if (scroll) scroll.scrollTo({ left: (showTable ? TABLE_WIDTH : 0) + todayX - scroll.clientWidth / 2, behavior: "smooth" });
+    if (scroll) scroll.scrollTo({ left: timelineLeft + todayX - scroll.clientWidth / 2, behavior: "smooth" });
   }
   function saveDraft() {
     if (!draft) return;
