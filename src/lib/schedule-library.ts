@@ -32,7 +32,7 @@ export function validateTemplate(template: ScheduleTemplate): ScheduleTemplate {
 function libraryLinks(work: LibraryWork, works: LibraryWork[], ids: Map<string, string>): SchedulePredecessor[] {
   if (!work.predecessor.trim()) return [];
   return work.predecessor.split(";").map((token) => {
-    const match = /^([a-z]+(?:\.[a-z]+)*?)\s*(fs|ss|ff|sf)?\s*([+-]\s*\d+)?$/i.exec(token.trim());
+    const match = /^([a-z]+?(?:\.[a-z]+?)*?)\s*(fs|ss|ff|sf)?\s*([+-]\s*\d+)?$/i.exec(token.trim());
     if (!match) throw new Error("Predecessor pustaka tidak valid. Contoh: a.aFS+2;a.bSS.");
     const path = match[1].toLowerCase();
     const taskId = ids.get(path);
