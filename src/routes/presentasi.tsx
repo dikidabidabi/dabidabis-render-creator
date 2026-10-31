@@ -5512,6 +5512,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
         })}
         {!showCeilingMode && rooms.map((room) => {
           const c = centroid(room.points);
+          if (showMaterialMode && area.showMaterialRoomInfo === false) return null;
           if (showArchitecturalLegend) {
             const number = roomNumberById.get(room.id);
             if (number === undefined) return null;
