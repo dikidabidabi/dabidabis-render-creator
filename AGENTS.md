@@ -20,7 +20,7 @@
 - Furniture renders before notation and room labels; Architectural mode uses scale-aware layered alpha shadows and image tint preserving transparency and linework, while other modes remain unchanged.
 - Notasi tangga Slide Denah/Detail memakai bidang potong 1 m dengan garis batas 45°, bagian di atas bidang potong putus-putus, sisi dalam tegas, arah naik/turun mengikuti bordes, dan tangga tipikal tengah ditampilkan utuh.
 - Account material libraries store names/images/descriptions/products in shared project storage; room selections store material IDs on sketch layers to keep edits synchronized.
-- Mode Material pada setiap kotak detail memakai ID material ruang untuk warna dan kode lantai/dinding, dengan legenda pada rel kanan Slide Detail; nilai awalnya nonaktif agar presentasi lama tidak berubah.
+- Mode Material per kotak detail memakai ID material ruang untuk warna/kode, legenda di rel kanan; bawaan nonaktif. Sub-ceklis Keterangan ruang (bawaan aktif) menyembunyikan nama/luas/level; simbol tetap.
 - Per-sketch Outline Specification toggles in the level-material header; aggregate library usage by type in full-width A3 landscape tables, paginate by available height, and repeat material identity on room-list continuations to avoid clipping or blank pages.
 - Pekerjaan Dasar dan Fasad disimpan sebagai pilihan material umum per sketsa, terpisah dari material ruang; Fasad dibagi Barat, Timur, Utara, dan Selatan.
 - Mode Plafon per kotak detail saling eksklusif dengan mode Material dan memakai kode material bersama yang sama dengan Outline Spesifikasi.
