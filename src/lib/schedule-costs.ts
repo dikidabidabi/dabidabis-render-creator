@@ -25,10 +25,12 @@ export function scheduleCosts(tasks: ScheduleTask[], projectCost?: number): Map<
     for (const task of siblings) {
       const value = validScheduleCost(task.cost) ? task.cost : share;
       if (value !== undefined) result.set(task.id, value);
-      allocate(code(task), value);
+      if (code(task)) allocate(code(task), value);
     }
   }
   allocate("", hasProjectCost(projectCost) ? projectCost : undefined);
+  const codes = new Set(tasks.map(code));
+  for (const key of groups.keys()) if (key && !codes.has(key)) allocate(key);
   return result;
 }
 
