@@ -187,3 +187,4 @@
 - [x] Tambahkan style Arsitektural Oranye Terang: tone dan sifat sama persis dengan Monokrom, dinding oranye bata; 3 uji lolos, 118 uji total lolos, warna dinding terukur di pratinjau.
 
 - [x] Gradien lantai style Monokrom dan Oranye Terang: sudut kiri atas putih, sudut kanan bawah tetap abu muda; 4 uji lolos, warna terukur pada slide.
+- [x] Sub-ceklis Keterangan ruang pada mode Material: bawaan aktif; nonaktif menyembunyikan nama/luas/ketinggian ruang di slide detail material, simbol dan warna material tetap.
