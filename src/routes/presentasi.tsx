@@ -146,7 +146,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
-  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
+  showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showMaterialRoomInfo?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
   architecturalStyle?: "tosca" | "brown" | "blue" | "bata" | "mono" | "lightorange";
   showArchitecturalLegend?: boolean;
@@ -5512,6 +5512,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
         })}
         {!showCeilingMode && rooms.map((room) => {
           const c = centroid(room.points);
+          if (showMaterialMode && area.showMaterialRoomInfo === false) return null;
           if (showArchitecturalLegend) {
             const number = roomNumberById.get(room.id);
             if (number === undefined) return null;
