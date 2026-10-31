@@ -55,3 +55,19 @@ test("invalid WBS, missing parent, missing predecessor and cycles are rejected",
   assert.throws(() => validateTemplate({ ...template, works: [{ ...template.works[0], predecessor: "a.bFS" }] }));
   assert.throws(() => validateTemplate({ ...template, works: [{ ...template.works[0], predecessor: "a.aFS" }, { ...template.works[1], predecessor: "aFS" }] }));
 });
+test("template with several main WBS applies all roots and shifts later groups", () => {
+  const template = { id: "t", works: [
+    { id: "1", wbs: "a", title: "Struktur", duration: 2, predecessor: "" },
+    { id: "2", wbs: "a.a", title: "Pondasi", duration: 2, predecessor: "" },
+    { id: "3", wbs: "b", title: "Arsitektur", duration: 3, predecessor: "aFS" },
+    { id: "4", wbs: "b.a", title: "Dinding", duration: 3, predecessor: "" },
+  ] };
+  const base = [
+    { id: "x", taskNumber: 1, wbs: "1", title: "Lama", start: "2026-01-01", due: "2026-01-02", owner: "", status: "belum", component: "", color: "stage", stage: true, checks: [] },
+    { id: "y", taskNumber: 2, wbs: "2", title: "MEP", start: "2026-01-01", due: "2026-01-02", owner: "", status: "belum", component: "", color: "stage", stage: true, checks: [] },
+  ] as never;
+  let n = 0;
+  const out = applyScheduleTemplate(base, template, "2026-01-05", "x", () => `n${n++}`);
+  const byTitle = Object.fromEntries(out.map((t) => [t.title, t.wbs]));
+  assert.deepEqual(byTitle, { Struktur: "1", Pondasi: "1.1", Arsitektur: "2", Dinding: "2.1", MEP: "3" });
+});

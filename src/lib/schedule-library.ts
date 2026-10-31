@@ -17,10 +17,9 @@ export function validateTemplate(template: ScheduleTemplate): ScheduleTemplate {
     return { ...work, wbs, title: work.title.trim(), predecessor: work.predecessor.trim().toLowerCase() };
   });
   const roots = works.filter((work) => !work.wbs.includes("."));
-  const root = roots[0];
-  if (roots.length !== 1 || !root) throw new Error("Setiap template harus memiliki satu WBS utama.");
+  if (!roots.length) throw new Error("Setiap template harus memiliki minimal satu WBS utama.");
   for (const work of works) {
-    if (work.wbs !== root.wbs && (!work.wbs.startsWith(root.wbs + ".") || !paths.has(work.wbs.split(".").slice(0, -1).join(".")))) throw new Error("Lengkapi WBS induk setiap pekerjaan.");
+    if (work.wbs.includes(".") && !paths.has(work.wbs.split(".").slice(0, -1).join("."))) throw new Error("Lengkapi WBS induk setiap pekerjaan.");
   }
   const cleaned = { ...template, works: works.sort((a, b) => a.wbs.localeCompare(b.wbs)) };
   // The same dependency resolver validates missing references, self-links and cycles.
@@ -64,12 +63,20 @@ export function applyScheduleTemplate(tasks: ScheduleTask[], template: ScheduleT
   const rootNumber = target?.wbs.split(".")[0] ?? String(Math.max(0, ...tasks.map((task) => Number(task.wbs.split(".")[0]) || 0)) + 1);
   const group = target ? tasks.filter((task) => task.wbs === rootNumber || task.wbs.startsWith(rootNumber + ".")) : [];
   const mapping = new Map<string, string>();
-  const root = valid.works.find((work) => !work.wbs.includes("."));
-  if (!root) throw new Error("WBS utama tidak ditemukan.");
-  mapping.set(root.wbs, rootNumber);
+  const roots = valid.works.filter((work) => !work.wbs.includes("."));
+  if (!roots.length) throw new Error("WBS utama tidak ditemukan.");
+  const base = Number(rootNumber);
+  roots.forEach((root, index) => mapping.set(root.wbs, String(base + index)));
+  // Later root groups shift down to make room for extra template roots.
+  const shift = roots.length - 1;
+  const others = tasks.filter((task) => !group.includes(task)).map((task) => {
+    const head = Number(task.wbs.split(".")[0]);
+    if (!shift || !target || !(head > base)) return task;
+    return { ...task, wbs: [String(head + shift), ...task.wbs.split(".").slice(1)].join(".") };
+  });
   const counters = new Map<string, number>();
   for (const work of valid.works) {
-    if (work === root) continue;
+    if (!work.wbs.includes(".")) continue;
     const parent = work.wbs.split(".").slice(0, -1).join(".");
     const n = (counters.get(parent) ?? 0) + 1;
     counters.set(parent, n);
@@ -85,5 +92,5 @@ export function applyScheduleTemplate(tasks: ScheduleTask[], template: ScheduleT
     const depth = wbs.split(".").length;
     return { ...(previous ?? { owner: "", status: "belum", component: "", checks: [] }), id, taskNumber: previous?.taskNumber ?? number++, wbs, title: work.title, start, due: scheduleDue(start, work.duration), stage: depth === 1, color: depth === 1 ? "stage" : depth === 2 ? "lavender" : depth === 3 ? "green" : "yellow", predecessor: undefined, predecessors: libraryLinks(work, valid.works, ids) };
   });
-  return resolveScheduleDependencies([...tasks.filter((task) => !group.includes(task)), ...added].sort((a, b) => a.wbs.localeCompare(b.wbs, undefined, { numeric: true })));
+  return resolveScheduleDependencies([...others, ...added].sort((a, b) => a.wbs.localeCompare(b.wbs, undefined, { numeric: true })));
 }
