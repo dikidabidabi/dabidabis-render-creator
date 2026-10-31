@@ -4857,6 +4857,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   const roomNumberById = new Map(numberedRooms.map(({ room, number }) => [room.id, number]));
   const legendPosition = architecturalLegendPosition(area);
   const legendBottom = showArchitecturalLegend && legendPosition === "bottom";
+  const legendRight = showArchitecturalLegend && legendPosition === "right";
   const legendBottomWidthRatio = area.showKeyplan === false ? 0.96 : 0.79;
   const architecturalLegendBox = legendBottom
     ? { width: A3_W * legendBottomWidthRatio, height: A3_H * (ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO - 0.03) }
@@ -5343,7 +5344,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   });
   return (
     <div data-architectural-style={architectural ? area.architecturalStyle ?? "tosca" : undefined} style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-gradient)" : "#ffffff", overflow: "hidden" }}>
-      <svg data-detail-plan="true" viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode ? "80%" : "100%", height: legendBottom ? `${(1 - ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO) * 100}%` : "100%", display: "block", marginInline: architectural ? "auto" : undefined }}>
+      <svg data-detail-plan="true" viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode || legendRight ? "80%" : "100%", height: legendBottom ? `${(1 - ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO) * 100}%` : "100%", display: "block", marginInline: architectural && !legendRight ? "auto" : undefined }}>
         <defs>
           {architectural && <>
             <radialGradient id={`architectural-floor-${patternId}`} gradientUnits="userSpaceOnUse" cx={bounds.minX} cy={bounds.minY} r={Math.hypot(w, h)}><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></radialGradient>
