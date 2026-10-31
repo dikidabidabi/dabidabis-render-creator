@@ -28,4 +28,4 @@
 - Outline Specification per-level location areas and all-level totals share specMaterialArea; location fragments retain the full level area and pagination measures the displayed room-and-area text to prevent clipping.
 - Schedule PDFs use window.print, A4 landscape and fit-width zoom. S-curve chunks pair labels with SVG row slices, reserving heading space. Schedule separators use thin background strips only at existing row/month borders.
 
-- Persist manual costs and schedule budget; derive residual sibling costs recursively, rejecting over-budget edits. Use cost/total weights or recursive root weights. Bars/curves/weekly summaries share leaf allocations, due-split fills, duration fallback and paired print footer; folding preserves totals.
+- Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
