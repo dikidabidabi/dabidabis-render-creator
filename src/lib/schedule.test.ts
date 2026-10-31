@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { upsertTaskProgress, normalizeSchedule, normalizeScheduleStore, copyScheduleEntry, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask, type ScheduleStore } from "./schedule";
+import { deleteScheduleTaskBranch, upsertTaskProgress, normalizeSchedule, normalizeScheduleStore, copyScheduleEntry, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, parsePredecessor, predecessorText, resolveScheduleDependencies, nextTaskNumber, type ScheduleTask, type ScheduleStore } from "./schedule";
 
 const task: ScheduleTask = { id: "task", wbs: "1.1", title: "Survei", owner: "", start: "2026-09-02", due: "2026-09-30", status: "belum", component: "", color: "lavender", stage: false, checks: [{ id: "a", title: "Ukur", done: true }, { id: "b", title: "Catat", done: false }] };
 describe("Jadwal pekerjaan", () => {
@@ -153,5 +153,35 @@ describe("copyScheduleEntry", () => {
     // sumber kosong atau sama dengan target tidak menambah entri
     assert.equal(copyScheduleEntry(store, "ZZ", "C").C, undefined);
     assert.equal(copyScheduleEntry(store, "A", "A"), store);
+  });
+});
+
+describe("Hapus pekerjaan beserta turunan", () => {
+  const base: ScheduleTask = { id: "x", wbs: "1", title: "A", owner: "", start: "2026-09-01", due: "2026-09-07", status: "belum", component: "", color: "lavender", stage: true, checks: [] };
+  const rows: ScheduleTask[] = [
+    base,
+    { ...base, id: "a", wbs: "1.1", stage: false },
+    { ...base, id: "b", wbs: "1.1.1", stage: false },
+    { ...base, id: "c", wbs: "2", title: "B" },
+    { ...base, id: "d", wbs: "2.1", stage: false, predecessors: [{ taskId: "a", type: "FS", lag: 0 }, { taskId: "c", type: "FS", lag: 0 }] },
+  ];
+  test("menghapus WBS utama menghapus semua turunannya", () => {
+    const next = deleteScheduleTaskBranch(rows, "x");
+    assert.deepEqual(next.map((t) => t.id), ["c", "d"]);
+  });
+  test("menghapus rincian tidak menyentuh induk atau saudara", () => {
+    const next = deleteScheduleTaskBranch(rows, "a");
+    assert.deepEqual(next.map((t) => t.id), ["x", "c", "d"]);
+  });
+  test("tautan predecessor ke pekerjaan terhapus dibersihkan", () => {
+    const next = deleteScheduleTaskBranch(rows, "a");
+    const d = next.find((t) => t.id === "d")!;
+    assert.deepEqual(d.predecessors?.map((l) => l.taskId), ["c"]);
+    const cleared = deleteScheduleTaskBranch(rows, "c").find((t) => t.id === "d")!;
+    assert.equal(cleared.predecessors, undefined);
+  });
+  test("hasil hapus lolos resolveScheduleDependencies", () => {
+    const next = deleteScheduleTaskBranch(rows, "a");
+    assert.doesNotThrow(() => resolveScheduleDependencies(next));
   });
 });
