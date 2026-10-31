@@ -261,3 +261,22 @@ export function copyScheduleEntry(store: ScheduleStore, sourceId: string, target
   if (!tasks?.length || sourceId === targetId) return store;
   return { ...store, [targetId]: tasks.map((task) => ({ ...task, checks: task.checks.map((check) => ({ ...check })), ...(task.progressEntries ? { progressEntries: task.progressEntries.map((entry) => ({ ...entry })) } : {}), ...(task.predecessor ? { predecessor: { ...task.predecessor } } : {}), ...(task.predecessors ? { predecessors: task.predecessors.map((link) => ({ ...link })) } : {}) })) };
 }
+/**
+ * Hapus satu pekerjaan beserta seluruh turunan WBS-nya.
+ * Tautan predecessor yang mengacu ke pekerjaan terhapus ikut dibersihkan
+ * agar resolveScheduleDependencies tidak menolak tautan putus.
+ */
+export function deleteScheduleTaskBranch(tasks: ScheduleTask[], taskId: string): ScheduleTask[] {
+  const target = tasks.find((t) => t.id === taskId);
+  if (!target) return tasks;
+  const wbs = target.wbs.trim().replace(/\.+$/, "");
+  const removed = new Set(tasks.filter((t) => t.id === taskId || (wbs !== "" && t.id !== taskId && t.wbs.startsWith(`${wbs}.`))).map((t) => t.id));
+  return tasks
+    .filter((t) => !removed.has(t.id))
+    .map((t) => {
+      const links = taskPredecessors(t);
+      const kept = links.filter((link) => !removed.has(link.taskId));
+      if (kept.length === links.length) return t;
+      return { ...t, predecessor: undefined, predecessors: kept.length ? kept : undefined };
+    });
+}
