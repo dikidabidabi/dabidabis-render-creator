@@ -69,5 +69,5 @@ test("template with several main WBS applies all roots and shifts later groups",
   let n = 0;
   const out = applyScheduleTemplate(base, template, "2026-01-05", "x", () => `n${n++}`);
   const byTitle = Object.fromEntries(out.map((t) => [t.title, t.wbs]));
-  expect(byTitle).toEqual({ Struktur: "1", Pondasi: "1.1", Arsitektur: "2", Dinding: "2.1", MEP: "3" });
+  assert.deepEqual(byTitle, { Struktur: "1", Pondasi: "1.1", Arsitektur: "2", Dinding: "2.1", MEP: "3" });
 });
