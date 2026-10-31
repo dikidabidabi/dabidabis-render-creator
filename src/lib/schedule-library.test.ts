@@ -5,7 +5,7 @@ import { predecessorText, scheduleDuration, type ScheduleTask } from "./schedule
 
 const template: ScheduleTemplate = { id: "template", works: [
   { id: "r", wbs: "a", title: "Arsitektur", duration: 20, predecessor: "" },
-  { id: "c1", wbs: "a.a", title: "Lantai", duration: 7, predecessor: "" },
+  { id: "c1", wbs: "a.a", title: "Lantai", duration: 7, predecessor: "", owner: "Budi" },
   { id: "g", wbs: "a.a.a", title: "Persiapan", duration: 2, predecessor: "" },
   { id: "gg", wbs: "a.a.a.a", title: "Ukur", duration: 1, predecessor: "" },
   { id: "c2", wbs: "a.b", title: "Dinding", duration: 9, predecessor: "a.aFS+2;a.a.aSS-1" },
@@ -28,6 +28,20 @@ test("each duration is adopted and predecessors use destination UUIDs and IDs", 
   assert.equal(wall.start, "2026-10-10");
   assert.equal(wall.predecessors?.[0].taskId, floor.id);
   assert.equal(predecessorText(wall, result), "14FS+2;15SS-1");
+});
+test("owner is adopted from the template and survives storage", () => {
+  const result = applyScheduleTemplate([task], template, "2026-10-01", undefined, ids);
+  assert.equal(result.find((row) => row.title === "Lantai")?.owner, "Budi");
+  assert.equal(result.find((row) => row.title === "Dinding")?.owner, "");
+  const stored = readScheduleLibrary(JSON.stringify([template]));
+  assert.equal(stored[0].works.find((work) => work.title === "Lantai")?.owner, "Budi");
+});
+test("legacy library rows without owner still read and apply", () => {
+  const legacy = { id: "t", works: [{ id: "1", wbs: "a", title: "Struktur", duration: 2, predecessor: "" }] };
+  const stored = readScheduleLibrary(JSON.stringify([legacy]));
+  assert.equal(stored[0].works[0].owner, "");
+  const result = applyScheduleTemplate([], stored[0], "2026-01-05", undefined, ids);
+  assert.equal(result[0].owner, "");
 });
 test("selecting any descendant replaces its entire root group only", () => {
   const child = { ...task, id: "child", taskNumber: 13, wbs: "3.1" };

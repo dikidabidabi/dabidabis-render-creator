@@ -1,7 +1,7 @@
 import { nextTaskNumber, resolveScheduleDependencies, scheduleDue, type ScheduleTask, type SchedulePredecessor, type PredecessorType } from "./schedule";
 
 export const SCHEDULE_LIBRARY_KEY = "dabidabis_schedule_library_v1";
-export type LibraryWork = { id: string; wbs: string; title: string; duration: number; predecessor: string };
+export type LibraryWork = { id: string; wbs: string; title: string; duration: number; predecessor: string; owner?: string };
 export type ScheduleTemplate = { id: string; works: LibraryWork[] };
 
 export function validateTemplate(template: ScheduleTemplate): ScheduleTemplate {
@@ -14,7 +14,7 @@ export function validateTemplate(template: ScheduleTemplate): ScheduleTemplate {
     paths.add(wbs);
     if (!work.title.trim()) throw new Error("Isi setiap judul pekerjaan.");
     if (!Number.isSafeInteger(work.duration) || work.duration < 0 || work.duration > 36500) throw new Error("Durasi harus 0–36500 hari.");
-    return { ...work, wbs, title: work.title.trim(), predecessor: work.predecessor.trim().toLowerCase() };
+    return { ...work, wbs, title: work.title.trim(), owner: work.owner?.trim() ?? "", predecessor: work.predecessor.trim().toLowerCase() };
   });
   const roots = works.filter((work) => !work.wbs.includes("."));
   if (!roots.length) throw new Error("Setiap template harus memiliki minimal satu WBS utama.");
@@ -90,7 +90,7 @@ export function applyScheduleTemplate(tasks: ScheduleTask[], template: ScheduleT
     if (!wbs || !id) throw new Error("Hierarki template tidak valid.");
     const previous = group.find((task) => task.wbs === wbs);
     const depth = wbs.split(".").length;
-    return { ...(previous ?? { owner: "", status: "belum", component: "", checks: [] }), id, taskNumber: previous?.taskNumber ?? number++, wbs, title: work.title, start, due: scheduleDue(start, work.duration), stage: depth === 1, color: depth === 1 ? "stage" : depth === 2 ? "lavender" : depth === 3 ? "green" : "yellow", predecessor: undefined, predecessors: libraryLinks(work, valid.works, ids) };
+    return { ...(previous ?? { owner: "", status: "belum", component: "", checks: [] }), id, taskNumber: previous?.taskNumber ?? number++, wbs, title: work.title, owner: work.owner || previous?.owner || "", start, due: scheduleDue(start, work.duration), stage: depth === 1, color: depth === 1 ? "stage" : depth === 2 ? "lavender" : depth === 3 ? "green" : "yellow", predecessor: undefined, predecessors: libraryLinks(work, valid.works, ids) };
   });
   return resolveScheduleDependencies([...others, ...added].sort((a, b) => a.wbs.localeCompare(b.wbs, undefined, { numeric: true })));
 }
