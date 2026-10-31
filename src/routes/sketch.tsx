@@ -411,6 +411,7 @@ type DetailArea = {
   showKeyplan: boolean;
   showFurniture: boolean;
   showMaterials: boolean;
+  showMaterialRoomInfo?: boolean;
   showCeiling: boolean;
   showArchitectural?: boolean;
   showArchitecturalLegend?: boolean;
