@@ -58,7 +58,7 @@ export function readScheduleLibrary(raw: string | null): ScheduleTemplate[] {
 }
 
 /** Replace the calling root group, or append a fresh root for a new task. */
-export function applyScheduleTemplate(tasks: ScheduleTask[], template: ScheduleTemplate, start: string, targetId?: string, makeId = () => crypto.randomUUID()): ScheduleTask[] {
+export function applyScheduleTemplate(tasks: ScheduleTask[], template: ScheduleTemplate, start: string, targetId?: string, makeId: () => string = () => crypto.randomUUID()): ScheduleTask[] {
   const valid = validateTemplate(template);
   const target = tasks.find((task) => task.id === targetId);
   const rootNumber = target?.wbs.split(".")[0] ?? String(Math.max(0, ...tasks.map((task) => Number(task.wbs.split(".")[0]) || 0)) + 1);
