@@ -23,7 +23,7 @@ import { ScheduleActualWeightFill } from "@/components/schedule-actual-weight-fi
 import { ScheduleWeeklySummary } from "@/components/schedule-weekly-summary";
 import { criticalPath, actualBarRanges, delayBarRange, descendants, visibleSchedule, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
 import { scheduleBarBounds, SCHEDULE_ROW_HEIGHT } from "@/lib/schedule-connectors";
-import { deleteScheduleTaskBranch, SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessors, taskPredecessors, resolveScheduleDependencies, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleTask, type SketchRef, deleteScheduleTaskBranch } from "@/lib/schedule";
+import { deleteScheduleTaskBranch, SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessors, taskPredecessors, resolveScheduleDependencies, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { printScheduleSection } from "@/lib/schedule-print";
 import { isWeightRoot, scheduleWeights, weeklyTaskWeights, weeklyActualWeights, formatScheduleWeight, weeklyScheduleSummary } from "@/lib/schedule-weights";
