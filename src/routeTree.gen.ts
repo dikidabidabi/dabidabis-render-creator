@@ -24,6 +24,7 @@ import { Route as PresentasiRouteImport } from './routes/presentasi'
 import { Route as PresentasiKirimanRouteImport } from './routes/presentasi-kiriman'
 import { Route as ProjectRouteImport } from './routes/project'
 import { Route as SketchRouteImport } from './routes/sketch'
+import { Route as JadwalPustakaRouteImport } from './routes/jadwal_.pustaka'
 import { Route as StudioIndexRouteImport } from './routes/studio.index'
 import { Route as StudioPustakaPromptRouteImport } from './routes/studio.pustaka-prompt'
 import { Route as TabulasiIndexRouteImport } from './routes/tabulasi.index'
@@ -105,6 +106,11 @@ const SketchRoute = SketchRouteImport.update({
   path: '/sketch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JadwalPustakaRoute = JadwalPustakaRouteImport.update({
+  id: '/jadwal_/pustaka',
+  path: '/jadwal/pustaka',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioIndexRoute = StudioIndexRouteImport.update({
   id: '/studio/',
   path: '/studio/',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
+  '/jadwal/pustaka': typeof JadwalPustakaRoute
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/list-material': typeof TabulasiListMaterialRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
+  '/jadwal/pustaka': typeof JadwalPustakaRoute
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/list-material': typeof TabulasiListMaterialRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/presentasi-kiriman': typeof PresentasiKirimanRoute
   '/project': typeof ProjectRoute
   '/sketch': typeof SketchRoute
+  '/jadwal_/pustaka': typeof JadwalPustakaRoute
   '/studio/pustaka-prompt': typeof StudioPustakaPromptRoute
   '/tabulasi/list-material': typeof TabulasiListMaterialRoute
   '/tabulasi/rumus': typeof TabulasiRumusRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
+    | '/jadwal/pustaka'
     | '/studio/pustaka-prompt'
     | '/tabulasi/list-material'
     | '/tabulasi/rumus'
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
     | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
+    | '/jadwal/pustaka'
     | '/studio/pustaka-prompt'
     | '/tabulasi/list-material'
     | '/tabulasi/rumus'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/presentasi-kiriman'
     | '/project'
     | '/sketch'
+    | '/jadwal_/pustaka'
     | '/studio/pustaka-prompt'
     | '/tabulasi/list-material'
     | '/tabulasi/rumus'
@@ -283,6 +295,7 @@ export interface RootRouteChildren {
   PresentasiKirimanRoute: typeof PresentasiKirimanRoute
   ProjectRoute: typeof ProjectRoute
   SketchRoute: typeof SketchRoute
+  JadwalPustakaRoute: typeof JadwalPustakaRoute
   StudioPustakaPromptRoute: typeof StudioPustakaPromptRoute
   TabulasiListMaterialRoute: typeof TabulasiListMaterialRoute
   TabulasiRumusRoute: typeof TabulasiRumusRoute
@@ -397,6 +410,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SketchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/jadwal_/pustaka': {
+      id: '/jadwal_/pustaka'
+      path: '/jadwal/pustaka'
+      fullPath: '/jadwal/pustaka'
+      preLoaderRoute: typeof JadwalPustakaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studio/': {
       id: '/studio/'
       path: '/studio'
@@ -451,6 +471,7 @@ const rootRouteChildren: RootRouteChildren = {
   PresentasiKirimanRoute: PresentasiKirimanRoute,
   ProjectRoute: ProjectRoute,
   SketchRoute: SketchRoute,
+  JadwalPustakaRoute: JadwalPustakaRoute,
   StudioPustakaPromptRoute: StudioPustakaPromptRoute,
   TabulasiListMaterialRoute: TabulasiListMaterialRoute,
   TabulasiRumusRoute: TabulasiRumusRoute,
