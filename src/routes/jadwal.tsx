@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from "@/components/ui/alert-dialog";
+import { addNamedSchedule, deleteNamedSchedule, readScheduleCollections, renameNamedSchedule, schedulesForSketch, serializeScheduleCollections, type ScheduleCollections } from "@/lib/schedule-collections";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -19,9 +21,9 @@ import { ScheduleTaskProgress } from "@/components/schedule-task-progress";
 import { ScheduleSCurve } from "@/components/schedule-s-curve";
 import { ScheduleActualWeightFill } from "@/components/schedule-actual-weight-fill";
 import { ScheduleWeeklySummary } from "@/components/schedule-weekly-summary";
-import { normalizeScheduleViews, criticalPath, actualBarRanges, delayBarRange, descendants, visibleSchedule, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
+import { criticalPath, actualBarRanges, delayBarRange, descendants, visibleSchedule, SCHEDULE_VIEW_KEY, DEFAULT_SCHEDULE_VIEW, type ScheduleView } from "@/lib/schedule-analysis";
 import { scheduleBarBounds, SCHEDULE_ROW_HEIGHT } from "@/lib/schedule-connectors";
-import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessors, taskPredecessors, resolveScheduleDependencies, normalizeScheduleStore, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleStore, type ScheduleTask, type SketchRef } from "@/lib/schedule";
+import { SCHEDULE_KEY, SCHEDULE_COLORS, SCHEDULE_STATUSES, SKETCH_STORE_KEY, WBS_LEVEL_LABELS, PREDECESSOR_TYPES, PREDECESSOR_LABELS, nextTaskNumber, predecessorText, parsePredecessors, taskPredecessors, resolveScheduleDependencies, readSketchStore, scheduleDue, scheduleDuration, scheduleProgress, totalScheduleProgress, wbsLevel, type PredecessorType, type ScheduleTask, type SketchRef } from "@/lib/schedule";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { printScheduleSection } from "@/lib/schedule-print";
 import { isWeightRoot, scheduleWeights, weeklyTaskWeights, weeklyActualWeights, formatScheduleWeight, weeklyScheduleSummary } from "@/lib/schedule-weights";
@@ -50,8 +52,11 @@ function SchedulePage() {
 function ScheduleWorkspace() {
   const [sketches, setSketches] = useState<SketchRef[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [store, setStore] = useState<ScheduleStore>({});
-  const [viewStore, setViewStore] = useState<Record<string, ScheduleView>>({});
+  const [store, setStore] = useState<ScheduleCollections>({});
+  const [selectedSchedules, setSelectedSchedules] = useState<Record<string, string>>({});
+  const [renaming, setRenaming] = useState(false);
+  const [scheduleName, setScheduleName] = useState("");
+  const [deletingSchedule, setDeletingSchedule] = useState(false);
   const [ready, setReady] = useState(false);
   const [today, setToday] = useState(() => new Date());
   const [view, setView] = useState("combined");
@@ -77,8 +82,7 @@ function ScheduleWorkspace() {
         const fallbackId = sketchStore.openId && sketchStore.sketches.some((s) => s.id === sketchStore.openId) ? sketchStore.openId : sketchStore.sketches[0]?.id ?? null;
         setActiveId((current) => current && sketchStore.sketches.some((s) => s.id === current) ? current : fallbackId);
         const savedView = JSON.parse(localStorage.getItem(SCHEDULE_VIEW_KEY) || "{}");
-        setViewStore(normalizeScheduleViews(savedView));
-        setStore(normalizeScheduleStore(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"), fallbackId));
+        setStore(readScheduleCollections(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"), savedView, fallbackId));
       } catch { toast.error("Data jadwal tidak dapat dibaca."); }
       setReady(true);
     }
@@ -89,34 +93,56 @@ function ScheduleWorkspace() {
     return () => { window.removeEventListener("storage", onStorage); window.clearInterval(timer); };
   }, []);
 
-  const tasks = activeId ? store[activeId] ?? [] : [];
-  const settings = { ...DEFAULT_SCHEDULE_VIEW, ...(activeId ? viewStore[activeId] : {}) };
+  const schedules = activeId ? schedulesForSketch(store, activeId) : [];
+  const activeSchedule = schedules.find((schedule) => activeId && schedule.id === selectedSchedules[activeId]) ?? schedules[0] ?? null;
+  const tasks = activeSchedule?.tasks ?? [];
+  const settings = activeSchedule?.view ?? DEFAULT_SCHEDULE_VIEW;
   const visibleTasks = visibleSchedule(tasks, settings.collapsed);
   const cpm = useMemo(() => criticalPath(tasks, settings.slack), [tasks, settings.slack]);
   const weights = useMemo(() => scheduleWeights(tasks), [tasks]);
   const activeSketch = sketches.find((s) => s.id === activeId) ?? null;
 
-  function saveSettings(next: ScheduleView) {
-    if (!activeId) return;
-    const nextStore = { ...viewStore, [activeId]: next };
-    setViewStore(nextStore);
-    const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_VIEW_KEY, JSON.stringify(nextStore)));
+  function persist(nextStore: ScheduleCollections) {
+    setStore(nextStore);
+    setSaving(true);
+    const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_KEY, serializeScheduleCollections(nextStore)));
     queue.current = write;
-    void write.catch(() => toast.error("Pilihan jadwal belum tersimpan."));
+    void write.then(() => { if (queue.current === write) setSaving(false); }, () => { setSaving(false); toast.error("Jadwal belum tersimpan. Silakan coba lagi."); });
+  }
+  function saveSettings(next: ScheduleView) {
+    if (!activeId || !activeSchedule) return;
+    persist({ ...store, [activeId]: schedules.map((schedule) => schedule.id === activeSchedule.id ? { ...schedule, view: next } : schedule) });
+  }
+  function selectSchedule(sketchId: string, scheduleId?: string) {
+    fillCleanup.current?.();
+    setActiveId(sketchId);
+    if (scheduleId) setSelectedSchedules((current) => ({ ...current, [sketchId]: scheduleId }));
+    setDraft(null); setDeleting(null); setRenaming(false); setDeletingSchedule(false);
+  }
+  function addSchedule() {
+    if (!activeId) return;
+    const id = crypto.randomUUID();
+    persist(addNamedSchedule(store, activeId, id));
+    selectSchedule(activeId, id);
+  }
+  function saveScheduleName() {
+    if (!activeId || !activeSchedule) return;
+    try { persist(renameNamedSchedule(store, activeId, activeSchedule.id, scheduleName)); setRenaming(false); }
+    catch (cause) { toast.error(cause instanceof Error ? cause.message : "Nama jadwal tidak valid."); }
+  }
+  function removeSchedule() {
+    if (!activeId || !activeSchedule) return;
+    persist(deleteNamedSchedule(store, activeId, activeSchedule.id, true));
+    selectSchedule(activeId);
   }
   function toggleHierarchy(task: ScheduleTask) {
     saveSettings({ ...settings, collapsed: settings.collapsed.includes(task.id) ? settings.collapsed.filter((id) => id !== task.id) : [...settings.collapsed, task.id] });
   }
 
   function commit(next: ScheduleTask[]) {
-    if (!activeId) return false;
+    if (!activeId || !activeSchedule) return false;
     try { next = resolveScheduleDependencies(next); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Hubungan tidak valid."); return false; }
-    const nextStore = { ...store, [activeId]: next };
-    setStore(nextStore);
-    setSaving(true);
-    const write = queue.current.catch(() => {}).then(() => setProjectItem(SCHEDULE_KEY, JSON.stringify(nextStore)));
-    queue.current = write;
-    void write.then(() => { if (queue.current === write) setSaving(false); }, () => { setSaving(false); toast.error("Jadwal belum tersimpan. Silakan coba lagi."); });
+    persist({ ...store, [activeId]: schedules.map((schedule) => schedule.id === activeSchedule.id ? { ...schedule, tasks: next } : schedule) });
     return true;
   }
 
@@ -222,13 +248,15 @@ function ScheduleWorkspace() {
       <p className="mb-3 text-xs font-medium uppercase text-ember">Sketsa</p>
       <div className="flex gap-2 overflow-x-auto lg:block lg:space-y-1">
         {sketches.map((sketch) => {
-          const list = store[sketch.id] ?? [];
-          const pct = totalScheduleProgress(list);
+          const sketchSchedules = schedulesForSketch(store, sketch.id);
           const active = sketch.id === activeId;
-          return <button key={sketch.id} type="button" onClick={() => { setActiveId(sketch.id); setDraft(null); setDeleting(null); }} aria-current={active ? "true" : undefined} className={`flex w-full flex-col gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-primary bg-primary/10" : "border-border bg-background hover:bg-muted/60"}`}>
-            <span className="truncate text-sm font-medium" title={sketch.title}>{sketch.title}</span>
-            <span className="text-[11px] text-muted-foreground">{list.length} pekerjaan · {pct}%</span>
-          </button>;
+          return <div key={sketch.id} className="min-w-44 lg:min-w-0">
+            <Button variant="ghost" onClick={() => selectSchedule(sketch.id)} aria-current={active ? "true" : undefined} className={`h-auto w-full flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left ${active ? "border-primary bg-primary/10" : "border-border bg-background hover:bg-muted/60"}`}>
+              <span className="w-full truncate text-sm font-medium" title={sketch.title}>{sketch.title}</span>
+              <span className="text-[11px] font-normal text-muted-foreground">{sketchSchedules.length} jadwal</span>
+            </Button>
+            {active && <div className="my-2 space-y-1 border-l border-border pl-2" aria-label="Daftar jadwal">{sketchSchedules.map((schedule) => <Button key={schedule.id} variant="ghost" onClick={() => selectSchedule(sketch.id, schedule.id)} aria-current={schedule.id === activeSchedule?.id ? "true" : undefined} className={`h-auto w-full flex-col items-start gap-0.5 px-2 py-2 text-left ${schedule.id === activeSchedule?.id ? "bg-primary/10 text-primary" : ""}`}><span className="w-full truncate text-xs" title={schedule.name}>{schedule.name}</span><span className="text-[10px] font-normal text-muted-foreground">{schedule.tasks.length} pekerjaan · {totalScheduleProgress(schedule.tasks)}%</span></Button>)}</div>}
+          </div>;
         })}
       </div>
       {!sketches.length && ready && <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground"><p>Belum ada sketsa.</p><Link to="/sketch" className="mt-2 inline-flex items-center gap-1 font-medium text-primary hover:underline"><PenTool className="size-3" />Buka halaman Sketsa</Link></div>}
@@ -236,9 +264,10 @@ function ScheduleWorkspace() {
 
     <div className="schedule-main min-w-0 flex-1">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div><p className="mb-2 text-xs font-medium uppercase text-ember">Project · Jadwal</p><h1 className="font-display text-3xl font-semibold">Jadwal</h1><p className="mt-2 text-sm text-muted-foreground">{activeSketch ? <span className="font-medium text-foreground">{activeSketch.title}</span> : "Tanpa sketsa"}<span className="mx-2">·</span>{format(today, "EEEE, d MMMM yyyy", { locale: localeId })}<span className="mx-2">·</span>{tasks.length} pekerjaan<span className="mx-2">·</span>{saving ? "Menyimpan…" : "Tersimpan"}</p></div>
-      <div className="flex flex-wrap items-center gap-3"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border print:hidden" /><Button variant="outline" className="print:hidden" onClick={() => printScheduleSection(printRef.current, "schedule")} disabled={!ready || !activeId || !tasks.length} title="Unduh jadwal sebagai PDF lanskap"><FileDown />Unduh PDF</Button><Button variant="outline" className="print:hidden" onClick={() => newTask(true)} disabled={!ready || !activeId}><Plus />Tahap</Button><Button className="print:hidden" onClick={() => newTask()} disabled={!ready || !activeId}><Plus />Pekerjaan</Button></div>
+      <div className="min-w-0 max-w-full"><p className="mb-2 text-xs font-medium uppercase text-ember">Project · Jadwal</p>{renaming ? <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); saveScheduleName(); }}><Input autoFocus aria-label="Nama jadwal" className="w-72 max-w-full font-display text-xl" value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} /><Button type="submit" size="sm">Simpan</Button><Button type="button" size="sm" variant="outline" onClick={() => setRenaming(false)}>Batal</Button></form> : <div className="flex items-start gap-2"><h1 className="min-w-0 break-words font-display text-3xl font-semibold">{activeSchedule?.name ?? "Jadwal"}</h1><Button variant="ghost" size="icon" className="shrink-0 print:hidden" aria-label="Ubah nama jadwal" title="Ubah nama jadwal" disabled={!activeSchedule} onClick={() => { setScheduleName(activeSchedule?.name ?? ""); setRenaming(true); }}><Pencil className="size-4" /></Button></div>}<p className="mt-2 text-sm text-muted-foreground">{activeSketch ? <span className="font-medium text-foreground">{activeSketch.title}</span> : "Tanpa sketsa"}<span className="mx-2">·</span>{format(today, "EEEE, d MMMM yyyy", { locale: localeId })}<span className="mx-2">·</span>{tasks.length} pekerjaan<span className="mx-2">·</span>{saving ? "Menyimpan…" : "Tersimpan"}</p></div>
+      <div className="flex flex-wrap items-center gap-3"><div className="text-right"><p className="text-xs text-muted-foreground">Progres keseluruhan</p><p className="mt-1 font-display text-3xl font-semibold text-primary">{percentage}%</p></div><div className="h-10 w-px bg-border print:hidden" /><Button variant="outline" className="print:hidden" onClick={() => printScheduleSection(printRef.current, "schedule")} disabled={!ready || !activeId || !tasks.length} title="Unduh jadwal sebagai PDF lanskap"><FileDown />Unduh PDF</Button><Button variant="outline" className="print:hidden" onClick={() => newTask(true)} disabled={!ready || !activeSchedule}><Plus />Tahap</Button><Button className="print:hidden" onClick={() => newTask()} disabled={!ready || !activeSchedule}><Plus />Pekerjaan</Button></div>
     </header>
+    <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden"><Button variant="outline" disabled={!ready || !activeId} onClick={addSchedule}><Plus />Tambah jadwal</Button><Button variant="outline" className="text-destructive" disabled={!activeSchedule} onClick={() => setDeletingSchedule(true)}><Trash2 />Hapus jadwal</Button></div>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3 print:hidden">
       <div className="flex flex-wrap items-center gap-5"><div className="flex items-center gap-2"><Checkbox id="schedule-weights" checked={settings.weights === true} onCheckedChange={(checked) => saveSettings({ ...settings, weights: checked === true })} /><Label htmlFor="schedule-weights">Bobot</Label></div><div className="space-y-2"><div className="flex items-center gap-2"><Checkbox id="critical-path" checked={settings.cpm} onCheckedChange={(checked) => saveSettings({ ...settings, cpm: checked === true })} /><Label htmlFor="critical-path">Jalur kritis (CPM)</Label></div><div className="flex items-center gap-2"><Label htmlFor="slack" className="text-xs">Slack (hari)</Label><Input id="slack" type="number" min={0} step={1} className="h-8 w-20" value={settings.slack} onChange={(event) => saveSettings({ ...settings, slack: Math.max(0, Math.trunc(Number(event.target.value) || 0)) })} /></div></div><ToggleGroup type="single" value={view} onValueChange={(v) => { if (v) setView(v); }} aria-label="Tampilan jadwal"><ToggleGroupItem value="combined">Tabel & Gantt</ToggleGroupItem><ToggleGroupItem value="table">Tabel</ToggleGroupItem><ToggleGroupItem value="timeline">Gantt</ToggleGroupItem></ToggleGroup></div>
       <div className="flex flex-wrap items-center gap-2"><ToggleGroup type="single" value={scale} onValueChange={(v) => { if (v) setScale(v); }} aria-label="Skala waktu"><ToggleGroupItem value="week">Minggu</ToggleGroupItem><ToggleGroupItem value="month">Bulan</ToggleGroupItem></ToggleGroup><Button size="icon" variant="ghost" title="Waktu sebelumnya" aria-label="Waktu sebelumnya" onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}><ChevronLeft /></Button><Button variant="outline" onClick={goToday}><CalendarDays />Hari ini</Button><Button size="icon" variant="ghost" title="Waktu berikutnya" aria-label="Waktu berikutnya" onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}><ChevronRight /></Button></div>
@@ -274,12 +303,12 @@ function ScheduleWorkspace() {
         })}
         {showTimeline && <ScheduleDependencyLinks tasks={visibleTasks} critical={settings.cpm ? cpm.critical : undefined} start={dates.start} dayWidth={dayWidth} width={timelineWidth} left={timelineLeft} />}
         {showTimeline && tasks.length > 0 && <ScheduleWeeklySummary summary={weeklySummary} labelWidth={timelineLeft} width={timelineWidth} dayWidth={dayWidth} offset={(start) => offset(parseISO(start))} />}
-        {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">{activeId ? "Belum ada pekerjaan pada sketsa ini." : "Pilih sketsa untuk mengelola jadwalnya."}</p>{activeId && <Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button>}</div>}
+        {!tasks.length && <div className="flex h-64 flex-col items-start justify-center gap-4 px-8"><ListChecks className="size-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">{activeId ? "Belum ada pekerjaan pada jadwal ini." : "Pilih sketsa untuk mengelola jadwalnya."}</p>{activeSchedule && <Button variant="outline" onClick={() => newTask()}><Plus />Tambah pekerjaan</Button>}</div>}
       </div>
     </div>
     {showTimeline && tasks.some((task) => taskPredecessors(task).length > 0) && <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs print:hidden" aria-label="Legenda hubungan predecessor">{PREDECESSOR_TYPES.map((type) => <span key={type} className={`schedule-link-${type} flex items-center gap-2`} title={PREDECESSOR_LABELS[type]}><span className="schedule-link-key h-0.5 w-5" /><span>{type} · {PREDECESSOR_LABELS[type]}</span></span>)}</div>}
     <footer className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground print:hidden">{([1, 2, 3, 4] as const).map((level) => <span key={level} className="flex items-center gap-2"><span className={`schedule-wbs-level-${level} rounded px-1.5 py-0.5 text-[10px] font-semibold`}>{["1", "1.1", "1.1.1", "1.1.1.1"][level - 1]}</span>{WBS_LEVEL_LABELS[level]}</span>)}<span className="h-4 w-px bg-border" />{SCHEDULE_COLORS.map((color) => <span key={color} className="flex items-center gap-2"><span className={`schedule-color-${color} size-3 rounded-sm`} />{COLOR_LABELS[color]}</span>)}<span className="flex items-center gap-2"><span className="schedule-delay-key" />Terlambat</span><span className="flex items-center gap-2"><span className="schedule-actual-key" />Aktual</span><span className="ml-auto flex items-center gap-2"><span className="schedule-today-key h-3 w-0.5" />Hari ini</span></footer>
-    <ScheduleSCurve tasks={tasks} today={today} weights={weights} showWeights={settings.weights === true} critical={settings.cpm ? cpm.critical : undefined} />
+    <ScheduleSCurve key={activeSchedule?.id ?? "empty"} tasks={tasks} today={today} weights={weights} showWeights={settings.weights === true} critical={settings.cpm ? cpm.critical : undefined} />
     </div>
 
     <Dialog open={!!draft} onOpenChange={(open) => { if (!open) setDraft(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>{draft && tasks.some((t) => t.id === draft.id) ? "Edit pekerjaan" : draft?.stage ? "Tambah tahap" : "Tambah pekerjaan"}</DialogTitle></DialogHeader>{draft && <form onSubmit={(e) => { e.preventDefault(); saveDraft(); }} className="space-y-5">
@@ -292,5 +321,6 @@ function ScheduleWorkspace() {
       <DialogFooter className="gap-2">{tasks.some((t) => t.id === draft.id) && <Button type="button" variant="ghost" className="mr-auto text-destructive" onClick={() => setDeleting(draft)}><Trash2 />Hapus</Button>}<Button type="button" variant="outline" onClick={() => setDraft(null)}>Batal</Button><Button type="submit">Simpan</Button></DialogFooter>
     </form>}</DialogContent></Dialog>
     <Dialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }}><DialogContent><DialogHeader><DialogTitle>Hapus pekerjaan?</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">{deleting?.title}</p><DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>Batal</Button><Button variant="destructive" onClick={() => { if (commit(tasks.filter((t) => t.id !== deleting?.id))) { setDeleting(null); setDraft(null); } }}>Hapus</Button></DialogFooter></DialogContent></Dialog>
+    <AlertDialog open={deletingSchedule} onOpenChange={setDeletingSchedule}><AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg"><AlertDialogHeader><AlertDialogTitle>Hapus jadwal?</AlertDialogTitle><AlertDialogDescription>Jadwal “{activeSchedule?.name}” beserta seluruh pekerjaan, progres, bobot, dan pengaturannya akan dihapus. Tindakan ini tidak dapat dibatalkan. Sketsa dan jadwal lainnya tetap tersimpan.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><Button variant="outline" onClick={() => setDeletingSchedule(false)}>Batal</Button><Button variant="destructive" onClick={removeSchedule}>Ya, hapus jadwal</Button></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </main>;
 }

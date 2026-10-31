@@ -183,7 +183,8 @@ import {
   distributeDiffableAcrossLevels,
 } from "@/lib/parking";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
-import { SCHEDULE_KEY, copyScheduleEntry, normalizeScheduleStore } from "@/lib/schedule";
+import { SCHEDULE_KEY } from "@/lib/schedule";
+import { readScheduleCollections, copyNamedSchedules, serializeScheduleCollections } from "@/lib/schedule-collections";
 import { SCHEDULE_VIEW_KEY } from "@/lib/schedule-analysis";
 import { normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import { normalizeDetailFurniture, type DetailFurniture } from "@/lib/detail-furniture";
@@ -1812,13 +1813,10 @@ export function SketchPage({ mode = "sketch" }: { mode?: "sketch" | "masterplan"
   // ke sketsa hasil duplikat agar halaman Jadwal langsung menampilkan susunan yang sama.
   const duplicateSketchSchedule = (sourceId: string, targetId: string) => {
     try {
-      const store = normalizeScheduleStore(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"));
-      const nextStore = copyScheduleEntry(store, sourceId, targetId);
-      if (nextStore !== store) void setProjectItem(SCHEDULE_KEY, JSON.stringify(nextStore));
-      const views = JSON.parse(localStorage.getItem(SCHEDULE_VIEW_KEY) || "{}") as Record<string, unknown>;
-      if (views && typeof views === "object" && views[sourceId]) {
-        void setProjectItem(SCHEDULE_VIEW_KEY, JSON.stringify({ ...views, [targetId]: views[sourceId] }));
-      }
+      const views = JSON.parse(localStorage.getItem(SCHEDULE_VIEW_KEY) || "{}");
+      const store = readScheduleCollections(JSON.parse(localStorage.getItem(SCHEDULE_KEY) || "null"), views, sourceId);
+      const nextStore = copyNamedSchedules(store, sourceId, targetId);
+      if (nextStore !== store) void setProjectItem(SCHEDULE_KEY, serializeScheduleCollections(nextStore));
     } catch {
       /* abaikan — jadwal sumber tetap utuh */
     }
