@@ -164,20 +164,21 @@ describe("Hapus pekerjaan beserta turunan", () => {
     { ...base, id: "b", wbs: "1.1.1", stage: false },
     { ...base, id: "c", wbs: "2", title: "B" },
     { ...base, id: "d", wbs: "2.1", stage: false, predecessors: [{ taskId: "a", type: "FS", lag: 0 }, { taskId: "c", type: "FS", lag: 0 }] },
+    { ...base, id: "e", wbs: "3", stage: false, predecessors: [{ taskId: "c", type: "FS", lag: 0 }] },
   ];
   test("menghapus WBS utama menghapus semua turunannya", () => {
     const next = deleteScheduleTaskBranch(rows, "x");
-    assert.deepEqual(next.map((t) => t.id), ["c", "d"]);
+    assert.deepEqual(next.map((t) => t.id), ["c", "d", "e"]);
   });
   test("menghapus rincian tidak menyentuh induk atau saudara", () => {
     const next = deleteScheduleTaskBranch(rows, "a");
-    assert.deepEqual(next.map((t) => t.id), ["x", "c", "d"]);
+    assert.deepEqual(next.map((t) => t.id), ["x", "c", "d", "e"]);
   });
   test("tautan predecessor ke pekerjaan terhapus dibersihkan", () => {
     const next = deleteScheduleTaskBranch(rows, "a");
     const d = next.find((t) => t.id === "d")!;
     assert.deepEqual(d.predecessors?.map((l) => l.taskId), ["c"]);
-    const cleared = deleteScheduleTaskBranch(rows, "c").find((t) => t.id === "d")!;
+    const cleared = deleteScheduleTaskBranch(rows, "c").find((t) => t.id === "e")!;
     assert.equal(cleared.predecessors, undefined);
   });
   test("hasil hapus lolos resolveScheduleDependencies", () => {
