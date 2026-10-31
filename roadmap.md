@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Pustaka jadwal per akun: judul pekerjaan dengan WBS huruf, durasi dan predecessor; dropdown/manual di Jadwal, penerapan seluruh hierarki dengan nomor WBS dan ID hubungan lokal, uji rumus dan alur.
+
 - [x] Biaya per jadwal: kolom setelah Progres, total proyek manual, pembagian sisa bertingkat dengan isian manual dipertahankan, bobot/kurva mengikuti biaya bila acuan tersedia. 69 uji lolos; isian induk/anak/cucu, bobot, penolakan biaya berlebih, muat ulang dan isolasi jadwal teruji pada sesi akun dengan data lokal sementara (sketsa akun tidak tersedia), tanpa perubahan Cloud.
 
 - [x] Nama jadwal dapat diubah di kiri atas; tambah beberapa jadwal per sketsa dan hapus dengan peringatan. Data lama dan pengaturan dimigrasikan, semua jadwal ikut disalin bersama sketsa. 80 uji lolos; alur ubah nama/tambah/pekerjaan terpisah/batal/hapus/muat ulang diuji pada sesi akun dengan data lokal sementara karena data sketsa akun tidak tersedia di browser pengujian; tanpa perubahan Cloud.
