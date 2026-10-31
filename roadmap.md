@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Nama jadwal dapat diubah di kiri atas; tambah beberapa jadwal per sketsa dan hapus dengan peringatan; pertahankan jadwal lama, pengaturan, penyalinan sketsa, dan uji alur penyimpanan.
+
 - [x] Tambahkan empat ringkasan bobot mingguan dan kumulatif pada Jadwal serta di atas sumbu Minggu Kurva S; rumus diuji dan tampilan/PDF tiga halaman diperiksa dengan 42 pekerjaan sementara di sesi akun aktif. Data jadwal akun tidak tersedia di browser baru; tanpa mengubah Cloud.
 
 - [x] Rapatkan grafik PDF Kurva S ke judul/keterangan dan pasangkan judul pekerjaan dengan potongan SVG pada tiap halaman; 4 uji lolos, tiga halaman grafik dan PDF tanpa Gantt diperiksa visual memakai 42 pekerjaan sementara pada sesi akun aktif (jadwal akun tidak tersedia di browser baru), tanpa mengubah Cloud.
