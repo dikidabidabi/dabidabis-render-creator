@@ -1,12 +1,18 @@
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
 import { scheduleDuration, scheduleProgress, type ScheduleTask } from "./schedule";
+import { hasProjectCost, scheduleCosts } from "./schedule-costs";
 
 const code = (task: ScheduleTask) => task.wbs.trim().replace(/\.+$/, "");
 const parentCode = (wbs: string) => wbs.slice(0, wbs.lastIndexOf("."));
 export const isWeightRoot = (task: ScheduleTask) => /^\d+$/.test(code(task));
 
 /** Derive weights from all immediate siblings, including folded rows. */
-export function scheduleWeights(tasks: ScheduleTask[]): Map<string, number> {
+export function scheduleWeights(tasks: ScheduleTask[], projectCost?: number): Map<string, number> {
+  if (hasProjectCost(projectCost)) {
+    const costs = scheduleCosts(tasks, projectCost);
+    const fallback = scheduleWeights(tasks);
+    return new Map(tasks.map((task) => [task.id, costs.has(task.id) ? (costs.get(task.id) ?? 0) * 100 / projectCost : fallback.get(task.id) ?? 0]));
+  }
   const byCode = new Map(tasks.map((task) => [code(task), task]));
   const counts = new Map<string, number>();
   tasks.forEach((task) => {

@@ -3,15 +3,15 @@ import { scheduleDuration, scheduleProgress, taskProgressAt, taskPredecessors, p
 
 export const SCHEDULE_VIEW_KEY = "dabidabis_jadwal_view_v1";
 export type ProgressObservation = { date: string; actual: number; note?: string };
-export type ScheduleView = { collapsed: string[]; cpm: boolean; weights?: boolean; slack: number; observations: ProgressObservation[] };
-export const DEFAULT_SCHEDULE_VIEW: ScheduleView = { collapsed: [], cpm: false, weights: false, slack: 0, observations: [] };
+export type ScheduleView = { collapsed: string[]; cpm: boolean; weights?: boolean; costs?: boolean; projectCost?: number; slack: number; observations: ProgressObservation[] };
+export const DEFAULT_SCHEDULE_VIEW: ScheduleView = { collapsed: [], cpm: false, weights: false, costs: false, slack: 0, observations: [] };
 
 export function normalizeScheduleViews(value: unknown): Record<string, ScheduleView> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).flatMap(([id, entry]) => {
     if (!entry || typeof entry !== "object") return [];
     const item = entry as Partial<ScheduleView>;
-    return [[id, { collapsed: Array.isArray(item.collapsed) ? item.collapsed.filter((id) => typeof id === "string") : [], cpm: item.cpm === true, weights: item.weights === true, slack: typeof item.slack === "number" && Number.isFinite(item.slack) ? Math.max(0, Math.trunc(item.slack)) : 0, observations: Array.isArray(item.observations) ? item.observations.filter((point) => point && /^\d{4}-\d{2}-\d{2}$/.test(point.date) && typeof point.actual === "number" && Number.isFinite(point.actual) && point.actual >= 0 && point.actual <= 100).sort((a, b) => a.date.localeCompare(b.date)) : [] }]];
+    return [[id, { collapsed: Array.isArray(item.collapsed) ? item.collapsed.filter((id) => typeof id === "string") : [], cpm: item.cpm === true, weights: item.weights === true, costs: item.costs === true, ...(typeof item.projectCost === "number" && Number.isFinite(item.projectCost) && item.projectCost >= 0 ? { projectCost: item.projectCost } : {}), slack: typeof item.slack === "number" && Number.isFinite(item.slack) ? Math.max(0, Math.trunc(item.slack)) : 0, observations: Array.isArray(item.observations) ? item.observations.filter((point) => point && /^\d{4}-\d{2}-\d{2}$/.test(point.date) && typeof point.actual === "number" && Number.isFinite(point.actual) && point.actual >= 0 && point.actual <= 100).sort((a, b) => a.date.localeCompare(b.date)) : [] }]];
   }));
 }
 

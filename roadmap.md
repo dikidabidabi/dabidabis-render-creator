@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Biaya per jadwal: kolom setelah Progres, total proyek manual, pembagian sisa bertingkat dengan isian manual dipertahankan, bobot/kurva mengikuti biaya bila acuan tersedia. 69 uji lolos; isian induk/anak/cucu, bobot, penolakan biaya berlebih, muat ulang dan isolasi jadwal teruji pada sesi akun dengan data lokal sementara (sketsa akun tidak tersedia), tanpa perubahan Cloud.
+
 - [x] Nama jadwal dapat diubah di kiri atas; tambah beberapa jadwal per sketsa dan hapus dengan peringatan. Data lama dan pengaturan dimigrasikan, semua jadwal ikut disalin bersama sketsa. 80 uji lolos; alur ubah nama/tambah/pekerjaan terpisah/batal/hapus/muat ulang diuji pada sesi akun dengan data lokal sementara karena data sketsa akun tidak tersedia di browser pengujian; tanpa perubahan Cloud.
 
 - [x] Tambahkan empat ringkasan bobot mingguan dan kumulatif pada Jadwal serta di atas sumbu Minggu Kurva S; rumus diuji dan tampilan/PDF tiga halaman diperiksa dengan 42 pekerjaan sementara di sesi akun aktif. Data jadwal akun tidak tersedia di browser baru; tanpa mengubah Cloud.

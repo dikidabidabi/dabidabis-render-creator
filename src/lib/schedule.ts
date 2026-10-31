@@ -31,6 +31,7 @@ export type ScheduleTask = {
   checks: ScheduleCheck[];
   progressEntries?: TaskProgressEntry[];
   weight?: number;
+  cost?: number;
 };
 
 export function validScheduleDate(value: string): boolean {
@@ -122,7 +123,8 @@ export function normalizeSchedule(value: unknown): ScheduleTask[] {
     const actualStart = typeof t.actualStart === "string" && validScheduleDate(t.actualStart) ? t.actualStart : undefined;
     const actualFinish = typeof t.actualFinish === "string" && validScheduleDate(t.actualFinish) && (!actualStart || t.actualFinish >= actualStart) ? t.actualFinish : undefined;
     const weight = typeof t.weight === "number" && Number.isFinite(t.weight) && t.weight >= 0 && t.weight <= 100 ? t.weight : undefined;
-    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, ...(predecessors ? { predecessors } : { predecessor }), actualStart, actualFinish, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks, ...(weight !== undefined ? { weight } : {}), ...(progressEntries ? { progressEntries } : {}) }];
+    const cost = typeof t.cost === "number" && Number.isFinite(t.cost) && t.cost >= 0 ? t.cost : undefined;
+    return [{ id: t.id, taskNumber: typeof t.taskNumber === "number" && Number.isSafeInteger(t.taskNumber) && t.taskNumber > 0 ? t.taskNumber : undefined, ...(predecessors ? { predecessors } : { predecessor }), actualStart, actualFinish, title: t.title, wbs: typeof t.wbs === "string" ? t.wbs : "", owner: typeof t.owner === "string" ? t.owner : "", start: t.start, due: t.due, status: SCHEDULE_STATUSES.includes(t.status as ScheduleStatus) ? t.status as ScheduleStatus : "belum", component: typeof t.component === "string" ? t.component : "", color: SCHEDULE_COLORS.includes(t.color as ScheduleColor) ? t.color as ScheduleColor : "lavender", stage: t.stage === true, checks, ...(weight !== undefined ? { weight } : {}), ...(cost !== undefined ? { cost } : {}), ...(progressEntries ? { progressEntries } : {}) }];
   });
   const used = new Set<number>();
   let next = Math.max(0, ...normalized.map((t) => t.taskNumber ?? 0)) + 1;
