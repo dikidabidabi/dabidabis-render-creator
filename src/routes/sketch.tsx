@@ -12403,6 +12403,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                       })} />
                     </label>
                   ))}
+                  {area.showMaterials === true && <label className="ml-3 flex items-center justify-between gap-3 py-1 text-[11px]">
+                    <span>Keterangan ruang</span>
+                    <Switch aria-label={`Keterangan Ruang Detail ${area.number}`} checked={area.showMaterialRoomInfo !== false}
+                      onCheckedChange={(checked) => onChange({ detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, showMaterialRoomInfo: checked } : item) })} />
+                  </label>}
                   {area.showArchitectural && <div className="mt-2 space-y-1.5">
                     <label className="ml-3 flex items-center justify-between gap-3 py-1 text-[11px]">
                       <span>Legenda</span>
