@@ -4857,6 +4857,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   const roomNumberById = new Map(numberedRooms.map(({ room, number }) => [room.id, number]));
   const legendPosition = architecturalLegendPosition(area);
   const legendBottom = showArchitecturalLegend && legendPosition === "bottom";
+  const legendRight = showArchitecturalLegend && legendPosition === "right";
   const legendBottomWidthRatio = area.showKeyplan === false ? 0.96 : 0.79;
   const architecturalLegendBox = legendBottom
     ? { width: A3_W * legendBottomWidthRatio, height: A3_H * (ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO - 0.03) }
