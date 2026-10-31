@@ -277,6 +277,6 @@ export function deleteScheduleTaskBranch(tasks: ScheduleTask[], taskId: string):
       const links = taskPredecessors(t);
       const kept = links.filter((link) => !removed.has(link.taskId));
       if (kept.length === links.length) return t;
-      return { ...t, predecessor: undefined, ...(kept.length ? { predecessors: kept } : {}) };
+      return { ...t, predecessor: undefined, predecessors: kept.length ? kept : undefined };
     });
 }
