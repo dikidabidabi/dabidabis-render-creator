@@ -148,7 +148,7 @@ type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showMaterialRoomInfo?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
-  architecturalStyle?: "tosca" | "brown" | "blue" | "bata" | "mono" | "lightorange";
+  architecturalStyle?: "tosca" | "brown" | "blue" | "bata" | "mono" | "lightorange" | "monobiru";
   showArchitecturalLegend?: boolean;
   architecturalLegendPosition?: "right" | "bottom";
 };
