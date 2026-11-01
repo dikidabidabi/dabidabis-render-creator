@@ -49,3 +49,28 @@ test("gradien lantai monokrom dan oranye terang berputih di sudut kiri atas", ()
     assert.equal(vars.get("architectural-floor-deep"), "#e1e1e1", `${style}: sudut kanan bawah tetap abu muda`);
   }
 });
+
+test("style mono biru memakai tone monokrom di luar warna dinding dan lantai", () => {
+  const mono = styleVars("mono");
+  const biru = styleVars("monobiru");
+  for (const [name, value] of mono) {
+    if (WALL_VARS.includes(name) || name === "architectural-floor-deep") continue;
+    assert.equal(biru.get(name), value, `${name} harus sama dengan monokrom`);
+  }
+});
+
+test("dinding mono biru biru gelap dan lantai kanan bawah biru muda", () => {
+  const biru = styleVars("monobiru");
+  for (const name of WALL_VARS) {
+    assert.equal(biru.get(name), "#1e2f3d", `${name} harus biru gelap`);
+  }
+  assert.equal(biru.get("architectural-floor-light"), "#ffffff", "sudut kiri atas harus putih");
+  assert.equal(biru.get("architectural-floor-deep"), "#e3f0f6", "sudut kanan bawah harus biru muda");
+});
+
+test("tombol style mono biru punya swatch dan terdaftar di pilihan", () => {
+  assert.match(css, /\.architectural-swatch-monobiru\s*\{/);
+  const sketch = readFileSync(new URL("../routes/sketch.tsx", import.meta.url), "utf8");
+  assert.match(sketch, /\["monobiru",\s*"Mono Biru"\]/);
+  assert.match(sketch, /"tosca" \| "brown" \| "blue" \| "bata" \| "mono" \| "lightorange" \| "monobiru"/);
+});

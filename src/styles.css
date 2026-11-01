@@ -70,6 +70,7 @@
   --architectural-style-bata: #834d53;
   --architectural-style-mono: #9a9a9a;
   --architectural-style-lightorange: #bd5b28;
+  --architectural-style-monobiru: #1e2f3d;
 
   --architectural-caption-surface: rgba(255,255,255,0.92);
   --architectural-caption-ink: #283b3a;
@@ -339,6 +340,27 @@
 [data-architectural-style="lightorange"] [data-detail-secondary-notation] [stroke]:not([stroke="none"]) { stroke: #4a4a4a; }
 [data-architectural-style="lightorange"] [data-detail-secondary-notation] [fill="#0a0a0a"],
 [data-architectural-style="lightorange"] [data-detail-secondary-notation] text { fill: #4a4a4a; stroke: none; }
+/* Mono Biru: tone dan sifat sama persis dengan Monokrom, hanya gradien lantai putih→biru muda dan dinding biru gelap. */
+[data-architectural-style="monobiru"] {
+  --architectural-door-ink: #4a4a4a;
+  --architectural-grid-ink: #4a4a4a;
+  --architectural-wall-light: #1e2f3d;
+  --architectural-wall-mid: #1e2f3d;
+  --architectural-wall-deep: #1e2f3d;
+  --architectural-background-gradient: #ffffff;
+  /* Gradien lantai mono biru: sudut kiri atas putih, menurun ke biru muda di kanan bawah. */
+  --architectural-floor-light: #ffffff;
+  --architectural-floor-deep: #e3f0f6;
+  --architectural-furniture: #f7f7f7;
+  --architectural-ink: #4a4a4a;
+  --architectural-edge: #4a4a4a;
+  --architectural-line: #4a4a4a;
+  --architectural-caption-surface: #ffffff;
+  --architectural-caption-ink: #4a4a4a;
+}
+[data-architectural-style="monobiru"] [data-detail-secondary-notation] [stroke]:not([stroke="none"]) { stroke: #4a4a4a; }
+[data-architectural-style="monobiru"] [data-detail-secondary-notation] [fill="#0a0a0a"],
+[data-architectural-style="monobiru"] [data-detail-secondary-notation] text { fill: #4a4a4a; stroke: none; }
 
 .architectural-swatch {
   width: 10px;
@@ -353,6 +375,7 @@
 .architectural-swatch-bata { background: var(--architectural-style-bata); }
 .architectural-swatch-mono { background: var(--architectural-style-mono); }
 .architectural-swatch-lightorange { background: var(--architectural-style-lightorange); }
+.architectural-swatch-monobiru { background: var(--architectural-style-monobiru); }
 
 
 .schedule-page { letter-spacing: 0; }
