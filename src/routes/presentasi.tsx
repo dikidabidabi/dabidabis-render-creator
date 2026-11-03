@@ -127,7 +127,7 @@ export const Route = createFileRoute("/presentasi")({
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 import { detailCorners, detailIntersectsRoom, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
-import { detailDimensionVisibility } from "@/lib/detail-dimensions";
+import { detailDimensionVisibility, mergeCrowdedDimensions } from "@/lib/detail-dimensions";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -5406,10 +5406,10 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
         })}
         {area.dimensions && <g data-detail-dimensions="true">
           {dimensionVisibility.room && <g data-detail-room-dimensions="true">
-          {renderHorizontalDimension("room-top", roomXsTop, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.75)}
-          {renderHorizontalDimension("room-bottom", roomXsBottom, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.75)}
-          {renderVerticalDimension("room-left", roomYsLeft, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.75)}
-          {renderVerticalDimension("room-right", roomYsRight, [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.75)}
+          {renderHorizontalDimension("room-top", mergeCrowdedDimensions(roomXsTop, horizontalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.75)}
+          {renderHorizontalDimension("room-bottom", mergeCrowdedDimensions(roomXsBottom, horizontalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.75)}
+          {renderVerticalDimension("room-left", mergeCrowdedDimensions(roomYsLeft, verticalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.75)}
+          {renderVerticalDimension("room-right", mergeCrowdedDimensions(roomYsRight, verticalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.75)}
           </g>}
           {dimensionVisibility.grid && <g data-detail-grid-dimensions="true">{gridDimensionChains.flatMap(({ gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints }) => {
             const horizontalPoints = horizontalX ? xAxisPoints : yAxisPoints;

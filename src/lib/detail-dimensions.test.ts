@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { detailDimensionVisibility } from "./detail-dimensions";
+import { detailDimensionVisibility, mergeCrowdedDimensions } from "./detail-dimensions";
 
 describe("detail dimension visibility", () => {
   it("defaults both sub-options to active when Dimensi is active", () => {
@@ -20,12 +20,11 @@ describe("detail dimension visibility", () => {
     assert.deepEqual(detailDimensionVisibility({ ...area, dimensions: true }), { grid: false, room: true });
   });
 });
-import { mergeCrowdedDimensions } from "./detail-dimensions";
-test("crowded room dimensions merge shortest segment, keeping grid ends", () => {
-  // pxPerM 100, font 10 → digit 6px. 0..300 (3000), 300..320 (200), 320..600
-  const merged = mergeCrowdedDimensions([0, 300, 320, 600], [0, 300, 600], { pxPerM: 100, fontSize: 10 });
-  expect(merged).toEqual([0, 300, 600]);
-});
-test("non-crowded room dimensions stay", () => {
-  expect(mergeCrowdedDimensions([0, 300, 600], [], { pxPerM: 100, fontSize: 10 })).toEqual([0, 300, 600]);
+describe("crowded room dimensions", () => {
+  it("merges the shortest segment and keeps grid break points", () => {
+    assert.deepEqual(mergeCrowdedDimensions([0, 300, 320, 600], [0, 300, 600], { pxPerM: 100, fontSize: 10 }), [0, 300, 600]);
+  });
+  it("keeps dimensions that do not collide", () => {
+    assert.deepEqual(mergeCrowdedDimensions([0, 300, 600], [], { pxPerM: 100, fontSize: 10 }), [0, 300, 600]);
+  });
 });
