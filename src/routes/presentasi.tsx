@@ -4932,9 +4932,11 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
   const lines = (sketch.lines ?? []).filter((line) => line.levelId === level.id);
   const doors = (sketch.doors ?? []).filter((door) => door.levelId === level.id);
   const windows = (sketch.windows ?? []).filter((window) => window.levelId === level.id);
+  const keyPlanLayers = (sourceSketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
+  const keyPlanLines = (sourceSketch.lines ?? []).filter((line) => line.levelId === level.id);
   const keyPlanPoints = [
-    ...levelLayers.flatMap((layer) => layer.points),
-    ...lines.flatMap((line) => [line.a, line.b]),
+    ...keyPlanLayers.flatMap((layer) => layer.points),
+    ...keyPlanLines.flatMap((line) => [line.a, line.b]),
   ];
   const keyPlanRaw = keyPlanPoints.length > 0 ? {
     minX: Math.min(...keyPlanPoints.map((point) => point.x)),
@@ -5604,18 +5606,18 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
       {area.showKeyplan !== false && <div style={{ position: "absolute", right: 28, bottom: 24, height: "16.666%", width: "15%", minWidth: 120, background: "rgba(255,255,255,0.96)", border: "1px solid #262626", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", display: "flex", flexDirection: "column", padding: 6 }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 12, fontWeight: 800, lineHeight: 1.2, marginBottom: 4 }}>KEY PLAN · {level.name}</div>
         <svg viewBox={`${keyPlanBounds.minX} ${keyPlanBounds.minY} ${keyPlanW} ${keyPlanH}`} preserveAspectRatio="xMidYMid meet" style={{ flex: 1, minHeight: 0, width: "100%", display: "block", background: "#ffffff" }}>
-          {levelLayers.map((layer) => (
+          {keyPlanLayers.map((layer) => (
             <polygon key={`key-room-${layer.id}`} points={layer.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={isVoid(layer.name) ? "#ffffff" : "#eeeeea"} stroke="#777777" strokeWidth={Math.max(keyPlanW, keyPlanH) * 0.0014} />
           ))}
           <MaterialEdges
-            lines={lines}
-            segmentationLines={sketch.lines ?? []}
+            lines={keyPlanLines}
+            segmentationLines={sourceSketch.lines ?? []}
             levelId={level.id}
-            edgeAttrs={sketch.edgeAttrs ?? {}}
+            edgeAttrs={sourceSketch.edgeAttrs ?? {}}
             pxPerM={pxPerM}
             sw={Math.max(keyPlanW, keyPlanH)}
           />
-          {(sketch.detailAreas ?? []).filter((detail) => detail.levelId === level.id && detail.showOnSlide !== false).map((detail) => {
+          {(sourceSketch.detailAreas ?? []).filter((detail) => detail.levelId === level.id && detail.showOnSlide !== false).map((detail) => {
             const corners = detailCorners(detail);
             const x = (detail.a.x + detail.b.x) / 2;
             const y = (detail.a.y + detail.b.y) / 2;

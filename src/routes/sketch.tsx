@@ -99,6 +99,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
+import { createDetailRectangle, detailCorners } from "@/lib/detail-geometry";
 import { normalizeGeneralMaterialSelections, type GeneralMaterialSelections } from "@/lib/material-library";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
