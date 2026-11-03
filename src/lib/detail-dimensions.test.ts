@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { detailDimensionVisibility } from "./detail-dimensions";
+import { detailDimensionVisibility, mergeCrowdedDimensions } from "./detail-dimensions";
 
 describe("detail dimension visibility", () => {
   it("defaults both sub-options to active when Dimensi is active", () => {
@@ -18,5 +18,13 @@ describe("detail dimension visibility", () => {
   it("retains individual choices after toggling the master", () => {
     const area = { dimensions: false, gridDimensions: false, roomDimensions: true };
     assert.deepEqual(detailDimensionVisibility({ ...area, dimensions: true }), { grid: false, room: true });
+  });
+});
+describe("crowded room dimensions", () => {
+  it("merges the shortest segment and keeps grid break points", () => {
+    assert.deepEqual(mergeCrowdedDimensions([0, 300, 320, 600], [0, 300, 600], { pxPerM: 100, fontSize: 100 }), [0, 300, 600]);
+  });
+  it("keeps dimensions that do not collide", () => {
+    assert.deepEqual(mergeCrowdedDimensions([0, 300, 600], [], { pxPerM: 100, fontSize: 10 }), [0, 300, 600]);
   });
 });
