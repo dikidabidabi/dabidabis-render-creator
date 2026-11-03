@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createDetailRectangle, detailCorners, detailLocalBounds, orientDetailSketch, rotateDetailPoint } from "./detail-geometry";
+import { createDetailRectangle, detailCorners, detailIntersectsRoom, detailLocalBounds, orientDetailSketch, rotateDetailPoint } from "./detail-geometry";
 import { edgeMaterialKey } from "./edge-segments";
 
 for (const angle of [0, 30, 45, 90, -30]) test(`detail follows ${angle} degree grid and retains its slide dimensions`, () => {
@@ -20,6 +20,21 @@ test("45 degree square with vertical world diagonal is accepted", () => {
 });
 test("legacy rectangle retains world orientation", () => {
   assert.deepEqual(detailLocalBounds({ a: { x: 100, y: 80 }, b: { x: 0, y: 0 } }), { minX: 0, minY: 0, maxX: 100, maxY: 80 });
+});
+test("edge-only room overlap is included and outside rotated footprint is excluded", () => {
+  const area = { a: rotateDetailPoint({ x: 0, y: 0 }, 45), b: rotateDetailPoint({ x: 80, y: 80 }, 45), rotation: 45 };
+  const crossing = [{ x: -20, y: 30 }, { x: 100, y: 30 }, { x: 100, y: 40 }, { x: -20, y: 40 }].map((p) => rotateDetailPoint(p, 45));
+  assert.equal(detailIntersectsRoom(area, crossing), true);
+  assert.equal(detailIntersectsRoom(area, [{ x: 40, y: 1 }, { x: 50, y: 1 }, { x: 50, y: 10 }]), false);
+});
+test("translation and scale preserve saved rectangle angle and local dimensions", () => {
+  const original = createDetailRectangle({ x: 0, y: 0 }, rotateDetailPoint({ x: 160, y: 80 }, 30), 30);
+  assert.ok(original);
+  const moved = { ...original, a: { x: original.a.x * 2 + 100, y: original.a.y * 2 - 50 }, b: { x: original.b.x * 2 + 100, y: original.b.y * 2 - 50 } };
+  const bounds = detailLocalBounds(moved);
+  assert.ok(Math.abs(bounds.maxX - bounds.minX - 320) < 1e-8);
+  assert.ok(Math.abs(bounds.maxY - bounds.minY - 160) < 1e-8);
+  assert.equal(moved.rotation, 30);
 });
 test("slide rotation preserves wall material, door normal, furniture, and source geometry", () => {
   const a = { x: 0, y: 0 }, b = { x: 0, y: 80 };

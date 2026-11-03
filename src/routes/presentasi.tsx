@@ -126,7 +126,7 @@ export const Route = createFileRoute("/presentasi")({
 
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
-import { detailCorners, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
+import { detailCorners, detailIntersectsRoom, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -4854,8 +4854,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
   const levelLayers = (sketch.layers ?? []).filter((layer) => layer.levelId === level.id && layer.points.length >= 3);
   const detailMinX = Math.min(area.a.x, area.b.x), detailMaxX = Math.max(area.a.x, area.b.x);
   const detailMinY = Math.min(area.a.y, area.b.y), detailMaxY = Math.max(area.a.y, area.b.y);
-  const detailRooms = levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name) && (layer.points.some((p) => p.x >= detailMinX && p.x <= detailMaxX && p.y >= detailMinY && p.y <= detailMaxY)
-    || [{ x: detailMinX, y: detailMinY }, { x: detailMaxX, y: detailMaxY }, { x: detailMinX, y: detailMaxY }, { x: detailMaxX, y: detailMinY }].some((p) => pointInRoom(p, layer.points))));
+  const detailRooms = levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name) && detailIntersectsRoom(area, layer.points));
   const showArchitecturalLegend = architecturalLegendEnabled(area);
   const numberedRooms = architecturalLegendRooms(detailRooms);
   const roomNumberById = new Map(numberedRooms.map(({ room, number }) => [room.id, number]));

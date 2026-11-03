@@ -1,5 +1,5 @@
 import { edgeMaterialKey, type EdgeMaterial } from "./edge-segments";
-import { positionFurniture, type DetailFurniture } from "./detail-furniture";
+import { pointInRoom, positionFurniture, type DetailFurniture } from "./detail-furniture";
 
 export type DetailPoint = { x: number; y: number };
 export type DetailRectangle = { a: DetailPoint; b: DetailPoint; rotation?: number };
@@ -33,6 +33,29 @@ export function detailCorners(area: DetailRectangle): DetailPoint[] {
 export function detailWorldBounds(area: DetailRectangle) {
   const points = detailCorners(area);
   return { minX: Math.min(...points.map((p) => p.x)), minY: Math.min(...points.map((p) => p.y)), maxX: Math.max(...points.map((p) => p.x)), maxY: Math.max(...points.map((p) => p.y)) };
+}
+
+export function detailIntersectsRoom(area: DetailRectangle, polygon: DetailPoint[]): boolean {
+  const bounds = detailLocalBounds(area);
+  const points = polygon.map((p) => rotateDetailPoint(p, -detailRotation(area)));
+  if (points.length < 3) return false;
+  const inside = (p: DetailPoint) => p.x >= bounds.minX && p.x <= bounds.maxX && p.y >= bounds.minY && p.y <= bounds.maxY;
+  if (points.some(inside)) return true;
+  const corners = [{ x: bounds.minX, y: bounds.minY }, { x: bounds.maxX, y: bounds.minY }, { x: bounds.maxX, y: bounds.maxY }, { x: bounds.minX, y: bounds.maxY }];
+  if (corners.some((p) => pointInRoom(p, points))) return true;
+  return points.some((a, i) => {
+    const b = points[(i + 1) % points.length];
+    let low = 0, high = 1;
+    for (const [start, delta, min, max] of [[a.x, b.x - a.x, bounds.minX, bounds.maxX], [a.y, b.y - a.y, bounds.minY, bounds.maxY]]) {
+      if (Math.abs(delta) < 1e-10) { if (start < min || start > max) return false; }
+      else {
+        const t1 = (min - start) / delta, t2 = (max - start) / delta;
+        low = Math.max(low, Math.min(t1, t2)); high = Math.min(high, Math.max(t1, t2));
+        if (low > high) return false;
+      }
+    }
+    return true;
+  });
 }
 
 /** Display-only rotation: persisted coordinates, IDs, dimensions and material selections never change. */

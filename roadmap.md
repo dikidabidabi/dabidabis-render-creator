@@ -1,5 +1,5 @@
 # Roadmap
 
-- [ ] Kotak pendetailan mengikuti orientasi grid milimeter saat dibuat dan menyimpan orientasinya.
-- [ ] Slide detail dan key plan memakai orientasi/cakupan kotak yang sama.
-- [ ] Uji geometri, persistensi, dan alur Sketsa → Presentasi.
+- [x] Kotak pendetailan mengikuti orientasi grid milimeter saat dibuat dan menyimpan orientasinya.
+- [x] Slide detail menyesuaikan denah/dimensi; key plan mempertahankan orientasi Sketsa.
+- [x] Uji geometri dan alur Sketsa → Presentasi termasuk muat ulang dengan sketsa uji 30°.
