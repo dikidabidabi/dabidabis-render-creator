@@ -127,6 +127,7 @@ export const Route = createFileRoute("/presentasi")({
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 import { detailCorners, detailIntersectsRoom, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
+import { detailDimensionVisibility } from "@/lib/detail-dimensions";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -148,6 +149,8 @@ type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: bo
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   rotation?: number;
+  gridDimensions?: boolean;
+  roomDimensions?: boolean;
   showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showMaterialRoomInfo?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
   architecturalStyle?: "tosca" | "brown" | "blue" | "bata" | "mono" | "lightorange" | "monobiru";
@@ -4843,6 +4846,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
   const { sketch, level } = slide;
   const architectural = slide.area.showArchitectural === true;
   const area = architectural ? { ...slide.area, showMaterials: false, showCeiling: false, interiorDimensions: false, floorHatch: false } : slide.area;
+  const dimensionVisibility = detailDimensionVisibility(area);
   const [materialLibrary, setMaterialLibrary] = useState<LibraryMaterial[]>([]);
   useEffect(() => {
     const reload = () => setMaterialLibrary(loadMaterialLibrary());
@@ -5401,11 +5405,13 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
           );
         })}
         {area.dimensions && <g data-detail-dimensions="true">
+          {dimensionVisibility.room && <g data-detail-room-dimensions="true">
           {renderHorizontalDimension("room-top", roomXsTop, [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.75)}
           {renderHorizontalDimension("room-bottom", roomXsBottom, [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.75)}
           {renderVerticalDimension("room-left", roomYsLeft, [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.75)}
           {renderVerticalDimension("room-right", roomYsRight, [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.75)}
-          {gridDimensionChains.flatMap(({ gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints }) => {
+          </g>}
+          {dimensionVisibility.grid && <g data-detail-grid-dimensions="true">{gridDimensionChains.flatMap(({ gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints }) => {
             const horizontalPoints = horizontalX ? xAxisPoints : yAxisPoints;
             const verticalPoints = horizontalX ? yAxisPoints : xAxisPoints;
             const horizontalLabels = (horizontalX ? spansX : spansY).map((span) => Math.round(span * 1000));
@@ -5418,7 +5424,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
               renderVerticalDimension(`grid-left-${gridIndex}`, verticalCoordinates, verticalLabels, perimeterBounds.minX - gridOffset, perimeterBounds.minX, true),
               renderVerticalDimension(`grid-right-${gridIndex}`, verticalCoordinates, verticalLabels, perimeterBounds.maxX + gridOffset, perimeterBounds.maxX, false),
             ];
-          })}
+          })}</g>}
         </g>}
         <g data-detail-secondary-notation="true">
         <DetailVoidNotation

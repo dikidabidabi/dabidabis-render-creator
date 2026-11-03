@@ -408,6 +408,8 @@ type DetailArea = {
   number: number;
   showOnSlide: boolean;
   dimensions: boolean;
+  gridDimensions?: boolean;
+  roomDimensions?: boolean;
   interiorDimensions: boolean;
   floorHatch: boolean;
   showKeyplan: boolean;
@@ -1220,6 +1222,8 @@ function normalizeSketch(s: any): Sketch {
           number: Math.max(1, Math.round(Number(area.number) || index + 1)),
           showOnSlide: area.showOnSlide !== false,
           dimensions: area.dimensions !== false,
+          gridDimensions: area.gridDimensions !== false,
+          roomDimensions: area.roomDimensions !== false,
           interiorDimensions: area.interiorDimensions === true && area.showArchitectural !== true,
           floorHatch: area.floorHatch === true,
           showKeyplan: area.showKeyplan !== false,
@@ -11342,6 +11346,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           number,
           showOnSlide: true,
           dimensions: true,
+          gridDimensions: true,
+          roomDimensions: true,
           interiorDimensions: false,
           floorHatch: false,
           showKeyplan: true,
@@ -12395,7 +12401,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     ["showCeiling", "Plafon"],
                     ["showArchitectural", "Arsitektural"],
                   ] as const).map(([key, label]) => (
-                    <label key={key} className="flex items-center justify-between gap-3 py-1 text-[11px]">
+                    <div key={key}>
+                    <label className="flex items-center justify-between gap-3 py-1 text-[11px]">
                       <span>{label}</span>
                       <Switch checked={area[key] === true} onCheckedChange={(checked) => onChange({
                         detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? {
@@ -12408,6 +12415,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         } : item),
                       })} />
                     </label>
+                    {key === "dimensions" && area.dimensions && <div className="ml-3">
+                      {([["gridDimensions", "Dimensi grid"], ["roomDimensions", "Dimensi ruang"]] as const).map(([dimensionKey, dimensionLabel]) => (
+                        <label key={dimensionKey} className="flex items-center justify-between gap-3 py-1 text-[11px]">
+                          <span>{dimensionLabel}</span>
+                          <Switch aria-label={`${dimensionLabel} Detail ${area.number}`} checked={area[dimensionKey] !== false}
+                            onCheckedChange={(checked) => onChange({ detailAreas: (sketch.detailAreas ?? []).map((item) => item.id === area.id ? { ...item, [dimensionKey]: checked } : item) })} />
+                        </label>
+                      ))}
+                    </div>}
+                    </div>
                   ))}
                   {area.showMaterials === true && <label className="ml-3 flex items-center justify-between gap-3 py-1 text-[11px]">
                     <span>Keterangan ruang</span>
