@@ -99,6 +99,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
+import { createDetailRectangle, detailCorners } from "@/lib/detail-geometry";
 import { normalizeGeneralMaterialSelections, type GeneralMaterialSelections } from "@/lib/material-library";
 import { colorForRoomName } from "@/lib/room-color";
 import { toast } from "sonner";
@@ -403,6 +404,7 @@ type DetailArea = {
   levelId: string;
   a: Point;
   b: Point;
+  rotation?: number;
   number: number;
   showOnSlide: boolean;
   dimensions: boolean;
@@ -1212,8 +1214,9 @@ function normalizeSketch(s: any): Sketch {
         return [{
           id: typeof area.id === "string" && area.id ? area.id : `DETAIL${Date.now()}_${index}`,
           levelId: typeof area.levelId === "string" && validLvl.has(area.levelId) ? area.levelId : fallback,
-          a: { x: Math.min(ax, bx), y: Math.min(ay, by) },
-          b: { x: Math.max(ax, bx), y: Math.max(ay, by) },
+          a: { x: ax, y: ay },
+          b: { x: bx, y: by },
+          rotation: Number.isFinite(Number(area.rotation)) ? Number(area.rotation) : 0,
           number: Math.max(1, Math.round(Number(area.number) || index + 1)),
           showOnSlide: area.showOnSlide !== false,
           dimensions: area.dimensions !== false,
@@ -5350,15 +5353,17 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     // Kotak pendetailan tersimpan: layer penanda saja, tidak mengubah geometri.
     for (const area of (sketch.detailAreas ?? []).filter((item) => item.levelId === activeLvlId)) {
-      const x = Math.min(area.a.x, area.b.x);
-      const y = Math.min(area.a.y, area.b.y);
-      const width = Math.abs(area.b.x - area.a.x);
-      const height = Math.abs(area.b.y - area.a.y);
+      const corners = detailCorners(area);
+      const { x, y } = corners[0];
       ctx.save();
       ctx.strokeStyle = area.showOnSlide ? "rgba(232,93,58,0.95)" : "rgba(90,90,90,0.7)";
       ctx.lineWidth = 2 / s;
       ctx.setLineDash([8 / s, 5 / s]);
-      ctx.strokeRect(x, y, width, height);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      corners.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+      ctx.closePath();
+      ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = area.showOnSlide ? "#e85d3a" : "#666666";
       ctx.beginPath();
@@ -11324,7 +11329,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
 
     if (curTool === "pendetailan") {
-      if (!activeLvlId || Math.abs(b.x - a.x) < MINOR_PX || Math.abs(b.y - a.y) < MINOR_PX) return;
+      const rectangle = createDetailRectangle(a, b, mmGridRotation, MINOR_PX);
+      if (!activeLvlId || !rectangle) return;
       const existing = sketch.detailAreas ?? [];
       const number = existing.reduce((max, item) => Math.max(max, item.number || 0), 0) + 1;
       const newAreaId = `DETAIL${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -11332,8 +11338,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const detailAreas = renumberDetailAreas([...existing, {
           id: newAreaId,
           levelId: activeLvlId,
-          a: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) },
-          b: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) },
+          ...rectangle,
           number,
           showOnSlide: true,
           dimensions: true,

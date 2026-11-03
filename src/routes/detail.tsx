@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { colorForRoomName } from "@/lib/room-color";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
+import { detailWorldBounds } from "@/lib/detail-geometry";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
 import { axisPositions, collectGrids, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
@@ -55,7 +56,7 @@ type ViewBox = { x: number; y: number; width: number; height: number };
 type Line = { a: Point; b: Point; levelId?: string; kind?: "straight" | "arc" | "bezier" };
 type Layer = { id: string; name: string; points: Point[]; color: string; levelId?: string };
 type Level = { id: string; name: string; mdpl?: number };
-type DetailArea = { id: string; levelId: string; a: Point; b: Point; number: number; furniture?: DetailFurniture[] };
+type DetailArea = { id: string; levelId: string; a: Point; b: Point; rotation?: number; number: number; furniture?: DetailFurniture[] };
 type Sketch = { id: string; title: string; scale?: string; levels: Level[]; layers: Layer[]; lines?: Line[]; detailAreas?: DetailArea[]; showFurnitureSlide?: boolean; edgeAttrs?: Record<string, EdgeMaterial>; structuralGrid?: StructuralGrid; structuralGridExtras?: StructuralGrid[]; doors?: Door[]; windows?: Window[] };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 type MoveGesture = { kind: "move"; start: Point; initial: Map<string, DetailFurniture> };
@@ -75,7 +76,7 @@ const MAJOR_METERS: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 
 const dimensionMm = (px: number, ppm: number) => Math.round(px / ppm * 1000);
 
 function boundsFor(area: DetailArea): Bounds {
-  return { minX: Math.min(area.a.x, area.b.x), minY: Math.min(area.a.y, area.b.y), maxX: Math.max(area.a.x, area.b.x), maxY: Math.max(area.a.y, area.b.y) };
+  return detailWorldBounds(area);
 }
 
 function baseView(bounds: Bounds): ViewBox {

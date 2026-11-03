@@ -1,5 +1,5 @@
 # Roadmap
 
-Semua tugas selesai. Terakhir: tombol hapus per baris pekerjaan di Jadwal (di kanan ikon edit) yang menghapus seluruh turunan WBS dan membersihkan tautan predecessor — 86 uji lolos, teruji di pratinjau dengan data sementara.
-
-Tidak ada tugas terbuka.
+- [x] Kotak pendetailan mengikuti orientasi grid milimeter saat dibuat dan menyimpan orientasinya.
+- [x] Slide detail menyesuaikan denah/dimensi; key plan mempertahankan orientasi Sketsa.
+- [x] Uji geometri dan alur Sketsa → Presentasi termasuk muat ulang dengan sketsa uji 30°.
