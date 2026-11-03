@@ -126,6 +126,7 @@ export const Route = createFileRoute("/presentasi")({
 
 import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
+import { detailCorners, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -146,6 +147,7 @@ type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapR
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
+  rotation?: number;
   showOnSlide: boolean; dimensions: boolean; interiorDimensions?: boolean; floorHatch: boolean; showKeyplan?: boolean; showFurniture?: boolean; showMaterials?: boolean; showMaterialRoomInfo?: boolean; showCeiling?: boolean; showArchitectural?: boolean; createdAt: number;
   furniture?: DetailFurniture[];
   architecturalStyle?: "tosca" | "brown" | "blue" | "bata" | "mono" | "lightorange" | "monobiru";
@@ -1775,12 +1777,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
         sketch: sk,
         level: lv,
         area,
-        bounds: {
-          minX: Math.min(area.a.x, area.b.x) - (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
-          minY: Math.min(area.a.y, area.b.y) - (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
-          maxX: Math.max(area.a.x, area.b.x) + (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
-          maxY: Math.max(area.a.y, area.b.y) + (area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
-        },
+        bounds: detailLocalBounds(area, area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
       });
     }
   }
@@ -4836,6 +4833,13 @@ function DetailFallbackMessage() {
 }
 
 function DetailBody({ slide }: { slide: DetailSlide }) {
+  const orientedSketch = useMemo(() => orientDetailSketch(slide.sketch, detailRotation(slide.area)), [slide.sketch, slide.area.rotation]);
+  const rotation = detailRotation(slide.area);
+  const local = detailLocalBounds(slide.area);
+  return <OrientedDetailBody slide={{ ...slide, sketch: orientedSketch, area: { ...slide.area, a: { x: local.minX, y: local.minY }, b: { x: local.maxX, y: local.maxY }, rotation: 0 } }} sourceSketch={slide.sketch} rotation={rotation} />;
+}
+
+function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSlide; sourceSketch: Sketch; rotation: number }) {
   const { sketch, level } = slide;
   const architectural = slide.area.showArchitectural === true;
   const area = architectural ? { ...slide.area, showMaterials: false, showCeiling: false, interiorDimensions: false, floorHatch: false } : slide.area;
@@ -5344,7 +5348,7 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
   });
   return (
     <div data-architectural-style={architectural ? area.architecturalStyle ?? "tosca" : undefined} style={{ width: "100%", height: "100%", position: "relative", background: architectural ? "var(--architectural-background-gradient)" : "#ffffff", overflow: "hidden" }}>
-      <svg data-detail-plan="true" viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode || legendRight ? "80%" : "100%", height: legendBottom ? `${(1 - ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO) * 100}%` : "100%", display: "block", marginInline: architectural && !legendRight ? "auto" : undefined }}>
+      <svg data-detail-plan="true" data-detail-rotation={rotation} viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ width: showMaterialMode || showCeilingMode || legendRight ? "80%" : "100%", height: legendBottom ? `${(1 - ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO) * 100}%` : "100%", display: "block", marginInline: architectural && !legendRight ? "auto" : undefined }}>
         <defs>
           {architectural && <>
             <radialGradient id={`architectural-floor-${patternId}`} gradientUnits="userSpaceOnUse" cx={bounds.minX} cy={bounds.minY} r={Math.hypot(w, h)}><stop stopColor="var(--architectural-floor-light)" /><stop offset="1" stopColor="var(--architectural-floor-deep)" /></radialGradient>
@@ -5612,16 +5616,15 @@ function DetailBody({ slide }: { slide: DetailSlide }) {
             sw={Math.max(keyPlanW, keyPlanH)}
           />
           {(sketch.detailAreas ?? []).filter((detail) => detail.levelId === level.id && detail.showOnSlide !== false).map((detail) => {
-            const x = Math.min(detail.a.x, detail.b.x);
-            const y = Math.min(detail.a.y, detail.b.y);
-            const width = Math.abs(detail.b.x - detail.a.x);
-            const height = Math.abs(detail.b.y - detail.a.y);
+            const corners = detailCorners(detail);
+            const x = (detail.a.x + detail.b.x) / 2;
+            const y = (detail.a.y + detail.b.y) / 2;
             const active = detail.id === area.id;
             const markerSize = Math.max(keyPlanW, keyPlanH) * 0.055;
             return <g key={`key-detail-${detail.id}`}>
-              <rect x={x} y={y} width={width} height={height} fill={active ? "rgba(232,93,58,0.2)" : "none"} stroke={active ? "#e85d3a" : "#555555"} strokeWidth={Math.max(keyPlanW, keyPlanH) * (active ? 0.006 : 0.0025)} strokeDasharray={`${Math.max(keyPlanW, keyPlanH) * 0.018} ${Math.max(keyPlanW, keyPlanH) * 0.012}`} />
-              <circle cx={x + width / 2} cy={y + height / 2} r={markerSize} fill={active ? "#e85d3a" : "#ffffff"} stroke="#111111" strokeWidth={Math.max(keyPlanW, keyPlanH) * 0.002} />
-              <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fontFamily="Sora, sans-serif" fontSize={markerSize * 1.05} fontWeight={800} fill={active ? "#ffffff" : "#111111"}>{detail.number}</text>
+              <polygon points={corners.map((p) => `${p.x},${p.y}`).join(" ")} fill={active ? "rgba(232,93,58,0.2)" : "none"} stroke={active ? "#e85d3a" : "#555555"} strokeWidth={Math.max(keyPlanW, keyPlanH) * (active ? 0.006 : 0.0025)} strokeDasharray={`${Math.max(keyPlanW, keyPlanH) * 0.018} ${Math.max(keyPlanW, keyPlanH) * 0.012}`} />
+              <circle cx={x} cy={y} r={markerSize} fill={active ? "#e85d3a" : "#ffffff"} stroke="#111111" strokeWidth={Math.max(keyPlanW, keyPlanH) * 0.002} />
+              <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fontFamily="Sora, sans-serif" fontSize={markerSize * 1.05} fontWeight={800} fill={active ? "#ffffff" : "#111111"}>{detail.number}</text>
             </g>;
           })}
         </svg>
