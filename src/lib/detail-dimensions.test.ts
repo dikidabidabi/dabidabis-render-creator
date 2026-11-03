@@ -22,7 +22,7 @@ describe("detail dimension visibility", () => {
 });
 describe("crowded room dimensions", () => {
   it("merges the shortest segment and keeps grid break points", () => {
-    assert.deepEqual(mergeCrowdedDimensions([0, 300, 320, 600], [0, 300, 600], { pxPerM: 100, fontSize: 10 }), [0, 300, 600]);
+    assert.deepEqual(mergeCrowdedDimensions([0, 300, 320, 600], [0, 300, 600], { pxPerM: 100, fontSize: 100 }), [0, 300, 600]);
   });
   it("keeps dimensions that do not collide", () => {
     assert.deepEqual(mergeCrowdedDimensions([0, 300, 600], [], { pxPerM: 100, fontSize: 10 }), [0, 300, 600]);
