@@ -1,3 +1,5 @@
+import { xAxisLabelAt, yAxisLabelAt } from "@/lib/structural-grid";
+
 export type DimensionPoint = { x: number; y: number };
 export type DimensionSide = "top" | "bottom" | "left" | "right";
 export type ExteriorChain = {
