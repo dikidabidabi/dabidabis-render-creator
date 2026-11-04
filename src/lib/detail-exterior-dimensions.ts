@@ -45,19 +45,16 @@ export function exteriorRoomChains(rooms: { id: string; points: DimensionPoint[]
       const group = groups.find((g) => angleDistance(g[0].angle, edge.angle) <= 2);
       if (group) group.push(edge); else groups.push([edge]);
     }
-    // A repeated room direction wins over an isolated oblique room.
-    groups.sort((a, b) => Number(new Set(b.map((e) => e.roomId)).size > 1) - Number(new Set(a.map((e) => e.roomId)).size > 1)
-      || new Set(b.map((e) => e.roomId)).size - new Set(a.map((e) => e.roomId)).size
-      || b.reduce((s, e) => s + e.length, 0) - a.reduce((s, e) => s + e.length, 0));
-    const selected = groups[0];
-    if (!selected) return [];
-    const longest = [...selected].sort((a, b) => b.length - a.length)[0];
-    const angle = longest.angle, { u, n } = dimensionBasis(angle);
-    const outward = Math.sign(dot(longest.normal, n));
-    const face = outward * Math.max(...selected.flatMap((e) => [dot(e.a, n) * outward, dot(e.b, n) * outward]));
-    const outer = selected.filter((e) => Math.abs(dot(e.a, n) - face) <= tolerance * 2 && Math.abs(dot(e.b, n) - face) <= tolerance * 2);
-    const coordinates = unique(outer.flatMap((e) => [dot(e.a, u), dot(e.b, u)]), tolerance);
-    return coordinates.length >= 2 ? [{ side, angle, face, outward, coordinates, roomIds: [...new Set(outer.map((e) => e.roomId))] }] : [];
+    // Every orientation cluster keeps its own outermost face so clusters never share one crossing chain.
+    return groups.flatMap((selected) => {
+      const longest = [...selected].sort((a, b) => b.length - a.length)[0];
+      const angle = longest.angle, { u, n } = dimensionBasis(angle);
+      const outward = Math.sign(dot(longest.normal, n));
+      const face = outward * Math.max(...selected.flatMap((e) => [dot(e.a, n) * outward, dot(e.b, n) * outward]));
+      const outer = selected.filter((e) => Math.abs(dot(e.a, n) - face) <= tolerance * 2 && Math.abs(dot(e.b, n) - face) <= tolerance * 2);
+      const coordinates = unique(outer.flatMap((e) => [dot(e.a, u), dot(e.b, u)]), tolerance);
+      return coordinates.length >= 2 ? [{ side, angle, face, outward, coordinates, roomIds: [...new Set(outer.map((e) => e.roomId))] }] : [];
+    });
   });
 }
 /** Four grid boundaries, never internal grid lines or screen-axis projections. */
@@ -77,22 +74,13 @@ export function exteriorGridChains(grids: DimensionGrid[], roomChains: ExteriorC
       return { side: normalSide(normal), angle, coordinates: unique(points.map((p) => dot(p, u)), tolerance), face: dot(a, n), outward: Math.sign(dot(normal, n)), gridIndex };
     });
   });
-  return sides.flatMap((side) => {
-    const room = roomChains.find((c) => c.side === side);
-    let options = candidates.filter((c) => c.side === side);
-    if (room) {
-      const aligned = options.filter((c) => angleDistance(c.angle, room.angle) <= 2);
-      if (aligned.length) options = aligned;
-      options = options.filter((c) => {
-        if (angleDistance(c.angle, room.angle) > 2) return true;
-        return c.coordinates[0] < room.coordinates[room.coordinates.length - 1] + tolerance && c.coordinates[c.coordinates.length - 1] > room.coordinates[0] - tolerance;
-      });
-    }
-    options.sort((a, b) => {
-      const axis = side === "top" ? { x: 0, y: -1 } : side === "bottom" ? { x: 0, y: 1 } : side === "left" ? { x: -1, y: 0 } : { x: 1, y: 0 };
-      const support = (c: ExteriorChain) => { const { u, n } = dimensionBasis(c.angle); const s = (c.coordinates[0] + c.coordinates[c.coordinates.length - 1]) / 2; return dot({ x: u.x * s + n.x * c.face, y: u.y * s + n.y * c.face }, axis); };
-      return support(b) - support(a);
-    });
-    return options[0] ? [options[0]] : [];
-  });
+  // One outermost grid boundary per side and orientation, parallel to that side's slope.
+  const result: ExteriorChain[] = [];
+  for (const c of candidates) {
+    const i = result.findIndex((r) => r.side === c.side && angleDistance(r.angle, c.angle) <= 2);
+    if (i < 0) result.push(c);
+    else if (c.outward * c.face > result[i].outward * result[i].face) result[i] = c;
+  }
+  void roomChains; void tolerance;
+  return result;
 }
