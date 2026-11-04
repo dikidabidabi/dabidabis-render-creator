@@ -252,6 +252,10 @@
 }
 
 /* Scoped palettes preserve the original Tosca slide and white wall geometry. */
+[data-architectural-style] {
+  --detail-dimension-ink: var(--architectural-ink);
+}
+
 [data-architectural-style="brown"] {
   --architectural-door-ink: var(--architectural-wall-light);
   --architectural-grid-ink: var(--architectural-wall-light);
