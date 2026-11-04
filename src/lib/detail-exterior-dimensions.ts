@@ -24,11 +24,24 @@ export function exteriorRoomChains(rooms: { id: string; points: DimensionPoint[]
     const minCross = Math.min(...cross), maxCross = Math.max(...cross);
     return [-1, 1].flatMap((outward) => {
       const face = outward < 0 ? minCross : maxCross;
-      // Hanya ruang terluar yang menyentuh muka sisi ini yang menyumbang
-      // proyeksi tarikan dimensi; ruang di belakangnya tidak diukur.
+      // Ruang terluar diukur lokal per posisi sepanjang sisi: sebuah ruang
+      // menyumbang proyeksi tarikan dimensi bila tidak ada ruang lain yang
+      // tumpang tindih rentangnya dan menjorok lebih keluar darinya. Dengan
+      // begitu bangunan berbentuk L tetap terukur di kedua segmen sisinya.
       const outerRooms = rooms.filter((room) => {
         const roomCross = room.points.map((p) => dot(p, n));
-        return outward < 0 ? Math.min(...roomCross) <= face + tolerance : Math.max(...roomCross) >= face - tolerance;
+        const roomU = room.points.map((p) => dot(p, u));
+        const extent = outward < 0 ? Math.min(...roomCross) : Math.max(...roomCross);
+        const uMin = Math.min(...roomU), uMax = Math.max(...roomU);
+        return !rooms.some((other) => {
+          if (other === room) return false;
+          const otherU = other.points.map((p) => dot(p, u));
+          const overlap = Math.min(uMax, Math.max(...otherU)) - Math.max(uMin, Math.min(...otherU));
+          if (overlap <= tolerance) return false;
+          const otherCross = other.points.map((p) => dot(p, n));
+          const otherExtent = outward < 0 ? Math.min(...otherCross) : Math.max(...otherCross);
+          return outward < 0 ? otherExtent < extent - tolerance : otherExtent > extent + tolerance;
+        });
       });
       const coordinates = unique(outerRooms.flatMap((room) => room.points).map((p) => dot(p, u)), tolerance);
       if (coordinates.length < 2) return [];

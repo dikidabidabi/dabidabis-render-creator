@@ -62,6 +62,19 @@ describe("detail dimensions follow grid orientation on all sides", () => {
     assert.deepEqual(top.coordinates, [0, 10]);
   });
 
+  it("measures every outermost room segment along an L-shaped side", () => {
+    const rooms = [
+      { id: "deep", points: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 8 }, { x: 0, y: 8 }] },
+      { id: "shallow", points: [{ x: 5, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 6 }, { x: 5, y: 6 }] },
+    ];
+    const chains = exteriorRoomChains(rooms, 0.01);
+    const bottom = chains.find((c) => c.side === "bottom");
+    assert.ok(bottom);
+    // Kedua ruang adalah ruang terluar pada segmennya masing-masing di sisi bawah.
+    assert.deepEqual(bottom.roomIds, ["deep", "shallow"]);
+    assert.deepEqual(bottom.coordinates, [0, 5, 12]);
+  });
+
   it("uses the millimeter grid angle when no structural grid exists", () => {
     const rooms = [{ id: "a", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 5 }, { x: 0, y: 5 }] }];
     const chains = exteriorRoomChains(rooms, 0.01, [], 15);
