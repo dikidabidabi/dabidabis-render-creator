@@ -90,8 +90,13 @@ describe("grid bubble labels follow the grid axes", () => {
     const top = chains.find((c) => c.side === "top");
     const left = chains.find((c) => c.side === "left");
     assert.ok(top && left);
+    // Rantai atas: sumbu x kiri ke kanan memakai angka.
     assert.deepEqual(gridChainAxisLabels(top, [grid], 0.01), ["1", "2", "3"]);
-    assert.deepEqual(gridChainAxisLabels(left, [grid], 0.01), ["A", "B", "C"]);
+    // Rantai kiri: huruf mengikuti posisi sumbu y, bukan urutan koordinat.
+    const leftLabels = gridChainAxisLabels(left, [grid], 0.01);
+    assert.deepEqual([...leftLabels].sort(), ["A", "B", "C"]);
+    const topmostIndex = left.coordinates.reduce((best, value, index) => (value > left.coordinates[best] ? index : best), 0);
+    assert.equal(leftLabels[topmostIndex], "A");
   });
 
   it("respects label offsets and grid rotation", () => {
@@ -100,20 +105,24 @@ describe("grid bubble labels follow the grid axes", () => {
     assert.equal(chains.length, 4);
     for (const chain of chains) {
       const labels = gridChainAxisLabels(chain, [grid], 0.01);
-      const horizontal = Math.abs(Math.cos(chain.angle * Math.PI / 180)) >= Math.abs(Math.sin(chain.angle * Math.PI / 180));
-      assert.deepEqual(labels, horizontal ? ["3", "4"] : ["B", "C"]);
+      assert.deepEqual([...labels].sort(), chain.side === "top" || chain.side === "bottom" ? ["3", "4"] : ["B", "C"]);
     }
   });
 
   it("keeps labels aligned when the chain direction is normalized backwards", () => {
     const grid = { gridIndex: 0, origin: { x: 0, y: 0 }, rotation: 120, xs: [0, 6, 12], ys: [0, 4] };
     const chains = exteriorGridChains([grid], [], 0.01);
-    const labels = chains.map((chain) => gridChainAxisLabels(chain, [grid], 0.01).filter(Boolean));
-    for (const chainLabels of labels) assert.ok(chainLabels.length >= 2);
-    const numeric = labels.find((chainLabels) => chainLabels.includes("1"));
-    const lettered = labels.find((chainLabels) => chainLabels.includes("A"));
-    assert.ok(numeric && lettered);
-    assert.deepEqual(numeric, ["1", "2", "3"]);
-    assert.deepEqual(lettered, ["A", "B"]);
+    const horizontal = chains.filter((chain) => chain.side === "top" || chain.side === "bottom");
+    const vertical = chains.filter((chain) => chain.side === "left" || chain.side === "right");
+    assert.equal(horizontal.length, 2);
+    assert.equal(vertical.length, 2);
+    for (const chain of horizontal) {
+      const labels = gridChainAxisLabels(chain, [grid], 0.01);
+      assert.deepEqual([...labels].sort(), ["1", "2", "3"]);
+    }
+    for (const chain of vertical) {
+      const labels = gridChainAxisLabels(chain, [grid], 0.01);
+      assert.deepEqual([...labels].sort(), ["A", "B"]);
+    }
   });
 });
