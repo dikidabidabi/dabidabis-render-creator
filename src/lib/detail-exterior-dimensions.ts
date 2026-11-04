@@ -20,14 +20,23 @@ export function exteriorRoomChains(rooms: { id: string; points: DimensionPoint[]
   const rotations = unique(grids.length ? grids.map((grid) => normalizedAngle(grid.rotation)) : [normalizedAngle(fallbackRotation)], 0.01);
   return rotations.flatMap((rotation) => [rotation, rotation + 90].flatMap((rawAngle) => {
     const angle = normalizedAngle(rawAngle), { u, n } = dimensionBasis(angle);
-    const coordinates = unique(points.map((p) => dot(p, u)), tolerance);
-    if (coordinates.length < 2) return [];
     const cross = points.map((p) => dot(p, n));
-    return [-1, 1].map((outward) => ({
-      side: normalSide({ x: n.x * outward, y: n.y * outward }), angle, coordinates,
-      face: outward < 0 ? Math.min(...cross) : Math.max(...cross), outward,
-      roomIds: rooms.map((room) => room.id),
-    }));
+    const minCross = Math.min(...cross), maxCross = Math.max(...cross);
+    return [-1, 1].flatMap((outward) => {
+      const face = outward < 0 ? minCross : maxCross;
+      // Hanya ruang terluar yang menyentuh muka sisi ini yang menyumbang
+      // proyeksi tarikan dimensi; ruang di belakangnya tidak diukur.
+      const outerRooms = rooms.filter((room) => {
+        const roomCross = room.points.map((p) => dot(p, n));
+        return outward < 0 ? Math.min(...roomCross) <= face + tolerance : Math.max(...roomCross) >= face - tolerance;
+      });
+      const coordinates = unique(outerRooms.flatMap((room) => room.points).map((p) => dot(p, u)), tolerance);
+      if (coordinates.length < 2) return [];
+      return [{
+        side: normalSide({ x: n.x * outward, y: n.y * outward }), angle, coordinates, face, outward,
+        roomIds: outerRooms.map((room) => room.id),
+      }];
+    });
   }));
 }
 /** Four grid boundaries, never internal grid lines or screen-axis projections. */
