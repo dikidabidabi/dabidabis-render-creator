@@ -89,7 +89,10 @@ export function gridChainAxisLabels(
     y: grid.origin.y + (x - grid.origin.x) * Math.sin(r) + (y - grid.origin.y) * Math.cos(r),
   });
   const { u } = dimensionBasis(chain.angle);
-  const horizontal = Math.abs(u.x) >= Math.abs(u.y);
+  // Rantai sejajar as x grid memakai angka; sejajar as y memakai huruf.
+  const gx = { x: Math.cos(r), y: Math.sin(r) };
+  const alongX = Math.abs(dot(u, gx)) >= Math.abs(-u.x * gx.y + u.y * gx.x);
+  const horizontal = alongX;
   const axisCount = (horizontal ? grid.xs : grid.ys).length;
   if (axisCount < 1) return [];
   // Nilai proyeksi tiap as pada kedua batas grid; rantai sisi tertentu
