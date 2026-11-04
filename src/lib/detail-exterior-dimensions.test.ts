@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { exteriorRoomChains, exteriorGridChains } from "./detail-exterior-dimensions";
+import { exteriorRoomChains, exteriorGridChains, gridChainAxisLabels } from "./detail-exterior-dimensions";
 
 const rot = (p: { x: number; y: number }, deg: number) => {
   const r = deg * Math.PI / 180;

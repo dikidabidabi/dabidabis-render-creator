@@ -87,7 +87,7 @@ export function gridChainAxisLabels(
     y: grid.origin.y + (x - grid.origin.x) * Math.sin(r) + (y - grid.origin.y) * Math.cos(r),
   });
   const { u } = dimensionBasis(chain.angle);
-  const horizontal = Math.abs(u.y) < 0.5;
+  const horizontal = Math.abs(u.x) >= Math.abs(u.y);
   const axisCount = (horizontal ? grid.xs : grid.ys).length;
   if (axisCount < 1) return [];
   // Nilai proyeksi tiap as pada kedua batas grid; rantai sisi tertentu
