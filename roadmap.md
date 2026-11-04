@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Kembalikan dimensi grid dan ruang semua sisi; keduanya mengikuti orientasi grid, bukan kemiringan ruang.
+- [ ] Uji aturan orientasi dan tampilan slide detail.
+
 - [x] Dimensi grid dan garis grid hanya sisi terluar, mengikuti arah grid.
 - [x] Dimensi ruang mengikuti sisi terluar dan kemiringan mayoritas ruang.
 - [x] Uji geometri serta tampilan slide detail dengan bangunan miring 20° pada sesi akun; proyek asli tidak tersedia di sesi pemeriksaan.
