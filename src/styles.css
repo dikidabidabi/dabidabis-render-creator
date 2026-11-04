@@ -60,6 +60,7 @@
   --architectural-shadow: #344b49;
   --architectural-line: oklch(0.16 0 0);
   --detail-opening-ink: #0a0a0a;
+  --detail-dimension-ink: #111111;
   --detail-opening-fill: #ffffff;
   --architectural-door-ink: var(--detail-opening-ink);
   --architectural-grid-ink: #555555;
