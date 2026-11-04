@@ -11,7 +11,6 @@ export const dimensionBasis = (angle: number) => {
   return { u: { x: Math.cos(r), y: Math.sin(r) }, n: { x: -Math.sin(r), y: Math.cos(r) } };
 };
 const normalizedAngle = (a: number) => ((a + 90) % 180 + 180) % 180 - 90;
-const angleDistance = (a: number, b: number) => Math.abs(normalizedAngle(a - b));
 const normalSide = (n: DimensionPoint): DimensionSide => Math.abs(n.x) > Math.abs(n.y) ? (n.x < 0 ? "left" : "right") : (n.y < 0 ? "top" : "bottom");
 const unique = (values: number[], tolerance: number) => values.filter(Number.isFinite).sort((a, b) => a - b).filter((v, i, a) => i === 0 || v - a[i - 1] > tolerance);
 /** Project room endpoints onto all four rails of the grid frame, never room-edge angles. */
