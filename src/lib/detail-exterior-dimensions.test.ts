@@ -82,3 +82,38 @@ describe("detail dimensions follow grid orientation on all sides", () => {
     assert.deepEqual(chains.map((c) => Math.round(c.angle)).sort((a, b) => a - b), [-75, -75, 15, 15]);
   });
 });
+
+describe("grid bubble labels follow the grid axes", () => {
+  it("numbers horizontal chains and letters vertical chains", () => {
+    const grid = { gridIndex: 0, origin: { x: 0, y: 0 }, rotation: 0, xs: [0, 6, 12], ys: [0, 4, 8] };
+    const chains = exteriorGridChains([grid], [], 0.01);
+    const top = chains.find((c) => c.side === "top");
+    const left = chains.find((c) => c.side === "left");
+    assert.ok(top && left);
+    assert.deepEqual(gridChainAxisLabels(top, [grid], 0.01), ["1", "2", "3"]);
+    assert.deepEqual(gridChainAxisLabels(left, [grid], 0.01), ["A", "B", "C"]);
+  });
+
+  it("respects label offsets and grid rotation", () => {
+    const grid = { gridIndex: 0, origin: { x: 10, y: 10 }, rotation: 30, xs: [10, 16], ys: [10, 15], labelOffsetX: 2, labelOffsetY: 1 };
+    const chains = exteriorGridChains([grid], [], 0.01);
+    assert.equal(chains.length, 4);
+    for (const chain of chains) {
+      const labels = gridChainAxisLabels(chain, [grid], 0.01);
+      const horizontal = Math.abs(Math.cos(chain.angle * Math.PI / 180)) >= Math.abs(Math.sin(chain.angle * Math.PI / 180));
+      assert.deepEqual(labels, horizontal ? ["3", "4"] : ["B", "C"]);
+    }
+  });
+
+  it("keeps labels aligned when the chain direction is normalized backwards", () => {
+    const grid = { gridIndex: 0, origin: { x: 0, y: 0 }, rotation: 120, xs: [0, 6, 12], ys: [0, 4] };
+    const chains = exteriorGridChains([grid], [], 0.01);
+    const labels = chains.map((chain) => gridChainAxisLabels(chain, [grid], 0.01).filter(Boolean));
+    for (const chainLabels of labels) assert.ok(chainLabels.length >= 2);
+    const numeric = labels.find((chainLabels) => chainLabels.includes("1"));
+    const lettered = labels.find((chainLabels) => chainLabels.includes("A"));
+    assert.ok(numeric && lettered);
+    assert.deepEqual(numeric, ["1", "2", "3"]);
+    assert.deepEqual(lettered, ["A", "B"]);
+  });
+});
