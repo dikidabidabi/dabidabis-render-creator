@@ -5138,12 +5138,13 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
     return { side, coordinates: values, face };
   }) : [];
   const dedupeDimensionCoordinates = (values: number[]) => values.filter(Number.isFinite).sort((a, b) => a - b).filter((v, i, all) => i === 0 || v - all[i - 1] > dimensionTolerance);
-  const outerRoomChains = exteriorRoomChains(detailRooms, dimensionTolerance);
-  const outerGridChains = exteriorGridChains(gridData.map(({ grid, gridIndex, rotation, xs, ys }) => ({ gridIndex, origin: grid.origin, rotation, xs, ys })), outerRoomChains, dimensionTolerance);
+  const dimensionGrids = gridData.map(({ grid, gridIndex, rotation, xs, ys }) => ({ gridIndex, origin: grid.origin, rotation, xs, ys }));
+  const outerRoomChains = exteriorRoomChains(detailRooms, dimensionTolerance, dimensionGrids, Number(sketch.mmGridRotation) || 0);
+  const outerGridChains = exteriorGridChains(dimensionGrids, outerRoomChains, dimensionTolerance);
   const roomChains = outerRoomChains.map((chain) => {
-    const grid = outerGridChains.find((candidate) => candidate.side === chain.side && Math.abs(Math.sin((candidate.angle - chain.angle) * Math.PI / 180)) < 0.035);
+    const matchingGrids = outerGridChains.filter((candidate) => candidate.side === chain.side && Math.abs(Math.sin((candidate.angle - chain.angle) * Math.PI / 180)) < 0.035);
     const values = [...chain.coordinates];
-    const gridCoordinates = grid?.coordinates ?? [];
+    const gridCoordinates = matchingGrids.flatMap((grid) => grid.coordinates);
     const min = values[0], max = values[values.length - 1];
     values.push(...gridCoordinates.filter((coordinate) => coordinate >= min - dimensionTolerance && coordinate <= max + dimensionTolerance));
     return { ...chain, coordinates: mergeCrowdedDimensions(dedupeDimensionCoordinates(values), gridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }) };

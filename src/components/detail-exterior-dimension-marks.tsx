@@ -22,10 +22,10 @@ export function DetailExteriorDimensionMarks({ chain, offset, fontSize, strokeWi
 }
 export function DetailExteriorGridLines({ chains, strokeWidth, dash }: { chains: ExteriorChain[]; strokeWidth: number; dash: string }) {
   return <g data-detail-grid="true" stroke="var(--detail-dimension-ink)" strokeWidth={strokeWidth} strokeDasharray={dash} opacity={0.72} pointerEvents="none">
-    {chains.map((chain) => {
+    {chains.map((chain, index) => {
       const { u, n } = dimensionBasis(chain.angle);
       const a = chain.coordinates[0], b = chain.coordinates[chain.coordinates.length - 1];
-      return <line key={chain.side} data-grid-side={chain.side} x1={u.x * a + n.x * chain.face} y1={u.y * a + n.y * chain.face} x2={u.x * b + n.x * chain.face} y2={u.y * b + n.y * chain.face} />;
+      return <line key={`${chain.gridIndex}-${chain.side}-${index}`} data-grid-side={chain.side} x1={u.x * a + n.x * chain.face} y1={u.y * a + n.y * chain.face} x2={u.x * b + n.x * chain.face} y2={u.y * b + n.y * chain.face} />;
     })}
   </g>;
 }
