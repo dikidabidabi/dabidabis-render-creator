@@ -128,6 +128,8 @@ import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 import { detailCorners, detailIntersectsRoom, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
 import { detailDimensionVisibility, mergeCrowdedDimensions } from "@/lib/detail-dimensions";
+import { exteriorRoomChains, exteriorGridChains } from "@/lib/detail-exterior-dimensions";
+import { DetailExteriorDimensionMarks, DetailExteriorGridLines } from "@/components/detail-exterior-dimension-marks";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -4985,12 +4987,6 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
         }))];
     }));
   });
-  const roomDimensionSegments = computeStraightSegments(lines.map((line) => ({
-    a: line.a,
-    b: line.b,
-    kind: line.kind,
-    levelId: line.levelId,
-  })));
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
   // Permukaan material dipakai sebagai acuan ukuran bersih dan proyeksi luar.
   const wallFaces = computeStraightSegments((sketch.lines ?? []).map((line) => ({
@@ -5141,158 +5137,18 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
     }
     return { side, coordinates: values, face };
   }) : [];
-  const roomDimensionPoints = (() => {
-    const junctions: { point: Point; directions: Point[] }[] = [];
-    for (const segment of roomDimensionSegments) {
-      for (const [point, other] of [[segment.a, segment.b], [segment.b, segment.a]] as const) {
-        let junction = junctions.find((candidate) => Math.hypot(candidate.point.x - point.x, candidate.point.y - point.y) <= dimensionTolerance);
-        if (!junction) {
-          junction = { point, directions: [] };
-          junctions.push(junction);
-        }
-        const dx = other.x - point.x;
-        const dy = other.y - point.y;
-        const length = Math.hypot(dx, dy);
-        if (length > dimensionTolerance) junction.directions.push({ x: dx / length, y: dy / length });
-      }
-    }
-    // Hanya pertemuan yang memiliki sedikitnya sepasang garis tegak lurus.
-    // Toleransi dua derajat mengakomodasi pembulatan koordinat hasil gambar.
-    const maxRightAngleDot = Math.sin((2 * Math.PI) / 180);
-    return junctions
-      .filter(({ directions }) => directions.some((first, firstIndex) =>
-        directions.slice(firstIndex + 1).some((second) => Math.abs(first.x * second.x + first.y * second.y) <= maxRightAngleDot),
-      ))
-      .map(({ point }) => point);
-  })();
-  const dedupeDimensionCoordinates = (values: number[]): number[] => {
-    const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
-    const unique: number[] = [];
-    for (const value of sorted) {
-      if (unique.length === 0 || Math.abs(value - unique[unique.length - 1]) > dimensionTolerance) unique.push(value);
-    }
-    return unique;
-  };
-  const rotateGridPoint = (point: Point, grid: StructuralGrid): Point => {
-    const radians = ((Number(grid.rotation) || 0) * Math.PI) / 180;
-    if (Math.abs(radians) < 1e-9) return point;
-    const dx = point.x - grid.origin.x;
-    const dy = point.y - grid.origin.y;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    return {
-      x: grid.origin.x + dx * cos - dy * sin,
-      y: grid.origin.y + dx * sin + dy * cos,
-    };
-  };
-  const gridDimensionChains = gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
-    const horizontalX = Math.abs(Math.cos((rotation * Math.PI) / 180)) >= Math.abs(Math.sin((rotation * Math.PI) / 180));
-    const xAxisPoints = xs.map((x) => rotateGridPoint({ x, y: ys[0] }, grid));
-    const yAxisPoints = ys.map((y) => rotateGridPoint({ x: xs[0], y }, grid));
-    return { gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints };
+  const dedupeDimensionCoordinates = (values: number[]) => values.filter(Number.isFinite).sort((a, b) => a - b).filter((v, i, all) => i === 0 || v - all[i - 1] > dimensionTolerance);
+  const outerRoomChains = exteriorRoomChains(detailRooms, dimensionTolerance);
+  const outerGridChains = exteriorGridChains(gridData.map(({ grid, gridIndex, rotation, xs, ys }) => ({ gridIndex, origin: grid.origin, rotation, xs, ys })), outerRoomChains, dimensionTolerance);
+  const roomChains = outerRoomChains.map((chain) => {
+    const grid = outerGridChains.find((candidate) => candidate.side === chain.side && Math.abs(Math.sin((candidate.angle - chain.angle) * Math.PI / 180)) < 0.035);
+    const values = [...chain.coordinates];
+    const gridCoordinates = grid?.coordinates ?? [];
+    const min = values[0], max = values[values.length - 1];
+    values.push(...gridCoordinates.filter((coordinate) => coordinate >= min - dimensionTolerance && coordinate <= max + dimensionTolerance));
+    return { ...chain, coordinates: mergeCrowdedDimensions(dedupeDimensionCoordinates(values), gridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }) };
   });
-  const horizontalGridCoordinates = dedupeDimensionCoordinates(gridDimensionChains.flatMap(({ horizontalX, xAxisPoints, yAxisPoints }) =>
-    (horizontalX ? xAxisPoints : yAxisPoints).map((point) => point.x),
-  ));
-  const verticalGridCoordinates = dedupeDimensionCoordinates(gridDimensionChains.flatMap(({ horizontalX, xAxisPoints, yAxisPoints }) =>
-    (horizontalX ? yAxisPoints : xAxisPoints).map((point) => point.y),
-  ));
-  const includeBracketingGridCoordinates = (roomCoordinates: number[], gridCoordinates: number[]): number[] => {
-    if (roomCoordinates.length === 0 || gridCoordinates.length === 0) return roomCoordinates;
-    const minRoom = roomCoordinates[0];
-    const maxRoom = roomCoordinates[roomCoordinates.length - 1];
-    const inside = gridCoordinates.filter((coordinate) => coordinate >= minRoom - dimensionTolerance && coordinate <= maxRoom + dimensionTolerance);
-    const before = [...gridCoordinates].reverse().find((coordinate) => coordinate < minRoom - dimensionTolerance);
-    const after = gridCoordinates.find((coordinate) => coordinate > maxRoom + dimensionTolerance);
-    return dedupeDimensionCoordinates([
-      ...roomCoordinates,
-      ...inside,
-      ...(before == null ? [] : [before]),
-      ...(after == null ? [] : [after]),
-    ]);
-  };
-  const gridDepthCandidates = gridData.map(({ spansX, spansY, rotation }) => {
-    const horizontalX = Math.abs(Math.cos((rotation * Math.PI) / 180)) >= Math.abs(Math.sin((rotation * Math.PI) / 180));
-    const horizontalSpans = horizontalX ? spansX : spansY;
-    const verticalSpans = horizontalX ? spansY : spansX;
-    return {
-      left: horizontalSpans[0],
-      right: horizontalSpans[horizontalSpans.length - 1],
-      top: verticalSpans[0],
-      bottom: verticalSpans[verticalSpans.length - 1],
-    };
-  });
-  const sideDepth = (side: "left" | "right" | "top" | "bottom") => {
-    const spans = gridDepthCandidates.map((candidate) => candidate[side]).filter((span): span is number => Number.isFinite(span) && span > 0);
-    return spans.length > 0 ? Math.max(...spans) * pxPerM : Number.POSITIVE_INFINITY;
-  };
-  const leftProjectionDepth = sideDepth("left");
-  const rightProjectionDepth = sideDepth("right");
-  const topProjectionDepth = sideDepth("top");
-  const bottomProjectionDepth = sideDepth("bottom");
-  const withinHorizontalPerimeter = (point: Point) => point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.maxX + dimensionTolerance;
-  const withinVerticalPerimeter = (point: Point) => point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.maxY + dimensionTolerance;
-  const roomXsTop = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
-    .filter((point) => withinHorizontalPerimeter(point) && point.y >= perimeterBounds.minY - dimensionTolerance && point.y <= perimeterBounds.minY + topProjectionDepth + dimensionTolerance)
-    .map((point) => point.x)), horizontalGridCoordinates);
-  const roomXsBottom = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
-    .filter((point) => withinHorizontalPerimeter(point) && point.y <= perimeterBounds.maxY + dimensionTolerance && point.y >= perimeterBounds.maxY - bottomProjectionDepth - dimensionTolerance)
-    .map((point) => point.x)), horizontalGridCoordinates);
-  const roomYsLeft = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
-    .filter((point) => withinVerticalPerimeter(point) && point.x >= perimeterBounds.minX - dimensionTolerance && point.x <= perimeterBounds.minX + leftProjectionDepth + dimensionTolerance)
-    .map((point) => point.y)), verticalGridCoordinates);
-  const roomYsRight = includeBracketingGridCoordinates(dedupeDimensionCoordinates(roomDimensionPoints
-    .filter((point) => withinVerticalPerimeter(point) && point.x <= perimeterBounds.maxX + dimensionTolerance && point.x >= perimeterBounds.maxX - rightProjectionDepth - dimensionTolerance)
-    .map((point) => point.y)), verticalGridCoordinates);
-  const roomOffset = pxPerM;
-  const gridOffset = pxPerM * 2;
   const tickSize = dimFont * 0.34;
-  const renderHorizontalDimension = (
-    key: string,
-    coordinates: number[],
-    labels: number[],
-    y: number,
-    extensionY: number,
-    labelAbove: boolean,
-    fontScale = 1,
-  ) => coordinates.length >= 2 ? <g key={key} fill={architectural ? "var(--architectural-ink)" : "#111111"} stroke={architectural ? "var(--architectural-ink)" : "#111111"} strokeWidth={dimStroke} pointerEvents="none">
-    {coordinates.slice(0, -1).map((x, index) => {
-      const nextX = coordinates[index + 1];
-      const label = labels[index] ?? Math.round((Math.abs(nextX - x) / pxPerM) * 1000);
-      const labelFont = dimFont * fontScale;
-      const outerTickY = y + (labelAbove ? -tickSize : tickSize);
-      return <g key={`${key}-${index}`}>
-        <line x1={x} y1={y} x2={nextX} y2={y} />
-        <line x1={x} y1={outerTickY} x2={x} y2={extensionY} />
-        {index === coordinates.length - 2 && <line x1={nextX} y1={outerTickY} x2={nextX} y2={extensionY} />}
-        <text x={(x + nextX) / 2} y={y + (labelAbove ? -labelFont * 0.35 : labelFont * 1.05)} textAnchor="middle" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600}>{label}</text>
-      </g>;
-    })}
-  </g> : null;
-  const renderVerticalDimension = (
-    key: string,
-    coordinates: number[],
-    labels: number[],
-    x: number,
-    extensionX: number,
-    labelLeft: boolean,
-    fontScale = 1,
-  ) => coordinates.length >= 2 ? <g key={key} fill={architectural ? "var(--architectural-ink)" : "#111111"} stroke={architectural ? "var(--architectural-ink)" : "#111111"} strokeWidth={dimStroke} pointerEvents="none">
-    {coordinates.slice(0, -1).map((y, index) => {
-      const nextY = coordinates[index + 1];
-      const label = labels[index] ?? Math.round((Math.abs(nextY - y) / pxPerM) * 1000);
-      const labelFont = dimFont * fontScale;
-      const textX = x + (labelLeft ? -labelFont * 0.4 : labelFont * 0.4);
-      const textY = (y + nextY) / 2;
-      const outerTickX = x + (labelLeft ? -tickSize : tickSize);
-      return <g key={`${key}-${index}`}>
-        <line x1={x} y1={y} x2={x} y2={nextY} />
-        <line x1={outerTickX} y1={y} x2={extensionX} y2={y} />
-        {index === coordinates.length - 2 && <line x1={outerTickX} y1={nextY} x2={extensionX} y2={nextY} />}
-        <text x={textX} y={textY} textAnchor="middle" dominantBaseline="central" stroke="none" fontFamily="Manrope, sans-serif" fontSize={labelFont} fontWeight={600} transform={`rotate(-90 ${textX} ${textY})`}>{label}</text>
-      </g>;
-    })}
-  </g> : null;
   const interiorDimensionMarks = interiorRoomDimensions.map(({ a, b, ux, uy, nx, ny, clear, roomId, index }) => {
     const offset = pxPerM * 0.5 + (interiorShortOffsets.get(`${roomId}-${index}`) ?? 0);
     const x1 = a.x + nx * offset, y1 = a.y + ny * offset;
@@ -5390,41 +5246,19 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
           items={area.showFurniture === false ? [] : furnitureForVisibleRooms(sketch.detailAreas ?? [], level.id, levelLayers.filter((layer) => !isLahan(layer.name) && !isVoid(layer.name)), detailRooms).filter((item) => item.x >= detailMinX && item.x <= detailMaxX && item.y >= detailMinY && item.y <= detailMaxY)}
           sw={sw} prefix={`detail-furniture-${patternId}`} architectural={architectural} pxPerM={pxPerM}
         />}
-        {(!architectural || area.dimensions) && gridData.map(({ grid, gridIndex, xs, ys, rotation }) => {
-          if (!xs.length || !ys.length) return null;
-          const dash = `${sw * 0.004} ${sw * 0.003}`;
-          const xStart = xs[0], xEnd = xs[xs.length - 1];
-          const yStart = ys[0], yEnd = ys[ys.length - 1];
-          return (
-            <g key={`detail-grid-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
-              <g data-detail-grid="true" stroke={architectural ? "var(--architectural-grid-ink)" : "#555555"} strokeWidth={gridStroke} strokeDasharray={dash} opacity={0.72}>
-                {xs.map((x, index) => <line key={`gx-${index}`} x1={x} y1={yStart} x2={x} y2={yEnd} />)}
-                {ys.map((y, index) => <line key={`gy-${index}`} x1={xStart} y1={y} x2={xEnd} y2={y} />)}
-              </g>
-            </g>
-          );
-        })}
+        {(!architectural || dimensionVisibility.grid) && <DetailExteriorGridLines chains={outerGridChains} strokeWidth={gridStroke} dash={`${sw * 0.004} ${sw * 0.003}`} />}
         {area.dimensions && <g data-detail-dimensions="true">
           {dimensionVisibility.room && <g data-detail-room-dimensions="true">
-          {renderHorizontalDimension("room-top", mergeCrowdedDimensions(roomXsTop, horizontalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.minY - roomOffset, perimeterBounds.minY, true, 0.75)}
-          {renderHorizontalDimension("room-bottom", mergeCrowdedDimensions(roomXsBottom, horizontalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.maxY + roomOffset, perimeterBounds.maxY, false, 0.75)}
-          {renderVerticalDimension("room-left", mergeCrowdedDimensions(roomYsLeft, verticalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.minX - roomOffset, perimeterBounds.minX, true, 0.75)}
-          {renderVerticalDimension("room-right", mergeCrowdedDimensions(roomYsRight, verticalGridCoordinates, { pxPerM, fontSize: dimFont * 0.75, tolerance: dimensionTolerance }), [], perimeterBounds.maxX + roomOffset, perimeterBounds.maxX, false, 0.75)}
+            {roomChains.map((chain) => <DetailExteriorDimensionMarks key={chain.side} chain={chain} offset={pxPerM} fontSize={dimFont * 0.75} strokeWidth={dimStroke} pxPerM={pxPerM} />)}
           </g>}
-          {dimensionVisibility.grid && <g data-detail-grid-dimensions="true">{gridDimensionChains.flatMap(({ gridIndex, spansX, spansY, horizontalX, xAxisPoints, yAxisPoints }) => {
-            const horizontalPoints = horizontalX ? xAxisPoints : yAxisPoints;
-            const verticalPoints = horizontalX ? yAxisPoints : xAxisPoints;
-            const horizontalLabels = (horizontalX ? spansX : spansY).map((span) => Math.round(span * 1000));
-            const verticalLabels = (horizontalX ? spansY : spansX).map((span) => Math.round(span * 1000));
-            const horizontalCoordinates = horizontalPoints.map((point) => point.x);
-            const verticalCoordinates = verticalPoints.map((point) => point.y);
-            return [
-              renderHorizontalDimension(`grid-top-${gridIndex}`, horizontalCoordinates, horizontalLabels, perimeterBounds.minY - gridOffset, perimeterBounds.minY, true),
-              renderHorizontalDimension(`grid-bottom-${gridIndex}`, horizontalCoordinates, horizontalLabels, perimeterBounds.maxY + gridOffset, perimeterBounds.maxY, false),
-              renderVerticalDimension(`grid-left-${gridIndex}`, verticalCoordinates, verticalLabels, perimeterBounds.minX - gridOffset, perimeterBounds.minX, true),
-              renderVerticalDimension(`grid-right-${gridIndex}`, verticalCoordinates, verticalLabels, perimeterBounds.maxX + gridOffset, perimeterBounds.maxX, false),
-            ];
-          })}</g>}
+          {dimensionVisibility.grid && <g data-detail-grid-dimensions="true">
+            {outerGridChains.map((chain) => {
+              const room = outerRoomChains.find((candidate) => candidate.side === chain.side);
+              const roomFace = room && Math.abs(Math.sin((room.angle - chain.angle) * Math.PI / 180)) < 0.035 ? room.face : chain.face;
+              const face = chain.outward * Math.max(chain.outward * chain.face, chain.outward * roomFace);
+              return <DetailExteriorDimensionMarks key={chain.side} chain={chain} offset={pxPerM * 2 + Math.abs(face - chain.face)} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />;
+            })}
+          </g>}
         </g>}
         <g data-detail-secondary-notation="true">
         <DetailVoidNotation
