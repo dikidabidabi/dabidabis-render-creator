@@ -5,7 +5,6 @@ export type ExteriorChain = {
   outward: number; roomIds?: string[]; gridIndex?: number;
 };
 export type DimensionGrid = { gridIndex: number; origin: DimensionPoint; rotation: number; xs: number[]; ys: number[] };
-const sides: DimensionSide[] = ["top", "bottom", "left", "right"];
 const dot = (p: DimensionPoint, q: DimensionPoint) => p.x * q.x + p.y * q.y;
 export const dimensionBasis = (angle: number) => {
   const r = angle * Math.PI / 180;
@@ -15,47 +14,22 @@ const normalizedAngle = (a: number) => ((a + 90) % 180 + 180) % 180 - 90;
 const angleDistance = (a: number, b: number) => Math.abs(normalizedAngle(a - b));
 const normalSide = (n: DimensionPoint): DimensionSide => Math.abs(n.x) > Math.abs(n.y) ? (n.x < 0 ? "left" : "right") : (n.y < 0 ? "top" : "bottom");
 const unique = (values: number[], tolerance: number) => values.filter(Number.isFinite).sort((a, b) => a - b).filter((v, i, a) => i === 0 || v - a[i - 1] > tolerance);
-function pointInside(p: DimensionPoint, polygon: DimensionPoint[]) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[i], b = polygon[j];
-    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
-}
-/** Exterior support edges only: interior partitions cannot supply dimension points. */
-export function exteriorRoomChains(rooms: { id: string; points: DimensionPoint[] }[], tolerance: number): ExteriorChain[] {
-  const edges = rooms.flatMap((room) => {
-    const area = room.points.reduce((s, p, i) => { const q = room.points[(i + 1) % room.points.length]; return s + p.x * q.y - q.x * p.y; }, 0);
-    return room.points.flatMap((a, i) => {
-      const b = room.points[(i + 1) % room.points.length], length = Math.hypot(b.x - a.x, b.y - a.y);
-      if (length <= tolerance) return [];
-      const normal = { x: (b.y - a.y) / length * Math.sign(area), y: -(b.x - a.x) / length * Math.sign(area) };
-      const exposed = [0.2, 0.5, 0.8].some((t) => {
-        const p = { x: a.x + (b.x - a.x) * t + normal.x * tolerance, y: a.y + (b.y - a.y) * t + normal.y * tolerance };
-        return !rooms.some((other) => other.id !== room.id && pointInside(p, other.points));
-      });
-      return exposed ? [{ a, b, length, normal, side: normalSide(normal), angle: normalizedAngle(Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI), roomId: room.id }] : [];
-    });
-  });
-  return sides.flatMap((side) => {
-    const candidates = edges.filter((e) => e.side === side);
-    const groups: typeof candidates[] = [];
-    for (const edge of candidates) {
-      const group = groups.find((g) => angleDistance(g[0].angle, edge.angle) <= 2);
-      if (group) group.push(edge); else groups.push([edge]);
-    }
-    // Every orientation cluster keeps its own outermost face so clusters never share one crossing chain.
-    return groups.flatMap((selected) => {
-      const longest = [...selected].sort((a, b) => b.length - a.length)[0];
-      const angle = longest.angle, { u, n } = dimensionBasis(angle);
-      const outward = Math.sign(dot(longest.normal, n));
-      const face = outward * Math.max(...selected.flatMap((e) => [dot(e.a, n) * outward, dot(e.b, n) * outward]));
-      const outer = selected.filter((e) => Math.abs(dot(e.a, n) - face) <= tolerance * 2 && Math.abs(dot(e.b, n) - face) <= tolerance * 2);
-      const coordinates = unique(outer.flatMap((e) => [dot(e.a, u), dot(e.b, u)]), tolerance);
-      return coordinates.length >= 2 ? [{ side, angle, face, outward, coordinates, roomIds: [...new Set(outer.map((e) => e.roomId))] }] : [];
-    });
-  });
+/** Project room endpoints onto all four rails of the grid frame, never room-edge angles. */
+export function exteriorRoomChains(rooms: { id: string; points: DimensionPoint[] }[], tolerance: number, grids: DimensionGrid[] = [], fallbackRotation = 0): ExteriorChain[] {
+  const points = rooms.flatMap((room) => room.points).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (points.length < 2) return [];
+  const rotations = unique(grids.length ? grids.map((grid) => normalizedAngle(grid.rotation)) : [normalizedAngle(fallbackRotation)], 0.01);
+  return rotations.flatMap((rotation) => [rotation, rotation + 90].flatMap((rawAngle) => {
+    const angle = normalizedAngle(rawAngle), { u, n } = dimensionBasis(angle);
+    const coordinates = unique(points.map((p) => dot(p, u)), tolerance);
+    if (coordinates.length < 2) return [];
+    const cross = points.map((p) => dot(p, n));
+    return [-1, 1].map((outward) => ({
+      side: normalSide({ x: n.x * outward, y: n.y * outward }), angle, coordinates,
+      face: outward < 0 ? Math.min(...cross) : Math.max(...cross), outward,
+      roomIds: rooms.map((room) => room.id),
+    }));
+  }));
 }
 /** Four grid boundaries, never internal grid lines or screen-axis projections. */
 export function exteriorGridChains(grids: DimensionGrid[], roomChains: ExteriorChain[], tolerance: number): ExteriorChain[] {
@@ -74,13 +48,7 @@ export function exteriorGridChains(grids: DimensionGrid[], roomChains: ExteriorC
       return { side: normalSide(normal), angle, coordinates: unique(points.map((p) => dot(p, u)), tolerance), face: dot(a, n), outward: Math.sign(dot(normal, n)), gridIndex };
     });
   });
-  // One outermost grid boundary per side and orientation, parallel to that side's slope.
-  const result: ExteriorChain[] = [];
-  for (const c of candidates) {
-    const i = result.findIndex((r) => r.side === c.side && angleDistance(r.angle, c.angle) <= 2);
-    if (i < 0) result.push(c);
-    else if (c.outward * c.face > result[i].outward * result[i].face) result[i] = c;
-  }
+  // Keep all four sides of every grid, including grids sharing an orientation.
   void roomChains; void tolerance;
-  return result;
+  return candidates;
 }
