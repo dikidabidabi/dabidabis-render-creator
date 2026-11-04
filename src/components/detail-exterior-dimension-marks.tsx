@@ -20,6 +20,22 @@ export function DetailExteriorDimensionMarks({ chain, offset, fontSize, strokeWi
     })}
   </g>;
 }
+export function DetailExteriorGridBubbles({ chain, labels, offset, fontSize, strokeWidth }: {
+  chain: ExteriorChain; labels: string[]; offset: number; fontSize: number; strokeWidth: number;
+}) {
+  if (!chain.coordinates.length) return null;
+  const rail = chain.face + chain.outward * offset;
+  const radius = fontSize * 0.8;
+  const center = rail + chain.outward * (radius + fontSize * 0.3);
+  return <g data-grid-bubbles="true" data-dimension-side={chain.side} transform={`rotate(${chain.angle})`}
+    fill="var(--detail-dimension-ink)" stroke="var(--detail-dimension-ink)" strokeWidth={strokeWidth} pointerEvents="none">
+    {chain.coordinates.map((x, index) => !labels[index] ? null : <g key={index}>
+      <line x1={x} y1={chain.face} x2={x} y2={center - chain.outward * radius} strokeWidth={strokeWidth * 0.8} />
+      <circle cx={x} cy={center} r={radius} fill="none" strokeWidth={strokeWidth * 1.4} />
+      <text x={x} y={center} textAnchor="middle" dominantBaseline="central" stroke="none" fontFamily="Manrope, sans-serif" fontSize={fontSize} fontWeight={700}>{labels[index]}</text>
+    </g>)}
+  </g>;
+}
 export function DetailExteriorGridLines({ chains, strokeWidth, dash }: { chains: ExteriorChain[]; strokeWidth: number; dash: string }) {
   return <g data-detail-grid="true" stroke="var(--detail-dimension-ink)" strokeWidth={strokeWidth} strokeDasharray={dash} opacity={0.72} pointerEvents="none">
     {chains.map((chain, index) => {

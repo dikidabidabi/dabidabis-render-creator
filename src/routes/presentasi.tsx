@@ -128,8 +128,8 @@ import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 import { detailCorners, detailIntersectsRoom, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
 import { detailDimensionVisibility, mergeCrowdedDimensions } from "@/lib/detail-dimensions";
-import { exteriorRoomChains, exteriorGridChains } from "@/lib/detail-exterior-dimensions";
-import { DetailExteriorDimensionMarks, DetailExteriorGridLines } from "@/components/detail-exterior-dimension-marks";
+import { exteriorRoomChains, exteriorGridChains, gridChainAxisLabels } from "@/lib/detail-exterior-dimensions";
+import { DetailExteriorDimensionMarks, DetailExteriorGridLines, DetailExteriorGridBubbles } from "@/components/detail-exterior-dimension-marks";
 
 // ---------- Types ----------
 type Point = { x: number; y: number };
@@ -5139,6 +5139,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
   }) : [];
   const dedupeDimensionCoordinates = (values: number[]) => values.filter(Number.isFinite).sort((a, b) => a - b).filter((v, i, all) => i === 0 || v - all[i - 1] > dimensionTolerance);
   const dimensionGrids = gridData.map(({ grid, gridIndex, rotation, xs, ys }) => ({ gridIndex, origin: grid.origin, rotation, xs, ys }));
+  const bubbleGrids = gridData.map(({ grid, gridIndex, rotation, xs, ys }) => ({ gridIndex, origin: grid.origin, rotation, xs, ys, labelOffsetX: grid.labelOffsetX, labelOffsetY: grid.labelOffsetY }));
   const outerRoomChains = exteriorRoomChains(detailRooms, dimensionTolerance, dimensionGrids, Number(sketch.mmGridRotation) || 0);
   const outerGridChains = exteriorGridChains(dimensionGrids, outerRoomChains, dimensionTolerance);
   const roomChains = outerRoomChains.map((chain) => {
@@ -5257,7 +5258,11 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
               const room = outerRoomChains.find((candidate) => candidate.side === chain.side && Math.abs(Math.sin((candidate.angle - chain.angle) * Math.PI / 180)) < 0.035);
               const roomFace = room && Math.abs(Math.sin((room.angle - chain.angle) * Math.PI / 180)) < 0.035 ? room.face : chain.face;
               const face = chain.outward * Math.max(chain.outward * chain.face, chain.outward * roomFace);
-              return <DetailExteriorDimensionMarks key={`${chain.side}-${i}`} chain={chain} offset={pxPerM * 2 + Math.abs(face - chain.face)} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />;
+              const offset = pxPerM * 2 + Math.abs(face - chain.face);
+              return <g key={`${chain.side}-${i}`}>
+                <DetailExteriorDimensionMarks chain={chain} offset={offset} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />
+                <DetailExteriorGridBubbles chain={chain} labels={gridChainAxisLabels(chain, bubbleGrids, dimensionTolerance)} offset={offset} fontSize={dimFont} strokeWidth={dimStroke} />
+              </g>;
             })}
           </g>}
         </g>}

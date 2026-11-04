@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { exteriorRoomChains, exteriorGridChains } from "./detail-exterior-dimensions";
+import { exteriorRoomChains, exteriorGridChains, gridChainAxisLabels } from "./detail-exterior-dimensions";
 
 const rot = (p: { x: number; y: number }, deg: number) => {
   const r = deg * Math.PI / 180;
@@ -80,5 +80,48 @@ describe("detail dimensions follow grid orientation on all sides", () => {
     const chains = exteriorRoomChains(rooms, 0.01, [], 15);
     assert.equal(chains.length, 4);
     assert.deepEqual(chains.map((c) => Math.round(c.angle)).sort((a, b) => a - b), [-75, -75, 15, 15]);
+  });
+});
+
+describe("grid bubble labels follow the grid axes", () => {
+  it("numbers horizontal chains and letters vertical chains", () => {
+    const grid = { gridIndex: 0, origin: { x: 0, y: 0 }, rotation: 0, xs: [0, 6, 12], ys: [0, 4, 8] };
+    const chains = exteriorGridChains([grid], [], 0.01);
+    const top = chains.find((c) => c.side === "top");
+    const left = chains.find((c) => c.side === "left");
+    assert.ok(top && left);
+    // Rantai atas: sumbu x kiri ke kanan memakai angka.
+    assert.deepEqual(gridChainAxisLabels(top, [grid], 0.01), ["1", "2", "3"]);
+    // Rantai kiri: huruf mengikuti posisi sumbu y, bukan urutan koordinat.
+    const leftLabels = gridChainAxisLabels(left, [grid], 0.01);
+    assert.deepEqual([...leftLabels].sort(), ["A", "B", "C"]);
+    const topmostIndex = left.coordinates.reduce((best, value, index) => (value > left.coordinates[best] ? index : best), 0);
+    assert.equal(leftLabels[topmostIndex], "A");
+  });
+
+  it("respects label offsets and grid rotation", () => {
+    const grid = { gridIndex: 0, origin: { x: 10, y: 10 }, rotation: 30, xs: [10, 16], ys: [10, 15], labelOffsetX: 2, labelOffsetY: 1 };
+    const chains = exteriorGridChains([grid], [], 0.01);
+    assert.equal(chains.length, 4);
+    for (const chain of chains) {
+      const labels = gridChainAxisLabels(chain, [grid], 0.01);
+      assert.deepEqual([...labels].sort(), chain.side === "top" || chain.side === "bottom" ? ["3", "4"] : ["B", "C"]);
+    }
+  });
+
+  it("keeps labels aligned when the chain direction is normalized backwards", () => {
+    const grid = { gridIndex: 0, origin: { x: 0, y: 0 }, rotation: 120, xs: [0, 6, 12], ys: [0, 4] };
+    const chains = exteriorGridChains([grid], [], 0.01);
+    assert.equal(chains.length, 4);
+    const numeric = chains.filter((chain) => gridChainAxisLabels(chain, [grid], 0.01).includes("1"));
+    const lettered = chains.filter((chain) => gridChainAxisLabels(chain, [grid], 0.01).includes("A"));
+    assert.equal(numeric.length, 2);
+    assert.equal(lettered.length, 2);
+    for (const chain of numeric) {
+      assert.deepEqual([...gridChainAxisLabels(chain, [grid], 0.01)].sort(), ["1", "2", "3"]);
+    }
+    for (const chain of lettered) {
+      assert.deepEqual([...gridChainAxisLabels(chain, [grid], 0.01)].sort(), ["A", "B"]);
+    }
   });
 });

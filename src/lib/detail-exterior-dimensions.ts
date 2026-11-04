@@ -1,3 +1,5 @@
+import { xAxisLabelAt, yAxisLabelAt } from "@/lib/structural-grid";
+
 export type DimensionPoint = { x: number; y: number };
 export type DimensionSide = "top" | "bottom" | "left" | "right";
 export type ExteriorChain = {
@@ -72,4 +74,47 @@ export function exteriorGridChains(grids: DimensionGrid[], roomChains: ExteriorC
   // Keep all four sides of every grid, including grids sharing an orientation.
   void roomChains; void tolerance;
   return candidates;
+}
+/** Label sumbu per rantai grid: bubble angka pada rantai horizontal, huruf pada rantai vertikal. */
+export function gridChainAxisLabels(
+  chain: ExteriorChain,
+  grids: { gridIndex: number; origin: DimensionPoint; rotation: number; xs: number[]; ys: number[]; labelOffsetX?: number; labelOffsetY?: number }[],
+  tolerance: number,
+): string[] {
+  const grid = grids.find((candidate) => candidate.gridIndex === chain.gridIndex);
+  if (!grid) return [];
+  const r = grid.rotation * Math.PI / 180;
+  const rotate = (x: number, y: number) => ({
+    x: grid.origin.x + (x - grid.origin.x) * Math.cos(r) - (y - grid.origin.y) * Math.sin(r),
+    y: grid.origin.y + (x - grid.origin.x) * Math.sin(r) + (y - grid.origin.y) * Math.cos(r),
+  });
+  const { u } = dimensionBasis(chain.angle);
+  // Rantai sejajar as x grid memakai angka; sejajar as y memakai huruf.
+  const gx = { x: Math.cos(r), y: Math.sin(r) };
+  const alongX = Math.abs(dot(u, gx)) >= Math.abs(-u.x * gx.y + u.y * gx.x);
+  const horizontal = alongX;
+  const axisCount = (horizontal ? grid.xs : grid.ys).length;
+  if (axisCount < 1) return [];
+  // Nilai proyeksi tiap as pada kedua batas grid; rantai sisi tertentu
+  // memakai nilai batas yang terdekat, sehingga urutan label tetap benar
+  // walau arah rantai dinormalisasi terbalik.
+  const axisProjections = (horizontal ? grid.xs : grid.ys).map((value) => {
+    const ends = horizontal
+      ? [rotate(value, grid.ys[0]), rotate(value, grid.ys[grid.ys.length - 1])]
+      : [rotate(grid.xs[0], value), rotate(grid.xs[grid.xs.length - 1], value)];
+    return ends.map((p) => dot(p, u));
+  });
+  return chain.coordinates.map((coordinate) => {
+    let best = -1, bestDist = Infinity;
+    axisProjections.forEach((ends, index) => {
+      for (const value of ends) {
+        const distance = Math.abs(value - coordinate);
+        if (distance < bestDist) { bestDist = distance; best = index; }
+      }
+    });
+    if (best < 0 || bestDist > tolerance) return "";
+    return horizontal
+      ? xAxisLabelAt(best, grid.labelOffsetX ?? 0)
+      : yAxisLabelAt(best, grid.labelOffsetY ?? 0);
+  });
 }
