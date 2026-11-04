@@ -5258,7 +5258,11 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
               const room = outerRoomChains.find((candidate) => candidate.side === chain.side && Math.abs(Math.sin((candidate.angle - chain.angle) * Math.PI / 180)) < 0.035);
               const roomFace = room && Math.abs(Math.sin((room.angle - chain.angle) * Math.PI / 180)) < 0.035 ? room.face : chain.face;
               const face = chain.outward * Math.max(chain.outward * chain.face, chain.outward * roomFace);
-              return <DetailExteriorDimensionMarks key={`${chain.side}-${i}`} chain={chain} offset={pxPerM * 2 + Math.abs(face - chain.face)} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />;
+              const offset = pxPerM * 2 + Math.abs(face - chain.face);
+              return <g key={`${chain.side}-${i}`}>
+                <DetailExteriorDimensionMarks chain={chain} offset={offset} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />
+                <DetailExteriorGridBubbles chain={chain} labels={gridChainAxisLabels(chain, bubbleGrids, dimensionTolerance)} offset={offset} fontSize={dimFont} strokeWidth={dimStroke} />
+              </g>;
             })}
           </g>}
         </g>}
