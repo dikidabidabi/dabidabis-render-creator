@@ -5249,14 +5249,14 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
         {(!architectural || dimensionVisibility.grid) && <DetailExteriorGridLines chains={outerGridChains} strokeWidth={gridStroke} dash={`${sw * 0.004} ${sw * 0.003}`} />}
         {area.dimensions && <g data-detail-dimensions="true">
           {dimensionVisibility.room && <g data-detail-room-dimensions="true">
-            {roomChains.map((chain) => <DetailExteriorDimensionMarks key={chain.side} chain={chain} offset={pxPerM} fontSize={dimFont * 0.75} strokeWidth={dimStroke} pxPerM={pxPerM} />)}
+            {roomChains.map((chain, i) => <DetailExteriorDimensionMarks key={`${chain.side}-${i}`} chain={chain} offset={pxPerM} fontSize={dimFont * 0.75} strokeWidth={dimStroke} pxPerM={pxPerM} />)}
           </g>}
           {dimensionVisibility.grid && <g data-detail-grid-dimensions="true">
-            {outerGridChains.map((chain) => {
-              const room = outerRoomChains.find((candidate) => candidate.side === chain.side);
+            {outerGridChains.map((chain, i) => {
+              const room = outerRoomChains.find((candidate) => candidate.side === chain.side && Math.abs(Math.sin((candidate.angle - chain.angle) * Math.PI / 180)) < 0.035);
               const roomFace = room && Math.abs(Math.sin((room.angle - chain.angle) * Math.PI / 180)) < 0.035 ? room.face : chain.face;
               const face = chain.outward * Math.max(chain.outward * chain.face, chain.outward * roomFace);
-              return <DetailExteriorDimensionMarks key={chain.side} chain={chain} offset={pxPerM * 2 + Math.abs(face - chain.face)} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />;
+              return <DetailExteriorDimensionMarks key={`${chain.side}-${i}`} chain={chain} offset={pxPerM * 2 + Math.abs(face - chain.face)} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />;
             })}
           </g>}
         </g>}
