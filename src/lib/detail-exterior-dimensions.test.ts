@@ -46,6 +46,22 @@ describe("detail dimensions follow grid orientation on all sides", () => {
     for (const chain of chains) assert.ok(chain.coordinates.length >= 2);
   });
 
+  it("only projects the outermost rooms on each side, never inner rooms", () => {
+    const rooms = [
+      { id: "front", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 4 }, { x: 0, y: 4 }] },
+      { id: "back", points: [{ x: 2, y: 4 }, { x: 8, y: 4 }, { x: 8, y: 8 }, { x: 2, y: 8 }] },
+    ];
+    const chains = exteriorRoomChains(rooms, 0.01);
+    const bottom = chains.find((c) => c.side === "bottom");
+    const top = chains.find((c) => c.side === "top");
+    assert.ok(bottom && top);
+    // Sisi bawah hanya diukur dari ruang "back" (terluar), bukan dari ruang "front".
+    assert.deepEqual(bottom.roomIds, ["back"]);
+    assert.deepEqual(bottom.coordinates, [2, 8]);
+    assert.deepEqual(top.roomIds, ["front"]);
+    assert.deepEqual(top.coordinates, [0, 10]);
+  });
+
   it("uses the millimeter grid angle when no structural grid exists", () => {
     const rooms = [{ id: "a", points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 5 }, { x: 0, y: 5 }] }];
     const chains = exteriorRoomChains(rooms, 0.01, [], 15);
