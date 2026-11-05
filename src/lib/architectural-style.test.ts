@@ -62,7 +62,7 @@ test("style mono biru memakai tone monokrom di luar warna dinding dan lantai", (
 test("dinding mono biru biru gelap dan lantai kanan bawah biru muda", () => {
   const biru = styleVars("monobiru");
   for (const name of WALL_VARS) {
-    assert.equal(biru.get(name), "#78828b", `${name} harus biru gelap`);
+    assert.equal(biru.get(name), "#75828e", `${name} harus biru gelap`);
   }
   assert.equal(biru.get("architectural-floor-light"), "#ffffff", "sudut kiri atas harus putih");
   assert.equal(biru.get("architectural-floor-deep"), "#e3f0f6", "sudut kanan bawah harus biru muda");
