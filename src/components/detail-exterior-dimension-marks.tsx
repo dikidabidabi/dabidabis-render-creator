@@ -31,7 +31,7 @@ export function DetailExteriorGridBubbles({ chain, labels, offset, fontSize, str
     fill="var(--detail-dimension-ink)" stroke="var(--detail-dimension-ink)" strokeWidth={strokeWidth} pointerEvents="none">
     {chain.coordinates.map((x, index) => !labels[index] ? null : <g key={index}>
       <line x1={x} y1={chain.face} x2={x} y2={center - chain.outward * radius} strokeWidth={strokeWidth * 0.8} />
-      <circle cx={x} cy={center} r={radius} fill="none" strokeWidth={strokeWidth * 1.4} />
+      <circle cx={x} cy={center} r={radius} fill="none" strokeWidth={strokeWidth * 4.2} />
       <text x={x} y={center} textAnchor="middle" dominantBaseline="central" stroke="none" fontFamily="Manrope, sans-serif" fontSize={fontSize} fontWeight={700}>{labels[index]}</text>
     </g>)}
   </g>;
