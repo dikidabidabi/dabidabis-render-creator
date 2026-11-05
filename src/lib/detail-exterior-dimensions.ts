@@ -4,7 +4,7 @@ export type DimensionPoint = { x: number; y: number };
 export type DimensionSide = "top" | "bottom" | "left" | "right";
 export type ExteriorChain = {
   side: DimensionSide; angle: number; coordinates: number[]; face: number;
-  outward: number; roomIds?: string[]; gridIndex?: number;
+  outward: number; roomIds?: string[]; gridIndex?: number; labels?: string[];
 };
 export type DimensionGrid = { gridIndex: number; origin: DimensionPoint; rotation: number; xs: number[]; ys: number[] };
 const dot = (p: DimensionPoint, q: DimensionPoint) => p.x * q.x + p.y * q.y;
@@ -116,5 +116,31 @@ export function gridChainAxisLabels(
     return horizontal
       ? xAxisLabelAt(best, grid.labelOffsetX ?? 0)
       : yAxisLabelAt(best, grid.labelOffsetY ?? 0);
+  });
+}
+/**
+ * Grid sejajar pada sisi yang sama digabung menjadi satu rantai: as diurutkan
+ * dan diberi label berurutan, sehingga dimensi grid juga menyambung antar grid.
+ */
+export function mergeStackedGridChains(chains: ExteriorChain[], grids: DimensionGrid[], tolerance: number): ExteriorChain[] {
+  const groups: ExteriorChain[][] = [];
+  for (const chain of chains) {
+    const group = groups.find((g) => g[0].side === chain.side && Math.abs(Math.sin((g[0].angle - chain.angle) * Math.PI / 180)) < 0.035);
+    if (group) group.push(chain); else groups.push([chain]);
+  }
+  return groups.map((group) => {
+    if (new Set(group.map((c) => c.gridIndex)).size < 2) return group[0];
+    const base = group[0];
+    const { u } = dimensionBasis(base.angle);
+    const grid = grids.find((g) => g.gridIndex === base.gridIndex);
+    const r = (grid?.rotation ?? 0) * Math.PI / 180;
+    const gx = { x: Math.cos(r), y: Math.sin(r) };
+    const alongX = Math.abs(dot(u, gx)) >= Math.abs(-u.x * gx.y + u.y * gx.x);
+    const coordinates = unique(group.flatMap((c) => c.coordinates), tolerance);
+    const faces = group.map((c) => c.face * base.outward);
+    return {
+      ...base, coordinates, face: Math.max(...faces) * base.outward,
+      labels: coordinates.map((_, i) => alongX ? xAxisLabelAt(i, 0) : yAxisLabelAt(i, 0)),
+    };
   });
 }

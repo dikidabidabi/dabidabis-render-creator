@@ -125,3 +125,16 @@ describe("grid bubble labels follow the grid axes", () => {
     }
   });
 });
+
+it("grid bertumpuk digabung berurutan dan dimensinya menyambung", async () => {
+  const { exteriorGridChains, mergeStackedGridChains } = await import("./detail-exterior-dimensions");
+  const grids = [
+    { gridIndex: 0, origin: { x: 0, y: 0 }, rotation: 0, xs: [0, 5], ys: [0, 4] },
+    { gridIndex: 1, origin: { x: 0, y: 0 }, rotation: 0, xs: [8, 12], ys: [1, 4] },
+  ];
+  const merged = mergeStackedGridChains(exteriorGridChains(grids, [], 0.01), grids, 0.01);
+  const bottom = merged.find((c) => c.side === "bottom")!;
+  assert.deepEqual(bottom.coordinates, [0, 5, 8, 12]);
+  assert.deepEqual(bottom.labels, ["1", "2", "3", "4"]);
+  assert.equal(merged.length, 4);
+});
