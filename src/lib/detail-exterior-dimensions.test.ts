@@ -126,7 +126,7 @@ describe("grid bubble labels follow the grid axes", () => {
   });
 });
 
-test("grid bertumpuk digabung berurutan dan dimensinya menyambung", async () => {
+it("grid bertumpuk digabung berurutan dan dimensinya menyambung", async () => {
   const { exteriorGridChains, mergeStackedGridChains } = await import("./detail-exterior-dimensions");
   const grids = [
     { gridIndex: 0, origin: { x: 0, y: 0 }, rotation: 0, xs: [0, 5], ys: [0, 4] },
