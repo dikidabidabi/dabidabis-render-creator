@@ -128,7 +128,7 @@ import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 import { detailCorners, detailIntersectsRoom, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
 import { detailDimensionVisibility, mergeCrowdedDimensions } from "@/lib/detail-dimensions";
-import { exteriorRoomChains, exteriorGridChains, gridChainAxisLabels } from "@/lib/detail-exterior-dimensions";
+import { exteriorRoomChains, exteriorGridChains, gridChainAxisLabels, mergeStackedGridChains } from "@/lib/detail-exterior-dimensions";
 import { DetailExteriorDimensionMarks, DetailExteriorGridLines, DetailExteriorGridBubbles } from "@/components/detail-exterior-dimension-marks";
 
 // ---------- Types ----------
@@ -5141,7 +5141,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
   const dimensionGrids = gridData.map(({ grid, gridIndex, rotation, xs, ys }) => ({ gridIndex, origin: grid.origin, rotation, xs, ys }));
   const bubbleGrids = gridData.map(({ grid, gridIndex, rotation, xs, ys }) => ({ gridIndex, origin: grid.origin, rotation, xs, ys, labelOffsetX: grid.labelOffsetX, labelOffsetY: grid.labelOffsetY }));
   const outerRoomChains = exteriorRoomChains(detailRooms, dimensionTolerance, dimensionGrids, Number(sketch.mmGridRotation) || 0);
-  const outerGridChains = exteriorGridChains(dimensionGrids, outerRoomChains, dimensionTolerance);
+  const outerGridChains = mergeStackedGridChains(exteriorGridChains(dimensionGrids, outerRoomChains, dimensionTolerance), dimensionGrids, dimensionTolerance);
   const roomChains = outerRoomChains.map((chain) => {
     const matchingGrids = outerGridChains.filter((candidate) => candidate.side === chain.side && Math.abs(Math.sin((candidate.angle - chain.angle) * Math.PI / 180)) < 0.035);
     const values = [...chain.coordinates];
@@ -5261,7 +5261,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
               const offset = pxPerM * 2 + Math.abs(face - chain.face);
               return <g key={`${chain.side}-${i}`}>
                 <DetailExteriorDimensionMarks chain={chain} offset={offset} fontSize={dimFont} strokeWidth={dimStroke} pxPerM={pxPerM} />
-                <DetailExteriorGridBubbles chain={chain} labels={gridChainAxisLabels(chain, bubbleGrids, dimensionTolerance)} offset={offset} fontSize={dimFont} strokeWidth={dimStroke} />
+                <DetailExteriorGridBubbles chain={chain} labels={chain.labels ?? gridChainAxisLabels(chain, bubbleGrids, dimensionTolerance)} offset={offset} fontSize={dimFont} strokeWidth={dimStroke} />
               </g>;
             })}
           </g>}
