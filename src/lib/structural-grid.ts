@@ -367,3 +367,64 @@ export function normalizeGridExtras(arr: any): StructuralGrid[] | undefined {
   return out.length ? out : undefined;
 }
 
+
+// ----- Merge Grid -----
+// Segmen as grid (koordinat dunia px) dalam format extraLines.
+export type GridAxisSegment = {
+  origin: { x: number; y: number };
+  rotation: number;
+  lengthM: number;
+  hideStart?: boolean;
+  hideEnd?: boolean;
+};
+
+export function gridAxisSegments(g: StructuralGrid, ppm: number): GridAxisSegment[] {
+  const r = ((g.rotation ?? 0) * Math.PI) / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  const toWorld = (lx: number, ly: number) => ({
+    x: g.origin.x + lx * c - ly * s,
+    y: g.origin.y + lx * s + ly * c,
+  });
+  const posX = axisPositions(g.spansX);
+  const posY = axisPositions(g.spansY);
+  const totX = posX[posX.length - 1] ?? 0;
+  const totY = posY[posY.length - 1] ?? 0;
+  const out: GridAxisSegment[] = [];
+  const rot = g.rotation ?? 0;
+  if (g.lineOnly) {
+    if (totX > 0) out.push({ origin: toWorld(0, 0), rotation: rot, lengthM: totX, hideStart: g.hideBubbleStartX, hideEnd: g.hideBubbleEndX });
+  } else {
+    if (totY > 0) for (const x of posX) out.push({ origin: toWorld(x * ppm, 0), rotation: rot + 90, lengthM: totY, hideStart: g.hideBubbleStartX, hideEnd: g.hideBubbleEndX });
+    if (totX > 0) for (const y of posY) out.push({ origin: toWorld(0, y * ppm), rotation: rot, lengthM: totX, hideStart: g.hideBubbleStartY, hideEnd: g.hideBubbleEndY });
+  }
+  for (const el of g.extraLines ?? []) out.push({ origin: { ...el.origin }, rotation: el.rotation, lengthM: el.lengthM, hideStart: el.hideStart, hideEnd: el.hideEnd });
+  return out;
+}
+
+// Jarak titik (px dunia) ke as terdekat pada grid.
+export function distanceToGrid(g: StructuralGrid, p: { x: number; y: number }, ppm: number): number {
+  let best = Infinity;
+  for (const seg of gridAxisSegments(g, ppm)) {
+    const a = (seg.rotation * Math.PI) / 180;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    const len = seg.lengthM * ppm;
+    const t = Math.max(0, Math.min(len, (p.x - seg.origin.x) * dx + (p.y - seg.origin.y) * dy));
+    const d = Math.hypot(p.x - (seg.origin.x + dx * t), p.y - (seg.origin.y + dy * t));
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+// Gabungkan seluruh as grid sumber ke grid target sebagai extraLines.
+export function mergeGridInto(target: StructuralGrid, source: StructuralGrid, ppm: number): StructuralGrid {
+  const stamp = Date.now().toString(36);
+  const added = gridAxisSegments(source, ppm).map((seg, i) => ({
+    id: `xl-${stamp}-${i}-${Math.random().toString(36).slice(2, 5)}`,
+    origin: seg.origin,
+    rotation: seg.rotation,
+    lengthM: Number(seg.lengthM.toFixed(4)),
+    hideStart: Boolean(seg.hideStart),
+    hideEnd: Boolean(seg.hideEnd),
+  }));
+  return { ...target, extraLines: [...(target.extraLines ?? []), ...added] };
+}
