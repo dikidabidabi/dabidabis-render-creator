@@ -1048,6 +1048,9 @@ function normalizeSketch(s: any): Sketch {
     functionZones: normalizeFunctionZones(s?.functionZones),
     northRotation: Number.isFinite(Number(s?.northRotation)) ? Number(s.northRotation) : 0,
     mmGridRotation: Number.isFinite(Number(s?.mmGridRotation)) ? Number(s.mmGridRotation) : 0,
+    mmGridPivot: s?.mmGridPivot && Number.isFinite(Number(s.mmGridPivot.x)) && Number.isFinite(Number(s.mmGridPivot.y))
+      ? { x: Number(s.mmGridPivot.x), y: Number(s.mmGridPivot.y) }
+      : null,
     geo: s?.geo && Number.isFinite(Number(s.geo.lat)) && Number.isFinite(Number(s.geo.lon))
       ? {
           lat: Number(s.geo.lat),
