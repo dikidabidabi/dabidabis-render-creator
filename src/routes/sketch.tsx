@@ -151,6 +151,8 @@ import {
   collectGrids,
   normalizeGridExtras,
   type ColumnClip,
+  distanceToGrid,
+  mergeGridInto,
 } from "@/lib/structural-grid";
 import {
   type EdgeMaterial,
