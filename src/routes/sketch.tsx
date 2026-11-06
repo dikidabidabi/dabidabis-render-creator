@@ -3175,7 +3175,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [gridMoveDyMm, setGridMoveDyMm] = useState<string>("0");
 
   // Grid Struktur — edit kolom: clip polygon (sembunyikan kolom di area)
-  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip" | "fromLine">("expand");
+  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip" | "fromLine" | "merge">("expand");
   type ClipDrag = {
     clipId: string;        // id clip (atau "__draft__" jika polygon belum di-commit)
     idx: number;           // index titik yang di-drag
@@ -8987,6 +8987,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         toast.success("Garis ditambahkan ke grid aktif");
         return;
       }
+      // -------- MODE: merge grid — gabungkan grid yang diklik ke grid aktif --------
+      if (gridEditMode === "merge") {
+        const tolPx = 10 / view.s;
+        const cands: Array<{ idx: number; g: StructuralGrid }> = [];
+        if (primaryGrid.enabled) cands.push({ idx: 0, g: primaryGrid });
+        gridExtras.forEach((g, i) => { if (g?.enabled) cands.push({ idx: i + 1, g }); });
+        let best: { idx: number; g: StructuralGrid; d: number } | null = null;
+        for (const c of cands) {
+          if (c.idx === editGridIdx) continue;
+          const d = distanceToGrid(c.g, rawWorld, pxPerMeter);
+          if (!best || d < best.d) best = { ...c, d };
+        }
+        if (!best || best.d > tolPx) {
+          toast.error("Klik garis grid lain untuk digabung");
+          return;
+        }
+        const merged = mergeGridInto(grid, best.g, pxPerMeter);
+        let nextPrimary: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+        let nextExtras = (sketch.structuralGridExtras ?? []).slice();
+        if (editGridIdx === 0) nextPrimary = merged; else nextExtras[editGridIdx - 1] = merged;
+        let nextIdx = editGridIdx;
+        if (best.idx === 0) {
+          nextPrimary = { ...DEFAULT_GRID, enabled: false };
+        } else {
+          nextExtras.splice(best.idx - 1, 1);
+          if (best.idx < editGridIdx) nextIdx = editGridIdx - 1;
+        }
+        onChange({ structuralGrid: nextPrimary, structuralGridExtras: nextExtras.length ? nextExtras : undefined });
+        setEditGridIdx(nextIdx);
+        toast.success("Grid berhasil digabung ke grid aktif");
+        return;
+      }
       // -------- MODE: edit kolom (clip polygon) --------
       if (gridEditMode === "clip") {
         const ppm = pxPerMeter;
@@ -14532,8 +14564,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   >
                     Jadikan Grid
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "merge" ? "default" : "outline"}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "merge" && "bg-gradient-primary shadow-primary")}
+                    onClick={() => { setGridEditMode("merge"); setClipDraft(null); }}
+                    title="Klik grid lain di kanvas untuk menggabungkannya ke grid aktif."
+                  >
+                    Merge Grid
+                  </Button>
                 </div>
               </div>
+              {gridEditMode === "merge" && (
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Klik garis grid lain di kanvas (termasuk garis hasil Jadikan Grid) — seluruh
+                  sumbunya digabung ke grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
+                  sedang aktif, lalu grid asalnya dihapus.
+                </p>
+              )}
               {gridEditMode === "fromLine" && (
                 <div className="space-y-1.5">
                   <p className="text-[10px] leading-snug text-muted-foreground">
