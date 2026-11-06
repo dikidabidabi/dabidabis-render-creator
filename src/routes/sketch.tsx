@@ -463,6 +463,7 @@ type Sketch = {
   ktbPct?: number; // 0..100, prosentase KTB (basement) terhadap luas lahan
   fungsi?: string; // fungsi bangunan: Hotel, Apartment, Komersil, Rumah Sakit, Bandara, Bangunan Khusus
   northRotation?: number; // derajat rotasi arah utara, 0 = atas (CW positif)
+  mmGridPivot?: { x: number; y: number } | null; // pusat rotasi milimeter block (hanya sketsa)
   mmGridRotation?: number; // derajat rotasi tampilan grid milimeter block (display-only, tidak mengubah koordinat sketsa)
   geo?: Geo; // koordinat lokasi (single source of truth peta/matahari/slide)
   sectionCut?: SectionCut; // legacy single cut (kompatibilitas)
@@ -2457,6 +2458,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const northRotation = Number.isFinite(Number(sketch.northRotation)) ? Number(sketch.northRotation) : 0;
   const mmGridRotation = Number.isFinite(Number(sketch.mmGridRotation)) ? Number(sketch.mmGridRotation) : 0;
   const mmGridRotRad = (mmGridRotation * Math.PI) / 180;
+  const mmPivotRaw = sketch.mmGridPivot;
+  const mmPivotX = mmPivotRaw && Number.isFinite(mmPivotRaw.x) ? mmPivotRaw.x : 0;
+  const mmPivotY = mmPivotRaw && Number.isFinite(mmPivotRaw.y) ? mmPivotRaw.y : 0;
+  const hasMmPivot = !!mmPivotRaw;
+  const mmPivot = useMemo(() => ({ x: mmPivotX, y: mmPivotY }), [mmPivotX, mmPivotY]);
+  const [mmPivotMode, setMmPivotMode] = useState<null | "set" | "move">(null);
   const structGridRotation = Number.isFinite(Number(grid.rotation)) ? Number(grid.rotation) : 0;
   const structGridRotRad = (structGridRotation * Math.PI) / 180;
   // Dua grid dianggap "paralel" bila selisih rotasi adalah kelipatan 90°.
@@ -3589,27 +3596,26 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           y: Math.round(p.y / MINOR_PX) * MINOR_PX,
         };
       }
+      const qx = p.x - mmPivot.x, qy = p.y - mmPivot.y;
       const cs0 = Math.cos(-mmGridRotRad), sn0 = Math.sin(-mmGridRotRad);
-      const lx = p.x * cs0 - p.y * sn0;
-      const ly = p.x * sn0 + p.y * cs0;
-      const sx = Math.round(lx / MINOR_PX) * MINOR_PX;
-      const sy = Math.round(ly / MINOR_PX) * MINOR_PX;
+      const lx = qx * cs0 - qy * sn0 + mmPivot.x;
+      const ly = qx * sn0 + qy * cs0 + mmPivot.y;
+      const sx = Math.round(lx / MINOR_PX) * MINOR_PX - mmPivot.x;
+      const sy = Math.round(ly / MINOR_PX) * MINOR_PX - mmPivot.y;
       const cs1 = Math.cos(mmGridRotRad), sn1 = Math.sin(mmGridRotRad);
-      return { x: sx * cs1 - sy * sn1, y: sx * sn1 + sy * cs1 };
+      return { x: sx * cs1 - sy * sn1 + mmPivot.x, y: sx * sn1 + sy * cs1 + mmPivot.y };
     },
-    [snap, mmGridRotRad],
+    [snap, mmGridRotRad, mmPivot],
   );
 
   const worldToMmLocal = useCallback((p: Point): Point => {
     if (Math.abs(mmGridRotRad) < 1e-9) return { x: p.x, y: p.y };
-    const cs = Math.cos(-mmGridRotRad), sn = Math.sin(-mmGridRotRad);
-    return { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs };
-  }, [mmGridRotRad]);
+    return rotateAround(p, mmPivot, -mmGridRotRad);
+  }, [mmGridRotRad, mmPivot]);
   const mmLocalToWorld = useCallback((p: Point): Point => {
     if (Math.abs(mmGridRotRad) < 1e-9) return { x: p.x, y: p.y };
-    const cs = Math.cos(mmGridRotRad), sn = Math.sin(mmGridRotRad);
-    return { x: p.x * cs - p.y * sn, y: p.x * sn + p.y * cs };
-  }, [mmGridRotRad]);
+    return rotateAround(p, mmPivot, mmGridRotRad);
+  }, [mmGridRotRad, mmPivot]);
   const snapMmLocal = useCallback((p: Point): Point => ({
     x: Math.round(p.x / MINOR_PX) * MINOR_PX,
     y: Math.round(p.y / MINOR_PX) * MINOR_PX,
@@ -4510,10 +4516,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     // Minor + Major grid (in world units), dengan rotasi tampilan opsional di sekitar titik (0,0).
     {
       ctx.save();
-      if (mmGridRotRad !== 0) ctx.rotate(mmGridRotRad);
+      if (mmGridRotRad !== 0) {
+        ctx.translate(mmPivot.x, mmPivot.y);
+        ctx.rotate(mmGridRotRad);
+        ctx.translate(-mmPivot.x, -mmPivot.y);
+      }
       // Hitung bounds visible dalam mm-grid frame (inverse-rotate 4 sudut world).
-      const cs = Math.cos(-mmGridRotRad), sn = Math.sin(-mmGridRotRad);
-      const localCorners = corners.map((c) => ({ x: c.x * cs - c.y * sn, y: c.x * sn + c.y * cs }));
+      const localCorners = corners.map((c) => rotateAround(c, mmPivot, -mmGridRotRad));
       const lMinX = Math.min(...localCorners.map((c) => c.x));
       const lMaxX = Math.max(...localCorners.map((c) => c.x));
       const lMinY = Math.min(...localCorners.map((c) => c.y));
@@ -4535,6 +4544,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const lym0 = Math.floor(lMinY / major) * major;
       for (let x = lxm0; x <= lMaxX; x += major) { ctx.moveTo(x, lMinY); ctx.lineTo(x, lMaxY); }
       for (let y = lym0; y <= lMaxY; y += major) { ctx.moveTo(lMinX, y); ctx.lineTo(lMaxX, y); }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Penanda pivot milimeter block (hanya di sketsa, tidak tampil di slide).
+    if (hasMmPivot) {
+      ctx.save();
+      ctx.fillStyle = "#f97316";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5 / s;
+      ctx.beginPath(); ctx.arc(mmPivot.x, mmPivot.y, 6 / s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = "#f97316";
+      ctx.beginPath();
+      ctx.moveTo(mmPivot.x - 12 / s, mmPivot.y); ctx.lineTo(mmPivot.x + 12 / s, mmPivot.y);
+      ctx.moveTo(mmPivot.x, mmPivot.y - 12 / s); ctx.lineTo(mmPivot.x, mmPivot.y + 12 / s);
       ctx.stroke();
       ctx.restore();
     }
@@ -5118,8 +5142,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
         // rotasi balik 4 sudutnya. Ini menjamin sisi-sisi rect benar-benar
         // berada di garis grid milimeter block pada semua tingkat zoom.
-        const la = rotateAround(drawing.a, { x: 0, y: 0 }, -mmGridRotRad);
-        const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -mmGridRotRad);
+        const la = rotateAround(drawing.a, mmPivot, -mmGridRotRad);
+        const lb = rotateAround(drawing.b, mmPivot, -mmGridRotRad);
         const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
         // Floor rect: a/b sudah ter-snap (vertex/midpoint/grid) — jangan re-snap mm grid.
         const sx = (v: number) => (isFloorRect || isRoofRect ? v : snapL(v));
@@ -5131,7 +5155,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const corners = [
           { x: lx1, y: ly1 }, { x: lx2, y: ly1 },
           { x: lx2, y: ly2 }, { x: lx1, y: ly2 },
-        ].map((p) => rotateAround(p, { x: 0, y: 0 }, mmGridRotRad));
+        ].map((p) => rotateAround(p, mmPivot, mmGridRotRad));
         ctx.moveTo(corners[0].x, corners[0].y);
         for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
         ctx.closePath();
@@ -6633,15 +6657,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       // preview drag parkir (4-titik rect ter-snap mm-grid)
       if (drawing && tool === "parking" && parkingSubTool === "draw") {
         const ang = mmGridRotRad || 0;
-        const la = rotateAround(drawing.a, { x: 0, y: 0 }, -ang);
-        const lb = rotateAround(drawing.b, { x: 0, y: 0 }, -ang);
+        const la = rotateAround(drawing.a, mmPivot, -ang);
+        const lb = rotateAround(drawing.b, mmPivot, -ang);
         const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
         const minX = snapL(Math.min(la.x, lb.x)), maxX = snapL(Math.max(la.x, lb.x));
         const minY = snapL(Math.min(la.y, lb.y)), maxY = snapL(Math.max(la.y, lb.y));
         const corners = [
           { x: minX, y: minY }, { x: maxX, y: minY },
           { x: maxX, y: maxY }, { x: minX, y: maxY },
-        ].map((p) => rotateAround(p, { x: 0, y: 0 }, ang));
+        ].map((p) => rotateAround(p, mmPivot, ang));
         ctx.save();
         ctx.translate(view.tx, view.ty);
         ctx.rotate(view.r);
@@ -7530,7 +7554,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, mmPivot, hasMmPivot, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -7811,8 +7835,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     (a: Point, b: Point) => {
       // Persegi mengikuti rotasi grid milimeter block. Sudut diagonal di-
       // un-rotate ke frame lokal, dibangun axis-aligned, lalu dirotasi balik.
-      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
-      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
+      const la = rotateAround(a, mmPivot, -mmGridRotRad);
+      const lb = rotateAround(b, mmPivot, -mmGridRotRad);
       const lminX = Math.min(la.x, lb.x);
       const lmaxX = Math.max(la.x, lb.x);
       const lminY = Math.min(la.y, lb.y);
@@ -7822,10 +7846,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const lp2 = { x: lmaxX, y: lminY };
       const lp3 = { x: lmaxX, y: lmaxY };
       const lp4 = { x: lminX, y: lmaxY };
-      const p1 = rotateAround(lp1, { x: 0, y: 0 }, mmGridRotRad);
-      const p2 = rotateAround(lp2, { x: 0, y: 0 }, mmGridRotRad);
-      const p3 = rotateAround(lp3, { x: 0, y: 0 }, mmGridRotRad);
-      const p4 = rotateAround(lp4, { x: 0, y: 0 }, mmGridRotRad);
+      const p1 = rotateAround(lp1, mmPivot, mmGridRotRad);
+      const p2 = rotateAround(lp2, mmPivot, mmGridRotRad);
+      const p3 = rotateAround(lp3, mmPivot, mmGridRotRad);
+      const p4 = rotateAround(lp4, mmPivot, mmGridRotRad);
       const { levels: nextLevelsBase, activeId } = ensureLevels();
       const newLines: Line[] = [
         { a: p1, b: p2, kind: "straight", levelId: activeId },
@@ -8329,6 +8353,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       setWindowEndpointDrag(null);
       setDraggingHandle(null);
       startGesture();
+      return;
+    }
+
+    // Tentukan / geser pivot milimeter block (snap ke grid saat ini).
+    if (mmPivotMode) {
+      const pt = snapPointToMillimeterGrid(getWorldPosRaw(e), true);
+      onChange({ mmGridPivot: { x: pt.x, y: pt.y } });
+      setMmPivotMode(null);
+      toast.success(mmPivotMode === "move" ? "Pivot dipindahkan" : "Pivot ditetapkan");
       return;
     }
 
@@ -9013,9 +9046,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       // klik di luar → set origin ke titik klik (snap bila paralel dgn mm grid)
       const snapped = gridsParallel
         ? (() => {
-            const local = rotateAround(rawWorld, { x: 0, y: 0 }, -mmGridRotRad);
+            const local = rotateAround(rawWorld, mmPivot, -mmGridRotRad);
             const sl = { x: Math.round(local.x / MINOR_PX) * MINOR_PX, y: Math.round(local.y / MINOR_PX) * MINOR_PX };
-            return rotateAround(sl, { x: 0, y: 0 }, mmGridRotRad);
+            return rotateAround(sl, mmPivot, mmGridRotRad);
           })()
         : rawWorld;
       updateGrid({ origin: snapped });
@@ -10597,9 +10630,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         const next = gridsParallel
           ? (() => {
               // Snap dalam frame mm grid (rotasi mmGridRotRad di sekitar 0,0)
-              const local = rotateAround(cand, { x: 0, y: 0 }, -mmGridRotRad);
+              const local = rotateAround(cand, mmPivot, -mmGridRotRad);
               const snapLocal = { x: Math.round(local.x / MINOR_PX) * MINOR_PX, y: Math.round(local.y / MINOR_PX) * MINOR_PX };
-              return rotateAround(snapLocal, { x: 0, y: 0 }, mmGridRotRad);
+              return rotateAround(snapLocal, mmPivot, mmGridRotRad);
             })()
           : cand;
         if (next.x !== grid.origin.x || next.y !== grid.origin.y) updateGrid({ origin: next });
@@ -11232,8 +11265,8 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
     if (tool === "floor" && floorMode === "rect") {
       // Bangun persegi axis-aligned (mengikuti rotasi mm-grid) lalu commit sebagai outer floor.
-      const la = rotateAround(a, { x: 0, y: 0 }, -mmGridRotRad);
-      const lb = rotateAround(b, { x: 0, y: 0 }, -mmGridRotRad);
+      const la = rotateAround(a, mmPivot, -mmGridRotRad);
+      const lb = rotateAround(b, mmPivot, -mmGridRotRad);
       // a/b sudah ter-snap (vertex/midpoint/grid) lewat snapPoint di pointer handler;
       // jangan re-snap ke mm-grid karena akan menghancurkan snap vertex/midpoint.
       const lminX = Math.min(la.x, lb.x);
@@ -11241,10 +11274,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const lminY = Math.min(la.y, lb.y);
       const lmaxY = Math.max(la.y, lb.y);
       if (lmaxX - lminX < MINOR_PX * 0.5 || lmaxY - lminY < MINOR_PX * 0.5) return;
-      const p1 = rotateAround({ x: lminX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
-      const p2 = rotateAround({ x: lmaxX, y: lminY }, { x: 0, y: 0 }, mmGridRotRad);
-      const p3 = rotateAround({ x: lmaxX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
-      const p4 = rotateAround({ x: lminX, y: lmaxY }, { x: 0, y: 0 }, mmGridRotRad);
+      const p1 = rotateAround({ x: lminX, y: lminY }, mmPivot, mmGridRotRad);
+      const p2 = rotateAround({ x: lmaxX, y: lminY }, mmPivot, mmGridRotRad);
+      const p3 = rotateAround({ x: lmaxX, y: lmaxY }, mmPivot, mmGridRotRad);
+      const p4 = rotateAround({ x: lminX, y: lmaxY }, mmPivot, mmGridRotRad);
       const rectPts = [p1, p2, p3, p4];
       // Stage rect sebagai draft (belum permanen). User menekan "Simpan Area" untuk commit.
       // Aturan:
@@ -15368,6 +15401,33 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     Reset
                   </Button>
                 </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <Button
+                    variant={mmPivotMode === "set" ? "default" : "outline"} size="sm" className="h-7 px-2 text-[10px]"
+                    onClick={() => setMmPivotMode((m) => (m === "set" ? null : "set"))}
+                    title="Klik titik pada sketsa (snap grid) sebagai pusat rotasi"
+                  >
+                    Tentukan pivot
+                  </Button>
+                  <Button
+                    variant={mmPivotMode === "move" ? "default" : "outline"} size="sm" className="h-7 px-2 text-[10px]"
+                    onClick={() => setMmPivotMode((m) => (m === "move" ? null : "move"))}
+                    disabled={!hasMmPivot}
+                    title="Klik lokasi baru pivot pada sketsa"
+                  >
+                    Geser
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="h-7 px-2 text-[10px]"
+                    onClick={() => { setMmPivotMode(null); onChange({ mmGridPivot: null }); }}
+                    disabled={!hasMmPivot}
+                  >
+                    Hapus
+                  </Button>
+                </div>
+                {mmPivotMode && (
+                  <p className="text-[10px] text-primary">Klik titik di sketsa untuk {mmPivotMode === "move" ? "memindahkan" : "menempatkan"} pivot.</p>
+                )}
               </div>
 
               <div className="space-y-1 rounded-md border border-border/60 bg-background/60 p-1.5">
