@@ -53,6 +53,10 @@ export type StructuralGrid = {
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
   columnClips?: ColumnClip[];            // poligon area yang menyembunyikan kolom
+  // Grid lain yang sudah di-"Merge Grid" ke grid ini. Tiap anak tetap utuh
+  // (bentang, kolom, clip, label) dalam koordinat dunia dan ikut bergeser /
+  // berotasi bersama grid induk.
+  merged?: StructuralGrid[];
 };
 
 
@@ -143,7 +147,21 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
     columnClips: clips.length ? clips : undefined,
+    merged: normalizeMerged(g.merged),
   };
+}
+
+function normalizeMerged(arr: any): StructuralGrid[] | undefined {
+  if (!Array.isArray(arr)) return undefined;
+  const out: StructuralGrid[] = [];
+  for (const raw of arr) {
+    const child = normalizeGrid(raw);
+    if (!child) continue;
+    const { merged: nested, ...base } = child;
+    out.push({ ...base, enabled: true });
+    for (const n of nested ?? []) out.push({ ...n, enabled: true });
+  }
+  return out.length ? out : undefined;
 }
 
 // Kumulatif posisi as dalam meter, mulai 0.
@@ -330,12 +348,13 @@ export function collectGrids(
   extras: StructuralGrid[] | undefined,
 ): StructuralGrid[] {
   const out: StructuralGrid[] = [];
-  if (primary && primary.enabled) out.push(primary);
-  if (Array.isArray(extras)) {
-    for (const g of extras) {
-      if (g && g.enabled) out.push(g);
-    }
-  }
+  const push = (g: StructuralGrid | undefined) => {
+    if (!g || !g.enabled) return;
+    out.push(g);
+    for (const child of g.merged ?? []) out.push({ ...child, enabled: true, merged: undefined });
+  };
+  push(primary);
+  if (Array.isArray(extras)) for (const g of extras) push(g);
   return out;
 }
 
@@ -412,19 +431,72 @@ export function distanceToGrid(g: StructuralGrid, p: { x: number; y: number }, p
     const d = Math.hypot(p.x - (seg.origin.x + dx * t), p.y - (seg.origin.y + dy * t));
     if (d < best) best = d;
   }
+  for (const child of g.merged ?? []) best = Math.min(best, distanceToGrid({ ...child, merged: undefined }, p, ppm));
   return best;
 }
 
-// Gabungkan seluruh as grid sumber ke grid target sebagai extraLines.
-export function mergeGridInto(target: StructuralGrid, source: StructuralGrid, ppm: number): StructuralGrid {
-  const stamp = Date.now().toString(36);
-  const added = gridAxisSegments(source, ppm).map((seg, i) => ({
-    id: `xl-${stamp}-${i}-${Math.random().toString(36).slice(2, 5)}`,
-    origin: seg.origin,
-    rotation: seg.rotation,
-    lengthM: Number(seg.lengthM.toFixed(4)),
-    hideStart: Boolean(seg.hideStart),
-    hideEnd: Boolean(seg.hideEnd),
-  }));
-  return { ...target, extraLines: [...(target.extraLines ?? []), ...added] };
+// Gabungkan grid sumber ke grid target secara utuh (as + kolom + clip),
+// termasuk anak-anak hasil merge sebelumnya. Grid sumber menjadi anak target.
+export function mergeGridInto(target: StructuralGrid, source: StructuralGrid): StructuralGrid {
+  const { merged: sourceChildren, ...sourceBase } = source;
+  return {
+    ...target,
+    merged: [
+      ...(target.merged ?? []),
+      { ...sourceBase, enabled: true },
+      ...(sourceChildren ?? []).map((c) => ({ ...c, enabled: true, merged: undefined })),
+    ],
+  };
+}
+
+// Pisahkan anak merge kembali menjadi grid mandiri.
+export function unmergeGridChild(
+  parent: StructuralGrid,
+  childIdx: number,
+): { parent: StructuralGrid; child: StructuralGrid | undefined } {
+  const list = parent.merged ?? [];
+  const child = list[childIdx];
+  const rest = list.filter((_, i) => i !== childIdx);
+  return { parent: { ...parent, merged: rest.length ? rest : undefined }, child: child ? { ...child, enabled: true } : undefined };
+}
+
+// Geser grid beserta garis tergabung & grid hasil merge (terikat).
+export function moveGridLinked(g: StructuralGrid, origin: { x: number; y: number }): StructuralGrid {
+  const dx = origin.x - g.origin.x;
+  const dy = origin.y - g.origin.y;
+  return translateGridLinked({ ...g }, dx, dy);
+}
+
+function translateGridLinked(g: StructuralGrid, dx: number, dy: number): StructuralGrid {
+  return {
+    ...g,
+    origin: { x: g.origin.x + dx, y: g.origin.y + dy },
+    extraLines: g.extraLines?.map((el) => ({ ...el, origin: { x: el.origin.x + dx, y: el.origin.y + dy } })),
+    merged: g.merged?.map((c) => translateGridLinked(c, dx, dy)),
+  };
+}
+
+// Ubah rotasi grid; garis tergabung & grid hasil merge ikut berputar di
+// sekitar origin grid induk.
+export function rotateGridLinked(g: StructuralGrid, rotation: number): StructuralGrid {
+  const delta = rotation - (g.rotation ?? 0);
+  if (!delta) return { ...g, rotation };
+  const r = (delta * Math.PI) / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  const pivot = g.origin;
+  const rot = (p: { x: number; y: number }) => {
+    const x = p.x - pivot.x, y = p.y - pivot.y;
+    return { x: pivot.x + x * c - y * s, y: pivot.y + x * s + y * c };
+  };
+  return {
+    ...g,
+    rotation,
+    extraLines: g.extraLines?.map((el) => ({ ...el, origin: rot(el.origin), rotation: el.rotation + delta })),
+    merged: g.merged?.map((child) => ({
+      ...child,
+      origin: rot(child.origin),
+      rotation: (child.rotation ?? 0) + delta,
+      extraLines: child.extraLines?.map((el) => ({ ...el, origin: rot(el.origin), rotation: el.rotation + delta })),
+    })),
+  };
 }
