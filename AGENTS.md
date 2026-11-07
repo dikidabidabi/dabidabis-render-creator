@@ -7,9 +7,9 @@
 - Architectural settings persist per area; plans remain centered/full-size; legends share numbering/ink and bottom layout maximizes fit. Subtract openings before wall shadows. Window cuts/notation share windowPlanGeometry bounds; short base and long frame/mullion shadows share wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions; wall fills omit bevel computation and rendering to reduce Android tablet graphics load.
 
-- Merged grids live whole in parent.merged (world coords); collectGrids flattens them and linked move/rotate helpers keep them attached.
+- Merged grids live whole in parent.merged; collectGrids flattens them; linked move/rotate keeps them attached.
 
-- Free stairs share polyline/width-offset geometry and automatic bend landings across Sketch, Presentation and file transforms.
+- Free stairs share polyline/offset geometry and bend landings across views.
 
 - Notification polling requires a session token and stable dependencies; background reads and feed-seen writes verify bearer claims through notification-session.server before user-scoped RLS queries, returning serializable empty/no-op results on unavailable sessions so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
