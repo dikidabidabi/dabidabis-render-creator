@@ -7,7 +7,7 @@
 - Architectural settings persist per area; plans remain centered/full-size; legends share numbering/ink and bottom layout maximizes fit. Subtract openings before wall shadows. Window cuts/notation share windowPlanGeometry bounds; short base and long frame/mullion shadows share wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions; wall fills omit bevel computation and rendering to reduce Android tablet graphics load.
 
-- Merged grids live whole in parent.merged; collectGrids flattens them; linked move/rotate keeps them attached.
+- Merged grids live whole in parent.merged; collectGrids flattens; linked move/rotate.
 
 - Free stairs share polyline/offset geometry and bend landings across views.
 
