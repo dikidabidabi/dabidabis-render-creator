@@ -14564,12 +14564,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   const dxPx = (dxMm / 1000) * pxPerMeter;
                   const dyPx = (dyMm / 1000) * pxPerMeter;
                   pushHistory();
-                  updateGrid({
-                    origin: {
-                      x: grid.origin.x + dxPx,
-                      y: grid.origin.y + dyPx,
-                    },
-                  });
+                  onChangeGridLinked(
+                    moveGridLinked(grid, { x: grid.origin.x + dxPx, y: grid.origin.y + dyPx }),
+                  );
                   setGridMoveDxMm("0");
                   setGridMoveDyMm("0");
                   toast.success(`Grid digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
