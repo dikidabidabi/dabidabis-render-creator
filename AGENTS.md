@@ -1,13 +1,15 @@
 # Architecture decisions
 
-- Builds preserve NODE_OPTIONS and reserve 6 GiB heap for client/SSR/Nitro; runtime bundling stays unchanged.
+- Builds preserve NODE_OPTIONS and reserve 6 GiB heap.
 
 - Named schedules are owner/sketch scoped; tasks/views persist atomically in one key. Migrate legacy arrays/views; deep-copy schedules on duplication. taskPredecessors supports legacy links/UUID arrays: maximum start bound, preserved duration, validated edges/cycles, CPM offsets. Bars/cables share bounds/rows/IDs. Persist folding/CPM/slack. Date fills stay atomic per column/visible rows; reject invalid/predecessor-controlled dates. CPM uses leaf completion; S curves duration-weighted progress. Actual bars split blue/red at due; explicit finish overrides first 100% entry, else today; retain delay bars without actual start; row deletion removes WBS descendants and dangling predecessor links.
 
 - Architectural settings persist per area; plans remain centered/full-size; legends share numbering/ink and bottom layout maximizes fit. Subtract openings before wall shadows. Window cuts/notation share windowPlanGeometry bounds; short base and long frame/mullion shadows share wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions; wall fills omit bevel computation and rendering to reduce Android tablet graphics load.
 
-- Free stairs share polyline/width-offset geometry and automatic bend landings across Sketch, Presentation and file transforms.
+- Merged grids live whole in parent.merged; collectGrids flattens; linked move/rotate.
+
+- Free stairs share polyline/offset geometry and bend landings across views.
 
 - Notification polling requires a session token and stable dependencies; background reads and feed-seen writes verify bearer claims through notification-session.server before user-scoped RLS queries, returning serializable empty/no-op results on unavailable sessions so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.

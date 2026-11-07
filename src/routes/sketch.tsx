@@ -153,6 +153,9 @@ import {
   type ColumnClip,
   distanceToGrid,
   mergeGridInto,
+  moveGridLinked,
+  rotateGridLinked,
+  unmergeGridChild,
 } from "@/lib/structural-grid";
 import {
   type EdgeMaterial,
@@ -2446,6 +2449,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     },
     [sketch.structuralGrid, sketch.structuralGridExtras, editGridIdx, onChange],
   );
+  // Ganti grid aktif secara utuh (dipakai geser/rotasi terikat dengan grid hasil merge).
+  const onChangeGridLinked = useCallback(
+    (next: StructuralGrid) => {
+      if (editGridIdx === 0) {
+        onChange({ structuralGrid: next });
+        return;
+      }
+      const arr = (sketch.structuralGridExtras ?? []).slice();
+      if (!arr[editGridIdx - 1]) return;
+      arr[editGridIdx - 1] = next;
+      onChange({ structuralGridExtras: arr });
+    },
+    [sketch.structuralGridExtras, editGridIdx, onChange],
+  );
   const updateGridOverride = useCallback(
     (lvlId: string, patch: Partial<import("@/lib/structural-grid").GridOverride>) => {
       const prev = grid.perLevel?.[lvlId] ?? {};
@@ -3523,6 +3540,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               })),
             }
           : {}),
+        ...(g.merged ? { merged: g.merged.map((child) => scaleGrid(child)!) } : {}),
         // spansX/Y, colSizeCm, rotation, columnClips (meter relatif) tetap.
       };
     };
@@ -5515,11 +5533,18 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     // ----- Modul Struktur: render grid INAKTIF (extras yang bukan grid edit aktif) sebagai ghost -----
     if (activeLvlId) {
       const activeLvGhost = levels.find((l) => l.id === activeLvlId);
-      const allGridsForGhost: Array<{ g: StructuralGrid; idx: number }> = [];
-      if (primaryGrid.enabled) allGridsForGhost.push({ g: primaryGrid, idx: 0 });
-      gridExtras.forEach((g, i) => { if (g.enabled) allGridsForGhost.push({ g, idx: i + 1 }); });
+      const allGridsForGhost: Array<{ g: StructuralGrid; idx: number; child?: boolean }> = [];
+      const addGhost = (g: StructuralGrid, idx: number) => {
+        if (!g.enabled) return;
+        allGridsForGhost.push({ g, idx });
+        // Grid hasil Merge Grid ikut dirender (terikat pada grid induknya).
+        for (const c of g.merged ?? []) allGridsForGhost.push({ g: { ...c, enabled: true, merged: undefined }, idx, child: true });
+      };
+      addGhost(primaryGrid, 0);
+      gridExtras.forEach((g, i) => addGhost(g, i + 1));
       for (const ent of allGridsForGhost) {
-        if (ent.idx === editGridIdx) continue; // grid aktif dirender block utama di bawah
+        if (ent.idx === editGridIdx && !ent.child) continue; // grid aktif dirender block utama di bawah
+        const linkedActive = Boolean(ent.child && ent.idx === editGridIdx);
         const g = ent.g;
         if (!activeLvGhost || !levelInRange(g, activeLvGhost, levels)) continue;
         const { spansX, spansY } = spansForLevel(g, activeLvGhost.id);
@@ -5536,10 +5561,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.rotate(gRotRad);
           ctx.translate(-g.origin.x, -g.origin.y);
         }
-        ctx.globalAlpha = 0.45;
-        ctx.strokeStyle = "rgba(80,80,80,0.85)";
-        ctx.lineWidth = 0.3 / s;
-        ctx.setLineDash([10 / s, 5 / s, 1.5 / s, 5 / s]);
+        ctx.globalAlpha = linkedActive ? 1 : 0.45;
+        ctx.strokeStyle = linkedActive ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.85)";
+        ctx.lineWidth = (linkedActive ? 0.4 : 0.3) / s;
+        ctx.setLineDash(linkedActive ? [14 / s, 6 / s, 2 / s, 6 / s] : [10 / s, 5 / s, 1.5 / s, 5 / s]);
         ctx.beginPath();
         if (g.lineOnly) {
           ctx.moveTo(xs[0] - bubbleOff, ys[0]);
@@ -5550,11 +5575,43 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         }
         ctx.stroke();
         ctx.setLineDash([]);
+        if (linkedActive) {
+          // Bubble grid tergabung saat induknya sedang diedit.
+          const bubbleR = 7 / s;
+          ctx.font = `600 ${7 / s}px var(--font-display), sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const bubble = (bx: number, by: number, label: string) => {
+            ctx.beginPath();
+            ctx.arc(bx, by, bubbleR, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.lineWidth = 0.4 / s;
+            ctx.strokeStyle = "#0a0a0a";
+            ctx.stroke();
+            ctx.fillStyle = "#0a0a0a";
+            ctx.fillText(label, bx, by);
+          };
+          if (g.lineOnly) {
+            const last = xs.length - 1;
+            if (!g.hideBubbleStartX) bubble(xs[0] - bubbleOff, ys[0], xAxisLabelAt(0, g.labelOffsetX ?? 0));
+            if (!g.hideBubbleEndX) bubble(xs[last] + bubbleOff, ys[0], xAxisLabelAt(last, g.labelOffsetX ?? 0));
+          } else {
+            xs.forEach((x, i) => {
+              if (!g.hideBubbleStartY) bubble(x, yMin - bubbleOff, xAxisLabelAt(i, g.labelOffsetX ?? 0));
+              if (!g.hideBubbleEndY) bubble(x, yMax + bubbleOff, xAxisLabelAt(i, g.labelOffsetX ?? 0));
+            });
+            ys.forEach((y, j) => {
+              if (!g.hideBubbleStartX) bubble(xMin - bubbleOff, y, yAxisLabelAt(j, g.labelOffsetY ?? 0));
+              if (!g.hideBubbleEndX) bubble(xMax + bubbleOff, y, yAxisLabelAt(j, g.labelOffsetY ?? 0));
+            });
+          }
+        }
         if (!g.lineOnly) {
           const colPx = (g.colSizeCm / 100) * ppm;
           const posXM = axisPositions(spansX);
           const posYM = axisPositions(spansY);
-          ctx.fillStyle = "rgba(40,40,40,0.55)";
+          ctx.fillStyle = linkedActive ? "#0a0a0a" : "rgba(40,40,40,0.55)";
           for (let j = 0; j < ys.length; j++) {
             for (let i = 0; i < xs.length; i++) {
               if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
@@ -5795,8 +5852,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     //       tergabung dalam grid induk). Render di world coords. -----
     {
       const all: Array<{ g: StructuralGrid; idx: number }> = [];
-      if (primaryGrid?.enabled) all.push({ g: primaryGrid, idx: 0 });
-      gridExtras.forEach((g, i) => { if (g?.enabled) all.push({ g, idx: i + 1 }); });
+      const addLines = (g: StructuralGrid | undefined, idx: number) => {
+        if (!g?.enabled) return;
+        all.push({ g, idx });
+        for (const c of g.merged ?? []) all.push({ g: { ...c, enabled: true, merged: undefined }, idx });
+      };
+      addLines(primaryGrid, 0);
+      gridExtras.forEach((g, i) => addLines(g, i + 1));
       const activeLv = levels.find((l) => l.id === activeLvlId);
       for (const ent of all) {
         const g = ent.g;
@@ -9005,7 +9067,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           toast.error("Klik garis grid lain untuk digabung");
           return;
         }
-        const merged = mergeGridInto(grid, best.g, pxPerMeter);
+        const merged = mergeGridInto(grid, best.g);
         let nextPrimary: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
         let nextExtras = (sketch.structuralGridExtras ?? []).slice();
         if (editGridIdx === 0) nextPrimary = merged; else nextExtras[editGridIdx - 1] = merged;
@@ -9088,7 +9150,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             return rotateAround(sl, mmPivot, mmGridRotRad);
           })()
         : rawWorld;
-      updateGrid({ origin: snapped });
+      onChangeGridLinked(moveGridLinked(grid, snapped));
       return;
     }
     if (tool === "atap") {
@@ -10672,7 +10734,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               return rotateAround(snapLocal, mmPivot, mmGridRotRad);
             })()
           : cand;
-        if (next.x !== grid.origin.x || next.y !== grid.origin.y) updateGrid({ origin: next });
+        if (next.x !== grid.origin.x || next.y !== grid.origin.y) onChangeGridLinked(moveGridLinked(grid, next));
       } else {
         // Corner: delta dihitung di frame lokal grid (rotasi struct).
         const rawLocal = structGridRotRad !== 0
@@ -14502,12 +14564,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   const dxPx = (dxMm / 1000) * pxPerMeter;
                   const dyPx = (dyMm / 1000) * pxPerMeter;
                   pushHistory();
-                  updateGrid({
-                    origin: {
-                      x: grid.origin.x + dxPx,
-                      y: grid.origin.y + dyPx,
-                    },
-                  });
+                  onChangeGridLinked(
+                    moveGridLinked(grid, { x: grid.origin.x + dxPx, y: grid.origin.y + dyPx }),
+                  );
                   setGridMoveDxMm("0");
                   setGridMoveDyMm("0");
                   toast.success(`Grid digeser ΔX ${dxMm}mm, ΔY ${dyMm}mm`);
@@ -14579,10 +14638,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>
               {gridEditMode === "merge" && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik garis grid lain di kanvas (termasuk garis hasil Jadikan Grid) — seluruh
-                  sumbunya digabung ke grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
-                  sedang aktif, lalu grid asalnya dihapus.
+                  Klik garis grid lain di kanvas (termasuk garis hasil Jadikan Grid) — grid itu
+                  beserta kolomnya digabung ke grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
+                  sedang aktif dan ikut bergeser/berputar bersamanya.
                 </p>
+              )}
+              {(grid.merged ?? []).length > 0 && (
+                <div className="space-y-1 rounded border border-border/40 p-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Grid tergabung ({grid.merged!.length})
+                  </div>
+                  {grid.merged!.map((child, ci) => (
+                    <div key={`mg-${ci}`} className="flex items-center justify-between gap-1 text-[10px]">
+                      <span className="truncate">
+                        Grid {ci + 1} · {child.lineOnly ? "1 garis" : `${child.spansX.length + 1}×${child.spansY.length + 1} as`}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-5 px-1.5 text-[10px]"
+                        title="Lepaskan grid ini menjadi grid extra tersendiri"
+                        onClick={() => {
+                          const { parent, child: freed } = unmergeGridChild(grid, ci);
+                          if (!freed) return;
+                          let nextPrimary = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                          const nextExtras = (sketch.structuralGridExtras ?? []).slice();
+                          if (editGridIdx === 0) nextPrimary = parent; else nextExtras[editGridIdx - 1] = parent;
+                          nextExtras.push(freed);
+                          onChange({ structuralGrid: nextPrimary, structuralGridExtras: nextExtras });
+                          toast.success(`Grid dilepas menjadi Extra ${nextExtras.length}`);
+                        }}
+                      >
+                        Pisahkan
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
               {gridEditMode === "fromLine" && (
                 <div className="space-y-1.5">
@@ -15497,13 +15588,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
                     onChange={(e) => {
                       const v = parseFloat(e.target.value);
-                      updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
+                      onChangeGridLinked(rotateGridLinked(grid, Number.isFinite(v) ? v : 0));
                     }}
                     className="h-7 text-xs"
                   />
                   <Button
                     variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
-                    onClick={() => updateGrid({ rotation: 0 })}
+                    onClick={() => onChangeGridLinked(rotateGridLinked(grid, 0))}
                     disabled={structGridRotation === 0}
                     title="Kembalikan rotasi grid struktur ke 0°"
                   >
@@ -15511,7 +15602,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   </Button>
                   <Button
                     variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
-                    onClick={() => updateGrid({ rotation: mmGridRotation })}
+                    onClick={() => onChangeGridLinked(rotateGridLinked(grid, mmGridRotation))}
                     disabled={structGridRotation === mmGridRotation}
                     title="Samakan dengan rotasi milimeter block agar paralel"
                   >
