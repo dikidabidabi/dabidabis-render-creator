@@ -4207,15 +4207,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const ly = posY[j] * pxPerMeter;
             const wx = g.origin.x + lx * cos - ly * sin;
             const wy = g.origin.y + lx * sin + ly * cos;
-            const corners = [
-              { x: -halfCol, y: -halfCol },
-              { x:  halfCol, y: -halfCol },
-              { x:  halfCol, y:  halfCol },
-              { x: -halfCol, y:  halfCol },
-            ].map((c) => ({
-              x: wx + c.x * cos - c.y * sin,
-              y: wy + c.x * sin + c.y * cos,
-            }));
+            const corners = columnFootprintPolygon({ x: wx, y: wy }, halfCol * 2, ang, g.colShape);
             obs.push({ kind: "polygon", poly: corners });
           }
         }
@@ -4282,10 +4274,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             const ly = posY[j] * pxPerMeter;
             const wx = g.origin.x + lx * cos - ly * sin;
             const wy = g.origin.y + lx * sin + ly * cos;
-            const corners = [
-              { x: -halfCol, y: -halfCol }, { x:  halfCol, y: -halfCol },
-              { x:  halfCol, y:  halfCol }, { x: -halfCol, y:  halfCol },
-            ].map((c) => ({ x: wx + c.x * cos - c.y * sin, y: wy + c.x * sin + c.y * cos }));
+            const corners = columnFootprintPolygon({ x: wx, y: wy }, halfCol * 2, ang, g.colShape);
             obs.push({ kind: "polygon", poly: corners });
           }
         }
@@ -5616,7 +5605,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             for (let i = 0; i < xs.length; i++) {
               if (!isNodeActive(g, activeLvGhost.id, i, j)) continue;
               if (isColumnClipped(g, posXM[i], posYM[j])) continue;
-              ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+              if (isCircularColumn(g)) {
+                ctx.beginPath();
+                ctx.arc(xs[i], ys[j], colPx / 2, 0, Math.PI * 2);
+                ctx.fill();
+              } else ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
             }
           }
         }
@@ -5769,12 +5762,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 ctx.strokeStyle = "rgba(232,93,58,0.55)";
                 ctx.setLineDash([2 / s, 2 / s]);
                 ctx.lineWidth = 0.6 / s;
-                ctx.strokeRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+                if (isCircularColumn(grid)) {
+                  ctx.beginPath();
+                  ctx.arc(xs[i], ys[j], colPx / 2, 0, Math.PI * 2);
+                  ctx.stroke();
+                } else ctx.strokeRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
                 ctx.restore();
               }
               continue;
             }
-            ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
+            if (isCircularColumn(grid)) {
+              ctx.beginPath();
+              ctx.arc(xs[i], ys[j], colPx / 2, 0, Math.PI * 2);
+              ctx.fill();
+            } else ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
           }
         }
 
@@ -14418,6 +14419,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         enabled: true,
                         origin: { x: src.origin.x + offsetPx, y: src.origin.y + offsetPx },
                         colSizeCm: src.colSizeCm,
+                        colShape: src.colShape,
                         fromLevelId: src.fromLevelId,
                         toLevelId: src.toLevelId,
                       };
@@ -14445,6 +14447,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         spansX: [...src.spansX],
                         spansY: [...src.spansY],
                         colSizeCm: src.colSizeCm,
+                        colShape: src.colShape,
                         fromLevelId: src.fromLevelId,
                         toLevelId: src.toLevelId,
                         perLevel: undefined,
@@ -14579,7 +14582,22 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </p>
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Dimensi Kolom (cm)</Label>
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {isCircularColumn(grid) ? "Dimensi Kolom — Diameter (cm)" : "Dimensi Kolom (cm)"}
+              </Label>
+              <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Bentuk kolom">
+                <span className="text-[10px] text-muted-foreground">Bentuk:</span>
+                <Button size="sm" variant={!isCircularColumn(grid) ? "default" : "outline"} className="h-6 px-2 text-[10px]"
+                  aria-pressed={!isCircularColumn(grid)}
+                  onClick={() => updateGrid({ colShape: "square" })}>
+                  Kotak
+                </Button>
+                <Button size="sm" variant={isCircularColumn(grid) ? "default" : "outline"} className="h-6 px-2 text-[10px]"
+                  aria-pressed={isCircularColumn(grid)}
+                  onClick={() => updateGrid({ colShape: "circle" })}>
+                  Lingkaran
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-1">
                 {COL_PRESETS.map((c) => (
                   <Button key={`c-${c}`} size="sm" variant={grid.colSizeCm === c ? "default" : "outline"} className="h-6 px-2 text-[10px]"
