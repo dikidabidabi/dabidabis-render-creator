@@ -50,6 +50,8 @@ import {
   yAxisLabelAt,
   computeAllStructuralStats,
   collectGrids,
+  columnFootprintPolygon,
+  isCircularColumn,
 } from "@/lib/structural-grid";
 import {
   computeStraightSegments,
@@ -4980,11 +4982,11 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
     const angle = rotation * Math.PI / 180;
     return xs.flatMap((x, i) => ys.flatMap((y, j) => {
       if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return [];
-      return [[{ x: x - half, y: y - half }, { x: x + half, y: y - half },
-        { x: x + half, y: y + half }, { x: x - half, y: y + half }].map((p) => ({
-          x: grid.origin.x + (p.x - grid.origin.x) * Math.cos(angle) - (p.y - grid.origin.y) * Math.sin(angle),
-          y: grid.origin.y + (p.x - grid.origin.x) * Math.sin(angle) + (p.y - grid.origin.y) * Math.cos(angle),
-        }))];
+      const center = {
+        x: grid.origin.x + (x - grid.origin.x) * Math.cos(angle) - (y - grid.origin.y) * Math.sin(angle),
+        y: grid.origin.y + (x - grid.origin.x) * Math.sin(angle) + (y - grid.origin.y) * Math.cos(angle),
+      };
+      return [columnFootprintPolygon(center, half * 2, angle, grid.colShape)];
     }));
   });
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
@@ -5335,6 +5337,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
             {xs.flatMap((x, i) => ys.map((y, j) => {
               if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return null;
+              if (isCircularColumn(grid)) return <circle key={`detail-column-${i}-${j}`} cx={x} cy={y} r={colPx / 2} fill={architectural ? "var(--architectural-wall-light)" : "#0a0a0a"} stroke={architectural ? "var(--architectural-edge)" : undefined} strokeWidth={sw * 0.00035} />;
               return <rect key={`detail-column-${i}-${j}`} x={x - colPx / 2} y={y - colPx / 2} width={colPx} height={colPx} fill={architectural ? "var(--architectural-wall-light)" : "#0a0a0a"} stroke={architectural ? "var(--architectural-edge)" : undefined} strokeWidth={sw * 0.00035} />;
             }))}
           </g>;
@@ -6232,10 +6235,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                   const ly = ysM[j] * pxPerM;
                   const cx = grid.origin.x + lx * cs - ly * sn;
                   const cy = grid.origin.y + lx * sn + ly * cs;
-                  const poly = [
-                    { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
-                    { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
-                  ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
+                  const poly = columnFootprintPolygon({ x: cx, y: cy }, halfCol * 2, rotRad, grid.colShape);
                   obs.push({ kind: "polygon", poly });
                 }
               }
@@ -6448,6 +6448,10 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 {xs.flatMap((x, i) => ys.map((y, j) => {
                   if (!isNodeActive(grid, level.id, i, j)) return null;
                   if (isColumnClipped(grid, xsM[i], ysM[j])) return null;
+                  if (isCircularColumn(grid)) return (
+                    <circle key={`column-overlay-${i}-${j}`} cx={x} cy={y} r={colPx / 2}
+                      fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
+                  );
                   return (
                     <rect key={`column-overlay-${i}-${j}`}
                       x={x - colPx / 2} y={y - colPx / 2}
@@ -10966,10 +10970,7 @@ function buildLevelObstacles(sketch: Sketch, levelId: string): ParkingObstacle[]
         const lyv = ysM[j] * pxPerM;
         const cx = grid.origin.x + lx * cs - lyv * sn;
         const cy = grid.origin.y + lx * sn + lyv * cs;
-        const poly = [
-          { x: -halfCol, y: -halfCol }, { x: halfCol, y: -halfCol },
-          { x: halfCol, y: halfCol }, { x: -halfCol, y: halfCol },
-        ].map((p) => ({ x: cx + p.x * cs - p.y * sn, y: cy + p.x * sn + p.y * cs }));
+        const poly = columnFootprintPolygon({ x: cx, y: cy }, halfCol * 2, rotRad, grid.colShape);
         obs.push({ kind: "polygon", poly });
       }
     }

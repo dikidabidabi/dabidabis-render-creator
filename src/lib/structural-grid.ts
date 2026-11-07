@@ -27,7 +27,8 @@ export type StructuralGrid = {
   rotation?: number;                     // derajat rotasi grid struktur (CW positif) — display & geometri kolom
   spansX: number[];                      // bentang antar as sumbu X (meter)
   spansY: number[];                      // bentang antar as sumbu Y (meter)
-  colSizeCm: number;                     // ukuran kolom persegi (cm)
+  colSizeCm: number;                     // sisi kolom kotak / diameter kolom lingkaran (cm)
+  colShape?: ColumnShape;                // bentuk kolom; bawaan "square" (kotak)
   labelOffsetX?: number;                 // offset penomoran sumbu X (0 → "1", 3 → "4")
   labelOffsetY?: number;                 // offset huruf sumbu Y (0 → "A", 3 → "D")
   // Visibilitas buble ujung — true = sembunyikan buble di ujung tsb.
@@ -59,6 +60,41 @@ export type StructuralGrid = {
   merged?: StructuralGrid[];
 };
 
+
+export type ColumnShape = "square" | "circle";
+
+export function isCircularColumn(grid: Pick<StructuralGrid, "colShape">): boolean {
+  return grid.colShape === "circle";
+}
+
+// Luas penampang kolom (m²): kotak = sisi², lingkaran = π·(diameter/2)².
+export function columnCrossSectionAreaM2(grid: Pick<StructuralGrid, "colSizeCm" | "colShape">): number {
+  const sizeM = grid.colSizeCm / 100;
+  return isCircularColumn(grid) ? Math.PI * (sizeM / 2) ** 2 : sizeM * sizeM;
+}
+
+// Poligon tapak kolom di koordinat dunia. `sizePx` = sisi kotak atau diameter
+// lingkaran; lingkaran didekati 24 sisi untuk hitungan geometri/obstacle.
+export function columnFootprintPolygon(
+  center: { x: number; y: number },
+  sizePx: number,
+  rotationRad: number,
+  shape: ColumnShape | undefined,
+): Array<{ x: number; y: number }> {
+  const half = sizePx / 2;
+  if (shape === "circle") {
+    const n = 24;
+    return Array.from({ length: n }, (_, k) => {
+      const a = rotationRad + (k / n) * Math.PI * 2;
+      return { x: center.x + half * Math.cos(a), y: center.y + half * Math.sin(a) };
+    });
+  }
+  const cs = Math.cos(rotationRad), sn = Math.sin(rotationRad);
+  return [
+    { x: -half, y: -half }, { x: half, y: -half },
+    { x: half, y: half }, { x: -half, y: half },
+  ].map((c) => ({ x: center.x + c.x * cs - c.y * sn, y: center.y + c.x * sn + c.y * cs }));
+}
 
 export const SPAN_PRESETS = [6, 7.2, 8, 9] as const;
 export const COL_PRESETS = [40, 50, 60, 70, 80] as const;
@@ -117,6 +153,7 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     spansX: spansX.length ? spansX : [...DEFAULT_GRID.spansX],
     spansY: spansY.length ? spansY : (g.lineOnly ? [] : [...DEFAULT_GRID.spansY]),
     colSizeCm: Number.isFinite(col) && col > 0 ? col : DEFAULT_GRID.colSizeCm,
+    colShape: g.colShape === "circle" ? "circle" : "square",
     labelOffsetX: Number.isFinite(Number(g.labelOffsetX)) ? Math.max(0, Math.floor(Number(g.labelOffsetX))) : 0,
     labelOffsetY: Number.isFinite(Number(g.labelOffsetY)) ? Math.max(0, Math.floor(Number(g.labelOffsetY))) : 0,
     hideBubbleStartX: Boolean(g.hideBubbleStartX),
@@ -314,8 +351,7 @@ export function computeStructuralStats(
   if (!grid || !grid.enabled) return { totalColumns: 0, concreteVolumeM3: 0 };
   if (grid.lineOnly) return { totalColumns: 0, concreteVolumeM3: 0 };
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
-  const colM = grid.colSizeCm / 100;
-  const colArea = colM * colM;
+  const colArea = columnCrossSectionAreaM2(grid);
   let cols = 0;
   let vol = 0;
   for (let i = 0; i < sorted.length; i++) {

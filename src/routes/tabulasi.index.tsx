@@ -20,6 +20,7 @@ import {
   spansForLevel,
   axisPositions,
   isColumnVisible,
+  columnFootprintPolygon,
 } from "@/lib/structural-grid";
 import {
   type ParkingArea,
@@ -452,15 +453,7 @@ function computeStats(sk: Sketch): Stats {
           const ly = posY[j] * pxPerMeter;
           const wx = g.origin.x + lx * cos - ly * sin;
           const wy = g.origin.y + lx * sin + ly * cos;
-          const corners = [
-            { x: -halfCol, y: -halfCol },
-            { x:  halfCol, y: -halfCol },
-            { x:  halfCol, y:  halfCol },
-            { x: -halfCol, y:  halfCol },
-          ].map((c) => ({
-            x: wx + c.x * cos - c.y * sin,
-            y: wy + c.x * sin + c.y * cos,
-          }));
+          const corners = columnFootprintPolygon({ x: wx, y: wy }, halfCol * 2, ang, g.colShape);
           obs.push({ kind: "polygon", poly: corners });
         }
       }

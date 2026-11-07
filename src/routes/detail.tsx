@@ -20,7 +20,7 @@ import { renumberDetailAreas } from "@/lib/detail-numbering";
 import { detailWorldBounds } from "@/lib/detail-geometry";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
-import { axisPositions, collectGrids, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
+import { axisPositions, collectGrids, isCircularColumn, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { windowDividerFractions, type Window } from "@/lib/windows";
 import {
@@ -528,6 +528,7 @@ function DetailConstruction({ sketch, levelId, lines, pxPerMeter }: { sketch: Sk
         if (!isColumnVisible(grid, levelId, i, j, spansX, spansY)) return [];
         const x = grid.origin.x + (mx * cos - my * sin) * pxPerMeter;
         const y = grid.origin.y + (mx * sin + my * cos) * pxPerMeter;
+        if (isCircularColumn(grid)) return [<circle key={`column-${gridIndex}-${i}-${j}`} cx={x} cy={y} r={size / 2} fill="#bdbdbd" stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} />];
         return [<rect key={`column-${gridIndex}-${i}-${j}`} x={x - size / 2} y={y - size / 2} width={size} height={size} fill="#bdbdbd" stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} transform={`rotate(${grid.rotation ?? 0} ${x} ${y})`} />];
       }));
     }) : null}
