@@ -153,6 +153,9 @@ import {
   type ColumnClip,
   distanceToGrid,
   mergeGridInto,
+  moveGridLinked,
+  rotateGridLinked,
+  unmergeGridChild,
 } from "@/lib/structural-grid";
 import {
   type EdgeMaterial,
@@ -2446,6 +2449,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     },
     [sketch.structuralGrid, sketch.structuralGridExtras, editGridIdx, onChange],
   );
+  // Ganti grid aktif secara utuh (dipakai geser/rotasi terikat dengan grid hasil merge).
+  const onChangeGridLinked = useCallback(
+    (next: StructuralGrid) => {
+      if (editGridIdx === 0) {
+        onChange({ structuralGrid: next });
+        return;
+      }
+      const arr = (sketch.structuralGridExtras ?? []).slice();
+      if (!arr[editGridIdx - 1]) return;
+      arr[editGridIdx - 1] = next;
+      onChange({ structuralGridExtras: arr });
+    },
+    [sketch.structuralGridExtras, editGridIdx, onChange],
+  );
   const updateGridOverride = useCallback(
     (lvlId: string, patch: Partial<import("@/lib/structural-grid").GridOverride>) => {
       const prev = grid.perLevel?.[lvlId] ?? {};
@@ -3523,6 +3540,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               })),
             }
           : {}),
+        ...(g.merged ? { merged: g.merged.map((child) => scaleGrid(child)!) } : {}),
         // spansX/Y, colSizeCm, rotation, columnClips (meter relatif) tetap.
       };
     };
@@ -9005,7 +9023,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           toast.error("Klik garis grid lain untuk digabung");
           return;
         }
-        const merged = mergeGridInto(grid, best.g, pxPerMeter);
+        const merged = mergeGridInto(grid, best.g);
         let nextPrimary: StructuralGrid = sketch.structuralGrid ?? { ...DEFAULT_GRID };
         let nextExtras = (sketch.structuralGridExtras ?? []).slice();
         if (editGridIdx === 0) nextPrimary = merged; else nextExtras[editGridIdx - 1] = merged;
@@ -9088,7 +9106,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             return rotateAround(sl, mmPivot, mmGridRotRad);
           })()
         : rawWorld;
-      updateGrid({ origin: snapped });
+      onChangeGridLinked(moveGridLinked(grid, snapped));
       return;
     }
     if (tool === "atap") {
@@ -10672,7 +10690,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               return rotateAround(snapLocal, mmPivot, mmGridRotRad);
             })()
           : cand;
-        if (next.x !== grid.origin.x || next.y !== grid.origin.y) updateGrid({ origin: next });
+        if (next.x !== grid.origin.x || next.y !== grid.origin.y) onChangeGridLinked(moveGridLinked(grid, next));
       } else {
         // Corner: delta dihitung di frame lokal grid (rotasi struct).
         const rawLocal = structGridRotRad !== 0
@@ -15497,13 +15515,13 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     value={Number.isFinite(structGridRotation) ? structGridRotation : 0}
                     onChange={(e) => {
                       const v = parseFloat(e.target.value);
-                      updateGrid({ rotation: Number.isFinite(v) ? v : 0 });
+                      onChangeGridLinked(rotateGridLinked(grid, Number.isFinite(v) ? v : 0));
                     }}
                     className="h-7 text-xs"
                   />
                   <Button
                     variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
-                    onClick={() => updateGrid({ rotation: 0 })}
+                    onClick={() => onChangeGridLinked(rotateGridLinked(grid, 0))}
                     disabled={structGridRotation === 0}
                     title="Kembalikan rotasi grid struktur ke 0°"
                   >
@@ -15511,7 +15529,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   </Button>
                   <Button
                     variant="outline" size="sm" className="h-7 px-1.5 text-[10px]"
-                    onClick={() => updateGrid({ rotation: mmGridRotation })}
+                    onClick={() => onChangeGridLinked(rotateGridLinked(grid, mmGridRotation))}
                     disabled={structGridRotation === mmGridRotation}
                     title="Samakan dengan rotasi milimeter block agar paralel"
                   >
