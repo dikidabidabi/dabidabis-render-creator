@@ -59,6 +59,7 @@ import {
   isColumnClipped,
   levelInRange,
   collectGrids,
+  isCircularColumn,
 } from "@/lib/structural-grid";
 
 export const Route = createFileRoute("/model3d")({
@@ -617,9 +618,9 @@ function StructuralColumns({
   );
   const items = useMemo(() => {
     if (!grids.length) return [] as Array<{
-      key: string; x: number; z: number; y: number; h: number; size: number; rotY: number;
+      key: string; x: number; z: number; y: number; h: number; size: number; rotY: number; round: boolean;
     }>;
-    const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number; rotY: number }> = [];
+    const out: Array<{ key: string; x: number; z: number; y: number; h: number; size: number; rotY: number; round: boolean }> = [];
 
     for (let gi = 0; gi < grids.length; gi++) {
       if (visibleGrids && visibleGrids[gi] === false) continue;
@@ -663,6 +664,7 @@ function StructuralColumns({
               h: totalH,
               size: colM,
               rotY: -rotRad,
+              round: isCircularColumn(grid),
             });
           }
         }
@@ -678,7 +680,9 @@ function StructuralColumns({
     <group>
       {items.map((it) => (
         <mesh key={it.key} position={[it.x, it.y, it.z]} rotation={[0, it.rotY, 0]} castShadow receiveShadow>
-          <boxGeometry args={[it.size, it.h, it.size]} />
+          {it.round
+            ? <cylinderGeometry args={[it.size / 2, it.size / 2, it.h, 32]} />
+            : <boxGeometry args={[it.size, it.h, it.size]} />}
           <meshStandardMaterial color={col} roughness={0.7} metalness={0.05} />
           <Edges threshold={15} color="#444444" />
         </mesh>

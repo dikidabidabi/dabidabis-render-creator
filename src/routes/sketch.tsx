@@ -156,6 +156,8 @@ import {
   moveGridLinked,
   rotateGridLinked,
   unmergeGridChild,
+  columnFootprintPolygon,
+  isCircularColumn,
 } from "@/lib/structural-grid";
 import {
   type EdgeMaterial,
