@@ -14641,10 +14641,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>
               {gridEditMode === "merge" && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
-                  Klik garis grid lain di kanvas (termasuk garis hasil Jadikan Grid) — seluruh
-                  sumbunya digabung ke grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
-                  sedang aktif, lalu grid asalnya dihapus.
+                  Klik garis grid lain di kanvas (termasuk garis hasil Jadikan Grid) — grid itu
+                  beserta kolomnya digabung ke grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
+                  sedang aktif dan ikut bergeser/berputar bersamanya.
                 </p>
+              )}
+              {(grid.merged ?? []).length > 0 && (
+                <div className="space-y-1 rounded border border-border/40 p-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Grid tergabung ({grid.merged!.length})
+                  </div>
+                  {grid.merged!.map((child, ci) => (
+                    <div key={`mg-${ci}`} className="flex items-center justify-between gap-1 text-[10px]">
+                      <span className="truncate">
+                        Grid {ci + 1} · {child.lineOnly ? "1 garis" : `${child.spansX.length + 1}×${child.spansY.length + 1} as`}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-5 px-1.5 text-[10px]"
+                        title="Lepaskan grid ini menjadi grid extra tersendiri"
+                        onClick={() => {
+                          const { parent, child: freed } = unmergeGridChild(grid, ci);
+                          if (!freed) return;
+                          let nextPrimary = sketch.structuralGrid ?? { ...DEFAULT_GRID };
+                          const nextExtras = (sketch.structuralGridExtras ?? []).slice();
+                          if (editGridIdx === 0) nextPrimary = parent; else nextExtras[editGridIdx - 1] = parent;
+                          nextExtras.push(freed);
+                          onChange({ structuralGrid: nextPrimary, structuralGridExtras: nextExtras });
+                          toast.success(`Grid dilepas menjadi Extra ${nextExtras.length}`);
+                        }}
+                      >
+                        Pisahkan
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               )}
               {gridEditMode === "fromLine" && (
                 <div className="space-y-1.5">
