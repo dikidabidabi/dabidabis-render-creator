@@ -52,6 +52,9 @@ import {
   collectGrids,
   columnFootprintPolygon,
   isCircularColumn,
+  gridColumnPoints,
+  gridLocalToWorld,
+  extraLinePath,
 } from "@/lib/structural-grid";
 import {
   computeStraightSegments,
@@ -4970,17 +4973,12 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
   const dimFont = sw * 0.012;
   const dimStroke = sw * 0.0001625;
   const gridStroke = Math.max(sw * 0.00028, 0.12);
-  const architecturalColumns = gridData.flatMap(({ grid, spansX, spansY, xs, ys, rotation }) => {
+  const architecturalColumns = grids.flatMap((grid) => {
     const half = grid.colSizeCm / 200 * pxPerM;
-    const angle = rotation * Math.PI / 180;
-    return xs.flatMap((x, i) => ys.flatMap((y, j) => {
-      if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return [];
-      const center = {
-        x: grid.origin.x + (x - grid.origin.x) * Math.cos(angle) - (y - grid.origin.y) * Math.sin(angle),
-        y: grid.origin.y + (x - grid.origin.x) * Math.sin(angle) + (y - grid.origin.y) * Math.cos(angle),
-      };
-      return [columnFootprintPolygon(center, half * 2, angle, grid.colShape)];
-    }));
+    const angle = (Number(grid.rotation) || 0) * Math.PI / 180;
+    const { spansX, spansY } = spansForLevel(grid, level.id);
+    return gridColumnPoints(grid, level.id, spansX, spansY).map((cp) =>
+      columnFootprintPolygon(gridLocalToWorld(grid, cp.mx, cp.my, pxPerM), half * 2, angle, grid.colShape));
   });
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
   // Permukaan material dipakai sebagai acuan ukuran bersih dan proyeksi luar.
@@ -5325,14 +5323,17 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />}
-        {!architectural && gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+        {!architectural && grids.map((grid, gridIndex) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
+          const rotation = Number(grid.rotation) || 0;
+          const { spansX, spansY } = spansForLevel(grid, level.id);
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
-            {xs.flatMap((x, i) => ys.map((y, j) => {
-              if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return null;
+            {gridColumnPoints(grid, level.id, spansX, spansY).map((cp) => {
+              const x = grid.origin.x + cp.mx * pxPerM, y = grid.origin.y + cp.my * pxPerM;
+              const i = cp.key, j = "c";
               if (isCircularColumn(grid)) return <circle key={`detail-column-${i}-${j}`} cx={x} cy={y} r={colPx / 2} fill={architectural ? "var(--architectural-wall-light)" : "#0a0a0a"} stroke={architectural ? "var(--architectural-edge)" : undefined} strokeWidth={sw * 0.00035} />;
               return <rect key={`detail-column-${i}-${j}`} x={x - colPx / 2} y={y - colPx / 2} width={colPx} height={colPx} fill={architectural ? "var(--architectural-wall-light)" : "#0a0a0a"} stroke={architectural ? "var(--architectural-edge)" : undefined} strokeWidth={sw * 0.00035} />;
-            }))}
+            })}
           </g>;
         })}
         {area.interiorDimensions && <g>{interiorDimensionMarks}{exteriorDimensionMarks}</g>}
@@ -6434,21 +6435,17 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           {/* Kolom struktur berada di atas furniture dan notasi denah lainnya. */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-            if (!levelInRange(grid, level, allLv) || grid.lineOnly) return null;
+            if (!levelInRange(grid, level, allLv)) return null;
             const { spansX, spansY } = spansForLevel(grid, level.id);
-            const xsM = axisPositions(spansX);
-            const ysM = axisPositions(spansY);
-            const xs = xsM.map((m) => grid.origin.x + m * pxPerM);
-            const ys = ysM.map((m) => grid.origin.y + m * pxPerM);
             const colPx = (grid.colSizeCm / 100) * pxPerM;
             const gridSW = sw * 0.0003;
             const rotDeg = Number(grid.rotation) || 0;
             return (
               <g key={`column-overlay-${gIdx}`} pointerEvents="none"
                 transform={rotDeg ? `rotate(${rotDeg} ${grid.origin.x} ${grid.origin.y})` : undefined}>
-                {xs.flatMap((x, i) => ys.map((y, j) => {
-                  if (!isNodeActive(grid, level.id, i, j)) return null;
-                  if (isColumnClipped(grid, xsM[i], ysM[j])) return null;
+                {gridColumnPoints(grid, level.id, spansX, spansY).map((cp) => {
+                  const x = grid.origin.x + cp.mx * pxPerM, y = grid.origin.y + cp.my * pxPerM;
+                  const i = cp.key, j = "c";
                   if (isCircularColumn(grid)) return (
                     <circle key={`column-overlay-${i}-${j}`} cx={x} cy={y} r={colPx / 2}
                       fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
@@ -6459,7 +6456,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       width={colPx} height={colPx}
                       fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
                   );
-                }))}
+                })}
               </g>
             );
           })}
