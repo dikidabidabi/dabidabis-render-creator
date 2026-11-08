@@ -57,6 +57,7 @@ import {
   spansForLevel,
   isNodeActive,
   isColumnClipped,
+  gridColumnPoints,
   levelInRange,
   collectGrids,
   isCircularColumn,
