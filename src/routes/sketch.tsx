@@ -5611,6 +5611,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             }
           }
         }
+        // Kolom hasil Insert Kolom
+        if (g.insertedColumns?.length) {
+          const colPx = (g.colSizeCm / 100) * ppm;
+          ctx.fillStyle = linkedActive ? "#0a0a0a" : "rgba(40,40,40,0.55)";
+          for (const c of g.insertedColumns) {
+            const cx = g.origin.x + c.x * ppm, cy = g.origin.y + c.y * ppm;
+            if (isCircularColumn(g)) {
+              ctx.beginPath();
+              ctx.arc(cx, cy, colPx / 2, 0, Math.PI * 2);
+              ctx.fill();
+            } else ctx.fillRect(cx - colPx / 2, cy - colPx / 2, colPx, colPx);
+          }
+        }
         ctx.restore();
       }
     }
@@ -5775,6 +5788,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               ctx.fill();
             } else ctx.fillRect(xs[i] - colPx / 2, ys[j] - colPx / 2, colPx, colPx);
           }
+        }
+
+        // Kolom hasil Insert Kolom (persilangan garis grid)
+        ctx.fillStyle = "#0a0a0a";
+        for (const c of grid.insertedColumns ?? []) {
+          const cx = ox + c.x * ppm, cy = oy + c.y * ppm;
+          if (isCircularColumn(grid)) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, colPx / 2, 0, Math.PI * 2);
+            ctx.fill();
+          } else ctx.fillRect(cx - colPx / 2, cy - colPx / 2, colPx, colPx);
+        }
+
+        // Marquee seleksi Insert Kolom (koordinat dunia → frame lokal grid)
+        if (colMarquee) {
+          const pts = [
+            colMarquee.start,
+            { x: colMarquee.cur.x, y: colMarquee.start.y },
+            colMarquee.cur,
+            { x: colMarquee.start.x, y: colMarquee.cur.y },
+          ].map((pt) => (structGridRotRad !== 0 ? rotateAround(pt, grid.origin, -structGridRotRad) : pt));
+          ctx.save();
+          ctx.setLineDash([6 / s, 4 / s]);
+          ctx.lineWidth = 1.2 / s;
+          ctx.strokeStyle = "rgba(232,93,58,0.9)";
+          ctx.fillStyle = "rgba(232,93,58,0.08)";
+          ctx.beginPath();
+          pts.forEach((pt, k) => (k === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
         }
 
         // Render clip polygons (dan draft) saat tool grid aktif
