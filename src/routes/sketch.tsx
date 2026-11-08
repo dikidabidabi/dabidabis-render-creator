@@ -9055,6 +9055,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const raw = structGridRotRad !== 0
         ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
         : rawWorld;
+      // -------- MODE: insert kolom — marquee di grid aktif --------
+      if (gridEditMode === "insertColumn") {
+        if (!grid.enabled) { toast.error("Aktifkan grid terlebih dahulu"); return; }
+        setColMarquee({ start: rawWorld, cur: rawWorld });
+        return;
+      }
       // -------- MODE: jadikan grid dari satu garis lurus --------
       if (gridEditMode === "fromLine") {
         const tolPx = 10 / view.s;
@@ -9070,31 +9076,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           toast.error("Tidak ada garis yang dipilih");
           return;
         }
-        const startLn = lines[bestIdx];
-        const lnOrigin = { ...startLn.a };
-        const vx = startLn.b.x - startLn.a.x;
-        const vy = startLn.b.y - startLn.a.y;
-        const rotDeg = (Math.atan2(vy, vx) * 180) / Math.PI;
-        const lenPx = Math.hypot(vx, vy);
+        // Garis lain yang ujungnya bersambung dan berbelok 0° – <90° dari
+        // arah garis sebelumnya dianggap satu nomor grid.
+        const chainCands = lines.map((ln) =>
+          (ln.kind ?? "straight") === "straight" && (!activeLvlId || !ln.levelId || ln.levelId === activeLvlId)
+            ? ln
+            : null,
+        );
+        const chain = chainGridLines(chainCands, bestIdx, Math.max(0.5, 2 / view.s));
+        const chainPts = chain.points;
+        let lenPx = 0;
+        for (let k = 1; k < chainPts.length; k++) lenPx += Math.hypot(chainPts[k].x - chainPts[k - 1].x, chainPts[k].y - chainPts[k - 1].y);
         const lenM = lenPx / pxPerMeter;
-        if (lenM < 0.1) {
+        if (lenM < 0.1 || chainPts.length < 2) {
           toast.error("Garis terlalu pendek");
           return;
         }
+        const rotDeg = (Math.atan2(chainPts[1].y - chainPts[0].y, chainPts[1].x - chainPts[0].x) * 180) / Math.PI;
         // Gabungkan ke grid yang sedang aktif (primer atau extra yg dipilih).
         const prevExtraLines = grid.extraLines ?? [];
         const newExtra = {
           id: `xl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
-          origin: lnOrigin,
+          origin: { ...chainPts[0] },
           rotation: rotDeg,
           lengthM: Number(lenM.toFixed(2)),
+          ...(chainPts.length >= 3 ? { points: chainPts.map((pt) => ({ ...pt })) } : {}),
         };
+        pushHistory();
         updateGrid({ extraLines: [...prevExtraLines, newExtra] });
         // Hapus garis aslinya, tapi pertahankan mode "fromLine" agar bisa
         // pilih garis lain secara berurutan.
-        const nextLines = lines.filter((_, i) => i !== bestIdx);
+        const used = new Set(chain.indices);
+        const nextLines = lines.filter((_, i) => !used.has(i));
         onChange({ lines: nextLines });
-        toast.success("Garis ditambahkan ke grid aktif");
+        toast.success(chain.indices.length > 1
+          ? `${chain.indices.length} garis bersambung dijadikan satu grid`
+          : "Garis ditambahkan ke grid aktif");
         return;
       }
       // -------- MODE: merge grid — gabungkan grid yang diklik ke grid aktif --------
@@ -10765,6 +10782,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
 
 
+    if (colMarquee) {
+      setColMarquee({ ...colMarquee, cur: getWorldPosRaw(e) });
+      return;
+    }
     if (gridDrag) {
       const rawWorld = getWorldPosRaw(e);
       if (gridDrag.kind === "move") {
@@ -11208,6 +11229,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
 
 
+    if (colMarquee) {
+      const mq = { ...colMarquee, cur: getWorldPosRaw(e) };
+      setColMarquee(null);
+      const res = insertColumnsInRect(
+        grid,
+        { x0: mq.start.x, y0: mq.start.y, x1: mq.cur.x, y1: mq.cur.y },
+        activeLvlId,
+        pxPerMeter,
+      );
+      if (!res.added) {
+        toast.error("Tidak ada persilangan garis grid baru di area seleksi");
+        return;
+      }
+      pushHistory();
+      onChangeGridLinked(res.grid);
+      toast.success(`${res.added} kolom ditambahkan`);
+      return;
+    }
     if (gridDrag) {
       setGridDrag(null);
       return;
