@@ -11767,6 +11767,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setPolyDraft(null);
     setGridDrag(null);
     setClipDrag(null);
+    setColMarquee(null);
     setDoorDraft(null);
     setWindowDraft(null);
     setDoorEndpointDrag(null);
