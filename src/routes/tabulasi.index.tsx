@@ -18,9 +18,8 @@ import {
   collectGrids,
   levelInRange,
   spansForLevel,
-  axisPositions,
-  isColumnVisible,
   columnFootprintPolygon,
+  gridColumnPoints,
 } from "@/lib/structural-grid";
 import {
   type ParkingArea,
@@ -438,19 +437,15 @@ function computeStats(sk: Sketch): Stats {
     const lv = levels.find((l) => l.id === lvId);
     if (!lv) return obs;
     for (const g of grids) {
-      if (g.lineOnly) continue;
       if (!levelInRange(g, lv, levels)) continue;
       const { spansX, spansY } = spansForLevel(g, lv.id);
       const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
       const ang = ((g.rotation ?? 0) * Math.PI) / 180;
       const cos = Math.cos(ang), sin = Math.sin(ang);
-      const posX = axisPositions(spansX);
-      const posY = axisPositions(spansY);
-      for (let j = 0; j < posY.length; j++) {
-        for (let i = 0; i < posX.length; i++) {
-          if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
-          const lx = posX[i] * pxPerMeter;
-          const ly = posY[j] * pxPerMeter;
+      for (const cp of gridColumnPoints(g, lv.id, spansX, spansY)) {
+        {
+          const lx = cp.mx * pxPerMeter;
+          const ly = cp.my * pxPerMeter;
           const wx = g.origin.x + lx * cos - ly * sin;
           const wy = g.origin.y + lx * sin + ly * cos;
           const corners = columnFootprintPolygon({ x: wx, y: wy }, halfCol * 2, ang, g.colShape);

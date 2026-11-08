@@ -52,6 +52,9 @@ import {
   collectGrids,
   columnFootprintPolygon,
   isCircularColumn,
+  gridColumnPoints,
+  gridLocalToWorld,
+  extraLinePath,
 } from "@/lib/structural-grid";
 import {
   computeStraightSegments,
@@ -3373,7 +3376,6 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
             const rendered: React.ReactNode[] = [];
 
             for (const [gridIndex, grid] of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).entries()) {
-              if (grid.lineOnly) continue;
               const rotation = ((Number(grid.rotation) || 0) * Math.PI) / 180;
               const cs = Math.cos(rotation), sn = Math.sin(rotation);
               const halfColumnM = grid.colSizeCm / 200;
@@ -3383,14 +3385,12 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                 const sourceLevel = levels.find((level) => level.id === box.id);
                 if (!sourceLevel || !levelInRange(grid, sourceLevel, levels)) continue;
                 const { spansX, spansY } = spansForLevel(grid, box.id);
-                const xs = axisPositions(spansX);
-                const ys = axisPositions(spansY);
 
-                for (let j = 0; j < ys.length; j++) {
-                  for (let i = 0; i < xs.length; i++) {
-                    if (!isColumnVisible(grid, box.id, i, j, spansX, spansY)) continue;
-                    const localX = xs[i] * pxPerMeter;
-                    const localY = ys[j] * pxPerMeter;
+                for (const cp of gridColumnPoints(grid, box.id, spansX, spansY)) {
+                  {
+                    const ck = cp.key;
+                    const localX = cp.mx * pxPerMeter;
+                    const localY = cp.my * pxPerMeter;
                     const center = {
                       x: grid.origin.x + localX * cs - localY * sn,
                       y: grid.origin.y + localX * sn + localY * cs,
@@ -3416,7 +3416,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
                       const topM = baseM + box.floorH;
                       rendered.push(
                         <rect
-                          key={`section-column-${gridIndex}-${box.id}-${i}-${j}-${floorIndex}`}
+                          key={`section-column-${gridIndex}-${box.id}-${ck}-${floorIndex}`}
                           x={x}
                           y={my(topM)}
                           width={columnWidthPx}
@@ -3450,20 +3450,16 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
               const sightLen2 = sightDx * sightDx + sightDy * sightDy;
               if (sightLen2 < 1e-6) return false;
               for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
-                if (grid.lineOnly) continue;
                 const sourceLevel = levels.find((level) => level.id === levelId);
                 if (!sourceLevel || !levelInRange(grid, sourceLevel, levels)) continue;
                 const { spansX, spansY } = spansForLevel(grid, levelId);
-                const xs = axisPositions(spansX);
-                const ys = axisPositions(spansY);
                 const rotation = ((Number(grid.rotation) || 0) * Math.PI) / 180;
                 const cs = Math.cos(rotation), sn = Math.sin(rotation);
                 const radiusPx = (grid.colSizeCm / 200) * pxPerMeter * Math.SQRT2;
-                for (let j = 0; j < ys.length; j++) {
-                  for (let i = 0; i < xs.length; i++) {
-                    if (!isColumnVisible(grid, levelId, i, j, spansX, spansY)) continue;
-                    const localX = xs[i] * pxPerMeter;
-                    const localY = ys[j] * pxPerMeter;
+                for (const cp of gridColumnPoints(grid, levelId, spansX, spansY)) {
+                  {
+                    const localX = cp.mx * pxPerMeter;
+                    const localY = cp.my * pxPerMeter;
                     const column = {
                       x: grid.origin.x + localX * cs - localY * sn,
                       y: grid.origin.y + localX * sn + localY * cs,
@@ -4977,17 +4973,12 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
   const dimFont = sw * 0.012;
   const dimStroke = sw * 0.0001625;
   const gridStroke = Math.max(sw * 0.00028, 0.12);
-  const architecturalColumns = gridData.flatMap(({ grid, spansX, spansY, xs, ys, rotation }) => {
+  const architecturalColumns = grids.flatMap((grid) => {
     const half = grid.colSizeCm / 200 * pxPerM;
-    const angle = rotation * Math.PI / 180;
-    return xs.flatMap((x, i) => ys.flatMap((y, j) => {
-      if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return [];
-      const center = {
-        x: grid.origin.x + (x - grid.origin.x) * Math.cos(angle) - (y - grid.origin.y) * Math.sin(angle),
-        y: grid.origin.y + (x - grid.origin.x) * Math.sin(angle) + (y - grid.origin.y) * Math.cos(angle),
-      };
-      return [columnFootprintPolygon(center, half * 2, angle, grid.colShape)];
-    }));
+    const angle = (Number(grid.rotation) || 0) * Math.PI / 180;
+    const { spansX, spansY } = spansForLevel(grid, level.id);
+    return gridColumnPoints(grid, level.id, spansX, spansY).map((cp) =>
+      columnFootprintPolygon(gridLocalToWorld(grid, cp.mx, cp.my, pxPerM), half * 2, angle, grid.colShape));
   });
   const dimensionTolerance = Math.max(pxPerM * 0.02, 0.01);
   // Permukaan material dipakai sebagai acuan ukuran bersih dan proyeksi luar.
@@ -5332,14 +5323,17 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
           edgeAttrs={sketch.edgeAttrs ?? {}}
           pxPerM={pxPerM}
         />}
-        {!architectural && gridData.map(({ grid, gridIndex, spansX, spansY, xs, ys, rotation }) => {
+        {!architectural && grids.map((grid, gridIndex) => {
           const colPx = (grid.colSizeCm / 100) * pxPerM;
+          const rotation = Number(grid.rotation) || 0;
+          const { spansX, spansY } = spansForLevel(grid, level.id);
           return <g key={`detail-columns-${gridIndex}`} pointerEvents="none" transform={rotation ? `rotate(${rotation} ${grid.origin.x} ${grid.origin.y})` : undefined}>
-            {xs.flatMap((x, i) => ys.map((y, j) => {
-              if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) return null;
+            {gridColumnPoints(grid, level.id, spansX, spansY).map((cp) => {
+              const x = grid.origin.x + cp.mx * pxPerM, y = grid.origin.y + cp.my * pxPerM;
+              const i = cp.key, j = "c";
               if (isCircularColumn(grid)) return <circle key={`detail-column-${i}-${j}`} cx={x} cy={y} r={colPx / 2} fill={architectural ? "var(--architectural-wall-light)" : "#0a0a0a"} stroke={architectural ? "var(--architectural-edge)" : undefined} strokeWidth={sw * 0.00035} />;
               return <rect key={`detail-column-${i}-${j}`} x={x - colPx / 2} y={y - colPx / 2} width={colPx} height={colPx} fill={architectural ? "var(--architectural-wall-light)" : "#0a0a0a"} stroke={architectural ? "var(--architectural-edge)" : undefined} strokeWidth={sw * 0.00035} />;
-            }))}
+            })}
           </g>;
         })}
         {area.interiorDimensions && <g>{interiorDimensionMarks}{exteriorDimensionMarks}</g>}
@@ -6083,22 +6077,33 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
             const bubFs = sw * 0.008;
             const baseIdx = (grid.labelOffsetX ?? 0) + grid.spansX.length + 1;
             return lines.map((el, i) => {
-              const lenPx = el.lengthM * pxPerM;
               const lbl = xAxisLabelAt(baseIdx + i, 0);
+              const path = extraLinePath(el, pxPerM);
+              const n = path.length;
+              const unitDir = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+                const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+                return { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+              };
+              const d0 = unitDir(path[0], path[1]);
+              const dn = unitDir(path[n - 2], path[n - 1]);
+              const lineStart = { x: path[0].x - d0.x * ext, y: path[0].y - d0.y * ext };
+              const lineEnd = { x: path[n - 1].x + dn.x * ext, y: path[n - 1].y + dn.y * ext };
+              const bubStart = { x: lineStart.x - d0.x * rBub, y: lineStart.y - d0.y * rBub };
+              const bubEnd = { x: lineEnd.x + dn.x * rBub, y: lineEnd.y + dn.y * rBub };
+              const linePts = [lineStart, ...path, lineEnd].map((pt) => `${pt.x},${pt.y}`).join(" ");
               return (
-                <g key={`xl-${gIdx}-${el.id}`} pointerEvents="none"
-                  transform={`translate(${el.origin.x} ${el.origin.y}) rotate(${el.rotation})`}>
-                  <line x1={-ext} y1={0} x2={lenPx + ext} y2={0}
+                <g key={`xl-${gIdx}-${el.id}`} pointerEvents="none">
+                  <polyline points={linePts} fill="none"
                     stroke="#0a0a0a" strokeWidth={gridSWx} strokeDasharray={dash} />
                   {!el.hideStart && (
-                    <g transform={`translate(${-ext - rBub} 0) rotate(${-el.rotation})`}>
+                    <g transform={`translate(${bubStart.x} ${bubStart.y})`}>
                       <circle r={rBub} fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSWx} />
                       <text textAnchor="middle" dominantBaseline="central"
                         fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">{lbl}</text>
                     </g>
                   )}
                   {!el.hideEnd && (
-                    <g transform={`translate(${lenPx + ext + rBub} 0) rotate(${-el.rotation})`}>
+                    <g transform={`translate(${bubEnd.x} ${bubEnd.y})`}>
                       <circle r={rBub} fill="#ffffff" stroke="#0a0a0a" strokeWidth={gridSWx} />
                       <text textAnchor="middle" dominantBaseline="central"
                         fontSize={bubFs} fontWeight={700} fill="#0a0a0a" fontFamily="Sora, sans-serif">{lbl}</text>
@@ -6221,18 +6226,15 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
               obs.push({ kind: "polygon", poly: ly.points });
             }
             for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
-              if (grid.lineOnly || !levelInRange(grid, level, sketch.levels ?? [])) continue;
+              if (!levelInRange(grid, level, sketch.levels ?? [])) continue;
               const { spansX, spansY } = spansForLevel(grid, level.id);
-              const xsM = axisPositions(spansX);
-              const ysM = axisPositions(spansY);
               const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
               const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
               const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
-              for (let j = 0; j < ysM.length; j++) {
-                for (let i = 0; i < xsM.length; i++) {
-                  if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
-                  const lx = xsM[i] * pxPerM;
-                  const ly = ysM[j] * pxPerM;
+              for (const cp of gridColumnPoints(grid, level.id, spansX, spansY)) {
+                {
+                  const lx = cp.mx * pxPerM;
+                  const ly = cp.my * pxPerM;
                   const cx = grid.origin.x + lx * cs - ly * sn;
                   const cy = grid.origin.y + lx * sn + ly * cs;
                   const poly = columnFootprintPolygon({ x: cx, y: cy }, halfCol * 2, rotRad, grid.colShape);
@@ -6433,21 +6435,17 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           {/* Kolom struktur berada di atas furniture dan notasi denah lainnya. */}
           {collectGrids(sketch.structuralGrid, sketch.structuralGridExtras).map((grid, gIdx) => {
             const allLv = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
-            if (!levelInRange(grid, level, allLv) || grid.lineOnly) return null;
+            if (!levelInRange(grid, level, allLv)) return null;
             const { spansX, spansY } = spansForLevel(grid, level.id);
-            const xsM = axisPositions(spansX);
-            const ysM = axisPositions(spansY);
-            const xs = xsM.map((m) => grid.origin.x + m * pxPerM);
-            const ys = ysM.map((m) => grid.origin.y + m * pxPerM);
             const colPx = (grid.colSizeCm / 100) * pxPerM;
             const gridSW = sw * 0.0003;
             const rotDeg = Number(grid.rotation) || 0;
             return (
               <g key={`column-overlay-${gIdx}`} pointerEvents="none"
                 transform={rotDeg ? `rotate(${rotDeg} ${grid.origin.x} ${grid.origin.y})` : undefined}>
-                {xs.flatMap((x, i) => ys.map((y, j) => {
-                  if (!isNodeActive(grid, level.id, i, j)) return null;
-                  if (isColumnClipped(grid, xsM[i], ysM[j])) return null;
+                {gridColumnPoints(grid, level.id, spansX, spansY).map((cp) => {
+                  const x = grid.origin.x + cp.mx * pxPerM, y = grid.origin.y + cp.my * pxPerM;
+                  const i = cp.key, j = "c";
                   if (isCircularColumn(grid)) return (
                     <circle key={`column-overlay-${i}-${j}`} cx={x} cy={y} r={colPx / 2}
                       fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
@@ -6458,7 +6456,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                       width={colPx} height={colPx}
                       fill="#0a0a0a" stroke="#0a0a0a" strokeWidth={gridSW} />
                   );
-                }))}
+                })}
               </g>
             );
           })}
@@ -10956,18 +10954,15 @@ function buildLevelObstacles(sketch: Sketch, levelId: string): ParkingObstacle[]
     obs.push({ kind: "polygon", poly: ly.points });
   }
   for (const grid of collectGrids(sketch.structuralGrid, sketch.structuralGridExtras)) {
-    if (grid.lineOnly || !levelInRange(grid, level, levels)) continue;
+    if (!levelInRange(grid, level, levels)) continue;
     const { spansX, spansY } = spansForLevel(grid, level.id);
-    const xsM = axisPositions(spansX);
-    const ysM = axisPositions(spansY);
     const halfCol = ((grid.colSizeCm / 100) * pxPerM) / 2;
     const rotRad = ((Number(grid.rotation) || 0) * Math.PI) / 180;
     const cs = Math.cos(rotRad), sn = Math.sin(rotRad);
-    for (let j = 0; j < ysM.length; j++) {
-      for (let i = 0; i < xsM.length; i++) {
-        if (!isColumnVisible(grid, level.id, i, j, spansX, spansY)) continue;
-        const lx = xsM[i] * pxPerM;
-        const lyv = ysM[j] * pxPerM;
+    for (const cp of gridColumnPoints(grid, level.id, spansX, spansY)) {
+      {
+        const lx = cp.mx * pxPerM;
+        const lyv = cp.my * pxPerM;
         const cx = grid.origin.x + lx * cs - lyv * sn;
         const cy = grid.origin.y + lx * sn + lyv * cs;
         const poly = columnFootprintPolygon({ x: cx, y: cy }, halfCol * 2, rotRad, grid.colShape);

@@ -157,6 +157,10 @@ import {
   rotateGridLinked,
   unmergeGridChild,
   columnFootprintPolygon,
+  gridColumnPoints,
+  chainGridLines,
+  extraLinePath,
+  insertColumnsInRect,
   isCircularColumn,
 } from "@/lib/structural-grid";
 import {
@@ -3196,7 +3200,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [gridMoveDyMm, setGridMoveDyMm] = useState<string>("0");
 
   // Grid Struktur — edit kolom: clip polygon (sembunyikan kolom di area)
-  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip" | "fromLine" | "merge">("expand");
+  const [gridEditMode, setGridEditMode] = useState<"expand" | "clip" | "fromLine" | "merge" | "insertColumn">("expand");
+  // Insert Kolom — marquee seleksi (px dunia)
+  const [colMarquee, setColMarquee] = useState<{ start: Point; cur: Point } | null>(null);
   type ClipDrag = {
     clipId: string;        // id clip (atau "__draft__" jika polygon belum di-commit)
     idx: number;           // index titik yang di-drag
@@ -3538,6 +3544,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               extraLines: g.extraLines.map((el) => ({
                 ...el,
                 origin: sp(el.origin),
+                ...(el.points ? { points: el.points.map((pt) => sp(pt)) } : {}),
                 // lengthM tetap (meter)
               })),
             }
@@ -4194,19 +4201,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     const lv = levels.find((l) => l.id === activeLvlId);
     if (lv) {
       for (const g of grids) {
-        if (g.lineOnly) continue;
         if (!levelInRange(g, lv, levels)) continue;
         const { spansX, spansY } = spansForLevel(g, lv.id);
         const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
         const ang = ((g.rotation ?? 0) * Math.PI) / 180;
         const cos = Math.cos(ang), sin = Math.sin(ang);
-        const posX = axisPositions(spansX);
-        const posY = axisPositions(spansY);
-        for (let j = 0; j < posY.length; j++) {
-          for (let i = 0; i < posX.length; i++) {
-            if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
-            const lx = posX[i] * pxPerMeter;
-            const ly = posY[j] * pxPerMeter;
+        for (const cp of gridColumnPoints(g, lv.id, spansX, spansY)) {
+          {
+            const lx = cp.mx * pxPerMeter;
+            const ly = cp.my * pxPerMeter;
             const wx = g.origin.x + lx * cos - ly * sin;
             const wy = g.origin.y + lx * sin + ly * cos;
             const corners = columnFootprintPolygon({ x: wx, y: wy }, halfCol * 2, ang, g.colShape);
@@ -4261,19 +4264,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     const lv = levels.find((l) => l.id === targetLvlId);
     if (lv) {
       for (const g of grids) {
-        if (g.lineOnly) continue;
         if (!levelInRange(g, lv, levels)) continue;
         const { spansX, spansY } = spansForLevel(g, lv.id);
         const halfCol = ((g.colSizeCm / 100) * pxPerMeter) / 2;
         const ang = ((g.rotation ?? 0) * Math.PI) / 180;
         const cos = Math.cos(ang), sin = Math.sin(ang);
-        const posX = axisPositions(spansX);
-        const posY = axisPositions(spansY);
-        for (let j = 0; j < posY.length; j++) {
-          for (let i = 0; i < posX.length; i++) {
-            if (!isColumnVisible(g, lv.id, i, j, spansX, spansY)) continue;
-            const lx = posX[i] * pxPerMeter;
-            const ly = posY[j] * pxPerMeter;
+        for (const cp of gridColumnPoints(g, lv.id, spansX, spansY)) {
+          {
+            const lx = cp.mx * pxPerMeter;
+            const ly = cp.my * pxPerMeter;
             const wx = g.origin.x + lx * cos - ly * sin;
             const wy = g.origin.y + lx * sin + ly * cos;
             const corners = columnFootprintPolygon({ x: wx, y: wy }, halfCol * 2, ang, g.colShape);
@@ -5615,6 +5614,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             }
           }
         }
+        // Kolom hasil Insert Kolom
+        if (g.insertedColumns?.length) {
+          const colPx = (g.colSizeCm / 100) * ppm;
+          ctx.fillStyle = linkedActive ? "#0a0a0a" : "rgba(40,40,40,0.55)";
+          for (const c of g.insertedColumns) {
+            const cx = g.origin.x + c.x * ppm, cy = g.origin.y + c.y * ppm;
+            if (isCircularColumn(g)) {
+              ctx.beginPath();
+              ctx.arc(cx, cy, colPx / 2, 0, Math.PI * 2);
+              ctx.fill();
+            } else ctx.fillRect(cx - colPx / 2, cy - colPx / 2, colPx, colPx);
+          }
+        }
         ctx.restore();
       }
     }
@@ -5781,6 +5793,38 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           }
         }
 
+        // Kolom hasil Insert Kolom (persilangan garis grid)
+        ctx.fillStyle = "#0a0a0a";
+        for (const c of grid.insertedColumns ?? []) {
+          const cx = ox + c.x * ppm, cy = oy + c.y * ppm;
+          if (isCircularColumn(grid)) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, colPx / 2, 0, Math.PI * 2);
+            ctx.fill();
+          } else ctx.fillRect(cx - colPx / 2, cy - colPx / 2, colPx, colPx);
+        }
+
+        // Marquee seleksi Insert Kolom (koordinat dunia → frame lokal grid)
+        if (colMarquee) {
+          const pts = [
+            colMarquee.start,
+            { x: colMarquee.cur.x, y: colMarquee.start.y },
+            colMarquee.cur,
+            { x: colMarquee.start.x, y: colMarquee.cur.y },
+          ].map((pt) => (structGridRotRad !== 0 ? rotateAround(pt, grid.origin, -structGridRotRad) : pt));
+          ctx.save();
+          ctx.setLineDash([6 / s, 4 / s]);
+          ctx.lineWidth = 1.2 / s;
+          ctx.strokeStyle = "rgba(232,93,58,0.9)";
+          ctx.fillStyle = "rgba(232,93,58,0.08)";
+          ctx.beginPath();
+          pts.forEach((pt, k) => (k === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+
         // Render clip polygons (dan draft) saat tool grid aktif
         if (tool === "grid") {
           const allClips: Array<{ id: string; pts: Point[]; isDraft: boolean }> = [];
@@ -5877,41 +5921,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         g.extraLines.forEach((el, li) => {
-          const lenPx = el.lengthM * ppm;
+          // Lurus = 2 titik; garis bersambung = seluruh titik (satu nomor grid).
+          const path = extraLinePath(el, ppm);
+          const n = path.length;
+          const unitDir = (a: Point, b: Point) => {
+            const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+            return { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+          };
+          const d0 = unitDir(path[0], path[1]);
+          const dn = unitDir(path[n - 2], path[n - 1]);
+          const startPt = { x: path[0].x - d0.x * bubbleOff, y: path[0].y - d0.y * bubbleOff };
+          const endPt = { x: path[n - 1].x + dn.x * bubbleOff, y: path[n - 1].y + dn.y * bubbleOff };
           ctx.save();
-          ctx.translate(el.origin.x, el.origin.y);
-          ctx.rotate((el.rotation * Math.PI) / 180);
           // garis
           ctx.strokeStyle = isActive ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.6)";
           ctx.lineWidth = (isActive ? 0.4 : 0.3) / s;
           ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
           ctx.beginPath();
-          ctx.moveTo(-bubbleOff, 0);
-          ctx.lineTo(lenPx + bubbleOff, 0);
+          ctx.moveTo(startPt.x, startPt.y);
+          for (const pt of path) ctx.lineTo(pt.x, pt.y);
+          ctx.lineTo(endPt.x, endPt.y);
           ctx.stroke();
           ctx.setLineDash([]);
-          // bubbles — satu label sama di kedua ujung
+          // bubbles — satu label sama di ujung awal & akhir rangkaian
           const label = xAxisLabelAt(baseIdx + li, 0);
-          const ends: Array<{ x: number; hide: boolean }> = [
-            { x: -bubbleOff, hide: !!el.hideStart },
-            { x: lenPx + bubbleOff, hide: !!el.hideEnd },
+          const ends: Array<{ p: Point; hide: boolean }> = [
+            { p: startPt, hide: !!el.hideStart },
+            { p: endPt, hide: !!el.hideEnd },
           ];
           for (const e of ends) {
             if (e.hide) continue;
             ctx.beginPath();
-            ctx.arc(e.x, 0, bubbleR, 0, Math.PI * 2);
+            ctx.arc(e.p.x, e.p.y, bubbleR, 0, Math.PI * 2);
             ctx.fillStyle = "#fff";
             ctx.fill();
             ctx.lineWidth = 0.4 / s;
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            // teks harus tetap tegak — un-rotate
-            ctx.save();
-            ctx.translate(e.x, 0);
-            ctx.rotate((-el.rotation * Math.PI) / 180);
-            ctx.fillText(label, 0, 0);
-            ctx.restore();
+            ctx.fillText(label, e.p.x, e.p.y);
           }
           ctx.restore();
         });
@@ -7624,7 +7672,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, mmPivot, hasMmPivot, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, colMarquee, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, mmPivot, hasMmPivot, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -9012,6 +9060,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const raw = structGridRotRad !== 0
         ? rotateAround(rawWorld, grid.origin, -structGridRotRad)
         : rawWorld;
+      // -------- MODE: insert kolom — marquee di grid aktif --------
+      if (gridEditMode === "insertColumn") {
+        if (!grid.enabled) { toast.error("Aktifkan grid terlebih dahulu"); return; }
+        setColMarquee({ start: rawWorld, cur: rawWorld });
+        return;
+      }
       // -------- MODE: jadikan grid dari satu garis lurus --------
       if (gridEditMode === "fromLine") {
         const tolPx = 10 / view.s;
@@ -9027,31 +9081,42 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           toast.error("Tidak ada garis yang dipilih");
           return;
         }
-        const startLn = lines[bestIdx];
-        const lnOrigin = { ...startLn.a };
-        const vx = startLn.b.x - startLn.a.x;
-        const vy = startLn.b.y - startLn.a.y;
-        const rotDeg = (Math.atan2(vy, vx) * 180) / Math.PI;
-        const lenPx = Math.hypot(vx, vy);
+        // Garis lain yang ujungnya bersambung dan berbelok 0° – <90° dari
+        // arah garis sebelumnya dianggap satu nomor grid.
+        const chainCands = lines.map((ln) =>
+          (ln.kind ?? "straight") === "straight" && (!activeLvlId || !ln.levelId || ln.levelId === activeLvlId)
+            ? ln
+            : null,
+        );
+        const chain = chainGridLines(chainCands, bestIdx, Math.max(0.5, 2 / view.s));
+        const chainPts = chain.points;
+        let lenPx = 0;
+        for (let k = 1; k < chainPts.length; k++) lenPx += Math.hypot(chainPts[k].x - chainPts[k - 1].x, chainPts[k].y - chainPts[k - 1].y);
         const lenM = lenPx / pxPerMeter;
-        if (lenM < 0.1) {
+        if (lenM < 0.1 || chainPts.length < 2) {
           toast.error("Garis terlalu pendek");
           return;
         }
+        const rotDeg = (Math.atan2(chainPts[1].y - chainPts[0].y, chainPts[1].x - chainPts[0].x) * 180) / Math.PI;
         // Gabungkan ke grid yang sedang aktif (primer atau extra yg dipilih).
         const prevExtraLines = grid.extraLines ?? [];
         const newExtra = {
           id: `xl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
-          origin: lnOrigin,
+          origin: { ...chainPts[0] },
           rotation: rotDeg,
           lengthM: Number(lenM.toFixed(2)),
+          ...(chainPts.length >= 3 ? { points: chainPts.map((pt) => ({ ...pt })) } : {}),
         };
+        pushHistory();
         updateGrid({ extraLines: [...prevExtraLines, newExtra] });
         // Hapus garis aslinya, tapi pertahankan mode "fromLine" agar bisa
         // pilih garis lain secara berurutan.
-        const nextLines = lines.filter((_, i) => i !== bestIdx);
+        const used = new Set(chain.indices);
+        const nextLines = lines.filter((_, i) => !used.has(i));
         onChange({ lines: nextLines });
-        toast.success("Garis ditambahkan ke grid aktif");
+        toast.success(chain.indices.length > 1
+          ? `${chain.indices.length} garis bersambung dijadikan satu grid`
+          : "Garis ditambahkan ke grid aktif");
         return;
       }
       // -------- MODE: merge grid — gabungkan grid yang diklik ke grid aktif --------
@@ -10722,6 +10787,10 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
 
 
+    if (colMarquee) {
+      setColMarquee({ ...colMarquee, cur: getWorldPosRaw(e) });
+      return;
+    }
     if (gridDrag) {
       const rawWorld = getWorldPosRaw(e);
       if (gridDrag.kind === "move") {
@@ -11165,6 +11234,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
 
 
+    if (colMarquee) {
+      const mq = { ...colMarquee, cur: getWorldPosRaw(e) };
+      setColMarquee(null);
+      const res = insertColumnsInRect(
+        grid,
+        { x0: mq.start.x, y0: mq.start.y, x1: mq.cur.x, y1: mq.cur.y },
+        activeLvlId,
+        pxPerMeter,
+      );
+      if (!res.added) {
+        toast.error("Tidak ada persilangan garis grid baru di area seleksi");
+        return;
+      }
+      pushHistory();
+      onChangeGridLinked(res.grid);
+      toast.success(`${res.added} kolom ditambahkan`);
+      return;
+    }
     if (gridDrag) {
       setGridDrag(null);
       return;
@@ -11685,6 +11772,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     setPolyDraft(null);
     setGridDrag(null);
     setClipDrag(null);
+    setColMarquee(null);
     setDoorDraft(null);
     setWindowDraft(null);
     setDoorEndpointDrag(null);
@@ -14654,8 +14742,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   >
                     Merge Grid
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "insertColumn" ? "default" : "outline"}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "insertColumn" && "bg-gradient-primary shadow-primary")}
+                    onClick={() => { setGridEditMode(gridEditMode === "insertColumn" ? "expand" : "insertColumn"); setClipDraft(null); }}
+                    aria-pressed={gridEditMode === "insertColumn"}
+                    title="Klik dan geser di kanvas untuk membuat area seleksi — tiap persilangan garis grid aktif di dalamnya mendapat kolom baru."
+                  >
+                    Insert Kolom
+                  </Button>
                 </div>
               </div>
+              {gridEditMode === "insertColumn" && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    Klik dan geser di kanvas untuk membuat area seleksi pada grid{" "}
+                    <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span>.
+                    Setiap persilangan garis grid di dalam area otomatis mendapat kolom baru.
+                  </p>
+                  {(grid.insertedColumns ?? []).length > 0 && (
+                    <div className="flex items-center justify-between gap-1 text-[10px]">
+                      <span>Kolom sisipan: {grid.insertedColumns!.length}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-5 px-1.5 text-[10px]"
+                        onClick={() => {
+                          pushHistory();
+                          updateGrid({ insertedColumns: undefined });
+                          toast.success("Kolom sisipan dihapus");
+                        }}
+                      >
+                        Hapus kolom sisipan
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
               {gridEditMode === "merge" && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
                   Klik garis grid lain di kanvas (termasuk garis hasil Jadikan Grid) — grid itu
@@ -14698,8 +14822,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               {gridEditMode === "fromLine" && (
                 <div className="space-y-1.5">
                   <p className="text-[10px] leading-snug text-muted-foreground">
-                    Klik garis lurus di kanvas — garis akan ditambahkan sebagai
-                    sumbu grid pada grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
+                    Klik garis lurus di kanvas — garis (beserta garis lain yang
+                    bersambung di ujungnya dengan belokan kurang dari 90°, sebagai satu
+                    nomor grid) akan ditambahkan sebagai sumbu grid pada grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
                     sedang aktif, dan garis aslinya dihapus. Mode tetap aktif
                     sehingga bisa pilih beberapa garis berurutan. Tekan tombol
                     <span className="font-medium text-foreground"> Jadikan Grid</span> lagi atau
@@ -14715,7 +14840,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         const lbl = xAxisLabelAt(baseIdx + i, 0);
                         return (
                           <div key={el.id} className="flex items-center justify-between gap-1.5">
-                            <span className="text-[11px] font-medium">{lbl} · {el.lengthM.toFixed(2)}m</span>
+                            <span className="text-[11px] font-medium">{lbl} · {el.lengthM.toFixed(2)}m{el.points && el.points.length >= 3 ? ` · ${el.points.length - 1} segmen` : ""}</span>
                             <div className="flex items-center gap-1.5">
                               <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung awal">
                                 <input type="checkbox" checked={!!el.hideStart}
