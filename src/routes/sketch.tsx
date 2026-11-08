@@ -14742,8 +14742,44 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   >
                     Merge Grid
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={gridEditMode === "insertColumn" ? "default" : "outline"}
+                    className={cn("h-6 px-2 text-[10px]", gridEditMode === "insertColumn" && "bg-gradient-primary shadow-primary")}
+                    onClick={() => { setGridEditMode(gridEditMode === "insertColumn" ? "expand" : "insertColumn"); setClipDraft(null); }}
+                    aria-pressed={gridEditMode === "insertColumn"}
+                    title="Klik dan geser di kanvas untuk membuat area seleksi — tiap persilangan garis grid aktif di dalamnya mendapat kolom baru."
+                  >
+                    Insert Kolom
+                  </Button>
                 </div>
               </div>
+              {gridEditMode === "insertColumn" && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    Klik dan geser di kanvas untuk membuat area seleksi pada grid{" "}
+                    <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span>.
+                    Setiap persilangan garis grid di dalam area otomatis mendapat kolom baru.
+                  </p>
+                  {(grid.insertedColumns ?? []).length > 0 && (
+                    <div className="flex items-center justify-between gap-1 text-[10px]">
+                      <span>Kolom sisipan: {grid.insertedColumns!.length}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-5 px-1.5 text-[10px]"
+                        onClick={() => {
+                          pushHistory();
+                          updateGrid({ insertedColumns: undefined });
+                          toast.success("Kolom sisipan dihapus");
+                        }}
+                      >
+                        Hapus kolom sisipan
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
               {gridEditMode === "merge" && (
                 <p className="text-[10px] leading-snug text-muted-foreground">
                   Klik garis grid lain di kanvas (termasuk garis hasil Jadikan Grid) — grid itu
@@ -14786,8 +14822,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               {gridEditMode === "fromLine" && (
                 <div className="space-y-1.5">
                   <p className="text-[10px] leading-snug text-muted-foreground">
-                    Klik garis lurus di kanvas — garis akan ditambahkan sebagai
-                    sumbu grid pada grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
+                    Klik garis lurus di kanvas — garis (beserta garis lain yang
+                    bersambung di ujungnya dengan belokan kurang dari 90°, sebagai satu
+                    nomor grid) akan ditambahkan sebagai sumbu grid pada grid <span className="font-medium text-foreground">{editGridIdx === 0 ? "Primer" : `Extra ${editGridIdx}`}</span> yang
                     sedang aktif, dan garis aslinya dihapus. Mode tetap aktif
                     sehingga bisa pilih beberapa garis berurutan. Tekan tombol
                     <span className="font-medium text-foreground"> Jadikan Grid</span> lagi atau
