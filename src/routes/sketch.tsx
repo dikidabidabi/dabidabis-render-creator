@@ -3544,6 +3544,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               extraLines: g.extraLines.map((el) => ({
                 ...el,
                 origin: sp(el.origin),
+                ...(el.points ? { points: el.points.map((pt) => sp(pt)) } : {}),
                 // lengthM tetap (meter)
               })),
             }
@@ -5920,41 +5921,45 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         g.extraLines.forEach((el, li) => {
-          const lenPx = el.lengthM * ppm;
+          // Lurus = 2 titik; garis bersambung = seluruh titik (satu nomor grid).
+          const path = extraLinePath(el, ppm);
+          const n = path.length;
+          const unitDir = (a: Point, b: Point) => {
+            const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+            return { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+          };
+          const d0 = unitDir(path[0], path[1]);
+          const dn = unitDir(path[n - 2], path[n - 1]);
+          const startPt = { x: path[0].x - d0.x * bubbleOff, y: path[0].y - d0.y * bubbleOff };
+          const endPt = { x: path[n - 1].x + dn.x * bubbleOff, y: path[n - 1].y + dn.y * bubbleOff };
           ctx.save();
-          ctx.translate(el.origin.x, el.origin.y);
-          ctx.rotate((el.rotation * Math.PI) / 180);
           // garis
           ctx.strokeStyle = isActive ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.6)";
           ctx.lineWidth = (isActive ? 0.4 : 0.3) / s;
           ctx.setLineDash([14 / s, 6 / s, 2 / s, 6 / s]);
           ctx.beginPath();
-          ctx.moveTo(-bubbleOff, 0);
-          ctx.lineTo(lenPx + bubbleOff, 0);
+          ctx.moveTo(startPt.x, startPt.y);
+          for (const pt of path) ctx.lineTo(pt.x, pt.y);
+          ctx.lineTo(endPt.x, endPt.y);
           ctx.stroke();
           ctx.setLineDash([]);
-          // bubbles — satu label sama di kedua ujung
+          // bubbles — satu label sama di ujung awal & akhir rangkaian
           const label = xAxisLabelAt(baseIdx + li, 0);
-          const ends: Array<{ x: number; hide: boolean }> = [
-            { x: -bubbleOff, hide: !!el.hideStart },
-            { x: lenPx + bubbleOff, hide: !!el.hideEnd },
+          const ends: Array<{ p: Point; hide: boolean }> = [
+            { p: startPt, hide: !!el.hideStart },
+            { p: endPt, hide: !!el.hideEnd },
           ];
           for (const e of ends) {
             if (e.hide) continue;
             ctx.beginPath();
-            ctx.arc(e.x, 0, bubbleR, 0, Math.PI * 2);
+            ctx.arc(e.p.x, e.p.y, bubbleR, 0, Math.PI * 2);
             ctx.fillStyle = "#fff";
             ctx.fill();
             ctx.lineWidth = 0.4 / s;
             ctx.strokeStyle = "#0a0a0a";
             ctx.stroke();
             ctx.fillStyle = "#0a0a0a";
-            // teks harus tetap tegak — un-rotate
-            ctx.save();
-            ctx.translate(e.x, 0);
-            ctx.rotate((-el.rotation * Math.PI) / 180);
-            ctx.fillText(label, 0, 0);
-            ctx.restore();
+            ctx.fillText(label, e.p.x, e.p.y);
           }
           ctx.restore();
         });
@@ -14798,7 +14803,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         const lbl = xAxisLabelAt(baseIdx + i, 0);
                         return (
                           <div key={el.id} className="flex items-center justify-between gap-1.5">
-                            <span className="text-[11px] font-medium">{lbl} · {el.lengthM.toFixed(2)}m</span>
+                            <span className="text-[11px] font-medium">{lbl} · {el.lengthM.toFixed(2)}m{el.points && el.points.length >= 3 ? ` · ${el.points.length - 1} segmen` : ""}</span>
                             <div className="flex items-center gap-1.5">
                               <label className="flex items-center gap-1 text-[10px]" title="Sembunyikan buble ujung awal">
                                 <input type="checkbox" checked={!!el.hideStart}
