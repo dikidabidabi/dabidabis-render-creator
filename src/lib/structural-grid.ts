@@ -47,9 +47,15 @@ export type StructuralGrid = {
     origin: { x: number; y: number };
     rotation: number;
     lengthM: number;
+    // Garis bersambung hasil "Jadikan Grid" (≥3 titik, px dunia). Bila ada,
+    // seluruh rangkaian dianggap satu nomor grid; buble di ujung awal & akhir.
+    points?: Array<{ x: number; y: number }>;
     hideStart?: boolean;
     hideEnd?: boolean;
   }>;
+  // Kolom hasil "Insert Kolom" pada persilangan garis grid. Titik dalam METER
+  // relatif grid.origin di frame lokal grid (sama seperti columnClips).
+  insertedColumns?: InsertedColumn[];
   fromLevelId?: string;                  // mulai berlaku dari level (inclusive)
   toLevelId?: string;                    // sampai dengan level (inclusive)
   perLevel?: Record<string, GridOverride>;
@@ -62,6 +68,7 @@ export type StructuralGrid = {
 
 
 export type ColumnShape = "square" | "circle";
+export type InsertedColumn = { id: string; x: number; y: number };
 
 export function isCircularColumn(grid: Pick<StructuralGrid, "colShape">): boolean {
   return grid.colShape === "circle";
@@ -174,6 +181,14 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
               origin: { x: ox, y: oy },
               rotation: Number.isFinite(rot) ? rot : 0,
               lengthM: len,
+              ...(Array.isArray(l.points)
+                ? (() => {
+                    const pts = l.points
+                      .map((p: any) => ({ x: Number(p?.x), y: Number(p?.y) }))
+                      .filter((p: any) => Number.isFinite(p.x) && Number.isFinite(p.y));
+                    return pts.length >= 3 ? { points: pts } : {};
+                  })()
+                : {}),
               hideStart: Boolean(l.hideStart),
               hideEnd: Boolean(l.hideEnd),
             };
@@ -184,8 +199,20 @@ export function normalizeGrid(g: any): StructuralGrid | undefined {
     toLevelId: typeof g.toLevelId === "string" ? g.toLevelId : undefined,
     perLevel: Object.keys(perLevel).length ? perLevel : undefined,
     columnClips: clips.length ? clips : undefined,
+    insertedColumns: normalizeInsertedColumns(g.insertedColumns),
     merged: normalizeMerged(g.merged),
   };
+}
+
+function normalizeInsertedColumns(arr: any): InsertedColumn[] | undefined {
+  if (!Array.isArray(arr)) return undefined;
+  const out: InsertedColumn[] = [];
+  arr.forEach((c: any, idx: number) => {
+    const x = Number(c?.x), y = Number(c?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    out.push({ id: typeof c.id === "string" && c.id ? c.id : `ic-${idx}-${Math.random().toString(36).slice(2, 6)}`, x, y });
+  });
+  return out.length ? out : undefined;
 }
 
 function normalizeMerged(arr: any): StructuralGrid[] | undefined {
@@ -320,6 +347,45 @@ export function isColumnVisible(
   return !isColumnClipped(grid, mx, my);
 }
 
+// Seluruh kolom yang tampil pada level (node grid aktif + kolom sisipan),
+// dalam METER di frame lokal grid relatif origin.
+export type GridColumnPoint = { key: string; mx: number; my: number; i?: number; j?: number; inserted?: boolean };
+export function gridColumnPoints(
+  grid: StructuralGrid,
+  levelId: string | undefined,
+  spansX?: number[],
+  spansY?: number[],
+): GridColumnPoint[] {
+  const out: GridColumnPoint[] = [];
+  if (!grid.lineOnly) {
+    const sx = spansX ?? spansForLevel(grid, levelId).spansX;
+    const sy = spansY ?? spansForLevel(grid, levelId).spansY;
+    const px = axisPositions(sx);
+    const py = axisPositions(sy);
+    for (let j = 0; j < py.length; j++) {
+      for (let i = 0; i < px.length; i++) {
+        if (isColumnVisible(grid, levelId, i, j, sx, sy)) out.push({ key: `${i},${j}`, mx: px[i], my: py[j], i, j });
+      }
+    }
+  }
+  for (const c of grid.insertedColumns ?? []) out.push({ key: `ins-${c.id}`, mx: c.x, my: c.y, inserted: true });
+  return out;
+}
+
+// Titik lokal grid (meter) → koordinat dunia (px).
+export function gridLocalToWorld(grid: StructuralGrid, mx: number, my: number, ppm: number): { x: number; y: number } {
+  const r = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  return { x: grid.origin.x + (mx * c - my * s) * ppm, y: grid.origin.y + (mx * s + my * c) * ppm };
+}
+
+export function gridWorldToLocal(grid: StructuralGrid, p: { x: number; y: number }, ppm: number): { x: number; y: number } {
+  const r = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  const dx = p.x - grid.origin.x, dy = p.y - grid.origin.y;
+  return { x: (dx * c + dy * s) / ppm, y: (-dx * s + dy * c) / ppm };
+}
+
 // Apakah `levelMdpl` tercakup dalam range [fromLevelId..toLevelId] berdasarkan
 // urutan MDPL ascending. Jika range tidak diset → berlaku untuk semua level
 // di atas (atau sama dengan) MDPL 0 sebagai default praktis.
@@ -349,7 +415,6 @@ export function computeStructuralStats(
   levels: { id: string; mdpl: number; typicalCount?: number; typicalHeight?: number }[],
 ): { totalColumns: number; concreteVolumeM3: number } {
   if (!grid || !grid.enabled) return { totalColumns: 0, concreteVolumeM3: 0 };
-  if (grid.lineOnly) return { totalColumns: 0, concreteVolumeM3: 0 };
   const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
   const colArea = columnCrossSectionAreaM2(grid);
   let cols = 0;
@@ -358,15 +423,7 @@ export function computeStructuralStats(
     const lv = sorted[i];
     if (!levelInRange(grid, lv, sorted)) continue;
     const { spansX, spansY } = spansForLevel(grid, lv.id);
-    const nx = spansX.length + 1;
-    const ny = spansY.length + 1;
-    let active = 0;
-    for (let jj = 0; jj < ny; jj++) {
-      for (let ii = 0; ii < nx; ii++) {
-        if (isColumnVisible(grid, lv.id, ii, jj, spansX, spansY)) active++;
-      }
-    }
-    const nodes = active;
+    const nodes = gridColumnPoints(grid, lv.id, spansX, spansY).length;
     const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
     const h = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
       ? Number(lv.typicalHeight)
@@ -452,8 +509,174 @@ export function gridAxisSegments(g: StructuralGrid, ppm: number): GridAxisSegmen
     if (totY > 0) for (const x of posX) out.push({ origin: toWorld(x * ppm, 0), rotation: rot + 90, lengthM: totY, hideStart: g.hideBubbleStartX, hideEnd: g.hideBubbleEndX });
     if (totX > 0) for (const y of posY) out.push({ origin: toWorld(0, y * ppm), rotation: rot, lengthM: totX, hideStart: g.hideBubbleStartY, hideEnd: g.hideBubbleEndY });
   }
-  for (const el of g.extraLines ?? []) out.push({ origin: { ...el.origin }, rotation: el.rotation, lengthM: el.lengthM, hideStart: el.hideStart, hideEnd: el.hideEnd });
+  for (const el of g.extraLines ?? []) {
+    if (!el.points || el.points.length < 3) {
+      out.push({ origin: { ...el.origin }, rotation: el.rotation, lengthM: el.lengthM, hideStart: el.hideStart, hideEnd: el.hideEnd });
+      continue;
+    }
+    const pts = el.points;
+    for (let k = 1; k < pts.length; k++) {
+      const a = pts[k - 1], b = pts[k];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len < 1e-9) continue;
+      out.push({
+        origin: { ...a },
+        rotation: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
+        lengthM: len / ppm,
+        hideStart: k === 1 ? el.hideStart : true,
+        hideEnd: k === pts.length - 1 ? el.hideEnd : true,
+      });
+    }
+  }
   return out;
+}
+
+type ExtraLine = NonNullable<StructuralGrid["extraLines"]>[number];
+
+// Titik-titik garis tambahan di koordinat dunia (px): lurus = 2 titik,
+// garis bersambung = seluruh titik sambungan.
+export function extraLinePath(el: ExtraLine, ppm: number): Array<{ x: number; y: number }> {
+  if (el.points && el.points.length >= 3) return el.points.map((p) => ({ ...p }));
+  const r = (el.rotation * Math.PI) / 180;
+  const len = el.lengthM * ppm;
+  return [{ ...el.origin }, { x: el.origin.x + Math.cos(r) * len, y: el.origin.y + Math.sin(r) * len }];
+}
+
+// ----- Jadikan Grid: garis bersambung -----
+// Mulai dari garis terpilih, sambungkan garis lain yang ujungnya bertemu
+// (toleransi `tolPx`) dan berbelok 0° hingga < 90° dari arah garis
+// sebelumnya. Hasilnya satu rangkaian titik berurutan (satu nomor grid).
+type Pt = { x: number; y: number };
+export function chainGridLines(
+  segs: ReadonlyArray<{ a: Pt; b: Pt } | null | undefined>,
+  startIdx: number,
+  tolPx: number,
+): { points: Pt[]; indices: number[] } {
+  const start = segs[startIdx];
+  if (!start) return { points: [], indices: [] };
+  const used = new Set<number>([startIdx]);
+  const points: Pt[] = [{ ...start.a }, { ...start.b }];
+  const indices = [startIdx];
+  const unit = (from: Pt, to: Pt) => {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const l = Math.hypot(dx, dy);
+    return l > 1e-9 ? { x: dx / l, y: dy / l } : null;
+  };
+  const extend = (atEnd: boolean) => {
+    for (;;) {
+      const tip = atEnd ? points[points.length - 1] : points[0];
+      const prev = atEnd ? points[points.length - 2] : points[1];
+      const dir = unit(prev, tip);
+      if (!dir) return;
+      let best: { idx: number; far: Pt; dot: number } | null = null;
+      segs.forEach((sg, idx) => {
+        if (!sg || used.has(idx)) return;
+        const ends: Array<[Pt, Pt]> = [[sg.a, sg.b], [sg.b, sg.a]];
+        for (const [near, far] of ends) {
+          if (Math.hypot(near.x - tip.x, near.y - tip.y) > tolPx) continue;
+          const nd = unit(tip, far);
+          if (!nd) continue;
+          const dot = dir.x * nd.x + dir.y * nd.y; // cos sudut belok
+          if (dot <= 1e-9) continue; // belok ≥ 90° → bukan sambungan
+          if (!best || dot > best.dot) best = { idx, far, dot };
+        }
+      });
+      if (!best) return;
+      const b = best as { idx: number; far: Pt; dot: number };
+      used.add(b.idx);
+      if (atEnd) { points.push({ ...b.far }); indices.push(b.idx); }
+      else { points.unshift({ ...b.far }); indices.unshift(b.idx); }
+    }
+  };
+  extend(true);
+  extend(false);
+  return { points, indices };
+}
+
+// ----- Insert Kolom -----
+function segmentIntersection(a: GridAxisSegment, b: GridAxisSegment, ppm: number): Pt | null {
+  const ra = (a.rotation * Math.PI) / 180, rb = (b.rotation * Math.PI) / 180;
+  const d1 = { x: Math.cos(ra) * a.lengthM * ppm, y: Math.sin(ra) * a.lengthM * ppm };
+  const d2 = { x: Math.cos(rb) * b.lengthM * ppm, y: Math.sin(rb) * b.lengthM * ppm };
+  const den = d1.x * d2.y - d1.y * d2.x;
+  const l1 = Math.hypot(d1.x, d1.y), l2 = Math.hypot(d2.x, d2.y);
+  if (l1 < 1e-9 || l2 < 1e-9 || Math.abs(den) < 1e-9 * l1 * l2) return null; // sejajar
+  const wx = b.origin.x - a.origin.x, wy = b.origin.y - a.origin.y;
+  const t = (wx * d2.y - wy * d2.x) / den;
+  const u = (wx * d1.y - wy * d1.x) / den;
+  const eps1 = 1e-3 / Math.max(1e-9, a.lengthM), eps2 = 1e-3 / Math.max(1e-9, b.lengthM);
+  if (t < -eps1 || t > 1 + eps1 || u < -eps2 || u > 1 + eps2) return null;
+  return { x: a.origin.x + d1.x * t, y: a.origin.y + d1.y * t };
+}
+
+// Semua persilangan garis grid (grid induk + garis tambahan + grid hasil
+// merge) dalam koordinat dunia px, tanpa duplikat.
+export function gridLineIntersections(g: StructuralGrid, ppm: number): Pt[] {
+  const segs: GridAxisSegment[] = [...gridAxisSegments(g, ppm)];
+  for (const child of g.merged ?? []) segs.push(...gridAxisSegments({ ...child, merged: undefined }, ppm));
+  const out: Pt[] = [];
+  const tol = 0.01 * ppm; // 1 cm
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const p = segmentIntersection(segs[i], segs[j], ppm);
+      if (!p) continue;
+      if (out.some((q) => Math.hypot(q.x - p.x, q.y - p.y) <= tol)) continue;
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+// Sisipkan kolom di setiap persilangan garis grid di dalam persegi seleksi
+// (px dunia). Node grid yang dinonaktifkan pada level aktif diaktifkan lagi;
+// persilangan lain tanpa kolom mendapat kolom sisipan.
+export function insertColumnsInRect(
+  g: StructuralGrid,
+  rect: { x0: number; y0: number; x1: number; y1: number },
+  levelId: string | undefined,
+  ppm: number,
+): { grid: StructuralGrid; added: number } {
+  const xMin = Math.min(rect.x0, rect.x1), xMax = Math.max(rect.x0, rect.x1);
+  const yMin = Math.min(rect.y0, rect.y1), yMax = Math.max(rect.y0, rect.y1);
+  const tol = 0.01 * ppm;
+  const tolM = 0.01;
+  const pts = gridLineIntersections(g, ppm).filter((p) => p.x >= xMin - 1e-6 && p.x <= xMax + 1e-6 && p.y >= yMin - 1e-6 && p.y <= yMax + 1e-6);
+  // Kolom yang sudah tampil (induk + anak merge) di koordinat dunia.
+  const existing: Pt[] = [];
+  for (const grid of [g, ...(g.merged ?? []).map((c) => ({ ...c, merged: undefined }))]) {
+    for (const c of gridColumnPoints(grid, levelId)) existing.push(gridLocalToWorld(grid, c.mx, c.my, ppm));
+  }
+  const { spansX, spansY } = spansForLevel(g, levelId);
+  const posX = axisPositions(spansX), posY = axisPositions(spansY);
+  let disabled = levelId ? [...(g.perLevel?.[levelId]?.disabledNodes ?? [])] : [];
+  const inserted = [...(g.insertedColumns ?? [])];
+  let added = 0;
+  for (const p of pts) {
+    if (existing.some((q) => Math.hypot(q.x - p.x, q.y - p.y) <= tol)) continue;
+    const local = gridWorldToLocal(g, p, ppm);
+    if (!g.lineOnly && levelId) {
+      const i = posX.findIndex((x) => Math.abs(x - local.x) <= tolM);
+      const j = posY.findIndex((y) => Math.abs(y - local.y) <= tolM);
+      const key = `${i},${j}`;
+      if (i >= 0 && j >= 0 && disabled.includes(key)) {
+        disabled = disabled.filter((k) => k !== key);
+        existing.push(p);
+        if (!isColumnClipped(g, posX[i], posY[j])) { added++; continue; }
+      }
+    }
+    inserted.push({
+      id: `ic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      x: Number(local.x.toFixed(4)),
+      y: Number(local.y.toFixed(4)),
+    });
+    existing.push(p);
+    added++;
+  }
+  if (!added) return { grid: g, added: 0 };
+  const perLevel = levelId && g.perLevel?.[levelId]
+    ? { ...g.perLevel, [levelId]: { ...g.perLevel[levelId], disabledNodes: disabled.length ? disabled : undefined } }
+    : g.perLevel;
+  return { grid: { ...g, perLevel, insertedColumns: inserted.length ? inserted : undefined }, added };
 }
 
 // Jarak titik (px dunia) ke as terdekat pada grid.
@@ -507,7 +730,11 @@ function translateGridLinked(g: StructuralGrid, dx: number, dy: number): Structu
   return {
     ...g,
     origin: { x: g.origin.x + dx, y: g.origin.y + dy },
-    extraLines: g.extraLines?.map((el) => ({ ...el, origin: { x: el.origin.x + dx, y: el.origin.y + dy } })),
+    extraLines: g.extraLines?.map((el) => ({
+      ...el,
+      origin: { x: el.origin.x + dx, y: el.origin.y + dy },
+      ...(el.points ? { points: el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) } : {}),
+    })),
     merged: g.merged?.map((c) => translateGridLinked(c, dx, dy)),
   };
 }
@@ -524,15 +751,21 @@ export function rotateGridLinked(g: StructuralGrid, rotation: number): Structura
     const x = p.x - pivot.x, y = p.y - pivot.y;
     return { x: pivot.x + x * c - y * s, y: pivot.y + x * s + y * c };
   };
+  const rotLine = (el: ExtraLine): ExtraLine => ({
+    ...el,
+    origin: rot(el.origin),
+    rotation: el.rotation + delta,
+    ...(el.points ? { points: el.points.map(rot) } : {}),
+  });
   return {
     ...g,
     rotation,
-    extraLines: g.extraLines?.map((el) => ({ ...el, origin: rot(el.origin), rotation: el.rotation + delta })),
+    extraLines: g.extraLines?.map(rotLine),
     merged: g.merged?.map((child) => ({
       ...child,
       origin: rot(child.origin),
       rotation: (child.rotation ?? 0) + delta,
-      extraLines: child.extraLines?.map((el) => ({ ...el, origin: rot(el.origin), rotation: el.rotation + delta })),
+      extraLines: child.extraLines?.map(rotLine),
     })),
   };
 }
