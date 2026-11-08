@@ -625,7 +625,6 @@ function StructuralColumns({
     for (let gi = 0; gi < grids.length; gi++) {
       if (visibleGrids && visibleGrids[gi] === false) continue;
       const grid = grids[gi];
-      if (grid.lineOnly) continue; // grid garis tunggal: tanpa kolom
 
       const colM = grid.colSizeCm / 100;
       const ox = (grid.origin.x - origin.x) * mPerPx;
@@ -638,8 +637,6 @@ function StructuralColumns({
         const lv = sortedLevels[li];
         if (!levelInRange(grid, lv, sortedLevels)) continue;
         const { spansX, spansY } = spansForLevel(grid, lv.id);
-        const xs = axisPositions(spansX);
-        const zs = axisPositions(spansY);
         const next = sortedLevels[li + 1];
         const floorH = Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0
           ? Number(lv.typicalHeight)
@@ -647,17 +644,15 @@ function StructuralColumns({
         const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
         const totalH = Math.max(0.1, floorH * k);
         const yBase = lv.mdpl - baseMdpl;
-        for (let i = 0; i < xs.length; i++) {
-          for (let j = 0; j < zs.length; j++) {
-            if (!isNodeActive(grid, lv.id, i, j)) continue;
-            if (isColumnClipped(grid, xs[i], zs[j])) continue;
+        for (const cp of gridColumnPoints(grid, lv.id, spansX, spansY)) {
+          {
             // Rotasi sumbu grid (CW positif di 2D = CW di bidang XZ ketika dilihat dari atas).
-            const lx = xs[i];
-            const lz = zs[j];
+            const lx = cp.mx;
+            const lz = cp.my;
             const rx = lx * cosR - lz * sinR;
             const rz = lx * sinR + lz * cosR;
             out.push({
-              key: `g${gi}_${lv.id}_${i}_${j}`,
+              key: `g${gi}_${lv.id}_${cp.key}`,
               x: ox + rx,
               z: oz + rz,
               y: yBase + totalH / 2,

@@ -20,7 +20,7 @@ import { renumberDetailAreas } from "@/lib/detail-numbering";
 import { detailWorldBounds } from "@/lib/detail-geometry";
 import { setProjectItem } from "@/lib/storage/idb-bridge";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
-import { axisPositions, collectGrids, isCircularColumn, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
+import { axisPositions, collectGrids, gridColumnPoints, isCircularColumn, isColumnVisible, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { windowDividerFractions, type Window } from "@/lib/windows";
 import {
@@ -519,18 +519,17 @@ function DetailConstruction({ sketch, levelId, lines, pxPerMeter }: { sketch: Sk
     })}
     {lines.filter((line) => (line.kind ?? "straight") !== "straight").map((line, index) => <line key={`curve-${index}`} x1={line.a.x} y1={line.a.y} x2={line.b.x} y2={line.b.y} stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} />)}
     {level ? grids.flatMap((grid, gridIndex) => {
-      if (grid.lineOnly || !levelInRange(grid, { id: level.id, mdpl: level.mdpl ?? 0 }, sketch.levels.map((item) => ({ id: item.id, mdpl: item.mdpl ?? 0 })))) return [];
+      if (!levelInRange(grid, { id: level.id, mdpl: level.mdpl ?? 0 }, sketch.levels.map((item) => ({ id: item.id, mdpl: item.mdpl ?? 0 })))) return [];
       const { spansX, spansY } = spansForLevel(grid, levelId);
-      const xs = axisPositions(spansX), ys = axisPositions(spansY);
       const angle = (grid.rotation ?? 0) * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
       const size = grid.colSizeCm / 100 * pxPerMeter;
-      return ys.flatMap((my, j) => xs.flatMap((mx, i) => {
-        if (!isColumnVisible(grid, levelId, i, j, spansX, spansY)) return [];
+      return gridColumnPoints(grid, levelId, spansX, spansY).flatMap((cp) => {
+        const mx = cp.mx, my = cp.my, i = cp.key, j = "c";
         const x = grid.origin.x + (mx * cos - my * sin) * pxPerMeter;
         const y = grid.origin.y + (mx * sin + my * cos) * pxPerMeter;
         if (isCircularColumn(grid)) return [<circle key={`column-${gridIndex}-${i}-${j}`} cx={x} cy={y} r={size / 2} fill="#bdbdbd" stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} />];
         return [<rect key={`column-${gridIndex}-${i}-${j}`} x={x - size / 2} y={y - size / 2} width={size} height={size} fill="#bdbdbd" stroke="#202020" strokeWidth={Math.max(0.35, pxPerMeter * 0.004)} transform={`rotate(${grid.rotation ?? 0} ${x} ${y})`} />];
-      }));
+      });
     }) : null}
   </g>;
 }
