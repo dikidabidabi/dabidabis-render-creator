@@ -18,8 +18,6 @@ import {
   collectGrids,
   levelInRange,
   spansForLevel,
-  axisPositions,
-  isColumnVisible,
   columnFootprintPolygon,
   gridColumnPoints,
 } from "@/lib/structural-grid";
