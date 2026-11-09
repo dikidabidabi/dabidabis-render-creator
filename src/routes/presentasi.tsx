@@ -133,6 +133,7 @@ import { roofPlanGeometry, roofSurfaceHeightAt, type Roof } from "@/lib/roofs";
 import { furnitureForVisibleRooms, normalizeDetailFurniture, pointInRoom, type DetailFurniture } from "@/lib/detail-furniture";
 import { detailCorners, detailIntersectsRoom, detailLocalBounds, detailRotation, orientDetailSketch } from "@/lib/detail-geometry";
 import { detailDimensionVisibility, mergeCrowdedDimensions } from "@/lib/detail-dimensions";
+import { curveEndDirections, curveWallBand, sampleCurveLine } from "@/lib/curve-wall";
 import { exteriorRoomChains, exteriorGridChains, gridChainAxisLabels, mergeStackedGridChains } from "@/lib/detail-exterior-dimensions";
 import { DetailExteriorDimensionMarks, DetailExteriorGridLines, DetailExteriorGridBubbles } from "@/components/detail-exterior-dimension-marks";
 
