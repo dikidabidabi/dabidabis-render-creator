@@ -7,7 +7,7 @@
 - Free stairs share polyline/offset geometry and bend landings across views.
 - Notification polling requires a session token and stable dependencies; background reads and feed-seen writes verify bearer claims through notification-session.server before user-scoped RLS queries, returning serializable empty/no-op results on unavailable sessions so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
-- Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation so spacing and end tolerance stay consistent.
+- Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation for consistent spacing.
 - Pintu lipat menyimpan mode satu/dua sisi, arah sisi tunggal, dan jumlah panel; panjang fisik daun dipertahankan saat diproyeksikan 45° sehingga sisa bukaan berada di kusen seberang atau di tengah, konsisten di Sketsa, Detail, Presentasi, dan DXF.
 - Dimensi interior Slide Detail mengukur bentang bersih permukaan-ke-permukaan tanpa interval ketebalan dinding, sejajar dinding acuan, dan menggeser 150 mm hanya rangkaian interval di bawah 200 mm yang berdampingan; dimensi luar hanya memproyeksikan muka material dan menempatkan rangkaian interval di bawah 400 mm pada jalur berulang 400/550/700 mm dari kotak detail, area tayang meluas 1 m, serta denah menjadi putih polos saat opsi aktif.
 - Ujung terbuka dan pertemuan Dinding Solid/standar 150 mm memakai kolom praktis 150 × 150 mm; solid hitam, standar putih dengan finishing 15 mm.
