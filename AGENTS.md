@@ -1,25 +1,19 @@
 # Architecture decisions
-
-- Builds preserve NODE_OPTIONS and reserve 6 GiB heap.
-
+- Builds keep NODE_OPTIONS and reserve 6 GiB heap.
 - Named schedules are owner/sketch scoped; tasks/views persist atomically in one key. Migrate legacy arrays/views; deep-copy schedules on duplication. taskPredecessors supports legacy links/UUID arrays: maximum start bound, preserved duration, validated edges/cycles, CPM offsets. Bars/cables share bounds/rows/IDs. Persist folding/CPM/slack. Date fills stay atomic per column/visible rows; reject invalid/predecessor-controlled dates. CPM uses leaf completion; S curves duration-weighted progress. Actual bars split blue/red at due; explicit finish overrides first 100% entry, else today; retain delay bars without actual start; row deletion removes WBS descendants and dangling predecessor links.
-
 - Architectural settings persist per area; plans remain centered/full-size; legends share numbering/ink and bottom layout maximizes fit. Subtract openings before wall shadows. Window cuts/notation share windowPlanGeometry bounds; short base and long frame/mullion shadows share wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows render as cached viewport-bounded bitmaps (max 2048 px) with geometry-cached wall unions; wall fills omit bevel computation and rendering to reduce Android tablet graphics load.
-
 - Merged grids live whole in parent.merged; collectGrids flattens; linked move/rotate.
-
 - Free stairs share polyline/offset geometry and bend landings across views.
-
 - Notification polling requires a session token and stable dependencies; background reads and feed-seen writes verify bearer claims through notification-session.server before user-scoped RLS queries, returning serializable empty/no-op results on unavailable sessions so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
-- Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation so spacing and end tolerance stay consistent.
+- Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation for consistent spacing.
 - Pintu lipat menyimpan mode satu/dua sisi, arah sisi tunggal, dan jumlah panel; panjang fisik daun dipertahankan saat diproyeksikan 45° sehingga sisa bukaan berada di kusen seberang atau di tengah, konsisten di Sketsa, Detail, Presentasi, dan DXF.
 - Dimensi interior Slide Detail mengukur bentang bersih permukaan-ke-permukaan tanpa interval ketebalan dinding, sejajar dinding acuan, dan menggeser 150 mm hanya rangkaian interval di bawah 200 mm yang berdampingan; dimensi luar hanya memproyeksikan muka material dan menempatkan rangkaian interval di bawah 400 mm pada jalur berulang 400/550/700 mm dari kotak detail, area tayang meluas 1 m, serta denah menjadi putih polos saat opsi aktif.
 - Ujung terbuka dan pertemuan Dinding Solid/standar 150 mm memakai kolom praktis 150 × 150 mm; solid hitam, standar putih dengan finishing 15 mm.
 - Detail furniture stores room ID, category and room-relative position with each detail box; categories are account-scoped, catalog/table mm convert via sketch scale, and per-box visibility controls Presentation. Per-sketch showFurnitureSlide groups recap by category/elevation so room edits preserve placement and reporting.
 - Detail numbering preserves IDs/furniture. Rectangles store world diagonals and grid angle (legacy zero); shared geometry rotates display-only data into the slide frame. Grid/room dimension flags default on and require master dimensions; interior stays separate.
-- Furniture renders before notation and room labels; Architectural mode uses scale-aware layered alpha shadows and image tint preserving transparency and linework, while other modes remain unchanged.
+- Furniture renders before notation and room labels; Architectural mode adds scale-aware alpha shadows and transparency-preserving tint; other modes unchanged.
 - Notasi tangga Slide Denah/Detail memakai bidang potong 1 m dengan garis batas 45°, bagian di atas bidang potong putus-putus, sisi dalam tegas, arah naik/turun mengikuti bordes, dan tangga tipikal tengah ditampilkan utuh.
 - Account material libraries store names/images/descriptions/products in shared project storage; room selections store material IDs on sketch layers to keep edits synchronized.
 - Mode Material per kotak detail memakai ID material ruang untuk warna/kode, legenda di rel kanan; bawaan nonaktif. Sub-ceklis Keterangan ruang (bawaan aktif) menyembunyikan nama/luas/level; simbol tetap.
@@ -29,5 +23,5 @@
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
 - Outline Specification per-level location areas and all-level totals share specMaterialArea; location fragments retain the full level area and pagination measures the displayed room-and-area text to prevent clipping.
 - Schedule PDFs use window.print, A4 landscape and fit-width zoom. S-curve chunks pair labels with SVG row slices, reserving heading space. Schedule separators use thin background strips only at existing row/month borders.
-
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
+- Picked curves render as curve-wall bands with wall notation; ends feed practical columns.
