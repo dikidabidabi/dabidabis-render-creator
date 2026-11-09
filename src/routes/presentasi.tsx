@@ -8193,25 +8193,62 @@ function MaterialEdges({
   const solidHatchPeriod = Math.max(1.8, pxPerM * 0.15);
   const hatchStroke = Math.max(0.18, sw * 0.0004);
   const patternId = useId();
-  const materialSegments = [...segs].sort((a, b) => {
-    const materialA = materialForEdgeSegment(a, segmentSource, edgeAttrs);
-    const materialB = materialForEdgeSegment(b, segmentSource, edgeAttrs);
+  // Garis lengkung/tangent yang diberi material lewat Pick Material dirender
+  // sebagai dinding mengikuti lengkungannya, sama seperti dinding lurus.
+  const pickedCurves = curved.flatMap(({ ln, i }) => {
+    const material = edgeMaterialForSegment(edgeAttrs, ln);
+    if (!material) return [];
+    if (levelId && ln.levelId && ln.levelId !== levelId) return [];
+    return [{ ln, i, material, points: sampleCurveLine(ln) }];
+  });
+  const isBandMaterial = (material: EdgeMaterial | undefined): material is WallBandGeometry["material"] =>
+    material === "solid" || material === "standard150" || material === "concrete150" || material === "concrete200" || material === "concrete250" || material === "concrete300" || material === "concrete350";
+  const curvePieceMaterial = new Map<EdgeSegment, EdgeMaterial>();
+  for (const curve of pickedCurves) {
+    if (isBandMaterial(curve.material)) continue;
+    curve.points.slice(1).forEach((point, index) => {
+      curvePieceMaterial.set({ id: `curve-${curve.i}-${index}`, a: curve.points[index], b: point, sourceLineIndex: -1, levelId: curve.ln.levelId }, curve.material);
+    });
+  }
+  const materialOf = (segment: EdgeSegment) => curvePieceMaterial.get(segment) ?? materialForEdgeSegment(segment, segmentSource, edgeAttrs);
+  const materialSegments = [...segs, ...curvePieceMaterial.keys()].sort((a, b) => {
+    const materialA = materialOf(a);
+    const materialB = materialOf(b);
     return (materialA ? WALL_THICK_MM[materialA] : 0) - (materialB ? WALL_THICK_MM[materialB] : 0);
   });
-  const wallBands: WallBandGeometry[] = mode === "base" ? [] : materialSegments.flatMap((segment) => {
-    const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
-    if (material !== "solid" && material !== "standard150" && material !== "concrete150" && material !== "concrete200" && material !== "concrete250" && material !== "concrete300" && material !== "concrete350") return [];
+  const bandHalves = (material: WallBandGeometry["material"]) => {
     const half = (WALL_THICK_MM[material] / 1000) * pxPerM * 0.5;
     const coreHalf = (material === "solid" || material === "standard150") && !detailSolidLayers
       ? half
       : Math.max(0, half - 0.015 * pxPerM);
-    return [{
-      segment,
-      material,
-      outer: wallBandPolygon(segment, half, half),
-      core: wallBandPolygon(segment, coreHalf, half),
-    }];
-  });
+    return { half, coreHalf };
+  };
+  const wallBands: WallBandGeometry[] = mode === "base" ? [] : [
+    ...materialSegments.flatMap((segment) => {
+      const material = materialOf(segment);
+      if (!isBandMaterial(material)) return [];
+      const { half, coreHalf } = bandHalves(material);
+      return [{
+        segment,
+        material,
+        outer: wallBandPolygon(segment, half, half),
+        core: wallBandPolygon(segment, coreHalf, half),
+      }];
+    }),
+    ...pickedCurves.flatMap((curve) => {
+      if (!isBandMaterial(curve.material)) return [];
+      const { half, coreHalf } = bandHalves(curve.material);
+      const outer = curveWallBand(curve.points, half, half);
+      const core = curveWallBand(curve.points, coreHalf, half);
+      if (outer.length < 3 || core.length < 3) return [];
+      return [{
+        segment: { id: `curve-${curve.i}`, a: curve.ln.a, b: curve.ln.b, sourceLineIndex: -1, levelId: curve.ln.levelId },
+        material: curve.material,
+        outer,
+        core,
+      }];
+    }),
+  ];
   const solidBands = wallBands.filter((band) => band.material === "solid" || band.material === "standard150");
   const concreteBands = wallBands.filter((band) => band.material !== "solid" && band.material !== "standard150");
   const wallPaths = (bands: WallBandGeometry[]) => ({
@@ -8361,7 +8398,7 @@ function MaterialEdges({
         </pattern>
       </defs>
       {/* Garis lengkung — render apa adanya (notasi material 2D hanya utk garis lurus). */}
-      {mode !== "overlay" && curved.map(({ ln, i }) => (
+      {mode !== "overlay" && curved.filter(({ ln }) => !edgeMaterialForSegment(edgeAttrs, ln)).map(({ ln, i }) => (
         <path
           key={`c-${i}`}
           d={linePath(ln)}
@@ -8386,7 +8423,7 @@ function MaterialEdges({
       {mode !== "base" && renderWallLayer(solidBands, solidPaths)}
       {/* Material non-masif tetap dirender per segmen. */}
       {mode !== "base" && materialSegments.map((s, si) => {
-        const mat = materialForEdgeSegment(s, segmentSource, edgeAttrs);
+        const mat = materialOf(s);
         if (!mat) return null;
         const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y;
         const len = Math.hypot(dx, dy) || 1;
@@ -8544,6 +8581,24 @@ function SolidWallPracticalColumns({
   for (const segment of solidSegments) {
     addContainingDirections(segment.a, segment);
     addContainingDirections(segment.b, segment);
+  }
+  // Ujung garis lengkung/tangent ber-material solid ikut menentukan kolom
+  // praktis: ujung terbuka dan sudut mendapat kolom, sambungan mulus tidak.
+  for (const line of lines) {
+    if ((line.kind ?? "straight") === "straight") continue;
+    if (levelId && line.levelId && line.levelId !== levelId) continue;
+    const material = edgeMaterialForSegment(edgeAttrs, line);
+    if (material !== "solid" && material !== "standard150") continue;
+    const points = sampleCurveLine(line);
+    const directions = curveEndDirections(points);
+    if (!directions) continue;
+    const start = points[0], end = points[points.length - 1];
+    const standard = material === "standard150";
+    addEndpoint(start, { x: start.x + directions.start.x, y: start.y + directions.start.y }, standard);
+    addEndpoint(end, { x: end.x + directions.end.x, y: end.y + directions.end.y }, standard);
+    const pseudo = { id: "curve", a: start, b: end, sourceLineIndex: -1 } as EdgeSegment;
+    addContainingDirections(start, pseudo);
+    addContainingDirections(end, pseudo);
   }
   const practicalColumnNodes = [...nodes.values()].filter(({ directions }) => {
     const uniqueDirections = directions.filter((direction, index) => !directions.slice(0, index).some((candidate) =>
