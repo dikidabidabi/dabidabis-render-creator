@@ -4727,6 +4727,7 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
 
 // ---- Diagram Hubungan Ruang Total (semua lantai) ----
 type TotalSimNode = SimNode & { levelId: string; homeX: number; homeY: number };
+type TotalSimLink = SimulationLinkDatum<TotalSimNode> & { weight: number; relation: RoomLink["relation"] };
 type TotalCell = { levelId: string; label: string; x: number; y: number; w: number; h: number };
 
 function BubbleTotalBody({ slide }: { slide: Extract<Slide, { kind: "bubble-total" }> }) {
@@ -4797,7 +4798,7 @@ function BubbleTotalBody({ slide }: { slide: Extract<Slide, { kind: "bubble-tota
 
   const [tick, setTick] = useState(0);
   const nodesRef = useRef<TotalSimNode[]>([]);
-  const linksRef = useRef<SimLink[]>([]);
+  const linksRef = useRef<TotalSimLink[]>([]);
   const cellByLevel = useMemo(() => new Map(model.cells.map((cell) => [cell.levelId, cell])), [model]);
 
   useEffect(() => {
@@ -4811,14 +4812,14 @@ function BubbleTotalBody({ slide }: { slide: Extract<Slide, { kind: "bubble-tota
       return { ...node, levelId: level.id, r, homeX, homeY, x: homeX, y: homeY };
     }));
     const byId = new Map(nodes.map((node) => [node.layerId, node]));
-    const links: SimLink[] = model.perLevel.flatMap(({ graph }) => graph.links.flatMap((link) => {
+    const links: TotalSimLink[] = model.perLevel.flatMap(({ graph }) => graph.links.flatMap((link) => {
       const source = byId.get(link.source), target = byId.get(link.target);
-      return source && target ? [{ source, target, weight: link.weight, relation: link.relation } as SimLink] : [];
+      return source && target ? [{ source, target, weight: link.weight, relation: link.relation } as TotalSimLink] : [];
     }));
     nodesRef.current = nodes;
     linksRef.current = links;
-    const sim = forceSimulation<TotalSimNode, SimLink>(nodes)
-      .force("link", forceLink<TotalSimNode, SimLink>(links).id((d) => d.layerId).distance((l) => (l.source as SimNode).r + (l.target as SimNode).r + 14).strength(0.5))
+    const sim = forceSimulation<TotalSimNode, TotalSimLink>(nodes)
+      .force("link", forceLink<TotalSimNode, TotalSimLink>(links).id((d) => d.layerId).distance((l) => (l.source as TotalSimNode).r + (l.target as TotalSimNode).r + 14).strength(0.5))
       .force("charge", forceManyBody<TotalSimNode>().strength(-60 * model.scale))
       .force("collide", forceCollide<TotalSimNode>().radius((d) => d.r + 3).iterations(2))
       .force("x", forceX<TotalSimNode>((d) => d.homeX).strength(0.12))
@@ -4867,7 +4868,7 @@ function BubbleTotalBody({ slide }: { slide: Extract<Slide, { kind: "bubble-tota
             </g>
           ))}
           {links.map((l, i) => {
-            const s = l.source as SimNode, t = l.target as SimNode;
+            const s = l.source as TotalSimNode, t = l.target as TotalSimNode;
             if (s.x == null || s.y == null || t.x == null || t.y == null) return null;
             const isDirect = l.relation === "direct", isDoor = l.relation === "door";
             return (
