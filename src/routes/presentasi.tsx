@@ -73,6 +73,7 @@ import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
+import { buildVerticalLinks, VERTICAL_LINK_RADIUS_M } from "@/lib/vertical-circulation";
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
 import { loadMasterplanAnalysis, analyzeSketchForIllustrations, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
 import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, iluNameFor, type Annotation } from "@/lib/analysis-illustrations";
@@ -1529,6 +1530,7 @@ type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "detail"; id: string; title: string; sketch: Sketch; level: Level; area: DetailArea; bounds: Bounds }
   | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "bubble-total"; id: string; title: string; sketch: Sketch; levels: Level[]; displayNames: Record<string, string> }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
@@ -1757,6 +1759,18 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     });
   });
   const perspektifList = perspektif.filter((p): p is PerspektifItem & { image: string } => !!p.image);
+  // Diagram hubungan ruang total semua lantai — tepat sebelum slide hubungan
+  // ruang lantai terendah. Lantai tipikal cukup satu cluster.
+  if (levels.length > 1) {
+    out.push({
+      kind: "bubble-total",
+      id: "bubble-total",
+      title: "Diagram Hubungan Ruang · Total Semua Lantai",
+      sketch: sk,
+      levels,
+      displayNames,
+    });
+  }
   for (const lv of levels) {
     out.push({
       kind: "bubble",
@@ -1943,7 +1957,8 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "perspektif": return "Perspektif";
       case "level": return "Denah per Level";
       case "detail": return "Pendetailan Denah";
-      case "bubble": return "Diagram Hubungan Ruang";
+      case "bubble":
+      case "bubble-total": return "Diagram Hubungan Ruang";
       case "section": return "Potongan Prinsip";
       case "matahari":
       case "shadow-seasonal":
@@ -2360,6 +2375,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "detail" && <DetailSlideBoundary key={slide.id} slide={slide} />}
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
+      {slide.kind === "bubble-total" && <BubbleTotalBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
@@ -2426,6 +2442,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "detail" ? `Sketsa · Pendetailan · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
+    : slide.kind === "bubble-total" ? "Diagram · Hubungan Ruang · Semua Lantai"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
     : slide.kind === "site" ? (
         slide.view === "lokasi" ? "Analisa · Lokasi"
