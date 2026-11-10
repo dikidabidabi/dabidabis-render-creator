@@ -4939,11 +4939,11 @@ function BubbleTotalBody({ slide }: { slide: Extract<Slide, { kind: "bubble-tota
             <span style={{ fontSize: 12 }}>Bersebelahan (dinding)</span>
           </div>
           <div style={{ fontSize: 11, color: "#888", marginTop: 12, lineHeight: 1.5 }}>
-            Garis merah menghubungkan lift, tangga, atau ramp sejenis di lantai berurutan yang berada pada grid dan koordinat sama atau berjarak horizontal kurang dari {VERTICAL_LINK_RADIUS_M} m. Lantai tipikal digambar sebagai satu cluster.
+            Merah: lift/tangga/ramp sejenis antar lantai pada koordinat sama atau jarak horizontal &lt; {VERTICAL_LINK_RADIUS_M} m. Lantai tipikal = 1 cluster.
           </div>
         </div>
 
-        <div style={{ border: "1px solid #ddd", padding: 14, overflow: "hidden" }}>
+        <div style={{ border: "1px solid #ddd", padding: 14 }}>
           <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8 }}>Per Lantai</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
             {[...model.perLevel].reverse().map((p) => (
