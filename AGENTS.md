@@ -5,7 +5,7 @@
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows are cached viewport-bounded bitmaps (max 2048 px) over cached wall unions; wall fills skip bevels to ease Android tablet GPU load.
 - Merged grids live whole in parent.merged; collectGrids flattens; linked move/rotate.
 - Free stairs share polyline/offset geometry and bend landings across views.
-- Notification polling requires a session token and stable dependencies; background reads and feed-seen writes verify bearer claims through notification-session.server before user-scoped RLS queries, returning serializable empty/no-op results on unavailable sessions so auth races cannot blank the app.
+- Notification polling needs a session token and stable deps; reads and feed-seen writes verify bearer claims via notification-session.server before RLS queries, returning serializable empty/no-op results without a session so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
 - Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation for consistent spacing.
 - Pintu lipat menyimpan mode satu/dua sisi, arah sisi tunggal, dan jumlah panel; panjang fisik daun dipertahankan saat diproyeksikan 45° sehingga sisa bukaan berada di kusen seberang atau di tengah, konsisten di Sketsa, Detail, Presentasi, dan DXF.
