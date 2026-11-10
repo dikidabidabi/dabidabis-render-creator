@@ -73,6 +73,7 @@ import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
+import { buildVerticalLinks, VERTICAL_LINK_RADIUS_M } from "@/lib/vertical-circulation";
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
 import { loadMasterplanAnalysis, analyzeSketchForIllustrations, type MasterplanAnalysis } from "@/lib/masterplan-analysis";
 import { annotationSvgElements, ANNOTATION_PRESETS, sortAnnotationsForRender, iluNameFor, type Annotation } from "@/lib/analysis-illustrations";
@@ -1529,6 +1530,7 @@ type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "detail"; id: string; title: string; sketch: Sketch; level: Level; area: DetailArea; bounds: Bounds }
   | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
+  | { kind: "bubble-total"; id: string; title: string; sketch: Sketch; levels: Level[]; displayNames: Record<string, string> }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
@@ -1757,6 +1759,18 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     });
   });
   const perspektifList = perspektif.filter((p): p is PerspektifItem & { image: string } => !!p.image);
+  // Diagram hubungan ruang total semua lantai — tepat sebelum slide hubungan
+  // ruang lantai terendah. Lantai tipikal cukup satu cluster.
+  if (levels.length > 1) {
+    out.push({
+      kind: "bubble-total",
+      id: "bubble-total",
+      title: "Diagram Hubungan Ruang · Total Semua Lantai",
+      sketch: sk,
+      levels,
+      displayNames,
+    });
+  }
   for (const lv of levels) {
     out.push({
       kind: "bubble",
@@ -1943,7 +1957,8 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "perspektif": return "Perspektif";
       case "level": return "Denah per Level";
       case "detail": return "Pendetailan Denah";
-      case "bubble": return "Diagram Hubungan Ruang";
+      case "bubble":
+      case "bubble-total": return "Diagram Hubungan Ruang";
       case "section": return "Potongan Prinsip";
       case "matahari":
       case "shadow-seasonal":
@@ -2360,6 +2375,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "detail" && <DetailSlideBoundary key={slide.id} slide={slide} />}
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
+      {slide.kind === "bubble-total" && <BubbleTotalBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
@@ -2426,6 +2442,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "detail" ? `Sketsa · Pendetailan · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
+    : slide.kind === "bubble-total" ? "Diagram · Hubungan Ruang · Semua Lantai"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
     : slide.kind === "site" ? (
         slide.view === "lokasi" ? "Analisa · Lokasi"
@@ -4701,6 +4718,240 @@ function BubbleBody({ slide }: { slide: Extract<Slide, { kind: "bubble" }> }) {
             {nodes.length > 14 ? (
               <div style={{ color: "#888", marginTop: 4 }}>+{nodes.length - 14} ruang lain</div>
             ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Diagram Hubungan Ruang Total (semua lantai) ----
+type TotalSimNode = SimNode & { levelId: string; homeX: number; homeY: number };
+type TotalSimLink = SimulationLinkDatum<TotalSimNode> & { weight: number; relation: RoomLink["relation"] };
+type TotalCell = { levelId: string; label: string; x: number; y: number; w: number; h: number };
+
+function BubbleTotalBody({ slide }: { slide: Extract<Slide, { kind: "bubble-total" }> }) {
+  const { sketch, levels, displayNames } = slide;
+  const mPerSPx = sketchMetersPerSketchPx(sketch.scale);
+  const tolerancePx = 1 / mPerSPx;
+  const sourceKey = JSON.stringify([
+    levels.map((lv) => [lv.id, lv.mdpl, lv.typicalCount]),
+    (sketch.layers ?? []).map((l) => [l.id, l.name, l.levelId, l.areaM2, l.points, l.coefficient]),
+    sketch.doors ?? [],
+    (sketch.lines ?? []).map((line) => [line.a, line.b, line.levelId]),
+    sketch.scale,
+  ]);
+
+  const model = useMemo(() => {
+    const sorted = [...levels].sort((a, b) => a.mdpl - b.mdpl);
+    const n = sorted.length;
+    const cols = Math.max(1, Math.ceil(Math.sqrt(n * (BUBBLE_VB_W / BUBBLE_VB_H))));
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const gap = 14;
+    const cellW = (BUBBLE_VB_W - gap * (cols + 1)) / cols;
+    const cellH = (BUBBLE_VB_H - gap * (rows + 1)) / rows;
+    const cells: TotalCell[] = [];
+    const perLevel = sorted.map((lv, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      // Lantai terendah di kiri bawah, naik ke atas seperti tumpukan lantai.
+      const cell: TotalCell = {
+        levelId: lv.id,
+        label: `${displayNames[lv.id] ?? lv.name}${Math.max(1, Math.round(lv.typicalCount ?? 1)) > 1 ? ` · tipikal ${Math.round(lv.typicalCount ?? 1)}×` : ""}`,
+        x: gap + col * (cellW + gap),
+        y: BUBBLE_VB_H - (row + 1) * (cellH + gap),
+        w: cellW,
+        h: cellH,
+      };
+      cells.push(cell);
+      const rooms = (sketch.layers ?? [])
+        .filter((l) => l.levelId === lv.id && !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name) && l.points.length >= 3)
+        .map((l) => {
+          const baseColor = colorForRoomName(l.name) ?? l.color ?? "rgba(120,120,120,ALPHA)";
+          return { id: l.id, name: l.name, points: l.points, areaM2: l.areaM2, color: roomFillOverride(l.name, "ALPHA") ?? baseColor, coefficient: l.coefficient ?? 1, levelId: l.levelId };
+        });
+      const graph = buildBubbleGraph(
+        rooms,
+        (sketch.doors ?? []).filter((d) => d.levelId === lv.id),
+        tolerancePx,
+        (sketch.lines ?? []).filter((line) => line.levelId === lv.id),
+      );
+      return { level: lv, cell, graph, area: rooms.reduce((s, r) => s + r.areaM2, 0) };
+    });
+    const allNodes = perLevel.flatMap((p) => p.graph.nodes);
+    const vertical = buildVerticalLinks(
+      perLevel.flatMap((p) => p.graph.nodes.map((node) => ({ id: node.layerId, levelId: p.level.id, name: node.name, x: node.cx * mPerSPx, y: node.cy * mPerSPx }))),
+      sorted.map((lv) => lv.id),
+    );
+    // Batas denah gabungan untuk menaruh posisi awal tiap ruang sesuai letaknya.
+    const xs = allNodes.map((node) => node.cx), ys = allNodes.map((node) => node.cy);
+    const minX = Math.min(...xs, 0), maxX = Math.max(...xs, 1), minY = Math.min(...ys, 0), maxY = Math.max(...ys, 1);
+    // Skala lingkaran seragam agar cluster terpadat tetap muat di selnya.
+    let scale = 1;
+    for (const p of perLevel) {
+      const sum = p.graph.nodes.reduce((s, node) => s + Math.PI * radiusForArea(node.areaM2) ** 2, 0);
+      if (sum > 0) scale = Math.min(scale, Math.sqrt((p.cell.w * (p.cell.h - 26) * 0.38) / sum));
+    }
+    return { perLevel, cells, vertical, scale, bounds: { minX, maxX, minY, maxY } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceKey]);
+
+  const [tick, setTick] = useState(0);
+  const nodesRef = useRef<TotalSimNode[]>([]);
+  const linksRef = useRef<TotalSimLink[]>([]);
+  const cellByLevel = useMemo(() => new Map(model.cells.map((cell) => [cell.levelId, cell])), [model]);
+
+  useEffect(() => {
+    const { minX, maxX, minY, maxY } = model.bounds;
+    const spanX = Math.max(1e-6, maxX - minX), spanY = Math.max(1e-6, maxY - minY);
+    const nodes: TotalSimNode[] = model.perLevel.flatMap(({ level, cell, graph }) => graph.nodes.map((node) => {
+      const r = Math.max(6, radiusForArea(node.areaM2) * model.scale);
+      const padX = Math.min(cell.w / 2, r + 10), padTop = Math.min(cell.h / 2, r + 30), padBottom = Math.min(cell.h / 2, r + 10);
+      const homeX = cell.x + padX + ((node.cx - minX) / spanX) * Math.max(0, cell.w - padX * 2);
+      const homeY = cell.y + padTop + ((node.cy - minY) / spanY) * Math.max(0, cell.h - padTop - padBottom);
+      return { ...node, levelId: level.id, r, homeX, homeY, x: homeX, y: homeY };
+    }));
+    const byId = new Map(nodes.map((node) => [node.layerId, node]));
+    const links: TotalSimLink[] = model.perLevel.flatMap(({ graph }) => graph.links.flatMap((link) => {
+      const source = byId.get(link.source), target = byId.get(link.target);
+      return source && target ? [{ source, target, weight: link.weight, relation: link.relation } as TotalSimLink] : [];
+    }));
+    nodesRef.current = nodes;
+    linksRef.current = links;
+    const sim = forceSimulation<TotalSimNode, TotalSimLink>(nodes)
+      .force("link", forceLink<TotalSimNode, TotalSimLink>(links).id((d) => d.layerId).distance((l) => (l.source as TotalSimNode).r + (l.target as TotalSimNode).r + 14).strength(0.5))
+      .force("charge", forceManyBody<TotalSimNode>().strength(-60 * model.scale))
+      .force("collide", forceCollide<TotalSimNode>().radius((d) => d.r + 3).iterations(2))
+      .force("x", forceX<TotalSimNode>((d) => d.homeX).strength(0.12))
+      .force("y", forceY<TotalSimNode>((d) => d.homeY).strength(0.12))
+      .alpha(1)
+      .alphaDecay(0.04)
+      .on("tick", () => setTick((t) => (t + 1) % 1000000));
+    return () => { sim.stop(); };
+  }, [model]);
+
+  // Jaga setiap ruang tetap di dalam sel lantainya.
+  for (const node of nodesRef.current) {
+    const cell = cellByLevel.get(node.levelId);
+    if (!cell || node.x == null || node.y == null) continue;
+    node.x = Math.max(cell.x + node.r + 4, Math.min(cell.x + cell.w - node.r - 4, node.x));
+    node.y = Math.max(cell.y + node.r + 26, Math.min(cell.y + cell.h - node.r - 4, node.y));
+  }
+  void tick;
+
+  const nodes = nodesRef.current;
+  const links = linksRef.current;
+  const nodeById = new Map(nodes.map((node) => [node.layerId, node]));
+  const totalArea = model.perLevel.reduce((s, p) => s + p.area * Math.max(1, Math.round(p.level.typicalCount ?? 1)), 0);
+  const verticalByKind = { lift: 0, tangga: 0, ramp: 0 };
+  for (const link of model.vertical) verticalByKind[link.kind] += 1;
+
+  return (
+    <div style={{ display: "flex", gap: 28, width: "100%", height: "100%", alignItems: "stretch" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg
+          viewBox={`0 0 ${BUBBLE_VB_W} ${BUBBLE_VB_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ width: "100%", height: "100%", display: "block", background: "#fafaf7", border: "1px solid #e5e5e5" }}
+          aria-label="Diagram hubungan ruang total semua lantai"
+        >
+          <defs>
+            <pattern id="bubble-total-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect x={0} y={0} width={BUBBLE_VB_W} height={BUBBLE_VB_H} fill="url(#bubble-total-grid)" />
+          {model.cells.map((cell) => (
+            <g key={`cell-${cell.levelId}`}>
+              <rect x={cell.x} y={cell.y} width={cell.w} height={cell.h} rx={10} fill="rgba(255,255,255,0.55)" stroke="rgba(0,0,0,0.28)" strokeWidth={1} strokeDasharray="6 5" />
+              <text x={cell.x + 12} y={cell.y + 17} fontSize={13} fontWeight={700} fill="#222" style={{ letterSpacing: "0.04em" }}>{cell.label}</text>
+            </g>
+          ))}
+          {links.map((l, i) => {
+            const s = l.source as TotalSimNode, t = l.target as TotalSimNode;
+            if (s.x == null || s.y == null || t.x == null || t.y == null) return null;
+            const isDirect = l.relation === "direct", isDoor = l.relation === "door";
+            return (
+              <line key={`e-${i}`} x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+                stroke={isDirect ? "#19bfff" : isDoor ? "rgba(20,20,20,0.85)" : "rgba(80,80,80,0.45)"}
+                strokeWidth={(isDirect ? 3 : isDoor ? 2.4 : 1.1)}
+                strokeDasharray={l.relation === "wall" ? "4 4" : undefined} />
+            );
+          })}
+          {nodes.map((n) => {
+            if (n.x == null || n.y == null) return null;
+            const fill = (n.color || "rgba(180,180,180,ALPHA)").replace("ALPHA", "0.78");
+            const stroke = (n.color || "rgba(80,80,80,ALPHA)").replace("ALPHA", "1");
+            const labelSize = Math.max(7, Math.min(14, n.r * 0.34));
+            return (
+              <g key={`n-${n.layerId}`}>
+                <circle cx={n.x} cy={n.y} r={n.r} fill={fill} stroke={stroke} strokeWidth={1.2} />
+                <text x={n.x} y={n.y} textAnchor="middle" dominantBaseline="central" fontSize={labelSize} fontWeight={600} fill="#0a0a0a"
+                  style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 2.2 } as React.CSSProperties}>
+                  {n.name}
+                </text>
+              </g>
+            );
+          })}
+          {/* Garis hubungan vertikal (merah) antar lift/tangga/ramp lintas lantai. */}
+          {model.vertical.map((link) => {
+            const s = nodeById.get(link.source), t = nodeById.get(link.target);
+            if (!s || !t || s.x == null || s.y == null || t.x == null || t.y == null) return null;
+            return (
+              <g key={`v-${link.source}-${link.target}`}>
+                <line x1={s.x} y1={s.y} x2={t.x} y2={t.y} stroke="#dc2626" strokeWidth={3} strokeLinecap="round" />
+                <circle cx={s.x} cy={s.y} r={3.5} fill="#dc2626" />
+                <circle cx={t.x} cy={t.y} r={3.5} fill="#dc2626" />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ border: "1px solid #111", padding: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>Topologi Total</div>
+          <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 26, fontWeight: 700, marginTop: 6, letterSpacing: "-0.02em" }}>
+            {nodes.length} Ruang · {model.cells.length} Cluster
+          </div>
+          <div style={{ fontSize: 13, color: "#444", marginTop: 4 }}>
+            {model.vertical.length} hubungan vertikal · {verticalByKind.lift} lift · {verticalByKind.tangga} tangga · {verticalByKind.ramp} ramp
+          </div>
+          <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>Total luas: {totalArea.toFixed(1)} m² (termasuk tipikal)</div>
+        </div>
+
+        <div style={{ border: "1px solid #ddd", padding: 16 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 600 }}>Legenda</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#dc2626" strokeWidth={3} /></svg>
+            <span style={{ fontSize: 12 }}>Hubungan vertikal (lift/tangga/ramp)</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#19bfff" strokeWidth={3} /></svg>
+            <span style={{ fontSize: 12 }}>Hubungan langsung</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#141414" strokeWidth={2.4} /></svg>
+            <span style={{ fontSize: 12 }}>Terhubung pintu</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+            <svg width={48} height={12}><line x1={2} y1={6} x2={46} y2={6} stroke="#666" strokeWidth={1.1} strokeDasharray="4 4" /></svg>
+            <span style={{ fontSize: 12 }}>Bersebelahan (dinding)</span>
+          </div>
+          <div style={{ fontSize: 11, color: "#888", marginTop: 12, lineHeight: 1.5 }}>
+            Merah: lift/tangga/ramp sejenis antar lantai pada koordinat sama atau jarak horizontal &lt; {VERTICAL_LINK_RADIUS_M} m. Lantai tipikal = 1 cluster.
+          </div>
+        </div>
+
+        <div style={{ border: "1px solid #ddd", padding: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 8 }}>Per Lantai</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
+            {[...model.perLevel].reverse().map((p) => (
+              <div key={`pl-${p.level.id}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.cell.label}</span>
+                <span style={{ color: "#666" }}>{p.graph.nodes.length} ruang · {p.area.toFixed(1)} m²</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
