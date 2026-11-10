@@ -24,7 +24,7 @@ export function ScheduleSCurve({ tasks, today, weights = new Map(), showWeights 
     if (!start || !end) return [];
     const days = differenceInCalendarDays(parseISO(end), parseISO(start));
     const step = Math.max(7, Math.ceil(days / 260));
-    const dates = new Set([start, end, current, ...leaves.flatMap((task) => [task.start, task.due, ...(task.actualStart ? [task.actualStart] : []), ...(task.actualFinish ? [task.actualFinish] : [])]), ...leaves.flatMap((task) => (task.progressEntries ?? []).map((point) => point.date))]);
+    const dates = new Set([start, end, ...(current >= start && current <= end ? [current] : []), ...leaves.flatMap((task) => [task.start, task.due, ...(task.actualStart ? [task.actualStart] : []), ...(task.actualFinish ? [task.actualFinish] : [])]), ...leaves.flatMap((task) => (task.progressEntries ?? []).map((point) => point.date))]);
     for (let d = step; d < days; d += step) dates.add(format(addDays(parseISO(start), d), "yyyy-MM-dd"));
     return [...dates].sort().map((date) => {
       const actual = date > current ? null : actualAt(date);
@@ -125,7 +125,7 @@ function SCurveChart({ tasks, data, current, number, weights, showWeights, criti
             </>}
           </g>;
         })}
-        <line x1={x(current)} x2={x(current)} y1={0} y2={height} stroke="var(--schedule-today)" strokeDasharray="4 4" />
+        {current >= firstPoint.date && current <= lastPoint.date && <line x1={x(current)} x2={x(current)} y1={0} y2={height} stroke="var(--schedule-today)" strokeDasharray="4 4" />}
         <polyline points={line(plan)} fill="none" stroke="var(--schedule-link-fs)" strokeWidth={2.5} />
         {actual.length > 0 && <polyline points={line(actual)} fill="none" stroke="var(--schedule-link-ss)" strokeWidth={2.5} />}
         {actual.map((point) => <circle key={point.date} cx={x(point.date)} cy={y(point.value)} r={3} fill="var(--schedule-link-ss)"><title>{`${point.date}: ${number(point.value)}%`}</title></circle>)}
