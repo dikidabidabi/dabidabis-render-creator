@@ -26,3 +26,4 @@
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
 - Picked curves render as wall bands; ends feed practical columns.
 - Total bubble slide: one cluster per level; red links join same-kind circulation rooms on the next matching level.
+- Rincian per Level slides render full content width unscaled and paginate rooms by estimated height, repeating the level header/table heading on continuations like Outline Specification.
