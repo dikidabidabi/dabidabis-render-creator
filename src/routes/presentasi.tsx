@@ -1511,7 +1511,7 @@ function rincianRowsForLevel(items: Layer[], zones: FunctionZone[]): RincianRow[
   });
 }
 // Usable content height after margins, slide heading and footer; heights in px.
-const RINCIAN_LAYOUT = { budget: 600, sectionOverhead: 92, totalRowHeight: 34, emptyHeight: 31 };
+const RINCIAN_LAYOUT = { budget: 632, sectionOverhead: 98, totalRowHeight: 37, emptyHeight: 34 };
 type RincianSection = {
   level: Level;
   items: RincianRow[];
@@ -1886,7 +1886,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     const singleRowGroups = new Set(levelRows.flatMap((rs) => rs.filter((r, i) => r.groupLast && rs[i - 1]?.groupId !== r.groupId)));
     const chunkPages = paginateRincianLevels(levelRows, (row) => {
       const singleGroup = singleRowGroups.has(row);
-      return 12 + 16 * Math.max(rincianTextLines(row.room.name, 56), singleGroup ? rincianTextLines(row.groupName, 26) : 1);
+      return 34 + 19 * (Math.max(rincianTextLines(row.room.name, 56), singleGroup ? rincianTextLines(row.groupName, 26) : 1) - 1);
     }, RINCIAN_LAYOUT);
     const pages: RincianSection[][] = chunkPages.map((chunks) => chunks.map((chunk) => {
       const lv = levels[chunk.levelIndex];
