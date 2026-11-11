@@ -1883,8 +1883,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     // Same rule as Outline Spesifikasi: fill each page by available height and
     // continue the remaining rows of a level on the next page with its header.
     const levelRows = levels.map((lv) => rincianRowsForLevel(ruangAll.filter((l) => l.levelId === lv.id), zones));
+    const singleRowGroups = new Set(levelRows.flatMap((rs) => rs.filter((r, i) => r.groupLast && rs[i - 1]?.groupId !== r.groupId)));
     const chunkPages = paginateRincianLevels(levelRows, (row) => {
-      const singleGroup = row.groupLast && levelRows.some((rs) => rs.findIndex((r) => r.groupId === row.groupId) === rs.indexOf(row));
+      const singleGroup = singleRowGroups.has(row);
       return 12 + 16 * Math.max(rincianTextLines(row.room.name, 56), singleGroup ? rincianTextLines(row.groupName, 26) : 1);
     }, RINCIAN_LAYOUT);
     const pages: RincianSection[][] = chunkPages.map((chunks) => chunks.map((chunk) => {
