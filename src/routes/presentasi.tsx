@@ -1,4 +1,5 @@
 import { getFormulaSettings } from "@/lib/formula-settings";
+import { paginateRincianLevels, rincianTextLines } from "@/lib/rincian-pagination";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1509,6 +1510,8 @@ function rincianRowsForLevel(items: Layer[], zones: FunctionZone[]): RincianRow[
       .map((room, index) => ({ room, groupId: id, groupName: name, groupArea: area, groupLast: index === group.length - 1 }));
   });
 }
+// Usable content height after margins, slide heading and footer; heights in px.
+const RINCIAN_LAYOUT = { budget: 600, sectionOverhead: 92, totalRowHeight: 34, emptyHeight: 31 };
 type RincianSection = {
   level: Level;
   items: RincianRow[];
@@ -1877,38 +1880,26 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
   {
     const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
     const zones = normalizeFunctionZones(sk.functionZones);
-    const MAX_ROWS_PER_CHUNK = 18;
-    const SECTION_OVERHEAD = 130; // px (header + thead + total row + margin)
-    const ROW_HEIGHT = 28;
-    const BUDGET = 700;
-    const allSections: RincianSection[] = [];
-    for (const lv of levels) {
-      const items = rincianRowsForLevel(ruangAll.filter((l) => l.levelId === lv.id), zones);
-      const k = Math.max(1, Math.round(lv.typicalCount ?? 1));
-      const totalAsliPer = items.reduce((s, { room }) => s + room.areaM2, 0);
-      const totalEfPer = items.reduce((s, { room }) => s + room.areaM2 * (room.coefficient ?? 1), 0);
-      if (items.length === 0) {
-        allSections.push({ level: lv, items, k, partIndex: 1, partCount: 1, totalAsliPer, totalEfPer });
-        continue;
-      }
-      const partCount = Math.max(1, Math.ceil(items.length / MAX_ROWS_PER_CHUNK));
-      for (let p = 0; p < partCount; p++) {
-        const chunk = items.slice(p * MAX_ROWS_PER_CHUNK, (p + 1) * MAX_ROWS_PER_CHUNK);
-        allSections.push({ level: lv, items: chunk, k, partIndex: p + 1, partCount, totalAsliPer, totalEfPer });
-      }
-    }
-    // Pack sections into pages by height budget
-    const pages: RincianSection[][] = [];
-    let cur: RincianSection[] = [];
-    let curH = 0;
-    for (const s of allSections) {
-      const h = SECTION_OVERHEAD + ROW_HEIGHT * Math.max(1, s.items.length);
-      if (cur.length > 0 && curH + h > BUDGET) {
-        pages.push(cur); cur = []; curH = 0;
-      }
-      cur.push(s); curH += h;
-    }
-    if (cur.length > 0) pages.push(cur);
+    // Same rule as Outline Spesifikasi: fill each page by available height and
+    // continue the remaining rows of a level on the next page with its header.
+    const levelRows = levels.map((lv) => rincianRowsForLevel(ruangAll.filter((l) => l.levelId === lv.id), zones));
+    const chunkPages = paginateRincianLevels(levelRows, (row) => {
+      const singleGroup = row.groupLast && levelRows.some((rs) => rs.findIndex((r) => r.groupId === row.groupId) === rs.indexOf(row));
+      return 12 + 16 * Math.max(rincianTextLines(row.room.name, 56), singleGroup ? rincianTextLines(row.groupName, 26) : 1);
+    }, RINCIAN_LAYOUT);
+    const pages: RincianSection[][] = chunkPages.map((chunks) => chunks.map((chunk) => {
+      const lv = levels[chunk.levelIndex];
+      const all = levelRows[chunk.levelIndex];
+      return {
+        level: lv,
+        items: chunk.rows,
+        k: Math.max(1, Math.round(lv.typicalCount ?? 1)),
+        partIndex: chunk.partIndex,
+        partCount: chunk.partCount,
+        totalAsliPer: all.reduce((sum, { room }) => sum + room.areaM2, 0),
+        totalEfPer: all.reduce((sum, { room }) => sum + room.areaM2 * (room.coefficient ?? 1), 0),
+      };
+    }));
     const pageCount = Math.max(1, pages.length);
     pages.forEach((sections, i) => {
       out.push({
@@ -2422,7 +2413,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {body}
         </div>
-      ) : slide.kind === "spec-outline" ? (
+      ) : slide.kind === "spec-outline" || slide.kind === "rincian" ? (
         <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
           {body}
         </div>
@@ -11466,7 +11457,7 @@ function RincianBody({ slide }: { slide: Extract<Slide, { kind: "rincian" }> }) 
     );
   }
   return (
-    <div style={{ width: "100%", overflow: "hidden", display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ width: "100%", minWidth: A3_W - PAD * 2, overflow: "hidden" }}>
       <div style={{ width: "100%" }}>
         {sections.map((sec, idx) => {
           const { level: lv, items, k, partIndex, partCount, totalAsliPer, totalEfPer } = sec;

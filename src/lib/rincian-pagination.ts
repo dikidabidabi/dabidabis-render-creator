@@ -36,14 +36,12 @@ export function paginateRincianLevels<T>(
     used = 0;
   };
 
-
   levels.forEach((rows, levelIndex) => {
     if (rows.length === 0) {
       const h = layout.sectionOverhead + layout.emptyHeight;
       if (page.length && used + h > layout.budget) flush();
       const chunk = { levelIndex, rows: [], partIndex: 1, partCount: 1 };
       page.push(chunk);
-
       used += h;
       return;
     }
@@ -64,7 +62,6 @@ export function paginateRincianLevels<T>(
         chunk = { levelIndex, rows: [], partIndex: levelChunks.length + 1, partCount: 1 };
         levelChunks.push(chunk);
         page.push(chunk);
-
         used += layout.sectionOverhead;
       }
       chunk.rows.push(row);
@@ -74,7 +71,6 @@ export function paginateRincianLevels<T>(
     levelChunks.forEach((c) => { c.partCount = levelChunks.length; });
   });
   flush();
-
   return pages;
 }
 
