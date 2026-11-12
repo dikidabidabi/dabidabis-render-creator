@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { test } from "node:test";
+import assert from "node:assert/strict";
 import { buildVolumetricTable, paginateVolumetricRows } from "./volumetric";
 
 const levels = [
@@ -17,29 +18,30 @@ const layers = [
   { name: "Taman", levelId: "l1", areaM2: 40 },
   { name: "Kantor", levelId: "t", areaM2: 200, coefficient: 1 },
 ];
+const t = buildVolumetricTable(levels, layers);
+const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 0.01, `${a} ≈ ${b}`);
 
-describe("volumetric table", () => {
-  const t = buildVolumetricTable(levels, layers);
-  it("fungsi is coefficient 1 area, MEP is coefficient 0 area", () => {
-    const l1 = t.rows.find((r) => r.name === "Lantai 1")!;
-    expect(l1.fungsiM2).toBeCloseTo(514.37);
-    expect(l1.mepM2).toBeCloseTo(138.85);
-    expect(l1.gfaM2).toBeCloseTo(845.31);
-    expect(l1.efektifPct).toBeCloseTo(60.85, 2);
-  });
-  it("volume = GFA × floor height, typical floors expand per copy", () => {
-    expect(t.rows.map((r) => r.name)).toEqual(["B1", "Lantai 1", "Level 2", "Level 3", "Lantai Atap"]);
-    const l1 = t.rows[1];
-    expect(l1.heightM).toBeCloseTo(5.25);
-    expect(l1.volumeM3).toBeCloseTo(845.31 * 5.25);
-    expect(t.rows[4].elevationM).toBeCloseTo(15.75);
-    expect(t.rows[0].heightM).toBeCloseTo(3.5);
-  });
-  it("CFA adds open/taman area to GFA", () => {
-    expect(t.cfaM2).toBeCloseTo(t.gfaM2 + 40);
-  });
-  it("paginates keeping room for totals on the last page", () => {
-    expect(paginateVolumetricRows([1, 2, 3], 5, 2).length).toBe(1);
-    expect(paginateVolumetricRows([1, 2, 3, 4, 5], 5, 2)).toEqual([[1, 2, 3, 4], [5]]);
-  });
+test("fungsi is coefficient 1 area, MEP is coefficient 0 area", () => {
+  const l1 = t.rows.find((r) => r.name === "Lantai 1")!;
+  close(l1.fungsiM2, 514.37);
+  close(l1.mepM2, 138.85);
+  close(l1.gfaM2, 845.31);
+  close(l1.efektifPct, 60.85);
+});
+
+test("volume = GFA × floor height; typical floors expand per copy", () => {
+  assert.deepEqual(t.rows.map((r) => r.name), ["B1", "Lantai 1", "Level 2", "Level 3", "Lantai Atap"]);
+  close(t.rows[1].heightM, 5.25);
+  close(t.rows[1].volumeM3, 845.31 * 5.25);
+  close(t.rows[4].elevationM, 15.75);
+  close(t.rows[0].heightM, 3.5);
+});
+
+test("CFA adds taman area to GFA", () => {
+  close(t.cfaM2, t.gfaM2 + 40);
+});
+
+test("pagination keeps room for totals on the last page", () => {
+  assert.equal(paginateVolumetricRows([1, 2, 3], 5, 2).length, 1);
+  assert.deepEqual(paginateVolumetricRows([1, 2, 3, 4, 5], 5, 2), [[1, 2, 3, 4], [5]]);
 });
