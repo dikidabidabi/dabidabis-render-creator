@@ -5,7 +5,7 @@
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows are cached viewport-bounded bitmaps (max 2048 px) over cached wall unions; wall fills skip bevels to ease Android tablet GPU load.
 - Merged grids live whole in parent.merged; collectGrids flattens; linked move/rotate.
 - Free stairs share polyline/offset geometry and bend landings across views.
-- Notification polling needs a session token and stable deps; reads and feed-seen writes verify bearer claims via notification-session.server before RLS queries, returning serializable empty/no-op results without a session so auth races cannot blank the app.
+- Notification reads/writes verify bearer claims via notification-session.server and return empty/no-op without a session so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
 - Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation for consistent spacing.
 - Pintu lipat menyimpan mode satu/dua sisi, arah sisi tunggal, dan jumlah panel; panjang fisik daun dipertahankan saat diproyeksikan 45° sehingga sisa bukaan berada di kusen seberang atau di tengah, konsisten di Sketsa, Detail, Presentasi, dan DXF.
@@ -22,8 +22,9 @@
 - Mode Plafon per kotak detail saling eksklusif dengan mode Material dan memakai kode material bersama yang sama dengan Outline Spesifikasi.
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
 - Outline Specification per-level location areas and all-level totals share specMaterialArea; location fragments retain the full level area and pagination measures the displayed room-and-area text to prevent clipping.
-- Schedule PDFs use window.print, A4 landscape and fit-width zoom. S-curve chunks pair labels with SVG row slices, reserving heading space. Schedule separators use thin background strips only at existing row/month borders.
+- Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG row slices; thin separators only at row/month borders.
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
 - Picked curves render as wall bands; ends feed practical columns.
 - Total bubble slide: one cluster per level; red links join same-kind circulation rooms on the next matching level.
-- Rincian per Level slides render full content width unscaled and paginate rooms by estimated height, repeating the level header/table heading on continuations like Outline Specification.
+- Rincian per Level slides render full-width unscaled and paginate like Outline Specification.
+- Volumetrik slides: one row per physical floor; sub-totals on the last page.

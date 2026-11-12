@@ -1,3 +1,4 @@
+import { buildVolumetricTable, paginateVolumetricRows, type VolumetricRow, type VolumetricTable } from "@/lib/volumetric";
 import { getFormulaSettings } from "@/lib/formula-settings";
 import { paginateRincianLevels, rincianTextLines } from "@/lib/rincian-pagination";
 import { createFileRoute } from "@tanstack/react-router";
@@ -1511,6 +1512,9 @@ function rincianRowsForLevel(items: Layer[], zones: FunctionZone[]): RincianRow[
   });
 }
 // Usable content height after margins, slide heading and footer; heights in px.
+// Volumetrik: anggaran tinggi 632 px − pita judul (40) − kepala tabel (52) = 540 px / 30 px per baris.
+const VOLUMETRIK_ROWS_PER_PAGE = 18;
+const VOLUMETRIK_TOTAL_RESERVE = 3; // dua baris sub-total (≈72 px)
 const RINCIAN_LAYOUT = { budget: 632, sectionOverhead: 98, totalRowHeight: 37, emptyHeight: 34 };
 type RincianSection = {
   level: Level;
@@ -1548,6 +1552,7 @@ type Slide =
   | { kind: "function-section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "explode-axo"; id: string; title: string; sketch: Sketch }
   | { kind: "rekap"; id: string; title: string; sketch: Sketch; data: Stats }
+  | { kind: "volumetrik"; id: string; title: string; sketch: Sketch; table: VolumetricTable; rows: VolumetricRow[]; pageIndex: number; pageCount: number }
   | { kind: "rincian"; id: string; title: string; sketch: Sketch; sections: RincianSection[]; pageIndex: number; pageCount: number }
   | { kind: "infografis"; id: string; title: string; sketch: Sketch; data: Stats }
   | { kind: "komposisi"; id: string; title: string; sketch: Sketch; data: Stats }
@@ -1876,6 +1881,23 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
     });
   }
   out.push({ kind: "rekap", id: "rekap", title: "Rekapitulasi", sketch: sk, data });
+  // Volumetrik — setelah Rekapitulasi; data sama dengan halaman Tabulasi.
+  {
+    const table = buildVolumetricTable(levels, sk.layers ?? []);
+    const pages = paginateVolumetricRows(table.rows, VOLUMETRIK_ROWS_PER_PAGE, VOLUMETRIK_TOTAL_RESERVE);
+    pages.forEach((rows, i) => {
+      out.push({
+        kind: "volumetrik",
+        id: pages.length > 1 ? `volumetrik-${i + 1}` : "volumetrik",
+        title: pages.length > 1 ? `Volumetrik (${i + 1}/${pages.length})` : "Volumetrik",
+        sketch: sk,
+        table,
+        rows,
+        pageIndex: i + 1,
+        pageCount: pages.length,
+      });
+    });
+  }
   // Rincian per Level — paginated jika tidak muat satu slide.
   {
     const ruangAll = (sk.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
@@ -1961,6 +1983,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "function-section": return "Potongan Fungsi";
       case "explode-axo": return "Aksonometri Eksplode";
       case "rekap": return "Rekapitulasi";
+      case "volumetrik": return "Volumetrik";
       case "rincian": return "Rincian per Level";
       case "infografis": return "Infografis";
       case "komposisi": return "Komposisi Ruang";
@@ -2382,6 +2405,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "function-section" && <FunctionSectionBody slide={slide} />}
       {slide.kind === "explode-axo" && <ExplodedAxoBody sketch={slide.sketch} />}
       {slide.kind === "rekap" && <RekapBody data={slide.data} sketch={slide.sketch} />}
+      {slide.kind === "volumetrik" && <VolumetrikBody slide={slide} />}
       {slide.kind === "rincian" && <RincianBody slide={slide} />}
       {slide.kind === "infografis" && <InfografisBody data={slide.data} sketch={slide.sketch} />}
       {slide.kind === "komposisi" && <KomposisiBody data={slide.data} sketch={slide.sketch} />}
@@ -2414,7 +2438,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {body}
         </div>
-      ) : slide.kind === "spec-outline" || slide.kind === "rincian" ? (
+      ) : slide.kind === "spec-outline" || slide.kind === "rincian" || slide.kind === "volumetrik" ? (
         <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
           {body}
         </div>
@@ -2452,6 +2476,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     : slide.kind === "thermal" ? "Analisa · Thermal Heatmap"
     : slide.kind === "explode-axo" ? "Sketsa · Aksonometri Eksplode"
     : slide.kind === "rekap" ? "Tabulasi · Rekap"
+    : slide.kind === "volumetrik" ? "Tabulasi · Volumetrik"
     : slide.kind === "rincian" ? "Tabulasi · Rincian"
     : slide.kind === "infografis" ? "Tabulasi · Infografis"
     : slide.kind === "komposisi" ? "Tabulasi · Komposisi"
@@ -11443,6 +11468,94 @@ function RekapBody({ data, sketch }: { data: Stats; sketch: Sketch }) {
       )}
       {totalParking.motor > 0 && (
         <GridStat label="Total Lot Parkir Motor" value={`${totalParking.motor} motor`} hint="akumulasi seluruh level" />
+      )}
+    </div>
+  );
+}
+
+// ---- Volumetrik ----
+function VolumetrikBody({ slide }: { slide: Extract<Slide, { kind: "volumetrik" }> }) {
+  const { sketch, table, rows, pageIndex, pageCount } = slide;
+  const isLast = pageIndex === pageCount;
+  const cols: { label: string; unit?: string; w: string; align: "left" | "center" | "right" }[] = [
+    { label: "No", w: "5%", align: "center" },
+    { label: "Lantai", w: "17%", align: "left" },
+    { label: "Elevasi Lantai", unit: "(m)", w: "11%", align: "right" },
+    { label: "Ketinggian Lantai", unit: "(m)", w: "11%", align: "right" },
+    { label: "GFA", unit: "(m²)", w: "11%", align: "right" },
+    { label: "Fungsi", unit: "(m²)", w: "11%", align: "right" },
+    { label: "MEP, Servis & Penunjang", unit: "(m²)", w: "13%", align: "right" },
+    { label: "Volume", unit: "(m³)", w: "12%", align: "right" },
+    { label: "Efektif", unit: "(%)", w: "9%", align: "right" },
+  ];
+  const cell = (align: "left" | "center" | "right"): React.CSSProperties => ({
+    padding: "0 10px", height: 30, textAlign: align, borderBottom: "1px solid #ececec",
+    fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+  });
+  const totalCell = (align: "left" | "center" | "right"): React.CSSProperties => ({
+    ...cell(align), height: 36, fontWeight: 700, background: "#f4f4f4", borderBottom: "1px solid #d8d8d8",
+  });
+  return (
+    <div style={{ width: "100%", minWidth: A3_W - PAD * 2, overflow: "hidden" }}>
+      <div style={{ height: 40, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #111" }}>
+        <span style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", textTransform: "uppercase" }}>
+          {sketch.title || "Proyek"}
+        </span>
+        {pageCount > 1 && (
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.16em", color: "#888", textTransform: "uppercase" }}>
+            bag. {pageIndex}/{pageCount}
+          </span>
+        )}
+      </div>
+      {table.rows.length === 0 ? (
+        <div style={{ fontSize: 14, color: "#999", padding: "12px 0" }}>Belum ada lantai.</div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, tableLayout: "fixed" }}>
+          <thead>
+            <tr style={{ height: 52, color: "#555", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              {cols.map((c) => (
+                <th key={c.label} style={{ width: c.w, textAlign: c.align, padding: "6px 10px", fontWeight: 700, lineHeight: 1.25, borderBottom: "1px solid #111", verticalAlign: "bottom" }}>
+                  {c.label}
+                  {c.unit && <span style={{ display: "block", color: "#e85d3a", letterSpacing: "0.04em", textTransform: "none" }}>{c.unit}</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.no}-${r.levelId}`}>
+                <td style={cell("center")}>{r.no}</td>
+                <td style={cell("left")}>{r.name}</td>
+                <td style={cell("right")}>{fmt(r.elevationM)}</td>
+                <td style={cell("right")}>{fmt(r.heightM)}</td>
+                <td style={cell("right")}>{fmt(r.gfaM2)}</td>
+                <td style={cell("right")}>{fmt(r.fungsiM2)}</td>
+                <td style={cell("right")}>{fmt(r.mepM2)}</td>
+                <td style={cell("right")}>{fmt(r.volumeM3)}</td>
+                <td style={cell("right")}>{fmt(r.efektifPct)}%</td>
+              </tr>
+            ))}
+            {isLast && (
+              <>
+                <tr>
+                  <td colSpan={3} style={{ ...totalCell("center"), letterSpacing: "0.08em" }}>SUB-TOTAL (GFA)</td>
+                  <td style={totalCell("right")}>{fmt(table.totalHeightM)}</td>
+                  <td style={{ ...totalCell("right"), fontSize: 16 }}>{fmt(table.gfaM2)}</td>
+                  <td style={totalCell("right")}>{fmt(table.fungsiM2)}</td>
+                  <td style={totalCell("right")}>{fmt(table.mepM2)}</td>
+                  <td style={totalCell("right")}>{fmt(table.volumeM3)}</td>
+                  <td style={totalCell("right")}>{fmt(table.efektifPct)}%</td>
+                </tr>
+                <tr>
+                  <td colSpan={3} style={{ ...totalCell("center"), letterSpacing: "0.08em" }}>SUB-TOTAL (CFA)</td>
+                  <td style={totalCell("right")} />
+                  <td style={{ ...totalCell("right"), fontSize: 16 }}>{fmt(table.cfaM2)}</td>
+                  <td colSpan={4} style={{ ...totalCell("left"), fontWeight: 400, color: "#888", fontSize: 12 }}>GFA + luas Taman / ruang terbuka</td>
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
       )}
     </div>
   );
