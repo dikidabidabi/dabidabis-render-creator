@@ -140,8 +140,9 @@ export function paginateVolumetricRows<T>(rows: T[], perPage: number, lastPageRe
   const pages: T[][] = [];
   let i = 0;
   while (rows.length - i > lastPer) {
-    pages.push(rows.slice(i, i + per));
-    i += per;
+    const take = Math.min(per, rows.length - i - 1);
+    pages.push(rows.slice(i, i + take));
+    i += take;
   }
   pages.push(rows.slice(i));
   return pages;

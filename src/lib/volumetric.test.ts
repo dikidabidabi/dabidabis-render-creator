@@ -40,6 +40,6 @@ describe("volumetric table", () => {
   });
   it("paginates keeping room for totals on the last page", () => {
     expect(paginateVolumetricRows([1, 2, 3], 5, 2).length).toBe(1);
-    expect(paginateVolumetricRows([1, 2, 3, 4, 5], 5, 2)).toEqual([[1, 2, 3, 4, 5], []].filter((p) => p.length).length === 1 ? [[1, 2, 3, 4, 5]] : [[1, 2, 3, 4, 5], []]);
+    expect(paginateVolumetricRows([1, 2, 3, 4, 5], 5, 2)).toEqual([[1, 2, 3, 4], [5]]);
   });
 });
