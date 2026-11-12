@@ -73,7 +73,11 @@ export function buildVolumetricTable(levels: VolumetricLevel[], layers: Volumetr
       let name: string;
       if (i < zi) name = isAutoName(lv.name) ? `B${zi - i}` : lv.name;
       else if (isAutoName(lv.name)) name = `Level ${upperNo + j}`;
-      else name = k > 1 ? `${lv.name} (${j + 1}/${k})` : lv.name;
+      else if (k > 1) {
+        // "Lantai 3" tipikal 3× → Lantai 3, Lantai 4, Lantai 5.
+        const m = lv.name.trim().match(/^(.*?)(\d+)$/);
+        name = m ? `${m[1]}${Number(m[2]) + j}` : `${lv.name} (${j + 1}/${k})`;
+      } else name = lv.name;
       floors.push({ lv, name, elevation: base + j * h });
     }
     if (i >= zi) upperNo += k;

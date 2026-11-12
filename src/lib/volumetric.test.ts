@@ -45,3 +45,8 @@ test("pagination keeps room for totals on the last page", () => {
   assert.equal(paginateVolumetricRows([1, 2, 3], 5, 2).length, 1);
   assert.deepEqual(paginateVolumetricRows([1, 2, 3, 4, 5], 5, 2), [[1, 2, 3, 4], [5]]);
 });
+
+test("named typical floors continue their number per copy", () => {
+  const r = buildVolumetricTable([{ id: "a", name: "Lantai 3", mdpl: 0, typicalCount: 3, typicalHeight: 5.25 }], []);
+  assert.deepEqual(r.rows.map((x) => x.name), ["Lantai 3", "Lantai 4", "Lantai 5"]);
+});
