@@ -27,3 +27,4 @@
 - Picked curves render as wall bands; ends feed practical columns.
 - Total bubble slide: one cluster per level; red links join same-kind circulation rooms on the next matching level.
 - Rincian per Level slides render full content width unscaled and paginate rooms by estimated height, repeating the level header/table heading on continuations like Outline Specification.
+- Volumetrik slides follow Rekapitulasi and reuse Tabulasi room data: one row per physical floor (typicals expanded), paginated with sub-totals only on the last page.
