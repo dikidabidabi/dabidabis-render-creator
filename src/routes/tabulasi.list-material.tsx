@@ -163,13 +163,15 @@ function RksNote({ material, onChange, onClose }: { material: LibraryMaterial; o
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const drag = useRef<{ dx: number; dy: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     const width = Math.min(760, window.innerWidth - 32);
     setPos({ x: Math.max(16, (window.innerWidth - width) / 2), y: Math.max(16, window.innerHeight * 0.12) });
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeRef.current(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
   const words = material.rks.trim() ? material.rks.trim().split(/\s+/).length : 0;
   return (
     <div
