@@ -15,7 +15,7 @@
 - Detail numbering preserves IDs/furniture. Rectangles store world diagonals and grid angle (legacy zero); shared geometry rotates display-only data into the slide frame. Grid/room dimension flags default on and require master dimensions; interior stays separate.
 - Furniture renders before notation and room labels; Architectural mode adds scale-aware alpha shadows and transparency-preserving tint; other modes unchanged.
 - Notasi tangga Slide Denah/Detail memakai bidang potong 1 m dengan garis batas 45°, bagian di atas bidang potong putus-putus, sisi dalam tegas, arah naik/turun mengikuti bordes, dan tangga tipikal tengah ditampilkan utuh.
-- Account material libraries store names/images/descriptions/products in shared project storage; room selections store material IDs on sketch layers to keep edits synchronized.
+- Account material libraries store names/images/descriptions/products/RKS in shared project storage; room selections store material IDs on sketch layers to keep edits synchronized.
 - Mode Material per kotak detail memakai ID material ruang untuk warna/kode, legenda di rel kanan; bawaan nonaktif. Sub-ceklis Keterangan ruang (bawaan aktif) menyembunyikan nama/luas/level; simbol tetap.
 - Per-sketch Outline Specification toggles in the level-material header; aggregate library usage by type in full-width A3 landscape tables, paginate by available height, and repeat material identity on room-list continuations to avoid clipping or blank pages.
 - Pekerjaan Dasar dan Fasad disimpan sebagai pilihan material umum per sketsa, terpisah dari material ruang; Fasad dibagi Barat, Timur, Utara, dan Selatan.
