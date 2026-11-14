@@ -72,8 +72,9 @@ function multiline(value: string): string {
   return esc(value).replace(/\r?\n/g, "<br>");
 }
 
+/** Each written line becomes its own paragraph so justified text never stretches a manual line break. */
 function paragraphs(value: string): string[] {
-  return value.split(/\r?\n\s*\r?\n/).map((part) => part.trim()).filter(Boolean);
+  return value.split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
 }
 
 const PAGE_BREAK = `<p class=MsoNormal><br clear=all style='mso-special-character:line-break;page-break-before:always'></p>`;
@@ -138,7 +139,7 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
     babII.push(item(3, "Deskripsi Material", `<p class=MsoIndent>${m.description.trim() ? multiline(m.description) : "—"}</p>${preview ? `<p class=MsoIndent>${preview}</p><p class=MsoIndent><i>Gambar referensi ${esc(m.name)}</i></p>` : ""}`));
     const narrative = paragraphs(m.rks);
     babII.push(item(4, "Persyaratan Teknis dan Pelaksanaan", narrative.length
-      ? narrative.map((text) => `<p class=MsoIndent style='text-align:justify'>${multiline(text)}</p>`).join("")
+      ? narrative.map((text) => `<p class=MsoIndent style='margin-left:18.0pt;text-align:justify'>${esc(text)}</p>`).join("")
       : `<p class=MsoIndent><i>Narasi RKS belum diisi pada List Material.</i></p>`));
   }
 
