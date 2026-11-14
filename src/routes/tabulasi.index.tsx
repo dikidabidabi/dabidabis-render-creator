@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car, Plus, Trash2, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, FileText, Loader2, Layers, BarChart3, Table as TableIcon, PieChart, Inbox, Wallet, Download, Boxes, Car, Plus, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,6 +11,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { TabulasiNavigation } from "@/components/tabulasi-navigation";
 import { loadMaterialLibrary, normalizeGeneralMaterialSelections, ROOM_MATERIAL_KINDS, type FacadeDirection, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterialKind, type RoomMaterials } from "@/lib/material-library";
 import { patchStoredSketch } from "@/lib/sketch-store";
+import { buildRksMhtml } from "@/lib/rks-document";
+import { collectSpecMaterialRefs } from "@/lib/spec-outline";
+import { toast } from "sonner";
 import { newFunctionZone, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
 import {
   type StructuralGrid,
@@ -58,7 +61,7 @@ type Layer = {
   roomMaterials?: RoomMaterials;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
-type Line = { a: Point; b: Point; kind?: string; levelId?: string };
+type Line = { a: Point; b: Point; kind?: "straight" | "arc" | "bezier"; bulge?: number; c1?: Point; c2?: Point; levelId?: string };
 type Sketch = {
   id: string;
   title: string;
@@ -79,6 +82,8 @@ type Sketch = {
   functionZones?: FunctionZone[];
   showSpecOutlineSlide?: boolean;
   generalMaterials?: GeneralMaterialSelections;
+  fungsi?: string;
+  geo?: { lat: number; lon: number; label?: string };
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -858,6 +863,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   const [sendToOutline, setSendToOutline] = useState(sketch.showSpecOutlineSlide === true);
   const [generalMaterials, setGeneralMaterials] = useState(() => normalizeGeneralMaterialSelections(sketch.generalMaterials));
   const fillCleanup = useRef<(() => void) | null>(null);
+  const [rksBusy, setRksBusy] = useState(false);
   const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
   const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
   useEffect(() => {
@@ -969,6 +975,28 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   useEffect(() => {
     return () => fillCleanup.current?.();
   }, []);
+  const handleDownloadRks = async () => {
+    if (rksBusy) return;
+    // Use the latest on-screen selections so the file matches the table.
+    const current: Sketch = {
+      ...sketch,
+      generalMaterials,
+      layers: (sketch.layers ?? []).map((layer) => ({ ...layer, roomMaterials: roomMaterials[layer.id] ?? layer.roomMaterials })),
+    };
+    if (collectSpecMaterialRefs(current).length === 0) {
+      toast.error("Belum ada material yang dipilih untuk dibuat RKS.");
+      return;
+    }
+    setRksBusy(true);
+    try {
+      await downloadSketchRks(current, materials);
+    } catch (error) {
+      console.error(error);
+      toast.error("RKS gagal dibuat. Silakan coba lagi.");
+    } finally {
+      setRksBusy(false);
+    }
+  };
   const saveGeneralMaterials = (next: GeneralMaterialSelections) => {
     setGeneralMaterials(next);
     materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({ ...stored, generalMaterials: next })));
@@ -1001,10 +1029,16 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                     <th colSpan={ROOM_MATERIAL_KINDS.length} className="border-l border-border/60 px-2 py-1 font-medium">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span>Material</span>
+                        <div className="flex flex-wrap items-center gap-2">
                         <label className="flex cursor-pointer items-center gap-1.5 text-left text-[11px] font-normal text-foreground">
                           <Checkbox checked={sendToOutline} onCheckedChange={(value) => toggleOutline(value === true)} aria-label="Kirim ke slide Outline Spesifikasi" />
                           Kirim ke slide Outline Spesifikasi
                         </label>
+                        <Button type="button" variant="outline" size="sm" className="h-7 gap-1 px-2 text-[11px] font-normal" onClick={() => void handleDownloadRks()} disabled={rksBusy} title="Unduh RKS (Rencana Kerja dan Syarat-syarat) sebagai file Word">
+                          {rksBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                          Download RKS
+                        </Button>
+                        </div>
                       </div>
                     </th>
                   </tr>
@@ -1257,6 +1291,57 @@ function downloadSketchExcel(sketch: Sketch, data: Stats, materials: LibraryMate
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function downloadSketchRks(sketch: Sketch, materials: LibraryMaterial[]) {
+  const data = computeStats(sketch);
+  const levels = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const ruang = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
+  const overview: Array<{ label: string; value: string }> = [
+    { label: "Nama Proyek", value: sketch.title || "Tanpa judul" },
+  ];
+  if (sketch.fungsi?.trim()) overview.push({ label: "Fungsi Bangunan", value: sketch.fungsi.trim() });
+  if (sketch.geo && Number.isFinite(sketch.geo.lat) && Number.isFinite(sketch.geo.lon)) {
+    overview.push({ label: "Lokasi", value: sketch.geo.label?.trim() || `${sketch.geo.lat.toFixed(5)}, ${sketch.geo.lon.toFixed(5)}` });
+  }
+  overview.push(
+    { label: "Skala Gambar", value: sketch.scale },
+    { label: "Luas Lahan", value: data.totalLahanM2 > 0 ? `${fmt(data.totalLahanM2)} m²` : "Belum ditentukan" },
+    { label: "Jumlah Lapis", value: `${data.jumlahLapis} lapis` },
+    { label: "Ketinggian Bangunan", value: `${fmt(data.ketinggianM)} m` },
+    { label: "Total Luas Bangunan", value: `${fmt(data.totalRuangM2)} m²` },
+    { label: "Luas Efektif", value: `${fmt(data.totalEfektifM2)} m²` },
+    { label: "KDB Rencana", value: `${fmt(data.kdbRencanaM2)} m²${data.kdbLimitM2 > 0 ? ` (batas ${fmt(data.kdbLimitM2)} m²)` : ""}` },
+    { label: "KLB Rencana", value: `${fmt(data.klbRencanaM2)} m²${data.klbLimitM2 > 0 ? ` (batas ${fmt(data.klbLimitM2)} m²)` : ""}` },
+    { label: "KDH Rencana", value: `${fmt(data.kdhRencanaM2)} m²${data.kdhLimitM2 > 0 ? ` (minimal ${fmt(data.kdhLimitM2)} m²)` : ""}` },
+    { label: "Jumlah Ruang", value: `${ruang.filter((l) => !l.isReferenceRoom).length} ruang` },
+  );
+  const { prepareRksAssets } = await import("@/lib/rks-assets");
+  const assets = await prepareRksAssets(sketch, materials);
+  const content = buildRksMhtml({
+    projectTitle: sketch.title || "Tanpa judul",
+    dateLabel: new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
+    overview,
+    levels: levels.map((lv) => ({
+      name: lv.name,
+      elevation: `${fmt(lv.mdpl)} m`,
+      typical: Math.max(1, lv.typicalCount ?? 1) > 1 ? `${Math.max(1, lv.typicalCount ?? 1)}×` : "—",
+      area: `${fmt(ruang.filter((l) => l.levelId === lv.id).reduce((s, l) => s + (l.areaM2 || 0), 0))} m²`,
+    })),
+    sketch,
+    materials,
+    ...assets,
+  });
+  const blob = new Blob([content], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const safeName = (sketch.title || "proyek").replace(/[^a-z0-9\-_ ]/gi, "_").slice(0, 60);
+  a.href = url;
+  a.download = `RKS - ${safeName}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 function InfographicSection({ data, sketch }: { data: Stats; sketch: Sketch }) {

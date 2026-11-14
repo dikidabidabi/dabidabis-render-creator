@@ -69,6 +69,7 @@ import {
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { windowPlanGeometry, windowDividerFractions, windowFramePolygons, type Window } from "@/lib/windows";
 import { roomWallSpans, roomWallSurfacePoint } from "@/lib/room-wall-spans";
+import { collectSpecMaterialRefs, sketchMetersPerSketchPx, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef } from "@/lib/spec-outline";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
@@ -1526,8 +1527,6 @@ type RincianSection = {
   totalEfPer: number;
 };
 type TocEntry = { label: string; page: number };
-type SpecMaterialRef = { kind: MaterialKind; materialId: string };
-type SpecLocation = { level: string; rooms: string[]; areaM2?: number };
 type SpecMaterialRow = { ref: SpecMaterialRef; locations: SpecLocation[] };
 type SpecMaterialPage = SpecMaterialRow[];
 type Slide =
@@ -1587,70 +1586,9 @@ function computeBounds(sk: Sketch): Bounds {
   return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
 }
 
-function collectSpecMaterialRefs(sketch: Sketch): SpecMaterialRef[] {
-  const refs: SpecMaterialRef[] = [];
-  const seen = new Set<string>();
-  const general = normalizeGeneralMaterialSelections(sketch.generalMaterials);
-  general.foundation.forEach((materialId) => {
-    const key = `pekerjaan dasar:${materialId}`;
-    if (!seen.has(key) && materialId) { seen.add(key); refs.push({ kind: "pekerjaan dasar", materialId }); }
-  });
-  (["lantai", "dinding", "plafon"] as const).forEach((kind) => {
-    (sketch.layers ?? []).forEach((layer) => {
-      if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return;
-      const materialId = layer.roomMaterials?.[kind];
-      if (!materialId) return;
-      const key = `${kind}:${materialId}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      refs.push({ kind, materialId });
-    });
-  });
-  (["barat", "timur", "utara", "selatan"] as const).forEach((direction) => {
-    general.facades[direction].forEach((materialId) => {
-      const key = `fasad:${materialId}`;
-      if (!seen.has(key) && materialId) { seen.add(key); refs.push({ kind: "fasad", materialId }); }
-    });
-  });
-  return refs;
-}
-
 function specTextLines(value: string | undefined, charsPerLine: number) {
   const lines = (value || "—").split(/\r?\n/);
   return lines.reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
-}
-
-function specMaterialArea(sketch: Sketch, ref: SpecMaterialRef, levelId?: string): number | null {
-  if (ref.kind !== "lantai" && ref.kind !== "dinding" && ref.kind !== "plafon") return null;
-  const metersPerPx = sketchMetersPerSketchPx(sketch.scale);
-  return (sketch.layers ?? []).reduce((sum, layer) => {
-    if (levelId !== undefined && layer.levelId !== levelId) return sum;
-    if (layer.isReferenceRoom || isLahan(layer.name) || isVoid(layer.name) || isTaman(layer.name)) return sum;
-    if (layer.roomMaterials?.[ref.kind as keyof RoomMaterials] !== ref.materialId) return sum;
-    if (ref.kind !== "dinding") return sum + Math.max(0, Number(layer.areaM2) || 0);
-    return sum + roomWallSpans(layer.points, sketch.lines ?? [], layer.levelId)
-      .reduce((total, span) => total + span.length * metersPerPx, 0) * 3;
-  }, 0);
-}
-
-function specLocationText(location: SpecLocation): string {
-  const rooms = location.rooms.join(", ");
-  return location.areaM2 === undefined ? rooms : `${rooms} (${fmt(location.areaM2, 2)} m²)`;
-}
-
-function specLocations(sketch: Sketch, ref: SpecMaterialRef): SpecLocation[] {
-  if (ref.kind === "pekerjaan dasar") return [{ level: "Umum", rooms: ["Seluruh bangunan"] }];
-  if (ref.kind === "fasad") {
-    const general = normalizeGeneralMaterialSelections(sketch.generalMaterials);
-    return (["barat", "timur", "utara", "selatan"] as const).filter((direction) => general.facades[direction].includes(ref.materialId))
-      .map((direction) => ({ level: direction[0].toUpperCase() + direction.slice(1), rooms: ["Fasad"] }));
-  }
-  return [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl).flatMap((level) => {
-    const rooms = [...new Set((sketch.layers ?? [])
-      .filter((layer) => !layer.isReferenceRoom && layer.levelId === level.id && layer.roomMaterials?.[ref.kind as keyof RoomMaterials] === ref.materialId)
-      .map((layer) => layer.name))].sort((a, b) => a.localeCompare(b, "id"));
-    return rooms.length ? [{ level: level.name, rooms, areaM2: specMaterialArea(sketch, ref, level.id) ?? undefined }] : [];
-  });
 }
 
 function specRowHeight(row: SpecMaterialRow, material?: LibraryMaterial): number {
@@ -6953,12 +6891,6 @@ function SiteMapCanvas({
 
 // Compute the site footprint convex extent (in meters) relative to a center coordinate.
 // We assume sketch world units are CANVAS pixels under sketch scale. Use `scale` mapping.
-function sketchMetersPerSketchPx(scale: string): number {
-  // mirror stackMetersPerPx logic.
-  const major: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 };
-  return (major[scale] ?? 1) / 80;
-
-}
 
 // Project a (lat,lon) to local meters offset from a center.
 function projectM(centerLat: number, centerLon: number, lat: number, lon: number) {
