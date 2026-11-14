@@ -14,6 +14,8 @@ export type LibraryMaterial = {
   description: string;
   product: string;
   code: string;
+  /** Narasi RKS (Rencana Kerja dan Syarat-syarat) untuk material ini. */
+  rks: string;
 };
 export type RoomMaterials = Partial<Record<RoomMaterialKind, string>>;
 export type FacadeDirection = "barat" | "timur" | "utara" | "selatan";
@@ -42,6 +44,7 @@ export function loadMaterialLibrary(): LibraryMaterial[] {
         description: typeof item.description === "string" ? item.description : "",
         product: typeof item.product === "string" ? item.product : "",
         code: typeof item.code === "string" ? item.code : "",
+        rks: typeof item.rks === "string" ? item.rks : "",
       }];
     });
   } catch {

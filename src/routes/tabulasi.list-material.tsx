@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, Plus, Trash2 } from "lucide-react";
+import { FileText, GripHorizontal, ImagePlus, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,7 @@ function MaterialLibraryPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollPos, setScrollPos] = useState(0);
   const [maxScroll, setMaxScroll] = useState(0);
+  const [rksId, setRksId] = useState<string | null>(null);
   useEffect(() => {
     const reload = () => setMaterials(loadMaterialLibrary());
     reload();
@@ -81,6 +82,7 @@ function MaterialLibraryPage() {
     description: "",
     product: "",
     code: "",
+    rks: "",
   }]);
   const change = (id: string, fields: Partial<LibraryMaterial>) => update(materials.map((m) => m.id === id ? { ...m, ...fields } : m));
   const handleUpload = async (file: File) => {
@@ -119,6 +121,10 @@ function MaterialLibraryPage() {
                       <Input aria-label={`Kode material ${m.name || kind}`} placeholder="Kode material, contoh MR" value={m.code} onChange={(event) => change(m.id, { code: event.target.value.toUpperCase().replace(/\s+/g, "") })} className="min-w-0 font-mono text-sm uppercase" />
                       <Textarea aria-label={`Deskripsi material ${m.name || kind}`} placeholder="Deskripsi" value={m.description} onChange={(event) => change(m.id, { description: event.target.value })} className="min-h-20 resize-y text-sm" />
                       <Textarea aria-label={`Produk material ${m.name || kind}`} placeholder="Produk" value={m.product} onChange={(event) => change(m.id, { product: event.target.value })} className="min-h-16 resize-y text-sm" />
+                      <Button type="button" size="sm" variant={rksId === m.id ? "default" : "outline"} className="w-full justify-start" title="Rencana Kerja dan Syarat-syarat" onClick={() => setRksId(rksId === m.id ? null : m.id)}>
+                        <FileText />RKS
+                        {m.rks.trim() && <span className="ml-auto text-xs font-normal opacity-70">{m.rks.trim().split(/\s+/).length} kata</span>}
+                      </Button>
                     </div>
                     <Button type="button" variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-destructive" title={`Hapus ${m.name || "material"}`} onClick={() => update(materials.filter((item) => item.id !== m.id))}><Trash2 /></Button>
                   </div>
@@ -145,7 +151,77 @@ function MaterialLibraryPage() {
           />
         )}
       </div>
+      {(() => {
+        const target = materials.find((m) => m.id === rksId);
+        return target ? <RksNote key={target.id} material={target} onChange={(rks) => change(target.id, { rks })} onClose={() => setRksId(null)} /> : null;
+      })()}
       <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void handleUpload(file); }} />
     </main>
+  );
+}
+function RksNote({ material, onChange, onClose }: { material: LibraryMaterial; onChange: (rks: string) => void; onClose: () => void }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const width = Math.min(760, window.innerWidth - 32);
+    setPos({ x: Math.max(16, (window.innerWidth - width) / 2), y: Math.max(16, window.innerHeight * 0.12) });
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeRef.current(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const words = material.rks.trim() ? material.rks.trim().split(/\s+/).length : 0;
+  return (
+    <div
+      ref={boxRef}
+      role="dialog"
+      aria-label={`RKS ${material.name || material.kind}`}
+      className="fixed z-50 flex w-[min(760px,calc(100vw-2rem))] flex-col rounded-lg border border-border bg-popover text-popover-foreground shadow-2xl"
+      style={pos ? { left: pos.x, top: pos.y } : { visibility: "hidden" }}
+    >
+      <div
+        className="flex cursor-move touch-none select-none items-center gap-2 border-b border-border px-3 py-2"
+        onPointerDown={(event) => {
+          if ((event.target as HTMLElement).closest("button") || !pos) return;
+          drag.current = { dx: event.clientX - pos.x, dy: event.clientY - pos.y };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (!drag.current) return;
+          const box = boxRef.current;
+          const w = box?.offsetWidth ?? 0;
+          const h = box?.offsetHeight ?? 0;
+          setPos({
+            x: Math.min(Math.max(0, event.clientX - drag.current.dx), Math.max(0, window.innerWidth - w)),
+            y: Math.min(Math.max(0, event.clientY - drag.current.dy), Math.max(0, window.innerHeight - Math.min(h, 80))),
+          });
+        }}
+        onPointerUp={() => { drag.current = null; }}
+      >
+        <GripHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">RKS · Rencana Kerja dan Syarat-syarat</p>
+          <p className="truncate text-sm font-semibold">
+            {material.code && <span className="mr-2 font-mono text-primary">{material.code}</span>}
+            {material.name || "Material tanpa nama"} <span className="font-normal capitalize text-muted-foreground">· {material.kind}</span>
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="icon" title="Tutup" onClick={onClose}><X /></Button>
+      </div>
+      <Textarea
+        autoFocus
+        aria-label={`Narasi RKS ${material.name || material.kind}`}
+        placeholder="Tulis narasi RKS: lingkup pekerjaan, persyaratan bahan, cara pelaksanaan, toleransi, pengujian, dan pemeliharaan..."
+        value={material.rks}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-[min(60vh,520px)] min-h-40 resize-y rounded-none border-0 px-4 py-3 text-sm leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0"
+      />
+      <div className="flex items-center justify-between border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+        <span>Tersimpan otomatis</span>
+        <span>{words} kata · {material.rks.length} karakter</span>
+      </div>
+    </div>
   );
 }
