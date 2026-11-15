@@ -219,7 +219,6 @@ function leafRing(p1: P, p2: P, thickness: number): Ring {
 
 // ---------- Penyusun geometri denah ----------
 
-export type DxfPlanGeometry = { prims: Prim[] };
 
 export function buildPlanPrimitives(input: DxfExportInput): Prim[] {
   const ppm = input.pxPerMeter;
