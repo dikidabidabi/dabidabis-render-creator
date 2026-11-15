@@ -69,6 +69,8 @@ import {
 import { foldingDoorSegments, type Door } from "@/lib/doors";
 import { windowPlanGeometry, windowDividerFractions, windowFramePolygons, type Window } from "@/lib/windows";
 import { roomWallSpans, roomWallSurfacePoint } from "@/lib/room-wall-spans";
+import { WALL_THICK_MM, materialForEdgeSegment, wallBandPolygon, windowWallCandidates } from "@/lib/wall-materials";
+import { practicalColumnNodes } from "@/lib/practical-columns";
 import { collectSpecMaterialRefs, sketchMetersPerSketchPx, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef } from "@/lib/spec-outline";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
@@ -7973,19 +7975,6 @@ function linePath(ln: Line): string {
 
 // ---- Material edge notation untuk denah (plan view) ----
 // Tebal dinding selubung (mm), dikonversi ke px sketsa via pxPerM.
-const WALL_THICK_MM: Record<EdgeMaterial, number> = {
-  solid: 150,
-  standard150: 150,
-  concrete150: 150,
-  concrete200: 200,
-  concrete250: 250,
-  concrete300: 300,
-  concrete350: 350,
-  concept: 150,
-  curtain: 80,
-  window: 150,
-  railing: 100,
-};
 const RAILING_COLOR = "#8b5a2b";
 
 type WallBandGeometry = {
@@ -7995,21 +7984,6 @@ type WallBandGeometry = {
   core: Point[];
 };
 
-function wallBandPolygon(segment: EdgeSegment, halfWidth: number, endExtension: number): Point[] {
-  const dx = segment.b.x - segment.a.x;
-  const dy = segment.b.y - segment.a.y;
-  const length = Math.hypot(dx, dy) || 1;
-  const ux = dx / length, uy = dy / length;
-  const nx = -dy / length, ny = dx / length;
-  const start = { x: segment.a.x - ux * endExtension, y: segment.a.y - uy * endExtension };
-  const end = { x: segment.b.x + ux * endExtension, y: segment.b.y + uy * endExtension };
-  return [
-    { x: start.x + nx * halfWidth, y: start.y + ny * halfWidth },
-    { x: end.x + nx * halfWidth, y: end.y + ny * halfWidth },
-    { x: end.x - nx * halfWidth, y: end.y - ny * halfWidth },
-    { x: start.x - nx * halfWidth, y: start.y - ny * halfWidth },
-  ];
-}
 
 function unionWallBands(polygons: Point[][]): Point[][][] {
   if (polygons.length === 0) return [];
@@ -8030,16 +8004,6 @@ function wallUnionPath(polygons: Point[][][]): string {
   }).join(" ")).join(" ");
 }
 
-function materialForEdgeSegment(
-  segment: EdgeSegment,
-  sourceLines: Line[],
-  edgeAttrs: Record<string, EdgeMaterial>,
-): EdgeMaterial | undefined {
-  const exact = edgeMaterialForSegment(edgeAttrs, segment);
-  if (exact) return exact;
-  const source = sourceLines[segment.sourceLineIndex];
-  return source ? edgeMaterialForSegment(edgeAttrs, source) : undefined;
-}
 
 function DetailVoidNotation({
   voids,
@@ -8734,95 +8698,12 @@ function SolidWallPracticalColumns({
   edgeAttrs: Record<string, EdgeMaterial>;
   pxPerM: number;
 }) {
-  const segmentSource = segmentationLines ?? lines;
-  const visibleLineIds = new Set(lines.map((line) => segmentIdFor(line.a, line.b)));
-  const solidSegments = computeStraightSegments(
-    segmentSource.map((line) => ({ a: line.a, b: line.b, kind: line.kind, levelId: line.levelId })),
-  ).filter((segment) => {
-    const source = segmentSource[segment.sourceLineIndex];
-    if (!source || (levelId && segment.levelId !== levelId)) return false;
-    if (!visibleLineIds.has(segmentIdFor(source.a, source.b))) return false;
-    const material = materialForEdgeSegment(segment, segmentSource, edgeAttrs);
-    return material === "solid" || material === "standard150";
-  });
-  const nodes = new Map<string, { point: Point; directions: Point[]; standard: boolean }>();
-  const addEndpoint = (point: Point, other: Point, standard: boolean) => {
-    const length = Math.hypot(other.x - point.x, other.y - point.y);
-    if (length < 1e-6) return;
-    const key = `${Math.round(point.x * 1000)},${Math.round(point.y * 1000)}`;
-    const entry = nodes.get(key) ?? { point, directions: [], standard: false };
-    entry.directions.push({ x: (other.x - point.x) / length, y: (other.y - point.y) / length });
-    entry.standard ||= standard;
-    nodes.set(key, entry);
-  };
-  for (const segment of solidSegments) {
-    const standard = materialForEdgeSegment(segment, segmentSource, edgeAttrs) === "standard150";
-    addEndpoint(segment.a, segment.b, standard);
-    addEndpoint(segment.b, segment.a, standard);
-  }
-  // Pertemuan T: endpoint satu dinding berada di tengah dinding lain. Topologi
-  // segmen lama tidak selalu membelah kasus ini, jadi tambahkan dua arah dari
-  // dinding yang dilewati langsung pada simpul endpoint tersebut.
-  const addContainingDirections = (point: Point, owner: EdgeSegment) => {
-    for (const segment of solidSegments) {
-      if (segment === owner) continue;
-      const dx = segment.b.x - segment.a.x;
-      const dy = segment.b.y - segment.a.y;
-      const length2 = dx * dx + dy * dy;
-      if (length2 < 1e-9) continue;
-      const t = ((point.x - segment.a.x) * dx + (point.y - segment.a.y) * dy) / length2;
-      if (t <= 1e-5 || t >= 1 - 1e-5) continue;
-      const projected = { x: segment.a.x + dx * t, y: segment.a.y + dy * t };
-      if (Math.hypot(projected.x - point.x, projected.y - point.y) > 1e-3) continue;
-      const standard = materialForEdgeSegment(segment, segmentSource, edgeAttrs) === "standard150";
-      addEndpoint(point, segment.a, standard);
-      addEndpoint(point, segment.b, standard);
-    }
-  };
-  for (const segment of solidSegments) {
-    addContainingDirections(segment.a, segment);
-    addContainingDirections(segment.b, segment);
-  }
-  // Ujung garis lengkung/tangent ber-material solid ikut menentukan kolom
-  // praktis: ujung terbuka dan sudut mendapat kolom, sambungan mulus tidak.
-  for (const line of lines) {
-    if ((line.kind ?? "straight") === "straight") continue;
-    if (levelId && line.levelId && line.levelId !== levelId) continue;
-    const material = edgeMaterialForSegment(edgeAttrs, line);
-    if (material !== "solid" && material !== "standard150") continue;
-    const points = sampleCurveLine(line);
-    const directions = curveEndDirections(points);
-    if (!directions) continue;
-    const start = points[0], end = points[points.length - 1];
-    const standard = material === "standard150";
-    addEndpoint(start, { x: start.x + directions.start.x, y: start.y + directions.start.y }, standard);
-    addEndpoint(end, { x: end.x + directions.end.x, y: end.y + directions.end.y }, standard);
-    const pseudo = { id: "curve", a: start, b: end, sourceLineIndex: -1 } as EdgeSegment;
-    addContainingDirections(start, pseudo);
-    addContainingDirections(end, pseudo);
-  }
-  const practicalColumnNodes = [...nodes.values()].filter(({ directions }) => {
-    const uniqueDirections = directions.filter((direction, index) => !directions.slice(0, index).some((candidate) =>
-      candidate.x * direction.x + candidate.y * direction.y > 0.999,
-    ));
-    // Satu arah berarti ujung dinding terbuka. Dua arah atau lebih tetap
-    // mengikuti aturan lama: kolom hanya muncul pada sudut/T, bukan pada
-    // sambungan lurus menerus.
-    if (uniqueDirections.length === 1) return true;
-    if (uniqueDirections.length < 2) return false;
-    for (let i = 0; i < uniqueDirections.length; i++) {
-      for (let j = i + 1; j < uniqueDirections.length; j++) {
-        const dot = Math.abs(uniqueDirections[i].x * uniqueDirections[j].x + uniqueDirections[i].y * uniqueDirections[j].y);
-        if (dot < 0.985) return true;
-      }
-    }
-    return false;
-  });
+  const practicalColumns = practicalColumnNodes({ lines, segmentationLines, levelId, edgeAttrs });
   const size = 0.15 * pxPerM;
   const finish = 0.015 * pxPerM;
   return (
     <g pointerEvents="none">
-      {practicalColumnNodes.map(({ point, standard }, index) => standard ? (
+      {practicalColumns.map(({ point, standard }, index) => standard ? (
         <g key={`practical-column-${index}`}>
           <rect x={point.x - size / 2} y={point.y - size / 2} width={size} height={size} fill="#ffffff" stroke="#929292" strokeWidth={Math.max(0.2, pxPerM * 0.002)} />
           <rect x={point.x - size / 2 + finish} y={point.y - size / 2 + finish} width={size - finish * 2} height={size - finish * 2} fill="#ffffff" stroke="#929292" strokeWidth={Math.max(0.15, pxPerM * 0.0015)} />
@@ -9029,13 +8910,6 @@ function DoorNotation({
   );
 }
 
-function windowWallCandidates(lines?: Line[], edgeAttrs?: Record<string, EdgeMaterial>) {
-  if (!lines || !edgeAttrs) return [];
-  return computeStraightSegments(lines).flatMap((segment) => {
-    const material = materialForEdgeSegment(segment, lines, edgeAttrs);
-    return material ? [{ a: segment.a, b: segment.b, thicknessMm: WALL_THICK_MM[material] }] : [];
-  });
-}
 
 function WindowNotation({
   windows,
