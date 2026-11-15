@@ -15593,15 +15593,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 onClick={() => {
                   try {
                     const activeLayers = layers.filter((l) => !activeLvlId || l.levelId === activeLvlId);
-                    const activeLines = lines.filter((l) => !activeLvlId || l.levelId === activeLvlId);
                     const activeDoors = (sketch.doors ?? []).filter((d) => !activeLvlId || d.levelId === activeLvlId);
+                    const activeWindows = (sketch.windows ?? []).filter((w) => !activeLvlId || w.levelId === activeLvlId);
                     const activeAreas = (sketch.parkingAreas ?? []).filter((a) => !activeLvlId || a.levelId === activeLvlId);
+                    // Seluruh garis dikirim agar identitas segmen material sama dengan slide.
                     const dxf = buildDxf({
                       pxPerMeter,
-                      wallThicknessM: 0.15,
-                      lines: activeLines,
+                      levelId: activeLvlId,
+                      lines,
+                      edgeAttrs: sketch.edgeAttrs ?? {},
                       layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
                       doors: activeDoors,
+                      windows: activeWindows,
+                      grids: collectGrids(primaryGrid, gridExtras),
+                      levels,
                       parkingStallsByArea: parkingStallsActive,
                       parkingAreas: activeAreas,
                       mmGridRotRad,
@@ -15614,7 +15619,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     toast.error("Gagal mengekspor DXF");
                   }
                 }}
-                title="Unduh denah aktif sebagai file .dxf (skala asli 1:1, satuan meter)"
+                title="Unduh denah aktif sebagai file .dxf (skala 1:1, satuan meter) — dinding sesuai tebal material, pintu, jendela, kolom, dan grid seperti Slide Detail"
               >
                 <Download className="mr-1.5 h-4 w-4" /> DXF
               </Button>
