@@ -42,7 +42,7 @@ export function materialForEdgeSegment(
 }
 
 /** Persegi panjang pita dinding selebar 2 × halfWidth, diperpanjang di kedua ujung. */
-export function wallBandPolygon(segment: Pick<EdgeSegment, "a" | "b">, halfWidth: number, endExtension: number): Point[] {
+export function wallBandPolygon(segment: Pick<EdgeSegment, "a" | "b"> & Partial<EdgeSegment>, halfWidth: number, endExtension: number): Point[] {
   const dx = segment.b.x - segment.a.x;
   const dy = segment.b.y - segment.a.y;
   const length = Math.hypot(dx, dy) || 1;
