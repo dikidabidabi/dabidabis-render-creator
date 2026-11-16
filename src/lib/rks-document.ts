@@ -106,11 +106,6 @@ function multiline(value: string): string {
   return esc(value).replace(/\r?\n/g, "<br>");
 }
 
-/** Each written line becomes its own paragraph so justified text never stretches a manual line break. */
-function paragraphs(value: string): string[] {
-  return value.split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
-}
-
 const PAGE_BREAK = `<p class=MsoNormal><br clear=all style='mso-special-character:line-break;page-break-before:always'></p>`;
 const SECTION_BREAK = `<span style='font-size:${RKS_FONT_SIZE_PT}.0pt;font-family:"${RKS_FONT_FAMILY}",serif'><br clear=all style='page-break-before:always;mso-break-type:section-break'></span>`;
 

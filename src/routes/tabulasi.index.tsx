@@ -1330,6 +1330,7 @@ async function downloadSketchRks(sketch: Sketch, materials: LibraryMaterial[]) {
     })),
     sketch,
     materials,
+    pasals: loadRksPasals(),
     ...assets,
   });
   const blob = new Blob([content], { type: "application/msword" });
