@@ -70,7 +70,7 @@ test("materials sharing a pasal become one pasal with the narrative written once
 });
 
 test("paragraph numbering has 3 levels prefixed by the pasal number in document order", () => {
-  const doc = { type: "doc", content: [ol(li("Persyaratan Bahan", ol(li("Semen", ol(li("Tipe I")))), li("Pasir")), li("Pelaksanaan"))] } as RksDoc;
+  const doc = { type: "doc", content: [ol(li("Persyaratan Bahan", ol(li("Semen", ol(li("Tipe I"))), li("Pasir"))), li("Pelaksanaan"))] } as RksDoc;
   const withDoc = materials.map((m) => m.id === "d1" ? { ...m, rksDoc: doc } : m);
   const { html } = buildRksHtml({ ...input, materials: withDoc });
   // Cat Tembok is pasal 3; butir 1–3 are Lingkup, Produk, Deskripsi.
