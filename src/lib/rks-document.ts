@@ -1,4 +1,5 @@
-import { materialCodes, type LibraryMaterial, type MaterialKind } from "@/lib/material-library";
+import { materialCodes, type LibraryMaterial, type MaterialKind, type RksPasalDef } from "@/lib/material-library";
+import { rksDocOf, rksHasContent, rksHasNumberedItems, rksNarrativeHtml, RKS_FIXED_ITEMS, type RksDoc } from "@/lib/rks-content";
 import { collectSpecMaterialRefs, formatSpecNumber, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef, type SpecSketch } from "@/lib/spec-outline";
 
 /** Word-compatible RKS export: MHTML (.doc) so embedded images open in Microsoft Word. */
@@ -14,6 +15,8 @@ export type RksInput = {
   levels: Array<{ name: string; elevation: string; typical: string; area: string }>;
   sketch: SpecSketch;
   materials: LibraryMaterial[];
+  /** Pasal RKS akun; material dengan pasal sama digabung dalam satu pasal. */
+  pasals?: RksPasalDef[];
   materialImages?: Map<string, RksMaterialImages>;
   /** Keyed by rksCodeKey(kind, code). */
   codeImages?: Map<string, RksAsset>;
@@ -25,7 +28,18 @@ export type RksOutlineRow = {
   locations: SpecLocation[];
   areaM2: number | null;
 };
-export type RksPasal = RksOutlineRow & { material: LibraryMaterial; number: number; anchor: string; title: string };
+export type RksPasalItem = RksOutlineRow & { material: LibraryMaterial };
+export type RksPasal = {
+  number: number;
+  anchor: string;
+  title: string;
+  name: string;
+  /** Jenis pekerjaan kemunculan pertama, menentukan kelompok pasal. */
+  kind: MaterialKind;
+  items: RksPasalItem[];
+  pasalId: string | null;
+  doc: RksDoc | null;
+};
 
 export const RKS_KIND_LABELS: Record<MaterialKind, string> = {
   "pekerjaan dasar": "Pekerjaan Dasar",
@@ -52,16 +66,36 @@ export function rksOutlineRows(sketch: SpecSketch, materials: LibraryMaterial[])
   }));
 }
 
-/** One pasal per material, numbered in Outline Spesifikasi order. */
-export function rksPasalList(sketch: SpecSketch, materials: LibraryMaterial[]): RksPasal[] {
-  return rksOutlineRows(sketch, materials)
-    .filter((row): row is RksOutlineRow & { material: LibraryMaterial } => Boolean(row.material))
-    .map((row, index) => ({
-      ...row,
-      number: index + 1,
-      anchor: `_TocRksPasal${String(index + 1).padStart(3, "0")}`,
-      title: `Pasal ${index + 1} — ${row.material.name.trim() || "Material tanpa nama"}`,
-    }));
+/**
+ * Pasal dalam urutan Outline Spesifikasi. Material dengan pasal RKS yang sama
+ * digabung dalam satu pasal (narasi ditulis sekali); material tanpa pasal menjadi pasal sendiri.
+ */
+export function rksPasalList(sketch: SpecSketch, materials: LibraryMaterial[], pasals: RksPasalDef[] = []): RksPasal[] {
+  const defs = new Map(pasals.map((pasal) => [pasal.id, pasal]));
+  const groups = new Map<string, { def: RksPasalDef | null; items: RksPasalItem[] }>();
+  for (const row of rksOutlineRows(sketch, materials)) {
+    if (!row.material) continue;
+    const def = row.material.pasalId ? defs.get(row.material.pasalId) ?? null : null;
+    const key = def ? `pasal:${def.id}` : `material:${row.material.id}`;
+    const group = groups.get(key) ?? { def, items: [] };
+    group.items.push(row as RksPasalItem);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group, index) => {
+    const number = index + 1;
+    const first = group.items[0];
+    const name = group.def ? group.def.name.trim() || "Pasal tanpa nama" : first.material.name.trim() || "Material tanpa nama";
+    return {
+      number,
+      anchor: `_TocRksPasal${String(number).padStart(3, "0")}`,
+      title: `Pasal ${number} — ${name}`,
+      name,
+      kind: first.ref.kind,
+      items: group.items,
+      pasalId: group.def?.id ?? null,
+      doc: group.def ? rksDocOf(group.def) : rksDocOf(first.material),
+    };
+  });
 }
 
 function esc(value: string): string {
@@ -70,11 +104,6 @@ function esc(value: string): string {
 
 function multiline(value: string): string {
   return esc(value).replace(/\r?\n/g, "<br>");
-}
-
-/** Each written line becomes its own paragraph so justified text never stretches a manual line break. */
-function paragraphs(value: string): string[] {
-  return value.split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
 }
 
 const PAGE_BREAK = `<p class=MsoNormal><br clear=all style='mso-special-character:line-break;page-break-before:always'></p>`;
@@ -93,7 +122,7 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
     return `<img width=${Math.round(asset.width)} height=${Math.round(asset.height)} src="${imageDir}/${name}" alt="${esc(alt)}">`;
   };
   const rows = rksOutlineRows(input.sketch, input.materials);
-  const pasals = rksPasalList(input.sketch, input.materials);
+  const pasals = rksPasalList(input.sketch, input.materials, input.pasals ?? []);
   const toc: Toc[] = [];
   const heading = (level: 1 | 2 | 3, anchor: string, label: string, extra = "") => {
     toc.push({ level, anchor, label });
@@ -111,7 +140,8 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
     ? `<p class=MsoBody>Belum ada lantai pada sketsa.</p>`
     : `<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0 width="100%" style='width:100%;border-collapse:collapse'><thead><tr>${["No", "Lantai", "Elevasi", "Tipikal", "Luas Ruang"].map((h) => `<th style='background:#F2F2F2'><p class=MsoCell><b>${h}</b></p></th>`).join("")}</tr></thead><tbody>${input.levels.map((level, index) => `<tr><td><p class=MsoCell align=center style='text-align:center'>${index + 1}</p></td><td><p class=MsoCell>${esc(level.name)}</p></td><td><p class=MsoCell align=right style='text-align:right'>${esc(level.elevation)}</p></td><td><p class=MsoCell align=center style='text-align:center'>${esc(level.typical)}</p></td><td><p class=MsoCell align=right style='text-align:right'>${esc(level.area)}</p></td></tr>`).join("")}</tbody></table>`);
   babI.push(heading(2, "_TocRksBab1Lingkup", "1.3  Lingkup Material"));
-  const kindCounts = (Object.keys(RKS_KIND_LABELS) as MaterialKind[]).map((kind) => ({ kind, count: pasals.filter((pasal) => pasal.ref.kind === kind).length })).filter((item) => item.count > 0);
+  const pasalItems = pasals.flatMap((pasal) => pasal.items);
+  const kindCounts = (Object.keys(RKS_KIND_LABELS) as MaterialKind[]).map((kind) => ({ kind, count: pasalItems.filter((item) => item.ref.kind === kind).length })).filter((item) => item.count > 0);
   babI.push(kindCounts.length === 0
     ? `<p class=MsoBody>Belum ada material yang dipilih pada Rincian per Level.</p>`
     : kindCounts.map((item, index) => `<p class=MsoList>${index + 1}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${RKS_KIND_LABELS[item.kind]}: ${item.count} material</p>`).join(""));
@@ -119,28 +149,47 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
   // BAB II — Pasal per material
   const babII: string[] = [];
   babII.push(heading(1, "_TocRksBab2", "BAB II  RENCANA KERJA DAN SYARAT-SYARAT TEKNIS", " style='page-break-before:always'"));
-  babII.push(`<p class=MsoBody>Setiap material diuraikan dalam satu pasal. Urutan pasal mengikuti Outline Spesifikasi proyek.</p>`);
+  babII.push(`<p class=MsoBody>Setiap pasal menguraikan satu kelompok pekerjaan. Material dengan pasal RKS yang sama diuraikan bersama dalam satu pasal. Urutan pasal mengikuti Outline Spesifikasi proyek.</p>`);
   if (pasals.length === 0) babII.push(`<p class=MsoBody>Belum ada material yang dipilih pada Rincian per Level.</p>`);
   let currentKind: MaterialKind | null = null;
   let groupIndex = 0;
   for (const pasal of pasals) {
-    if (pasal.ref.kind !== currentKind) {
-      currentKind = pasal.ref.kind;
+    if (pasal.kind !== currentKind) {
+      currentKind = pasal.kind;
       groupIndex += 1;
       babII.push(heading(2, `_TocRksGroup${groupIndex}`, `${String.fromCharCode(64 + groupIndex)}.  ${RKS_KIND_LABELS[currentKind]}`));
     }
-    const m = pasal.material;
     babII.push(heading(3, pasal.anchor, pasal.title));
-    const item = (n: number, label: string, body: string) => `<p class=MsoList><b>${n}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${esc(label)}</b></p>${body}`;
-    const locationLines = pasal.locations.map((location) => `<p class=MsoSub>-<span style='mso-tab-count:1'>&nbsp;&nbsp;</span><b>${esc(location.level)}:</b> ${esc(specLocationText(location))}</p>`).join("");
-    babII.push(item(1, "Lingkup Pekerjaan", `<p class=MsoIndent>${RKS_KIND_LABELS[pasal.ref.kind]} menggunakan material <b>${esc(m.name || "Material tanpa nama")}</b> dengan kode <b>${esc(pasal.code)}</b> pada lokasi berikut:</p>${locationLines}${pasal.areaM2 === null ? "" : `<p class=MsoIndent>Total luas: <b>${formatSpecNumber(pasal.areaM2, 2)} m²</b></p>`}`));
-    babII.push(item(2, "Produk / Merek", `<p class=MsoIndent>${m.product.trim() ? multiline(m.product) : "—"}</p>`));
-    const preview = imageTag(input.materialImages?.get(m.id)?.preview, m.name);
-    babII.push(item(3, "Deskripsi Material", `<p class=MsoIndent>${m.description.trim() ? multiline(m.description) : "—"}</p>${preview ? `<p class=MsoIndent>${preview}</p><p class=MsoIndent><i>Gambar referensi ${esc(m.name)}</i></p>` : ""}`));
-    const narrative = paragraphs(m.rks);
-    babII.push(item(4, "Persyaratan Teknis dan Pelaksanaan", narrative.length
-      ? narrative.map((text) => `<p class=MsoIndent style='margin-left:18.0pt;text-align:justify'>${esc(text)}</p>`).join("")
-      : `<p class=MsoIndent><i>Narasi RKS belum diisi pada List Material.</i></p>`));
+    const n = pasal.number;
+    const item = (sub: number, label: string, body: string) => `<p class=MsoList><b>${n}.${sub}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${esc(label)}</b></p>${body}`;
+    const multi = pasal.items.length > 1;
+    const letter = (index: number, html: string) => `<p class=MsoIndent style='margin-left:54.0pt;text-indent:-18.0pt'>${String.fromCharCode(97 + (index % 26))}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${html}</p>`;
+    const locationLines = (entry: RksPasalItem, left: number) => entry.locations.map((location) => `<p class=MsoSub style='margin-left:${left + 14}.0pt;text-indent:-14.0pt'>-<span style='mso-tab-count:1'>&nbsp;&nbsp;</span><b>${esc(location.level)}:</b> ${esc(specLocationText(location))}</p>`).join("");
+    const areaLine = (entry: RksPasalItem, left: number) => entry.areaM2 === null ? "" : `<p class=MsoIndent style='margin-left:${left}.0pt'>Total luas: <b>${formatSpecNumber(entry.areaM2, 2)} m²</b></p>`;
+    const nameOf = (m: LibraryMaterial) => esc(m.name || "Material tanpa nama");
+    if (!multi) {
+      const entry = pasal.items[0];
+      babII.push(item(1, "Lingkup Pekerjaan", `<p class=MsoIndent>${RKS_KIND_LABELS[entry.ref.kind]} menggunakan material <b>${nameOf(entry.material)}</b> dengan kode <b>${esc(entry.code)}</b> pada lokasi berikut:</p>${locationLines(entry, 36)}${areaLine(entry, 36)}`));
+      const m = entry.material;
+      babII.push(item(2, "Produk / Merek", `<p class=MsoIndent>${m.product.trim() ? multiline(m.product) : "—"}</p>`));
+      const preview = imageTag(input.materialImages?.get(m.id)?.preview, m.name);
+      babII.push(item(3, "Deskripsi Material", `<p class=MsoIndent>${m.description.trim() ? multiline(m.description) : "—"}</p>${preview ? `<p class=MsoIndent>${preview}</p><p class=MsoIndent><i>Gambar referensi ${esc(m.name)}</i></p>` : ""}`));
+    } else {
+      babII.push(item(1, "Lingkup Pekerjaan", `<p class=MsoIndent>Pasal ini mencakup material berikut:</p>${pasal.items.map((entry, index) => letter(index, `<b>${nameOf(entry.material)}</b> — kode <b>${esc(entry.code)}</b> (${RKS_KIND_LABELS[entry.ref.kind]}), lokasi:`) + locationLines(entry, 54) + areaLine(entry, 54)).join("")}`));
+      babII.push(item(2, "Produk / Merek", pasal.items.map((entry, index) => letter(index, `<b>${nameOf(entry.material)}:</b> ${entry.material.product.trim() ? multiline(entry.material.product) : "—"}`)).join("")));
+      babII.push(item(3, "Deskripsi Material", pasal.items.map((entry, index) => {
+        const m = entry.material;
+        const preview = imageTag(input.materialImages?.get(m.id)?.preview, m.name);
+        return letter(index, `<b>${nameOf(m)}:</b> ${m.description.trim() ? multiline(m.description) : "—"}`) + (preview ? `<p class=MsoIndent style='margin-left:54.0pt'>${preview}</p><p class=MsoIndent style='margin-left:54.0pt'><i>Gambar referensi ${esc(m.name)}</i></p>` : "");
+      }).join("")));
+    }
+    if (rksHasNumberedItems(pasal.doc)) {
+      babII.push(rksNarrativeHtml(pasal.doc, n, RKS_FIXED_ITEMS + 1));
+    } else {
+      babII.push(item(RKS_FIXED_ITEMS + 1, "Persyaratan Teknis dan Pelaksanaan", rksHasContent(pasal.doc)
+        ? rksNarrativeHtml(pasal.doc, n, RKS_FIXED_ITEMS + 2)
+        : `<p class=MsoIndent><i>Narasi RKS belum diisi pada List Material.</i></p>`));
+    }
   }
 
   // BAB III — Lampiran tabel Outline Spesifikasi (landscape)
@@ -190,9 +239,9 @@ body, p, td, th, li, div, span, a, b, i { ${font}; }
 p.MsoNormal, p.MsoBody, p.MsoCell, p.MsoList, p.MsoSub, p.MsoIndent, li.MsoNormal, div.MsoNormal { margin:0cm; margin-bottom:6.0pt; line-height:115%; ${size}; ${font}; }
 p.MsoBody { text-align:justify; }
 p.MsoCell { margin:0cm; line-height:normal; }
-p.MsoList { margin-left:18.0pt; text-indent:-18.0pt; margin-top:6.0pt; }
-p.MsoIndent { margin-left:18.0pt; }
-p.MsoSub { margin-left:36.0pt; text-indent:-14.0pt; margin-bottom:2.0pt; }
+p.MsoList { margin-left:36.0pt; text-indent:-36.0pt; margin-top:6.0pt; page-break-after:avoid; }
+p.MsoIndent { margin-left:36.0pt; }
+p.MsoSub { margin-left:50.0pt; text-indent:-14.0pt; margin-bottom:2.0pt; }
 h1 { mso-style-link:"Heading 1"; mso-outline-level:1; margin:0cm; margin-bottom:12.0pt; ${size}; ${font}; font-weight:bold; text-align:center; }
 h2 { mso-style-link:"Heading 2"; mso-outline-level:2; margin:0cm; margin-top:12.0pt; margin-bottom:6.0pt; ${size}; ${font}; font-weight:bold; }
 h3 { mso-style-link:"Heading 3"; mso-outline-level:3; margin:0cm; margin-top:12.0pt; margin-bottom:6.0pt; ${size}; ${font}; font-weight:bold; page-break-after:avoid; }

@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildRksHtml, buildRksMhtml, rksPasalList, RKS_FONT_FAMILY, RKS_FONT_SIZE_PT } from "./rks-document";
-import type { LibraryMaterial } from "./material-library";
+import type { LibraryMaterial, RksPasalDef } from "./material-library";
+import type { RksDoc } from "./rks-content";
 
 const mat = (id: string, kind: LibraryMaterial["kind"], name: string, rks = ""): LibraryMaterial => ({ id, kind, name, image: null, description: "", product: "", code: "", rks });
 const materials = [
@@ -22,7 +23,7 @@ const sketch = {
 const input = { projectTitle: "Gedung Theranostic", dateLabel: "November 2026", overview: [{ label: "Nama Proyek", value: "Gedung Theranostic" }], levels: [], sketch, materials };
 
 test("pasal follow Outline Spesifikasi order: dasar, lantai, dinding, plafon, fasad", () => {
-  assert.deepEqual(rksPasalList(sketch, materials).map((p) => p.ref.kind), ["pekerjaan dasar", "lantai", "dinding", "plafon", "fasad"]);
+  assert.deepEqual(rksPasalList(sketch, materials).map((p) => p.kind), ["pekerjaan dasar", "lantai", "dinding", "plafon", "fasad"]);
   assert.deepEqual(rksPasalList(sketch, materials).map((p) => p.number), [1, 2, 3, 4, 5]);
 });
 
@@ -52,4 +53,37 @@ test("Word file embeds image parts next to the HTML", () => {
   const file = buildRksMhtml(withImage);
   assert.ok(file.startsWith("MIME-Version: 1.0"));
   assert.ok(file.includes("Content-Location: file:///C:/RKS/rks_files/image001.png"));
+});
+
+const p = (text: string) => ({ type: "paragraph", content: [{ type: "text", text }] });
+const li = (text: string, ...nested: object[]) => ({ type: "listItem", content: [p(text), ...nested] });
+const ol = (...items: object[]) => ({ type: "orderedList", content: items });
+
+test("materials sharing a pasal become one pasal with the narrative written once", () => {
+  const shared: RksPasalDef = { id: "ps1", name: "Pekerjaan Cat", rks: "", rksDoc: { type: "doc", content: [p("Cat diaplikasikan dua lapis.")] } as RksDoc };
+  const withPasal = materials.map((m) => m.id === "d1" || m.id === "p1" ? { ...m, pasalId: "ps1" } : m);
+  const list = rksPasalList(sketch, withPasal, [shared]);
+  assert.deepEqual(list.map((x) => x.title), ["Pasal 1 — Beton K-300", "Pasal 2 — Granit 60x60", "Pasal 3 — Pekerjaan Cat", "Pasal 4 — ACP Abu"]);
+  assert.deepEqual(list[2].items.map((x) => x.material.id), ["d1", "p1"]);
+  const { html } = buildRksHtml({ ...input, materials: withPasal, pasals: [shared] });
+  assert.equal(html.split("Cat diaplikasikan dua lapis.").length - 1, 1);
+});
+
+test("paragraph numbering has 3 levels prefixed by the pasal number in document order", () => {
+  const doc = { type: "doc", content: [ol(li("Persyaratan Bahan", ol(li("Semen", ol(li("Tipe I"))), li("Pasir"))), li("Pelaksanaan"))] } as RksDoc;
+  const withDoc = materials.map((m) => m.id === "d1" ? { ...m, rksDoc: doc } : m);
+  const { html } = buildRksHtml({ ...input, materials: withDoc });
+  // Cat Tembok is pasal 3; butir 1–3 are Lingkup, Produk, Deskripsi.
+  for (const label of ["3.1.", "3.4.", "3.4.1.", "3.4.1.1.", "3.4.2.", "3.5."]) assert.ok(html.includes(`>${label}<span`), label);
+  assert.ok(html.indexOf("3.4.1.1.") < html.indexOf("3.4.2."));
+  assert.ok(!html.includes("3.4.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>Persyaratan Teknis"));
+});
+
+test("sub-points and tables are indented under their numbered point", () => {
+  const table = { type: "table", content: [{ type: "tableRow", content: [{ type: "tableHeader", content: [p("Uji")] }, { type: "tableCell", content: [p("Slump 10 cm")] }] }] };
+  const doc = { type: "doc", content: [ol({ type: "listItem", content: [p("Pengujian"), { type: "bulletList", content: [li("Uji tekan")] }, table] })] } as RksDoc;
+  const { html } = buildRksHtml({ ...input, materials: materials.map((m) => m.id === "b1" ? { ...m, rksDoc: doc } : m) });
+  assert.ok(html.includes("margin-left:54pt;text-indent:-18pt;text-align:justify'>a.<span"));
+  assert.ok(html.includes("margin-left:36pt;border-collapse:collapse"));
+  assert.ok(html.includes("Slump 10 cm"));
 });

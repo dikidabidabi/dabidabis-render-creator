@@ -1,4 +1,5 @@
 import { setProjectItem } from "@/lib/storage/idb-bridge";
+import { normalizeRksDoc, type RksDoc } from "@/lib/rks-content";
 
 export const MATERIAL_LIBRARY_KEY = "dabidabis_material_library_v1";
 export const ROOM_MATERIAL_KINDS = ["lantai", "dinding", "plafon"] as const;
@@ -16,7 +17,14 @@ export type LibraryMaterial = {
   code: string;
   /** Narasi RKS (Rencana Kerja dan Syarat-syarat) untuk material ini. */
   rks: string;
+  /** Narasi RKS berformat (penomoran, sub-poin, tabel). `rks` menyimpan teks polosnya. */
+  rksDoc?: RksDoc | null;
+  /** Pasal RKS bersama; bila diisi, narasi diambil dari pasal tersebut. */
+  pasalId?: string | null;
 };
+/** Pasal RKS akun: material dengan pasal yang sama berbagi satu narasi. */
+export type RksPasalDef = { id: string; name: string; rks: string; rksDoc: RksDoc | null };
+export const RKS_PASAL_KEY = "dabidabis_rks_pasal_v1";
 export type RoomMaterials = Partial<Record<RoomMaterialKind, string>>;
 export type FacadeDirection = "barat" | "timur" | "utara" | "selatan";
 export type GeneralMaterialSelections = {
@@ -45,6 +53,8 @@ export function loadMaterialLibrary(): LibraryMaterial[] {
         product: typeof item.product === "string" ? item.product : "",
         code: typeof item.code === "string" ? item.code : "",
         rks: typeof item.rks === "string" ? item.rks : "",
+        rksDoc: normalizeRksDoc(item.rksDoc),
+        pasalId: typeof item.pasalId === "string" && item.pasalId ? item.pasalId : null,
       }];
     });
   } catch {
@@ -88,4 +98,26 @@ export async function saveMaterialLibrary(materials: LibraryMaterial[]) {
     await setProjectItem(MATERIAL_LIBRARY_KEY, payload);
   });
   await pendingSave;
+}
+
+let pendingPasalSave: Promise<void> = Promise.resolve();
+
+export function loadRksPasals(): RksPasalDef[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(RKS_PASAL_KEY) || "[]");
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item): RksPasalDef[] => item && typeof item.id === "string" && typeof item.name === "string"
+      ? [{ id: item.id, name: item.name, rks: typeof item.rks === "string" ? item.rks : "", rksDoc: normalizeRksDoc(item.rksDoc) }]
+      : []);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveRksPasals(pasals: RksPasalDef[]) {
+  const payload = JSON.stringify(pasals);
+  pendingPasalSave = pendingPasalSave.catch(() => {}).then(async () => {
+    await setProjectItem(RKS_PASAL_KEY, payload);
+  });
+  await pendingPasalSave;
 }
