@@ -499,3 +499,33 @@
   }
   * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+/* Penyunting narasi RKS (List Material). Nomor P.n mengikuti ekspor Word:
+   butir 1–3 pasal dipakai Lingkup, Produk, dan Deskripsi, narasi bernomor mulai P.4. */
+.rks-editor .rks-editor-content { outline: none; min-height: 100%; font-size: 0.875rem; line-height: 1.65; counter-reset: rks1 3; }
+.rks-editor .rks-editor-content > * + * { margin-top: 0.35rem; }
+.rks-editor .rks-editor-content p { margin: 0; text-align: justify; }
+.rks-editor .rks-editor-content > p { padding-left: 2.6rem; }
+.rks-editor .rks-editor-content p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--muted-foreground); float: left; height: 0; pointer-events: none; }
+.rks-editor .rks-editor-content > p.is-editor-empty:first-child::before { margin-left: 0; }
+.rks-editor ol { list-style: none; margin: 0; padding: 0; }
+.rks-editor ol > li { counter-increment: rks1; counter-reset: rks2; position: relative; padding-left: 2.6rem; }
+.rks-editor ol > li::before { content: "P." counter(rks1) "."; position: absolute; left: 0; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.rks-editor ol ol > li { counter-increment: rks2; counter-reset: rks3; padding-left: 3.2rem; }
+.rks-editor ol ol > li::before { content: "P." counter(rks1) "." counter(rks2) "."; }
+.rks-editor ol ol ol > li { counter-increment: rks3; counter-reset: rks4; padding-left: 3.9rem; }
+.rks-editor ol ol ol > li::before { content: "P." counter(rks1) "." counter(rks2) "." counter(rks3) "."; }
+.rks-editor ol ol ol ol > li { counter-increment: rks4; padding-left: 1.4rem; }
+.rks-editor ol ol ol ol > li::before { content: counter(rks4, lower-alpha) ")"; }
+.rks-editor ul { list-style: lower-alpha; margin: 0; padding-left: 1.4rem; }
+.rks-editor ul ul { list-style: "- "; }
+.rks-editor ul > li::marker { color: var(--muted-foreground); }
+.rks-editor .rks-editor-content > ul { margin-left: 2.6rem; }
+.rks-editor li > * + * { margin-top: 0.25rem; }
+.rks-editor table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 0.4rem 0; overflow: hidden; }
+.rks-editor .rks-editor-content > .tableWrapper { margin-left: 2.6rem; }
+.rks-editor td, .rks-editor th { border: 1px solid var(--border); padding: 0.25rem 0.4rem; vertical-align: top; min-width: 3rem; position: relative; }
+.rks-editor th { background: var(--muted); font-weight: 600; text-align: left; }
+.rks-editor td p, .rks-editor th p { text-align: left; }
+.rks-editor .selectedCell::after { content: ""; position: absolute; inset: 0; background: color-mix(in oklab, var(--primary) 15%, transparent); pointer-events: none; }
+.rks-editor .tableWrapper { overflow-x: auto; }
