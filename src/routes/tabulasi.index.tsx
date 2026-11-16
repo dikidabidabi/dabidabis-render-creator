@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { TabulasiNavigation } from "@/components/tabulasi-navigation";
-import { loadMaterialLibrary, normalizeGeneralMaterialSelections, ROOM_MATERIAL_KINDS, type FacadeDirection, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterialKind, type RoomMaterials } from "@/lib/material-library";
+import { loadMaterialLibrary, loadRksPasals, normalizeGeneralMaterialSelections, ROOM_MATERIAL_KINDS, type FacadeDirection, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterialKind, type RoomMaterials } from "@/lib/material-library";
 import { patchStoredSketch } from "@/lib/sketch-store";
 import { buildRksMhtml } from "@/lib/rks-document";
 import { collectSpecMaterialRefs } from "@/lib/spec-outline";
