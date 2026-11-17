@@ -164,9 +164,9 @@ function paragraphHtml(node: RksNode, ctx: Ctx, label?: { text: string; hang: nu
     return `<p class=MsoCell style='${indentStyle}'>${label ? `${esc(label.text)}${TAB}` : ""}${body}</p>`;
   }
   if (label) {
-    return `<p class=MsoIndent style='margin-left:${label.indent + label.hang}pt;text-indent:-${label.hang}pt;text-align:justify'>${esc(label.text)}${TAB}${body}</p>`;
+    return `<p class=MsoRks style='margin-left:${label.indent + label.hang}pt;text-indent:-${label.hang}pt;text-align:justify'>${esc(label.text)}${TAB}${body}</p>`;
   }
-  return `<p class=MsoIndent style='margin-left:${ctx.indent}pt;text-align:justify'>${body}</p>`;
+  return `<p class=MsoRks style='margin-left:${ctx.indent}pt;text-align:justify'>${body}</p>`;
 }
 
 function blocks(nodes: RksNode[] | undefined, ctx: Ctx): string {
@@ -222,7 +222,7 @@ function table(node: RksNode, ctx: Ctx): string {
     const tag = header ? "th" : "td";
     return `<${tag}${colspan}${rowspan} valign=top style='vertical-align:top${header ? ";background:#F2F2F2" : ""}'>${header ? inner.replace(/<p class=MsoCell([^>]*)>/g, "<p class=MsoCell$1><b>").replace(/<\/p>/g, "</b></p>") : inner}</${tag}>`;
   }).join("")}</tr>`).join("");
-  return `<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0 width=${Math.round(width / 0.75)} style='width:${width}pt;margin-left:${indent}pt;border-collapse:collapse;margin-bottom:6.0pt'>${body}</table><p class=MsoIndent style='margin:0cm;font-size:4.0pt;line-height:normal'>&nbsp;</p>`;
+  return `<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0 width=${Math.round(width / 0.75)} style='width:${width}pt;margin-left:${indent}pt;border-collapse:collapse;margin-bottom:6.0pt'>${body}</table><p class=MsoRks style='margin:0cm;font-size:4.0pt;line-height:normal'>&nbsp;</p>`;
 }
 
 /** Apakah narasi memakai butir bernomor level 1 (menggantikan judul bawaan butir 4). */

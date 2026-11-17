@@ -163,9 +163,9 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
     const n = pasal.number;
     const item = (sub: number, label: string, body: string) => `<p class=MsoList><b>${n}.${sub}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${esc(label)}</b></p>${body}`;
     const multi = pasal.items.length > 1;
-    const letter = (index: number, html: string) => `<p class=MsoIndent style='margin-left:54.0pt;text-indent:-18.0pt'>${String.fromCharCode(97 + (index % 26))}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${html}</p>`;
-    const locationLines = (entry: RksPasalItem, left: number) => entry.locations.map((location) => `<p class=MsoSub style='margin-left:${left + 14}.0pt;text-indent:-14.0pt'>-<span style='mso-tab-count:1'>&nbsp;&nbsp;</span><b>${esc(location.level)}:</b> ${esc(specLocationText(location))}</p>`).join("");
-    const areaLine = (entry: RksPasalItem, left: number) => entry.areaM2 === null ? "" : `<p class=MsoIndent style='margin-left:${left}.0pt'>Total luas: <b>${formatSpecNumber(entry.areaM2, 2)} m²</b></p>`;
+    const letter = (index: number, html: string) => `<p class=MsoRks style='margin-left:54.0pt;text-indent:-18.0pt'>${String.fromCharCode(97 + (index % 26))}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${html}</p>`;
+    const locationLines = (entry: RksPasalItem, left: number) => entry.locations.map((location) => `<p class=MsoRks style='margin-bottom:2.0pt;margin-left:${left + 14}.0pt;text-indent:-14.0pt'>-<span style='mso-tab-count:1'>&nbsp;&nbsp;</span><b>${esc(location.level)}:</b> ${esc(specLocationText(location))}</p>`).join("");
+    const areaLine = (entry: RksPasalItem, left: number) => entry.areaM2 === null ? "" : `<p class=MsoRks style='margin-left:${left}.0pt'>Total luas: <b>${formatSpecNumber(entry.areaM2, 2)} m²</b></p>`;
     const nameOf = (m: LibraryMaterial) => esc(m.name || "Material tanpa nama");
     if (!multi) {
       const entry = pasal.items[0];
@@ -180,7 +180,7 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
       babII.push(item(3, "Deskripsi Material", pasal.items.map((entry, index) => {
         const m = entry.material;
         const preview = imageTag(input.materialImages?.get(m.id)?.preview, m.name);
-        return letter(index, `<b>${nameOf(m)}:</b> ${m.description.trim() ? multiline(m.description) : "—"}`) + (preview ? `<p class=MsoIndent style='margin-left:54.0pt'>${preview}</p><p class=MsoIndent style='margin-left:54.0pt'><i>Gambar referensi ${esc(m.name)}</i></p>` : "");
+        return letter(index, `<b>${nameOf(m)}:</b> ${m.description.trim() ? multiline(m.description) : "—"}`) + (preview ? `<p class=MsoRks style='margin-left:54.0pt'>${preview}</p><p class=MsoRks style='margin-left:54.0pt'><i>Gambar referensi ${esc(m.name)}</i></p>` : "");
       }).join("")));
     }
     if (rksHasNumberedItems(pasal.doc)) {
@@ -236,7 +236,7 @@ div.WordSection1 { page:WordSection1; }
 @page WordSection2 { size:841.9pt 595.3pt; mso-page-orientation:landscape; margin:42.5pt 42.5pt 42.5pt 42.5pt; }
 div.WordSection2 { page:WordSection2; }
 body, p, td, th, li, div, span, a, b, i { ${font}; }
-p.MsoNormal, p.MsoBody, p.MsoCell, p.MsoList, p.MsoSub, p.MsoIndent, li.MsoNormal, div.MsoNormal { margin:0cm; margin-bottom:6.0pt; line-height:115%; ${size}; ${font}; }
+p.MsoNormal, p.MsoBody, p.MsoCell, p.MsoList, p.MsoSub, p.MsoIndent, p.MsoRks, li.MsoNormal, div.MsoNormal { margin:0cm; margin-bottom:6.0pt; line-height:115%; ${size}; ${font}; }
 p.MsoBody { text-align:justify; }
 p.MsoCell { margin:0cm; line-height:normal; }
 p.MsoList { margin-left:36.0pt; text-indent:-36.0pt; margin-top:6.0pt; page-break-after:avoid; }
