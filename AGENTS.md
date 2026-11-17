@@ -21,11 +21,11 @@
 - Pekerjaan Dasar dan Fasad disimpan sebagai pilihan material umum per sketsa, terpisah dari material ruang; Fasad dibagi Barat, Timur, Utara, dan Selatan.
 - Mode Plafon per kotak detail saling eksklusif dengan mode Material dan memakai kode material bersama yang sama dengan Outline Spesifikasi.
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
-- Spec refs/areas live in spec-outline, shared by slides and RKS export (MHTML .doc for embedded images); pagination measures room text.
-- RKS narratives are editor JSON (rks-content) on a material or its pasal; one pasal per group; hanging indents use CSS classes since readers drop inline text-indent.
+- Spec refs/areas live in spec-outline, shared by slides and RKS export (MHTML .doc for embedded images); fragments keep full level area; pagination measures room text.
+- RKS narratives are editor JSON (rks-content) on a material or its pasal; one pasal per group; hanging indents use CSS classes as readers drop inline text-indent.
 - Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG row slices.
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
 - Picked curves render as wall bands; ends feed practical columns.
 - Total bubble slide: one cluster per level; red links join same-kind circulation rooms on the next matching level.
-- Rincian per Level slides render full-width unscaled and paginate like Outline Specification.
-- Volumetrik slides: one row per physical floor; sub-totals on the last page.
+- Rincian per Level slides: full-width, unscaled, paged like Outline Specification.
+- Volumetrik slides: one row per physical floor; sub-totals on last page.
