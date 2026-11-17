@@ -336,7 +336,8 @@ function RksNote({ material, pasal, pasals, members, doc, onPasal, onChange, onC
       <div
         className="flex cursor-move touch-none select-none items-center gap-2 border-b border-border px-3 py-2"
         onPointerDown={(event) => {
-          if ((event.target as HTMLElement).closest("button, [role=combobox], input") || !pos) return;
+          // Menu pilihan pasal dirender di portal, tetapi event-nya tetap menggelembung ke sini.
+          if (!event.currentTarget.contains(event.target as Node) || (event.target as HTMLElement).closest("button, [role=combobox], input") || !pos) return;
           drag.current = { dx: event.clientX - pos.x, dy: event.clientY - pos.y };
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
