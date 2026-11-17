@@ -161,14 +161,14 @@ export function rksNarrativeHtml(doc: RksNode | null | undefined, pasalNumber: n
  * H = butir dengan label gantung, I = paragraf rata indentasi, C = paragraf dalam sel tabel.
  */
 export function rksIndentClass(kind: "H" | "I" | "C" | "T", indentPt: number, hangPt = 0): string {
-  return `MsoRks${kind}${Math.max(0, Math.round(indentPt))}_${Math.max(0, Math.round(hangPt))}`;
+  return `MsoRks${kind}${Math.max(0, Math.round(indentPt))}x${Math.max(0, Math.round(hangPt))}`;
 }
 
 /** CSS untuk setiap kelas indentasi RKS yang dipakai di HTML. */
 export function rksIndentCss(html: string, textCss: string): string {
   const seen = new Set<string>();
   const rules: string[] = [];
-  for (const match of html.matchAll(/class=(MsoRks([HICT])(\d+)_(\d+))/g)) {
+  for (const match of html.matchAll(/class=(MsoRks([HICT])(\d+)x(\d+))/g)) {
     const [, name, kind, indentText, hangText] = match;
     if (seen.has(name)) continue;
     seen.add(name);
@@ -243,7 +243,7 @@ function table(node: RksNode, ctx: Ctx): string {
     const rowspan = typeof cell.attrs?.rowspan === "number" && cell.attrs.rowspan > 1 ? ` rowspan=${cell.attrs.rowspan}` : "";
     const inner = blocks(cell.content, { indent: 0, olDepth: ctx.olDepth, ulDepth: ctx.ulDepth, prefix: ctx.prefix, counter: { n: 0 }, cell: true }) || `<p class=${rksIndentClass("C", 0)}>&nbsp;</p>`;
     const tag = header ? "th" : "td";
-    return `<${tag}${colspan}${rowspan} valign=top style='border:solid #999999 1.0pt;padding:3.0pt 4.0pt 3.0pt 4.0pt;vertical-align:top${header ? ";background:#F2F2F2" : ""}'>${header ? inner.replace(/<p class=(MsoRksC[\d_]+)>/g, "<p class=$1><b>").replace(/<\/p>/g, "</b></p>") : inner}</${tag}>`;
+    return `<${tag}${colspan}${rowspan} valign=top style='border:solid #999999 1.0pt;padding:3.0pt 4.0pt 3.0pt 4.0pt;vertical-align:top${header ? ";background:#F2F2F2" : ""}'>${header ? inner.replace(/<p class=(MsoRksC[\dx]+)>/g, "<p class=$1><b>").replace(/<\/p>/g, "</b></p>") : inner}</${tag}>`;
   }).join("")}</tr>`).join("");
   return `<table class=${rksIndentClass("T", indent)} border=1 cellspacing=0 cellpadding=0 width=${Math.round(width / 0.75)} style='width:${width}pt;margin-left:${indent}pt;border-collapse:collapse'>${body}</table><p class=MsoNormal style='margin:0cm;font-size:4.0pt;line-height:normal'>&nbsp;</p>`;
 }
