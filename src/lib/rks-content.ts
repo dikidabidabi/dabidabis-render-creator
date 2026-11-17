@@ -160,7 +160,7 @@ export function rksNarrativeHtml(doc: RksNode | null | undefined, pasalNumber: n
  * atribut style) agar Word maupun LibreOffice menempatkan label di kiri teksnya.
  * H = butir dengan label gantung, I = paragraf rata indentasi, C = paragraf dalam sel tabel.
  */
-export function rksIndentClass(kind: "H" | "I" | "C", indentPt: number, hangPt = 0): string {
+export function rksIndentClass(kind: "H" | "I" | "C" | "T", indentPt: number, hangPt = 0): string {
   return `MsoRks${kind}${Math.max(0, Math.round(indentPt))}_${Math.max(0, Math.round(hangPt))}`;
 }
 
@@ -245,7 +245,7 @@ function table(node: RksNode, ctx: Ctx): string {
     const tag = header ? "th" : "td";
     return `<${tag}${colspan}${rowspan} valign=top style='border:solid #999999 1.0pt;padding:3.0pt 4.0pt 3.0pt 4.0pt;vertical-align:top${header ? ";background:#F2F2F2" : ""}'>${header ? inner.replace(/<p class=(MsoRksC[\d_]+)>/g, "<p class=$1><b>").replace(/<\/p>/g, "</b></p>") : inner}</${tag}>`;
   }).join("")}</tr>`).join("");
-  return `<table class=${rksIndentClass("T" as "H", indent)} border=1 cellspacing=0 cellpadding=0 width=${Math.round(width / 0.75)} style='width:${width}pt;margin-left:${indent}pt;border-collapse:collapse'>${body}</table><p class=MsoNormal style='margin:0cm;font-size:4.0pt;line-height:normal'>&nbsp;</p>`;
+  return `<table class=${rksIndentClass("T", indent)} border=1 cellspacing=0 cellpadding=0 width=${Math.round(width / 0.75)} style='width:${width}pt;margin-left:${indent}pt;border-collapse:collapse'>${body}</table><p class=MsoNormal style='margin:0cm;font-size:4.0pt;line-height:normal'>&nbsp;</p>`;
 }
 
 /** Apakah narasi memakai butir bernomor level 1 (menggantikan judul bawaan butir 4). */
