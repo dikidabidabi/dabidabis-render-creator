@@ -83,7 +83,8 @@ test("sub-points and tables are indented under their numbered point", () => {
   const table = { type: "table", content: [{ type: "tableRow", content: [{ type: "tableHeader", content: [p("Uji")] }, { type: "tableCell", content: [p("Slump 10 cm")] }] }] };
   const doc = { type: "doc", content: [ol({ type: "listItem", content: [p("Pengujian"), { type: "bulletList", content: [li("Uji tekan")] }, table] })] } as RksDoc;
   const { html } = buildRksHtml({ ...input, materials: materials.map((m) => m.id === "b1" ? { ...m, rksDoc: doc } : m) });
-  assert.ok(html.includes("margin-left:54pt;text-indent:-18pt;text-align:justify'>a.<span"));
+  assert.ok(html.includes("<p class=MsoRksH36x18>a.<span"));
+  assert.ok(html.includes("p.MsoRksH36x18 { margin:0cm; margin-left:54.0pt; text-indent:-18.0pt;"));
   assert.ok(html.includes("margin-left:36pt;border-collapse:collapse"));
   assert.ok(html.includes("Slump 10 cm"));
 });

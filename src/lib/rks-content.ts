@@ -155,18 +155,41 @@ export function rksNarrativeHtml(doc: RksNode | null | undefined, pasalNumber: n
   return blocks(doc.content, root);
 }
 
+/**
+ * Nama kelas paragraf berindentasi. Indentasi gantung ditulis lewat kelas CSS (bukan
+ * atribut style) agar Word maupun LibreOffice menempatkan label di kiri teksnya.
+ * H = butir dengan label gantung, I = paragraf rata indentasi, C = paragraf dalam sel tabel.
+ */
+export function rksIndentClass(kind: "H" | "I" | "C" | "T", indentPt: number, hangPt = 0): string {
+  return `MsoRks${kind}${Math.max(0, Math.round(indentPt))}x${Math.max(0, Math.round(hangPt))}`;
+}
+
+/** CSS untuk setiap kelas indentasi RKS yang dipakai di HTML. */
+export function rksIndentCss(html: string, textCss: string): string {
+  const seen = new Set<string>();
+  const rules: string[] = [];
+  for (const match of html.matchAll(/class=(MsoRks([HICT])(\d+)x(\d+))/g)) {
+    const [, name, kind, indentText, hangText] = match;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const indent = Number(indentText);
+    const hang = Number(hangText);
+    if (kind === "T") {
+      rules.push(`table.${name} { margin-left:${indent}.0pt; border-collapse:collapse; mso-table-lspace:0pt; }`);
+      continue;
+    }
+    const spacing = kind === "C" ? "margin-bottom:0cm; line-height:normal;" : "margin-bottom:6.0pt; line-height:115%; text-align:justify;";
+    rules.push(`p.${name} { margin:0cm; margin-left:${indent + hang}.0pt; text-indent:${hang ? `-${hang}.0pt` : "0cm"}; ${spacing} ${textCss} }`);
+  }
+  return rules.join("\n");
+}
+
 function paragraphHtml(node: RksNode, ctx: Ctx, label?: { text: string; hang: number; indent: number }): string {
   const body = inline(node.content);
   if (!label && !body.trim()) return "";
-  if (ctx.cell) {
-    const pad = label ? label.indent + label.hang : ctx.indent;
-    const indentStyle = pad > 0 ? `margin-left:${pad}pt;${label ? `text-indent:-${label.hang}pt;` : ""}` : "";
-    return `<p class=MsoCell style='${indentStyle}'>${label ? `${esc(label.text)}${TAB}` : ""}${body}</p>`;
-  }
-  if (label) {
-    return `<p class=MsoIndent style='margin-left:${label.indent + label.hang}pt;text-indent:-${label.hang}pt;text-align:justify'>${esc(label.text)}${TAB}${body}</p>`;
-  }
-  return `<p class=MsoIndent style='margin-left:${ctx.indent}pt;text-align:justify'>${body}</p>`;
+  const kind = ctx.cell ? "C" : label ? "H" : "I";
+  const className = label ? rksIndentClass(kind, label.indent, label.hang) : rksIndentClass(kind, ctx.indent);
+  return `<p class=${className}>${label ? `${esc(label.text)}${TAB}` : ""}${body}</p>`;
 }
 
 function blocks(nodes: RksNode[] | undefined, ctx: Ctx): string {
@@ -218,11 +241,11 @@ function table(node: RksNode, ctx: Ctx): string {
     const header = cell.type === "tableHeader";
     const colspan = typeof cell.attrs?.colspan === "number" && cell.attrs.colspan > 1 ? ` colspan=${cell.attrs.colspan}` : "";
     const rowspan = typeof cell.attrs?.rowspan === "number" && cell.attrs.rowspan > 1 ? ` rowspan=${cell.attrs.rowspan}` : "";
-    const inner = blocks(cell.content, { indent: 0, olDepth: ctx.olDepth, ulDepth: ctx.ulDepth, prefix: ctx.prefix, counter: { n: 0 }, cell: true }) || `<p class=MsoCell>&nbsp;</p>`;
+    const inner = blocks(cell.content, { indent: 0, olDepth: ctx.olDepth, ulDepth: ctx.ulDepth, prefix: ctx.prefix, counter: { n: 0 }, cell: true }) || `<p class=${rksIndentClass("C", 0)}>&nbsp;</p>`;
     const tag = header ? "th" : "td";
-    return `<${tag}${colspan}${rowspan} valign=top style='vertical-align:top${header ? ";background:#F2F2F2" : ""}'>${header ? inner.replace(/<p class=MsoCell([^>]*)>/g, "<p class=MsoCell$1><b>").replace(/<\/p>/g, "</b></p>") : inner}</${tag}>`;
+    return `<${tag}${colspan}${rowspan} valign=top style='border:solid #999999 1.0pt;padding:3.0pt 4.0pt 3.0pt 4.0pt;vertical-align:top${header ? ";background:#F2F2F2" : ""}'>${header ? inner.replace(/<p class=(MsoRksC[\dx]+)>/g, "<p class=$1><b>").replace(/<\/p>/g, "</b></p>") : inner}</${tag}>`;
   }).join("")}</tr>`).join("");
-  return `<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0 width=${Math.round(width / 0.75)} style='width:${width}pt;margin-left:${indent}pt;border-collapse:collapse;margin-bottom:6.0pt'>${body}</table><p class=MsoIndent style='margin:0cm;font-size:4.0pt;line-height:normal'>&nbsp;</p>`;
+  return `<table class=${rksIndentClass("T", indent)} border=1 cellspacing=0 cellpadding=0 width=${Math.round(width / 0.75)} style='width:${width}pt;margin-left:${indent}pt;border-collapse:collapse'>${body}</table><p class=MsoNormal style='margin:0cm;font-size:4.0pt;line-height:normal'>&nbsp;</p>`;
 }
 
 /** Apakah narasi memakai butir bernomor level 1 (menggantikan judul bawaan butir 4). */

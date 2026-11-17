@@ -1,5 +1,5 @@
 import { materialCodes, type LibraryMaterial, type MaterialKind, type RksPasalDef } from "@/lib/material-library";
-import { rksDocOf, rksHasContent, rksHasNumberedItems, rksNarrativeHtml, RKS_FIXED_ITEMS, type RksDoc } from "@/lib/rks-content";
+import { rksDocOf, rksHasContent, rksHasNumberedItems, rksIndentClass, rksIndentCss, rksNarrativeHtml, RKS_FIXED_ITEMS, type RksDoc } from "@/lib/rks-content";
 import { collectSpecMaterialRefs, formatSpecNumber, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef, type SpecSketch } from "@/lib/spec-outline";
 
 /** Word-compatible RKS export: MHTML (.doc) so embedded images open in Microsoft Word. */
@@ -163,9 +163,9 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
     const n = pasal.number;
     const item = (sub: number, label: string, body: string) => `<p class=MsoList><b>${n}.${sub}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${esc(label)}</b></p>${body}`;
     const multi = pasal.items.length > 1;
-    const letter = (index: number, html: string) => `<p class=MsoIndent style='margin-left:54.0pt;text-indent:-18.0pt'>${String.fromCharCode(97 + (index % 26))}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${html}</p>`;
-    const locationLines = (entry: RksPasalItem, left: number) => entry.locations.map((location) => `<p class=MsoSub style='margin-left:${left + 14}.0pt;text-indent:-14.0pt'>-<span style='mso-tab-count:1'>&nbsp;&nbsp;</span><b>${esc(location.level)}:</b> ${esc(specLocationText(location))}</p>`).join("");
-    const areaLine = (entry: RksPasalItem, left: number) => entry.areaM2 === null ? "" : `<p class=MsoIndent style='margin-left:${left}.0pt'>Total luas: <b>${formatSpecNumber(entry.areaM2, 2)} m²</b></p>`;
+    const letter = (index: number, html: string) => `<p class=${rksIndentClass("H", 36, 18)}>${String.fromCharCode(97 + (index % 26))}.<span style='mso-tab-count:1'>&nbsp;&nbsp;</span>${html}</p>`;
+    const locationLines = (entry: RksPasalItem, left: number) => entry.locations.map((location) => `<p class=${rksIndentClass("H", left, 14)}>-<span style='mso-tab-count:1'>&nbsp;&nbsp;</span><b>${esc(location.level)}:</b> ${esc(specLocationText(location))}</p>`).join("");
+    const areaLine = (entry: RksPasalItem, left: number) => entry.areaM2 === null ? "" : `<p class=${rksIndentClass("I", left)}>Total luas: <b>${formatSpecNumber(entry.areaM2, 2)} m²</b></p>`;
     const nameOf = (m: LibraryMaterial) => esc(m.name || "Material tanpa nama");
     if (!multi) {
       const entry = pasal.items[0];
@@ -180,7 +180,7 @@ export function buildRksHtml(input: RksInput, imageDir = "rks_files"): { html: s
       babII.push(item(3, "Deskripsi Material", pasal.items.map((entry, index) => {
         const m = entry.material;
         const preview = imageTag(input.materialImages?.get(m.id)?.preview, m.name);
-        return letter(index, `<b>${nameOf(m)}:</b> ${m.description.trim() ? multiline(m.description) : "—"}`) + (preview ? `<p class=MsoIndent style='margin-left:54.0pt'>${preview}</p><p class=MsoIndent style='margin-left:54.0pt'><i>Gambar referensi ${esc(m.name)}</i></p>` : "");
+        return letter(index, `<b>${nameOf(m)}:</b> ${m.description.trim() ? multiline(m.description) : "—"}`) + (preview ? `<p class=${rksIndentClass("I", 54)}>${preview}</p><p class=${rksIndentClass("I", 54)}><i>Gambar referensi ${esc(m.name)}</i></p>` : "");
       }).join("")));
     }
     if (rksHasNumberedItems(pasal.doc)) {
@@ -236,7 +236,7 @@ div.WordSection1 { page:WordSection1; }
 @page WordSection2 { size:841.9pt 595.3pt; mso-page-orientation:landscape; margin:42.5pt 42.5pt 42.5pt 42.5pt; }
 div.WordSection2 { page:WordSection2; }
 body, p, td, th, li, div, span, a, b, i { ${font}; }
-p.MsoNormal, p.MsoBody, p.MsoCell, p.MsoList, p.MsoSub, p.MsoIndent, li.MsoNormal, div.MsoNormal { margin:0cm; margin-bottom:6.0pt; line-height:115%; ${size}; ${font}; }
+p.MsoNormal, p.MsoBody, p.MsoCell, p.MsoList, p.MsoSub, p.MsoIndent, p.MsoRks, li.MsoNormal, div.MsoNormal { margin:0cm; margin-bottom:6.0pt; line-height:115%; ${size}; ${font}; }
 p.MsoBody { text-align:justify; }
 p.MsoCell { margin:0cm; line-height:normal; }
 p.MsoList { margin-left:36.0pt; text-indent:-36.0pt; margin-top:6.0pt; page-break-after:avoid; }
@@ -266,7 +266,9 @@ table.MsoTableGrid td, table.MsoTableGrid th { border:solid #999999 1.0pt; paddi
     ...tocHtml,
     `<p class=MsoNormal><!--[if supportFields]><span style='mso-element:field-end'></span><![endif]--></p>`,
   ].join("");
-  const html = `<html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta http-equiv=Content-Type content="text/html; charset=utf-8"><meta name=ProgId content=Word.Document><meta name=Generator content="Dabidabi's"><title>RKS — ${esc(input.projectTitle)}</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]--><style>${css}</style></head><body lang=ID style='tab-interval:36.0pt'><div class=WordSection1>${cover}${tocPage}${babI.join("")}${babII.join("")}</div>${SECTION_BREAK}<div class=WordSection2>${babIII.join("")}</div></body></html>`;
+  const bodyHtml = `${cover}${tocPage}${babI.join("")}${babII.join("")}`;
+  const indentCss = rksIndentCss(bodyHtml, `${size}; ${font};`);
+  const html = `<html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta http-equiv=Content-Type content="text/html; charset=utf-8"><meta name=ProgId content=Word.Document><meta name=Generator content="Dabidabi's"><title>RKS — ${esc(input.projectTitle)}</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]--><style>${css}\n${indentCss}</style></head><body lang=ID style='tab-interval:36.0pt'><div class=WordSection1>${bodyHtml}</div>${SECTION_BREAK}<div class=WordSection2>${babIII.join("")}</div></body></html>`;
   return { html, images };
 }
 

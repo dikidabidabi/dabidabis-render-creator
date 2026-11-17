@@ -238,14 +238,16 @@ function MaterialLibraryPage() {
                         const pasal = pasalOf(m);
                         const words = rksWordCount(pasal ? pasal.rks || rksPlainText(rksDocOf(pasal)) : m.rks);
                         return (
+                          <div className="space-y-1">
                           <div className="flex items-center gap-1">
                             <Button type="button" size="sm" variant={rksId === m.id ? "default" : "outline"} className="min-w-0 flex-1 justify-start" title={pasal ? `Rencana Kerja dan Syarat-syarat · Pasal ${pasal.name}` : "Rencana Kerja dan Syarat-syarat"} onClick={() => setRksId(rksId === m.id ? null : m.id)}>
                               <FileText />RKS
-                              {pasal && <span className="min-w-0 truncate text-xs font-normal opacity-80">· {pasal.name || "Pasal tanpa nama"}</span>}
                               {words > 0 && <span className="ml-auto shrink-0 text-xs font-normal opacity-70">{words} kata</span>}
                             </Button>
                             <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" title={`Salin RKS ${m.name || "material"}`} aria-label={`Salin RKS ${m.name || "material"}`} disabled={words === 0} onClick={() => copyRks(m)}><Copy /></Button>
                             <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" title={clip ? `Tempel RKS dari ${clip.from}` : "Salin RKS material lain terlebih dahulu"} aria-label={`Tempel RKS ke ${m.name || "material"}`} disabled={!clip} onClick={() => pasteRks(m)}><ClipboardPaste /></Button>
+                          </div>
+                          {pasal && <p className="truncate text-[11px] text-muted-foreground" title={`Pasal ${pasal.name}`}>Pasal: {pasal.name || "tanpa nama"}</p>}
                           </div>
                         );
                       })()}
@@ -336,7 +338,8 @@ function RksNote({ material, pasal, pasals, members, doc, onPasal, onChange, onC
       <div
         className="flex cursor-move touch-none select-none items-center gap-2 border-b border-border px-3 py-2"
         onPointerDown={(event) => {
-          if ((event.target as HTMLElement).closest("button, [role=combobox], input") || !pos) return;
+          // Menu pilihan pasal dirender di portal, tetapi event-nya tetap menggelembung ke sini.
+          if (!event.currentTarget.contains(event.target as Node) || (event.target as HTMLElement).closest("button, [role=combobox], input") || !pos) return;
           drag.current = { dx: event.clientX - pos.x, dy: event.clientY - pos.y };
           event.currentTarget.setPointerCapture(event.pointerId);
         }}

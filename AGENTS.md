@@ -4,7 +4,7 @@
 - Architectural settings persist per area; plans remain centered/full-size; legends share numbering/ink and bottom layout maximizes fit. Subtract openings before wall shadows. Window cuts/notation share windowPlanGeometry bounds; short base and long frame/mullion shadows share wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows are cached viewport-bounded bitmaps (max 2048 px) over cached wall unions; wall fills skip bevels to ease Android tablet GPU load.
 - Merged grids live whole in parent.merged; collectGrids flattens; linked move/rotate.
-- Free stairs share polyline/offset geometry and bend landings across views.
+- Free stairs share polyline/offset geometry; landings bend across views.
 - Notification reads/writes verify bearer claims via notification-session.server and return empty/no-op without a session so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
 - Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation for consistent spacing.
@@ -21,10 +21,11 @@
 - Pekerjaan Dasar dan Fasad disimpan sebagai pilihan material umum per sketsa, terpisah dari material ruang; Fasad dibagi Barat, Timur, Utara, dan Selatan.
 - Mode Plafon per kotak detail saling eksklusif dengan mode Material dan memakai kode material bersama yang sama dengan Outline Spesifikasi.
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
-- Spec refs/locations/areas live in spec-outline, shared by slides and the RKS export (MHTML .doc so Word embeds images); fragments keep full level area; pagination measures room text.
-- Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG row slices; thin separators only at row/month borders.
+- Spec refs/areas live in spec-outline, shared by slides and RKS export (MHTML .doc for embedded images); fragments keep full level area; pagination measures room text.
+- RKS narratives: editor JSON (rks-content) on a material or its pasal; one pasal per group; hanging indents via CSS classes (inline text-indent gets dropped).
+- Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG row slices.
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
 - Picked curves render as wall bands; ends feed practical columns.
 - Total bubble slide: one cluster per level; red links join same-kind circulation rooms on the next matching level.
-- Rincian per Level slides render full-width unscaled and paginate like Outline Specification.
-- Volumetrik slides: one row per physical floor; sub-totals on the last page.
+- Rincian per Level slide: full-width, unscaled, paged like Outline Spec.
+- Volumetrik slide: one row per physical floor; sub-totals on last page.
