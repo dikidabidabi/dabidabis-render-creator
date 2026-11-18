@@ -1,4 +1,7 @@
-// DXF (R12 ASCII) untuk denah sketsa, mengikuti notasi Slide Detail.
+// DXF (R2000 / AC1015 ASCII) untuk denah sketsa, mengikuti notasi Slide Detail.
+// Setiap bagian dikelompokkan sebagai block: DINDING (notasi arsir = HATCH),
+// KOLOM, GRID (garis as + bubble), PINTU-nn, JENDELA-nn. Nama & luas ruang
+// ditulis sebagai TEXT CAD di model space.
 // Unit DXF = METER (skala 1:1). Sumbu Y di-flip dari kanvas (Y kanvas turun →
 // Y CAD naik). Seluruh geometri dihitung di koordinat kanvas (px) memakai
 // modul yang sama dengan slide, lalu dikonversi saat ditulis.
@@ -37,7 +40,7 @@ export type DxfLine = {
   levelId?: string;
 };
 
-export type DxfLayerPoly = { name: string; points: DxfPoint[] };
+export type DxfLayerPoly = { name: string; points: DxfPoint[]; areaM2?: number };
 
 export type DxfDoor = Pick<Door, "a" | "b" | "nx" | "ny" | "leaves" | "type" | "slideDirection" | "foldingSideMode" | "foldingSide" | "foldingLeafCount" | "widthCm">;
 
@@ -76,13 +79,27 @@ type MultiPolygon = Ring[][];
 
 // ---------- Primitive (koordinat kanvas px) ----------
 
-type Prim =
+/** Notasi arsir: SOLID = isian penuh, WALL = pasangan garis 45° dinding bata, CONCRETE = bintik beton. */
+export type DxfHatchKind = "SOLID" | "WALL" | "CONCRETE";
+
+type Prim = (
   | { t: "poly"; layer: string; pts: P[]; closed: boolean; ltype?: string }
   | { t: "line"; layer: string; a: P; b: P; ltype?: string }
   | { t: "arc"; layer: string; c: P; r: number; from: P; to: P }
   | { t: "circle"; layer: string; c: P; r: number }
-  | { t: "fill"; layer: string; pts: P[] }
-  | { t: "text"; layer: string; p: P; h: number; text: string };
+  | { t: "hatch"; layer: string; rings: P[][]; pattern: DxfHatchKind }
+  | { t: "text"; layer: string; p: P; h: number; text: string }
+) & {
+  /** Nama block tempat primitive ini; kosong = langsung di model space. */
+  block?: string;
+  /** Titik dasar block (px kanvas). */
+  base?: P;
+};
+
+export const DXF_BLOCK_WALLS = "DINDING";
+export const DXF_BLOCK_COLUMNS = "KOLOM";
+const ROOM_NAME_HEIGHT_M = 0.3;
+const ROOM_AREA_HEIGHT_M = 0.22;
 
 export const DXF_LAYERS: Array<{ name: string; color: number; ltype?: string }> = [
   { name: "0", color: 7 },
@@ -90,6 +107,7 @@ export const DXF_LAYERS: Array<{ name: string; color: number; ltype?: string }> 
   { name: "WALL-SOLID", color: 7 },
   { name: "WALL-SOLID-CORE", color: 8 },
   { name: "WALL-SOLID-HATCH", color: 9 },
+  { name: "WALL-CONCRETE-HATCH", color: 9 },
   { name: "WALL-CONCRETE", color: 7 },
   { name: "WALL-CONCRETE-CORE", color: 8 },
   { name: "WALL-CONCEPT", color: 7 },
@@ -103,6 +121,7 @@ export const DXF_LAYERS: Array<{ name: string; color: number; ltype?: string }> 
   { name: "GRID", color: 1, ltype: "GRIDCENTER" },
   { name: "GRID-BUBBLE", color: 1 },
   { name: "ROOM", color: 3 },
+  { name: "ROOM-TEXT", color: 7 },
   { name: "PARKING-LOT", color: 5 },
   { name: "PARKING-AREA", color: 8 },
   { name: "PARKING-PATH", color: 1 },
@@ -342,13 +361,15 @@ export function buildPlanPrimitives(input: DxfExportInput): Prim[] {
   };
   pushShape(solidOuter, "WALL-SOLID");
   pushShape(solidCore, "WALL-SOLID-CORE");
-  // Arsir dinding solid: pasangan garis 45°, jarak 40 mm, berulang tiap 150 mm.
-  const hatchPeriod = Math.max(1.8, ppm * 0.15);
-  for (const [a, b] of hatchSegments(solidCore, 45, hatchPeriod, [hatchPeriod * 0.1, hatchPeriod * (0.1 + 4 / 15)])) {
-    prims.push({ t: "line", layer: "WALL-SOLID-HATCH", a, b });
-  }
+  // Arsir dinding solid sebagai HATCH: pasangan garis 45°, jarak 40 mm, berulang tiap 150 mm.
+  const pushHatch = (shape: MultiPolygon, layer: string, pattern: DxfHatchKind) => {
+    const rings = shape.flatMap((polygon) => polygon.map(openRing)).filter((ring) => ring.length >= 3);
+    if (rings.length) prims.push({ t: "hatch", layer, rings, pattern });
+  };
+  pushHatch(solidCore, "WALL-SOLID-HATCH", "WALL");
   pushShape(concreteOuterCut, "WALL-CONCRETE");
   pushShape(concreteCore, "WALL-CONCRETE-CORE");
+  pushHatch(concreteCore, "WALL-CONCRETE-HATCH", "CONCRETE");
 
   // Material non-masif (konsep, curtain wall, jendela material, railing).
   for (const { a, b, material } of otherSegments) {
@@ -356,7 +377,7 @@ export function buildPlanPrimitives(input: DxfExportInput): Prim[] {
     const ring = rectAlong(a, b, half, half, half);
     const [a1, b1, b2, a2] = ring;
     if (material === "concept") {
-      prims.push({ t: "fill", layer: "WALL-CONCEPT", pts: ring });
+      prims.push({ t: "hatch", layer: "WALL-CONCEPT", rings: [ring], pattern: "SOLID" });
       prims.push({ t: "poly", layer: "WALL-CONCEPT", pts: ring, closed: true });
     } else if (material === "curtain") {
       prims.push({ t: "line", layer: "WALL-CURTAIN", a: a1, b: b1 });
@@ -381,9 +402,12 @@ export function buildPlanPrimitives(input: DxfExportInput): Prim[] {
     }
   }
 
+  tagBlock(prims, 0, DXF_BLOCK_WALLS);
+
   // ---- Kolom ----
+  const columnStart = prims.length;
   for (const { ring, circle } of columnRings) {
-    prims.push({ t: "fill", layer: "COLUMN", pts: ring });
+    prims.push({ t: "hatch", layer: "COLUMN", rings: [ring], pattern: "SOLID" });
     if (circle) prims.push({ t: "circle", layer: "COLUMN", c: circle.c, r: circle.r });
     else prims.push({ t: "poly", layer: "COLUMN", pts: ring, closed: true });
   }
@@ -399,19 +423,26 @@ export function buildPlanPrimitives(input: DxfExportInput): Prim[] {
       prims.push({ t: "poly", layer: "COLUMN-PRACTICAL", pts: square(0), closed: true });
       prims.push({ t: "poly", layer: "COLUMN-PRACTICAL", pts: square(finish), closed: true });
     } else {
-      prims.push({ t: "fill", layer: "COLUMN-PRACTICAL", pts: square(0) });
+      prims.push({ t: "hatch", layer: "COLUMN-PRACTICAL", rings: [square(0)], pattern: "SOLID" });
       prims.push({ t: "poly", layer: "COLUMN-PRACTICAL", pts: square(0), closed: true });
     }
   }
 
-  // ---- Pintu (kusen 50 mm, daun 40 mm) ----
-  const leafThickness = DXF_DOOR_LEAF_MM / 1000 * ppm;
-  for (const door of doors) prims.push(...doorPrimitives(door, ppm, attachedDepth(door.a, door.b), jamb, leafThickness));
+  tagBlock(prims, columnStart, DXF_BLOCK_COLUMNS);
 
-  // ---- Jendela ----
-  for (const window of windows) {
+  // ---- Pintu (kusen 50 mm, daun 40 mm): satu block per pintu ----
+  const leafThickness = DXF_DOOR_LEAF_MM / 1000 * ppm;
+  doors.forEach((door, index) => {
+    const start = prims.length;
+    prims.push(...doorPrimitives(door, ppm, attachedDepth(door.a, door.b), jamb, leafThickness));
+    tagBlock(prims, start, dxfBlockName("PINTU", index), midpoint(door.a, door.b));
+  });
+
+  // ---- Jendela: satu block per jendela ----
+  windows.forEach((window, index) => {
     const geometry = windowPlanGeometry(window, ppm, windowWalls);
-    if (!geometry) continue;
+    if (!geometry) return;
+    const start = prims.length;
     const { dx, dy, nx, ny, halfDepth } = geometry;
     const jambRing = (c: P, direction: number): Ring => [
       { x: c.x + nx * halfDepth, y: c.y + ny * halfDepth },
@@ -433,15 +464,27 @@ export function buildPlanPrimitives(input: DxfExportInput): Prim[] {
       const c = { x: window.a.x + (window.b.x - window.a.x) * t, y: window.a.y + (window.b.y - window.a.y) * t };
       prims.push({ t: "poly", layer: "WINDOW", pts: rectAlong({ x: c.x - dx * jamb / 2, y: c.y - dy * jamb / 2 }, { x: c.x + dx * jamb / 2, y: c.y + dy * jamb / 2 }, halfDepth), closed: true });
     }
-  }
+    tagBlock(prims, start, dxfBlockName("JENDELA", index), midpoint(window.a, window.b));
+  });
 
-  // ---- Grid struktur ----
-  for (const grid of grids) prims.push(...gridPrimitives(grid, levelId, ppm));
+  // ---- Grid struktur: garis as beserta bubble dalam satu block per grid ----
+  grids.forEach((grid, index) => {
+    const start = prims.length;
+    prims.push(...gridPrimitives(grid, levelId, ppm));
+    tagBlock(prims, start, grids.length === 1 ? "GRID" : dxfBlockName("GRID", index));
+  });
 
-  // ---- Ruang ----
+  // ---- Ruang: batas ruang + nama dan luas sebagai TEXT CAD ----
   for (const layer of input.layers) {
     if (!layer.points || layer.points.length < 3) continue;
     prims.push({ t: "poly", layer: "ROOM", pts: layer.points, closed: true });
+    const center = ringCentroid(layer.points);
+    const nameH = ROOM_NAME_HEIGHT_M * ppm, areaH = ROOM_AREA_HEIGHT_M * ppm;
+    const name = layer.name.trim();
+    const area = Number.isFinite(layer.areaM2) ? Number(layer.areaM2) : Math.abs(ringArea(layer.points)) / (ppm * ppm);
+    const gap = 0.08 * ppm;
+    if (name) prims.push({ t: "text", layer: "ROOM-TEXT", p: { x: center.x, y: center.y - (areaH + gap) / 2 }, h: nameH, text: name });
+    prims.push({ t: "text", layer: "ROOM-TEXT", p: { x: center.x, y: center.y + (name ? (nameH + gap) / 2 : 0) }, h: areaH, text: formatRoomArea(area) });
   }
 
   // ---- Parkir ----
@@ -458,6 +501,43 @@ export function buildPlanPrimitives(input: DxfExportInput): Prim[] {
     }
   }
   return prims;
+}
+
+function tagBlock(prims: Prim[], start: number, block: string, base?: P) {
+  for (let i = start; i < prims.length; i++) {
+    prims[i].block = block;
+    if (base) prims[i].base = base;
+  }
+}
+
+const dxfBlockName = (prefix: string, index: number) => `${prefix}-${String(index + 1).padStart(2, "0")}`;
+const midpoint = (a: P, b: P): P => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+function ringArea(ring: Ring): number {
+  let area = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  return area / 2;
+}
+
+function ringCentroid(ring: Ring): P {
+  const area = ringArea(ring);
+  if (Math.abs(area) < 1e-9) return { x: ring.reduce((s, p) => s + p.x, 0) / ring.length, y: ring.reduce((s, p) => s + p.y, 0) / ring.length };
+  let cx = 0, cy = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const cross = a.x * b.y - b.x * a.y;
+    cx += (a.x + b.x) * cross;
+    cy += (a.y + b.y) * cross;
+  }
+  return { x: cx / (6 * area), y: cy / (6 * area) };
+}
+
+/** Luas ruang seperti slide: dua desimal format Indonesia, contoh "12,50 m²". */
+export function formatRoomArea(areaM2: number): string {
+  return `${(Number.isFinite(areaM2) ? areaM2 : 0).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²`;
 }
 
 function doorPrimitives(d: DxfDoor, ppm: number, wallDepth: number, jambWidth: number, leafThickness: number): Prim[] {
@@ -560,42 +640,85 @@ function gridPrimitives(grid: StructuralGrid, levelId: string | undefined, ppm: 
   return out;
 }
 
-// ---------- Penulis DXF ----------
+// ---------- Penulis DXF (R2000 / AC1015) ----------
 
-function code(buf: string[], g: number, v: string | number) {
-  buf.push(String(g));
-  buf.push(typeof v === "number" ? formatNum(v) : v);
-}
+type Tag = [number, string | number];
 
 function formatNum(n: number): string {
   if (!Number.isFinite(n)) return "0";
-  return n.toFixed(6).replace(/\.?0+$/, "") || "0";
+  const fixed = n.toFixed(6).replace(/\.?0+$/, "");
+  return fixed === "-0" || fixed === "" ? "0" : fixed;
 }
 
-function emitPrim(buf: string[], prim: Prim, ppm: number) {
-  const m = (p: P): P => ({ x: p.x / ppm, y: -p.y / ppm });
+/** Teks TEXT CAD: karakter non-ASCII ditulis sebagai \U+XXXX agar terbaca di semua codepage. */
+export function dxfText(text: string): string {
+  return Array.from(text.replace(/[\r\n\t]+/g, " "))
+    .map((ch) => {
+      const code = ch.codePointAt(0) ?? 32;
+      return code >= 32 && code < 127 ? ch : `\\U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
+    })
+    .join("");
+}
+
+const S45 = Math.SQRT1_2;
+/** Definisi garis pola (sudah dirotasi, satuan meter) seperti yang disimpan entitas HATCH. */
+const HATCH_PATTERNS: Record<Exclude<DxfHatchKind, "SOLID">, { name: string; lines: Array<{ angle: number; base: [number, number]; offset: [number, number]; dashes: number[] }> }> = {
+  // Sama dengan pola slide: dua garis 45° berjarak 40 mm, berulang tiap 150 mm.
+  WALL: {
+    name: "DABI_DINDING",
+    lines: [0.015, 0.055].map((o) => ({ angle: 45, base: [S45 * o, -S45 * o] as [number, number], offset: [-S45 * 0.15, S45 * 0.15] as [number, number], dashes: [] })),
+  },
+  // Bintik beton renggang.
+  CONCRETE: {
+    name: "DABI_BETON",
+    lines: [{ angle: 0, base: [0, 0], offset: [0.05, 0.1], dashes: [0, -0.1] }],
+  },
+};
+
+class DxfWriter {
+  private seq = 0x30;
+  handle(): string {
+    return (this.seq++).toString(16).toUpperCase();
+  }
+  get seed(): string {
+    return this.seq.toString(16).toUpperCase();
+  }
+}
+
+function write(buf: string[], tags: Tag[]) {
+  for (const [g, v] of tags) {
+    buf.push(String(g));
+    buf.push(typeof v === "number" ? formatNum(v) : v);
+  }
+}
+
+type Ctx = { w: DxfWriter; owner: string; ppm: number; base: P };
+
+function entityHead(ctx: Ctx, type: string, layer: string, subclass: string, ltype?: string): Tag[] {
+  const tags: Tag[] = [[0, type], [5, ctx.w.handle()], [330, ctx.owner], [100, "AcDbEntity"], [8, layer]];
+  if (ltype) tags.push([6, ltype]);
+  tags.push([100, subclass]);
+  return tags;
+}
+
+function emitPrim(buf: string[], prim: Prim, ctx: Ctx) {
+  // Kanvas px (Y turun) → meter CAD (Y naik), relatif terhadap titik dasar block.
+  const m = (p: P): P => ({ x: (p.x - ctx.base.x) / ctx.ppm, y: -(p.y - ctx.base.y) / ctx.ppm });
   switch (prim.t) {
     case "line": {
       const a = m(prim.a), b = m(prim.b);
-      code(buf, 0, "LINE"); code(buf, 8, prim.layer);
-      if (prim.ltype) code(buf, 6, prim.ltype);
-      code(buf, 10, a.x); code(buf, 20, a.y); code(buf, 30, 0);
-      code(buf, 11, b.x); code(buf, 21, b.y); code(buf, 31, 0);
+      write(buf, [...entityHead(ctx, "LINE", prim.layer, "AcDbLine", prim.ltype), [10, a.x], [20, a.y], [30, 0], [11, b.x], [21, b.y], [31, 0]]);
       return;
     }
     case "poly": {
       if (prim.pts.length < 2) return;
-      // R12 tidak mengenal LWPOLYLINE — pakai POLYLINE / VERTEX / SEQEND.
-      code(buf, 0, "POLYLINE"); code(buf, 8, prim.layer);
-      if (prim.ltype) code(buf, 6, prim.ltype);
-      code(buf, 66, 1); code(buf, 70, prim.closed ? 1 : 0);
-      code(buf, 10, 0); code(buf, 20, 0); code(buf, 30, 0);
+      const tags = entityHead(ctx, "LWPOLYLINE", prim.layer, "AcDbPolyline", prim.ltype);
+      tags.push([90, prim.pts.length], [70, prim.closed ? 1 : 0], [43, 0]);
       for (const point of prim.pts) {
         const p = m(point);
-        code(buf, 0, "VERTEX"); code(buf, 8, prim.layer);
-        code(buf, 10, p.x); code(buf, 20, p.y); code(buf, 30, 0);
+        tags.push([10, p.x], [20, p.y]);
       }
-      code(buf, 0, "SEQEND"); code(buf, 8, prim.layer);
+      write(buf, tags);
       return;
     }
     case "arc": {
@@ -607,83 +730,233 @@ function emitPrim(buf: string[], prim: Prim, ppm: number) {
       while (sweep < 0) sweep += Math.PI * 2;
       if (sweep > Math.PI) [s, e] = [e, s];
       const deg = (r: number) => ((r * 180 / Math.PI) % 360 + 360) % 360;
-      code(buf, 0, "ARC"); code(buf, 8, prim.layer);
-      code(buf, 10, c.x); code(buf, 20, c.y); code(buf, 30, 0);
-      code(buf, 40, prim.r / ppm);
-      code(buf, 50, deg(s)); code(buf, 51, deg(e));
+      write(buf, [...entityHead(ctx, "ARC", prim.layer, "AcDbCircle"), [10, c.x], [20, c.y], [30, 0], [40, prim.r / ctx.ppm], [100, "AcDbArc"], [50, deg(s)], [51, deg(e)]]);
       return;
     }
     case "circle": {
       const c = m(prim.c);
-      code(buf, 0, "CIRCLE"); code(buf, 8, prim.layer);
-      code(buf, 10, c.x); code(buf, 20, c.y); code(buf, 30, 0);
-      code(buf, 40, prim.r / ppm);
+      write(buf, [...entityHead(ctx, "CIRCLE", prim.layer, "AcDbCircle"), [10, c.x], [20, c.y], [30, 0], [40, prim.r / ctx.ppm]]);
       return;
     }
-    case "fill": {
-      // Isian padat poligon cembung: kipas SOLID segitiga (titik ke-4 = ke-3).
-      const pts = prim.pts.map(m);
-      for (let i = 1; i + 1 < pts.length; i++) {
-        const tri = [pts[0], pts[i], pts[i + 1], pts[i + 1]];
-        code(buf, 0, "SOLID"); code(buf, 8, prim.layer);
-        tri.forEach((p, k) => { code(buf, 10 + k, p.x); code(buf, 20 + k, p.y); code(buf, 30 + k, 0); });
+    case "hatch": {
+      const solid = prim.pattern === "SOLID";
+      const pattern = solid ? null : HATCH_PATTERNS[prim.pattern];
+      const tags = entityHead(ctx, "HATCH", prim.layer, "AcDbHatch");
+      tags.push([10, 0], [20, 0], [30, 0], [210, 0], [220, 0], [230, 1], [2, pattern ? pattern.name : "SOLID"], [70, solid ? 1 : 0], [71, 0], [91, prim.rings.length]);
+      prim.rings.forEach((ring, index) => {
+        // Lingkar pertama = batas luar; sisanya lubang/pulau (gaya paritas normal).
+        tags.push([92, index === 0 ? 3 : 2], [72, 0], [73, 1], [93, ring.length]);
+        for (const point of ring) {
+          const p = m(point);
+          tags.push([10, p.x], [20, p.y]);
+        }
+        tags.push([97, 0]);
+      });
+      tags.push([75, 0], [76, solid ? 1 : 2]);
+      if (pattern) {
+        tags.push([52, 0], [41, 1], [77, 0], [78, pattern.lines.length]);
+        for (const line of pattern.lines) {
+          tags.push([53, line.angle], [43, line.base[0]], [44, line.base[1]], [45, line.offset[0]], [46, line.offset[1]], [79, line.dashes.length]);
+          for (const dash of line.dashes) tags.push([49, dash]);
+        }
       }
+      tags.push([98, 0]);
+      write(buf, tags);
       return;
     }
     case "text": {
       const p = m(prim.p);
-      code(buf, 0, "TEXT"); code(buf, 8, prim.layer);
-      code(buf, 10, p.x); code(buf, 20, p.y); code(buf, 30, 0);
-      code(buf, 40, prim.h / ppm);
-      code(buf, 1, prim.text);
-      code(buf, 72, 1); code(buf, 73, 2);
-      code(buf, 11, p.x); code(buf, 21, p.y); code(buf, 31, 0);
+      write(buf, [
+        ...entityHead(ctx, "TEXT", prim.layer, "AcDbText"),
+        [10, p.x], [20, p.y], [30, 0], [40, prim.h / ctx.ppm], [1, dxfText(prim.text)], [7, DXF_TEXT_STYLE],
+        [72, 1], [11, p.x], [21, p.y], [31, 0], [100, "AcDbText"], [73, 2],
+      ]);
       return;
     }
+  }
+}
+
+export const DXF_TEXT_STYLE = "DABIDABI";
+
+const LTYPES: Array<{ name: string; desc: string; pattern: number[] }> = [
+  { name: "ByBlock", desc: "", pattern: [] },
+  { name: "ByLayer", desc: "", pattern: [] },
+  { name: "Continuous", desc: "Solid line", pattern: [] },
+  { name: "GRIDCENTER", desc: "Grid center ____ _ ____", pattern: [0.7, -0.3, 0.1, -0.3] },
+  { name: "DOORDASH", desc: "Door threshold __ __", pattern: [0.08, -0.06] },
+];
+
+function primPoints(prim: Prim): P[] {
+  switch (prim.t) {
+    case "line": return [prim.a, prim.b];
+    case "poly": return prim.pts;
+    case "hatch": return prim.rings.flat();
+    case "text": return [prim.p];
+    default: return [{ x: prim.c.x - prim.r, y: prim.c.y - prim.r }, { x: prim.c.x + prim.r, y: prim.c.y + prim.r }];
   }
 }
 
 export function buildDxf(input: DxfExportInput): string {
   const prims = buildPlanPrimitives(input);
-  const buf: string[] = [];
+  const ppm = input.pxPerMeter;
+  const w = new DxfWriter();
 
-  code(buf, 0, "SECTION"); code(buf, 2, "HEADER");
-  code(buf, 9, "$ACADVER"); code(buf, 1, "AC1009");
-  code(buf, 9, "$INSUNITS"); code(buf, 70, 6); // 6 = meter
-  code(buf, 9, "$MEASUREMENT"); code(buf, 70, 1);
-  code(buf, 9, "$LTSCALE"); code(buf, 40, 1);
-  code(buf, 0, "ENDSEC");
-
-  code(buf, 0, "SECTION"); code(buf, 2, "TABLES");
-  const ltypes: Array<{ name: string; desc: string; pattern: number[] }> = [
-    { name: "CONTINUOUS", desc: "Solid line", pattern: [] },
-    { name: "GRIDCENTER", desc: "Grid center ____ _ ____", pattern: [0.7, -0.3, 0.1, -0.3] },
-    { name: "DOORDASH", desc: "Door threshold __ __", pattern: [0.08, -0.06] },
-  ];
-  code(buf, 0, "TABLE"); code(buf, 2, "LTYPE"); code(buf, 70, ltypes.length);
-  for (const lt of ltypes) {
-    code(buf, 0, "LTYPE"); code(buf, 2, lt.name); code(buf, 70, 0);
-    code(buf, 3, lt.desc); code(buf, 72, 65); code(buf, 73, lt.pattern.length);
-    code(buf, 40, lt.pattern.reduce((sum, v) => sum + Math.abs(v), 0));
-    for (const v of lt.pattern) code(buf, 49, v);
+  // Kelompokkan primitive per block (urutan kemunculan dipertahankan).
+  const blocks = new Map<string, { base: P; prims: Prim[] }>();
+  const modelPrims: Prim[] = [];
+  for (const prim of prims) {
+    if (!prim.block) { modelPrims.push(prim); continue; }
+    const group = blocks.get(prim.block) ?? { base: prim.base ?? { x: 0, y: 0 }, prims: [] };
+    group.prims.push(prim);
+    blocks.set(prim.block, group);
   }
-  code(buf, 0, "ENDTAB");
-  code(buf, 0, "TABLE"); code(buf, 2, "LAYER"); code(buf, 70, DXF_LAYERS.length);
+
+  // Batas gambar (meter CAD).
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const prim of prims) for (const point of primPoints(prim)) {
+    const x = point.x / ppm, y = -point.y / ppm;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+  }
+  if (!Number.isFinite(minX)) { minX = 0; minY = 0; maxX = 10; maxY = 10; }
+
+  // Handle tetap untuk tabel, block record, dan objek.
+  const h = {
+    vportTable: w.handle(), ltypeTable: w.handle(), layerTable: w.handle(), styleTable: w.handle(), viewTable: w.handle(),
+    ucsTable: w.handle(), appidTable: w.handle(), dimstyleTable: w.handle(), brTable: w.handle(),
+    rootDict: w.handle(), groupDict: w.handle(), layoutDict: w.handle(), mlineDict: w.handle(), plotDict: w.handle(), plotNormal: w.handle(),
+    mlineStandard: w.handle(), modelBR: w.handle(), paperBR: w.handle(), modelLayout: w.handle(), paperLayout: w.handle(),
+  };
+  const blockRecords = [...blocks.keys()].map((name) => ({ name, handle: w.handle() }));
+
+  const tables: string[] = [];
+  write(tables, [[0, "SECTION"], [2, "TABLES"]]);
+  const table = (name: string, handle: string, count: number, extra: Tag[] = []) =>
+    write(tables, [[0, "TABLE"], [2, name], [5, handle], [330, "0"], [100, "AcDbSymbolTable"], [70, count], ...extra]);
+  const record = (type: string, owner: string, subclass: string, handleCode = 5): Tag[] =>
+    [[0, type], [handleCode, w.handle()], [330, owner], [100, "AcDbSymbolTableRecord"], [100, subclass]];
+  const endTab = () => write(tables, [[0, "ENDTAB"]]);
+
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const viewH = Math.max(1, (maxY - minY) * 1.1, (maxX - minX) * 1.1 / 1.6);
+  table("VPORT", h.vportTable, 1);
+  write(tables, [
+    ...record("VPORT", h.vportTable, "AcDbViewportTableRecord"), [2, "*Active"], [70, 0],
+    [10, 0], [20, 0], [11, 1], [21, 1], [12, cx], [22, cy], [13, 0], [23, 0], [14, 0.5], [24, 0.5], [15, 0.5], [25, 0.5],
+    [16, 0], [26, 0], [36, 1], [17, 0], [27, 0], [37, 0], [40, viewH], [41, 1.6], [42, 50], [43, 0], [44, 0], [50, 0], [51, 0],
+    [71, 0], [72, 1000], [73, 1], [74, 3], [75, 0], [76, 0], [77, 0], [78, 0],
+  ]);
+  endTab();
+
+  table("LTYPE", h.ltypeTable, LTYPES.length);
+  for (const lt of LTYPES) {
+    const tags: Tag[] = [...record("LTYPE", h.ltypeTable, "AcDbLinetypeTableRecord"), [2, lt.name], [70, 0], [3, lt.desc], [72, 65], [73, lt.pattern.length], [40, lt.pattern.reduce((sum, v) => sum + Math.abs(v), 0)]];
+    for (const v of lt.pattern) tags.push([49, v], [74, 0]);
+    write(tables, tags);
+  }
+  endTab();
+
+  table("LAYER", h.layerTable, DXF_LAYERS.length);
   for (const layer of DXF_LAYERS) {
-    code(buf, 0, "LAYER"); code(buf, 2, layer.name); code(buf, 70, 0);
-    code(buf, 62, layer.color); code(buf, 6, layer.ltype ?? "CONTINUOUS");
+    write(tables, [...record("LAYER", h.layerTable, "AcDbLayerTableRecord"), [2, layer.name], [70, 0], [62, layer.color], [6, layer.ltype ?? "Continuous"], [370, -3], [390, h.plotNormal]]);
   }
-  code(buf, 0, "ENDTAB");
-  code(buf, 0, "ENDSEC");
+  endTab();
 
-  code(buf, 0, "SECTION"); code(buf, 2, "BLOCKS"); code(buf, 0, "ENDSEC");
+  table("STYLE", h.styleTable, 2);
+  for (const [name, font] of [["Standard", "txt"], [DXF_TEXT_STYLE, "arial.ttf"]]) {
+    write(tables, [...record("STYLE", h.styleTable, "AcDbTextStyleTableRecord"), [2, name], [70, 0], [40, 0], [41, 1], [50, 0], [71, 0], [42, 0.25], [3, font], [4, ""]]);
+  }
+  endTab();
+  table("VIEW", h.viewTable, 0); endTab();
+  table("UCS", h.ucsTable, 0); endTab();
+  table("APPID", h.appidTable, 1);
+  write(tables, [...record("APPID", h.appidTable, "AcDbRegAppTableRecord"), [2, "ACAD"], [70, 0]]);
+  endTab();
+  table("DIMSTYLE", h.dimstyleTable, 1, [[100, "AcDbDimStyleTable"]]);
+  write(tables, [...record("DIMSTYLE", h.dimstyleTable, "AcDbDimStyleTableRecord", 105), [2, "Standard"], [70, 0], [40, 1], [41, 0.1], [42, 0.05], [43, 0.1], [44, 0.1], [140, 0.1], [141, 0.1], [147, 0.05], [340, ""]].filter(([g]) => g !== 340));
+  endTab();
+  table("BLOCK_RECORD", h.brTable, 2 + blockRecords.length);
+  write(tables, [[0, "BLOCK_RECORD"], [5, h.modelBR], [330, h.brTable], [100, "AcDbSymbolTableRecord"], [100, "AcDbBlockTableRecord"], [2, "*Model_Space"], [340, h.modelLayout]]);
+  write(tables, [[0, "BLOCK_RECORD"], [5, h.paperBR], [330, h.brTable], [100, "AcDbSymbolTableRecord"], [100, "AcDbBlockTableRecord"], [2, "*Paper_Space"], [340, h.paperLayout]]);
+  for (const br of blockRecords) write(tables, [[0, "BLOCK_RECORD"], [5, br.handle], [330, h.brTable], [100, "AcDbSymbolTableRecord"], [100, "AcDbBlockTableRecord"], [2, br.name], [70, 6]]);
+  endTab();
+  write(tables, [[0, "ENDSEC"]]);
 
-  code(buf, 0, "SECTION"); code(buf, 2, "ENTITIES");
-  for (const prim of prims) emitPrim(buf, prim, input.pxPerMeter);
-  code(buf, 0, "ENDSEC");
-  code(buf, 0, "EOF");
-  return buf.join("\r\n") + "\r\n";
+  // BLOCKS: model/paper space kosong + satu definisi per bagian denah.
+  const blocksBuf: string[] = [];
+  write(blocksBuf, [[0, "SECTION"], [2, "BLOCKS"]]);
+  const blockDef = (name: string, owner: string, base: P, body: () => void) => {
+    write(blocksBuf, [[0, "BLOCK"], [5, w.handle()], [330, owner], [100, "AcDbEntity"], [8, "0"], [100, "AcDbBlockBegin"], [2, name], [70, 0], [10, base.x], [20, base.y], [30, 0], [3, name], [1, ""]]);
+    body();
+    write(blocksBuf, [[0, "ENDBLK"], [5, w.handle()], [330, owner], [100, "AcDbEntity"], [8, "0"], [100, "AcDbBlockEnd"]]);
+  };
+  blockDef("*Model_Space", h.modelBR, { x: 0, y: 0 }, () => {});
+  blockDef("*Paper_Space", h.paperBR, { x: 0, y: 0 }, () => {});
+  for (const br of blockRecords) {
+    const group = blocks.get(br.name)!;
+    // Geometri block relatif terhadap titik dasar; titik dasar block = (0,0).
+    blockDef(br.name, br.handle, { x: 0, y: 0 }, () => {
+      for (const prim of group.prims) emitPrim(blocksBuf, prim, { w, owner: br.handle, ppm, base: group.base });
+    });
+  }
+  write(blocksBuf, [[0, "ENDSEC"]]);
+
+  // ENTITIES: INSERT tiap block di posisi aslinya, lalu ruang/teks/garis lepas.
+  const entities: string[] = [];
+  write(entities, [[0, "SECTION"], [2, "ENTITIES"]]);
+  const modelCtx: Ctx = { w, owner: h.modelBR, ppm, base: { x: 0, y: 0 } };
+  for (const br of blockRecords) {
+    const base = blocks.get(br.name)!.base;
+    write(entities, [...entityHead(modelCtx, "INSERT", "0", "AcDbBlockReference"), [2, br.name], [10, base.x / ppm], [20, -base.y / ppm], [30, 0]]);
+  }
+  for (const prim of modelPrims) emitPrim(entities, prim, modelCtx);
+  write(entities, [[0, "ENDSEC"]]);
+
+  // OBJECTS: kamus minimal yang dibutuhkan AutoCAD (grup, layout, mline style, plot style).
+  const objects: string[] = [];
+  write(objects, [[0, "SECTION"], [2, "OBJECTS"]]);
+  write(objects, [[0, "DICTIONARY"], [5, h.rootDict], [330, "0"], [100, "AcDbDictionary"], [281, 1],
+    [3, "ACAD_GROUP"], [350, h.groupDict], [3, "ACAD_LAYOUT"], [350, h.layoutDict], [3, "ACAD_MLINESTYLE"], [350, h.mlineDict], [3, "ACAD_PLOTSTYLENAME"], [350, h.plotDict]]);
+  write(objects, [[0, "DICTIONARY"], [5, h.groupDict], [330, h.rootDict], [100, "AcDbDictionary"], [281, 1]]);
+  write(objects, [[0, "DICTIONARY"], [5, h.layoutDict], [330, h.rootDict], [100, "AcDbDictionary"], [281, 1], [3, "Model"], [350, h.modelLayout], [3, "Layout1"], [350, h.paperLayout]]);
+  write(objects, [[0, "DICTIONARY"], [5, h.mlineDict], [330, h.rootDict], [100, "AcDbDictionary"], [281, 1], [3, "Standard"], [350, h.mlineStandard]]);
+  write(objects, [[0, "ACDBDICTIONARYWDFLT"], [5, h.plotDict], [330, h.rootDict], [100, "AcDbDictionary"], [281, 1], [3, "Normal"], [350, h.plotNormal], [100, "AcDbDictionaryWithDefault"], [340, h.plotNormal]]);
+  write(objects, [[0, "ACDBPLACEHOLDER"], [5, h.plotNormal], [330, h.plotDict]]);
+  write(objects, [[0, "MLINESTYLE"], [5, h.mlineStandard], [330, h.mlineDict], [100, "AcDbMlineStyle"], [2, "Standard"], [70, 0], [3, ""], [62, 256], [51, 90], [52, 90], [71, 2], [49, 0.5], [62, 256], [6, "BYLAYER"], [49, -0.5], [62, 256], [6, "BYLAYER"]]);
+  const layout = (handle: string, name: string, flags: number, order: number, owner: string): Tag[] => [
+    [0, "LAYOUT"], [5, handle], [330, h.layoutDict], [100, "AcDbPlotSettings"], [1, ""], [4, "A3"], [6, ""],
+    [40, 7.5], [41, 20], [42, 7.5], [43, 20], [44, 420], [45, 297], [46, 0], [47, 0], [48, 0], [49, 0], [140, 0], [141, 0], [142, 1], [143, 1],
+    [70, flags], [72, 1], [73, 0], [74, 5], [7, ""], [75, 16], [76, 0], [77, 2], [78, 300], [147, 1], [148, 0], [149, 0],
+    [100, "AcDbLayout"], [1, name], [70, 1], [71, order], [10, 0], [20, 0], [11, 420], [21, 297], [12, 0], [22, 0], [32, 0],
+    [14, 1e20], [24, 1e20], [34, 1e20], [15, -1e20], [25, -1e20], [35, -1e20], [146, 0], [13, 0], [23, 0], [33, 0],
+    [16, 1], [26, 0], [36, 0], [17, 0], [27, 1], [37, 0], [76, 1], [330, owner],
+  ];
+  write(objects, layout(h.modelLayout, "Model", 1024, 0, h.modelBR));
+  write(objects, layout(h.paperLayout, "Layout1", 0, 1, h.paperBR));
+  write(objects, [[0, "ENDSEC"]]);
+
+  const header: string[] = [];
+  write(header, [
+    [0, "SECTION"], [2, "HEADER"],
+    [9, "$ACADVER"], [1, "AC1015"],
+    [9, "$DWGCODEPAGE"], [3, "ANSI_1252"],
+    [9, "$INSBASE"], [10, 0], [20, 0], [30, 0],
+    [9, "$EXTMIN"], [10, minX], [20, minY], [30, 0],
+    [9, "$EXTMAX"], [10, maxX], [20, maxY], [30, 0],
+    [9, "$LTSCALE"], [40, 1],
+    [9, "$TEXTSTYLE"], [7, DXF_TEXT_STYLE],
+    [9, "$INSUNITS"], [70, 6], // 6 = meter
+    [9, "$MEASUREMENT"], [70, 1],
+    [9, "$HANDSEED"], [5, w.seed],
+    [0, "ENDSEC"],
+  ]);
+  const classes: string[] = [];
+  write(classes, [[0, "SECTION"], [2, "CLASSES"], [0, "ENDSEC"]]);
+  const eof: string[] = [];
+  write(eof, [[0, "EOF"]]);
+  return [...header, ...classes, ...tables, ...blocksBuf, ...entities, ...objects, ...eof].join("\r\n") + "\r\n";
 }
+
 
 // ---------- Download helper ----------
 
