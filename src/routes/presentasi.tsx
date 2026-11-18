@@ -9756,7 +9756,7 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         const pts = ly.points.map(toXZ);
         if (pts.length < 3) continue;
         const shape = new THREE.Shape();
-        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, -p.z) : shape.lineTo(p.x, -p.z));
         const geo = new THREE.ShapeGeometry(shape);
         geo.rotateX(-Math.PI / 2);
         const mat = new THREE.MeshStandardMaterial({ color: "#e6e9ec", roughness: 0.95, metalness: 0 });
@@ -9787,10 +9787,12 @@ function WindBody({ sketch }: { sketch: Sketch }) {
         const yTop = yBot + height;
 
         const shape = new THREE.Shape();
-        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, -p.z) : shape.lineTo(p.x, -p.z));
         const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+        // Shape memakai -z sehingga rotateX(-π/2) memetakan kembali ke +z (sama dengan
+        // halaman Model 3D, tidak ter-mirror); ekstrusi naik dari yBot ke yTop.
         geo.rotateX(-Math.PI / 2);
-        geo.translate(0, yTop, 0);
+        geo.translate(0, yBot, 0);
         const isGreen = isAtapHijau(ly.name);
         const color = isGreen ? "#7fb98a" : "#e2e6ea";
         const mat = new THREE.MeshStandardMaterial({
@@ -10233,7 +10235,7 @@ function ThermalBody({ sketch }: { sketch: Sketch }) {
         const pts = ly.points.map(toXZ);
         if (pts.length < 3) continue;
         const shape = new THREE.Shape();
-        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, -p.z) : shape.lineTo(p.x, -p.z));
         const geo = new THREE.ShapeGeometry(shape);
         geo.rotateX(-Math.PI / 2);
         const mat = new THREE.MeshBasicMaterial({ color: "#dfe3e8" });
@@ -10272,10 +10274,12 @@ function ThermalBody({ sketch }: { sketch: Sketch }) {
         const yTop = yBot + height;
 
         const shape = new THREE.Shape();
-        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, p.z) : shape.lineTo(p.x, p.z));
+        pts.forEach((p, i) => i === 0 ? shape.moveTo(p.x, -p.z) : shape.lineTo(p.x, -p.z));
         const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+        // Shape memakai -z sehingga rotateX(-π/2) memetakan kembali ke +z (sama dengan
+        // halaman Model 3D, tidak ter-mirror); ekstrusi naik dari yBot ke yTop.
         geo.rotateX(-Math.PI / 2);
-        geo.translate(0, yTop, 0);
+        geo.translate(0, yBot, 0);
         geo.computeVertexNormals();
 
         const posAttr = geo.attributes.position as THREE.BufferAttribute;
