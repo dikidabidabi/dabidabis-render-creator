@@ -2,13 +2,14 @@ import { EditorContent, useEditor, useEditorState, type Editor, type JSONContent
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
+import TextAlign from "@tiptap/extension-text-align";
 import {
   BetweenHorizontalEnd, BetweenVerticalEnd, Bold, Grid2x2X, Italic, ListIndentDecrease, ListIndentIncrease,
-  ListOrdered, ListTree, Pilcrow, Redo2, Rows3, Columns3, Table2, Underline, Undo2,
+  AlignCenter, AlignJustify, AlignLeft, AlignRight, ListOrdered, ListTree, Pilcrow, Redo2, Rows3, Columns3, Table2, Underline, Undo2,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import type { RksDoc } from "@/lib/rks-content";
+import { isRksAlign, type RksAlign, type RksDoc } from "@/lib/rks-content";
 
 type Props = {
   initial: RksDoc | null;
@@ -28,6 +29,7 @@ export default function RksEditor({ initial, ariaLabel, placeholder, onChange }:
       TableHeader,
       TableCell,
       Placeholder.configure({ placeholder }),
+      TextAlign.configure({ types: ["paragraph"], alignments: ["left", "center", "right", "justify"] }),
     ],
     content: initial ?? { type: "doc", content: [{ type: "paragraph" }] },
     autofocus: "end",
@@ -51,6 +53,19 @@ function olDepth(editor: Editor): number {
   return depth;
 }
 
+/** Perataan paragraf aktif; tanpa pilihan, narasi rata kiri-kanan dan isi tabel rata kiri. */
+function currentAlign(editor: Editor): RksAlign {
+  const { $from } = editor.state.selection;
+  let inCell = false;
+  let align: unknown = null;
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === "paragraph" && align === null) align = node.attrs.textAlign;
+    if (node.type.name === "tableCell" || node.type.name === "tableHeader") inCell = true;
+  }
+  return isRksAlign(align) ? align : inCell ? "left" : "justify";
+}
+
 function Toolbar({ editor }: { editor: Editor }) {
   const state = useEditorState({
     editor,
@@ -67,6 +82,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
       level: olDepth(e),
+      align: currentAlign(e),
     }),
   });
   const chain = () => editor.chain().focus();
@@ -78,6 +94,11 @@ function Toolbar({ editor }: { editor: Editor }) {
       <Tool label="Tebal (Ctrl+B)" active={state.bold} onClick={() => chain().toggleBold().run()}><Bold /></Tool>
       <Tool label="Miring (Ctrl+I)" active={state.italic} onClick={() => chain().toggleItalic().run()}><Italic /></Tool>
       <Tool label="Garis bawah (Ctrl+U)" active={state.underline} onClick={() => chain().toggleUnderline().run()}><Underline /></Tool>
+      <Sep />
+      <Tool label="Rata kiri (Ctrl+Shift+L)" active={state.align === "left"} onClick={() => chain().setTextAlign("left").run()}><AlignLeft /></Tool>
+      <Tool label="Rata tengah (Ctrl+Shift+E)" active={state.align === "center"} onClick={() => chain().setTextAlign("center").run()}><AlignCenter /></Tool>
+      <Tool label="Rata kanan (Ctrl+Shift+R)" active={state.align === "right"} onClick={() => chain().setTextAlign("right").run()}><AlignRight /></Tool>
+      <Tool label="Rata kiri-kanan / justify (Ctrl+Shift+J)" active={state.align === "justify"} onClick={() => chain().setTextAlign("justify").run()}><AlignJustify /></Tool>
       <Sep />
       <Tool label="Paragraf biasa" active={!state.inList && !state.table} onClick={() => {
         let c = chain();

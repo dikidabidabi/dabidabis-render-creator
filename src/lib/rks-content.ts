@@ -18,6 +18,15 @@ export const RKS_FIXED_ITEMS = 3;
 /** Lebar teks A4 tegak dengan margin 72 pt. */
 const TEXT_WIDTH_PT = 451;
 
+/** Perataan paragraf seperti Word: rata kiri, tengah, kanan, atau rata kiri-kanan. */
+export type RksAlign = "left" | "center" | "right" | "justify";
+export const RKS_ALIGNS: readonly RksAlign[] = ["left", "center", "right", "justify"];
+export function isRksAlign(value: unknown): value is RksAlign {
+  return typeof value === "string" && (RKS_ALIGNS as readonly string[]).includes(value);
+}
+const ALIGN_CODE: Record<RksAlign, string> = { left: "L", center: "C", right: "R", justify: "J" };
+const ALIGN_CSS: Record<string, RksAlign> = { L: "left", C: "center", R: "right", J: "justify" };
+
 const ALLOWED = new Set(["doc", "paragraph", "text", "hardBreak", "orderedList", "bulletList", "listItem", "table", "tableRow", "tableCell", "tableHeader"]);
 
 export function normalizeRksDoc(value: unknown): RksDoc | null {
@@ -40,6 +49,7 @@ export function normalizeRksDoc(value: unknown): RksDoc | null {
       const attrs = source.attrs as Record<string, unknown>;
       const kept: Record<string, unknown> = {};
       for (const key of ["colspan", "rowspan", "start"]) if (typeof attrs[key] === "number") kept[key] = attrs[key];
+      if (source.type === "paragraph" && isRksAlign(attrs.textAlign)) kept.textAlign = attrs.textAlign;
       if (Object.keys(kept).length) out.attrs = kept;
     }
     if (Array.isArray(source.content)) out.content = source.content.map(clean).filter((child): child is RksNode => child !== null);
@@ -160,16 +170,17 @@ export function rksNarrativeHtml(doc: RksNode | null | undefined, pasalNumber: n
  * atribut style) agar Word maupun LibreOffice menempatkan label di kiri teksnya.
  * H = butir dengan label gantung, I = paragraf rata indentasi, C = paragraf dalam sel tabel.
  */
-export function rksIndentClass(kind: "H" | "I" | "C" | "T", indentPt: number, hangPt = 0): string {
-  return `MsoRks${kind}${Math.max(0, Math.round(indentPt))}x${Math.max(0, Math.round(hangPt))}`;
+export function rksIndentClass(kind: "H" | "I" | "C" | "T", indentPt: number, hangPt = 0, align?: RksAlign | null): string {
+  const suffix = align && kind !== "T" ? `a${ALIGN_CODE[align]}` : "";
+  return `MsoRks${kind}${Math.max(0, Math.round(indentPt))}x${Math.max(0, Math.round(hangPt))}${suffix}`;
 }
 
 /** CSS untuk setiap kelas indentasi RKS yang dipakai di HTML. */
 export function rksIndentCss(html: string, textCss: string): string {
   const seen = new Set<string>();
   const rules: string[] = [];
-  for (const match of html.matchAll(/class=(MsoRks([HICT])(\d+)x(\d+))/g)) {
-    const [, name, kind, indentText, hangText] = match;
+  for (const match of html.matchAll(/class=(MsoRks([HICT])(\d+)x(\d+)(?:a([LCRJ]))?)/g)) {
+    const [, name, kind, indentText, hangText, alignCode] = match;
     if (seen.has(name)) continue;
     seen.add(name);
     const indent = Number(indentText);
@@ -178,8 +189,9 @@ export function rksIndentCss(html: string, textCss: string): string {
       rules.push(`table.${name} { margin-left:${indent}.0pt; border-collapse:collapse; mso-table-lspace:0pt; }`);
       continue;
     }
-    const spacing = kind === "C" ? "margin-bottom:0cm; line-height:normal;" : "margin-bottom:6.0pt; line-height:115%; text-align:justify;";
-    rules.push(`p.${name} { margin:0cm; margin-left:${indent + hang}.0pt; text-indent:${hang ? `-${hang}.0pt` : "0cm"}; ${spacing} ${textCss} }`);
+    const spacing = kind === "C" ? "margin-bottom:0cm; line-height:normal;" : "margin-bottom:6.0pt; line-height:115%;";
+    const align = alignCode ? ALIGN_CSS[alignCode] : kind === "C" ? "left" : "justify";
+    rules.push(`p.${name} { margin:0cm; margin-left:${indent + hang}.0pt; text-indent:${hang ? `-${hang}.0pt` : "0cm"}; ${spacing} text-align:${align}; ${textCss} }`);
   }
   return rules.join("\n");
 }
@@ -188,7 +200,8 @@ function paragraphHtml(node: RksNode, ctx: Ctx, label?: { text: string; hang: nu
   const body = inline(node.content);
   if (!label && !body.trim()) return "";
   const kind = ctx.cell ? "C" : label ? "H" : "I";
-  const className = label ? rksIndentClass(kind, label.indent, label.hang) : rksIndentClass(kind, ctx.indent);
+  const align = isRksAlign(node.attrs?.textAlign) ? node.attrs.textAlign : null;
+  const className = label ? rksIndentClass(kind, label.indent, label.hang, align) : rksIndentClass(kind, ctx.indent, 0, align);
   return `<p class=${className}>${label ? `${esc(label.text)}${TAB}` : ""}${body}</p>`;
 }
 

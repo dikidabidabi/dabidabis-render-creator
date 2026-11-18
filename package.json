@@ -49,6 +49,7 @@
     "@tanstack/react-start": "1.168.60",
     "@tanstack/router-plugin": "1.168.42",
     "@tiptap/extension-table": "^3.34.0",
+    "@tiptap/extension-text-align": "^3.34",
     "@tiptap/extensions": "^3.34.0",
     "@tiptap/pm": "^3.34.0",
     "@tiptap/react": "^3.34.0",
