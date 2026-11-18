@@ -58,3 +58,44 @@ export function functionZoneColor(color: string, alpha = 1): string {
   }
   return value;
 }
+export const UNASSIGNED_ZONE_ID = "__unassigned__";
+export const UNASSIGNED_ZONE_NAME = "Belum dikelompokkan";
+export const UNASSIGNED_ZONE_COLOR = "#bdbdbd";
+
+export type ZoneAreaRoom = {
+  areaM2: number;
+  functionZoneId?: string | null;
+  /** Pengali tipikal lantai (≥ 1). */
+  multiplier?: number;
+};
+
+export type ZoneAreaGroup = {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+  areaM2: number;
+  assigned: boolean;
+};
+
+/**
+ * Kelompokkan ruang berdasarkan zona fungsi Tabulasi. Urutan mengikuti
+ * urutan zona; ruang tanpa zona (atau zona yang sudah dihapus) masuk
+ * "Belum dikelompokkan" di akhir. Jumlah & luas memakai pengali tipikal.
+ */
+export function groupRoomsByFunctionZone(rooms: ZoneAreaRoom[], zones: FunctionZone[]): ZoneAreaGroup[] {
+  const byId = new Map<string, ZoneAreaGroup>();
+  for (const zone of zones) {
+    byId.set(zone.id, { id: zone.id, name: zone.name, color: functionZoneColor(zone.color, 1), count: 0, areaM2: 0, assigned: true });
+  }
+  const unassigned: ZoneAreaGroup = {
+    id: UNASSIGNED_ZONE_ID, name: UNASSIGNED_ZONE_NAME, color: UNASSIGNED_ZONE_COLOR, count: 0, areaM2: 0, assigned: false,
+  };
+  for (const room of rooms) {
+    const k = Math.max(1, Math.round(room.multiplier ?? 1));
+    const group = (room.functionZoneId && byId.get(room.functionZoneId)) || unassigned;
+    group.count += k;
+    group.areaM2 += (Number.isFinite(room.areaM2) ? room.areaM2 : 0) * k;
+  }
+  return [...byId.values(), unassigned].filter((group) => group.count > 0);
+}

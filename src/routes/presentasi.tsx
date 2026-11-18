@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
 import { ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO, architecturalLegendPosition, architecturalLegendEnabled, architecturalLegendPositionLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
 import { colorForRoomName } from "@/lib/room-color";
-import { functionZoneColor, normalizeFunctionZones, type FunctionZone } from "@/lib/function-zones";
+import { functionZoneColor, groupRoomsByFunctionZone, normalizeFunctionZones, type FunctionZone, type ZoneAreaGroup } from "@/lib/function-zones";
 import { loadMaterialLibrary, materialCodes, normalizeGeneralMaterialSelections, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterials } from "@/lib/material-library";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -2378,7 +2378,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
         <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {body}
         </div>
-      ) : slide.kind === "spec-outline" || slide.kind === "rincian" || slide.kind === "volumetrik" ? (
+      ) : slide.kind === "spec-outline" || slide.kind === "rincian" || slide.kind === "volumetrik" || slide.kind === "komposisi" ? (
         <div style={{ flex: 1, minHeight: 0, marginTop: 28, marginBottom: 28, overflow: "hidden" }}>
           {body}
         </div>
@@ -11543,64 +11543,19 @@ const KOMPOSISI_PALETTE = [
   "#9333ea", "#dc2626", "#0891b2", "#65a30d", "#c2410c",
 ];
 
-function normalizeRoomName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[._\-/()]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function roomGroupKey(name: string): { key: string; label: string } {
-  const norm = normalizeRoomName(name);
-  if (!norm) return { key: "lainnya", label: "Lainnya" };
-  // Pengelompokan berdasarkan nama PERSIS (termasuk angka). Contoh:
-  // "Unit 1 Htl" → satu kelompok; "Unit 2 Htl" → kelompok berbeda.
-  const key = norm;
-  const label = key
-    .split(" ")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-  return { key, label };
-}
-
-type RoomGroup = {
-  key: string;
-  label: string;
-  count: number;
-  areaM2: number;
-  perLevel: Record<string, number>; // levelId -> area (with typical mul)
-  color: string;
-};
-
-function computeRoomGroups(sketch: Sketch): {
-  groups: RoomGroup[];
-  totalArea: number;
-  totalCount: number;
-} {
+function computeZoneGroups(sketch: Sketch): { groups: ZoneAreaGroup[]; totalArea: number; totalCount: number } {
   const layers = (sketch.layers ?? []).filter((l) => !isLahan(l.name) && !isVoid(l.name) && !isTaman(l.name));
-  const levels = sketch.levels ?? [];
   const mul: Record<string, number> = {};
-  for (const lv of levels) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
-  const byKey = new Map<string, RoomGroup>();
-  for (const l of layers) {
-    const { key, label } = roomGroupKey(l.name);
-    const k = (l.levelId && mul[l.levelId]) || 1;
-    const a = (l.areaM2 || 0) * k;
-    let g = byKey.get(key);
-    if (!g) {
-      g = { key, label, count: 0, areaM2: 0, perLevel: {}, color: "#000" };
-      byKey.set(key, g);
-    }
-    g.count += k;
-    g.areaM2 += a;
-    if (l.levelId) g.perLevel[l.levelId] = (g.perLevel[l.levelId] || 0) + a;
-  }
-  const groups = [...byKey.values()].sort((a, b) => b.areaM2 - a.areaM2);
-  groups.forEach((g, i) => { g.color = KOMPOSISI_PALETTE[i % KOMPOSISI_PALETTE.length]; });
-  const totalArea = groups.reduce((s, g) => s + g.areaM2, 0);
-  const totalCount = groups.reduce((s, g) => s + g.count, 0);
-  return { groups, totalArea, totalCount };
+  for (const lv of sketch.levels ?? []) mul[lv.id] = Math.max(1, Math.round(lv.typicalCount ?? 1));
+  const groups = groupRoomsByFunctionZone(
+    layers.map((l) => ({ areaM2: l.areaM2 || 0, functionZoneId: l.functionZoneId, multiplier: (l.levelId && mul[l.levelId]) || 1 })),
+    normalizeFunctionZones(sketch.functionZones),
+  );
+  return {
+    groups,
+    totalArea: groups.reduce((s, g) => s + g.areaM2, 0),
+    totalCount: groups.reduce((s, g) => s + g.count, 0),
+  };
 }
 
 function loadModel3DShot(sketchId: string): string | null {
@@ -11613,9 +11568,55 @@ function loadModel3DShot(sketchId: string): string | null {
   } catch { return null; }
 }
 
+/** Mengisi sisa tinggi; bila isi lebih tinggi, diperkecil merata agar tetap muat tanpa terpotong. */
+function KFitInside({ children }: { children: React.ReactNode }) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+    const measure = () => {
+      const avail = outer.clientHeight;
+      const need = inner.offsetHeight;
+      const next = avail > 0 && need > avail ? avail / need : 1;
+      setScale((prev) => (Math.abs(prev - next) < 0.002 ? prev : next));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(outer);
+    ro.observe(inner);
+    measure();
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={outerRef} style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
+      <div ref={innerRef} style={{ position: "absolute", top: 0, left: 0, width: `${100 / scale}%`, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function KPanel({ title, subtitle, grow, children }: { title: string; subtitle?: string; grow?: boolean; children: React.ReactNode }) {
+  return (
+    <div style={{
+      padding: "14px 16px", border: "1px solid #ececec", borderRadius: 4, background: "#fafafa",
+      display: "flex", flexDirection: "column", gap: 10, minHeight: 0, minWidth: 0,
+      flex: grow ? "1 1 0" : "0 0 auto", overflow: "hidden",
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexShrink: 0 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888", fontWeight: 600 }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "#aaa", fontWeight: 600 }}>{subtitle}</div>}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>{children}</div>
+    </div>
+  );
+}
+
 function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch }) {
   void _data;
-  const { groups, totalArea, totalCount } = useMemo(() => computeRoomGroups(sketch), [sketch]);
+  const { groups, totalArea, totalCount } = useMemo(() => computeZoneGroups(sketch), [sketch]);
   const [shot, setShot] = useState<string | null>(() => loadModel3DShot(sketch.id));
   useEffect(() => {
     setShot(loadModel3DShot(sketch.id));
@@ -11664,24 +11665,21 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
     }));
   const tipTotal = tipData.reduce((s, b) => s + b.area, 0) || 1;
 
-  // Per-level distribution (use group colors for stacked bar by group)
   const perLevelTotals = levels.map((lv) => {
-    const area = layers.filter((l) => l.levelId === lv.id).reduce(
-      (s, l) => s + l.areaM2 * mul[lv.id],
-      0,
-    );
+    const area = layers.filter((l) => l.levelId === lv.id).reduce((s, l) => s + l.areaM2 * mul[lv.id], 0);
     return { lv, area, name: displayNames[lv.id] ?? lv.name };
   });
   const maxLevelArea = Math.max(1, ...perLevelTotals.map((p) => p.area));
+  const zonedCount = groups.filter((g) => g.assigned).length;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1.1fr", gap: 18, width: "100%", height: "100%", minHeight: 0 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1.15fr", gap: 16, width: "100%", height: "100%", minHeight: 0, boxSizing: "border-box" }}>
       {/* Kiri: Aksonometri (besar) */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
-        <Panel title="Aksonometri · Screenshot Model 3D">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, minWidth: 0 }}>
+        <KPanel title="Aksonometri · Screenshot Model 3D" grow>
           <div style={{ position: "relative", flex: 1, minHeight: 0, background: "#f4f4f4", border: "1px solid #e5e5e5", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
             {shot ? (
-              <img src={shot} alt="Aksonometri" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+              <img src={shot} alt="Aksonometri" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
             ) : (
               <div style={{ fontSize: 12, color: "#888", textAlign: "center", padding: 24, lineHeight: 1.5 }}>
                 Belum ada screenshot di halaman <strong>3D Model</strong>.<br />
@@ -11689,83 +11687,89 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
               </div>
             )}
           </div>
-        </Panel>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flexShrink: 0 }}>
-          <KStat label="Total Kelompok" value={`${groups.length}`} hint="kelompok ruang" />
+        </KPanel>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, flexShrink: 0 }}>
+          <KStat label="Zona Fungsi" value={`${zonedCount}`} hint="zona terisi" />
           <KStat label="Total Item" value={`${totalCount}`} hint="termasuk tipikal" />
-          <KStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="setelah pengali tipikal" />
-          <KStat label="Lantai" value={`${levels.length}`} hint="level pada sketsa" />
+          <KStat label="Total Luas" value={`${fmt(totalArea)} m²`} hint="setelah tipikal" />
+          <KStat label="Lantai" value={`${levels.length}`} hint="level sketsa" />
         </div>
       </div>
 
-      {/* Tengah: tiga donut/diagram bertumpuk */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
-        <Panel title="Tipe Koefisien">
+      {/* Tengah: koefisien, tipikalitas, distribusi */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0, minWidth: 0 }}>
+        <KPanel title="Tipe Koefisien">
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Donut
-              size={110} thickness={10}
+              size={96} thickness={9}
               segments={coefData.map((b) => ({ value: (b.area / coefTotal) * 100, color: b.color }))}
               centerValue={`${coefData.length}`} centerLabel="tipe"
             />
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
               {coefData.map((b) => (
                 <KLegend key={b.key} color={b.color} label={b.label}
                   count={b.count} area={b.area} pct={(b.area / coefTotal) * 100} />
               ))}
             </div>
           </div>
-        </Panel>
-        <Panel title="Tipikalitas Lantai">
+        </KPanel>
+        <KPanel title="Tipikalitas Lantai">
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Donut
-              size={110} thickness={10}
+              size={96} thickness={9}
               segments={tipData.map((b) => ({ value: (b.area / tipTotal) * 100, color: b.color }))}
               centerValue={`${tipData.length}`} centerLabel="tipe"
             />
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
               {tipData.map((b) => (
                 <KLegend key={b.key} color={b.color} label={b.label}
                   count={b.count} area={b.area} pct={(b.area / tipTotal) * 100} />
               ))}
             </div>
           </div>
-        </Panel>
-        <Panel title="Distribusi per Lantai">
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 11 }}>
-            {perLevelTotals.map(({ lv, area, name }) => {
-              const pct = (area / maxLevelArea) * 100;
-              return (
-                <div key={lv.id}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                    <span style={{ fontWeight: 600 }}>{name}</span>
-                    <span style={{ color: "#888", fontVariantNumeric: "tabular-nums" }}>{fmt(area)} m²</span>
+        </KPanel>
+        <KPanel title="Distribusi per Lantai" grow>
+          <KFitInside>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${perLevelTotals.length > 24 ? 3 : perLevelTotals.length > 12 ? 2 : 1}, minmax(0, 1fr))`, columnGap: 12, rowGap: 5, fontSize: 11 }}>
+              {perLevelTotals.map(({ lv, area, name }) => {
+                const pct = (area / maxLevelArea) * 100;
+                return (
+                  <div key={lv.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{name}</span>
+                      <span style={{ color: "#888", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", marginLeft: 6 }}>{fmt(area, 0)} m²</span>
+                    </div>
+                    <div style={{ height: 4, width: "100%", background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: "#0a0a0a", borderRadius: 999 }} />
+                    </div>
                   </div>
-                  <div style={{ height: 4, width: "100%", background: "#f0f0f0", borderRadius: 999, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, background: "#0a0a0a", borderRadius: 999 }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
+                );
+              })}
+            </div>
+          </KFitInside>
+        </KPanel>
       </div>
 
-      {/* Kanan: tabel pengelompokkan ruang */}
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <Panel title="Pengelompokkan Ruang">
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%", minHeight: 0 }}>
-            <div style={{ display: "flex", justifyContent: "center" }}>
-              <Donut
-                size={150} thickness={13}
-                segments={groups.map((g) => ({ value: (g.areaM2 / (totalArea || 1)) * 100, color: g.color }))}
-                centerValue={`${groups.length}`} centerLabel="kelompok"
-              />
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      {/* Kanan: pengelompokkan ruang berdasarkan zona fungsi */}
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, minWidth: 0 }}>
+        <KPanel title="Pengelompokkan Ruang" subtitle="Zona Fungsi" grow>
+          <div style={{ display: "flex", justifyContent: "center", flexShrink: 0, marginBottom: 10 }}>
+            <Donut
+              size={140} thickness={13}
+              segments={groups.map((g) => ({ value: (g.areaM2 / (totalArea || 1)) * 100, color: g.color }))}
+              centerValue={`${zonedCount}`} centerLabel="zona"
+            />
+          </div>
+          <KFitInside>
+            {groups.length === 0 ? (
+              <div style={{ fontSize: 11, color: "#888", textAlign: "center", padding: 12, lineHeight: 1.5 }}>
+                Belum ada ruang. Atur zona fungsi tiap ruang di halaman <strong>Tabulasi</strong>.
+              </div>
+            ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
                 <thead>
-                  <tr style={{ background: "#fafafa", color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", fontSize: 8 }}>
-                    <th style={kth}>Kelompok</th>
+                  <tr style={{ background: "#f2f2f2", color: "#666", textTransform: "uppercase", letterSpacing: "0.1em", fontSize: 8 }}>
+                    <th style={kth}>Zona Fungsi</th>
                     <th style={{ ...kth, textAlign: "right" }}>n</th>
                     <th style={{ ...kth, textAlign: "right" }}>m²</th>
                     <th style={{ ...kth, textAlign: "right" }}>%</th>
@@ -11775,11 +11779,11 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
                   {groups.map((g) => {
                     const pct = (g.areaM2 / (totalArea || 1)) * 100;
                     return (
-                      <tr key={g.key} style={{ borderTop: "1px solid #eee" }}>
+                      <tr key={g.id} style={{ borderTop: "1px solid #eee" }}>
                         <td style={ktd}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: 2, background: g.color, display: "inline-block" }} />
-                            <span style={{ fontWeight: 600 }}>{g.label}</span>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: g.color, display: "inline-block", flexShrink: 0 }} />
+                            <span style={{ fontWeight: 600, fontStyle: g.assigned ? "normal" : "italic", color: g.assigned ? "#111" : "#777" }}>{g.name}</span>
                           </span>
                         </td>
                         <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{g.count}</td>
@@ -11788,7 +11792,7 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
                       </tr>
                     );
                   })}
-                  <tr style={{ borderTop: "1px solid #111", background: "#fafafa", fontWeight: 700 }}>
+                  <tr style={{ borderTop: "1px solid #111", background: "#f2f2f2", fontWeight: 700 }}>
                     <td style={ktd}>Total</td>
                     <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{totalCount}</td>
                     <td style={{ ...ktd, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(totalArea)}</td>
@@ -11796,9 +11800,9 @@ function KomposisiBody({ data: _data, sketch }: { data: Stats; sketch: Sketch })
                   </tr>
                 </tbody>
               </table>
-            </div>
-          </div>
-        </Panel>
+            )}
+          </KFitInside>
+        </KPanel>
       </div>
     </div>
   );
@@ -11809,9 +11813,9 @@ const ktd: React.CSSProperties = { padding: "6px 8px", verticalAlign: "middle" }
 
 function KStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div style={{ border: "1px solid #ececec", borderRadius: 4, background: "#fafafa", padding: 12 }}>
+    <div style={{ border: "1px solid #ececec", borderRadius: 4, background: "#fafafa", padding: "9px 12px", minWidth: 0 }}>
       <div style={{ fontSize: 9, letterSpacing: "0.22em", textTransform: "uppercase", color: "#888", fontWeight: 700 }}>{label}</div>
-      <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", marginTop: 4 }}>{value}</div>
+      <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
       {hint && <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>{hint}</div>}
     </div>
   );
