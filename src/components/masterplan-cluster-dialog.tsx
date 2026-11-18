@@ -434,7 +434,8 @@ function MiniBlocks({
       {roadRings.map((rr, i) => {
         const shape = new THREE.Shape();
         rr.outer.forEach((p, k) => {
-          const x = p.x - c.x, y = p.y - c.y;
+          // -y: rotation -π/2 memetakan kembali ke +z, sama dengan garis lahan/as/blok.
+          const x = p.x - c.x, y = -(p.y - c.y);
           if (k === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
         });
         shape.closePath();
@@ -442,7 +443,7 @@ function MiniBlocks({
           if (h.length < 3) continue;
           const hole = new THREE.Path();
           h.forEach((p, k) => {
-            const x = p.x - c.x, y = p.y - c.y;
+            const x = p.x - c.x, y = -(p.y - c.y);
             if (k === 0) hole.moveTo(x, y); else hole.lineTo(x, y);
           });
           hole.closePath();
