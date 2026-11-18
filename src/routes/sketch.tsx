@@ -15602,7 +15602,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                       levelId: activeLvlId,
                       lines,
                       edgeAttrs: sketch.edgeAttrs ?? {},
-                      layers: activeLayers.map((l) => ({ name: l.name, points: l.points })),
+                      layers: activeLayers.map((l) => ({ name: l.name, points: l.points, areaM2: l.areaM2 })),
                       doors: activeDoors,
                       windows: activeWindows,
                       grids: collectGrids(primaryGrid, gridExtras),
@@ -15619,7 +15619,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                     toast.error("Gagal mengekspor DXF");
                   }
                 }}
-                title="Unduh denah aktif sebagai file .dxf (skala 1:1, satuan meter) — dinding sesuai tebal material, pintu, jendela, kolom, dan grid seperti Slide Detail"
+                title="Unduh denah aktif sebagai file .dxf (skala 1:1, satuan meter) — block dinding berarsir hatch, kolom, grid dengan bubble, tiap pintu dan jendela, serta nama dan luas ruang sebagai teks CAD"
               >
                 <Download className="mr-1.5 h-4 w-4" /> DXF
               </Button>

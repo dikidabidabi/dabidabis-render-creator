@@ -650,14 +650,28 @@ function formatNum(n: number): string {
   return fixed === "-0" || fixed === "" ? "0" : fixed;
 }
 
-/** Teks TEXT CAD: karakter non-ASCII ditulis sebagai \U+XXXX agar terbaca di semua codepage. */
+/** Teks TEXT CAD satu baris; karakter di luar ANSI_1252 diubah saat file dikodekan (encodeDxf). */
 export function dxfText(text: string): string {
-  return Array.from(text.replace(/[\r\n\t]+/g, " "))
-    .map((ch) => {
-      const code = ch.codePointAt(0) ?? 32;
-      return code >= 32 && code < 127 ? ch : `\\U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
-    })
-    .join("");
+  return text.replace(/[\r\n\t]+/g, " ");
+}
+
+/**
+ * Kodekan isi DXF sesuai $DWGCODEPAGE ANSI_1252 (R2000 tidak membaca UTF-8):
+ * huruf Latin-1 seperti "²" ditulis satu byte, karakter lain sebagai \U+XXXX.
+ */
+// Karakter Windows-1252 di rentang 0x80–0x9F (tanda kutip, pisah, €, dll.).
+const CP1252_EXTRA = new Map<number, number>([..."€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ"].map((ch, i) => [ch.codePointAt(0)!, 0x80 + i] as [number, number]).filter(([code]) => code > 0xff));
+
+export function encodeDxf(content: string): Uint8Array {
+  const bytes: number[] = [];
+  for (const ch of content) {
+    const code = ch.codePointAt(0) ?? 63;
+    const extra = CP1252_EXTRA.get(code);
+    if (extra !== undefined) bytes.push(extra);
+    else if (code < 0x80 || (code >= 0xa0 && code <= 0xff)) bytes.push(code);
+    else for (const c of `\\U+${code.toString(16).toUpperCase().padStart(4, "0")}`) bytes.push(c.charCodeAt(0));
+  }
+  return Uint8Array.from(bytes);
 }
 
 const S45 = Math.SQRT1_2;
@@ -739,8 +753,8 @@ function emitPrim(buf: string[], prim: Prim, ctx: Ctx) {
       return;
     }
     case "hatch": {
-      const solid = prim.pattern === "SOLID";
-      const pattern = solid ? null : HATCH_PATTERNS[prim.pattern];
+      const pattern = prim.pattern === "SOLID" ? null : HATCH_PATTERNS[prim.pattern];
+      const solid = pattern === null;
       const tags = entityHead(ctx, "HATCH", prim.layer, "AcDbHatch");
       tags.push([10, 0], [20, 0], [30, 0], [210, 0], [220, 0], [230, 1], [2, pattern ? pattern.name : "SOLID"], [70, solid ? 1 : 0], [71, 0], [91, prim.rings.length]);
       prim.rings.forEach((ring, index) => {
@@ -873,7 +887,7 @@ export function buildDxf(input: DxfExportInput): string {
   write(tables, [...record("APPID", h.appidTable, "AcDbRegAppTableRecord"), [2, "ACAD"], [70, 0]]);
   endTab();
   table("DIMSTYLE", h.dimstyleTable, 1, [[100, "AcDbDimStyleTable"]]);
-  write(tables, [...record("DIMSTYLE", h.dimstyleTable, "AcDbDimStyleTableRecord", 105), [2, "Standard"], [70, 0], [40, 1], [41, 0.1], [42, 0.05], [43, 0.1], [44, 0.1], [140, 0.1], [141, 0.1], [147, 0.05], [340, ""]].filter(([g]) => g !== 340));
+  write(tables, [...record("DIMSTYLE", h.dimstyleTable, "AcDbDimStyleTableRecord", 105), [2, "Standard"], [70, 0], [40, 1], [41, 0.1], [42, 0.05], [43, 0.1], [44, 0.1], [140, 0.1], [141, 0.1], [147, 0.05]]);
   endTab();
   table("BLOCK_RECORD", h.brTable, 2 + blockRecords.length);
   write(tables, [[0, "BLOCK_RECORD"], [5, h.modelBR], [330, h.brTable], [100, "AcDbSymbolTableRecord"], [100, "AcDbBlockTableRecord"], [2, "*Model_Space"], [340, h.modelLayout]]);
@@ -961,7 +975,7 @@ export function buildDxf(input: DxfExportInput): string {
 // ---------- Download helper ----------
 
 export function downloadDxf(filename: string, content: string) {
-  const blob = new Blob([content], { type: "application/dxf" });
+  const blob = new Blob([encodeDxf(content) as BlobPart], { type: "application/dxf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
