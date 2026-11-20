@@ -3,7 +3,7 @@
 - Named schedules are owner/sketch scoped; tasks/views persist atomically in one key. Migrate legacy arrays/views; deep-copy schedules on duplication. taskPredecessors supports legacy links/UUID arrays: maximum start bound, preserved duration, validated edges/cycles, CPM offsets. Bars/cables share bounds/rows/IDs. Persist folding/CPM/slack. Date fills stay atomic per column/visible rows; reject invalid/predecessor-controlled dates. CPM uses leaf completion; S curves duration-weighted progress. Actual bars split blue/red at due; explicit finish overrides first 100% entry, else today; retain delay bars without actual start; row deletion removes WBS descendants and dangling predecessor links.
 - Architectural settings persist per area; plans remain centered/full-size; legends share numbering/ink and bottom layout maximizes fit. Subtract openings before wall shadows. Window cuts/notation share windowPlanGeometry bounds; short base and long frame/mullion shadows share wall darkness. DoorNotation retains dimensions.
 - Architectural clipping rounds coordinates, rejects invalid bands and preserves geometry on failure; shadow strips avoid clipping unions, free-stair unions fall back safely, and detail slides retry without Architectural mode. Wall shadows are cached viewport-bounded bitmaps (max 2048 px) over cached wall unions; wall fills skip bevels to ease Android tablet GPU load.
-- Merged grids live whole in parent.merged; collectGrids flattens; linked move/rotate.
+- Merged grids live in parent.merged; collectGrids flattens; linked move/rotate.
 - Free stairs share polyline/offset geometry; landings bend across views.
 - Notification reads/writes verify bearer claims via notification-session.server and return empty/no-op without a session so auth races cannot blank the app.
 - Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
@@ -13,7 +13,7 @@
 - Wall bands and practical columns live in wall-materials/practical-columns, shared by Detail slides and DXF so CAD matches slides; DXF is R2000/ANSI_1252, openings/columns cut wall unions, each part is a block with HATCH notation.
 - Detail furniture stores room ID, category and room-relative position with each detail box; categories are account-scoped, catalog/table mm convert via sketch scale, and per-box visibility controls Presentation. Per-sketch showFurnitureSlide groups recap by category/elevation so room edits preserve placement and reporting.
 - Detail numbering preserves IDs/furniture. Rectangles store world diagonals and grid angle (legacy zero); shared geometry rotates display-only data into the slide frame. Grid/room dimension flags default on and require master dimensions; interior stays separate.
-- Furniture renders before notation and room labels; Architectural mode adds scale-aware alpha shadows and transparency-preserving tint; other modes unchanged.
+- Furniture renders before notation/room labels; Architectural mode adds scale-aware alpha shadows and transparency-preserving tint.
 - Notasi tangga Slide Denah/Detail memakai bidang potong 1 m dengan garis batas 45°, bagian di atas bidang potong putus-putus, sisi dalam tegas, arah naik/turun mengikuti bordes, dan tangga tipikal tengah ditampilkan utuh.
 - Account material libraries store names/images/descriptions/products/RKS in shared project storage; room selections store material IDs on sketch layers to keep edits synchronized.
 - Mode Material per kotak detail memakai ID material ruang untuk warna/kode, legenda di rel kanan; bawaan nonaktif. Sub-ceklis Keterangan ruang (bawaan aktif) menyembunyikan nama/luas/level; simbol tetap.
@@ -23,9 +23,10 @@
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
 - Spec refs/areas live in spec-outline, shared by slides and RKS export (MHTML .doc for embedded images); fragments keep full level area; pagination measures room text.
 - RKS narratives: editor JSON (rks-content) on a material or its pasal; one pasal per group; hanging indents via CSS classes (inline text-indent gets dropped).
-- Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG row slices.
+- Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG rows.
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
-- Picked curves render as wall bands; ends feed practical columns.
-- Total bubble slide: one cluster per level; red links join same-kind circulation rooms on the next matching level.
-- Rincian per Level slide: full-width, unscaled, paged like Outline Spec.
+- Picked curves render as wall bands feeding practical columns.
+- Total bubble slide: one cluster/level; red links join same-kind circulation on next matching level.
+- Rincian per Level slide: full-width/unscaled, paged like Outline Spec.
 - Volumetrik slide: one row per physical floor; sub-totals on last page.
+- Level Detail 3D (level-detail-3d) reuses wall/opening modules; Model 3D level height.

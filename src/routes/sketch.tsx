@@ -86,6 +86,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import {
   AlertDialog,
@@ -318,6 +319,8 @@ type Level = {
   opacity: number; // 0..1 — opacity ketika level ini tidak aktif
   typicalCount?: number; // ≥1, jumlah lantai tipikal yang menggandakan luas + koefisien
   typicalHeight?: number; // m, tinggi tiap lantai tipikal (default TYPICAL_FLOOR_H)
+  /** Tampilkan kotak Detail 3D level ini di halaman Model 3D. Default false. */
+  detail3d?: boolean;
   /** Masterplan: jika level ini adalah massa tambahan di atas bangunan lain,
    *  simpan id layer induknya. Total luas bangunan akan diakumulasi ke induk. */
   parentLayerId?: string;
@@ -998,6 +1001,7 @@ function normalizeSketch(s: any): Sketch {
         typicalCount: Number.isFinite(Number(lv.typicalCount)) ? Math.max(1, Math.round(Number(lv.typicalCount))) : 1,
         typicalHeight: Number.isFinite(Number(lv.typicalHeight)) && Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : undefined,
         ...(typeof lv.parentLayerId === "string" && lv.parentLayerId ? { parentLayerId: lv.parentLayerId } : {}),
+        ...(lv.detail3d === true ? { detail3d: true } : {}),
       }))
     : [];
   let lines: Line[] = Array.isArray(s?.lines) ? s.lines : [];
@@ -2771,6 +2775,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const k = Math.max(1, Math.min(99, Math.round(count)));
       onChange({
         levels: levels.map((l) => (l.id === lvlId ? { ...l, typicalCount: k } : l)),
+      });
+    },
+    [levels, onChange],
+  );
+
+  const setLevelDetail3d = useCallback(
+    (lvlId: string, on: boolean) => {
+      onChange({
+        levels: levels.map((l) => {
+          if (l.id !== lvlId) return l;
+          const { detail3d: _old, ...rest } = l;
+          return on ? { ...rest, detail3d: true } : rest;
+        }),
       });
     },
     [levels, onChange],
@@ -15810,6 +15827,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onIncrementTypical={incrementTypical}
             onSetTypical={setLevelTypical}
             onSetTypicalHeight={setLevelTypicalHeight}
+            onSetDetail3d={mode === "sketch" ? setLevelDetail3d : undefined}
             onRenameLayer={renameLayer}
             onToggleLockLayer={toggleLock}
             onToggleHiddenLayer={toggleHidden}
@@ -16387,6 +16405,7 @@ function LevelsPanel({
   onIncrementTypical,
   onSetTypical,
   onSetTypicalHeight,
+  onSetDetail3d,
   onRenameLayer,
   onToggleLockLayer,
   onToggleHiddenLayer,
@@ -16413,6 +16432,8 @@ function LevelsPanel({
   onIncrementTypical: (id: string) => void;
   onSetTypical: (id: string, count: number) => void;
   onSetTypicalHeight: (id: string, meters: number) => void;
+  /** Sketsa saja: centang "Detail 3D" untuk menampilkan kotak detail di Model 3D. */
+  onSetDetail3d?: (id: string, on: boolean) => void;
   onRenameLayer: (id: string, name: string) => void;
   onToggleLockLayer: (id: string) => void;
   onToggleHiddenLayer: (id: string) => void;
@@ -16717,6 +16738,21 @@ function LevelsPanel({
                 </span>
               </div>
 
+
+              {onSetDetail3d && (
+                <label
+                  className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                  title="Tampilkan kotak Detail 3D level ini (lantai, dinding, pintu, jendela) di halaman Model 3D"
+                >
+                  <Checkbox
+                    checked={!!lvl.detail3d}
+                    onCheckedChange={(v) => onSetDetail3d(lvl.id, v === true)}
+                    aria-label={`Detail 3D ${displayNames[lvl.id] ?? lvl.name}`}
+                    className="h-3.5 w-3.5"
+                  />
+                  Detail 3D
+                </label>
+              )}
 
               {!isActive && (
                 <div className="mt-2 space-y-1">

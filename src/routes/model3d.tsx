@@ -91,8 +91,9 @@ type Layer = {
   color: string;
   levelId?: string;
   coefficient?: number;
+  hidden?: boolean;
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number; detail3d?: boolean };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; label?: string };
 type Sketch = {
   id: string;
@@ -115,6 +116,10 @@ type Sketch = {
     createdAt: number;
   }[];
   roofs?: Roof[];
+  lines?: Detail3dLine[];
+  edgeAttrs?: Record<string, EdgeMaterial>;
+  doors?: unknown[];
+  windows?: unknown[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 type VertexSelection = {
@@ -126,6 +131,11 @@ type VertexSelection = {
 };
 
 import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
+import { LevelDetail3dBox } from "@/components/level-detail-3d";
+import { levelWallHeight, type Detail3dInput, type Detail3dLine } from "@/lib/level-detail-3d";
+import type { EdgeMaterial } from "@/lib/edge-segments";
+import { normalizeDoors } from "@/lib/doors";
+import { normalizeWindows } from "@/lib/windows";
 
 const STORAGE_KEY = SKETCH_STORAGE_KEY;
 const MINOR_PX = 8;
@@ -2119,6 +2129,57 @@ function SketchViewer({
 }
 
 // ---------- Page ----------
+function roomSolidColor(ly: Layer): string {
+  return solidColorForRoomName(ly.name,
+    ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+      const parts = body.split(",").map((part: string) => part.trim());
+      return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+    }) || "#e85d3a");
+}
+
+// Kotak Detail 3D untuk setiap level yang dicentang "Detail 3D" di Sketsa.
+function LevelDetail3dList({ sketch }: { sketch: Sketch }) {
+  const checked = useMemo(
+    () => [...(sketch.levels ?? [])].filter((lv) => lv.detail3d).sort((a, b) => a.mdpl - b.mdpl),
+    [sketch.levels],
+  );
+  const inputs = useMemo(() => {
+    if (!checked.length) return [];
+    const pxPerMeter = 1 / metersPerPx(sketch.scale);
+    const lines = Array.isArray(sketch.lines) ? sketch.lines : [];
+    const doors = normalizeDoors(sketch.doors ?? []);
+    const windows = normalizeWindows(sketch.windows ?? []);
+    return checked.map((lv) => {
+      const input: Detail3dInput = {
+        pxPerMeter,
+        levelId: lv.id,
+        lines,
+        edgeAttrs: sketch.edgeAttrs ?? {},
+        rooms: (sketch.layers ?? [])
+          .filter((ly) => ly.levelId === lv.id && !ly.hidden)
+          .map((ly) => ({ name: ly.name, points: ly.points, color: roomSolidColor(ly) })),
+        slabs: (sketch.floors ?? []).filter((f) => f.levelId === lv.id),
+        // Tanpa id acak dari normalisasi agar model tidak dibangun ulang tiap muat ulang.
+        doors: doors.filter((d) => d.levelId === lv.id).map(({ id: _id, levelId: _lv, ...door }) => door),
+        windows: windows.filter((w) => w.levelId === lv.id).map((w) => ({ ...w, id: "" })),
+        wallHeight: levelWallHeight(sketch.levels ?? [], lv.id),
+      };
+      return { id: lv.id, name: lv.name, input };
+    });
+  }, [checked, sketch.scale, sketch.lines, sketch.edgeAttrs, sketch.layers, sketch.floors, sketch.doors, sketch.windows, sketch.levels]);
+  if (!inputs.length) return null;
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">Detail 3D per level</div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {inputs.map((item) => (
+          <LevelDetail3dBox key={item.id} levelName={item.name} input={item.input} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Model3DPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -2231,6 +2292,7 @@ function Model3DPage() {
                     sketch={s}
                     onChange={(patch) => updateSketch(s.id, patch)}
                   />
+                  <LevelDetail3dList sketch={s} />
                 </div>
               )}
             </div>
