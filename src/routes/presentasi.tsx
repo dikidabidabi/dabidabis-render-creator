@@ -71,6 +71,8 @@ import { windowPlanGeometry, windowDividerFractions, windowFramePolygons, type W
 import { roomWallSpans, roomWallSurfacePoint } from "@/lib/room-wall-spans";
 import { WALL_THICK_MM, materialForEdgeSegment, wallBandPolygon, windowWallCandidates } from "@/lib/wall-materials";
 import { practicalColumnNodes } from "@/lib/practical-columns";
+import { detail3dInputForSketch } from "@/lib/level-detail-3d";
+import { LevelDetail3dSlide } from "@/components/level-detail-3d-slide";
 import { collectSpecMaterialRefs, sketchMetersPerSketchPx, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef } from "@/lib/spec-outline";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
@@ -157,7 +159,7 @@ type Layer = {
   functionZoneId?: string;
   roomMaterials?: RoomMaterials;
 };
-type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
+type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number; detail3d?: boolean };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
 type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
 type DetailArea = {
@@ -1537,6 +1539,7 @@ type Slide =
   | { kind: "closing"; id: string; title: string; sketch: Sketch }
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "detail"; id: string; title: string; sketch: Sketch; level: Level; area: DetailArea; bounds: Bounds }
+  | { kind: "detail3d"; id: string; title: string; sketch: Sketch; level: Level }
   | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "bubble-total"; id: string; title: string; sketch: Sketch; levels: Level[]; displayNames: Record<string, string> }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
@@ -1753,6 +1756,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
         bounds: detailLocalBounds(area, area.interiorDimensions ? 1 / sketchMetersPerSketchPx(sk.scale) : 0),
       });
     }
+    // Detail 3D: satu slide aksonometri untuk tiap level yang dicentang di Sketsa.
+    if (lv.detail3d === true) {
+      out.push({ kind: "detail3d", id: `detail3d-${lv.id}`, title: `Detail 3D · ${lvName}`, sketch: sk, level: lv });
+    }
   }
   // Slide Potongan Prinsip (A-A, B-B, …) — otomatis muncul setelah slide denah
   // ketika user menarik garis potong di kanvas sketsa.
@@ -1911,6 +1918,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "perspektif": return "Perspektif";
       case "level": return "Denah per Level";
       case "detail": return "Pendetailan Denah";
+      case "detail3d": return "Detail 3D";
       case "bubble":
       case "bubble-total": return "Diagram Hubungan Ruang";
       case "section": return "Potongan Prinsip";
@@ -2321,7 +2329,7 @@ function useSlideTheme(slideId?: string) {
 function SlideContent({ slide }: { slide?: Slide }) {
   const theme = useSlideTheme(slide?.id);
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
@@ -2329,6 +2337,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "closing" && <ClosingBody slide={slide} />}
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "detail" && <DetailSlideBoundary key={slide.id} slide={slide} />}
+      {slide.kind === "detail3d" && <Detail3dSlideBody key={slide.id} slide={slide} />}
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "bubble-total" && <BubbleTotalBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
@@ -2397,6 +2406,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
   const kicker =
     slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "detail" ? `Sketsa · Pendetailan · ${(slide as any).level?.name ?? ""}`
+    : slide.kind === "detail3d" ? `Sketsa · Detail 3D · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
     : slide.kind === "bubble-total" ? "Diagram · Hubungan Ruang · Semua Lantai"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
@@ -5015,6 +5025,16 @@ function MaterialCodeSymbol({ code, kind, size }: { code: string; kind: "lantai"
 }
 
 type DetailSlide = Extract<Slide, { kind: "detail" }>;
+
+function Detail3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "detail3d" }> }) {
+  const { sketch, level } = slide;
+  const input = useMemo(
+    () => detail3dInputForSketch(sketch as unknown as Parameters<typeof detail3dInputForSketch>[0], level.id, 1 / sketchMetersPerSketchPx(sketch.scale)),
+    [sketch, level.id],
+  );
+  const levelMm = Math.round((Number(level.mdpl) || 0) * 1000);
+  return <LevelDetail3dSlide levelName={level.name} elevation={`${levelMm >= 0 ? "+" : ""}${levelMm}`} input={input} slideWidth={A3_W} slideHeight={A3_H} />;
+}
 
 /** Satu bentuk denah yang tidak valid tidak boleh membuat slide kosong.
  *  Jika mode Arsitektural gagal, slide tetap dibuka dengan denah detail biasa. */

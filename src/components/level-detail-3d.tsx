@@ -4,57 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Edges, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { Box, Maximize2, Minimize2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { buildLevelDetail3d, type Detail3dInput, type Detail3dKind, type Detail3dPrism } from "@/lib/level-detail-3d";
-
-const KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color: string; opacity?: number; edges?: string }> = {
-  wall: { color: "#f1ece4", edges: "#6b645c" },
-  concrete: { color: "#b9b7b2", edges: "#2f2d2a" },
-  concept: { color: "#d8d2c8", edges: "#4a453f" },
-  glass: { color: "#8fc6e0", opacity: 0.38, edges: "#3f7f9c" },
-  railing: { color: "#6f7378", edges: "#2a2c2e" },
-  frame: { color: "#4a3f36" },
-  door: { color: "#a8743f", edges: "#5a3b1c" },
-  slab: { color: "#a3a7ad", edges: "#4b4f55" },
-};
-
-function prismGeometry(prism: Detail3dPrism, cx: number, cy: number): THREE.BufferGeometry | null {
-  const depth = prism.top - prism.bottom;
-  if (!(depth > 0) || prism.outer.length < 3) return null;
-  const shape = new THREE.Shape(prism.outer.map((p) => new THREE.Vector2(p.x - cx, p.y - cy)));
-  for (const hole of prism.holes) {
-    if (hole.length >= 3) shape.holes.push(new THREE.Path(hole.map((p) => new THREE.Vector2(p.x - cx, p.y - cy))));
-  }
-  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-  // Sama dengan halaman Model 3D: +y sketsa → +Z scene, ekstrusi ke atas (tidak ter-mirror).
-  geo.rotateX(Math.PI / 2);
-  geo.scale(1, -1, 1);
-  geo.translate(0, prism.bottom, 0);
-  geo.clearGroups();
-  return geo;
-}
-
-function mergedByKey(prisms: Detail3dPrism[], cx: number, cy: number) {
-  const buckets = new Map<string, { kind: Detail3dKind; color?: string; geos: THREE.BufferGeometry[] }>();
-  for (const prism of prisms) {
-    const key = prism.kind === "floor" ? `floor:${prism.color ?? ""}` : prism.kind;
-    const geo = prismGeometry(prism, cx, cy);
-    if (!geo) continue;
-    const bucket = buckets.get(key) ?? { kind: prism.kind, color: prism.color, geos: [] };
-    bucket.geos.push(geo);
-    buckets.set(key, bucket);
-  }
-  const out: Array<{ key: string; kind: Detail3dKind; color?: string; geometry: THREE.BufferGeometry }> = [];
-  for (const [key, bucket] of buckets) {
-    const merged = bucket.geos.length === 1 ? bucket.geos[0]! : mergeGeometries(bucket.geos, false);
-    if (merged && merged !== bucket.geos[0]) bucket.geos.forEach((g) => g.dispose());
-    if (merged) out.push({ key, kind: bucket.kind, color: bucket.color, geometry: merged });
-  }
-  return out;
-}
+import { buildLevelDetail3d, type Detail3dInput } from "@/lib/level-detail-3d";
+import { detail3dMergedMeshes, detail3dStyle } from "@/lib/level-detail-3d-mesh";
 
 export type LevelDetail3dBoxProps = {
   levelName: string;
@@ -74,7 +28,7 @@ export function LevelDetail3dBox({ levelName, input }: LevelDetail3dBoxProps) {
   const cx = b ? (b.minX + b.maxX) / 2 : 0;
   const cy = b ? (b.minY + b.maxY) / 2 : 0;
   const span = b ? Math.max(4, b.maxX - b.minX, b.maxY - b.minY) : 10;
-  const meshes = useMemo(() => mergedByKey(model.prisms, cx, cy), [model.prisms, cx, cy]);
+  const meshes = useMemo(() => detail3dMergedMeshes(model.prisms, cx, cy), [model.prisms, cx, cy]);
   useEffect(() => () => meshes.forEach((m) => m.geometry.dispose()), [meshes]);
   const camDist = span * 1.15 + model.wallHeight;
   const hasWalls = model.counts.walls > 0;
@@ -93,7 +47,7 @@ export function LevelDetail3dBox({ levelName, input }: LevelDetail3dBoxProps) {
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">Detail 3D — {levelName}</div>
             <div className="truncate text-[11px] text-muted-foreground">
-              Tinggi dinding {fmt(model.wallHeight)} m · {model.counts.walls} dinding · {model.counts.doors} pintu · {model.counts.windows} jendela
+              Tinggi dinding {fmt(model.wallHeight)} m · {model.counts.walls} dinding · {model.counts.columns} kolom · {model.counts.doors} pintu · {model.counts.windows} jendela
             </div>
           </div>
         </div>
@@ -120,7 +74,7 @@ export function LevelDetail3dBox({ levelName, input }: LevelDetail3dBoxProps) {
             <directionalLight position={[-span, span, -span * 0.6]} intensity={0.45} />
             <group>
               {meshes.map((m) => {
-                const style = m.kind === "floor" ? { color: m.color ?? "#d6d0c6", edges: "#55504a" } : KIND_STYLE[m.kind];
+                const style = detail3dStyle(m.kind, m.color);
                 const transparent = style.opacity !== undefined;
                 return (
                   <mesh key={m.key} geometry={m.geometry} castShadow={!transparent} receiveShadow>

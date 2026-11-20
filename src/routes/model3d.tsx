@@ -132,10 +132,8 @@ type VertexSelection = {
 
 import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
 import { LevelDetail3dBox } from "@/components/level-detail-3d";
-import { levelWallHeight, type Detail3dInput, type Detail3dLine } from "@/lib/level-detail-3d";
+import { detail3dInputForSketch, type Detail3dLine } from "@/lib/level-detail-3d";
 import type { EdgeMaterial } from "@/lib/edge-segments";
-import { normalizeDoors } from "@/lib/doors";
-import { normalizeWindows } from "@/lib/windows";
 
 const STORAGE_KEY = SKETCH_STORAGE_KEY;
 const MINOR_PX = 8;
@@ -2129,14 +2127,6 @@ function SketchViewer({
 }
 
 // ---------- Page ----------
-function roomSolidColor(ly: Layer): string {
-  return solidColorForRoomName(ly.name,
-    ly.color?.replace(/rgba?\(([^)]+)\)/, (_, body) => {
-      const parts = body.split(",").map((part: string) => part.trim());
-      return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
-    }) || "#e85d3a");
-}
-
 // Kotak Detail 3D untuk setiap level yang dicentang "Detail 3D" di Sketsa.
 function LevelDetail3dList({ sketch }: { sketch: Sketch }) {
   const checked = useMemo(
@@ -2146,27 +2136,8 @@ function LevelDetail3dList({ sketch }: { sketch: Sketch }) {
   const inputs = useMemo(() => {
     if (!checked.length) return [];
     const pxPerMeter = 1 / metersPerPx(sketch.scale);
-    const lines = Array.isArray(sketch.lines) ? sketch.lines : [];
-    const doors = normalizeDoors(sketch.doors ?? []);
-    const windows = normalizeWindows(sketch.windows ?? []);
-    return checked.map((lv) => {
-      const input: Detail3dInput = {
-        pxPerMeter,
-        levelId: lv.id,
-        lines,
-        edgeAttrs: sketch.edgeAttrs ?? {},
-        rooms: (sketch.layers ?? [])
-          .filter((ly) => ly.levelId === lv.id && !ly.hidden)
-          .map((ly) => ({ name: ly.name, points: ly.points, color: roomSolidColor(ly) })),
-        slabs: (sketch.floors ?? []).filter((f) => f.levelId === lv.id),
-        // Tanpa id acak dari normalisasi agar model tidak dibangun ulang tiap muat ulang.
-        doors: doors.filter((d) => d.levelId === lv.id).map(({ id: _id, levelId: _lv, ...door }) => door),
-        windows: windows.filter((w) => w.levelId === lv.id).map((w) => ({ ...w, id: "" })),
-        wallHeight: levelWallHeight(sketch.levels ?? [], lv.id),
-      };
-      return { id: lv.id, name: lv.name, input };
-    });
-  }, [checked, sketch.scale, sketch.lines, sketch.edgeAttrs, sketch.layers, sketch.floors, sketch.doors, sketch.windows, sketch.levels]);
+    return checked.map((lv) => ({ id: lv.id, name: lv.name, input: detail3dInputForSketch(sketch, lv.id, pxPerMeter) }));
+  }, [checked, sketch]);
   if (!inputs.length) return null;
   return (
     <div className="mt-4 space-y-3">

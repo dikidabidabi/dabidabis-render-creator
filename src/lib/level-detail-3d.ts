@@ -9,12 +9,16 @@ import { windowFramePolygons, windowPlanGeometry, type Window } from "@/lib/wind
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
 import { curveWallBand, sampleCurveLine } from "@/lib/curve-wall";
 import { WALL_THICK_MM, isWallBandMaterial, materialForEdgeSegment, wallBandPolygon, windowWallCandidates } from "@/lib/wall-materials";
+import { collectGrids, columnFootprintPolygon, gridColumnPoints, gridLocalToWorld, levelInRange, spansForLevel, type StructuralGrid } from "@/lib/structural-grid";
+import { normalizeDoors } from "@/lib/doors";
+import { normalizeWindows } from "@/lib/windows";
+import { solidColorForRoomName } from "@/lib/room-color";
 
 type P = { x: number; y: number };
 type Ring = P[];
 type MultiPolygon = Ring[][];
 
-export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door";
+export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column";
 
 export type Detail3dPrism = {
   kind: Detail3dKind;
@@ -33,7 +37,9 @@ export type Detail3dInput = {
   /** Seluruh garis sketsa (semua level) agar identitas segmen material sama dengan slide. */
   lines: Detail3dLine[];
   edgeAttrs?: Record<string, EdgeMaterial>;
-  rooms: Array<{ name: string; points: P[]; color: string }>;
+  rooms: Array<{ id?: string; name: string; points: P[]; color: string; areaM2?: number }>;
+  /** Tapak kolom struktur (px) pada level ini, lihat detail3dColumnRings. */
+  columns?: Ring[];
   slabs?: Array<{ outer: P[]; holes?: P[][]; thicknessMm: number }>;
   doors: Array<Pick<Door, "a" | "b" | "nx" | "ny" | "leaves" | "type" | "slideDirection" | "foldingSideMode" | "foldingSide" | "foldingLeafCount" | "widthCm">>;
   windows: Window[];
@@ -47,7 +53,7 @@ export type Detail3dModel = {
   doorHeight: number;
   sillHeight: number;
   headHeight: number;
-  counts: { walls: number; doors: number; windows: number; rooms: number };
+  counts: { walls: number; doors: number; windows: number; rooms: number; columns: number };
   bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
 };
 
@@ -219,6 +225,13 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
   shapes.glass = difference(union(bands.glass), solid);
   shapes.railing = difference(union(bands.railing), union([...solid, ...shapes.glass].flat()));
 
+  // ---- Kolom struktur: setinggi level, memotong pita dinding ----
+  const columnShape = union((input.columns ?? []).filter((ring) => ring.length >= 3));
+  if (columnShape.length) {
+    for (const cls of ["wall", "concrete", "concept", "glass", "railing"] as const) shapes[cls] = difference(shapes[cls], columnShape);
+    push("column", columnShape, 0, wallHeight);
+  }
+
   for (const cls of ["wall", "concrete", "concept", "glass"] as const) {
     const shape = shapes[cls];
     if (!shape.length) continue;
@@ -316,7 +329,133 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
     doorHeight,
     sillHeight,
     headHeight,
-    counts: { walls: wallCount, doors: input.doors.length, windows: input.windows.length, rooms: roomCount },
+    counts: { walls: wallCount, doors: input.doors.length, windows: input.windows.length, rooms: roomCount, columns: (input.columns ?? []).filter((ring) => ring.length >= 3).length },
     bounds,
   };
+}
+
+/** Tapak kolom struktur (px) dari grid aktif yang berlaku di level ini — sama dengan Slide Detail & DXF. */
+export function detail3dColumnRings(
+  grids: StructuralGrid[],
+  levelId: string,
+  levels: Array<{ id: string; mdpl: number }>,
+  pxPerMeter: number,
+): Ring[] {
+  const level = levels.find((candidate) => candidate.id === levelId);
+  if (!level) return [];
+  const out: Ring[] = [];
+  for (const grid of grids) {
+    if (!levelInRange(grid, level, levels)) continue;
+    const { spansX, spansY } = spansForLevel(grid, levelId);
+    const size = (Number(grid.colSizeCm) || 0) / 100 * pxPerMeter;
+    if (!(size > 0)) continue;
+    const angle = (Number(grid.rotation) || 0) * Math.PI / 180;
+    for (const cp of gridColumnPoints(grid, levelId, spansX, spansY)) {
+      out.push(columnFootprintPolygon(gridLocalToWorld(grid, cp.mx, cp.my, pxPerMeter), size, angle, grid.colShape));
+    }
+  }
+  return out;
+}
+
+type Detail3dSketchLike = {
+  lines?: Detail3dLine[];
+  edgeAttrs?: Record<string, EdgeMaterial>;
+  layers?: Array<{ id?: string; name: string; points: P[]; color?: string; levelId?: string; hidden?: boolean; areaM2?: number }>;
+  levels?: Array<{ id: string; mdpl: number; typicalCount?: number; typicalHeight?: number }>;
+  floors?: Array<{ levelId: string; outer: P[]; holes?: P[][]; thicknessMm: number }>;
+  doors?: unknown[];
+  windows?: unknown[];
+  structuralGrid?: StructuralGrid;
+  structuralGridExtras?: StructuralGrid[];
+};
+
+export function detail3dRoomColor(room: { name: string; color?: string }): string {
+  return solidColorForRoomName(room.name,
+    room.color?.replace(/rgba?\(([^)]+)\)/, (_, body: string) => {
+      const parts = body.split(",").map((part) => part.trim());
+      return `rgb(${parts[0]}, ${parts[1]}, ${parts[2]})`;
+    }) || "#e85d3a");
+}
+
+/** Satu sumber input Detail 3D untuk halaman Model 3D dan slide Presentasi. */
+export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: string, pxPerMeter: number): Detail3dInput {
+  const levels = (sketch.levels ?? []).map((lv) => ({ ...lv, mdpl: Number(lv.mdpl) || 0 }));
+  const doors = normalizeDoors(sketch.doors ?? []);
+  const windows = normalizeWindows(sketch.windows ?? []);
+  return {
+    pxPerMeter,
+    levelId,
+    lines: Array.isArray(sketch.lines) ? sketch.lines : [],
+    edgeAttrs: sketch.edgeAttrs ?? {},
+    rooms: (sketch.layers ?? [])
+      .filter((ly) => ly.levelId === levelId && !ly.hidden)
+      .map((ly) => ({ ...(ly.id ? { id: ly.id } : {}), name: ly.name, points: ly.points, color: detail3dRoomColor(ly), ...(Number.isFinite(ly.areaM2) ? { areaM2: ly.areaM2 } : {}) })),
+    slabs: (sketch.floors ?? []).filter((f) => f.levelId === levelId).map((f) => ({ outer: f.outer, ...(f.holes ? { holes: f.holes } : {}), thicknessMm: f.thicknessMm })),
+    columns: detail3dColumnRings(collectGrids(sketch.structuralGrid, sketch.structuralGridExtras), levelId, levels, pxPerMeter),
+    // Tanpa id acak dari normalisasi agar model tidak dibangun ulang tiap muat ulang.
+    doors: doors.filter((d) => d.levelId === levelId).map(({ id: _id, levelId: _lv, ...door }) => door),
+    windows: windows.filter((w) => w.levelId === levelId).map((w) => ({ ...w, id: "" })),
+    wallHeight: levelWallHeight(levels, levelId),
+  };
+}
+
+/** Ruang yang diberi nomor pada slide aksonometri (urutan sama dengan legenda). */
+export function detail3dLegendRooms(input: Detail3dInput) {
+  return input.rooms
+    .filter((room) => {
+      const name = room.name.trim().toLowerCase();
+      return !name.startsWith("lahan") && name !== "void" && room.points.length >= 3;
+    })
+    .map((room, index) => ({
+      id: room.id ?? `room-${index}`,
+      name: room.name,
+      areaM2: Number(room.areaM2) || 0,
+      /** Titik label dalam meter. */
+      center: roomLabelPoint(room.points.map((p) => ({ x: p.x / input.pxPerMeter, y: p.y / input.pxPerMeter }))),
+    }));
+}
+
+function pointInRing(p: P, ring: Ring): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i]!, b = ring[j]!;
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y + 1e-12) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** Titik label di dalam ruang: centroid luas, atau tengah potongan horizontal terlebar bila centroid jatuh di luar. */
+export function roomLabelPoint(ring: Ring): P {
+  const area = ringArea(ring);
+  let cx = 0, cy = 0;
+  if (Math.abs(area) > 1e-9) {
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i]!, b = ring[(i + 1) % ring.length]!;
+      const f = a.x * b.y - b.x * a.y;
+      cx += (a.x + b.x) * f; cy += (a.y + b.y) * f;
+    }
+    cx /= 6 * area; cy /= 6 * area;
+  } else {
+    cx = ring.reduce((s, p) => s + p.x, 0) / Math.max(1, ring.length);
+    cy = ring.reduce((s, p) => s + p.y, 0) / Math.max(1, ring.length);
+  }
+  const c = { x: cx, y: cy };
+  if (pointInRing(c, ring)) return c;
+  const ys = ring.map((p) => p.y);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  let best: { p: P; w: number } | null = null;
+  for (let k = 1; k < 20; k++) {
+    const y = minY + (maxY - minY) * (k / 20);
+    const xs: number[] = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i]!, b = ring[(i + 1) % ring.length]!;
+      if ((a.y > y) !== (b.y > y)) xs.push(a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y));
+    }
+    xs.sort((m, n) => m - n);
+    for (let i = 0; i + 1 < xs.length; i += 2) {
+      const w = xs[i + 1]! - xs[i]!;
+      if (!best || w > best.w) best = { p: { x: (xs[i]! + xs[i + 1]!) / 2, y }, w };
+    }
+  }
+  return best?.p ?? c;
 }

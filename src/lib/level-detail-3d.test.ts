@@ -63,3 +63,35 @@ test("ruang menjadi lantai, lahan diabaikan", () => {
   assert.equal(floors.length, 1);
   assert.equal(model.bounds?.maxX, 4);
 });
+
+test("kolom struktur grid tampil setinggi level dan memotong dinding", async () => {
+  const { detail3dColumnRings } = await import("./level-detail-3d");
+  const grid = { enabled: true, origin: { x: 0, y: 0 }, rotation: 0, spansX: [5], spansY: [4], colSizeCm: 50 };
+  const rings = detail3dColumnRings([grid as any], L, [{ id: L, mdpl: 0 }], PPM);
+  assert.equal(rings.length, 4);
+  const line = wall(0, 0, 500, 0);
+  const model = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "solid" }, columns: rings }));
+  const columns = model.prisms.filter((p) => p.kind === "column");
+  assert.equal(columns.length, 4);
+  assert.equal(model.counts.columns, 4);
+  for (const c of columns) { assert.equal(c.bottom, 0); assert.equal(c.top, 3.5); }
+  const xs = columns[0]!.outer.map((p) => p.x);
+  assert.ok(Math.abs(Math.max(...xs) - Math.min(...xs) - 0.5) < 1e-6);
+  // Dinding tidak lagi menempati tapak kolom di ujungnya (x 0..0,25 m).
+  const wallMinX = Math.min(...model.prisms.filter((p) => p.kind === "wall").flatMap((p) => p.outer.map((q) => q.x)));
+  assert.ok(wallMinX >= 0.25 - 1e-6);
+});
+
+test("kolom di luar rentang level grid tidak ikut", async () => {
+  const { detail3dColumnRings } = await import("./level-detail-3d");
+  const grid = { enabled: true, origin: { x: 0, y: 0 }, rotation: 0, spansX: [5], spansY: [4], colSizeCm: 50, fromLevelId: "b", toLevelId: "b" };
+  assert.equal(detail3dColumnRings([grid as any], "a", [{ id: "a", mdpl: 0 }, { id: "b", mdpl: 4 }], PPM).length, 0);
+});
+
+test("label ruang berbentuk L tetap berada di dalam ruang", async () => {
+  const { roomLabelPoint } = await import("./level-detail-3d");
+  const ring = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 10 }, { x: 0, y: 10 }];
+  const p = roomLabelPoint(ring);
+  const inside = (p.x >= 0 && p.x <= 10 && p.y >= 0 && p.y <= 1) || (p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 10);
+  assert.ok(inside, JSON.stringify(p));
+});
