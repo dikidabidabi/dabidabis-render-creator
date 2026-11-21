@@ -3,114 +3,19 @@
 // seperti Slide Detail. Gambar 3D dirender sekali ke PNG agar ikut terekspor
 // PDF/PPTX dan tidak menahan konteks WebGL.
 import { useEffect, useMemo, useState } from "react";
-import * as THREE from "three";
 import { buildLevelDetail3d, detail3dLegendRooms, type Detail3dInput, type Detail3dModel } from "@/lib/level-detail-3d";
-import { detail3dMergedMeshes, detail3dStyle } from "@/lib/level-detail-3d-mesh";
+import { renderDetail3dAxo } from "@/components/detail3d-axo-renderer";
 import { ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, architecturalLegendLayout } from "@/lib/architectural-legend";
 
 type Label = { id: string; x: number; y: number };
 type AxoRender = { dataUrl: string; labels: Label[] };
 
 const INK = "#1d1d1b";
-const VIEW_DIR = new THREE.Vector3(0.7, 1.1, 0.9).normalize(); // sama dengan kotak Detail 3D
 const cache = new Map<string, AxoRender>();
 
 function renderAxonometric(model: Detail3dModel, labels: Array<{ id: string; center: { x: number; y: number } }>, width: number, height: number): AxoRender | null {
-  const b = model.bounds;
-  if (!b) return null;
-  const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
-  const span = Math.max(4, b.maxX - b.minX, b.maxY - b.minY);
-  const pixelRatio = 2;
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
-  const disposables: Array<{ dispose: () => void }> = [];
-  try {
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setSize(width, height, false);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#ffffff");
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b8, 0.7));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.25);
-    sun.position.set(span * 0.8, span * 1.8, span * 1.1);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(4096, 4096);
-    sun.shadow.bias = -0.0004;
-    sun.shadow.normalBias = 0.03;
-    Object.assign(sun.shadow.camera, { left: -span * 1.5, right: span * 1.5, top: span * 1.5, bottom: -span * 1.5, near: 0.1, far: span * 6 });
-    scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.45);
-    fill.position.set(-span, span, -span * 0.6);
-    scene.add(fill);
-
-    for (const m of detail3dMergedMeshes(model.prisms, cx, cy)) {
-      const style = detail3dStyle(m.kind, m.color);
-      const transparent = style.opacity !== undefined;
-      const material = new THREE.MeshStandardMaterial({
-        color: style.color,
-        roughness: m.kind === "glass" ? 0.1 : 0.75,
-        metalness: m.kind === "glass" ? 0.1 : 0.02,
-        transparent,
-        opacity: style.opacity ?? 1,
-        depthWrite: !transparent,
-        side: THREE.DoubleSide,
-      });
-      const mesh = new THREE.Mesh(m.geometry, material);
-      mesh.castShadow = !transparent;
-      mesh.receiveShadow = true;
-      scene.add(mesh);
-      disposables.push(m.geometry, material);
-      if (style.edges) {
-        const edgeGeo = new THREE.EdgesGeometry(m.geometry, 20);
-        const edgeMat = new THREE.LineBasicMaterial({ color: style.edges });
-        scene.add(new THREE.LineSegments(edgeGeo, edgeMat));
-        disposables.push(edgeGeo, edgeMat);
-      }
-    }
-    const groundGeo = new THREE.PlaneGeometry(span * 4, span * 4);
-    const groundMat = new THREE.ShadowMaterial({ opacity: 0.16 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.16;
-    ground.receiveShadow = true;
-    scene.add(ground);
-    disposables.push(groundGeo, groundMat);
-
-    // Kamera ortografik (aksonometri), dipaskan ke seluruh titik model.
-    const camera = new THREE.OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 0.01, span * 40);
-    camera.position.copy(VIEW_DIR).multiplyScalar(span * 10);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(0, 0, 0);
-    camera.updateMatrixWorld();
-    const inv = camera.matrixWorldInverse;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const v = new THREE.Vector3();
-    for (const prism of model.prisms) for (const p of prism.outer) for (const h of [prism.bottom, prism.top]) {
-      v.set(p.x - cx, h, p.y - cy).applyMatrix4(inv);
-      minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
-      minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
-    }
-    if (!Number.isFinite(minX)) return null;
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    camera.position.addScaledVector(right, (minX + maxX) / 2).addScaledVector(up, (minY + maxY) / 2);
-    camera.zoom = Math.min(width / Math.max(1e-3, maxX - minX), height / Math.max(1e-3, maxY - minY)) * 0.92;
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
-
-    renderer.render(scene, camera);
-    const dataUrl = renderer.domElement.toDataURL("image/png");
-    const projected = labels.map(({ id, center }) => {
-      v.set(center.x - cx, 0.02, center.y - cy).project(camera);
-      return { id, x: ((v.x + 1) / 2) * width, y: ((1 - v.y) / 2) * height };
-    });
-    return { dataUrl, labels: projected };
-  } finally {
-    disposables.forEach((d) => d.dispose());
-    renderer.dispose();
-    renderer.forceContextLoss();
-  }
+  const result = renderDetail3dAxo([{ model, base: 0 }], labels.map(({ id, center }) => ({ id, x: center.x, y: center.y, h: 0.02 })), width, height);
+  return result ? { dataUrl: result.dataUrl, labels: result.points } : null;
 }
 
 export type LevelDetail3dSlideProps = {

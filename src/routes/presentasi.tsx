@@ -73,6 +73,7 @@ import { WALL_THICK_MM, materialForEdgeSegment, wallBandPolygon, windowWallCandi
 import { practicalColumnNodes } from "@/lib/practical-columns";
 import { detail3dInputForSketch } from "@/lib/level-detail-3d";
 import { LevelDetail3dSlide } from "@/components/level-detail-3d-slide";
+import { DetailAxonometricSlide } from "@/components/detail-axonometric-slide";
 import { collectSpecMaterialRefs, sketchMetersPerSketchPx, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef } from "@/lib/spec-outline";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
@@ -1540,6 +1541,7 @@ type Slide =
   | { kind: "level"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "detail"; id: string; title: string; sketch: Sketch; level: Level; area: DetailArea; bounds: Bounds }
   | { kind: "detail3d"; id: string; title: string; sketch: Sketch; level: Level }
+  | { kind: "detail-axo"; id: string; title: string; sketch: Sketch; levels: Level[] }
   | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "bubble-total"; id: string; title: string; sketch: Sketch; levels: Level[]; displayNames: Record<string, string> }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
@@ -1761,6 +1763,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       out.push({ kind: "detail3d", id: `detail3d-${lv.id}`, title: `Detail 3D · ${lvName}`, sketch: sk, level: lv });
     }
   }
+  // Detail Aksonometri: susunan Detail 3D semua lantai setelah slide detail lantai terakhir.
+  if (levels.length > 1) {
+    out.push({ kind: "detail-axo", id: "detail-axo", title: "Detail Aksonometri", sketch: sk, levels });
+  }
   // Slide Potongan Prinsip (A-A, B-B, …) — otomatis muncul setelah slide denah
   // ketika user menarik garis potong di kanvas sketsa.
   {
@@ -1919,6 +1925,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "level": return "Denah per Level";
       case "detail": return "Pendetailan Denah";
       case "detail3d": return "Detail 3D";
+      case "detail-axo": return "Detail Aksonometri";
       case "bubble":
       case "bubble-total": return "Diagram Hubungan Ruang";
       case "section": return "Potongan Prinsip";
@@ -2329,7 +2336,7 @@ function useSlideTheme(slideId?: string) {
 function SlideContent({ slide }: { slide?: Slide }) {
   const theme = useSlideTheme(slide?.id);
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d" || slide.kind === "detail-axo";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
@@ -2338,6 +2345,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "level" && <LevelBody slide={slide} />}
       {slide.kind === "detail" && <DetailSlideBoundary key={slide.id} slide={slide} />}
       {slide.kind === "detail3d" && <Detail3dSlideBody key={slide.id} slide={slide} />}
+      {slide.kind === "detail-axo" && <DetailAxoSlideBody key={slide.id} slide={slide} />}
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "bubble-total" && <BubbleTotalBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
@@ -2407,6 +2415,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     slide.kind === "level" ? `Sketsa · Level · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "detail" ? `Sketsa · Pendetailan · ${(slide as any).level?.name ?? ""}`
     : slide.kind === "detail3d" ? `Sketsa · Detail 3D · ${(slide as any).level?.name ?? ""}`
+    : slide.kind === "detail-axo" ? "Sketsa · Detail Aksonometri"
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
     : slide.kind === "bubble-total" ? "Diagram · Hubungan Ruang · Semua Lantai"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
@@ -5034,6 +5043,21 @@ function Detail3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "detail3d"
   );
   const levelMm = Math.round((Number(level.mdpl) || 0) * 1000);
   return <LevelDetail3dSlide levelName={level.name} elevation={`${levelMm >= 0 ? "+" : ""}${levelMm}`} input={input} slideWidth={A3_W} slideHeight={A3_H} />;
+}
+
+function DetailAxoSlideBody({ slide }: { slide: Extract<Slide, { kind: "detail-axo" }> }) {
+  const { sketch, levels } = slide;
+  const items = useMemo(() => {
+    const ppm = 1 / sketchMetersPerSketchPx(sketch.scale);
+    return levels.map((lv) => ({
+      id: lv.id,
+      name: lv.name,
+      mdpl: Number(lv.mdpl) || 0,
+      ...(lv.typicalCount ? { typicalCount: lv.typicalCount } : {}),
+      input: detail3dInputForSketch(sketch as unknown as Parameters<typeof detail3dInputForSketch>[0], lv.id, ppm),
+    }));
+  }, [sketch, levels]);
+  return <DetailAxonometricSlide levels={items} stairs={sketch.stairs ?? []} slideWidth={A3_W} slideHeight={A3_H} />;
 }
 
 /** Satu bentuk denah yang tidak valid tidak boleh membuat slide kosong.
