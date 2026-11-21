@@ -29,4 +29,4 @@
 - Total bubble slide: one cluster/level; red links join same-kind circulation on next matching level.
 - Rincian per Level slide: full-width/unscaled, paged like Outline Spec.
 - Volumetrik slide: one row per physical floor; sub-totals on last page.
-- Detail 3D input (level-detail-3d) feeds Model 3D and slides; slides render static PNGs for export.
+- Detail 3D input (level-detail-3d) feeds Model 3D/slides; slides use static PNGs.
