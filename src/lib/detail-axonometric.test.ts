@@ -16,10 +16,10 @@ test("lantai disusun dari terendah dengan jarak renggang di atas dinding", () =>
   assert.deepEqual(stack, [{ levelId: "a", base: 0 }, { levelId: "b", base: 8.5 }]);
 });
 
-test("jarak renggang minimal 3 m dan maksimal 30 m", () => {
+test("jarak renggang minimal 3 m dan maksimal 50 m", () => {
   assert.equal(detailAxoGap(2), 3);
-  assert.equal(detailAxoGap(20), 8);
-  assert.equal(detailAxoGap(500), 30);
+  assert.equal(detailAxoGap(20), 20);
+  assert.equal(detailAxoGap(500), 50);
 });
 
 test("lift dan tangga dihubungkan ke lantai berikutnya, ruang lain tidak", () => {

@@ -20,7 +20,7 @@ export type AxoStackLevel = { levelId: string; mdpl: number; input: Detail3dInpu
 /** Jarak renggang antar-lantai (m): sebanding bentang denah agar tiap lantai terbaca. */
 export function detailAxoGap(spanM: number): number {
   const span = Number.isFinite(spanM) ? spanM : 0;
-  return Math.min(30, Math.max(3, span * 0.4));
+  return Math.min(50, Math.max(3, span));
 }
 
 /**

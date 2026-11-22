@@ -59,8 +59,8 @@ export function DetailAxonometricSlide({ levels, stairs, slideWidth, slideHeight
   }, [sourceKey]);
 
   const viewW = Math.round(slideWidth * 0.7);
-  const viewTop = Math.round(slideHeight * 0.05);
-  const viewH = Math.round(slideHeight * 0.9);
+  const viewTop = Math.round(slideHeight * 0.15);
+  const viewH = Math.round(slideHeight * 0.82);
   const viewLeft = Math.round(slideWidth * 0.04);
   const cacheKey = `${sourceKey}|${viewW}x${viewH}`;
   const [render, setRender] = useState<AxoRender | null>(() => cache.get(cacheKey) ?? null);

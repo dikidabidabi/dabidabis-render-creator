@@ -10,4 +10,4 @@
 - [x] Slide detail menyesuaikan denah/dimensi; key plan mempertahankan orientasi Sketsa.
 - [x] Uji geometri dan alur Sketsa → Presentasi termasuk muat ulang dengan sketsa uji 30°.
 
-- [ ] Slide "Detail Aksonometri" setelah semua slide detail lantai: semua lantai sketsa disusun aksonometri, lift/tangga dihubungkan garis putus-putus.
+- [x] Slide "Detail Aksonometri" setelah semua slide detail lantai: semua lantai sketsa disusun aksonometri, lift/tangga dihubungkan garis putus-putus.
