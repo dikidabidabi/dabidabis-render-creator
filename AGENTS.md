@@ -28,5 +28,5 @@
 - Picked curves render as wall bands feeding practical columns.
 - Total bubble slide: one cluster/level; red links join same-kind circulation on next matching level.
 - Rincian per Level slide: full-width, unscaled, paged like Outline Spec.
-- Volumetrik slide: a row per physical floor; sub-totals last page.
+- Volumetrik slide: row per physical floor; sub-totals last page.
 - Detail 3D input (level-detail-3d) feeds Model 3D and slides; one renderer makes static PNGs.
