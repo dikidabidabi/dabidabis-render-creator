@@ -62,6 +62,12 @@ export const PANEL_LAYOUTS: PanelLayout[] = [
       ...grid(3, 1, 0, 0.415, 1, 0.25), { x: 0, y: 0.68, w: 0.6, h: 0.32 },
     ],
     texts: [{ x: 0.615, y: 0.68, w: 0.385, h: 0.32 }] },
+  { id: "duo", name: "Duo Bertumpuk", description: "2 gambar lebar bertumpuk, teks di bawah.",
+    slots: grid(1, 2, 0, 0, 1, 0.8), texts: [{ x: 0, y: 0.815, w: 1, h: 0.185 }] },
+  { id: "duo-sejajar", name: "Duo Sejajar", description: "2 gambar tegak berdampingan, teks di bawah.",
+    slots: grid(2, 1, 0, 0, 1, 0.78), texts: [{ x: 0, y: 0.795, w: 1, h: 0.205 }] },
+  { id: "trio", name: "Trio Bertumpuk", description: "3 gambar lebar bertumpuk, kolom teks di kanan.",
+    slots: grid(1, 3, 0, 0, 0.7, 1), texts: [{ x: 0.715, y: 0, w: 0.285, h: 1 }] },
   { id: "fokus", name: "Fokus Tunggal", description: "1 gambar besar, 2 gambar kecil, 2 kotak penjelasan.",
     slots: [{ x: 0, y: 0, w: 1, h: 0.6 }, ...grid(2, 1, 0, 0.615, 0.66, 0.385)],
     texts: [{ x: 0.675, y: 0.615, w: 0.325, h: 0.22 }, { x: 0.675, y: 0.85, w: 0.325, h: 0.15 }] },
@@ -590,15 +596,90 @@ export function panelCellFrame(aspect: number, area = 860_000) {
 export type PanelPlacement = { token: string; slot: number; frame: { w: number; h: number } };
 
 /** Layout, konten terpasang, dan kotaknya — dipakai bersama alat, slide dan PSD. */
+const panelPageSize = (orientation: PanelOrientation) => (orientation === "portrait" ? { w: 1000, h: 1414 } : { w: 1414, h: 1000 });
+
+/** Biaya susunan: bentuk konten vs kotak, kotak kosong, dan bagian kertas yang tidak terpakai gambar. */
+function layoutArrangementCost(layout: PanelLayout, aspects: number[], orientation: PanelOrientation) {
+  const page = panelPageSize(orientation);
+  const boxes = panelSlotImageBoxes(panelPageGeometry(layout, page.w, page.h));
+  const slots = arrangePanelSlots(boxes, aspects);
+  const totalArea = boxes.reduce((a, b) => a + b.w * b.h, 0) || 1;
+  let fit = 0, used = 0, placed = 0, coverage = 0;
+  slots.forEach((slot, i) => {
+    const b = boxes[slot];
+    if (!b) return;
+    placed++;
+    const boxAspect = b.w / b.h, a = clampAspect(aspects[i]!);
+    fit += Math.abs(Math.log(a / boxAspect));
+    used += b.w * b.h;
+    // Luas gambar yang benar-benar terisi (contain) di kotak.
+    coverage += (b.w * b.h) * Math.min(a / boxAspect, boxAspect / a);
+  });
+  const missing = aspects.length - placed;
+  const empty = boxes.length - placed;
+  return fit / Math.max(1, placed) + 1.1 * (1 - used / totalArea) + 0.6 * (1 - coverage / totalArea) + 0.25 * empty + 2 * missing;
+}
+
+/** Layout otomatis yang paling sesuai bentuk dan jumlah konten panel. */
+export function bestPanelLayout(key: PanelKey, aspects: number[], orientation: PanelOrientation): PanelLayout {
+  if (aspects.length === 0) return autoPanelLayout(key, 0);
+  const preferredId = panelDef(key).preferredLayout;
+  const fits = PANEL_LAYOUTS.filter((l) => l.slots.length >= aspects.length);
+  const pool = fits.length > 0 ? fits : PANEL_LAYOUTS;
+  let best = pool[0]!, bestCost = Infinity;
+  for (const layout of pool) {
+    const cost = layoutArrangementCost(layout, aspects, orientation) - (layout.id === preferredId ? 0.06 : 0);
+    if (cost < bestCost - 1e-9) { bestCost = cost; best = layout; }
+  }
+  return best;
+}
+
+/** Kotak kosong pada layout otomatis dilebur ke kotak tetangga sebaris/sekolom agar tidak ada lubang. */
+export function absorbEmptySlots(layout: PanelLayout, occupied: Set<number>): { layout: PanelLayout; remap: number[] } {
+  const slots = layout.slots.map((r) => ({ ...r }));
+  const alive = slots.map(() => true);
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-3;
+  for (let e = 0; e < slots.length; e++) {
+    if (occupied.has(e)) continue;
+    const E = slots[e]!;
+    // Utamakan melebar ke samping (sebaris), baru memanjang ke atas/bawah (sekolom).
+    let target = -1;
+    for (const mode of ["row", "col"] as const) {
+      for (let p = 0; p < slots.length && target < 0; p++) {
+        if (p === e || !alive[p] || !occupied.has(p)) continue;
+        const P = slots[p]!;
+        const ok = mode === "row"
+          ? near(P.y, E.y) && near(P.h, E.h) && (Math.abs(P.x + P.w + GAP - E.x) < 0.01 || Math.abs(E.x + E.w + GAP - P.x) < 0.01)
+          : near(P.x, E.x) && near(P.w, E.w) && (Math.abs(P.y + P.h + GAP - E.y) < 0.01 || Math.abs(E.y + E.h + GAP - P.y) < 0.01);
+        if (ok) target = p;
+      }
+    }
+    if (target < 0) continue;
+    const P = slots[target]!;
+    const x0 = Math.min(P.x, E.x), y0 = Math.min(P.y, E.y);
+    slots[target] = { x: x0, y: y0, w: Math.max(P.x + P.w, E.x + E.w) - x0, h: Math.max(P.y + P.h, E.y + E.h) - y0 };
+    alive[e] = false;
+  }
+  const remap: number[] = [];
+  const kept: PanelRect[] = [];
+  slots.forEach((r, i) => { remap[i] = alive[i] ? kept.length : -1; if (alive[i]) kept.push(r); });
+  if (kept.length === slots.length) return { layout, remap };
+  return { layout: { ...layout, slots: kept }, remap };
+}
+
 export function panelArrangement(key: PanelKey, cfg: CompetitionPanelConfig | undefined, catalog: PanelContentItem[], sk: PanelSourceSketch, orientation: PanelOrientation) {
   const items = panelItems(key, cfg, catalog, sk);
-  const layout = panelLayoutFor(key, cfg, items.length);
-  const page = orientation === "portrait" ? { w: 1000, h: 1414 } : { w: 1414, h: 1000 };
+  const aspects = items.map((t) => panelContentAspect(t, sk));
+  const chosen = panelLayoutById(cfg?.layoutId);
+  const base = chosen ?? bestPanelLayout(key, aspects, orientation);
+  const page = panelPageSize(orientation);
+  const slots = arrangePanelSlots(panelSlotImageBoxes(panelPageGeometry(base, page.w, page.h)), aspects);
+  // Layout pilihan pengguna dibiarkan apa adanya (kotak kosong tetap terlihat untuk diisi).
+  const { layout, remap } = chosen ? { layout: base, remap: base.slots.map((_, i) => i) } : absorbEmptySlots(base, new Set(slots.filter((s) => s >= 0)));
   const boxes = panelSlotImageBoxes(panelPageGeometry(layout, page.w, page.h));
-  const slots = arrangePanelSlots(boxes, items.map((t) => panelContentAspect(t, sk)));
   const placements: PanelPlacement[] = [];
   items.forEach((token, i) => {
-    const slot = slots[i]!;
+    const slot = remap[slots[i]!] ?? -1;
     if (slot < 0) return;
     const b = boxes[slot]!;
     placements.push({ token, slot, frame: panelCellFrame(b.w / b.h) });

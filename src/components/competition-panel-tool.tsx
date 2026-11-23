@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_PANEL_SETTINGS, PANEL_DEFS, PANEL_KEYS, PANEL_LAYOUTS, applyPanelSuggestion, panelContentCatalog, panelIncluded,
-  panelArrangement, panelItems, panelLayoutFor, panelPageGeometry, panelSuggestions, panelTexts, panelTitle,
+  panelArrangement, panelItems, panelPageGeometry, panelSuggestions, panelTexts, panelTitle,
   type CompetitionPanelConfig, type CompetitionPanelSettings, type PanelCatalogExtras, type PanelContentItem, type PanelKey,
   type PanelLayout, type PanelOrientation, type PanelPaper, type PanelSourceSketch,
 } from "@/lib/competition-panels";
@@ -125,8 +125,7 @@ export function CompetitionPanelTool({ sketch, onChange, onDownload }: {
         <div className="text-[10px] font-medium text-muted-foreground">Panel ({included.length}/{PANEL_KEYS.length} dipakai)</div>
         {PANEL_DEFS.map((def) => {
           const cfg = settings.panels[def.key];
-          const items = panelItems(def.key, cfg, catalog, sketch);
-          const layout = panelLayoutFor(def.key, cfg, items.length);
+          const { items, layout } = panelArrangement(def.key, cfg, catalog, sketch, settings.orientation);
           const on = panelIncluded(cfg);
           const hints = panelSuggestions(def.key, items, layout, catalog, sketch).length;
           return (
@@ -243,8 +242,8 @@ function PanelEditorDialog({ open, panelKey, onOpenChange, onSelect, settings, s
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-xs font-semibold"><LayoutTemplate className="h-3.5 w-3.5" /> Layout</div>
               <div className="grid grid-cols-5 gap-1.5">
-                <button type="button" onClick={() => patchPanel(key, { layoutId: undefined })} className={cn("flex flex-col items-center gap-1 rounded-md border p-1 text-[10px]", !cfg?.layoutId ? "border-primary bg-primary/10" : "border-border")} title="Layout dipilih otomatis sesuai jumlah konten">
-                  <PanelLayoutThumb layout={panelLayoutFor(key, undefined, items.length)} orientation={settings.orientation} width={40} active={!cfg?.layoutId} />
+                <button type="button" onClick={() => patchPanel(key, { layoutId: undefined })} className={cn("flex flex-col items-center gap-1 rounded-md border p-1 text-[10px]", !cfg?.layoutId ? "border-primary bg-primary/10" : "border-border")} title="Layout dipilih otomatis sesuai jumlah dan bentuk konten">
+                  <PanelLayoutThumb layout={panelArrangement(key, cfg ? { ...cfg, layoutId: undefined } : undefined, catalog, sketch, settings.orientation).layout} orientation={settings.orientation} width={40} active={!cfg?.layoutId} />
                   Otomatis
                 </button>
                 {PANEL_LAYOUTS.map((l) => (

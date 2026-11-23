@@ -1187,16 +1187,19 @@ export function PresentasiBox({
 
   const autoPsdKey = autoPsd ? `${autoPsd.target}|${autoPsd.paper}` : null;
   const autoPsdDoneRef = useRef<string | null>(null);
+  // Fungsi ekspor terbaru disimpan di ref: render ulang yang sering tidak boleh membatalkan jadwal unduhan otomatis.
+  const startPsdExportRef = useRef(startPsdExport);
+  startPsdExportRef.current = startPsdExport;
   useEffect(() => {
     if (!autoPsd || !autoPsdKey || autoPsdDoneRef.current === autoPsdKey) return;
     const t = window.setTimeout(() => {
       autoPsdDoneRef.current = autoPsdKey;
-      startPsdExport(autoPsd.target, autoPsd.paper);
+      startPsdExportRef.current(autoPsd.target, autoPsd.paper);
       onAutoPsdDone?.();
     }, 600);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPsdKey, startPsdExport]);
+  }, [autoPsdKey]);
 
   const currentPanel = slides[idx]?.kind === "competition-panel" ? (slides[idx] as CompetitionPanelSlide) : null;
 
@@ -2553,6 +2556,8 @@ function SlideContent({ slide }: { slide?: Slide }) {
     </>
   );
   const fixedBody = slide.kind === "spec-outline" || slide.kind === "rincian" || slide.kind === "volumetrik" || slide.kind === "komposisi";
+  // Isi yang sudah mengisi kotaknya sendiri (denah) cukup diberi ruang penuh tanpa diperkecil.
+  const fillsFrame = fixedBody || slide.kind === "level";
   // Di dalam kotak Panel Sayembara: tanpa kepala/kaki slide agar gambar lebih besar.
   // Kanvas mengikuti rasio kotak panel, sehingga isi slide tersusun ulang (bukan slide A3 yang diperkecil).
   if (bare) {
@@ -2561,7 +2566,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
     }
     return (
       <div style={{ width: bare.w, height: bare.h, background: "#ffffff", color: theme.ink, fontFamily: theme.body, padding: 18, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-        {fixedBody
+        {fillsFrame
           ? <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{body}</div>
           : <BareFitBox>{body}</BareFitBox>}
       </div>
@@ -5379,18 +5384,32 @@ function BareFitBox({ children }: { children: React.ReactNode }) {
   useLayoutEffect(() => {
     const box = boxRef.current, inner = innerRef.current;
     if (!box || !inner) return;
+    // Ukur ukuran isi sebenarnya: scrollWidth/Height menangkap luberan kanan/bawah, sedangkan
+    // isi yang dipusatkan juga meluber ke kiri/atas, jadi luberan itu ditambahkan dari posisi elemen.
     const measure = () => {
       const prev = inner.style.transform;
       inner.style.transform = "none";
-      const w = inner.scrollWidth, h = inner.scrollHeight;
+      const base = inner.getBoundingClientRect();
+      let minX = 0, minY = 0, seen = 0;
+      const walk = (el: Element) => {
+        for (const child of Array.from(el.children)) {
+          if (++seen > 3000) return;
+          const r = child.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) { minX = Math.min(minX, r.left - base.left); minY = Math.min(minY, r.top - base.top); }
+          const cs = window.getComputedStyle(child);
+          if (cs.overflowX === "visible" && cs.overflowY === "visible") walk(child);
+        }
+      };
+      walk(inner);
+      const w = Math.ceil(inner.scrollWidth - minX), h = Math.ceil(inner.scrollHeight - minY);
       inner.style.transform = prev;
       if (!w || !h || !box.offsetWidth || !box.offsetHeight) return;
-      setFit({ s: Math.min(box.offsetWidth / w, box.offsetHeight / h), w, h });
+      setFit((old) => (old && Math.abs(old.w - w) < 2 && Math.abs(old.h - h) < 2 ? old : { s: Math.min(box.offsetWidth / w, box.offsetHeight / h), w, h }));
     };
     measure();
     const raf = requestAnimationFrame(measure);
-    const t = window.setTimeout(measure, 400);
-    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
+    const timers = [400, 1200].map((ms) => window.setTimeout(measure, ms));
+    return () => { cancelAnimationFrame(raf); timers.forEach((t) => window.clearTimeout(t)); };
   }, []);
   return (
     <div ref={boxRef} style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>

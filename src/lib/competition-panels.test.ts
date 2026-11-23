@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   PANEL_DEFS, PANEL_LAYOUTS, activePanelKeys, autoPanelLayout, defaultPanelItems, normalizeCompetitionPanels,
-  panelContentCatalog, panelPaperPixels, arrangePanelSlots, panelArrangement, panelCellFrame, panelContentAspect, panelSuggestions, panelTexts, panelLayoutById, type PanelSourceSketch,
+  panelContentCatalog, panelPaperPixels, arrangePanelSlots, panelArrangement, panelCellFrame, panelContentAspect, panelSuggestions, panelTexts, panelLayoutById, bestPanelLayout, absorbEmptySlots, type PanelSourceSketch,
 } from "./competition-panels";
 
 const expect = (actual: unknown) => ({
@@ -131,5 +131,28 @@ describe("susunan konten panel", () => {
     const a = panelArrangement("tampak", undefined, catalog, sk, "portrait");
     expect(a.placements).toHaveLength(4);
     expect(new Set(a.placements.map((p) => p.slot)).size).toBe(4);
+  });
+  it("layout otomatis memilih kotak lebar bertumpuk untuk dua denah lebar", () => {
+    expect(bestPanelLayout("denah", [2.6, 2.6], "portrait").id).toBe("duo");
+  });
+  it("layout otomatis memilih kotak berdampingan untuk dua gambar tegak", () => {
+    expect(bestPanelLayout("denah", [0.7, 0.7], "portrait").id).toBe("duo-sejajar");
+  });
+  it("layout otomatis selalu memuat semua konten bila ada layout yang cukup", () => {
+    for (const n of [1, 3, 5, 7, 9]) {
+      assert.ok(bestPanelLayout("simulasi", Array(n).fill(1.4), "portrait").slots.length >= n);
+    }
+  });
+  it("kotak kosong di layout otomatis dilebur ke kotak sebaris", () => {
+    const grid = panelLayoutById("grid-2x3")!;
+    const { layout, remap } = absorbEmptySlots(grid, new Set([0, 1, 2, 3, 4]));
+    expect(layout.slots).toHaveLength(5);
+    expect(remap[5]).toBe(-1);
+    const merged = layout.slots[4]!;
+    assert.ok(Math.abs(merged.w - 1) < 1e-6, `lebar ${merged.w}`);
+  });
+  it("tanpa kotak kosong susunan tidak berubah", () => {
+    const grid = panelLayoutById("kuadran")!;
+    expect(absorbEmptySlots(grid, new Set([0, 1, 2, 3])).layout).toBe(grid);
   });
 });

@@ -29,4 +29,4 @@
 - Total bubble slide: one cluster/level; red links join same-kind circulation on next level.
 - Rincian per Level: full-width, unscaled, paged as Outline Spec.
 - Volumetrik: row per physical floor, subtotals last.
-- Detail 3D feeds Model 3D/slides/Potongan 3D/Tampak; competition panels map tokens to deck slides; PSD shares geometry.
+- Detail 3D feeds Model 3D/slides/Potongan 3D/Tampak; panels redraw bare slide bodies in aspect-matched slots (PSD too).

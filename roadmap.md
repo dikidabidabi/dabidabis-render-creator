@@ -13,3 +13,4 @@
 - [x] Slide "Detail Aksonometri" setelah semua slide detail lantai: semua lantai sketsa disusun aksonometri, lift/tangga dihubungkan garis putus-putus.
 - [x] Ceklis "Potongan 3D" per garis potong (bawaan nonaktif) → slide perspektif potongan 3D dengan bayangan 45°, style mayoritas detail arsitektural, balok aturan potongan.
 - [x] Alat "Panel Sayembara" di Sketsa: ceklis tampil di Presentasi, 7 panel bawaan dari proyek, 10 layout, edit konten/teks, sugesti, unduh PSD A1/A2 dengan teks dapat diedit.
+- [x] Panel Sayembara: konten disusun ulang sesuai layout (bukan salinan slide), kotak sesuai bentuk gambar, layout otomatis sesuai konten.
