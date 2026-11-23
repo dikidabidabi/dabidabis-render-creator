@@ -179,8 +179,9 @@ import {
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
 import { type Door, type DoorType, foldingDoorSegments, genDoorId, normalizeDoors } from "@/lib/doors";
-import { type Window, genWindowId, normalizeWindows, windowDividerFractions, windowLengthCm, DYNAMIC_WINDOW_INITIAL_CM } from "@/lib/windows";
+import { type Window, type WindowHeightType, genWindowId, normalizeWindows, windowDividerFractions, windowHeightLabel, windowHeightType, windowLengthCm, DYNAMIC_WINDOW_INITIAL_CM } from "@/lib/windows";
 import { DynamicWindowSettings } from "@/components/dynamic-window-settings";
+import { WindowHeightTypePicker } from "@/components/window-height-type-picker";
 import {
   type ParkingArea,
   type ParkingPath,
@@ -3164,6 +3165,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [windowLeaves, setWindowLeaves] = useState(1);
   const [windowWidthCm, setWindowWidthCm] = useState(120);
   const [windowKind, setWindowKind] = useState<"regular" | "dynamic">("regular");
+  const [windowHeightTypeChoice, setWindowHeightTypeChoice] = useState<WindowHeightType>("standard");
   const [windowDividerSpacingCm, setWindowDividerSpacingCm] = useState(100);
   const [windowEndToleranceCm, setWindowEndToleranceCm] = useState(20);
   const [windowDraft, setWindowDraft] = useState<
@@ -11338,10 +11340,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         id: genWindowId(), levelId: draft.levelId, a: draft.a, b: draft.b,
         nx: draft.nx, ny: draft.ny, leaves: windowLeaves, widthCm: windowWidthCm,
         kind: windowKind, dividerSpacingCm: windowDividerSpacingCm, endToleranceCm: windowEndToleranceCm,
+        heightType: windowHeightTypeChoice,
       };
       onChange({ windows: [...(sketch.windows ?? []), window] });
       if (windowKind === "dynamic") { setWindowEditMode(true); setSelectedWindowId(window.id); }
-      toast.success(`Jendela ${windowKind === "dynamic" ? "dinamis" : `${windowLeaves} daun`} · ${windowWidthCm}cm ditambahkan`);
+      toast.success(`${windowHeightLabel(windowHeightTypeChoice)} ${windowKind === "dynamic" ? "dinamis" : `${windowLeaves} daun`} · ${windowWidthCm}cm ditambahkan`);
       return;
     }
     if (circleDraft && tool === "circle") {
@@ -14159,6 +14162,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               };
               return <div className="space-y-2 border-t border-border/60 pt-2">
                 <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Jendela terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
+                <WindowHeightTypePicker value={windowHeightType(selected.heightType)} onChange={(heightType) => { pushHistory(); onChange({ windows: (sketch.windows ?? []).map((window) => window.id === selected.id ? { ...window, heightType } : window) }); }} />
                 {selected.kind === "dynamic" ? <>
                   <div className="flex items-center justify-between gap-2"><Label htmlFor="dynamic-window-length" className="text-[11px] text-muted-foreground">Panjang (cm)</Label><Input id="dynamic-window-length" type="number" min={50} step={5} value={selected.widthCm} onFocus={() => pushHistory()} onChange={e => resize(Number(e.target.value))} className="h-7 w-24 text-xs" /></div>
                   <DynamicWindowSettings spacing={selected.dividerSpacingCm ?? 100} tolerance={selected.endToleranceCm ?? 20} onEditStart={() => pushHistory()} onChange={values => onChange({ windows: (sketch.windows ?? []).map(window => window.id === selected.id ? { ...window, ...values } : window) })} />
@@ -14170,6 +14174,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>;
             })()}
             {!windowEditMode && <>
+            <WindowHeightTypePicker value={windowHeightTypeChoice} onChange={setWindowHeightTypeChoice} />
             <div className="grid grid-cols-2 gap-1.5">
               <Button type="button" size="sm" variant={windowKind === "regular" ? "default" : "outline"} onClick={() => { setWindowKind("regular"); setWindowWidthCm(120); }} className="h-8 text-xs">Jendela Biasa</Button>
               <Button type="button" size="sm" variant={windowKind === "dynamic" ? "default" : "outline"} onClick={() => { setWindowKind("dynamic"); setWindowWidthCm(DYNAMIC_WINDOW_INITIAL_CM); }} className="h-auto min-h-8 whitespace-normal text-xs">Jendela Dinamis</Button>

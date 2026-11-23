@@ -2128,7 +2128,7 @@ function SketchViewer({
 
 // ---------- Page ----------
 // Kotak Detail 3D untuk setiap level yang dicentang "Detail 3D" di Sketsa.
-function LevelDetail3dList({ sketch }: { sketch: Sketch }) {
+function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (patch: Partial<Sketch>) => void }) {
   const checked = useMemo(
     () => [...(sketch.levels ?? [])].filter((lv) => lv.detail3d).sort((a, b) => a.mdpl - b.mdpl),
     [sketch.levels],
@@ -2144,7 +2144,15 @@ function LevelDetail3dList({ sketch }: { sketch: Sketch }) {
       <div className="text-xs uppercase tracking-wider text-muted-foreground">Detail 3D per level</div>
       <div className="grid gap-3 lg:grid-cols-2">
         {inputs.map((item) => (
-          <LevelDetail3dBox key={item.id} levelName={item.name} input={item.input} />
+          <LevelDetail3dBox
+            key={item.id}
+            levelName={item.name}
+            input={item.input}
+            onWindowTypeChange={(windowId, heightType) => onChange({
+              windows: (sketch.windows ?? []).map((window) =>
+                window && typeof window === "object" && (window as { id?: unknown }).id === windowId ? { ...(window as object), heightType } : window),
+            })}
+          />
         ))}
       </div>
     </div>
@@ -2263,7 +2271,7 @@ function Model3DPage() {
                     sketch={s}
                     onChange={(patch) => updateSketch(s.id, patch)}
                   />
-                  <LevelDetail3dList sketch={s} />
+                  <LevelDetail3dList sketch={s} onChange={(patch) => updateSketch(s.id, patch)} />
                 </div>
               )}
             </div>

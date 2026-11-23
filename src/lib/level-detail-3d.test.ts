@@ -36,24 +36,46 @@ test("garis tanpa material tidak menjadi dinding", () => {
   assert.equal(model.prisms.length, 0);
 });
 
-test("pintu membuka dinding sampai 2,1 m dan menyisakan ambang di atasnya", () => {
+test("pintu membuka dinding sampai 2,4 m dan menyisakan ambang di atasnya", () => {
   const line = wall(0, 0, 500, 0);
   const door = { a: { x: 200, y: 0 }, b: { x: 290, y: 0 }, nx: 0, ny: 1, leaves: 1 as const, widthCm: 90 };
   const model = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "solid" }, doors: [door] }));
   const walls = model.prisms.filter((p) => p.kind === "wall");
   assert.equal(walls.filter((p) => p.bottom === 0 && p.top === 3.5).length, 2); // dinding terbelah
-  assert.equal(walls.filter((p) => p.bottom === 2.1 && p.top === 3.5).length, 1);
+  assert.equal(walls.filter((p) => p.bottom === 2.4 && p.top === 3.5).length, 1);
   assert.equal(model.prisms.filter((p) => p.kind === "door").length, 1);
 });
 
-test("jendela menyisakan dinding di bawah ambang 0,9 m dan di atas 2,1 m serta kaca di antaranya", () => {
-  const line = wall(0, 0, 500, 0);
-  const win = { id: "w", a: { x: 100, y: 0 }, b: { x: 250, y: 0 }, nx: 0, ny: 1, leaves: 2, widthCm: 150 };
-  const model = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "solid" }, windows: [win] }));
+const windowWall = wall(0, 0, 500, 0);
+const windowModel = (heightType?: "full" | "standard" | "wall") => buildLevelDetail3d(base({
+  lines: [windowWall],
+  edgeAttrs: { [edgeMaterialKey(L, windowWall.a, windowWall.b)]: "solid" },
+  windows: [{ id: "w", a: { x: 100, y: 0 }, b: { x: 250, y: 0 }, nx: 0, ny: 1, leaves: 2, widthCm: 150, ...(heightType ? { heightType } : {}) }],
+}));
+
+test("jendela standar (bawaan): ambang 0,8 m, puncak 2,4 m, bata di bawah dan di atas", () => {
+  const model = windowModel();
   const walls = model.prisms.filter((p) => p.kind === "wall");
-  assert.ok(walls.some((p) => p.bottom === 0 && p.top === 0.9));
-  assert.ok(walls.some((p) => p.bottom === 2.1 && p.top === 3.5));
-  assert.ok(model.prisms.some((p) => p.kind === "glass" && p.bottom === 0.9 && p.top === 2.1));
+  assert.ok(walls.some((p) => p.bottom === 0 && p.top === 0.8));
+  assert.ok(walls.some((p) => p.bottom === 2.4 && p.top === 3.5));
+  assert.ok(model.prisms.some((p) => p.kind === "glass" && p.bottom === 0.8 && p.top === 2.4));
+  assert.equal(model.windows[0]?.type, "standard");
+});
+
+test("full window: dari lantai sampai 2,4 m, bata di atasnya sampai plat", () => {
+  const model = windowModel("full");
+  const walls = model.prisms.filter((p) => p.kind === "wall");
+  assert.ok(!walls.some((p) => p.bottom === 0 && p.top < 3.5));
+  assert.ok(walls.some((p) => p.bottom === 2.4 && p.top === 3.5));
+  assert.ok(model.prisms.some((p) => p.kind === "glass" && p.bottom === 0 && p.top === 2.4));
+});
+
+test("window wall: dari lantai sampai puncak dinding tanpa bata di atas", () => {
+  const model = windowModel("wall");
+  const walls = model.prisms.filter((p) => p.kind === "wall");
+  assert.ok(!walls.some((p) => p.bottom > 0));
+  assert.equal(walls.filter((p) => p.bottom === 0 && p.top === 3.5).length, 2); // hanya dinding di kiri-kanan jendela
+  assert.ok(model.prisms.some((p) => p.kind === "glass" && p.bottom === 0 && p.top === 3.5));
 });
 
 test("ruang menjadi lantai, lahan diabaikan", () => {

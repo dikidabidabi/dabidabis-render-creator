@@ -17,7 +17,40 @@ export type Window = {
   kind?: "regular" | "dynamic";
   dividerSpacingCm?: number;
   endToleranceCm?: number;
+  /** Tipe tinggi jendela; bawaan "standard". */
+  heightType?: WindowHeightType;
 };
+
+/** full = lantai s/d puncak pintu (bata di atasnya); standard = ambang 0,8 m s/d puncak pintu;
+ *  wall = lantai s/d puncak dinding tanpa bata di atasnya. */
+export type WindowHeightType = "full" | "standard" | "wall";
+export const WINDOW_HEIGHT_TYPES: { value: WindowHeightType; label: string; hint: string }[] = [
+  { value: "full", label: "Full Window", hint: "Dari lantai sampai puncak pintu, dinding bata di atasnya" },
+  { value: "standard", label: "Jendela Standar", hint: "Ambang 0,8 m sampai puncak pintu" },
+  { value: "wall", label: "Window Wall", hint: "Dari lantai sampai puncak dinding, tanpa bata di atas" },
+];
+export const WINDOW_STANDARD_SILL_M = 0.8;
+export const WINDOW_DOOR_HEAD_M = 2.4;
+
+export function windowHeightType(value: unknown): WindowHeightType {
+  return value === "full" || value === "wall" ? value : "standard";
+}
+
+export function windowHeightLabel(value: unknown): string {
+  const type = windowHeightType(value);
+  return WINDOW_HEIGHT_TYPES.find((item) => item.value === type)!.label;
+}
+
+/** Ambang & puncak jendela (m dari muka lantai) untuk tinggi dinding dan puncak pintu tertentu. */
+export function windowVerticalRange(type: unknown, wallHeight: number, doorHead: number): { sill: number; head: number } {
+  const h = Math.max(0.1, wallHeight);
+  const head = Math.min(doorHead, h);
+  switch (windowHeightType(type)) {
+    case "full": return { sill: 0, head };
+    case "wall": return { sill: 0, head: h };
+    default: return { sill: Math.min(WINDOW_STANDARD_SILL_M, head * 0.45), head };
+  }
+}
 
 export const DYNAMIC_WINDOW_INITIAL_CM = 50;
 
@@ -135,6 +168,7 @@ export function normalizeWindow(raw: any): Window | null {
     leaves: Number.isFinite(leavesRaw) ? Math.max(1, Math.min(24, Math.round(leavesRaw))) : 1,
     widthCm: windowLengthCm(Number.isFinite(widthRaw) ? widthRaw : kind === "dynamic" ? 50 : 120, kind),
     kind,
+    heightType: windowHeightType(raw.heightType),
     ...(kind === "dynamic" ? {
       dividerSpacingCm: Number.isFinite(spacingRaw) ? Math.max(5, spacingRaw) : 100,
       endToleranceCm: Number.isFinite(toleranceRaw) ? Math.max(0, toleranceRaw) : 20,

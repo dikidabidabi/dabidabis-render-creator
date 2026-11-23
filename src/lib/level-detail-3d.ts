@@ -5,7 +5,7 @@
 
 import polygonClipping from "polygon-clipping";
 import { foldingDoorSegments, type Door } from "@/lib/doors";
-import { windowFramePolygons, windowPlanGeometry, type Window } from "@/lib/windows";
+import { WINDOW_DOOR_HEAD_M, WINDOW_STANDARD_SILL_M, windowFramePolygons, windowHeightType, windowPlanGeometry, windowVerticalRange, type Window, type WindowHeightType } from "@/lib/windows";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
 import { curveWallBand, sampleCurveLine } from "@/lib/curve-wall";
 import { WALL_THICK_MM, isWallBandMaterial, materialForEdgeSegment, wallBandPolygon, windowWallCandidates } from "@/lib/wall-materials";
@@ -54,12 +54,14 @@ export type Detail3dModel = {
   sillHeight: number;
   headHeight: number;
   counts: { walls: number; doors: number; windows: number; rooms: number; columns: number };
+  /** Titik tengah tiap jendela (m) untuk tombol edit tipe di kotak Detail 3D. */
+  windows: Array<{ id: string; type: WindowHeightType; center: P; sill: number; head: number }>;
   bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
 };
 
-export const DETAIL3D_DOOR_HEIGHT_M = 2.1;
-export const DETAIL3D_WINDOW_SILL_M = 0.9;
-export const DETAIL3D_WINDOW_HEAD_M = 2.1;
+export const DETAIL3D_DOOR_HEIGHT_M = WINDOW_DOOR_HEAD_M;
+export const DETAIL3D_WINDOW_SILL_M = WINDOW_STANDARD_SILL_M;
+export const DETAIL3D_WINDOW_HEAD_M = WINDOW_DOOR_HEAD_M;
 export const DETAIL3D_RAILING_HEIGHT_M = 1;
 export const DETAIL3D_ROOM_SLAB_M = 0.15;
 const DEFAULT_TOP_LEVEL_H = 4;
@@ -224,7 +226,14 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
     return geometry ? geometry.halfDepth * 2 : 0.15 * ppm;
   };
   const doorCuts = union(input.doors.map((door) => rectAlong(door.a, door.b, depthAt(door.a, door.b) * 0.7)));
-  const windowCuts = difference(union(input.windows.map((window) => rectAlong(window.a, window.b, depthAt(window.a, window.b) * 0.7))), doorCuts);
+  const windowRange = (window: Window) => windowVerticalRange(window.heightType, wallHeight, doorHeight);
+  // Potongan dinding per tipe jendela agar ambang/bata atas mengikuti tipe masing-masing.
+  const windowCutsByType = (["full", "standard", "wall"] as const).map((type) => {
+    const list = input.windows.filter((window) => windowHeightType(window.heightType) === type);
+    const range = windowVerticalRange(type, wallHeight, doorHeight);
+    return { range, cuts: difference(union(list.map((window) => rectAlong(window.a, window.b, depthAt(window.a, window.b) * 0.7))), doorCuts) };
+  });
+  const windowCuts = union(windowCutsByType.flatMap((entry) => entry.cuts.flat()));
   const openingCuts = union([...doorCuts, ...windowCuts].flat());
 
   const shapes: Record<WallClass, MultiPolygon> = {
@@ -250,9 +259,12 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
     if (!shape.length) continue;
     push(cls, difference(shape, openingCuts), 0, wallHeight);
     push(cls, intersection(shape, doorCuts), doorHeight, wallHeight);
-    const underWindow = intersection(shape, windowCuts);
-    push(cls, underWindow, 0, sillHeight);
-    push(cls, underWindow, headHeight, wallHeight);
+    for (const { range, cuts } of windowCutsByType) {
+      if (!cuts.length) continue;
+      const underWindow = intersection(shape, cuts);
+      push(cls, underWindow, 0, range.sill);
+      push(cls, underWindow, range.head, wallHeight);
+    }
   }
   push("railing", difference(shapes.railing, doorCuts), 0, DETAIL3D_RAILING_HEIGHT_M);
 
@@ -300,13 +312,22 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
   }
 
   // ---- Jendela: kaca + kusen ----
+  const windowMarks: Detail3dModel["windows"] = [];
   for (const window of input.windows) {
     const geometry = windowPlanGeometry(window, ppm, wallCandidates);
     if (!geometry) continue;
-    push("glass", [[rectAlong(window.a, window.b, 0.006 * ppm)]], sillHeight, headHeight);
-    for (const frame of windowFramePolygons(window, ppm, wallCandidates)) push("frame", [[frame]], sillHeight, headHeight);
-    push("frame", [[geometry.footprint]], sillHeight, sillHeight + 0.05);
-    push("frame", [[geometry.footprint]], headHeight - 0.05, headHeight);
+    const { sill, head } = windowRange(window);
+    push("glass", [[rectAlong(window.a, window.b, 0.006 * ppm)]], sill, head);
+    for (const frame of windowFramePolygons(window, ppm, wallCandidates)) push("frame", [[frame]], sill, head);
+    push("frame", [[geometry.footprint]], sill, sill + 0.05);
+    push("frame", [[geometry.footprint]], head - 0.05, head);
+    windowMarks.push({
+      id: window.id,
+      type: windowHeightType(window.heightType),
+      center: { x: (window.a.x + window.b.x) / 2 / ppm, y: (window.a.y + window.b.y) / 2 / ppm },
+      sill,
+      head,
+    });
   }
 
   // ---- Lantai ----
@@ -350,6 +371,7 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
     sillHeight,
     headHeight,
     counts: { walls: wallCount, doors: input.doors.length, windows: input.windows.length, rooms: roomCount, columns: (input.columns ?? []).filter((ring) => ring.length >= 3).length },
+    windows: windowMarks,
     bounds,
   };
 }
@@ -402,6 +424,10 @@ export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: stri
   const levels = (sketch.levels ?? []).map((lv) => ({ ...lv, mdpl: Number(lv.mdpl) || 0 }));
   const doors = normalizeDoors(sketch.doors ?? []);
   const windows = normalizeWindows(sketch.windows ?? []);
+  const rawWindowIds = new Set((sketch.windows ?? []).flatMap((raw) => {
+    const id = (raw as { id?: unknown } | null)?.id;
+    return typeof id === "string" && id ? [id] : [];
+  }));
   return {
     pxPerMeter,
     levelId,
@@ -414,7 +440,8 @@ export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: stri
     columns: detail3dColumnRings(collectGrids(sketch.structuralGrid, sketch.structuralGridExtras), levelId, levels, pxPerMeter),
     // Tanpa id acak dari normalisasi agar model tidak dibangun ulang tiap muat ulang.
     doors: doors.filter((d) => d.levelId === levelId).map(({ id: _id, levelId: _lv, ...door }) => door),
-    windows: windows.filter((w) => w.levelId === levelId).map((w) => ({ ...w, id: "" })),
+    // Id jendela tersimpan dipertahankan (untuk edit tipe di Detail 3D); id acak hasil normalisasi dikosongkan.
+    windows: windows.filter((w) => w.levelId === levelId).map((w) => ({ ...w, id: rawWindowIds.has(w.id) ? w.id : "" })),
     wallHeight: levelWallHeight(levels, levelId),
   };
 }

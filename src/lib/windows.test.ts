@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { DYNAMIC_WINDOW_INITIAL_CM, normalizeWindow, windowDividerFractions, windowFramePolygons, windowLengthCm, windowPlanGeometry } from "./windows";
+import { DYNAMIC_WINDOW_INITIAL_CM, normalizeWindow, windowDividerFractions, windowFramePolygons, windowLengthCm, windowPlanGeometry, windowVerticalRange } from "./windows";
 
 const dynamic = (lengthCm: number, tolerance = 20) => ({
   a: { x: 0, y: 0 }, b: { x: lengthCm / 100 * 80, y: 0 },
@@ -54,4 +54,14 @@ describe("dynamic windows", () => {
     const centers = frames.slice(2).map((frame) => (frame[0].x + frame[2].x) / 2);
     assert.deepEqual(centers.map((x) => Math.round(x)), [80, 160, 240, 320]);
   });
+});
+test("tipe jendela bawaan adalah Jendela Standar", () => {
+  assert.equal(normalizeWindow({ id: "w", a: { x: 0, y: 0 }, b: { x: 100, y: 0 } })?.heightType, "standard");
+  assert.equal(normalizeWindow({ id: "w", a: { x: 0, y: 0 }, b: { x: 100, y: 0 }, heightType: "wall" })?.heightType, "wall");
+});
+
+test("rentang tinggi tiap tipe jendela pada dinding 3,5 m", () => {
+  assert.deepEqual(windowVerticalRange("standard", 3.5, 2.4), { sill: 0.8, head: 2.4 });
+  assert.deepEqual(windowVerticalRange("full", 3.5, 2.4), { sill: 0, head: 2.4 });
+  assert.deepEqual(windowVerticalRange("wall", 3.5, 2.4), { sill: 0, head: 3.5 });
 });
