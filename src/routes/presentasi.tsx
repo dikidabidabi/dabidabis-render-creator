@@ -1,7 +1,7 @@
 import { buildVolumetricTable, paginateVolumetricRows, type VolumetricRow, type VolumetricTable } from "@/lib/volumetric";
 import { getFormulaSettings } from "@/lib/formula-settings";
 import { paginateRincianLevels, rincianTextLines } from "@/lib/rincian-pagination";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Fragment } from "react";
@@ -75,6 +75,12 @@ import { detail3dInputForSketch } from "@/lib/level-detail-3d";
 import { LevelDetail3dSlide } from "@/components/level-detail-3d-slide";
 import { DetailAxonometricSlide } from "@/components/detail-axonometric-slide";
 import { Section3dSlide } from "@/components/section3d-slide";
+import { TampakSlide } from "@/components/tampak-slide";
+import {
+  DEFAULT_PANEL_SETTINGS, PANEL_COLORS, PANEL_KEYS, PANEL_TYPE, TAMPAK_DIRS, TAMPAK_LABEL, fitPanelFontSize, normalizeCompetitionPanels,
+  panelContentCatalog, panelIncluded, panelItems, panelLayoutFor, panelPageGeometry, panelPaperPixels, panelTexts, panelTitle,
+  type PanelCatalogExtras, type PanelKey, type PanelLayout, type PanelOrientation, type PanelPaper, type PanelSourceSketch, type PanelText, type TampakDir,
+} from "@/lib/competition-panels";
 import { majorityArchitecturalStyle } from "@/lib/section-3d";
 import { collectSpecMaterialRefs, sketchMetersPerSketchPx, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef } from "@/lib/spec-outline";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
@@ -136,6 +142,11 @@ export const Route = createFileRoute("/presentasi")({
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
+  }),
+  validateSearch: (search: Record<string, unknown>): { psd?: string; paper?: PanelPaper; sketch?: string } => ({
+    ...(typeof search["psd"] === "string" ? { psd: search["psd"] } : {}),
+    ...(search["paper"] === "A1" || search["paper"] === "A2" ? { paper: search["paper"] } : {}),
+    ...(typeof search["sketch"] === "string" ? { sketch: search["sketch"] } : {}),
   }),
   component: PresentasiPage,
 });
@@ -200,6 +211,7 @@ type Sketch = {
   showFurnitureSlide?: boolean;
   showSpecOutlineSlide?: boolean;
   generalMaterials?: GeneralMaterialSelections;
+  competitionPanels?: unknown;
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 
@@ -540,6 +552,8 @@ function ThemeSelect({
 }
 
 function PresentasiPage() {
+  const search = Route.useSearch();
+  const navigate = useNavigate();
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -590,6 +604,10 @@ function PresentasiPage() {
       }
     } catch { /* ignore */ }
   };
+
+  useEffect(() => {
+    if (loaded && search.sketch && sketches.some((sk) => sk.id === search.sketch)) setOpenId(search.sketch);
+  }, [loaded, search.sketch, sketches]);
 
   useEffect(() => {
     load();
@@ -648,6 +666,8 @@ function PresentasiPage() {
               moodboard={moodboardStore[sk.id] ?? null}
               open={openId === sk.id}
               onToggle={() => setOpenId((p) => (p === sk.id ? null : sk.id))}
+              autoPsd={search.psd && search.sketch === sk.id ? { target: search.psd, paper: search.paper ?? "A1" } : null}
+              onAutoPsdDone={() => { void navigate({ to: "/presentasi", search: {}, replace: true }); }}
             />
           ))}
         </div>
@@ -684,7 +704,7 @@ export function PrintStyles() {
 // ---------- Sketch Box ----------
 export function PresentasiBox({
   sketch, narasi, perspektif, moodboard, open, onToggle, hideShare, planOverride, analysisOverride,
-  annotateShareId, viewsOverride, coverOverride,
+  annotateShareId, viewsOverride, coverOverride, autoPsd, onAutoPsdDone,
 }: {
   sketch: Sketch; narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null;
   open: boolean; onToggle: () => void;
@@ -697,6 +717,9 @@ export function PresentasiBox({
   viewsOverride?: Record<string, { scale: number; tx: number; ty: number }> | null;
   /** Cover halaman judul dari presentasi sumber (untuk presentasi kiriman). */
   coverOverride?: string | null;
+  /** Permintaan unduh PSD Panel Sayembara dari halaman Sketsa. */
+  autoPsd?: { target: string; paper: PanelPaper } | null;
+  onAutoPsdDone?: () => void;
 }) {
 
   const external = planOverride !== undefined || analysisOverride !== undefined;
@@ -757,7 +780,7 @@ export function PresentasiBox({
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [exporting, setExporting] = useState<null | "pptx" | "pdf">(null);
+  const [exporting, setExporting] = useState<null | "pptx" | "pdf" | "psd">(null);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
@@ -1074,6 +1097,108 @@ export function PresentasiBox({
     }
   }, [effectiveSketch.title]);
 
+  // ---------- Unduh Panel Sayembara (.psd A1/A2) ----------
+  const [psdJob, setPsdJob] = useState<{ panels: CompetitionPanelSlide[]; paper: PanelPaper } | null>(null);
+  const psdRootRef = useRef<HTMLDivElement | null>(null);
+  const startPsdExport = useCallback((target: string, paper: PanelPaper) => {
+    const settings = normalizeCompetitionPanels(effectiveSketch.competitionPanels) ?? DEFAULT_PANEL_SETTINGS;
+    const keys = (PANEL_KEYS as readonly string[]).includes(target)
+      ? [target as PanelKey]
+      : PANEL_KEYS.filter((k) => panelIncluded(settings.panels[k]));
+    if (keys.length === 0) { window.alert("Belum ada panel yang dipilih untuk diunduh."); return; }
+    const panels = buildPanelSlides(effectiveSketch, slides, { narasi, perspektif, moodboard, materialLibrary }, keys);
+    setExporting("psd");
+    setExportProgress({ current: 0, total: panels.reduce((n, p) => n + p.cells.length, 0) + panels.length });
+    setPsdJob({ panels, paper });
+  }, [effectiveSketch, slides, narasi, perspektif, moodboard, materialLibrary]);
+
+  useEffect(() => {
+    if (!psdJob) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // Beri waktu render 3D/peta di kotak tersembunyi sebelum ditangkap.
+        await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+        await new Promise<void>((r) => setTimeout(r, 1500));
+        const root = psdRootRef.current;
+        if (!root || cancelled) return;
+        const [{ default: html2canvas }, { buildPanelPsd, downloadBlob }] = await Promise.all([
+          import("html2canvas-pro"),
+          import("@/lib/competition-psd"),
+        ]);
+        const total = psdJob.panels.reduce((n, p) => n + p.cells.length, 0) + psdJob.panels.length;
+        let step = 0;
+        const files: Array<{ name: string; blob: Blob }> = [];
+        const project = effectiveSketch.title || "Proyek";
+        const safe = (t: string) => t.replace(/[^\w\-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+        for (const panel of psdJob.panels) {
+          const { w: W, h: H } = panelPaperPixels(psdJob.paper, panel.orientation);
+          const geo = panelPageGeometry(panel.layout, W, H);
+          const capH = PANEL_TYPE.captionH * geo.unit;
+          const cells: Array<{ label: string; image: HTMLCanvasElement | null }> = [];
+          for (let i = 0; i < panel.cells.length; i++) {
+            const cell = panel.cells[i]!;
+            setExportProgress({ current: ++step, total });
+            await new Promise<void>((r) => setTimeout(r, 0));
+            const el = root.querySelector<HTMLElement>(`[data-psd-cell="${panel.panelKey}:${i}"]`);
+            const box = geo.slots[i];
+            let image: HTMLCanvasElement | null = null;
+            if (el && box) {
+              const scale = Math.max(0.6, Math.min(2.5, Math.min(box.w / A3_W, (box.h - capH) / A3_H)));
+              try {
+                image = await html2canvas(el, { backgroundColor: "#ffffff", scale, useCORS: true, logging: false });
+              } catch (err) {
+                console.warn("Panel cell capture failed", cell.token, err);
+              }
+            }
+            cells.push({ label: cell.label, image });
+          }
+          setExportProgress({ current: ++step, total });
+          await new Promise<void>((r) => setTimeout(r, 0));
+          const blob = await buildPanelPsd({
+            name: panel.panelName, number: panel.number, total: panel.total, projectTitle: project,
+            layout: panel.layout, texts: panel.texts, cells, paper: psdJob.paper, orientation: panel.orientation,
+          });
+          cells.forEach((c) => { if (c.image) { c.image.width = 0; c.image.height = 0; } });
+          files.push({ name: `${safe(project)}_Panel_${String(panel.number).padStart(2, "0")}_${safe(panel.panelName)}_${psdJob.paper}.psd`, blob });
+          if (cancelled) return;
+        }
+        if (files.length === 1) downloadBlob(files[0]!.blob, files[0]!.name);
+        else {
+          const { default: JSZip } = await import("jszip");
+          const zip = new JSZip();
+          files.forEach((f) => zip.file(f.name, f.blob));
+          const blob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+          downloadBlob(blob, `${safe(project)}_Panel_Sayembara_${psdJob.paper}.zip`);
+        }
+      } catch (err) {
+        console.error(err);
+        window.alert("Gagal mengunduh panel PSD: " + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        if (!cancelled) {
+          setPsdJob(null);
+          setExporting(null);
+          setExportProgress(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [psdJob, effectiveSketch.title]);
+
+  const autoPsdKey = autoPsd ? `${autoPsd.target}|${autoPsd.paper}` : null;
+  const autoPsdDoneRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!autoPsd || !autoPsdKey || autoPsdDoneRef.current === autoPsdKey) return;
+    const t = window.setTimeout(() => {
+      autoPsdDoneRef.current = autoPsdKey;
+      startPsdExport(autoPsd.target, autoPsd.paper);
+      onAutoPsdDone?.();
+    }, 600);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPsdKey, startPsdExport]);
+
+  const currentPanel = slides[idx]?.kind === "competition-panel" ? (slides[idx] as CompetitionPanelSlide) : null;
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface/60 shadow-sm">
@@ -1211,6 +1336,18 @@ export function PresentasiBox({
                     {exporting === "pptx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Presentation className="h-4 w-4" />}
                     PPTX
                   </Button>
+                  {currentPanel && (["A1", "A2"] as const).map((paper) => (
+                    <Button
+                      key={paper}
+                      variant="secondary" size="sm" className="h-8 gap-1.5"
+                      onClick={() => startPsdExport(currentPanel.panelKey, paper)}
+                      disabled={!!exporting}
+                      title={`Unduh panel ini sebagai Photoshop (.psd) ${paper}, teks dapat diedit`}
+                    >
+                      {exporting === "psd" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+                      PSD {paper}
+                    </Button>
+                  ))}
                   <Button
                     variant="secondary" size="icon" className="h-8 w-8"
                     onClick={() => { setFull(true); setPlaying(true); }}
@@ -1227,7 +1364,7 @@ export function PresentasiBox({
                 <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
                   <span>
                     Merender Slide {exportProgress.current} dari {exportProgress.total}
-                    {exporting === "pdf" ? " (PDF)" : " (PPTX)"}…
+                    {exporting === "pdf" ? " (PDF)" : exporting === "psd" ? " (Panel PSD)" : " (PPTX)"}…
                   </span>
                   <span>{Math.round((exportProgress.current / exportProgress.total) * 100)}%</span>
                 </div>
@@ -1340,7 +1477,23 @@ export function PresentasiBox({
       )}
 
       {/* Offscreen export container (full A3 canvas, captured by html2canvas for both PDF and PPTX) */}
-      {exporting && (
+      {psdJob && (
+        <div
+          ref={psdRootRef}
+          className="no-print"
+          style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
+          aria-hidden
+        >
+          <SlideBareCtx.Provider value={true}>
+            {psdJob.panels.flatMap((p) => p.cells.map((c, i) => c.slide ? (
+              <div key={`${p.panelKey}-${i}`} data-psd-cell={`${p.panelKey}:${i}`} style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}>
+                <SlideContent slide={c.slide} />
+              </div>
+            ) : null))}
+          </SlideBareCtx.Provider>
+        </div>
+      )}
+      {exporting && exporting !== "psd" && (
         <div
           ref={exportRootRef}
           className="no-print"
@@ -1571,7 +1724,14 @@ type Slide =
   | { kind: "masterplan"; id: string; title: string; sketch: Sketch; plan: import("@/lib/masterplan").MasterPlan; analysis: MasterplanAnalysis | null }
   | { kind: "siteplan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
   | { kind: "analisis-kawasan"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
-  | { kind: "analisis-site"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis };
+  | { kind: "analisis-site"; id: string; title: string; sketch: Sketch; analysis: MasterplanAnalysis }
+  | { kind: "tampak"; id: string; title: string; sketch: Sketch; dir: TampakDir }
+  | {
+      kind: "competition-panel"; id: string; title: string; sketch: Sketch; panelKey: PanelKey; panelName: string;
+      number: number; total: number; layout: PanelLayout; cells: PanelCell[]; texts: PanelText[];
+      paper: PanelPaper; orientation: PanelOrientation;
+    };
+type PanelCell = { token: string; label: string; slide: Slide | null };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -1919,6 +2079,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       });
     });
   }
+  // Panel Sayembara — hanya bila ceklis "Tampilkan di Presentasi" pada alat Panel Sayembara aktif.
+  if (normalizeCompetitionPanels(sk.competitionPanels)?.enabled) {
+    out.push(...buildPanelSlides(sk, out, { narasi: narasiList, perspektif, moodboard, materialLibrary }));
+  }
   // Slide penutup
   out.push({ kind: "closing", id: "closing-slide", title: "Terima Kasih", sketch: sk });
 
@@ -1958,6 +2122,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "siteplan": return "Siteplan Kawasan";
       case "analisis-kawasan": return "Analisis Kawasan";
       case "analisis-site": return "Analisis Site";
+      case "competition-panel": return "Panel Sayembara";
       default: return null;
     }
   };
@@ -2343,8 +2508,9 @@ function useSlideTheme(slideId?: string) {
 
 function SlideContent({ slide }: { slide?: Slide }) {
   const theme = useSlideTheme(slide?.id);
+  const bare = React.useContext(SlideBareCtx);
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d" || slide.kind === "detail-axo" || slide.kind === "section3d";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d" || slide.kind === "detail-axo" || slide.kind === "section3d" || slide.kind === "tampak" || slide.kind === "competition-panel";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
@@ -2382,8 +2548,21 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "siteplan" && <SiteplanBody analysis={slide.analysis} />}
       {slide.kind === "analisis-kawasan" && <AnalisisKawasanBody analysis={slide.analysis} />}
       {slide.kind === "analisis-site" && <AnalisisKawasanBody analysis={slide.analysis} scope="site" />}
+      {slide.kind === "tampak" && <TampakSlideBody slide={slide} />}
+      {slide.kind === "competition-panel" && <CompetitionPanelBody slide={slide} />}
     </>
   );
+  const fixedBody = slide.kind === "spec-outline" || slide.kind === "rincian" || slide.kind === "volumetrik" || slide.kind === "komposisi";
+  // Di dalam kotak Panel Sayembara: tanpa kepala/kaki slide agar gambar lebih besar.
+  if (bare && !isSpecial) {
+    return (
+      <div style={{ width: A3_W, height: A3_H, background: "#ffffff", color: theme.ink, fontFamily: theme.body, padding: 28, display: "flex", flexDirection: "column" }}>
+        {fixedBody
+          ? <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{body}</div>
+          : <BareFitBox>{body}</BareFitBox>}
+      </div>
+    );
+  }
   // All non-special slides default to centered fit; users can pan and pinch-to-zoom.
   return (
     <div
@@ -5090,6 +5269,226 @@ function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3
     };
   }, [sketch]);
   return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={A3_W} slideHeight={A3_H} />;
+}
+
+// ---------- Panel Sayembara ----------
+/** Slide yang dirender di dalam kotak Panel Sayembara (tanpa kepala/kaki). */
+const SlideBareCtx = React.createContext(false);
+type CompetitionPanelSlide = Extract<Slide, { kind: "competition-panel" }>;
+type PanelBuildCtx = { narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null; materialLibrary: LibraryMaterial[] };
+
+function panelExtras(ctx: PanelBuildCtx): PanelCatalogExtras {
+  return {
+    narasi: ctx.narasi.map((n) => ({ id: n.id, text: n.text })),
+    perspektif: ctx.perspektif.filter((p) => !!p.image).map((p) => ({ id: p.id, title: p.title })),
+    hasMoodboard: !!ctx.moodboard?.image,
+  };
+}
+
+function panelSketchCuts(sk: Sketch): SectionCut[] {
+  return Array.isArray(sk.sectionCuts) && sk.sectionCuts.length > 0 ? sk.sectionCuts : (sk.sectionCut ? [sk.sectionCut] : []);
+}
+
+/** Token konten panel → slide proyek (memakai slide presentasi bila ada agar zoom/pan sama). */
+function resolvePanelSlide(token: string, deck: Slide[], sk: Sketch, ctx: PanelBuildCtx): Slide | null {
+  const sep = token.indexOf(":");
+  const kind = sep >= 0 ? token.slice(0, sep) : token;
+  const arg = sep >= 0 ? token.slice(sep + 1) : "";
+  const byId = (id: string) => deck.find((s) => s.id === id) ?? null;
+  const cuts = panelSketchCuts(sk);
+  const cutIndex = cuts.findIndex((c, i) => !!c?.p1 && !!c?.p2 && (c.label || `Potongan ${i + 1}`) === arg);
+  const cut = cutIndex >= 0 ? cuts[cutIndex] : undefined;
+  switch (kind) {
+    case "site": return deck.find((s) => s.kind === "site" && s.view === arg) ?? null;
+    case "konsep": return deck.filter((s) => s.kind === "konsep")[Number(arg) || 0] ?? null;
+    case "bubble": return byId(`bubble-${arg}`);
+    case "lvl": return byId(`lvl-${arg}`);
+    case "perspektif": return byId(`perspektif-${arg}`);
+    case "section":
+      if (!cut) return null;
+      return byId(`section-cut-${cutIndex}-${arg}`) ?? { kind: "section", id: `section-cut-${cutIndex}-${arg}`, title: `Potongan Prinsip Skematik ${arg}`, sketch: sk, cut };
+    case "section3d":
+      if (!cut) return null;
+      return byId(`section3d-${cutIndex}-${arg}`) ?? { kind: "section3d", id: `section3d-${cutIndex}-${arg}`, title: `Potongan 3D ${arg}`, sketch: sk, cut, label: arg };
+    case "function-section":
+      if (!cut) return null;
+      return byId(`function-section-${cutIndex}-${arg}`) ?? { kind: "function-section", id: `function-section-${cutIndex}-${arg}`, title: `Potongan Fungsi ${arg}`, sketch: sk, cut };
+    case "tampak": {
+      if (!(TAMPAK_DIRS as readonly string[]).includes(arg)) return null;
+      const dir = arg as TampakDir;
+      return { kind: "tampak", id: `tampak-${dir}`, title: TAMPAK_LABEL[dir], sketch: sk, dir };
+    }
+    case "spec-outline": {
+      const hit = deck.find((s) => s.kind === "spec-outline");
+      if (hit) return hit;
+      const pages = paginateSpecMaterials(sk, collectSpecMaterialRefs(sk), ctx.materialLibrary);
+      return { kind: "spec-outline", id: "spec-outline", title: "Outline Spesifikasi", sketch: sk, materialRows: pages[0] ?? [], pageIndex: 1, pageCount: 1 };
+    }
+    default: return deck.find((s) => s.kind === kind) ?? null;
+  }
+}
+
+function buildPanelSlides(sk: Sketch, deck: Slide[], ctx: PanelBuildCtx, keys?: PanelKey[]): CompetitionPanelSlide[] {
+  const settings = normalizeCompetitionPanels(sk.competitionPanels) ?? DEFAULT_PANEL_SETTINGS;
+  const extras = panelExtras(ctx);
+  const source = sk as unknown as PanelSourceSketch;
+  const catalog = panelContentCatalog(source, extras);
+  const labelOf = new Map(catalog.map((c) => [c.token, c.label]));
+  const included = PANEL_KEYS.filter((k) => panelIncluded(settings.panels[k]));
+  const list = keys ?? included;
+  return list.map((key) => {
+    const cfg = settings.panels[key];
+    const items = panelItems(key, cfg, catalog, source);
+    const layout = panelLayoutFor(key, cfg, items.length);
+    const name = panelTitle(key, cfg);
+    const order = included.indexOf(key);
+    return {
+      kind: "competition-panel",
+      id: `panel-${key}`,
+      title: `Panel Sayembara · ${name}`,
+      sketch: sk,
+      panelKey: key,
+      panelName: name,
+      number: (order >= 0 ? order : PANEL_KEYS.indexOf(key)) + 1,
+      total: Math.max(included.length, 1),
+      layout,
+      cells: items.slice(0, layout.slots.length).map((token) => ({ token, label: labelOf.get(token) ?? token, slide: resolvePanelSlide(token, deck, sk, ctx) })),
+      texts: panelTexts(key, cfg, layout, source, extras),
+      paper: settings.paper,
+      orientation: settings.orientation,
+    };
+  });
+}
+
+/** Kotak paskan sederhana (ukuran tata letak, tanpa terpengaruh skala induk). */
+function BareFitBox({ children }: { children: React.ReactNode }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ s: number; w: number; h: number } | null>(null);
+  useLayoutEffect(() => {
+    const box = boxRef.current, inner = innerRef.current;
+    if (!box || !inner) return;
+    const measure = () => {
+      const prev = inner.style.transform;
+      inner.style.transform = "none";
+      const w = inner.scrollWidth, h = inner.scrollHeight;
+      inner.style.transform = prev;
+      if (!w || !h || !box.offsetWidth || !box.offsetHeight) return;
+      setFit({ s: Math.min(box.offsetWidth / w, box.offsetHeight / h), w, h });
+    };
+    measure();
+    const raf = requestAnimationFrame(measure);
+    const t = window.setTimeout(measure, 400);
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
+  }, []);
+  return (
+    <div ref={boxRef} style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div ref={innerRef} style={{ width: fit ? fit.w : "100%", height: fit ? fit.h : "100%", transform: fit ? `scale(${fit.s})` : undefined, transformOrigin: "center center", flexShrink: 0 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TampakSlideBody({ slide }: { slide: Extract<Slide, { kind: "tampak" }> }) {
+  const { sketch, dir } = slide;
+  const levels = useMemo(() => {
+    const ppm = 1 / sketchMetersPerSketchPx(sketch.scale);
+    return (sketch.levels ?? []).map((lv) => ({
+      id: lv.id,
+      name: lv.name,
+      mdpl: Number(lv.mdpl) || 0,
+      ...(lv.typicalCount ? { typicalCount: lv.typicalCount } : {}),
+      input: detail3dInputForSketch(sketch as unknown as Parameters<typeof detail3dInputForSketch>[0], lv.id, ppm),
+    }));
+  }, [sketch]);
+  return <TampakSlide levels={levels} dir={dir} northRotation={Number(sketch.northRotation) || 0} slideWidth={A3_W} slideHeight={A3_H} />;
+}
+
+/** Ukuran halaman panel (rasio kertas A) yang dipaskan ke dalam bingkai slide. */
+function panelPageFit(orientation: PanelOrientation, maxW: number, maxH: number) {
+  const r = Math.SQRT2;
+  if (orientation === "portrait") {
+    const h = Math.min(maxH, maxW * r);
+    return { w: h / r, h };
+  }
+  const w = Math.min(maxW, maxH * r);
+  return { w, h: w / r };
+}
+
+function CompetitionPanelBody({ slide }: { slide: CompetitionPanelSlide }) {
+  const page = panelPageFit(slide.orientation, A3_W - 40, A3_H - 40);
+  return (
+    <div style={{ width: "100%", height: "100%", background: "#e9e6e1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ boxShadow: "0 10px 30px -12px rgba(0,0,0,0.35)" }}>
+        <CompetitionPanelPage slide={slide} width={page.w} height={page.h} />
+      </div>
+    </div>
+  );
+}
+
+/** Halaman Panel Sayembara: geometri dan tipografi sama dengan berkas PSD. */
+function CompetitionPanelPage({ slide, width, height }: { slide: CompetitionPanelSlide; width: number; height: number }) {
+  const g = panelPageGeometry(slide.layout, width, height);
+  const u = g.unit;
+  const capH = PANEL_TYPE.captionH * u;
+  const nn = String(slide.number).padStart(2, "0");
+  const project = slide.sketch.title || "Proyek";
+  const abs = (b: { x: number; y: number; w: number; h: number }): React.CSSProperties => ({ position: "absolute", left: b.x, top: b.y, width: b.w, height: b.h });
+  return (
+    <div data-panel-page={slide.panelKey} style={{ position: "relative", width, height, background: PANEL_COLORS.page, color: PANEL_COLORS.ink, overflow: "hidden", fontFamily: "Manrope, sans-serif" }}>
+      <div style={abs(g.header)}>
+        <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.kicker * u, fontWeight: 700, letterSpacing: "0.2em", color: PANEL_COLORS.accent }}>PANEL {nn} · SAYEMBARA</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 * u, marginTop: PANEL_TYPE.kicker * 0.5 * u }}>
+          <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.title * u, fontWeight: 800, lineHeight: 1.1, textTransform: "uppercase" }}>{slide.panelName}</div>
+          <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.project * u, fontWeight: 700, textAlign: "right", maxWidth: "38%" }}>{project}</div>
+        </div>
+        <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3 * u, background: PANEL_COLORS.ink }} />
+      </div>
+      {g.slots.map((box, i) => {
+        const cell = slide.cells[i];
+        const ih = box.h - capH;
+        const s = Math.min(box.w / A3_W, ih / A3_H);
+        return (
+          <div key={i} data-panel-cell={cell?.token ?? "kosong"} style={abs(box)}>
+            <div style={{ position: "absolute", left: 0, top: 0, width: box.w, height: ih, overflow: "hidden", background: "#ffffff", border: cell?.slide ? `${Math.max(1, u)}px solid ${PANEL_COLORS.border}` : `${Math.max(1, u * 1.5)}px dashed ${PANEL_COLORS.border}`, boxSizing: "border-box" }}>
+              {cell?.slide ? (
+                <div style={{ position: "absolute", left: (box.w - A3_W * s) / 2, top: (ih - A3_H * s) / 2, width: A3_W, height: A3_H, transform: `scale(${s})`, transformOrigin: "top left", pointerEvents: "none" }}>
+                  <SlideBareCtx.Provider value={true}>
+                    <SlideContent slide={cell.slide} />
+                  </SlideBareCtx.Provider>
+                </div>
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", textAlign: "center", padding: 8 * u, fontSize: 10 * u, color: PANEL_COLORS.muted }}>
+                  {cell ? "Konten belum tersedia di proyek" : "Kotak kosong · pilih konten di alat Panel Sayembara"}
+                </div>
+              )}
+            </div>
+            {cell && <div style={{ position: "absolute", left: 0, bottom: 0, height: capH - 4 * u, width: box.w, fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.caption * u, fontWeight: 700, letterSpacing: "0.06em", color: PANEL_COLORS.muted, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cell.label}</div>}
+          </div>
+        );
+      })}
+      {g.texts.map((box, i) => {
+        const t = slide.texts[i] ?? { title: "", body: "" };
+        const pad = PANEL_TYPE.pad * u;
+        const accent = PANEL_TYPE.accent * u;
+        const titleH = t.title ? PANEL_TYPE.textTitle * 1.7 * u : 0;
+        const innerW = box.w - pad * 2 - accent;
+        const bodyH = Math.max(10, box.h - pad * 2 - titleH);
+        const fs = fitPanelFontSize(t.body, innerW, bodyH, PANEL_TYPE.bodyMax * u, PANEL_TYPE.bodyMin * u);
+        return (
+          <div key={`t${i}`} data-panel-text={i} style={{ ...abs(box), background: PANEL_COLORS.textBg, borderLeft: `${accent}px solid ${PANEL_COLORS.accent}`, padding: pad, boxSizing: "border-box", overflow: "hidden" }}>
+            {t.title && <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.textTitle * u, fontWeight: 700, height: titleH }}>{t.title}</div>}
+            <div style={{ fontSize: fs, lineHeight: PANEL_TYPE.lineHeight, whiteSpace: "pre-wrap", height: bodyH, overflow: "hidden" }}>{t.body}</div>
+          </div>
+        );
+      })}
+      <div style={{ ...abs(g.footer), borderTop: `${Math.max(1, u)}px solid ${PANEL_COLORS.border}`, display: "flex", justifyContent: "space-between", paddingTop: 6 * u, fontSize: PANEL_TYPE.footer * u, color: PANEL_COLORS.muted, boxSizing: "border-box" }}>
+        <span>Dabidabi's · {project}</span>
+        <span>{slide.paper} · {slide.orientation === "portrait" ? "Potret" : "Lanskap"} · {nn}/{String(slide.total).padStart(2, "0")}</span>
+      </div>
+    </div>
+  );
 }
 
 /** Satu bentuk denah yang tidak valid tidak boleh membuat slide kosong.

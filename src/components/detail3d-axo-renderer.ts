@@ -13,7 +13,14 @@ export type AxoPoint = { id: string; x: number; y: number; h: number };
 export type AxoProjected = { id: string; x: number; y: number };
 export type AxoRender = { dataUrl: string; points: AxoProjected[] };
 
-export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: number, height: number): AxoRender | null {
+export type AxoRenderOptions = {
+  /** Arah kamera (dari model ke kamera). Bawaan aksonometri Detail 3D; arah datar = tampak. */
+  viewDir?: THREE.Vector3;
+};
+
+export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: number, height: number, opts: AxoRenderOptions = {}): AxoRender | null {
+  const viewDir = (opts.viewDir ?? DETAIL3D_VIEW_DIR).clone().normalize();
+  const elevation = Math.abs(viewDir.y) < 0.05;
   let minPX = Infinity, minPY = Infinity, maxPX = -Infinity, maxPY = -Infinity, topH = 0;
   for (const { model, base } of parts) {
     const b = model.bounds;
@@ -38,7 +45,14 @@ export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: n
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b8, 0.7));
     const sun = new THREE.DirectionalLight(0xffffff, 1.25);
-    sun.position.set(span * 0.8, topH + span * 1.8, span * 1.1);
+    if (elevation) {
+      // Tampak: matahari 45° dari kiri-depan dan 45° di atas, bayangan jatuh ke kanan-bawah.
+      const side = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), viewDir).normalize();
+      const d = reach * 2;
+      sun.position.copy(viewDir).multiplyScalar(d).addScaledVector(side, -d).add(new THREE.Vector3(0, topH / 2 + d * Math.SQRT2, 0));
+    } else {
+      sun.position.set(span * 0.8, topH + span * 1.8, span * 1.1);
+    }
     sun.target.position.set(0, topH / 2, 0);
     scene.add(sun.target);
     sun.castShadow = true;
@@ -91,7 +105,7 @@ export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: n
 
     // Kamera ortografik (aksonometri), dipaskan ke seluruh titik model.
     const camera = new THREE.OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, 0.01, reach * 60);
-    camera.position.copy(DETAIL3D_VIEW_DIR).multiplyScalar(reach * 15);
+    camera.position.copy(viewDir).multiplyScalar(reach * 15);
     camera.up.set(0, 1, 0);
     camera.lookAt(0, 0, 0);
     camera.updateMatrixWorld();

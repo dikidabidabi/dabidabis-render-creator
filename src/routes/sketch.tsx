@@ -34,6 +34,7 @@ import {
   ClipboardPaste,
   Waypoints,
   Scissors,
+  Trophy,
   Grid3x3,
   Paintbrush,
   DoorOpen,
@@ -129,6 +130,8 @@ import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog"
 import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlockPolygon, FUNCTION_META as MP_FN_META } from "@/lib/masterplan";
 import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
+import { CompetitionPanelTool } from "@/components/competition-panel-tool";
+import { normalizeCompetitionPanels, type CompetitionPanelSettings } from "@/lib/competition-panels";
 import { drawOsmTiles, nominatimSearch, worldToGeo, type Geo, DEFAULT_GEO } from "@/lib/geo";
 import { takePendingTenderExec } from "@/lib/tender-exec";
 import {
@@ -506,6 +509,8 @@ type Sketch = {
   linkedMasterplan?: { rootLayerId: string };
   functionZones?: FunctionZone[];
   generalMaterials?: GeneralMaterialSelections;
+  /** Alat Panel Sayembara: layout, konten, teks dan ceklis tampil di Presentasi. */
+  competitionPanels?: CompetitionPanelSettings;
 };
 
 type ImageReference = {
@@ -1228,6 +1233,10 @@ function normalizeSketch(s: any): Sketch {
       return out;
     })(),
     generalMaterials: normalizeGeneralMaterialSelections(s?.generalMaterials),
+    ...(() => {
+      const competitionPanels = normalizeCompetitionPanels(s?.competitionPanels);
+      return competitionPanels ? { competitionPanels } : {};
+    })(),
     detailAreas: (() => {
       if (!Array.isArray(s?.detailAreas)) return [];
       const validLvl = new Set(levels.map((l) => l.id));
@@ -2831,7 +2840,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "window" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "window" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan" | "panelSayembara">("line");
   // ===== Image Reference (JPG) =====
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -12378,6 +12387,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <Scissors className="mr-1.5 h-4 w-4" /> Garis Potong
           </Button>
           <Button
+            variant={tool === "panelSayembara" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setTool("panelSayembara"); }}
+            className={cn(tool === "panelSayembara" && "bg-gradient-primary shadow-primary")}
+            title="Panel Sayembara — susun 7 panel (Konsep, Denah, Tampak, Potongan, Simulasi, Perhitungan & Material, Perspektif) dari konten proyek, lalu unduh PSD A1/A2."
+          >
+            <Trophy className="mr-1.5 h-4 w-4" /> Panel Sayembara
+          </Button>
+          <Button
             variant={tool === "separasi" ? "default" : "outline"}
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("separasi"); }}
@@ -15144,6 +15162,16 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             Tarik diagonal untuk membentuk persegi/persegi panjang. Ruang otomatis terbentuk.
           </p>
+        )}
+        {tool === "panelSayembara" && (
+          <CompetitionPanelTool
+            sketch={sketch as unknown as Parameters<typeof CompetitionPanelTool>[0]["sketch"]}
+            onChange={(next) => onChange({ competitionPanels: next })}
+            onDownload={(target, paper) => {
+              toast.info("Menyiapkan panel PSD di halaman Presentasi…");
+              void navigateFn({ to: "/presentasi", search: { psd: target, paper, sketch: sketch.id } });
+            }}
+          />
         )}
         {tool === "section" && (
           <div className="space-y-1.5">
