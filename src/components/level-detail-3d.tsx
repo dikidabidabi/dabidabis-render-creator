@@ -96,7 +96,7 @@ export function LevelDetail3dBox({ levelName, input, onWindowTypeChange }: Level
                 const style = detail3dStyle(m.kind, m.color);
                 const transparent = style.opacity !== undefined;
                 return (
-                  <mesh key={m.key} geometry={m.geometry} castShadow={!transparent} receiveShadow>
+                  <mesh key={`${m.key}:${m.geometry.uuid}`} geometry={m.geometry} castShadow={!transparent} receiveShadow>
                     <meshStandardMaterial
                       color={style.color}
                       roughness={m.kind === "glass" ? 0.1 : 0.75}
