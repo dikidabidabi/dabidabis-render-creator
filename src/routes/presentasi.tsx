@@ -78,7 +78,7 @@ import { Section3dSlide } from "@/components/section3d-slide";
 import { TampakSlide } from "@/components/tampak-slide";
 import {
   DEFAULT_PANEL_SETTINGS, PANEL_COLORS, PANEL_KEYS, PANEL_TYPE, TAMPAK_DIRS, TAMPAK_LABEL, fitPanelFontSize, normalizeCompetitionPanels,
-  panelContentCatalog, panelIncluded, panelItems, panelLayoutFor, panelPageGeometry, panelPaperPixels, panelTexts, panelTitle,
+  panelContentCatalog, panelArrangement, panelIncluded, panelPageGeometry, panelPaperPixels, panelTexts, panelTitle,
   type PanelCatalogExtras, type PanelKey, type PanelLayout, type PanelOrientation, type PanelPaper, type PanelSourceSketch, type PanelText, type TampakDir,
 } from "@/lib/competition-panels";
 import { majorityArchitecturalStyle } from "@/lib/section-3d";
@@ -1135,23 +1135,23 @@ export function PresentasiBox({
           const { w: W, h: H } = panelPaperPixels(psdJob.paper, panel.orientation);
           const geo = panelPageGeometry(panel.layout, W, H);
           const capH = PANEL_TYPE.captionH * geo.unit;
-          const cells: Array<{ label: string; image: HTMLCanvasElement | null }> = [];
-          for (let i = 0; i < panel.cells.length; i++) {
-            const cell = panel.cells[i]!;
+          // Diindeks per kotak layout; kotak tanpa konten dibiarkan kosong.
+          const cells: Array<{ label: string; image: HTMLCanvasElement | null } | undefined> = geo.slots.map(() => undefined);
+          for (const cell of panel.cells) {
             setExportProgress({ current: ++step, total });
             await new Promise<void>((r) => setTimeout(r, 0));
-            const el = root.querySelector<HTMLElement>(`[data-psd-cell="${panel.panelKey}:${i}"]`);
-            const box = geo.slots[i];
+            const el = root.querySelector<HTMLElement>(`[data-psd-cell="${panel.panelKey}:${cell.slot}"]`);
+            const box = geo.slots[cell.slot];
             let image: HTMLCanvasElement | null = null;
             if (el && box) {
-              const scale = Math.max(0.6, Math.min(2.5, Math.min(box.w / A3_W, (box.h - capH) / A3_H)));
+              const scale = Math.max(0.6, Math.min(3, Math.min(box.w / cell.frame.w, (box.h - capH) / cell.frame.h)));
               try {
                 image = await html2canvas(el, { backgroundColor: "#ffffff", scale, useCORS: true, logging: false });
               } catch (err) {
                 console.warn("Panel cell capture failed", cell.token, err);
               }
             }
-            cells.push({ label: cell.label, image });
+            cells[cell.slot] = { label: cell.label, image };
           }
           setExportProgress({ current: ++step, total });
           await new Promise<void>((r) => setTimeout(r, 0));
@@ -1159,7 +1159,7 @@ export function PresentasiBox({
             name: panel.panelName, number: panel.number, total: panel.total, projectTitle: project,
             layout: panel.layout, texts: panel.texts, cells, paper: psdJob.paper, orientation: panel.orientation,
           });
-          cells.forEach((c) => { if (c.image) { c.image.width = 0; c.image.height = 0; } });
+          cells.forEach((c) => { if (c?.image) { c.image.width = 0; c.image.height = 0; } });
           files.push({ name: `${safe(project)}_Panel_${String(panel.number).padStart(2, "0")}_${safe(panel.panelName)}_${psdJob.paper}.psd`, blob });
           if (cancelled) return;
         }
@@ -1484,13 +1484,13 @@ export function PresentasiBox({
           style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
           aria-hidden
         >
-          <SlideBareCtx.Provider value={true}>
-            {psdJob.panels.flatMap((p) => p.cells.map((c, i) => c.slide ? (
-              <div key={`${p.panelKey}-${i}`} data-psd-cell={`${p.panelKey}:${i}`} style={{ width: A3_W, height: A3_H, background: "#fff", overflow: "hidden" }}>
+          {psdJob.panels.flatMap((p) => p.cells.map((c) => c.slide ? (
+            <div key={`${p.panelKey}-${c.slot}`} data-psd-cell={`${p.panelKey}:${c.slot}`} style={{ width: c.frame.w, height: c.frame.h, background: "#fff", overflow: "hidden" }}>
+              <SlideBareCtx.Provider value={c.frame}>
                 <SlideContent slide={c.slide} />
-              </div>
-            ) : null))}
-          </SlideBareCtx.Provider>
+              </SlideBareCtx.Provider>
+            </div>
+          ) : null))}
         </div>
       )}
       {exporting && exporting !== "psd" && (
@@ -1731,7 +1731,7 @@ type Slide =
       number: number; total: number; layout: PanelLayout; cells: PanelCell[]; texts: PanelText[];
       paper: PanelPaper; orientation: PanelOrientation;
     };
-type PanelCell = { token: string; label: string; slide: Slide | null };
+type PanelCell = { token: string; label: string; slide: Slide | null; slot: number; frame: { w: number; h: number } };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -2554,9 +2554,13 @@ function SlideContent({ slide }: { slide?: Slide }) {
   );
   const fixedBody = slide.kind === "spec-outline" || slide.kind === "rincian" || slide.kind === "volumetrik" || slide.kind === "komposisi";
   // Di dalam kotak Panel Sayembara: tanpa kepala/kaki slide agar gambar lebih besar.
-  if (bare && !isSpecial) {
+  // Kanvas mengikuti rasio kotak panel, sehingga isi slide tersusun ulang (bukan slide A3 yang diperkecil).
+  if (bare) {
+    if (isSpecial) {
+      return <div style={{ width: bare.w, height: bare.h, background: "#ffffff", color: theme.ink, fontFamily: theme.body, overflow: "hidden" }}>{body}</div>;
+    }
     return (
-      <div style={{ width: A3_W, height: A3_H, background: "#ffffff", color: theme.ink, fontFamily: theme.body, padding: 28, display: "flex", flexDirection: "column" }}>
+      <div style={{ width: bare.w, height: bare.h, background: "#ffffff", color: theme.ink, fontFamily: theme.body, padding: 18, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
         {fixedBody
           ? <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{body}</div>
           : <BareFitBox>{body}</BareFitBox>}
@@ -5231,7 +5235,8 @@ function Detail3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "detail3d"
     [sketch, level.id],
   );
   const levelMm = Math.round((Number(level.mdpl) || 0) * 1000);
-  return <LevelDetail3dSlide levelName={level.name} elevation={`${levelMm >= 0 ? "+" : ""}${levelMm}`} input={input} slideWidth={A3_W} slideHeight={A3_H} />;
+  const frame = useSlideFrame();
+  return <LevelDetail3dSlide levelName={level.name} elevation={`${levelMm >= 0 ? "+" : ""}${levelMm}`} input={input} slideWidth={frame.w} slideHeight={frame.h} />;
 }
 
 function DetailAxoSlideBody({ slide }: { slide: Extract<Slide, { kind: "detail-axo" }> }) {
@@ -5246,7 +5251,8 @@ function DetailAxoSlideBody({ slide }: { slide: Extract<Slide, { kind: "detail-a
       input: detail3dInputForSketch(sketch as unknown as Parameters<typeof detail3dInputForSketch>[0], lv.id, ppm),
     }));
   }, [sketch, levels]);
-  return <DetailAxonometricSlide levels={items} stairs={sketch.stairs ?? []} slideWidth={A3_W} slideHeight={A3_H} />;
+  const frame = useSlideFrame();
+  return <DetailAxonometricSlide levels={items} stairs={sketch.stairs ?? []} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} />;
 }
 
 function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3d" }> }) {
@@ -5268,12 +5274,18 @@ function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3
       style: majorityArchitecturalStyle(sketch.detailAreas ?? []),
     };
   }, [sketch]);
-  return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={A3_W} slideHeight={A3_H} />;
+  const frame = useSlideFrame();
+  return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} />;
 }
 
 // ---------- Panel Sayembara ----------
-/** Slide yang dirender di dalam kotak Panel Sayembara (tanpa kepala/kaki). */
-const SlideBareCtx = React.createContext(false);
+/** Kanvas konten di dalam kotak Panel Sayembara (null = slide biasa A3).
+ *  Konten disusun ulang mengikuti rasio kotak, tanpa kepala/kaki/judul slide. */
+const SlideBareCtx = React.createContext<{ w: number; h: number } | null>(null);
+function useSlideFrame() {
+  const bare = React.useContext(SlideBareCtx);
+  return { w: bare?.w ?? A3_W, h: bare?.h ?? A3_H, bare: !!bare };
+}
 type CompetitionPanelSlide = Extract<Slide, { kind: "competition-panel" }>;
 type PanelBuildCtx = { narasi: NarasiItem[]; perspektif: PerspektifItem[]; moodboard: MoodboardEntry | null; materialLibrary: LibraryMaterial[] };
 
@@ -5338,8 +5350,7 @@ function buildPanelSlides(sk: Sketch, deck: Slide[], ctx: PanelBuildCtx, keys?: 
   const list = keys ?? included;
   return list.map((key) => {
     const cfg = settings.panels[key];
-    const items = panelItems(key, cfg, catalog, source);
-    const layout = panelLayoutFor(key, cfg, items.length);
+    const { layout, placements } = panelArrangement(key, cfg, catalog, source, settings.orientation);
     const name = panelTitle(key, cfg);
     const order = included.indexOf(key);
     return {
@@ -5352,7 +5363,7 @@ function buildPanelSlides(sk: Sketch, deck: Slide[], ctx: PanelBuildCtx, keys?: 
       number: (order >= 0 ? order : PANEL_KEYS.indexOf(key)) + 1,
       total: Math.max(included.length, 1),
       layout,
-      cells: items.slice(0, layout.slots.length).map((token) => ({ token, label: labelOf.get(token) ?? token, slide: resolvePanelSlide(token, deck, sk, ctx) })),
+      cells: placements.map(({ token, slot, frame }) => ({ token, slot, frame, label: labelOf.get(token) ?? token, slide: resolvePanelSlide(token, deck, sk, ctx) })),
       texts: panelTexts(key, cfg, layout, source, extras),
       paper: settings.paper,
       orientation: settings.orientation,
@@ -5402,7 +5413,8 @@ function TampakSlideBody({ slide }: { slide: Extract<Slide, { kind: "tampak" }> 
       input: detail3dInputForSketch(sketch as unknown as Parameters<typeof detail3dInputForSketch>[0], lv.id, ppm),
     }));
   }, [sketch]);
-  return <TampakSlide levels={levels} dir={dir} northRotation={Number(sketch.northRotation) || 0} slideWidth={A3_W} slideHeight={A3_H} />;
+  const frame = useSlideFrame();
+  return <TampakSlide levels={levels} dir={dir} northRotation={Number(sketch.northRotation) || 0} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} />;
 }
 
 /** Ukuran halaman panel (rasio kertas A) yang dipaskan ke dalam bingkai slide. */
@@ -5446,15 +5458,16 @@ function CompetitionPanelPage({ slide, width, height }: { slide: CompetitionPane
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3 * u, background: PANEL_COLORS.ink }} />
       </div>
       {g.slots.map((box, i) => {
-        const cell = slide.cells[i];
+        // Konten ditempatkan per kotak sesuai bentuk gambarnya (lihat panelArrangement).
+        const cell = slide.cells.find((c) => c.slot === i);
         const ih = box.h - capH;
-        const s = Math.min(box.w / A3_W, ih / A3_H);
+        const s = cell ? Math.min(box.w / cell.frame.w, ih / cell.frame.h) : 1;
         return (
           <div key={i} data-panel-cell={cell?.token ?? "kosong"} style={abs(box)}>
             <div style={{ position: "absolute", left: 0, top: 0, width: box.w, height: ih, overflow: "hidden", background: "#ffffff", border: cell?.slide ? `${Math.max(1, u)}px solid ${PANEL_COLORS.border}` : `${Math.max(1, u * 1.5)}px dashed ${PANEL_COLORS.border}`, boxSizing: "border-box" }}>
               {cell?.slide ? (
-                <div style={{ position: "absolute", left: (box.w - A3_W * s) / 2, top: (ih - A3_H * s) / 2, width: A3_W, height: A3_H, transform: `scale(${s})`, transformOrigin: "top left", pointerEvents: "none" }}>
-                  <SlideBareCtx.Provider value={true}>
+                <div style={{ position: "absolute", left: (box.w - cell.frame.w * s) / 2, top: (ih - cell.frame.h * s) / 2, width: cell.frame.w, height: cell.frame.h, transform: `scale(${s})`, transformOrigin: "top left", pointerEvents: "none" }}>
+                  <SlideBareCtx.Provider value={cell.frame}>
                     <SlideContent slide={cell.slide} />
                   </SlideBareCtx.Provider>
                 </div>
@@ -6163,6 +6176,9 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
 
 function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const { sketch, level, bounds } = slide;
+  // Di kotak Panel Sayembara: angka ringkas pindah ke teks panel; kotak tegak menaruh legenda di bawah denah.
+  const frame = useSlideFrame();
+  const panelTall = frame.bare && frame.w / frame.h < 1.25;
   const w = bounds.maxX - bounds.minX;
   const h = bounds.maxY - bounds.minY;
   const layers = (sketch.layers ?? []).filter((l) => l.levelId === level.id);
@@ -6189,8 +6205,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const dimOffsetPx = sw * 0.018;
 
   return (
-    <div style={{ display: "flex", gap: 32, width: "100%", height: "100%", alignItems: "stretch" }}>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ display: "flex", flexDirection: panelTall ? "column" : "row", gap: frame.bare ? 18 : 32, width: "100%", height: "100%", alignItems: "stretch" }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ position: "relative", height: "100%", width: "auto", aspectRatio: `${w} / ${h}`, maxWidth: "100%", maxHeight: "100%" }}>
         <svg
           viewBox={`${bounds.minX} ${bounds.minY} ${w} ${h}`}
@@ -7174,7 +7190,8 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
         <SlideCompass rotation={effectiveNorthDeg(sketch)} draggableId={`level-${slide.id}`} />
         </div>
       </div>
-      <div style={{ width: (layers.filter((l) => !isLahan(l.name)).length > 60 ? 420 : layers.filter((l) => !isLahan(l.name)).length > 32 ? 360 : 300), flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
+      <div style={{ width: panelTall ? "100%" : frame.bare ? Math.min(300, frame.w * 0.26) : (layers.filter((l) => !isLahan(l.name)).length > 60 ? 420 : layers.filter((l) => !isLahan(l.name)).length > 32 ? 360 : 300), maxHeight: panelTall ? "32%" : undefined, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 14, overflow: "hidden" }}>
+        {!frame.bare && <>
         <BigStat
           compact
           label="Level"
@@ -7191,18 +7208,19 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
           hint={k > 1 ? `${fmt(luasPerLantai)} m² × ${k} lantai` : undefined}
         />
         {sketch.fungsi && <BigStat compact label="Fungsi" value={sketch.fungsi} />}
+        </>}
         {(() => {
           const roomList = layers.filter((l) => !isLahan(l.name));
           if (roomList.length === 0) return null;
           const n = roomList.length;
-          const cols = n > 60 ? 4 : n > 32 ? 3 : n > 14 ? 2 : 1;
+          const cols = panelTall ? (n > 24 ? 5 : n > 12 ? 4 : n > 4 ? 3 : 2) : n > 60 ? 4 : n > 32 ? 3 : n > 14 ? 2 : 1;
           const fontPx = n > 80 ? 8 : n > 60 ? 9 : n > 44 ? 10 : n > 28 ? 11 : 12;
           const gapPx = n > 60 ? 2 : n > 28 ? 3 : 4;
           return (
-            <div style={{ marginTop: 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
+            <div style={{ marginTop: frame.bare ? 0 : 6, borderTop: "1px solid #111", paddingTop: 10, minHeight: 0, flex: "1 1 auto", display: "flex", flexDirection: "column" }}>
               {/* Judul halaman sketsa (bangunan) — ditempatkan di atas legenda,
                   sinkron dengan judul utama slide & nama bangunan di masterplan. */}
-              <div
+              {!frame.bare && <div
                 style={{
                   fontFamily: "var(--font-display, Sora, sans-serif)",
                   fontSize: 20,
@@ -7216,7 +7234,7 @@ function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
                 title="Judul halaman sketsa"
               >
                 {sketch.title}
-              </div>
+              </div>}
               <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
                 Legenda Ruang
               </div>
@@ -7873,6 +7891,17 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
   const firstBreak = text.indexOf("\n");
   const heading = firstBreak === -1 ? text : text.slice(0, firstBreak).trim();
   const body = firstBreak === -1 ? "" : text.slice(firstBreak + 1).trim();
+  const frame = useSlideFrame();
+  // Di kotak Panel Sayembara narasinya sudah ada di kotak teks: tampilkan gambar konsep saja.
+  if (frame.bare) {
+    if (bgImage) return <img src={bgImage} alt={`Konsep ${slide.index + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
+    return (
+      <div style={{ width: "100%", height: "100%", padding: 36, boxSizing: "border-box", background: "#f5f2ec", display: "flex", flexDirection: "column", justifyContent: "center", gap: 14, overflow: "hidden" }}>
+        <div style={{ fontFamily: "var(--font-display, Sora, sans-serif)", fontSize: 34, fontWeight: 700, lineHeight: 1.15, color: "#1d1d1b" }}>{heading || "Konsep"}</div>
+        {body && <div style={{ fontSize: 20, lineHeight: 1.5, color: "#333333", whiteSpace: "pre-wrap" }}>{body}</div>}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -8029,6 +8058,11 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
 }
 
 function PerspektifBody({ slide }: { slide: Extract<Slide, { kind: "perspektif" }> }) {
+  const frame = useSlideFrame();
+  // Di kotak Panel Sayembara: gambar render saja, judulnya menjadi keterangan kotak.
+  if (frame.bare) {
+    return <img src={slide.image} alt={slide.caption} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
+  }
   return (
     <div
       style={{

@@ -23,8 +23,10 @@ export function tampakViewDir(dir: TampakDir, northRotationDeg: number): THREE.V
   return east.negate();
 }
 
-export function TampakSlide({ levels, dir, northRotation, slideWidth, slideHeight }: {
+export function TampakSlide({ levels, dir, northRotation, slideWidth, slideHeight, bare = false }: {
   levels: TampakLevel[]; dir: TampakDir; northRotation: number; slideWidth: number; slideHeight: number;
+  /** Di dalam kotak Panel Sayembara: tanpa judul, gambar memenuhi kotak. */
+  bare?: boolean;
 }) {
   const sourceKey = useMemo(() => JSON.stringify({ levels, dir, northRotation }), [levels, dir, northRotation]);
   const parts = useMemo(() => {
@@ -41,8 +43,9 @@ export function TampakSlide({ levels, dir, northRotation, slideWidth, slideHeigh
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey]);
-  const viewW = Math.round(slideWidth * 0.9);
-  const viewH = Math.round(slideHeight * 0.74);
+  const viewW = Math.round(slideWidth * (bare ? 0.96 : 0.9));
+  const viewH = Math.round(slideHeight * (bare ? 0.94 : 0.74));
+  const viewTop = slideHeight * (bare ? 0.03 : 0.2);
   const cacheKey = `${sourceKey}|${viewW}x${viewH}`;
   const [render, setRender] = useState<AxoRender | null>(() => cache.get(cacheKey) ?? null);
   const [failed, setFailed] = useState(false);
@@ -68,18 +71,18 @@ export function TampakSlide({ levels, dir, northRotation, slideWidth, slideHeigh
   const floors = parts.length;
   return (
     <div data-tampak-slide={dir} style={{ position: "relative", width: "100%", height: "100%", background: "#ffffff", overflow: "hidden" }}>
-      <div style={{ position: "absolute", left: 52, top: 44, borderLeft: "8px solid #e85d3a", padding: "10px 20px" }}>
+      {!bare && <div style={{ position: "absolute", left: 52, top: 44, borderLeft: "8px solid #e85d3a", padding: "10px 20px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 30, fontWeight: 800, color: "#1d1d1b" }}>{TAMPAK_LABEL[dir].toUpperCase()}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 17, color: "#444444", marginTop: 4 }}>Proyeksi model 3D · {floors} lantai</div>
-      </div>
-      <div style={{ position: "absolute", left: (slideWidth - viewW) / 2, top: slideHeight * 0.2, width: viewW, height: viewH }}>
+      </div>}
+      <div style={{ position: "absolute", left: (slideWidth - viewW) / 2, top: viewTop, width: viewW, height: viewH }}>
         {render
           ? <img src={render.dataUrl} alt={TAMPAK_LABEL[dir]} style={{ width: "100%", height: "100%", display: "block" }} />
           : <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontFamily: "Manrope, sans-serif", fontSize: 18, color: "#555555", textAlign: "center", padding: 40 }}>
               {parts.length === 0 ? "Belum ada dinding bermaterial. Beri material dinding lewat Pick Material di Sketsa." : failed ? "Tampak 3D tidak dapat ditampilkan di perangkat ini." : "Menyiapkan tampak…"}
             </div>}
       </div>
-      {render?.points[0] && <div style={{ position: "absolute", left: slideWidth * 0.04, right: slideWidth * 0.04, top: slideHeight * 0.2 + render.points[0].y - 1, borderTop: "3px solid #1d1d1b" }} />}
+      {render?.points[0] && <div style={{ position: "absolute", left: slideWidth * 0.04, right: slideWidth * 0.04, top: viewTop + render.points[0].y - 1, borderTop: "3px solid #1d1d1b" }} />}
     </div>
   );
 }

@@ -167,7 +167,8 @@ export function normalizeCompetitionPanels(raw: unknown): CompetitionPanelSettin
 export type PanelSourceSketch = {
   title?: string;
   levels?: Array<{ id: string; name: string; mdpl: number; typicalCount?: number }>;
-  layers?: Array<{ name: string; areaM2: number; levelId?: string; coefficient?: number; hidden?: boolean; isReferenceRoom?: boolean }>;
+  layers?: Array<{ name: string; areaM2: number; levelId?: string; coefficient?: number; hidden?: boolean; isReferenceRoom?: boolean; points?: Array<{ x: number; y: number }> }>;
+  scale?: string;
   sectionCuts?: Array<{ label?: string; p1?: unknown; p2?: unknown }>;
   geo?: { lat: number; lon: number; label?: string };
   linkedMasterplan?: { rootLayerId: string } | undefined;
@@ -449,4 +450,158 @@ export function fitPanelFontSize(text: string, w: number, h: number, max: number
     fs *= 0.92;
   }
   return min;
+}
+
+// ---------- Susunan konten (bukan salinan slide) ----------
+/** Rasio lebar/tinggi alami gambar tiap konten, agar ditempatkan di kotak yang sebentuk. */
+const BASE_ASPECT: Record<string, number> = {
+  site: 1.45, "analisis-kawasan": 1.45, masterplan: 1.4, siteplan: 1.4, "analisis-site": 1.45,
+  bubble: 1.35, "bubble-total": 1.5, konsep: 1.2, "detail-axo": 1.15,
+  section3d: 1.55, section: 1.9, "function-section": 1.9,
+  "facade-zoning": 1.7, "shadow-seasonal": 1.7, matahari: 1.3, thermal: 1.4, wind: 1.4, "explode-axo": 0.85, stacking: 1.2,
+  rekap: 1.35, volumetrik: 1.7, rincian: 1.5, komposisi: 1.35, infografis: 1.4, biaya: 1.4, "spec-outline": 1.5, furniture: 1.4,
+  perspektif: 1.6, moodboard: 1.4,
+};
+const clampAspect = (a: number) => (Number.isFinite(a) && a > 0 ? Math.max(0.45, Math.min(3.2, a)) : 1.4);
+
+function sketchFootprint(sk: PanelSourceSketch, rotationDeg = 0) {
+  const rad = (rotationDeg * Math.PI) / 180;
+  const c = Math.cos(rad), s = Math.sin(rad);
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const l of sk.layers ?? []) {
+    if (l.hidden || l.isReferenceRoom || isSite(l.name)) continue;
+    for (const p of l.points ?? []) {
+      const x = p.x * c - p.y * s, y = p.x * s + p.y * c;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+  }
+  return Number.isFinite(minX) && maxX > minX && maxY > minY ? { w: maxX - minX, h: maxY - minY } : null;
+}
+
+export function panelContentAspect(token: string, sk: PanelSourceSketch): number {
+  const sep = token.indexOf(":");
+  const kind = sep >= 0 ? token.slice(0, sep) : token;
+  const arg = sep >= 0 ? token.slice(sep + 1) : "";
+  if (kind === "lvl") {
+    // Slide denah memakai bingkai bersama semua lantai (termasuk lahan).
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const l of sk.layers ?? []) for (const p of l.points ?? []) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    // Denah + legenda ruang di sampingnya.
+    return Number.isFinite(minX) && maxX > minX && maxY > minY ? clampAspect(((maxX - minX) / (maxY - minY)) * 1.15) : 1.4;
+  }
+  if (kind === "tampak") {
+    const fp = sketchFootprint(sk, Number(sk.northRotation) || 0);
+    const floors = sortedPanelLevels(sk).reduce((n, lv) => n + Math.max(1, Math.round(Number(lv.typicalCount) || 1)), 0) || 1;
+    if (!fp) return 2;
+    const mPerPx = sketchMetersPerPx(sk.scale);
+    const width = (arg === "timur" || arg === "barat" ? fp.h : fp.w) * mPerPx;
+    return clampAspect((width * 1.12) / (floors * 4 * 1.2));
+  }
+  return BASE_ASPECT[kind] ?? 1.4;
+}
+
+function sketchMetersPerPx(scale: string | undefined): number {
+  const major: Record<string, number> = { "1:100": 1, "1:200": 2, "1:500": 5, "1:1000": 10, "1:1200": 12, "1:1500": 15, "1:2000": 20 };
+  return (major[scale ?? ""] ?? 1) / 80;
+}
+
+/** Bidang gambar kotak (tanpa baris keterangan). */
+export function panelSlotImageBoxes(geo: PanelPageGeometry): PanelBox[] {
+  const capH = PANEL_TYPE.captionH * geo.unit;
+  return geo.slots.map((b) => ({ x: b.x, y: b.y, w: b.w, h: Math.max(1, b.h - capH) }));
+}
+
+/**
+ * Menempatkan konten ke kotak layout sesuai bentuk gambarnya.
+ * Konten pertama (prioritas) mendapat kotak terbesar; sisanya ditukar
+ * sampai rasio gambar paling cocok dengan rasio kotak dan kotak besar
+ * tidak dibiarkan kosong. Hasil: indeks kotak untuk tiap konten (−1 = tidak muat).
+ */
+export function arrangePanelSlots(boxes: PanelBox[], aspects: number[]): number[] {
+  const n = Math.min(aspects.length, boxes.length);
+  const out = aspects.map(() => -1);
+  if (n === 0) return out;
+  const area = boxes.map((b) => b.w * b.h);
+  const maxArea = Math.max(...area);
+  const slotAspect = boxes.map((b) => b.w / Math.max(1e-6, b.h));
+  const fitCost = (item: number, slot: number) => Math.abs(Math.log(clampAspect(aspects[item]!) / slotAspect[slot]!));
+  // Konten lebih awal sedikit lebih disukai di kotak lebih besar/awal agar urutan tetap terbaca.
+  const orderCost = (item: number, slot: number) => 0.002 * Math.abs(item - slot) + (item === 0 ? 0 : 0.03 * (item / n) * (area[slot]! / maxArea));
+  const emptyCost = (slot: number) => 0.6 * (area[slot]! / maxArea);
+  const biggest = area.reduce((best, a, i) => (a > area[best]! + 1e-6 || (Math.abs(a - area[best]!) <= 1e-6 && fitCost(0, i) < fitCost(0, best) - 1e-9) ? i : best), 0);
+  const slotOf = Array.from({ length: n }, () => -1);
+  slotOf[0] = biggest;
+  const used = new Set([biggest]);
+  for (let i = 1; i < n; i++) {
+    let best = -1, bestCost = Infinity;
+    for (let s = 0; s < boxes.length; s++) {
+      if (used.has(s)) continue;
+      const c = fitCost(i, s) + orderCost(i, s) - emptyCost(s);
+      if (c < bestCost - 1e-9) { bestCost = c; best = s; }
+    }
+    slotOf[i] = best;
+    used.add(best);
+  }
+  const total = () => {
+    const taken = new Set(slotOf);
+    let c = 0;
+    slotOf.forEach((s, i) => { c += fitCost(i, s) + orderCost(i, s); });
+    for (let s = 0; s < boxes.length; s++) if (!taken.has(s)) c += emptyCost(s);
+    return c;
+  };
+  let current = total();
+  for (let pass = 0; pass < 6; pass++) {
+    let improved = false;
+    for (let i = 1; i < n; i++) {
+      // tukar dengan konten lain
+      for (let j = i + 1; j < n; j++) {
+        [slotOf[i], slotOf[j]] = [slotOf[j]!, slotOf[i]!];
+        const c = total();
+        if (c < current - 1e-9) { current = c; improved = true; } else [slotOf[i], slotOf[j]] = [slotOf[j]!, slotOf[i]!];
+      }
+      // pindah ke kotak kosong
+      const taken = new Set(slotOf);
+      for (let s = 0; s < boxes.length; s++) {
+        if (taken.has(s)) continue;
+        const prev = slotOf[i]!;
+        slotOf[i] = s;
+        const c = total();
+        if (c < current - 1e-9) { current = c; improved = true; taken.delete(prev); taken.add(s); } else slotOf[i] = prev;
+      }
+    }
+    if (!improved) break;
+  }
+  slotOf.forEach((s, i) => { out[i] = s; });
+  return out;
+}
+
+/** Ukuran kanvas gambar untuk satu kotak: rasio sama dengan kotak, luas tetap,
+ *  sehingga konten disusun ulang mengikuti bentuk kotak (bukan slide A3 diperkecil). */
+export function panelCellFrame(aspect: number, area = 860_000) {
+  const a = Math.max(0.3, Math.min(4, aspect));
+  const w = Math.round(Math.sqrt(area * a));
+  return { w, h: Math.round(w / a) };
+}
+
+export type PanelPlacement = { token: string; slot: number; frame: { w: number; h: number } };
+
+/** Layout, konten terpasang, dan kotaknya — dipakai bersama alat, slide dan PSD. */
+export function panelArrangement(key: PanelKey, cfg: CompetitionPanelConfig | undefined, catalog: PanelContentItem[], sk: PanelSourceSketch, orientation: PanelOrientation) {
+  const items = panelItems(key, cfg, catalog, sk);
+  const layout = panelLayoutFor(key, cfg, items.length);
+  const page = orientation === "portrait" ? { w: 1000, h: 1414 } : { w: 1414, h: 1000 };
+  const boxes = panelSlotImageBoxes(panelPageGeometry(layout, page.w, page.h));
+  const slots = arrangePanelSlots(boxes, items.map((t) => panelContentAspect(t, sk)));
+  const placements: PanelPlacement[] = [];
+  items.forEach((token, i) => {
+    const slot = slots[i]!;
+    if (slot < 0) return;
+    const b = boxes[slot]!;
+    placements.push({ token, slot, frame: panelCellFrame(b.w / b.h) });
+  });
+  return { items, layout, placements };
 }

@@ -14,7 +14,8 @@ export type PsdPanelInput = {
   projectTitle: string;
   layout: PanelLayout;
   texts: PanelText[];
-  cells: Array<{ label: string; image: HTMLCanvasElement | null }>;
+  /** Diindeks per kotak layout (undefined = kotak kosong). */
+  cells: Array<{ label: string; image: HTMLCanvasElement | null } | undefined>;
   paper: PanelPaper;
   orientation: PanelOrientation;
 };

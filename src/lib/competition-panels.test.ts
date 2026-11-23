@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   PANEL_DEFS, PANEL_LAYOUTS, activePanelKeys, autoPanelLayout, defaultPanelItems, normalizeCompetitionPanels,
-  panelContentCatalog, panelPaperPixels, panelSuggestions, panelTexts, panelLayoutById, type PanelSourceSketch,
+  panelContentCatalog, panelPaperPixels, arrangePanelSlots, panelArrangement, panelCellFrame, panelContentAspect, panelSuggestions, panelTexts, panelLayoutById, type PanelSourceSketch,
 } from "./competition-panels";
 
 const expect = (actual: unknown) => ({
@@ -95,5 +95,41 @@ describe("Panel Sayembara", () => {
   it("ukuran kertas A1 dan A2 pada 150 dpi", () => {
     expect(panelPaperPixels("A1", "portrait")).toEqual({ w: 3508, h: 4967 });
     expect(panelPaperPixels("A2", "landscape")).toEqual({ w: 3508, h: 2480 });
+  });
+});
+
+describe("susunan konten panel", () => {
+  const boxes = [
+    { x: 0, y: 0, w: 1000, h: 500 }, // besar, lebar
+    { x: 0, y: 520, w: 300, h: 600 }, // tegak
+    { x: 320, y: 520, w: 600, h: 300 }, // lebar
+  ];
+  it("konten pertama mendapat kotak terbesar", () => {
+    expect(arrangePanelSlots(boxes, [0.6, 2, 0.5])[0]).toBe(0);
+  });
+  it("konten tegak masuk kotak tegak, konten lebar masuk kotak lebar", () => {
+    expect(arrangePanelSlots(boxes, [2, 2, 0.5])).toEqual([0, 2, 1]);
+    expect(arrangePanelSlots(boxes, [2, 0.5, 2])).toEqual([0, 1, 2]);
+  });
+  it("kotak sama bentuk mempertahankan urutan konten", () => {
+    const grid = [0, 1, 2, 3].map((i) => ({ x: (i % 2) * 500, y: Math.floor(i / 2) * 400, w: 480, h: 380 }));
+    expect(arrangePanelSlots(grid, [1.2, 1.2, 1.2, 1.2])).toEqual([0, 1, 2, 3]);
+  });
+  it("konten yang tidak muat diberi −1", () => {
+    expect(arrangePanelSlots(boxes, [1, 1, 1, 1])[3]).toBe(-1);
+  });
+  it("kanvas kotak mengikuti rasio kotak", () => {
+    const f = panelCellFrame(2);
+    assert.ok(Math.abs(f.w / f.h - 2) < 0.01);
+  });
+  it("tampak memakai rasio lebar fasad terhadap tinggi bangunan", () => {
+    const wide: PanelSourceSketch = { ...sk, scale: "1:100", layers: [{ name: "Ruang", areaM2: 1, levelId: "L1", points: [{ x: 0, y: 0 }, { x: 80 * 40, y: 0 }, { x: 80 * 40, y: 80 * 10 }, { x: 0, y: 80 * 10 }] }] };
+    assert.ok(panelContentAspect("tampak:selatan", wide) > panelContentAspect("tampak:timur", wide));
+  });
+  it("setiap konten terpasang di kotak berbeda dengan kanvas sebentuk kotak", () => {
+    const catalog = panelContentCatalog(sk);
+    const a = panelArrangement("tampak", undefined, catalog, sk, "portrait");
+    expect(a.placements).toHaveLength(4);
+    expect(new Set(a.placements.map((p) => p.slot)).size).toBe(4);
   });
 });

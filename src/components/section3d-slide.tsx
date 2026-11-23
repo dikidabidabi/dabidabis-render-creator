@@ -29,9 +29,20 @@ export type Section3dSlideProps = {
   style: ArchitecturalStyleId;
   slideWidth: number;
   slideHeight: number;
+  /** Di dalam kotak Panel Sayembara: tanpa judul, keterangan ringkas di bawah. */
+  bare?: boolean;
 };
 
-export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, style, slideWidth, slideHeight }: Section3dSlideProps) {
+type Section3dPalette = (typeof SECTION3D_PALETTE)[keyof typeof SECTION3D_PALETTE];
+const SECTION3D_LEGEND = (palette: Section3dPalette) => [
+  { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, dinding, kolom)", short: "Bidang potong" },
+  { fill: palette.wall, stroke: palette.edge, text: "Dinding tampak", short: "Dinding" },
+  { fill: palette.floor, stroke: palette.edge, text: "Lantai", short: "Lantai" },
+  { fill: "#bfe0ee", stroke: palette.edge, text: "Kaca / jendela", short: "Kaca" },
+  { fill: "#a8743f", stroke: palette.edge, text: "Pintu", short: "Pintu" },
+];
+
+export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, style, slideWidth, slideHeight, bare = false }: Section3dSlideProps) {
   const palette = SECTION3D_PALETTE[style];
   const sourceKey = useMemo(() => JSON.stringify({ cut, pxPerMeter, levels, slabs, grids, style }), [cut, pxPerMeter, levels, slabs, grids, style]);
   const data = useMemo(() => {
@@ -61,10 +72,11 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey]);
 
-  const viewLeft = Math.round(slideWidth * 0.02);
-  const viewTop = Math.round(slideHeight * 0.13);
-  const viewW = Math.round(slideWidth * 0.76);
-  const viewH = Math.round(slideHeight * 0.84);
+  const legendRowH = bare ? Math.max(34, Math.round(slideHeight * 0.07)) : 0;
+  const viewLeft = Math.round(slideWidth * (bare ? 0.07 : 0.02));
+  const viewTop = Math.round(slideHeight * (bare ? 0.02 : 0.13));
+  const viewW = Math.round(slideWidth * (bare ? 0.91 : 0.76));
+  const viewH = Math.round(bare ? slideHeight * 0.96 - legendRowH : slideHeight * 0.84);
   const cacheKey = `${sourceKey}|${viewW}x${viewH}`;
   const [render, setRender] = useState<Section3dRender | null>(() => cache.get(cacheKey) ?? null);
   const [failed, setFailed] = useState(false);
@@ -122,19 +134,18 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
           {!data || data.parts.length === 0 ? "Garis potong belum melewati lantai, dinding, atau ruang. Geser garis potong di halaman Sketsa." : failed ? "Potongan 3D tidak dapat ditampilkan di perangkat ini." : "Menyiapkan potongan 3D…"}
         </div>}
       </div>
+      {bare ? (
+        <div data-section3d-legend="compact" style={{ position: "absolute", left: slideWidth * 0.03, right: slideWidth * 0.03, bottom: 0, height: legendRowH, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 18px", fontFamily: "Manrope, sans-serif", fontSize: 13, color: "var(--architectural-caption-ink, #283b3a)" }}>
+          {SECTION3D_LEGEND(palette).map((item) => <span key={item.text} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><span style={{ width: 18, height: 11, background: item.fill, border: `1.5px solid ${item.stroke}` }} />{item.short}</span>)}
+        </div>
+      ) : <>
       <div style={{ position: "absolute", left: 52, top: 36, background: "var(--architectural-caption-surface)", color: "var(--architectural-caption-ink)", borderLeft: `8px solid ${palette.cut === "#ffffff" ? palette.edge : palette.cut}`, padding: "14px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>POTONGAN 3D {label}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 16, marginTop: 4 }}>Perspektif potongan dari Detail 3D semua lantai</div>
       </div>
       <aside aria-label={`Legenda Potongan 3D ${label}`} data-section3d-legend="true" style={{ position: "absolute", right: "2%", top: "13%", width: slideWidth * 0.19, background: "var(--architectural-caption-surface)", color: "var(--architectural-caption-ink)", padding: "16px 18px", fontFamily: "Manrope, sans-serif" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 18, fontWeight: 800, marginBottom: 10 }}>Keterangan</div>
-        {[
-          { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, dinding, kolom)" },
-          { fill: palette.wall, stroke: palette.edge, text: "Dinding tampak" },
-          { fill: palette.floor, stroke: palette.edge, text: "Lantai" },
-          { fill: "#bfe0ee", stroke: palette.edge, text: "Kaca / jendela" },
-          { fill: "#a8743f", stroke: palette.edge, text: "Pintu" },
-        ].map((item) => <div key={item.text} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, padding: "4px 0" }}>
+        {SECTION3D_LEGEND(palette).map((item) => <div key={item.text} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, padding: "4px 0" }}>
           <span style={{ width: 22, height: 14, flex: "0 0 22px", background: item.fill, border: `1.5px solid ${item.stroke}` }} />{item.text}
         </div>)}
         <div style={{ borderTop: "1px solid currentColor", opacity: 0.35, margin: "12px 0" }} />
@@ -144,6 +155,7 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
           Style: {STYLE_NAME[style]} (mayoritas detail arsitektural).
         </div>
       </aside>
+      </>}
     </div>
   );
 }

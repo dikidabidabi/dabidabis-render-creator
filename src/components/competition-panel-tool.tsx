@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_PANEL_SETTINGS, PANEL_DEFS, PANEL_KEYS, PANEL_LAYOUTS, applyPanelSuggestion, panelContentCatalog, panelIncluded,
-  panelItems, panelLayoutFor, panelPageGeometry, panelSuggestions, panelTexts, panelTitle,
+  panelArrangement, panelItems, panelLayoutFor, panelPageGeometry, panelSuggestions, panelTexts, panelTitle,
   type CompetitionPanelConfig, type CompetitionPanelSettings, type PanelCatalogExtras, type PanelContentItem, type PanelKey,
   type PanelLayout, type PanelOrientation, type PanelPaper, type PanelSourceSketch,
 } from "@/lib/competition-panels";
@@ -193,7 +193,7 @@ function PanelEditorDialog({ open, panelKey, onOpenChange, onSelect, settings, s
   const key = panelKey ?? "konsep";
   const cfg = settings.panels[key];
   const items = panelItems(key, cfg, catalog, sketch);
-  const layout = panelLayoutFor(key, cfg, items.length);
+  const { layout, placements } = panelArrangement(key, cfg, catalog, sketch, settings.orientation);
   const texts = panelTexts(key, cfg, layout, sketch, extras);
   const suggestions = panelSuggestions(key, items, layout, catalog, sketch);
   const labelOf = new Map(catalog.map((c) => [c.token, c.label]));
@@ -257,12 +257,14 @@ function PanelEditorDialog({ open, panelKey, onOpenChange, onSelect, settings, s
             </div>
             <div className="space-y-1">
               <div className="text-xs font-semibold">Pratinjau susunan</div>
+              <p className="text-[11px] text-muted-foreground">Konten pertama mendapat kotak terbesar. Konten lain ditempatkan di kotak yang paling sesuai bentuk gambarnya, lalu digambar ulang mengikuti ukuran kotak.</p>
               <div className="flex gap-3">
                 <PanelLayoutThumb layout={layout} orientation={settings.orientation} width={settings.orientation === "portrait" ? 120 : 170} active />
                 <ol className="min-w-0 flex-1 space-y-0.5 text-[11px]">
-                  {layout.slots.map((_, i) => (
-                    <li key={i} className={cn("truncate", !items[i] && "text-muted-foreground")}>{i + 1}. {items[i] ? labelOf.get(items[i]!) ?? items[i] : "Kosong"}</li>
-                  ))}
+                  {layout.slots.map((_, i) => {
+                    const token = placements.find((p) => p.slot === i)?.token;
+                    return <li key={i} className={cn("truncate", !token && "text-muted-foreground")}>{i + 1}. {token ? labelOf.get(token) ?? token : "Kosong"}</li>;
+                  })}
                   {items.length > layout.slots.length && <li className="text-destructive">+{items.length - layout.slots.length} konten tidak muat</li>}
                 </ol>
               </div>

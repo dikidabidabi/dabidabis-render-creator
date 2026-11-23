@@ -22,9 +22,11 @@ export type DetailAxonometricSlideProps = {
   stairs: Stair[];
   slideWidth: number;
   slideHeight: number;
+  /** Di dalam kotak Panel Sayembara: tanpa judul, legenda sirkulasi ringkas. */
+  bare?: boolean;
 };
 
-export function DetailAxonometricSlide({ levels, stairs, slideWidth, slideHeight }: DetailAxonometricSlideProps) {
+export function DetailAxonometricSlide({ levels, stairs, slideWidth, slideHeight, bare = false }: DetailAxonometricSlideProps) {
   const sourceKey = useMemo(() => JSON.stringify({ levels, stairs }), [levels, stairs]);
   const data = useMemo(() => {
     const built = [...levels]
@@ -58,10 +60,10 @@ export function DetailAxonometricSlide({ levels, stairs, slideWidth, slideHeight
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey]);
 
-  const viewW = Math.round(slideWidth * 0.7);
-  const viewTop = Math.round(slideHeight * 0.15);
-  const viewH = Math.round(slideHeight * 0.82);
-  const viewLeft = Math.round(slideWidth * 0.04);
+  const viewW = Math.round(slideWidth * (bare ? 0.84 : 0.7));
+  const viewTop = Math.round(slideHeight * (bare ? 0.02 : 0.15));
+  const viewH = Math.round(slideHeight * (bare ? 0.88 : 0.82));
+  const viewLeft = Math.round(slideWidth * (bare ? 0.14 : 0.04));
   const cacheKey = `${sourceKey}|${viewW}x${viewH}`;
   const [render, setRender] = useState<AxoRender | null>(() => cache.get(cacheKey) ?? null);
   const [failed, setFailed] = useState(false);
@@ -118,6 +120,14 @@ export function DetailAxonometricSlide({ levels, stairs, slideWidth, slideHeight
           {data.parts.length === 0 ? "Belum ada lantai dengan ruang atau dinding bermaterial. Beri material dinding lewat Pick Material di halaman Sketsa." : failed ? "Aksonometri 3D tidak dapat ditampilkan di perangkat ini." : "Menyiapkan detail aksonometri…"}
         </div>}
       </div>
+      {bare ? (
+        <div data-detail-axo-legend="compact" style={{ position: "absolute", left: slideWidth * 0.03, right: slideWidth * 0.03, bottom: slideHeight * 0.015, display: "flex", flexWrap: "wrap", gap: "4px 18px", fontFamily: "Manrope, sans-serif", fontSize: 14, fontWeight: 600, color: INK }}>
+          {kinds.map((kind) => <span key={kind} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <svg width="36" height="10" aria-hidden="true"><line x1="2" y1="5" x2="34" y2="5" stroke={LINK_STYLE[kind].color} strokeWidth={3} strokeDasharray="8 5" strokeLinecap="round" /></svg>
+            {LINK_STYLE[kind].label}
+          </span>)}
+        </div>
+      ) : <>
       <div style={{ position: "absolute", left: 52, top: 44, background: "rgba(255,255,255,0.92)", borderLeft: "8px solid #e85d3a", padding: "16px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>DETAIL AKSONOMETRI</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 18, marginTop: 4 }}>Susunan Detail 3D semua lantai</div>
@@ -139,6 +149,7 @@ export function DetailAxonometricSlide({ levels, stairs, slideWidth, slideHeight
           {LINK_STYLE[kind].label} · {data.links.filter((link) => link.kind === kind).length} penghubung
         </div>)}
       </aside>
+      </>}
     </div>
   );
 }
