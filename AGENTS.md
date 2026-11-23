@@ -26,7 +26,7 @@
 - Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG rows.
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
 - Picked curves render as wall bands feeding practical columns.
-- Total bubble slide: one cluster/level; red links join same-kind circulation on next matching level.
-- Rincian per Level slide: full-width, unscaled, paged as Outline Spec.
-- Volumetrik slide: row per physical floor; subtotals last.
-- Detail 3D input (level-detail-3d) feeds Model 3D/slides; section-3d clips it for Potongan 3D.
+- Total bubble slide: one cluster/level; red links join same-kind circulation on next level.
+- Rincian per Level: full-width, unscaled, paged as Outline Spec.
+- Volumetrik: row per physical floor, subtotals last.
+- Detail 3D feeds Model 3D/slides/Potongan 3D/Tampak; competition panels map tokens to deck slides; PSD shares geometry.
