@@ -95,3 +95,24 @@ test("label ruang berbentuk L tetap berada di dalam ruang", async () => {
   const inside = (p.x >= 0 && p.x <= 10 && p.y >= 0 && p.y <= 1) || (p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 10);
   assert.ok(inside, JSON.stringify(p));
 });
+
+test("void pada alat Lantai melubangi lantai ruang dan bidang potongnya", async () => {
+  const { section3dFrame, clipPrismsToSection, sectionCutFaces } = await import("./section-3d");
+  const room = [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 600 }, { x: 0, y: 600 }];
+  const voidRing = [{ x: 400, y: 200 }, { x: 600, y: 200 }, { x: 600, y: 400 }, { x: 400, y: 400 }];
+  const model = buildLevelDetail3d(base({
+    rooms: [{ name: "Lobi", points: room, color: "#ff0000" }],
+    slabs: [{ outer: room, holes: [voidRing], thicknessMm: 150 }],
+  }));
+  const ringArea = (ring: { x: number; y: number }[]) => Math.abs(ring.reduce((s, p, i) => { const q = ring[(i + 1) % ring.length]!; return s + p.x * q.y - q.x * p.y; }, 0) / 2);
+  const solidArea = (kind: string) => model.prisms.filter((p) => p.kind === kind)
+    .reduce((s, p) => s + ringArea(p.outer) - p.holes.reduce((h, r) => h + ringArea(r), 0), 0);
+  // 10 × 6 m dikurangi void 2 × 2 m.
+  assert.equal(Math.round(solidArea("floor") * 100) / 100, 56);
+  assert.equal(Math.round(solidArea("slab") * 100) / 100, 56);
+  // Garis potong melewati tengah void: lantai terbelah di s 0–4 m dan 6–10 m saja.
+  const frame = section3dFrame({ x: 0, y: 300 }, { x: 1000, y: 300 }, PPM)!;
+  const faces = sectionCutFaces(clipPrismsToSection(model.prisms, frame), frame).filter((f) => f.kind === "floor" || f.kind === "slab");
+  assert.ok(faces.length > 0);
+  assert.ok(faces.every((f) => f.s1 <= 4 + 1e-6 || f.s0 >= 6 - 1e-6));
+});

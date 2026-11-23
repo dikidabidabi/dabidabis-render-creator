@@ -132,6 +132,19 @@ function union(rings: Ring[]): MultiPolygon {
     return valid.map((ring) => [ring]);
   }
 }
+/** Gabungan poligon berlubang (ring pertama = luar, sisanya lubang). */
+function unionPolygons(polygons: Ring[][]): MultiPolygon {
+  const valid = polygons
+    .map(([outer, ...holes]) => (outer && validRing(outer) ? [outer, ...holes.filter(validRing)] : null))
+    .filter((polygon): polygon is Ring[] => !!polygon);
+  if (!valid.length) return [];
+  try {
+    const geoms = valid.map((polygon) => toGeom([polygon])[0]!);
+    return fromGeom(polygonClipping.union(geoms[0] as any, ...(geoms.slice(1) as any[])) as Geom);
+  } catch {
+    return valid;
+  }
+}
 function difference(subject: MultiPolygon, cut: MultiPolygon): MultiPolygon {
   if (!subject.length || !cut.length) return subject;
   try { return fromGeom(polygonClipping.difference(toGeom(subject) as any, toGeom(cut) as any) as Geom); } catch { return subject; }
@@ -297,11 +310,18 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
   }
 
   // ---- Lantai ----
+  // Lubang (void) pada alat Lantai juga melubangi lantai ruang di atasnya,
+  // kecuali bagian lubang yang tertutup plat lain.
+  const slabRings = (input.slabs ?? []).filter((slab) => slab.outer.length >= 3);
+  const slabVoids = difference(
+    union(slabRings.flatMap((slab) => slab.holes ?? [])),
+    unionPolygons(slabRings.map((slab) => [slab.outer, ...(slab.holes ?? [])])),
+  );
   let roomCount = 0;
   for (const room of input.rooms) {
     const name = room.name.trim().toLowerCase();
     if (name.startsWith("lahan") || name === "void" || room.points.length < 3) continue;
-    push("floor", [[room.points]], -DETAIL3D_ROOM_SLAB_M, 0.005, room.color);
+    push("floor", difference([[room.points]], slabVoids), -DETAIL3D_ROOM_SLAB_M, 0.005, room.color);
     roomCount++;
   }
   for (const slab of input.slabs ?? []) {
