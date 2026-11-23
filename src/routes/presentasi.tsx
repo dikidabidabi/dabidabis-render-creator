@@ -21,6 +21,8 @@ import {
   Inbox,
   Loader2,
 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { slidePdfFileName, slidePdfRaster, SLIDE_PDF_PAPERS, type SlidePdfPaper } from "@/lib/slide-pdf";
 import { cn } from "@/lib/utils";
 import { renumberDetailAreas } from "@/lib/detail-numbering";
 import { ARCHITECTURAL_LEGEND_FONTS, ARCHITECTURAL_LEGEND_HEADER_HEIGHT, ARCHITECTURAL_LEGEND_LINE_HEIGHT, ARCHITECTURAL_LEGEND_WIDTH_RATIO, ARCHITECTURAL_LEGEND_BOTTOM_HEIGHT_RATIO, architecturalLegendPosition, architecturalLegendEnabled, architecturalLegendPositionLayout, architecturalLegendRooms } from "@/lib/architectural-legend";
@@ -289,6 +291,46 @@ function perspektifForSketch(store: PerspektifStore, sketchId: string): Perspekt
 }
 
 // A3 landscape: 420 × 297 mm. Internal slide canvas in px (proportional, 1mm ≈ 3.3674px).
+function SlidePdfMenu({ onPick, busy, disabled, label, compact }: {
+  onPick: (paper: SlidePdfPaper) => void;
+  busy: boolean;
+  disabled: boolean;
+  label: string;
+  compact?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {compact ? (
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={disabled} title={label} aria-label={label}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+          </Button>
+        ) : (
+          <Button variant="secondary" size="sm" className="h-8 gap-1.5" disabled={disabled} title="Unduh slide ini sebagai PDF A1/A2 resolusi tinggi">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            {label}
+            <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+          </Button>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel className="text-xs">Unduh PDF slide ini</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {(["A1", "A2"] as const).map((paper) => {
+          const spec = SLIDE_PDF_PAPERS[paper];
+          const r = slidePdfRaster(paper, A3_W, A3_H);
+          return (
+            <DropdownMenuItem key={paper} onSelect={() => onPick(paper)} className="flex flex-col items-start gap-0">
+              <span className="text-sm font-medium">{paper} lanskap</span>
+              <span className="text-[11px] text-muted-foreground">{spec.widthMm}×{spec.heightMm} mm · ±{r.effectiveDpi} dpi</span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 const A3_W = 1414;
 const A3_H = 1000;
 const PAD = 84; // 2.5cm at this scale (2.5/42 * 1414 ≈ 84.16, 2.5/29.7 * 1000 ≈ 84.18)
@@ -780,7 +822,8 @@ export function PresentasiBox({
   const [idx, setIdx] = useState(0);
   const [full, setFull] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [exporting, setExporting] = useState<null | "pptx" | "pdf" | "psd">(null);
+  const [exporting, setExporting] = useState<null | "pptx" | "pdf" | "psd" | "slide">(null);
+  const [slideExportId, setSlideExportId] = useState<string | null>(null);
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const exportRootRef = useRef<HTMLDivElement | null>(null);
 
@@ -1097,6 +1140,54 @@ export function PresentasiBox({
     }
   }, [effectiveSketch.title]);
 
+  // ---------- Unduh PDF satu slide (A1/A2, resolusi tinggi) ----------
+  const doExportSlidePdf = useCallback(async (slideId: string, paper: SlidePdfPaper) => {
+    if (exporting) return;
+    const slideIndex = slides.findIndex((s) => s.id === slideId);
+    const slide = slides[slideIndex];
+    if (!slide) return;
+    setSlideExportId(slideId);
+    setExporting("slide");
+    setExportProgress({ current: 1, total: 1 });
+    try {
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      const root = exportRootRef.current;
+      if (!root) throw new Error("Render container tidak siap");
+      const page = root.querySelector<HTMLElement>("[data-slide-page]");
+      if (!page) throw new Error("Slide tidak ditemukan");
+      // Beri waktu gambar, peta & 3D selesai digambar sebelum ditangkap.
+      await Promise.all(Array.from(page.querySelectorAll("img")).map((img) => img.decode().catch(() => undefined)));
+      await new Promise<void>((r) => setTimeout(r, 700));
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("jspdf"),
+      ]);
+      const raster = slidePdfRaster(paper, A3_W, A3_H);
+      const canvas = await html2canvas(page, {
+        backgroundColor: "#ffffff",
+        scale: raster.scale,
+        useCORS: true,
+        logging: false,
+        width: A3_W,
+        height: A3_H,
+      });
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      canvas.width = 0;
+      canvas.height = 0;
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: paper.toLowerCase(), compress: true });
+      pdf.addImage(dataUrl, "JPEG", 0, 0, raster.widthMm, raster.heightMm, undefined, "FAST");
+      pdf.setProperties({ title: `${effectiveSketch.title || "Presentasi"} — ${slide.title} (${paper})` });
+      pdf.save(slidePdfFileName(effectiveSketch.title || "presentasi", slideIndex + 1, slide.title, paper));
+    } catch (err) {
+      console.error(err);
+      window.alert("Gagal mengunduh PDF slide: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setExporting(null);
+      setExportProgress(null);
+      setSlideExportId(null);
+    }
+  }, [exporting, slides, effectiveSketch.title]);
+
   // ---------- Unduh Panel Sayembara (.psd A1/A2) ----------
   const [psdJob, setPsdJob] = useState<{ panels: CompetitionPanelSlide[]; paper: PanelPaper } | null>(null);
   const psdRootRef = useRef<HTMLDivElement | null>(null);
@@ -1326,6 +1417,14 @@ export function PresentasiBox({
                   {idx + 1} / {slides.length} · {slides[idx]?.title}
                 </div>
                 <div className="flex items-center gap-1">
+                  {slides[idx] && (
+                    <SlidePdfMenu
+                      busy={exporting === "slide"}
+                      disabled={!!exporting}
+                      onPick={(paper) => doExportSlidePdf(slides[idx]!.id, paper)}
+                      label="PDF Slide"
+                    />
+                  )}
                   <Button variant="secondary" size="sm" className="h-8 gap-1.5" onClick={doExportPdf} disabled={exporting === "pdf"} title="Unduh sebagai PDF A3 lanskap">
                     {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
                     PDF
@@ -1367,7 +1466,7 @@ export function PresentasiBox({
                 <div className="mb-1 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
                   <span>
                     Merender Slide {exportProgress.current} dari {exportProgress.total}
-                    {exporting === "pdf" ? " (PDF)" : exporting === "psd" ? " (Panel PSD)" : " (PPTX)"}…
+                    {exporting === "pdf" ? " (PDF)" : exporting === "psd" ? " (Panel PSD)" : exporting === "slide" ? " (PDF resolusi tinggi)" : " (PPTX)"}…
                   </span>
                   <span>{Math.round((exportProgress.current / exportProgress.total) * 100)}%</span>
                 </div>
@@ -1444,6 +1543,13 @@ export function PresentasiBox({
                         >
                           {i + 1}. {s.title}
                         </label>
+                        <SlidePdfMenu
+                          compact
+                          busy={exporting === "slide" && slideExportId === s.id}
+                          disabled={!!exporting}
+                          onPick={(paper) => doExportSlidePdf(s.id, paper)}
+                          label={`Unduh PDF slide ${i + 1}`}
+                        />
                         <ThemeSelect
                           value={themeMap[s.id] ?? globalTheme}
                           onChange={(id) => { setSlideThemeId(s.id, id); }}
@@ -1503,7 +1609,7 @@ export function PresentasiBox({
           style={{ position: "fixed", left: "-100000px", top: 0, pointerEvents: "none" }}
           aria-hidden
         >
-          {visibleSlides.map((s) => (
+          {(exporting === "slide" ? slides.filter((s) => s.id === slideExportId) : visibleSlides).map((s) => (
             <div
               key={s.id}
               data-slide-page
