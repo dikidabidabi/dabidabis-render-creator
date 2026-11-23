@@ -7,6 +7,18 @@ import type { Detail3dKind, Detail3dPrism } from "@/lib/level-detail-3d";
 import { DETAIL3D_KIND_STYLE, detail3dPrismGeometry } from "@/lib/level-detail-3d-mesh";
 import type { Section3dFrame } from "@/lib/section-3d";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+
+/** Exposure ke arah putih: warna permukaan dicampur putih agar model terang/bersih. */
+const WHITE_MIX = 0.45;
+/** Tebal garis bangunan dalam piksel CSS (garis WebGL biasa hanya 1 px fisik). */
+const EDGE_WIDTH = 1.35;
+
+export function brightenSection3dColor(color: string, mix = WHITE_MIX) {
+  return "#" + new THREE.Color(color).lerp(new THREE.Color(0xffffff), mix).getHexString();
+}
 
 export type Section3dPalette = { floor: string; wall: string; structure: string; cut: string; edge: string; shadow: string };
 export type Section3dPart = { key: string; prisms: Detail3dPrism[]; bases: number[] };
@@ -70,16 +82,16 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
     renderer.setSize(width, height, false);
     renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const scene = new THREE.Scene();
-    // Ruang dalam tetap terang: bayangan 45° lembut, bukan gelap pekat.
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    scene.add(new THREE.HemisphereLight(0xffffff, new THREE.Color(palette.shadow), 0.45));
+    // Exposure tinggi ke arah putih; bayangan 45° doff (datar, lembut, tanpa kilap).
+    scene.add(new THREE.AmbientLight(0xffffff, 1.8));
+    scene.add(new THREE.HemisphereLight(0xffffff, new THREE.Color(brightenSection3dColor(palette.shadow, 0.7)), 0.5));
 
     // Matahari 45°: datang dari kiri-depan pengamat (kiri gambar = +u), elevasi 45°.
     const lh = new THREE.Vector2(frame.u.x - frame.n.x, frame.u.y - frame.n.y).normalize();
     const mid = toScene(frame.a.x + frame.u.x * (minS + maxS) / 2 + frame.n.x * maxD / 2, frame.a.y + frame.u.y * (minS + maxS) / 2 + frame.n.y * maxD / 2, minH + totalH / 2);
-    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
     const R = reach * 3;
     sun.position.set(mid.x + lh.x * R, mid.y + R, mid.z + lh.y * R);
     sun.target.position.copy(mid);
@@ -88,8 +100,8 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
     sun.shadow.mapSize.set(4096, 4096);
     sun.shadow.bias = -0.0003;
     sun.shadow.normalBias = 0.02;
-    sun.shadow.radius = 3;
-    sun.shadow.intensity = 0.55;
+    sun.shadow.radius = 4;
+    sun.shadow.intensity = 0.6;
     Object.assign(sun.shadow.camera, { left: -reach * 1.2, right: reach * 1.2, top: reach * 1.2, bottom: -reach * 1.2, near: 0.1, far: R * 3 });
     scene.add(sun);
 
@@ -100,8 +112,9 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
       let m = material.get(key);
       if (!m) {
         const transparent = style.opacity !== undefined;
-        m = new THREE.MeshStandardMaterial({
-          color: style.color, roughness: kind === "glass" ? 0.1 : 0.85, metalness: 0.02,
+        // Doff: Lambert tanpa pantulan spekular, warna dicerahkan ke arah putih.
+        m = new THREE.MeshLambertMaterial({
+          color: brightenSection3dColor(style.color, kind === "glass" ? 0.25 : WHITE_MIX),
           transparent, opacity: style.opacity ?? 1, depthWrite: !transparent, side: transparent ? THREE.DoubleSide : THREE.FrontSide,
           polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
         });
@@ -110,7 +123,9 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
       }
       return { material: m, style };
     };
-    const edgeMat = new THREE.LineBasicMaterial({ color: palette.edge, transparent: true, opacity: 0.55 });
+    // Garis bangunan tegas: lebar nyata dalam piksel, warna tepi penuh.
+    const edgeMat = new LineMaterial({ color: new THREE.Color(palette.edge).getHex(), linewidth: EDGE_WIDTH, worldUnits: false });
+    edgeMat.resolution.set(width, height);
     disposables.push(edgeMat);
 
     for (const part of parts) {
@@ -129,8 +144,13 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
         if (!geo) continue;
         disposables.push(geo);
         const { material: m, style } = matFor(kind);
-        const edgesGeo = style.edges ? new THREE.EdgesGeometry(geo, 25) : null;
-        if (edgesGeo) disposables.push(edgesGeo);
+        let edgesGeo: LineSegmentsGeometry | null = null;
+        if (style.edges) {
+          const raw = new THREE.EdgesGeometry(geo, 25);
+          edgesGeo = new LineSegmentsGeometry().fromEdgesGeometry(raw);
+          raw.dispose();
+          disposables.push(edgesGeo);
+        }
         for (const base of part.bases) {
           const mesh = new THREE.Mesh(geo, m);
           mesh.position.y = base;
@@ -138,7 +158,7 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
           mesh.receiveShadow = true;
           scene.add(mesh);
           if (edgesGeo) {
-            const lines = new THREE.LineSegments(edgesGeo, edgeMat);
+            const lines = new LineSegments2(edgesGeo, edgeMat);
             lines.position.y = base;
             scene.add(lines);
           }
@@ -146,7 +166,7 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
       }
     }
     const groundGeo = new THREE.PlaneGeometry(reach * 8, reach * 8);
-    const groundMat = new THREE.ShadowMaterial({ opacity: 0.18, color: new THREE.Color(palette.shadow) });
+    const groundMat = new THREE.ShadowMaterial({ opacity: 0.12, color: new THREE.Color(palette.shadow) });
     disposables.push(groundGeo, groundMat);
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
