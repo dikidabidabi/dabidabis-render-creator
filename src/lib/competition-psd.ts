@@ -1,4 +1,4 @@
-// Ekspor Panel Sayembara ke Photoshop (.psd) berukuran A1/A2 pada 150 dpi.
+// Ekspor Panel Arsitektur ke Photoshop (.psd) berukuran A1/A2 pada 150 dpi.
 // Gambar tiap kotak menjadi layer terpisah, teks menjadi layer teks asli
 // (dapat diedit di Photoshop). Hanya untuk browser: memakai canvas.
 import type { Layer, Psd } from "ag-psd";
@@ -118,7 +118,7 @@ export async function buildPanelPsd(input: PsdPanelInput): Promise<Blob> {
 
   // Kepala panel
   const hd = g.header;
-  texts.push(textLayer("Kicker", `PANEL ${nn} · SAYEMBARA`, { x: hd.x, y: hd.y, w: hd.w * 0.6, h: PANEL_TYPE.kicker * 1.6 * u }, { size: PANEL_TYPE.kicker * u, bold: true, color: PANEL_COLORS.accent, spacing: 200 }));
+  texts.push(textLayer("Kicker", `PANEL ${nn} · ARSITEKTUR`, { x: hd.x, y: hd.y, w: hd.w * 0.6, h: PANEL_TYPE.kicker * 1.6 * u }, { size: PANEL_TYPE.kicker * u, bold: true, color: PANEL_COLORS.accent, spacing: 200 }));
   texts.push(textLayer("Judul Panel", input.name.toUpperCase(), { x: hd.x, y: hd.y + PANEL_TYPE.kicker * 1.8 * u, w: hd.w * 0.66, h: PANEL_TYPE.title * 1.5 * u }, { size: PANEL_TYPE.title * u, bold: true }));
   texts.push(textLayer("Judul Proyek", input.projectTitle, { x: hd.x + hd.w * 0.62, y: hd.y + PANEL_TYPE.kicker * 1.8 * u, w: hd.w * 0.38, h: PANEL_TYPE.project * 3 * u }, { size: PANEL_TYPE.project * u, bold: true, align: "right" }));
   frames.push(rectLayer("Garis Kepala", { x: hd.x, y: hd.y + hd.h - 3 * u, w: hd.w, h: 3 * u }, PANEL_COLORS.ink));

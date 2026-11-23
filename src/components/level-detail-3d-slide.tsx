@@ -14,7 +14,7 @@ const INK = "#1d1d1b";
 const cache = new Map<string, AxoRender>();
 
 function renderAxonometric(model: Detail3dModel, labels: Array<{ id: string; center: { x: number; y: number } }>, width: number, height: number): AxoRender | null {
-  const result = renderDetail3dAxo([{ model, base: 0 }], labels.map(({ id, center }) => ({ id, x: center.x, y: center.y, h: 0.02 })), width, height);
+  const result = renderDetail3dAxo([{ model, base: 0 }], labels.map(({ id, center }) => ({ id, x: center.x, y: center.y, h: 0.02 })), width, height, { look: "bright" });
   return result ? { dataUrl: result.dataUrl, labels: result.points } : null;
 }
 

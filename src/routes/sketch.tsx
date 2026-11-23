@@ -509,7 +509,7 @@ type Sketch = {
   linkedMasterplan?: { rootLayerId: string };
   functionZones?: FunctionZone[];
   generalMaterials?: GeneralMaterialSelections;
-  /** Alat Panel Sayembara: layout, konten, teks dan ceklis tampil di Presentasi. */
+  /** Alat Panel Arsitektur: layout, konten, teks dan ceklis tampil di Presentasi. */
   competitionPanels?: CompetitionPanelSettings;
 };
 
@@ -12391,9 +12391,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             size="sm"
             onClick={() => { cancelPendingCurve(); setTool("panelSayembara"); }}
             className={cn(tool === "panelSayembara" && "bg-gradient-primary shadow-primary")}
-            title="Panel Sayembara — susun 7 panel (Konsep, Denah, Tampak, Potongan, Simulasi, Perhitungan & Material, Perspektif) dari konten proyek, lalu unduh PSD A1/A2."
+            title="Panel Arsitektur — susun 7 panel (Konsep, Denah, Tampak, Potongan, Simulasi, Perhitungan & Material, Perspektif) dari konten proyek, lalu unduh PSD A1/A2."
           >
-            <Trophy className="mr-1.5 h-4 w-4" /> Panel Sayembara
+            <Trophy className="mr-1.5 h-4 w-4" /> Panel Arsitektur
           </Button>
           <Button
             variant={tool === "separasi" ? "default" : "outline"}

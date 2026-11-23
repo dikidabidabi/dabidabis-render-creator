@@ -1,4 +1,4 @@
-// Alat "Panel Sayembara" di halaman Sketsa: ceklis tampil di Presentasi,
+// Alat "Panel Arsitektur" di halaman Sketsa: ceklis tampil di Presentasi,
 // pilihan kertas, tujuh panel (konten bawaan dari proyek), editor layout,
 // konten dan teks penjelasan, sugesti, dan unduhan PSD A1/A2.
 import { useEffect, useMemo, useState } from "react";
@@ -100,7 +100,7 @@ export function CompetitionPanelTool({ sketch, onChange, onDownload }: {
   return (
     <div className="space-y-2" data-competition-tool="true">
       <label className="flex items-start gap-2 rounded-md border border-border bg-background/60 px-2 py-1.5 text-[11px]">
-        <input type="checkbox" className="mt-0.5" checked={settings.enabled} onChange={(e) => patch({ enabled: e.target.checked })} aria-label="Tampilkan slide Panel Sayembara di Presentasi" />
+        <input type="checkbox" className="mt-0.5" checked={settings.enabled} onChange={(e) => patch({ enabled: e.target.checked })} aria-label="Tampilkan slide Panel Arsitektur di Presentasi" />
         <span><span className="font-semibold">Tampilkan di Presentasi</span><br /><span className="text-muted-foreground">Slide panel muncul sebelum slide penutup.</span></span>
       </label>
       <div className="grid grid-cols-2 gap-1.5">
@@ -222,7 +222,7 @@ function PanelEditorDialog({ open, panelKey, onOpenChange, onSelect, settings, s
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Atur Panel Sayembara</DialogTitle>
+          <DialogTitle>Atur Panel Arsitektur</DialogTitle>
           <DialogDescription>Isi bawaan diambil dari proyek. Ubah layout, konten dan teks penjelasan kapan saja.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-wrap gap-1" role="tablist" aria-label="Panel">

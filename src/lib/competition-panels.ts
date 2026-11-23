@@ -1,4 +1,4 @@
-// Panel Sayembara: tujuh panel bernama (Konsep … Perspektif) yang menyusun
+// Panel Arsitektur: tujuh panel bernama (Konsep … Perspektif) yang menyusun
 // konten proyek ke dalam layout pilihan. Modul ini murni (tanpa React/DOM)
 // agar katalog konten, isi bawaan, layout, teks dan sugesti bisa diuji, dan
 // dipakai bersama oleh alat Sketsa, slide Presentasi, serta ekspor PSD.

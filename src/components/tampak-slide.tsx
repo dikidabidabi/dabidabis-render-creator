@@ -25,7 +25,7 @@ export function tampakViewDir(dir: TampakDir, northRotationDeg: number): THREE.V
 
 export function TampakSlide({ levels, dir, northRotation, slideWidth, slideHeight, bare = false }: {
   levels: TampakLevel[]; dir: TampakDir; northRotation: number; slideWidth: number; slideHeight: number;
-  /** Di dalam kotak Panel Sayembara: tanpa judul, gambar memenuhi kotak. */
+  /** Di dalam kotak Panel Arsitektur: tanpa judul, gambar memenuhi kotak. */
   bare?: boolean;
 }) {
   const sourceKey = useMemo(() => JSON.stringify({ levels, dir, northRotation }), [levels, dir, northRotation]);

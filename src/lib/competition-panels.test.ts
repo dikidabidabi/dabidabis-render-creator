@@ -27,7 +27,7 @@ const sk: PanelSourceSketch = {
 };
 const catalog = panelContentCatalog(sk, { perspektif: [{ id: "p1", title: "Eksterior" }] });
 
-describe("Panel Sayembara", () => {
+describe("Panel Arsitektur", () => {
   it("memiliki tujuh panel bernama sesuai urutan", () => {
     expect(PANEL_DEFS.map((d) => d.name)).toEqual([
       "Konsep", "Denah", "Tampak", "Potongan", "Simulasi", "Perhitungan & Material", "Perspektif Eksterior & Interior",

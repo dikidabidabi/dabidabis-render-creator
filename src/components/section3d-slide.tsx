@@ -29,7 +29,7 @@ export type Section3dSlideProps = {
   style: ArchitecturalStyleId;
   slideWidth: number;
   slideHeight: number;
-  /** Di dalam kotak Panel Sayembara: tanpa judul, keterangan ringkas di bawah. */
+  /** Di dalam kotak Panel Arsitektur: tanpa judul, keterangan ringkas di bawah. */
   bare?: boolean;
 };
 

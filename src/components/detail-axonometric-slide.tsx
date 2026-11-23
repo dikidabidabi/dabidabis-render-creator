@@ -22,7 +22,7 @@ export type DetailAxonometricSlideProps = {
   stairs: Stair[];
   slideWidth: number;
   slideHeight: number;
-  /** Di dalam kotak Panel Sayembara: tanpa judul, legenda sirkulasi ringkas. */
+  /** Di dalam kotak Panel Arsitektur: tanpa judul, legenda sirkulasi ringkas. */
   bare?: boolean;
 };
 
@@ -73,7 +73,7 @@ export function DetailAxonometricSlide({ levels, stairs, slideWidth, slideHeight
     setRender(null);
     setFailed(false);
     try {
-      const result = renderDetail3dAxo(data.parts, data.points, viewW, viewH);
+      const result = renderDetail3dAxo(data.parts, data.points, viewW, viewH, { look: "bright" });
       if (!result) return;
       if (cache.size > 8) cache.delete(cache.keys().next().value as string);
       cache.set(cacheKey, result);

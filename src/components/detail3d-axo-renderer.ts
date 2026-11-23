@@ -4,6 +4,12 @@
 import * as THREE from "three";
 import type { Detail3dModel } from "@/lib/level-detail-3d";
 import { detail3dMergedMeshes, detail3dStyle } from "@/lib/level-detail-3d-mesh";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { BRIGHT3D_GLASS_MIX, BRIGHT3D_LIGHT, BRIGHT3D_WHITE_MIX, brightEdgeMaterial, brightenColor } from "@/components/bright-3d-look";
+
+/** Warna garis bangunan pada tampilan terang (sama tegasnya dengan Potongan 3D). */
+export const DETAIL3D_BRIGHT_EDGE = "#2f2d2a";
 
 export const DETAIL3D_VIEW_DIR = new THREE.Vector3(0.7, 1.1, 0.9).normalize(); // sama dengan kotak Detail 3D
 
@@ -16,11 +22,14 @@ export type AxoRender = { dataUrl: string; points: AxoProjected[] };
 export type AxoRenderOptions = {
   /** Arah kamera (dari model ke kamera). Bawaan aksonometri Detail 3D; arah datar = tampak. */
   viewDir?: THREE.Vector3;
+  /** "bright" = exposure putih, material doff, garis tipis tegas seperti Potongan 3D. */
+  look?: "standard" | "bright";
 };
 
 export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: number, height: number, opts: AxoRenderOptions = {}): AxoRender | null {
   const viewDir = (opts.viewDir ?? DETAIL3D_VIEW_DIR).clone().normalize();
   const elevation = Math.abs(viewDir.y) < 0.05;
+  const bright = opts.look === "bright";
   let minPX = Infinity, minPY = Infinity, maxPX = -Infinity, maxPY = -Infinity, topH = 0;
   for (const { model, base } of parts) {
     const b = model.bounds;
@@ -42,9 +51,14 @@ export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: n
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#ffffff");
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b8, 0.7));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.25);
+    if (bright) {
+      scene.add(new THREE.AmbientLight(0xffffff, BRIGHT3D_LIGHT.ambient));
+      scene.add(new THREE.HemisphereLight(0xffffff, brightenColor(0xc9c2b8, 0.7), BRIGHT3D_LIGHT.hemisphere));
+    } else {
+      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xc9c2b8, 0.7));
+    }
+    const sun = new THREE.DirectionalLight(0xffffff, bright ? BRIGHT3D_LIGHT.sun : 1.25);
     if (elevation) {
       // Tampak: matahari 45° dari kiri-depan dan 45° di atas, bayangan jatuh ke kanan-bawah.
       const side = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), viewDir).normalize();
@@ -59,32 +73,55 @@ export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: n
     sun.shadow.mapSize.set(4096, 4096);
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
+    if (bright) { sun.shadow.radius = BRIGHT3D_LIGHT.shadowRadius; sun.shadow.intensity = BRIGHT3D_LIGHT.shadowIntensity; }
     Object.assign(sun.shadow.camera, { left: -reach * 1.5, right: reach * 1.5, top: reach * 1.5, bottom: -reach * 1.5, near: 0.1, far: reach * 8 });
     scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.45);
-    fill.position.set(-span, topH + span, -span * 0.6);
-    scene.add(fill);
+    if (!bright) {
+      const fill = new THREE.DirectionalLight(0xffffff, 0.45);
+      fill.position.set(-span, topH + span, -span * 0.6);
+      scene.add(fill);
+    }
+    const brightEdgeMat = bright ? brightEdgeMaterial(DETAIL3D_BRIGHT_EDGE, width, height) : null;
+    if (brightEdgeMat) disposables.push(brightEdgeMat);
 
     for (const { model, base } of parts) {
       for (const m of detail3dMergedMeshes(model.prisms, cx, cy)) {
         const style = detail3dStyle(m.kind, m.color);
         const transparent = style.opacity !== undefined;
-        const material = new THREE.MeshStandardMaterial({
-          color: style.color,
-          roughness: m.kind === "glass" ? 0.1 : 0.75,
-          metalness: m.kind === "glass" ? 0.1 : 0.02,
-          transparent,
-          opacity: style.opacity ?? 1,
-          depthWrite: !transparent,
-          side: THREE.DoubleSide,
-        });
+        const material = bright
+          // Doff: Lambert tanpa pantulan spekular, warna dicerahkan ke arah putih.
+          ? new THREE.MeshLambertMaterial({
+            color: brightenColor(style.color, m.kind === "glass" ? BRIGHT3D_GLASS_MIX : BRIGHT3D_WHITE_MIX),
+            transparent,
+            opacity: style.opacity ?? 1,
+            depthWrite: !transparent,
+            side: THREE.DoubleSide,
+            polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+          })
+          : new THREE.MeshStandardMaterial({
+            color: style.color,
+            roughness: m.kind === "glass" ? 0.1 : 0.75,
+            metalness: m.kind === "glass" ? 0.1 : 0.02,
+            transparent,
+            opacity: style.opacity ?? 1,
+            depthWrite: !transparent,
+            side: THREE.DoubleSide,
+          });
         const mesh = new THREE.Mesh(m.geometry, material);
         mesh.position.y = base;
         mesh.castShadow = !transparent;
         mesh.receiveShadow = true;
         scene.add(mesh);
         disposables.push(m.geometry, material);
-        if (style.edges) {
+        if (style.edges && brightEdgeMat) {
+          const raw = new THREE.EdgesGeometry(m.geometry, 20);
+          const edgeGeo = new LineSegmentsGeometry().fromEdgesGeometry(raw);
+          raw.dispose();
+          const edges = new LineSegments2(edgeGeo, brightEdgeMat);
+          edges.position.y = base;
+          scene.add(edges);
+          disposables.push(edgeGeo);
+        } else if (style.edges) {
           const edgeGeo = new THREE.EdgesGeometry(m.geometry, 20);
           const edgeMat = new THREE.LineBasicMaterial({ color: style.edges });
           const edges = new THREE.LineSegments(edgeGeo, edgeMat);
@@ -95,7 +132,7 @@ export function renderDetail3dAxo(parts: AxoPart[], points: AxoPoint[], width: n
       }
     }
     const groundGeo = new THREE.PlaneGeometry(span * 4, span * 4);
-    const groundMat = new THREE.ShadowMaterial({ opacity: 0.16 });
+    const groundMat = new THREE.ShadowMaterial({ opacity: bright ? BRIGHT3D_LIGHT.groundShadow : 0.16 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = Math.min(0, ...parts.map((p) => p.base)) - 0.16;

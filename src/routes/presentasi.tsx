@@ -759,7 +759,7 @@ export function PresentasiBox({
   viewsOverride?: Record<string, { scale: number; tx: number; ty: number }> | null;
   /** Cover halaman judul dari presentasi sumber (untuk presentasi kiriman). */
   coverOverride?: string | null;
-  /** Permintaan unduh PSD Panel Sayembara dari halaman Sketsa. */
+  /** Permintaan unduh PSD Panel Arsitektur dari halaman Sketsa. */
   autoPsd?: { target: string; paper: PanelPaper } | null;
   onAutoPsdDone?: () => void;
 }) {
@@ -1188,7 +1188,7 @@ export function PresentasiBox({
     }
   }, [exporting, slides, effectiveSketch.title]);
 
-  // ---------- Unduh Panel Sayembara (.psd A1/A2) ----------
+  // ---------- Unduh Panel Arsitektur (.psd A1/A2) ----------
   const [psdJob, setPsdJob] = useState<{ panels: CompetitionPanelSlide[]; paper: PanelPaper } | null>(null);
   const psdRootRef = useRef<HTMLDivElement | null>(null);
   const startPsdExport = useCallback((target: string, paper: PanelPaper) => {
@@ -1260,7 +1260,7 @@ export function PresentasiBox({
           const zip = new JSZip();
           files.forEach((f) => zip.file(f.name, f.blob));
           const blob = await zip.generateAsync({ type: "blob", compression: "STORE" });
-          downloadBlob(blob, `${safe(project)}_Panel_Sayembara_${psdJob.paper}.zip`);
+          downloadBlob(blob, `${safe(project)}_Panel_Arsitektur_${psdJob.paper}.zip`);
         }
       } catch (err) {
         console.error(err);
@@ -2188,7 +2188,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       });
     });
   }
-  // Panel Sayembara — hanya bila ceklis "Tampilkan di Presentasi" pada alat Panel Sayembara aktif.
+  // Panel Arsitektur — hanya bila ceklis "Tampilkan di Presentasi" pada alat Panel Arsitektur aktif.
   if (normalizeCompetitionPanels(sk.competitionPanels)?.enabled) {
     out.push(...buildPanelSlides(sk, out, { narasi: narasiList, perspektif, moodboard, materialLibrary }));
   }
@@ -2231,7 +2231,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "siteplan": return "Siteplan Kawasan";
       case "analisis-kawasan": return "Analisis Kawasan";
       case "analisis-site": return "Analisis Site";
-      case "competition-panel": return "Panel Sayembara";
+      case "competition-panel": return "Panel Arsitektur";
       default: return null;
     }
   };
@@ -2664,7 +2664,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
   const fixedBody = slide.kind === "spec-outline" || slide.kind === "rincian" || slide.kind === "volumetrik" || slide.kind === "komposisi";
   // Isi yang sudah mengisi kotaknya sendiri (denah) cukup diberi ruang penuh tanpa diperkecil.
   const fillsFrame = fixedBody || slide.kind === "level";
-  // Di dalam kotak Panel Sayembara: tanpa kepala/kaki slide agar gambar lebih besar.
+  // Di dalam kotak Panel Arsitektur: tanpa kepala/kaki slide agar gambar lebih besar.
   // Kanvas mengikuti rasio kotak panel, sehingga isi slide tersusun ulang (bukan slide A3 yang diperkecil).
   if (bare) {
     if (isSpecial) {
@@ -5389,8 +5389,8 @@ function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3
   return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} />;
 }
 
-// ---------- Panel Sayembara ----------
-/** Kanvas konten di dalam kotak Panel Sayembara (null = slide biasa A3).
+// ---------- Panel Arsitektur ----------
+/** Kanvas konten di dalam kotak Panel Arsitektur (null = slide biasa A3).
  *  Konten disusun ulang mengikuti rasio kotak, tanpa kepala/kaki/judul slide. */
 const SlideBareCtx = React.createContext<{ w: number; h: number } | null>(null);
 function useSlideFrame() {
@@ -5467,7 +5467,7 @@ function buildPanelSlides(sk: Sketch, deck: Slide[], ctx: PanelBuildCtx, keys?: 
     return {
       kind: "competition-panel",
       id: `panel-${key}`,
-      title: `Panel Sayembara · ${name}`,
+      title: `Panel Arsitektur · ${name}`,
       sketch: sk,
       panelKey: key,
       panelName: name,
@@ -5564,7 +5564,7 @@ function CompetitionPanelBody({ slide }: { slide: CompetitionPanelSlide }) {
   );
 }
 
-/** Halaman Panel Sayembara: geometri dan tipografi sama dengan berkas PSD. */
+/** Halaman Panel Arsitektur: geometri dan tipografi sama dengan berkas PSD. */
 function CompetitionPanelPage({ slide, width, height }: { slide: CompetitionPanelSlide; width: number; height: number }) {
   const g = panelPageGeometry(slide.layout, width, height);
   const u = g.unit;
@@ -5575,7 +5575,7 @@ function CompetitionPanelPage({ slide, width, height }: { slide: CompetitionPane
   return (
     <div data-panel-page={slide.panelKey} style={{ position: "relative", width, height, background: PANEL_COLORS.page, color: PANEL_COLORS.ink, overflow: "hidden", fontFamily: "Manrope, sans-serif" }}>
       <div style={abs(g.header)}>
-        <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.kicker * u, fontWeight: 700, letterSpacing: "0.2em", color: PANEL_COLORS.accent }}>PANEL {nn} · SAYEMBARA</div>
+        <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.kicker * u, fontWeight: 700, letterSpacing: "0.2em", color: PANEL_COLORS.accent }}>PANEL {nn} · ARSITEKTUR</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 * u, marginTop: PANEL_TYPE.kicker * 0.5 * u }}>
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.title * u, fontWeight: 800, lineHeight: 1.1, textTransform: "uppercase" }}>{slide.panelName}</div>
           <div style={{ fontFamily: "Sora, sans-serif", fontSize: PANEL_TYPE.project * u, fontWeight: 700, textAlign: "right", maxWidth: "38%" }}>{project}</div>
@@ -5598,7 +5598,7 @@ function CompetitionPanelPage({ slide, width, height }: { slide: CompetitionPane
                 </div>
               ) : (
                 <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", textAlign: "center", padding: 8 * u, fontSize: 10 * u, color: PANEL_COLORS.muted }}>
-                  {cell ? "Konten belum tersedia di proyek" : "Kotak kosong · pilih konten di alat Panel Sayembara"}
+                  {cell ? "Konten belum tersedia di proyek" : "Kotak kosong · pilih konten di alat Panel Arsitektur"}
                 </div>
               )}
             </div>
@@ -6301,7 +6301,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
 
 function LevelBody({ slide }: { slide: Extract<Slide, { kind: "level" }> }) {
   const { sketch, level, bounds } = slide;
-  // Di kotak Panel Sayembara: angka ringkas pindah ke teks panel; kotak tegak menaruh legenda di bawah denah.
+  // Di kotak Panel Arsitektur: angka ringkas pindah ke teks panel; kotak tegak menaruh legenda di bawah denah.
   const frame = useSlideFrame();
   const panelTall = frame.bare && frame.w / frame.h < 1.25;
   const w = bounds.maxX - bounds.minX;
@@ -8017,7 +8017,7 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
   const heading = firstBreak === -1 ? text : text.slice(0, firstBreak).trim();
   const body = firstBreak === -1 ? "" : text.slice(firstBreak + 1).trim();
   const frame = useSlideFrame();
-  // Di kotak Panel Sayembara narasinya sudah ada di kotak teks: tampilkan gambar konsep saja.
+  // Di kotak Panel Arsitektur narasinya sudah ada di kotak teks: tampilkan gambar konsep saja.
   if (frame.bare) {
     if (bgImage) return <img src={bgImage} alt={`Konsep ${slide.index + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
     return (
@@ -8184,7 +8184,7 @@ function KonsepBody({ slide }: { slide: Extract<Slide, { kind: "konsep" }> }) {
 
 function PerspektifBody({ slide }: { slide: Extract<Slide, { kind: "perspektif" }> }) {
   const frame = useSlideFrame();
-  // Di kotak Panel Sayembara: gambar render saja, judulnya menjadi keterangan kotak.
+  // Di kotak Panel Arsitektur: gambar render saja, judulnya menjadi keterangan kotak.
   if (frame.bare) {
     return <img src={slide.image} alt={slide.caption} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />;
   }
