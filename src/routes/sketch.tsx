@@ -410,6 +410,8 @@ type SectionCut = {
   p2: Point;
   label?: string;
   showFunctionSlide?: boolean;
+  /** Slide Potongan 3D dari garis potong ini (bawaan nonaktif). */
+  show3dSlide?: boolean;
   updatedAt?: number;
 };
 
@@ -1086,6 +1088,7 @@ function normalizeSketch(s: any): Sketch {
           p2: { x: Number(c.p2.x), y: Number(c.p2.y) },
           label: typeof c.label === "string" && c.label.trim() ? c.label : "A-A",
           showFunctionSlide: c.showFunctionSlide === true,
+          show3dSlide: c.show3dSlide === true,
           updatedAt: Number.isFinite(Number(c.updatedAt)) ? Number(c.updatedAt) : Date.now(),
         };
       };
@@ -11650,7 +11653,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const label = nextSectionLabel(existing);
       const next: SectionCut[] = [
         ...existing,
-        { p1: a, p2: b, label, showFunctionSlide: false, updatedAt: Date.now() },
+        { p1: a, p2: b, label, showFunctionSlide: false, show3dSlide: false, updatedAt: Date.now() },
       ];
       onChange({ sectionCuts: next, sectionCut: undefined });
       toast.success(`Garis Potong ${label} tersimpan · slide potongan otomatis dibuat`, { duration: 2500 });
@@ -15209,6 +15212,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         className="h-3.5 w-3.5 accent-foreground"
                       />
                       Fungsi
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-muted-foreground" title="Buat slide Potongan 3D dari garis potong ini">
+                      <input
+                        type="checkbox"
+                        checked={c.show3dSlide === true}
+                        onChange={(event) => {
+                          const next = (sketch.sectionCuts ?? []).map((cut, index) => index === i
+                            ? { ...cut, show3dSlide: event.target.checked, updatedAt: Date.now() }
+                            : cut);
+                          onChange({ sectionCuts: next, sectionCut: undefined });
+                        }}
+                        className="h-3.5 w-3.5 accent-foreground"
+                      />
+                      Potongan 3D
                     </label>
                     <Button
                       variant="ghost"

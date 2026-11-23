@@ -11,3 +11,4 @@
 - [x] Uji geometri dan alur Sketsa → Presentasi termasuk muat ulang dengan sketsa uji 30°.
 
 - [x] Slide "Detail Aksonometri" setelah semua slide detail lantai: semua lantai sketsa disusun aksonometri, lift/tangga dihubungkan garis putus-putus.
+- [x] Ceklis "Potongan 3D" per garis potong (bawaan nonaktif) → slide perspektif potongan 3D dengan bayangan 45°, style mayoritas detail arsitektural, balok aturan potongan.

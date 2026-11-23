@@ -12,6 +12,27 @@ export type Section3dPalette = { floor: string; wall: string; structure: string;
 export type Section3dPart = { key: string; prisms: Detail3dPrism[]; bases: number[] };
 export type Section3dRender = { dataUrl: string; project: (x: number, y: number, h: number) => { x: number; y: number } };
 
+/** Prisma bersama dicerminkan (skala y −1) sehingga urutan segitiganya terbalik;
+ *  kembalikan agar sisi luar menjadi sisi depan dan normalnya tidak dibalik saat diterangi. */
+function fixWinding(geo: THREE.BufferGeometry) {
+  const attrs = Object.values(geo.attributes) as THREE.BufferAttribute[];
+  if (geo.index) {
+    const idx = geo.index;
+    for (let i = 0; i + 2 < idx.count; i += 3) { const t = idx.getX(i + 1); idx.setX(i + 1, idx.getX(i + 2)); idx.setX(i + 2, t); }
+    idx.needsUpdate = true;
+    return;
+  }
+  for (const attr of attrs) {
+    const size = attr.itemSize;
+    for (let i = 0; i + 2 < attr.count; i += 3) for (let k = 0; k < size; k++) {
+      const t = attr.getComponent(i + 1, k);
+      attr.setComponent(i + 1, k, attr.getComponent(i + 2, k));
+      attr.setComponent(i + 2, k, t);
+    }
+    attr.needsUpdate = true;
+  }
+}
+
 function colorFor(kind: Detail3dKind, palette: Section3dPalette) {
   switch (kind) {
     case "floor": return { color: palette.floor, edges: palette.edge as string | undefined, opacity: undefined as number | undefined };
@@ -49,15 +70,16 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
     renderer.setSize(width, height, false);
     renderer.setClearColor(0x000000, 0);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     const scene = new THREE.Scene();
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    scene.add(new THREE.HemisphereLight(0xffffff, new THREE.Color(palette.shadow), 0.55));
+    // Ruang dalam tetap terang: bayangan 45° lembut, bukan gelap pekat.
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    scene.add(new THREE.HemisphereLight(0xffffff, new THREE.Color(palette.shadow), 0.45));
 
     // Matahari 45°: datang dari kiri-depan pengamat (kiri gambar = +u), elevasi 45°.
     const lh = new THREE.Vector2(frame.u.x - frame.n.x, frame.u.y - frame.n.y).normalize();
     const mid = toScene(frame.a.x + frame.u.x * (minS + maxS) / 2 + frame.n.x * maxD / 2, frame.a.y + frame.u.y * (minS + maxS) / 2 + frame.n.y * maxD / 2, minH + totalH / 2);
-    const sun = new THREE.DirectionalLight(0xffffff, 1.35);
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
     const R = reach * 3;
     sun.position.set(mid.x + lh.x * R, mid.y + R, mid.z + lh.y * R);
     sun.target.position.copy(mid);
@@ -67,6 +89,7 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
     sun.shadow.bias = -0.0003;
     sun.shadow.normalBias = 0.02;
     sun.shadow.radius = 3;
+    sun.shadow.intensity = 0.55;
     Object.assign(sun.shadow.camera, { left: -reach * 1.2, right: reach * 1.2, top: reach * 1.2, bottom: -reach * 1.2, near: 0.1, far: R * 3 });
     scene.add(sun);
 
@@ -79,7 +102,7 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
         const transparent = style.opacity !== undefined;
         m = new THREE.MeshStandardMaterial({
           color: style.color, roughness: kind === "glass" ? 0.1 : 0.85, metalness: 0.02,
-          transparent, opacity: style.opacity ?? 1, depthWrite: !transparent, side: THREE.DoubleSide,
+          transparent, opacity: style.opacity ?? 1, depthWrite: !transparent, side: transparent ? THREE.DoubleSide : THREE.FrontSide,
           polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
         });
         material.set(key, m);
@@ -95,6 +118,7 @@ export function renderSection3d(parts: Section3dPart[], frame: Section3dFrame, p
       for (const prism of part.prisms) {
         const geo = detail3dPrismGeometry(prism, cx, cy);
         if (!geo) continue;
+        fixWinding(geo);
         const arr = buckets.get(prism.kind) ?? [];
         arr.push(geo);
         buckets.set(prism.kind, arr);

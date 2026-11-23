@@ -74,6 +74,8 @@ import { practicalColumnNodes } from "@/lib/practical-columns";
 import { detail3dInputForSketch } from "@/lib/level-detail-3d";
 import { LevelDetail3dSlide } from "@/components/level-detail-3d-slide";
 import { DetailAxonometricSlide } from "@/components/detail-axonometric-slide";
+import { Section3dSlide } from "@/components/section3d-slide";
+import { majorityArchitecturalStyle } from "@/lib/section-3d";
 import { collectSpecMaterialRefs, sketchMetersPerSketchPx, specLocations, specLocationText, specMaterialArea, type SpecLocation, type SpecMaterialRef } from "@/lib/spec-outline";
 import { architecturalWallUnion, architecturalShadowStrips, architecturalWindowBases } from "@/lib/architectural-plan";
 import { architecturalShadowProfile } from "@/lib/architectural-shadow";
@@ -162,7 +164,7 @@ type Layer = {
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number; detail3d?: boolean };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
-type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; updatedAt?: number };
+type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; show3dSlide?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   rotation?: number;
@@ -1545,6 +1547,7 @@ type Slide =
   | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "bubble-total"; id: string; title: string; sketch: Sketch; levels: Level[]; displayNames: Record<string, string> }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
+  | { kind: "section3d"; id: string; title: string; sketch: Sketch; cut: SectionCut; label: string }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
   | { kind: "perspektif"; id: string; title: string; sketch: Sketch; image: string; caption: string; index: number; total: number }
@@ -1784,6 +1787,10 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
         sketch: sk,
         cut: c,
       });
+      // Potongan 3D: hanya bila ceklis "Potongan 3D" pada garis potong aktif.
+      if (c.show3dSlide === true) {
+        out.push({ kind: "section3d", id: `section3d-${i}-${lbl}`, title: `Potongan 3D ${lbl}`, sketch: sk, cut: c, label: lbl });
+      }
     }
   }
   out.push({ kind: "wind", id: "wind", title: "Simulasi Aliran Angin", sketch: sk });
@@ -1929,6 +1936,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "bubble":
       case "bubble-total": return "Diagram Hubungan Ruang";
       case "section": return "Potongan Prinsip";
+      case "section3d": return "Potongan 3D";
       case "matahari":
       case "shadow-seasonal":
       case "facade-zoning": return "Analisa Matahari & Fasad";
@@ -2336,7 +2344,7 @@ function useSlideTheme(slideId?: string) {
 function SlideContent({ slide }: { slide?: Slide }) {
   const theme = useSlideTheme(slide?.id);
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d" || slide.kind === "detail-axo";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d" || slide.kind === "detail-axo" || slide.kind === "section3d";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
@@ -2346,6 +2354,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "detail" && <DetailSlideBoundary key={slide.id} slide={slide} />}
       {slide.kind === "detail3d" && <Detail3dSlideBody key={slide.id} slide={slide} />}
       {slide.kind === "detail-axo" && <DetailAxoSlideBody key={slide.id} slide={slide} />}
+      {slide.kind === "section3d" && <Section3dSlideBody key={slide.id} slide={slide} />}
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "bubble-total" && <BubbleTotalBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
@@ -2419,6 +2428,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
     : slide.kind === "bubble-total" ? "Diagram · Hubungan Ruang · Semua Lantai"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
+    : slide.kind === "section3d" ? "Sketsa · Potongan 3D"
     : slide.kind === "site" ? (
         slide.view === "lokasi" ? "Analisa · Lokasi"
         : slide.view === "akses" ? "Analisa · Akses"
@@ -5058,6 +5068,28 @@ function DetailAxoSlideBody({ slide }: { slide: Extract<Slide, { kind: "detail-a
     }));
   }, [sketch, levels]);
   return <DetailAxonometricSlide levels={items} stairs={sketch.stairs ?? []} slideWidth={A3_W} slideHeight={A3_H} />;
+}
+
+function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3d" }> }) {
+  const { sketch, cut, label } = slide;
+  const props = useMemo(() => {
+    const ppm = 1 / sketchMetersPerSketchPx(sketch.scale);
+    const levels = (sketch.levels ?? []).map((lv) => ({
+      id: lv.id,
+      name: lv.name,
+      mdpl: Number(lv.mdpl) || 0,
+      ...(lv.typicalCount ? { typicalCount: lv.typicalCount } : {}),
+      ...((lv as { typicalHeight?: number }).typicalHeight ? { typicalHeight: (lv as { typicalHeight?: number }).typicalHeight } : {}),
+      input: detail3dInputForSketch(sketch as unknown as Parameters<typeof detail3dInputForSketch>[0], lv.id, ppm),
+    }));
+    const slabs = (sketch.floors ?? []).map((f) => ({ levelId: f.levelId, outer: f.outer, ...(f.holes ? { holes: f.holes } : {}), thicknessMm: f.thicknessMm }));
+    return {
+      ppm, levels, slabs,
+      grids: collectGrids(sketch.structuralGrid, sketch.structuralGridExtras),
+      style: majorityArchitecturalStyle(sketch.detailAreas ?? []),
+    };
+  }, [sketch]);
+  return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={A3_W} slideHeight={A3_H} />;
 }
 
 /** Satu bentuk denah yang tidak valid tidak boleh membuat slide kosong.
