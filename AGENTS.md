@@ -6,7 +6,7 @@
 - Merged grids live in parent.merged; collectGrids flattens; linked move/rotate.
 - Free stairs share polyline/offset geometry; landings bend across views.
 - Notification reads/writes verify bearer claims via notification-session.server and return empty/no-op without a session so auth races cannot blank the app.
-- Tabel Rincian per Level memakai area gulir vertikal mandiri dan fill handle material hanya menyalin sepanjang kolom serta level yang sama agar pengisian massal tidak bocor ke data lain.
+- Rincian per Level scrolls on its own; material fill handle copies only within one column and level.
 - Doors/windows use tool-local editing; dynamic windows keep A fixed and share windowDividerFractions across Sketch/Presentation for consistent spacing.
 - Pintu lipat menyimpan mode satu/dua sisi, arah sisi tunggal, dan jumlah panel; panjang fisik daun dipertahankan saat diproyeksikan 45° sehingga sisa bukaan berada di kusen seberang atau di tengah, konsisten di Sketsa, Detail, Presentasi, dan DXF.
 - Detail interior dimensions measure clear face-to-face spans parallel to the reference wall, offsetting only adjacent sub-200 mm chains by 150 mm; exterior dimensions project material faces only, stack sub-400 mm intervals on 400/550/700 mm rails, extend the view 1 m, and blank the plan white.
@@ -30,3 +30,4 @@
 - Rincian per Level: full-width, unscaled, paged as Outline Spec.
 - Volumetrik: row per physical floor, subtotals last.
 - Detail 3D (windowVerticalRange per type) feeds all 3D views; panels redraw bare slide bodies in aspect slots (PSD too).
+- section-room-legend numbers rooms for Potongan Prinsip and 3D alike.
