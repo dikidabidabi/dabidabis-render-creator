@@ -37,8 +37,7 @@ type Section3dPalette = (typeof SECTION3D_PALETTE)[keyof typeof SECTION3D_PALETT
 const SECTION3D_LEGEND = (palette: Section3dPalette) => [
   { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, plafon, dinding, kolom)", short: "Bidang potong" },
   { fill: palette.wall, stroke: palette.edge, text: "Dinding tampak", short: "Dinding" },
-  { fill: "#f7f5f0", stroke: palette.edge, text: "Plafon (+2.800, tebal 5 mm)", short: "Plafon" },
-  { fill: "#c8ccd0", stroke: palette.edge, text: "Rangka hollow aluminium 2×4 cm @40 cm, 4×4 cm @120 cm (bersilangan)", short: "Rangka plafon" },
+  { fill: "#f7f5f0", stroke: palette.edge, text: "Plafon. Ketinggian dan spesifikasi sesuai gambar", short: "Plafon" },
   { fill: palette.floor, stroke: palette.edge, text: "Lantai", short: "Lantai" },
   { fill: "#bfe0ee", stroke: palette.edge, text: "Kaca / jendela", short: "Kaca" },
   { fill: "#a8743f", stroke: palette.edge, text: "Pintu", short: "Pintu" },
@@ -139,7 +138,7 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
           {data.groups.map((group) => <g key={group.key} data-section3d-cut={group.key}>
             <path d={toPath(group.glass)} fill="#bfe0ee" fillOpacity={0.85} stroke={palette.edge} strokeWidth={0.8} fillRule="evenodd" />
             <path d={toPath(group.frame)} fill={palette.edge} stroke={palette.edge} strokeWidth={0.6} fillRule="evenodd" />
-            <path d={toPath(group.solid)} fill={palette.cut} stroke={palette.edge} strokeWidth={2.2} strokeLinejoin="miter" fillRule="evenodd" />
+            <path d={toPath(group.solid)} fill={palette.cut} stroke={palette.cut === "#ffffff" ? "#1a1a1a" : "none"} strokeWidth={palette.cut === "#ffffff" ? 1 : 0} strokeLinejoin="miter" fillRule="evenodd" />
           </g>)}
           {floorLabels.map(({ floor, x, y }) => <g key={floor.key} data-section3d-level={floor.key}>
             <line x1={x} y1={y} x2={x - 34} y2={y} stroke={palette.edge} strokeWidth={1.2} />
