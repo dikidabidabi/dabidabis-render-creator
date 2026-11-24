@@ -251,20 +251,20 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
     const range = windowVerticalRange(type, wallHeight, doorHeight);
     return { range, cuts: difference(union(list.map((window) => rectAlong(window.a, window.b, depthAt(window.a, window.b) * 0.7))), doorCuts) };
   });
-  const windowCuts = union(windowCutsByType.flatMap((entry) => entry.cuts.flat()));
-  const openingCuts = union([...doorCuts, ...windowCuts].flat());
+  const windowCuts = unionPolygons(windowCutsByType.flatMap((entry) => entry.cuts));
+  const openingCuts = unionPolygons([...doorCuts, ...windowCuts]);
 
   const shapes: Record<WallClass, MultiPolygon> = {
     concrete: union(bands.concrete),
     wall: [], concept: [], glass: [], railing: [], parapet: [],
   };
   shapes.wall = difference(union(bands.wall), shapes.concrete);
-  const heavy = union([...shapes.concrete, ...shapes.wall].flat());
+  const heavy = unionPolygons([...shapes.concrete, ...shapes.wall]);
   shapes.concept = difference(union(bands.concept), heavy);
-  const solid = union([...heavy, ...shapes.concept].flat());
+  const solid = unionPolygons([...heavy, ...shapes.concept]);
   shapes.parapet = difference(union(bands.parapet), solid);
-  shapes.glass = difference(union(bands.glass), union([...solid, ...shapes.parapet].flat()));
-  shapes.railing = difference(union(bands.railing), union([...solid, ...shapes.glass].flat()));
+  shapes.glass = difference(union(bands.glass), unionPolygons([...solid, ...shapes.parapet]));
+  shapes.railing = difference(union(bands.railing), unionPolygons([...solid, ...shapes.glass]));
 
   // ---- Kolom struktur: setinggi level, memotong pita dinding ----
   const columnShape = union((input.columns ?? []).filter((ring) => ring.length >= 3));

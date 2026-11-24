@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildLevelDetail3d, detail3dInputForSketch, levelWallHeight, type Detail3dInput } from "./level-detail-3d";
-import { edgeMaterialKey } from "./edge-segments";
+import { edgeMaterialKey, type EdgeMaterial } from "./edge-segments";
 
 const PPM = 100; // 100 px = 1 m
 const L = "lv1";
@@ -36,6 +36,15 @@ test("bidang potong parapet mempertahankan tebal 15 cm dan tinggi 1,2 m", async 
   assert.equal(face.bottom, 0);
   assert.equal(face.top, 1.2);
   assert.ok(Math.abs(face.s1 - face.s0 - 0.15) < 1e-6);
+});
+
+test("parapet di dalam ruang berdinding keliling tetap tampil (lubang dinding tidak terisi)", () => {
+  const lines = [wall(0, 0, 800, 0), wall(800, 0, 800, 600), wall(800, 600, 0, 600), wall(0, 600, 0, 0), wall(200, 300, 600, 300)];
+  const edgeAttrs = Object.fromEntries(lines.map((l, i) => [edgeMaterialKey(L, l.a, l.b), i === 4 ? "parapet" : "solid"])) as Record<string, EdgeMaterial>;
+  const model = buildLevelDetail3d(base({ lines, edgeAttrs }));
+  const parapets = model.prisms.filter((p) => p.kind === "parapet");
+  assert.equal(parapets.length, 1);
+  assert.equal(parapets[0]?.top, 1.2);
 });
 
 for (const kind of ["lurus", "u", "bebas", "lingkar"] as const) {
