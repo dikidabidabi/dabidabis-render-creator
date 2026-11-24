@@ -29,4 +29,4 @@
 - Total bubble slide: one cluster/level; red links join same-kind circulation on next level.
 - Rincian per Level: full-width, unscaled, paged as Outline Spec.
 - Volumetrik: row per physical floor, subtotals last.
-- Detail 3D (windowVerticalRange per window type) feeds all 3D views; panels redraw bare slide bodies in aspect-matched slots (PSD too).
+- Detail 3D (windowVerticalRange per type) feeds all 3D views; panels redraw bare slide bodies in aspect slots (PSD too).
