@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { AppWindow, Box, Check, Download, Maximize2, Minimize2, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -13,19 +14,45 @@ import { buildLevelDetail3d, type Detail3dInput, type Detail3dModel } from "@/li
 import { detail3dMergedMeshes, detail3dStyle, type Detail3dMesh } from "@/lib/level-detail-3d-mesh";
 import { disposeGroup, exportGroupAsGlb, exportGroupAsObj, triggerDownload } from "@/lib/model3d-export";
 
-/** Susun mesh Detail 3D (geometri disalin) menjadi grup siap ekspor .obj/.glb. */
+const EXPORT_CATEGORIES: { name: string; kinds: Detail3dMesh["kind"][] }[] = [
+  { name: "Lantai", kinds: ["floor", "slab"] },
+  { name: "Dinding", kinds: ["wall", "concrete", "concept"] },
+  { name: "Parapet", kinds: ["parapet"] },
+  { name: "Kolom", kinds: ["column"] },
+  { name: "Tangga", kinds: ["stair"] },
+  { name: "Pintu", kinds: ["door"] },
+  { name: "Kaca", kinds: ["glass"] },
+  { name: "Kusen", kinds: ["frame"] },
+  { name: "Railing", kinds: ["railing"] },
+  { name: "Plafon", kinds: ["ceiling"] },
+  { name: "Rangka_Plafon", kinds: ["ceilingFrame"] },
+];
+
+/** Susun Detail 3D menjadi satu objek per elemen (Lantai, Dinding, Pintu, Kaca, Kusen, ...) agar material mudah diganti di 3ds Max. */
 function detail3dExportGroup(meshes: Detail3dMesh[], name: string): THREE.Group {
   const group = new THREE.Group();
   group.name = name;
-  meshes.forEach((m, i) => {
-    const style = detail3dStyle(m.kind, m.color);
-    const transparent = style.opacity !== undefined;
-    const mat = new THREE.MeshStandardMaterial({ color: style.color, transparent, opacity: style.opacity ?? 1, roughness: m.kind === "glass" ? 0.1 : 0.75, side: THREE.DoubleSide });
-    mat.name = m.kind;
-    const mesh = new THREE.Mesh(m.geometry.clone(), mat);
-    mesh.name = `${m.kind}_${i}`;
+  for (const cat of EXPORT_CATEGORIES) {
+    const parts = meshes.filter((m) => cat.kinds.includes(m.kind));
+    if (!parts.length) continue;
+    const geos = parts.map((m) => {
+      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      for (const key of Object.keys(g.attributes)) if (!["position", "normal", "uv"].includes(key)) g.deleteAttribute(key);
+      return g;
+    });
+    const mats = parts.map((m, i) => {
+      const style = detail3dStyle(m.kind, m.color);
+      const mat = new THREE.MeshStandardMaterial({ color: style.color, transparent: style.opacity !== undefined, opacity: style.opacity ?? 1, roughness: m.kind === "glass" ? 0.1 : 0.75, side: THREE.DoubleSide });
+      mat.name = parts.length > 1 ? `${cat.name}_${i + 1}` : cat.name;
+      return mat;
+    });
+    const merged = geos.length === 1 ? geos[0]! : mergeGeometries(geos, true);
+    if (merged !== geos[0]) geos.forEach((g) => g.dispose());
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, mats.length === 1 ? mats[0]! : mats);
+    mesh.name = cat.name;
     group.add(mesh);
-  });
+  }
   return group;
 }
 
