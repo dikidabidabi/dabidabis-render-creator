@@ -72,7 +72,7 @@ export function buildSectionPrims(sketch: SectionDxfSketch, cut: { p1: P; p2: P;
   }
 
   // Garis & label level.
-  const levels = (sketch.levels ?? []).map((lv) => ({ ...lv, name: lv.name ?? lv.id, mdpl: Number(lv.mdpl) || 0 }));
+  const levels = ((sketch.levels ?? []) as Array<{ id: string; name?: string; mdpl: number; typicalCount?: number; typicalHeight?: number }>).map((lv) => ({ ...lv, name: lv.name ?? lv.id, mdpl: Number(lv.mdpl) || 0 }));
   const base0 = Math.min(...levels.map((l) => l.mdpl), 0);
   for (const floor of section3dFloors(levels)) {
     const h = floor.base - (levels.length ? Math.min(...levels.map((l) => l.mdpl)) : base0);
