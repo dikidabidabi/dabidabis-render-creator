@@ -18,7 +18,7 @@ type P = { x: number; y: number };
 type Ring = P[];
 type MultiPolygon = Ring[][];
 
-export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column";
+export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column" | "ceiling";
 
 export type Detail3dPrism = {
   kind: Detail3dKind;

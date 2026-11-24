@@ -15,6 +15,10 @@ type Ring = P[];
 export const SECTION3D_BEAM_WIDTH_M = 0.4;
 export const SECTION3D_PERIMETER_BEAM_WIDTH_M = 0.2;
 export const SECTION3D_BEAM_HEIGHT_M = 0.7;
+/** Plafon khusus Potongan 3D: dasar 2,8 m dari muka lantai, tebal 50 cm. */
+export const SECTION3D_CEILING_HEIGHT_M = 2.8;
+export const SECTION3D_CEILING_THICKNESS_M = 0.5;
+const NO_CEILING_ROOM = /lift|shaft|tangga/i;
 const TYPICAL_FLOOR_H = 3;
 const TOP_FLOOR_H = 4;
 const FAR = 10000;
@@ -166,6 +170,43 @@ export function section3dBeams(
       const [ring, ...inner] = polygon.map(openRing);
       if (!ring || ring.length < 3) continue;
       out.push({ kind: "slab", outer: ring, holes: inner.filter((h) => h.length >= 3), bottom: -t - SECTION3D_BEAM_HEIGHT_M, top: -t });
+    }
+  }
+  return out;
+}
+
+/**
+ * Plafon (meter, relatif muka lantai) pada ruang yang tertutup plat lantai di
+ * atasnya: hanya bagian ruang yang berada di bawah plat atas (lubang/void plat
+ * tidak diberi plafon). Ruang lift, shaft, dan tangga tidak diberi plafon.
+ * Puncak plafon dibatasi di bawah plat atas bila tinggi lantai kurang.
+ */
+export function section3dCeilings(
+  rooms: Array<{ name: string; points: P[] }>,
+  slabsAbove: Array<{ outer: P[]; holes?: P[][]; thicknessMm: number }>,
+  pxPerMeter: number,
+  floorHeight: number,
+): Detail3dPrism[] {
+  const ppm = pxPerMeter > 0 ? pxPerMeter : 1;
+  const toM = (ring: P[]) => ring.map((p) => ({ x: p.x / ppm, y: p.y / ppm }));
+  const above = slabsAbove.filter((slab) => slab.outer.length >= 3);
+  if (!above.length) return [];
+  const thickAbove = Math.max(...above.map((slab) => Math.max(0.01, (Number(slab.thicknessMm) || 150) / 1000)));
+  const bottom = SECTION3D_CEILING_HEIGHT_M;
+  const top = Math.min(bottom + SECTION3D_CEILING_THICKNESS_M, floorHeight - thickAbove);
+  if (!(top - bottom > 0.01)) return [];
+  const slabGeoms = above.map((slab) => [ringToGeom(toM(slab.outer)), ...(slab.holes ?? []).filter((h) => h.length >= 3).map((h) => ringToGeom(toM(h)))]);
+  const cover = safe(() => polygonClipping.union(slabGeoms[0] as any, ...(slabGeoms.slice(1) as any[])) as Geom);
+  if (!cover || !cover.length) return [];
+  const out: Detail3dPrism[] = [];
+  for (const room of rooms) {
+    const name = room.name.trim().toLowerCase();
+    if (room.points.length < 3 || name.startsWith("lahan") || name === "void" || NO_CEILING_ROOM.test(name)) continue;
+    const covered = safe(() => polygonClipping.intersection([ringToGeom(toM(room.points))] as any, cover as any) as Geom);
+    for (const polygon of covered ?? []) {
+      const [outer, ...holes] = polygon.map(openRing);
+      if (!outer || outer.length < 3) continue;
+      out.push({ kind: "ceiling", outer, holes: holes.filter((h) => h.length >= 3), bottom, top });
     }
   }
   return out;

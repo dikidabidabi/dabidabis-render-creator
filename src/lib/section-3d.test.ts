@@ -69,3 +69,24 @@ test("style potongan 3D mengikuti mayoritas detail arsitektural, bawaan Tosca", 
     { showArchitectural: false, architecturalStyle: "blue" },
   ]), "bata");
 });
+
+test("plafon potongan 3D: dasar 2,8 m, tebal 50 cm, hanya di bawah plat atas, tanpa lift/shaft/tangga", async () => {
+  const { section3dCeilings } = await import("./section-3d");
+  const sq = (x0: number, y0: number, x1: number, y1: number) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  const ppm = 100;
+  const rooms = [
+    { name: "Kantor", points: sq(0, 0, 1000, 600) },
+    { name: "Lift Penumpang", points: sq(1000, 0, 1200, 200) },
+    { name: "Shaft MEP", points: sq(1000, 200, 1200, 400) },
+    { name: "Tangga Darurat", points: sq(1000, 400, 1200, 600) },
+  ];
+  // Plat atas hanya menutup separuh kantor (x 0–5 m) dan seluruh area inti.
+  const slabsAbove = [{ outer: sq(0, 0, 500, 600), thicknessMm: 150 }, { outer: sq(1000, 0, 1200, 600), thicknessMm: 150 }];
+  const ceilings = section3dCeilings(rooms, slabsAbove, ppm, 4);
+  assert.equal(ceilings.length, 1);
+  assert.equal(ceilings[0]!.kind, "ceiling");
+  assert.deepEqual([ceilings[0]!.bottom, ceilings[0]!.top], [2.8, 3.3]);
+  assert.ok(Math.abs(area(ceilings[0]!.outer) - 30) < 1e-6); // 5 m × 6 m yang tertutup plat
+  // Tanpa plat di atas → tanpa plafon.
+  assert.equal(section3dCeilings(rooms, [], ppm, 4).length, 0);
+});

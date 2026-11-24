@@ -43,7 +43,7 @@ function fixWinding(geo: THREE.BufferGeometry) {
 function colorFor(kind: Detail3dKind, palette: Section3dPalette) {
   switch (kind) {
     case "floor": return { color: palette.floor, edges: palette.edge as string | undefined, opacity: undefined as number | undefined };
-    case "wall": case "concept": return { color: palette.wall, edges: palette.edge, opacity: undefined };
+    case "wall": case "concept": case "ceiling": return { color: palette.wall, edges: palette.edge, opacity: undefined };
     case "concrete": case "column": case "slab": return { color: palette.structure, edges: palette.edge, opacity: undefined };
     default: return DETAIL3D_KIND_STYLE[kind];
   }

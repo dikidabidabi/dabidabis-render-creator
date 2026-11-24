@@ -17,6 +17,7 @@ export const DETAIL3D_KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color
   door: { color: "#a8743f", edges: "#5a3b1c" },
   slab: { color: "#a3a7ad", edges: "#4b4f55" },
   column: { color: "#8f8c86", edges: "#262420" },
+  ceiling: { color: "#f7f5f0", edges: DETAIL3D_WALL_EDGE },
 };
 
 export function detail3dStyle(kind: Detail3dKind, color?: string) {

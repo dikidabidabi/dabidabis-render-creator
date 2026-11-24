@@ -3,9 +3,9 @@
 // Gambar 3D dirender sekali ke PNG; bidang potong (poché) dan label lantai
 // digambar sebagai SVG di atasnya agar tegas dan ikut terekspor.
 import { useEffect, useMemo, useState } from "react";
-import { buildLevelDetail3d, type Detail3dInput, type Detail3dKind } from "@/lib/level-detail-3d";
+import { buildLevelDetail3d, type Detail3dInput, type Detail3dKind, type Detail3dPrism } from "@/lib/level-detail-3d";
 import {
-  SECTION3D_PALETTE, clipPrismsToSection, mergeCutFaces, section3dBeams, section3dFloors, section3dFrame, sectionCutFaces,
+  SECTION3D_PALETTE, clipPrismsToSection, mergeCutFaces, section3dBeams, section3dCeilings, section3dFloors, section3dFrame, sectionCutFaces,
   type ArchitecturalStyleId,
 } from "@/lib/section-3d";
 import type { StructuralGrid } from "@/lib/structural-grid";
@@ -15,7 +15,7 @@ const cache = new Map<string, Section3dRender>();
 const STYLE_NAME: Record<ArchitecturalStyleId, string> = {
   tosca: "Tosca", brown: "Coklat", blue: "Biru", bata: "Bata", mono: "Monokrom", lightorange: "Oranye Terang", monobiru: "Mono Biru",
 };
-const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing"];
+const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling"];
 
 export type Section3dLevel = { id: string; name: string; mdpl: number; typicalCount?: number; typicalHeight?: number; input: Detail3dInput };
 
@@ -35,8 +35,9 @@ export type Section3dSlideProps = {
 
 type Section3dPalette = (typeof SECTION3D_PALETTE)[keyof typeof SECTION3D_PALETTE];
 const SECTION3D_LEGEND = (palette: Section3dPalette) => [
-  { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, dinding, kolom)", short: "Bidang potong" },
+  { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, plafon, dinding, kolom)", short: "Bidang potong" },
   { fill: palette.wall, stroke: palette.edge, text: "Dinding tampak", short: "Dinding" },
+  { fill: "#f7f5f0", stroke: palette.edge, text: "Plafon (+2.800, tebal 50 cm)", short: "Plafon" },
   { fill: palette.floor, stroke: palette.edge, text: "Lantai", short: "Lantai" },
   { fill: "#bfe0ee", stroke: palette.edge, text: "Kaca / jendela", short: "Kaca" },
   { fill: "#a8743f", stroke: palette.edge, text: "Pintu", short: "Pintu" },
@@ -56,8 +57,24 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
       const bases = floors.filter((f) => f.levelId === level.id).map((f) => f.base);
       return { key: level.id, prisms, bases, faces: sectionCutFaces(prisms, frame) };
     }).filter((part) => part.prisms.length > 0 && part.bases.length > 0);
+    // Plafon hanya di Potongan 3D: per salinan lantai, ditutup plat lantai di atasnya
+    // (salinan tipikal berikutnya atau level berikutnya).
+    const ceilingParts = new Map<string, { key: string; prisms: Detail3dPrism[]; bases: number[]; faces: ReturnType<typeof sectionCutFaces> }>();
+    floors.forEach((floor, index) => {
+      const level = levels.find((lv) => lv.id === floor.levelId);
+      const next = floors[index + 1];
+      if (!level || !next || !parts.some((part) => part.key === level.id)) return;
+      const groupKey = `${level.id}__plafon__${next.levelId}__${floor.height}`;
+      const existing = ceilingParts.get(groupKey);
+      if (existing) { existing.bases.push(floor.base); return; }
+      const ceilings = section3dCeilings(level.input.rooms, slabs.filter((s) => s.levelId === next.levelId), pxPerMeter, floor.height);
+      const prisms = clipPrismsToSection(ceilings, frame);
+      if (!prisms.length) return;
+      ceilingParts.set(groupKey, { key: groupKey, prisms, bases: [floor.base], faces: sectionCutFaces(prisms, frame) });
+    });
+    const allParts = [...parts, ...ceilingParts.values()];
     // Siluet potong per salinan lantai: masif (lantai/plat/balok/dinding/kolom), kaca, kusen/daun.
-    const groups = parts.flatMap((part) => part.bases.map((base) => ({
+    const groups = allParts.flatMap((part) => part.bases.map((base) => ({
       key: `${part.key}@${base}`,
       solid: mergeCutFaces(part.faces.filter((f) => SOLID.includes(f.kind)).map((f) => ({ ...f, bottom: f.bottom + base, top: f.top + base }))),
       glass: mergeCutFaces(part.faces.filter((f) => f.kind === "glass").map((f) => ({ ...f, bottom: f.bottom + base, top: f.top + base }))),
@@ -68,7 +85,7 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
       const s = part.faces.length ? Math.max(...part.faces.map((f) => f.s1)) : frame.length;
       labelS.set(part.key, s);
     }
-    return { frame, floors: floors.filter((f) => labelS.has(f.levelId)), parts, groups, labelS };
+    return { frame, floors: floors.filter((f) => labelS.has(f.levelId)), parts: allParts, groups, labelS };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey]);
 
