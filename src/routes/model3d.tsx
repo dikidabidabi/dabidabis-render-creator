@@ -132,6 +132,7 @@ type VertexSelection = {
 
 import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
 import { LevelDetail3dBox } from "@/components/level-detail-3d";
+import { clipPrismsToSection, section3dFrame, sectionCoords } from "@/lib/section-3d";
 import { buildFullDetail3d, detail3dInputForSketch, type Detail3dLine } from "@/lib/level-detail-3d";
 import type { EdgeMaterial } from "@/lib/edge-segments";
 
@@ -2161,14 +2162,44 @@ function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (pa
 
 // Kotak "Detail 3D full": semua lantai digabung menjadi satu bangunan utuh.
 function FullDetail3d({ sketch, onChange }: { sketch: Sketch; onChange: (patch: Partial<Sketch>) => void }) {
-  const model = useMemo(() => buildFullDetail3d(sketch, 1 / metersPerPx(sketch.scale)), [sketch]);
+  const pxPerMeter = 1 / metersPerPx(sketch.scale);
+  const fullModel = useMemo(() => buildFullDetail3d(sketch, pxPerMeter), [sketch, pxPerMeter]);
+  type Cut = { p1: { x: number; y: number }; p2: { x: number; y: number }; label?: string };
+  const cuts = ((sketch as unknown as { sectionCuts?: Cut[] }).sectionCuts ?? []).filter((c) => c && c.p1 && c.p2);
+  const cutLabel = (c: Cut, i: number) => { const l = c.label?.trim() || String.fromCharCode(65 + (i % 26)); return `Potongan ${l}-${l}`; };
+  const [cutIndex, setCutIndex] = useState(-1);
+  const activeCut = cutIndex >= 0 ? cuts[cutIndex] : undefined;
+  const model = useMemo(() => {
+    if (!activeCut) return fullModel;
+    const frame = section3dFrame(activeCut.p1, activeCut.p2, pxPerMeter);
+    if (!frame) return fullModel;
+    return {
+      ...fullModel,
+      prisms: clipPrismsToSection(fullModel.prisms, frame),
+      windows: fullModel.windows.filter((w) => sectionCoords(frame, w.center).d >= 0),
+    };
+  }, [fullModel, activeCut, pxPerMeter]);
   if (!(sketch.levels ?? []).length) return null;
   return (
     <div className="mt-4 space-y-3">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">Detail 3D full</div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">Detail 3D full</div>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          Potongan
+          <select
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+            value={activeCut ? cutIndex : -1}
+            onChange={(e) => setCutIndex(Number(e.target.value))}
+            aria-label="Potongan"
+          >
+            <option value={-1}>Tanpa potongan</option>
+            {cuts.map((c, i) => <option key={i} value={i}>{cutLabel(c, i)}</option>)}
+          </select>
+        </label>
+      </div>
       <LevelDetail3dBox
         levelName="Semua lantai"
-        title="Detail 3D full — Semua lantai"
+        title={activeCut ? `Detail 3D full — ${cutLabel(activeCut, cutIndex)}` : "Detail 3D full — Semua lantai"}
         model={model}
         onWindowTypeChange={(windowId, heightType) => onChange({
           windows: (sketch.windows ?? []).map((window) =>
