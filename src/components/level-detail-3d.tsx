@@ -4,13 +4,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { AppWindow, Box, Check, Maximize2, Minimize2, Pencil, RotateCcw } from "lucide-react";
+import { AppWindow, Box, Check, Download, Maximize2, Minimize2, Pencil, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { WINDOW_HEIGHT_TYPES, windowHeightLabel, type WindowHeightType } from "@/lib/windows";
 import { cn } from "@/lib/utils";
 import { buildLevelDetail3d, type Detail3dInput, type Detail3dModel } from "@/lib/level-detail-3d";
-import { detail3dMergedMeshes, detail3dStyle } from "@/lib/level-detail-3d-mesh";
+import { detail3dMergedMeshes, detail3dStyle, type Detail3dMesh } from "@/lib/level-detail-3d-mesh";
+import { disposeGroup, exportGroupAsGlb, exportGroupAsObj, triggerDownload } from "@/lib/model3d-export";
+
+/** Susun mesh Detail 3D (geometri disalin) menjadi grup siap ekspor .obj/.glb. */
+function detail3dExportGroup(meshes: Detail3dMesh[], name: string): THREE.Group {
+  const group = new THREE.Group();
+  group.name = name;
+  meshes.forEach((m, i) => {
+    const style = detail3dStyle(m.kind, m.color);
+    const transparent = style.opacity !== undefined;
+    const mat = new THREE.MeshStandardMaterial({ color: style.color, transparent, opacity: style.opacity ?? 1, roughness: m.kind === "glass" ? 0.1 : 0.75, side: THREE.DoubleSide });
+    mat.name = m.kind;
+    const mesh = new THREE.Mesh(m.geometry.clone(), mat);
+    mesh.name = `${m.kind}_${i}`;
+    group.add(mesh);
+  });
+  return group;
+}
 
 export type LevelDetail3dBoxProps = {
   levelName: string;
@@ -43,6 +60,19 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
   const span = b ? Math.max(4, b.maxX - b.minX, b.maxY - b.minY) : 10;
   const meshes = useMemo(() => detail3dMergedMeshes(model.prisms, cx, cy), [model.prisms, cx, cy]);
   useEffect(() => () => meshes.forEach((m) => m.geometry.dispose()), [meshes]);
+  const fileBase = (title ?? `Detail 3D ${levelName}`).replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "detail3d";
+  const [exporting, setExporting] = useState(false);
+  const exportModel = async (format: "obj" | "glb") => {
+    const group = detail3dExportGroup(meshes, fileBase);
+    setExporting(true);
+    try {
+      if (format === "obj") triggerDownload(exportGroupAsObj(group), `${fileBase}.obj`, "text/plain");
+      else triggerDownload(await exportGroupAsGlb(group), `${fileBase}.glb`, "model/gltf-binary");
+    } finally {
+      disposeGroup(group);
+      setExporting(false);
+    }
+  };
   const camDist = span * 1.15 + model.wallHeight;
   const hasWalls = model.counts.walls > 0;
   const fmt = (n: number) => n.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -78,6 +108,19 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
               <Pencil className="mr-1 h-3.5 w-3.5" />Edit
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={meshes.length === 0 || exporting} aria-label="Unduh model 3D" title="Unduh model 3D (.obj / .glb)">
+                <Download className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="text-xs">Unduh model 3D</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => void exportModel("obj")}>Wavefront (.obj)</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void exportModel("glb")}>glTF Binary (.glb)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => setViewKey((k) => k + 1)} aria-label="Atur ulang tampilan" title="Atur ulang tampilan">
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
