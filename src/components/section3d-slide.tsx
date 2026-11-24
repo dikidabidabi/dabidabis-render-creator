@@ -65,7 +65,7 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
     if (!frame) return null;
     const floors = section3dFloors(levels);
     const parts = levels.map((level) => {
-      const model = buildLevelDetail3d(level.input);
+      const model = buildLevelDetail3d(level.input, { capUnderUpper: true });
       const beams = section3dBeams(slabs.filter((s) => s.levelId === level.id), grids, pxPerMeter);
       const prisms = clipPrismsToSection([...model.prisms.filter((prism) => prism.kind !== "stair"), ...beams], frame);
       const bases = floors.filter((f) => f.levelId === level.id).map((f) => f.base);

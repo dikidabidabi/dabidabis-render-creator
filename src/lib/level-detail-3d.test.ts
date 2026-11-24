@@ -193,7 +193,9 @@ test("void pada alat Lantai melubangi lantai ruang dan bidang potongnya", async 
 test("dinding di bawah lantai atas berhenti 5 cm di bawah muka lantai, di luar tapak tetap penuh", () => {
   const line = wall(0, 0, 1000, 0);
   const upperFootprint = [[[{ x: 0, y: -100 }, { x: 500, y: -100 }, { x: 500, y: 100 }, { x: 0, y: 100 }]]];
-  const model = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "solid" }, upperFootprint }));
+  const model = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "solid" }, upperFootprint }), { capUnderUpper: true });
+  const plain = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "solid" }, upperFootprint }));
+  assert.ok(plain.prisms.filter((p) => p.kind === "wall").every((p) => p.top === 3.5));
   const tops = model.prisms.filter((p) => p.kind === "wall").map((p) => Math.round(p.top * 1000) / 1000).sort();
   assert.deepEqual([...new Set(tops)], [3.45, 3.5]);
 });

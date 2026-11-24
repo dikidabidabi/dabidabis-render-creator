@@ -201,7 +201,7 @@ function wallClassOf(material: EdgeMaterial): WallClass {
   return "glass"; // curtain & window
 }
 
-export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
+export function buildLevelDetail3d(input: Detail3dInput, opts: { capUnderUpper?: boolean } = {}): Detail3dModel {
   const ppm = input.pxPerMeter > 0 ? input.pxPerMeter : 1;
   const levelId = input.levelId;
   const edgeAttrs = input.edgeAttrs ?? {};
@@ -377,7 +377,7 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
   }
 
   // ---- Dinding berhenti 5 cm di bawah lantai atas agar lantai atas bersih ----
-  const upper = (input.upperFootprint ?? []).filter((poly) => poly[0] && poly[0].length >= 3);
+  const upper = (opts.capUnderUpper ? input.upperFootprint ?? [] : []).filter((poly) => poly[0] && poly[0].length >= 3);
   if (upper.length) {
     const fp = unionPolygons(upper);
     const capTop = wallHeight - DETAIL3D_UNDER_FLOOR_GAP_M;
