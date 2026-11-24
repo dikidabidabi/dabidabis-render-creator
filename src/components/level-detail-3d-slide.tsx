@@ -14,7 +14,7 @@ const INK = "#1d1d1b";
 const cache = new Map<string, AxoRender>();
 
 function renderAxonometric(model: Detail3dModel, labels: Array<{ id: string; center: { x: number; y: number } }>, width: number, height: number): AxoRender | null {
-  const result = renderDetail3dAxo([{ model, base: 0 }], labels.map(({ id, center }) => ({ id, x: center.x, y: center.y, h: 0.02 })), width, height, { look: "bright" });
+  const result = renderDetail3dAxo([{ model, base: 0 }], labels.map(({ id, center }) => ({ id, x: center.x, y: center.y, h: model.wallHeight })), width, height, { look: "bright" });
   return result ? { dataUrl: result.dataUrl, labels: result.points } : null;
 }
 
@@ -72,9 +72,9 @@ export function LevelDetail3dSlide({ levelName, elevation, input, slideWidth, sl
           if (number === undefined) return null;
           return <div key={label.id} data-detail3d-room-number={number} style={{
             position: "absolute", left: label.x, top: label.y, transform: "translate(-50%, -50%)",
-            minWidth: 30, height: 30, padding: "0 6px", borderRadius: 15, background: "#ffffff", border: `2px solid ${INK}`,
+            minWidth: 15, height: 15, padding: "0 3px", borderRadius: 7.5, background: "#ffffff", border: `1px solid ${INK}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "Sora, sans-serif", fontSize: 15, fontWeight: 800, color: INK, boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+            fontFamily: "Sora, sans-serif", fontSize: 7.5, fontWeight: 800, color: INK, boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
           }}>{number}</div>;
         })}
         {!render && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 40, textAlign: "center", fontFamily: "Manrope, sans-serif", fontSize: 18, color: "#555555" }}>

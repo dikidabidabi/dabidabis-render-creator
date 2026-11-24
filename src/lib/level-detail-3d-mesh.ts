@@ -3,10 +3,14 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Detail3dKind, Detail3dPrism } from "@/lib/level-detail-3d";
 
+/** Semua jenis dinding (bata, beton, konsep) sama-sama putih di Detail 3D. */
+export const DETAIL3D_WALL_COLOR = "#ffffff";
+const DETAIL3D_WALL_EDGE = "#4a453f";
+
 export const DETAIL3D_KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color: string; opacity?: number; edges?: string }> = {
-  wall: { color: "#f1ece4", edges: "#6b645c" },
-  concrete: { color: "#b9b7b2", edges: "#2f2d2a" },
-  concept: { color: "#d8d2c8", edges: "#4a453f" },
+  wall: { color: DETAIL3D_WALL_COLOR, edges: DETAIL3D_WALL_EDGE },
+  concrete: { color: DETAIL3D_WALL_COLOR, edges: DETAIL3D_WALL_EDGE },
+  concept: { color: DETAIL3D_WALL_COLOR, edges: DETAIL3D_WALL_EDGE },
   glass: { color: "#8fc6e0", opacity: 0.38, edges: "#3f7f9c" },
   railing: { color: "#6f7378", edges: "#2a2c2e" },
   frame: { color: "#4a3f36" },
