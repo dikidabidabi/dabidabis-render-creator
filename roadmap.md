@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Tambahkan material Parapet: denah putih tanpa hatch, tebal 15 cm dan tinggi 1,2 m di Detail 3D/Potongan 3D.
+- [ ] Tampilkan tangga sketsa di semua Detail 3D dan uji alur tampilan.
+
 - [x] Kembalikan dimensi grid dan ruang semua sisi; keduanya mengikuti orientasi grid, bukan kemiringan ruang.
 - [x] Uji 22 aturan geometri dan tampilan komputer/ponsel dengan grid 30° dan ruang 20°; slide asli tidak tersedia pada sesi pemeriksaan.
 

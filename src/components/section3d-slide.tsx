@@ -16,7 +16,7 @@ const cache = new Map<string, Section3dRender>();
 const STYLE_NAME: Record<ArchitecturalStyleId, string> = {
   tosca: "Tosca", brown: "Coklat", blue: "Biru", bata: "Bata", mono: "Monokrom", lightorange: "Oranye Terang", monobiru: "Mono Biru",
 };
-const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling", "ceilingFrame", "stair"];
+const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling", "ceilingFrame", "stair", "parapet"];
 
 /** Tangga sketsa: bidang anak tangga & bordes denah (px) dari level asal ke level tujuan. */
 export type Section3dStair = { id: string; levelId: string; toLevelId: string; surfaces: Section3dStairSurface[] };
@@ -67,7 +67,7 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
     const parts = levels.map((level) => {
       const model = buildLevelDetail3d(level.input);
       const beams = section3dBeams(slabs.filter((s) => s.levelId === level.id), grids, pxPerMeter);
-      const prisms = clipPrismsToSection([...model.prisms, ...beams], frame);
+      const prisms = clipPrismsToSection([...model.prisms.filter((prism) => prism.kind !== "stair"), ...beams], frame);
       const bases = floors.filter((f) => f.levelId === level.id).map((f) => f.base);
       return { key: level.id, prisms, bases, faces: sectionCutFaces(prisms, frame) };
     }).filter((part) => part.prisms.length > 0 && part.bases.length > 0);

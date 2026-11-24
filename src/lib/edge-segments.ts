@@ -15,7 +15,8 @@ export type EdgeMaterial =
   | "concept"
   | "curtain"
   | "window"
-  | "railing";
+  | "railing"
+  | "parapet";
 
 // Garis input (subset dari Line di sketch.tsx).
 export type StraightLineInput = {
@@ -196,6 +197,7 @@ export const MATERIAL_COLORS: Record<EdgeMaterial, string> = {
   curtain: "#22d3ee",
   window: "#1e3a8a",
   railing: "#8b5a2b",
+  parapet: "#ffffff",
 };
 
 export const MATERIAL_LABELS: Record<EdgeMaterial, string> = {
@@ -210,4 +212,5 @@ export const MATERIAL_LABELS: Record<EdgeMaterial, string> = {
   curtain: "Curtain Wall",
   window: "Window Wall",
   railing: "Railing",
+  parapet: "Parapet",
 };

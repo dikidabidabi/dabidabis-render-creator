@@ -9,6 +9,7 @@ const DETAIL3D_WALL_EDGE = "#4a453f";
 
 export const DETAIL3D_KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color: string; opacity?: number; edges?: string }> = {
   wall: { color: DETAIL3D_WALL_COLOR, edges: DETAIL3D_WALL_EDGE },
+  parapet: { color: DETAIL3D_WALL_COLOR, edges: DETAIL3D_WALL_EDGE },
   concrete: { color: DETAIL3D_WALL_COLOR, edges: DETAIL3D_WALL_EDGE },
   concept: { color: DETAIL3D_WALL_COLOR, edges: DETAIL3D_WALL_EDGE },
   glass: { color: "#8fc6e0", opacity: 0.38, edges: "#3f7f9c" },
@@ -20,7 +21,7 @@ export const DETAIL3D_KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color
   ceiling: { color: "#f7f5f0", edges: DETAIL3D_WALL_EDGE },
   /** Rangka hollow aluminium plafon (khusus Potongan 3D). */
   ceilingFrame: { color: "#9ea4ab", edges: "#5d636a" },
-  /** Tangga beton (khusus Potongan 3D). */
+  /** Tangga beton bersama Detail 3D dan Potongan 3D. */
   stair: { color: "#d9d6cf", edges: "#4b4f55" },
 };
 

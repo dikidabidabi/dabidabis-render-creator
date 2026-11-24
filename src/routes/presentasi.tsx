@@ -9108,6 +9108,11 @@ function MaterialEdges({
     // Alas jendela tetap berbayangan 20 cm; kusen dan pembatas 150 cm.
     const windowFrames = architecturalWindows.flatMap((window) => windowFramePolygons(window, pxPerM, windowWalls).map((polygon) => [polygon]));
     const windowFramePath = wallUnionPath(windowFrames);
+    const parapetBands = [
+      ...materialSegments.filter((segment) => materialOf(segment) === "parapet").map((segment) => wallBandPolygon(segment, pxPerM * 0.075, pxPerM * 0.075)),
+      ...pickedCurves.filter((curve) => curve.material === "parapet").map((curve) => curveWallBand(curve.points, pxPerM * 0.075, pxPerM * 0.075)),
+    ];
+    const parapetPath = architecturalGeometry(parapetBands, [...openings, ...windowOpenings]).wallPath;
     // Bound blur textures to the visible detail, not five times the entire level.
     const shadowPadding = pxPerM * 0.6;
     const shadowRegion = architecturalBounds ? {
@@ -9157,6 +9162,7 @@ function MaterialEdges({
       <path data-architectural-wall-fill="true" d={wallPath} fill={`url(#architectural-wall-${patternId})`} fillRule="evenodd" stroke="none" />
       <path d={wallPath} fill="none" fillRule="evenodd"
         stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.004)} strokeLinejoin="miter" />
+      {parapetPath && <path data-parapet="true" d={parapetPath} fill="var(--detail-opening-fill)" fillRule="evenodd" stroke="var(--architectural-edge)" strokeWidth={Math.max(stroke, pxPerM * 0.004)} />}
       <g data-architectural-unpicked-lines="true" fill="none" stroke="var(--architectural-line)" strokeWidth={stroke}>
         {segs.filter((segment) => !materialForEdgeSegment(segment, segmentSource, edgeAttrs)).map((segment, si) =>
           <path key={`${segment.id}-${si}`} d={`M ${segment.a.x} ${segment.a.y} L ${segment.b.x} ${segment.b.y}`} />)}
@@ -9245,6 +9251,13 @@ function MaterialEdges({
         }
         if (mat === "solid" || mat === "standard150") {
           return null;
+        }
+        if (mat === "parapet") {
+          return <g key={`s-${s.id}-${si}`} data-parapet="true">
+            <polygon points={pts} fill="var(--detail-opening-fill)" stroke="none" />
+            <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y} stroke="var(--detail-opening-ink)" strokeWidth={stroke} />
+            <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y} stroke="var(--detail-opening-ink)" strokeWidth={stroke} />
+          </g>;
         }
         if (mat === "curtain") {
           // Curtain wall: dua garis sejajar tipis dengan isi semi-transparan biru muda.

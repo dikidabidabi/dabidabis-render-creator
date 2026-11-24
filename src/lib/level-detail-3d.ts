@@ -14,11 +14,14 @@ import { normalizeDoors } from "@/lib/doors";
 import { normalizeWindows } from "@/lib/windows";
 import { solidColorForRoomName } from "@/lib/room-color";
 
+import { section3dStairs, type Section3dStairSurface } from "./detail3d-stairs";
+import { normalizeStairs, stairPlanGeometry } from "./stairs";
+
 type P = { x: number; y: number };
 type Ring = P[];
 type MultiPolygon = Ring[][];
 
-export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column" | "ceiling" | "ceilingFrame" | "stair";
+export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column" | "ceiling" | "ceilingFrame" | "stair" | "parapet";
 
 export type Detail3dPrism = {
   kind: Detail3dKind;
@@ -57,6 +60,7 @@ export type Detail3dInput = {
   windows: Window[];
   /** Tinggi dinding (m) = tinggi level. */
   wallHeight: number;
+  stairs?: Array<{ surfaces: Section3dStairSurface[]; heightM: number }>;
 };
 
 export type Detail3dModel = {
@@ -75,6 +79,7 @@ export const DETAIL3D_DOOR_HEIGHT_M = WINDOW_DOOR_HEAD_M;
 export const DETAIL3D_WINDOW_SILL_M = WINDOW_STANDARD_SILL_M;
 export const DETAIL3D_WINDOW_HEAD_M = WINDOW_DOOR_HEAD_M;
 export const DETAIL3D_RAILING_HEIGHT_M = 1;
+export const DETAIL3D_PARAPET_HEIGHT_M = 1.2;
 export const DETAIL3D_ROOM_SLAB_M = 0.15;
 const DEFAULT_TOP_LEVEL_H = 4;
 const TYPICAL_FLOOR_H = 3;
@@ -181,8 +186,9 @@ function rectAlong(a: P, b: P, half: number, extendStart = 0, extendEnd = extend
   ];
 }
 
-type WallClass = "wall" | "concrete" | "concept" | "glass" | "railing";
+type WallClass = "wall" | "concrete" | "concept" | "glass" | "railing" | "parapet";
 function wallClassOf(material: EdgeMaterial): WallClass {
+  if (material === "parapet") return "parapet";
   if (material.startsWith("concrete")) return "concrete";
   if (isWallBandMaterial(material)) return "wall";
   if (material === "concept") return "concept";
@@ -209,7 +215,7 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
   };
 
   // ---- Pita dinding per kelas material ----
-  const bands: Record<WallClass, Ring[]> = { wall: [], concrete: [], concept: [], glass: [], railing: [] };
+  const bands: Record<WallClass, Ring[]> = { wall: [], concrete: [], concept: [], glass: [], railing: [], parapet: [] };
   let wallCount = 0;
   const segs = computeStraightSegments(allLines.map((l) => ({ a: l.a, b: l.b, kind: l.kind, levelId: l.levelId }))).filter((segment) => {
     const source = allLines[segment.sourceLineIndex];
@@ -250,19 +256,20 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
 
   const shapes: Record<WallClass, MultiPolygon> = {
     concrete: union(bands.concrete),
-    wall: [], concept: [], glass: [], railing: [],
+    wall: [], concept: [], glass: [], railing: [], parapet: [],
   };
   shapes.wall = difference(union(bands.wall), shapes.concrete);
   const heavy = union([...shapes.concrete, ...shapes.wall].flat());
   shapes.concept = difference(union(bands.concept), heavy);
   const solid = union([...heavy, ...shapes.concept].flat());
-  shapes.glass = difference(union(bands.glass), solid);
+  shapes.parapet = difference(union(bands.parapet), solid);
+  shapes.glass = difference(union(bands.glass), union([...solid, ...shapes.parapet].flat()));
   shapes.railing = difference(union(bands.railing), union([...solid, ...shapes.glass].flat()));
 
   // ---- Kolom struktur: setinggi level, memotong pita dinding ----
   const columnShape = union((input.columns ?? []).filter((ring) => ring.length >= 3));
   if (columnShape.length) {
-    for (const cls of ["wall", "concrete", "concept", "glass", "railing"] as const) shapes[cls] = difference(shapes[cls], columnShape);
+    for (const cls of ["wall", "concrete", "concept", "glass", "railing", "parapet"] as const) shapes[cls] = difference(shapes[cls], columnShape);
     push("column", columnShape, 0, wallHeight);
   }
 
@@ -279,6 +286,7 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
     }
   }
   push("railing", difference(shapes.railing, doorCuts), 0, DETAIL3D_RAILING_HEIGHT_M);
+  push("parapet", difference(shapes.parapet, doorCuts), 0, DETAIL3D_PARAPET_HEIGHT_M);
 
   // ---- Pintu: kusen + daun (mengikuti notasi denah) ----
   const jamb = 0.05 * ppm;
@@ -366,6 +374,9 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
   // ---- px → meter ----
   const toM = (ring: Ring) => ring.map((p) => ({ x: p.x / ppm, y: p.y / ppm }));
   const prisms = prims.map((prism) => ({ ...prism, outer: toM(prism.outer), holes: prism.holes.map(toM) }));
+  for (const stair of input.stairs ?? []) {
+    prisms.push(...section3dStairs(stair.surfaces, stair.heightM, ppm));
+  }
   let bounds: Detail3dModel["bounds"] = null;
   for (const prism of prisms) {
     for (const p of prism.outer) {
@@ -417,6 +428,7 @@ type Detail3dSketchLike = {
   layers?: Array<{ id?: string; name: string; points: P[]; color?: string; levelId?: string; hidden?: boolean; areaM2?: number }>;
   levels?: Array<{ id: string; mdpl: number; typicalCount?: number; typicalHeight?: number }>;
   floors?: Array<{ levelId: string; outer: P[]; holes?: P[][]; thicknessMm: number }>;
+  stairs?: unknown[];
   doors?: unknown[];
   windows?: unknown[];
   structuralGrid?: StructuralGrid;
@@ -440,9 +452,27 @@ export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: stri
     const id = (raw as { id?: unknown } | null)?.id;
     return typeof id === "string" && id ? [id] : [];
   }));
+  let shift = 0;
+  const elevations = [...levels].sort((a, b) => a.mdpl - b.mdpl).map((lv) => {
+    const height = Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : TYPICAL_FLOOR_H;
+    const copies = Math.max(1, Math.round(Number(lv.typicalCount) || 1));
+    const base = lv.mdpl + shift;
+    shift += (copies - 1) * height;
+    return { id: lv.id, base, height, copies };
+  });
+  const stairs = normalizeStairs(sketch.stairs ?? [], new Set(levels.map((lv) => lv.id)))
+    .filter((stair) => stair.levelId === levelId)
+    .flatMap((stair) => {
+      const from = elevations.find((lv) => lv.id === stair.levelId);
+      const to = elevations.find((lv) => lv.id === stair.toLevelId);
+      if (!from || !to) return [];
+      const heightM = from.copies > 1 ? from.height : to.base - from.base;
+      return heightM > 0.1 ? [{ surfaces: stairPlanGeometry(stair, pxPerMeter).sectionSurfaces, heightM }] : [];
+    });
   return {
     pxPerMeter,
     levelId,
+    stairs,
     lines: Array.isArray(sketch.lines) ? sketch.lines : [],
     edgeAttrs: sketch.edgeAttrs ?? {},
     rooms: (sketch.layers ?? [])

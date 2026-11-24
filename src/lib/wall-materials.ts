@@ -14,6 +14,7 @@ export const WALL_THICK_MM: Record<EdgeMaterial, number> = {
   curtain: 80,
   window: 150,
   railing: 100,
+  parapet: 150,
 };
 
 export type WallBandMaterial = "solid" | "standard150" | "concrete150" | "concrete200" | "concrete250" | "concrete300" | "concrete350";

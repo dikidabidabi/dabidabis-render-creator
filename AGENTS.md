@@ -30,4 +30,4 @@
 - Rincian per Level: full-width, unscaled, paged as Outline Spec.
 - Volumetrik: row per physical floor, subtotals last.
 - Detail 3D (windowVerticalRange per type) feeds all 3D views; panels redraw bare slide bodies in aspect slots (PSD too).
-- section-room-legend numbers rooms for both sections; Potongan 3D stairs use sloped-soffit prisms.
+- section-room-legend shares numbering; detail3d-stairs shares sloped-soffit stairs across 3D views; parapets are low walls.

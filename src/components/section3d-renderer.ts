@@ -43,7 +43,7 @@ function fixWinding(geo: THREE.BufferGeometry) {
 function colorFor(kind: Detail3dKind, palette: Section3dPalette) {
   switch (kind) {
     case "floor": return { color: palette.floor, edges: palette.edge as string | undefined, opacity: undefined as number | undefined };
-    case "wall": case "concept": case "ceiling": return { color: palette.wall, edges: palette.edge, opacity: undefined };
+    case "wall": case "parapet": case "concept": case "ceiling": return { color: palette.wall, edges: palette.edge, opacity: undefined };
     case "concrete": case "column": case "slab": case "stair": return { color: palette.structure, edges: palette.edge, opacity: undefined };
     // Rangka hollow plafon hanya 2–4 cm di atas papan 5 mm: garis tepinya akan tembus
     // papan (polygon offset), jadi cukup bidang berarsir; siluet potongnya tetap bergaris.

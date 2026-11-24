@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildLevelDetail3d, levelWallHeight, type Detail3dInput } from "./level-detail-3d";
+import { buildLevelDetail3d, detail3dInputForSketch, levelWallHeight, type Detail3dInput } from "./level-detail-3d";
 import { edgeMaterialKey } from "./edge-segments";
 
 const PPM = 100; // 100 px = 1 m
@@ -10,6 +10,48 @@ const base = (over: Partial<Detail3dInput> = {}): Detail3dInput => ({
   pxPerMeter: PPM, levelId: L, lines: [], edgeAttrs: {}, rooms: [], doors: [], windows: [], wallHeight: 3.5, ...over,
 });
 const depthOf = (ring: { y: number }[]) => Math.max(...ring.map((p) => p.y)) - Math.min(...ring.map((p) => p.y));
+
+test("parapet tebal 15 cm dari lantai sampai 1,2 m, tidak setinggi dinding biasa", () => {
+  const line = wall(0, 0, 500, 0);
+  const model = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "parapet" } }));
+  const parapets = model.prisms.filter((p) => p.kind === "parapet");
+  assert.equal(parapets.length, 1);
+  const parapet = parapets[0];
+  assert.ok(parapet);
+  assert.equal(parapet.bottom, 0);
+  assert.equal(parapet.top, 1.2);
+  assert.ok(Math.abs(depthOf(parapet.outer) - 0.15) < 1e-6);
+  assert.equal(model.prisms.filter((p) => p.kind === "wall" || p.kind === "glass").length, 0);
+});
+
+test("bidang potong parapet mempertahankan tebal 15 cm dan tinggi 1,2 m", async () => {
+  const { section3dFrame, clipPrismsToSection, sectionCutFaces } = await import("./section-3d");
+  const line = wall(0, 0, 500, 0);
+  const model = buildLevelDetail3d(base({ lines: [line], edgeAttrs: { [edgeMaterialKey(L, line.a, line.b)]: "parapet" } }));
+  const frame = section3dFrame({ x: 250, y: -100 }, { x: 250, y: 100 }, PPM);
+  assert.ok(frame);
+  const faces = sectionCutFaces(clipPrismsToSection(model.prisms, frame), frame);
+  const face = faces.find((f) => f.kind === "parapet");
+  assert.ok(face);
+  assert.equal(face.bottom, 0);
+  assert.equal(face.top, 1.2);
+  assert.ok(Math.abs(face.s1 - face.s0 - 0.15) < 1e-6);
+});
+
+for (const kind of ["lurus", "u", "bebas", "lingkar"] as const) {
+  test(`tangga ${kind} sketsa tampil di Detail 3D pada level asal sampai level tujuan`, () => {
+    const stair = { id: "s", levelId: "a", toLevelId: "b", kind, a: { x: 0, y: 0 }, b: { x: 400, y: 0 }, widthM: 1.2, stepCount: 18, landing: true, offsetM: 0.2, innerRadiusM: 0.45, rotationDeg: 0, createdAt: 1,
+      ...(kind === "bebas" ? { pathPoints: [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 300, y: 300 }] } : {}) };
+    const sketch = { levels: [{ id: "a", mdpl: 0 }, { id: "b", mdpl: 3.5 }], stairs: [stair] };
+    const model = buildLevelDetail3d(detail3dInputForSketch(sketch, "a", PPM));
+    const steps = model.prisms.filter((p) => p.kind === "stair");
+    assert.ok(steps.length >= 18);
+    assert.equal(Math.max(...steps.map((p) => p.top)), 3.5);
+    assert.ok(model.bounds && model.bounds.maxX > model.bounds.minX);
+    const other = buildLevelDetail3d(detail3dInputForSketch(sketch, "b", PPM));
+    assert.equal(other.prisms.filter((p) => p.kind === "stair").length, 0);
+  });
+}
 
 test("tinggi dinding = selisih MDPL ke level di atasnya", () => {
   const levels = [{ id: "a", mdpl: 0 }, { id: "b", mdpl: 3.5 }, { id: "c", mdpl: 7.5 }];
