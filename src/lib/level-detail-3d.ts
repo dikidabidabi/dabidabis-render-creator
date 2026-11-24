@@ -61,6 +61,8 @@ export type Detail3dInput = {
   /** Tinggi dinding (m) = tinggi level. */
   wallHeight: number;
   stairs?: Array<{ surfaces: Section3dStairSurface[]; heightM: number }>;
+  /** Tapak lantai level di atasnya (px): dinding di bawahnya berhenti 5 cm di bawah muka lantai. */
+  upperFootprint?: Ring[][];
 };
 
 export type Detail3dModel = {
@@ -81,6 +83,9 @@ export const DETAIL3D_WINDOW_HEAD_M = WINDOW_DOOR_HEAD_M;
 export const DETAIL3D_RAILING_HEIGHT_M = 1;
 export const DETAIL3D_PARAPET_HEIGHT_M = 1.2;
 export const DETAIL3D_ROOM_SLAB_M = 0.15;
+/** Jarak puncak dinding di bawah muka lantai finish level di atasnya (m). */
+export const DETAIL3D_UNDER_FLOOR_GAP_M = 0.05;
+const CAPPED_KINDS = new Set<Detail3dKind>(["wall", "concrete", "concept", "glass", "frame", "column"]);
 const DEFAULT_TOP_LEVEL_H = 4;
 const TYPICAL_FLOOR_H = 3;
 
@@ -371,6 +376,28 @@ export function buildLevelDetail3d(input: Detail3dInput): Detail3dModel {
     push("slab", [[slab.outer, ...(slab.holes ?? []).filter((h) => h.length >= 3)]], -t, 0);
   }
 
+  // ---- Dinding berhenti 5 cm di bawah lantai atas agar lantai atas bersih ----
+  const upper = (input.upperFootprint ?? []).filter((poly) => poly[0] && poly[0].length >= 3);
+  if (upper.length) {
+    const fp = unionPolygons(upper);
+    const capTop = wallHeight - DETAIL3D_UNDER_FLOOR_GAP_M;
+    const capped: Detail3dPrism[] = [];
+    for (const prism of prims) {
+      if (!CAPPED_KINDS.has(prism.kind) || prism.top < wallHeight - 1e-3 || !(capTop > prism.bottom + 1e-4)) { capped.push(prism); continue; }
+      const shape: MultiPolygon = [[prism.outer, ...prism.holes]];
+      const inside = intersection(shape, fp);
+      if (!inside.length) { capped.push(prism); continue; }
+      const outside = difference(shape, fp);
+      const add = (parts: MultiPolygon, top: number) => {
+        for (const [outer, ...holes] of parts) if (outer && validRing(outer)) capped.push({ ...prism, outer, holes: holes.filter(validRing), top });
+      };
+      add(outside, prism.top);
+      add(inside, capTop);
+    }
+    prims.length = 0;
+    prims.push(...capped);
+  }
+
   // ---- px → meter ----
   const toM = (ring: Ring) => ring.map((p) => ({ x: p.x / ppm, y: p.y / ppm }));
   const prisms = prims.map((prism) => ({ ...prism, outer: toM(prism.outer), holes: prism.holes.map(toM) }));
@@ -485,7 +512,21 @@ export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: stri
     // Id jendela tersimpan dipertahankan (untuk edit tipe di Detail 3D); id acak hasil normalisasi dikosongkan.
     windows: windows.filter((w) => w.levelId === levelId).map((w) => ({ ...w, id: rawWindowIds.has(w.id) ? w.id : "" })),
     wallHeight: levelWallHeight(levels, levelId),
+    upperFootprint: upperFootprintFor(sketch, levelId, elevations),
   };
+}
+
+/** Tapak lantai (ruang + plat) level tepat di atas; salinan tipikal ditutup lantainya sendiri. */
+function upperFootprintFor(sketch: Detail3dSketchLike, levelId: string, elevations: Array<{ id: string; copies: number }>): Ring[][] {
+  const index = elevations.findIndex((lv) => lv.id === levelId);
+  if (index < 0) return [];
+  const ids = new Set<string>();
+  if (elevations[index]!.copies > 1) ids.add(levelId);
+  const next = elevations[index + 1];
+  if (next) ids.add(next.id);
+  const rooms = (sketch.layers ?? []).filter((ly) => !!ly.levelId && ids.has(ly.levelId) && !ly.hidden && ly.points.length >= 3 && ly.name.trim().toLowerCase() !== "void").map((ly) => [ly.points]);
+  const slabs = (sketch.floors ?? []).filter((f) => ids.has(f.levelId) && f.outer.length >= 3).map((f) => [f.outer, ...(f.holes ?? []).filter((h) => h.length >= 3)]);
+  return [...rooms, ...slabs];
 }
 
 /** Ruang yang diberi nomor pada slide aksonometri (urutan sama dengan legenda). */
