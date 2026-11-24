@@ -5,8 +5,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildLevelDetail3d, type Detail3dInput, type Detail3dKind, type Detail3dPrism } from "@/lib/level-detail-3d";
 import {
-  SECTION3D_PALETTE, clipPrismsToSection, mergeCutFaces, section3dBeams, section3dCeilings, section3dFloors, section3dFrame, sectionCutFaces,
-  type ArchitecturalStyleId,
+  SECTION3D_PALETTE, clipPrismsToSection, mergeCutFaces, section3dBeams, section3dCeilings, section3dFloors, section3dFrame, section3dStairs, sectionCutFaces,
+  type ArchitecturalStyleId, type Section3dStairSurface,
 } from "@/lib/section-3d";
 import type { StructuralGrid } from "@/lib/structural-grid";
 import { renderSection3d, type Section3dRender } from "@/components/section3d-renderer";
@@ -16,7 +16,10 @@ const cache = new Map<string, Section3dRender>();
 const STYLE_NAME: Record<ArchitecturalStyleId, string> = {
   tosca: "Tosca", brown: "Coklat", blue: "Biru", bata: "Bata", mono: "Monokrom", lightorange: "Oranye Terang", monobiru: "Mono Biru",
 };
-const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling", "ceilingFrame"];
+const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling", "ceilingFrame", "stair"];
+
+/** Tangga sketsa: bidang anak tangga & bordes denah (px) dari level asal ke level tujuan. */
+export type Section3dStair = { id: string; levelId: string; toLevelId: string; surfaces: Section3dStairSurface[] };
 
 export type Section3dLevel = { id: string; name: string; mdpl: number; typicalCount?: number; typicalHeight?: number; input: Detail3dInput };
 
@@ -41,11 +44,12 @@ export type Section3dSlideProps = {
   /** Di dalam kotak Panel Arsitektur: tanpa judul, keterangan ringkas di bawah. */
   bare?: boolean;
   roomLegend?: Section3dRoomLegend;
+  stairs?: Section3dStair[];
 };
 
 type Section3dPalette = (typeof SECTION3D_PALETTE)[keyof typeof SECTION3D_PALETTE];
 const SECTION3D_LEGEND = (palette: Section3dPalette) => [
-  { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, plafon, dinding, kolom)", short: "Bidang potong" },
+  { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, plafon, dinding, kolom, tangga)", short: "Bidang potong" },
   { fill: palette.wall, stroke: palette.edge, text: "Dinding tampak", short: "Dinding" },
   { fill: "#f7f5f0", stroke: palette.edge, text: "Plafon. Ketinggian dan spesifikasi sesuai gambar", short: "Plafon" },
   { fill: palette.floor, stroke: palette.edge, text: "Lantai", short: "Lantai" },
@@ -53,9 +57,9 @@ const SECTION3D_LEGEND = (palette: Section3dPalette) => [
   { fill: "#a8743f", stroke: palette.edge, text: "Pintu", short: "Pintu" },
 ];
 
-export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, style, slideWidth, slideHeight, bare = false, roomLegend }: Section3dSlideProps) {
+export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, style, slideWidth, slideHeight, bare = false, roomLegend, stairs = [] }: Section3dSlideProps) {
   const palette = SECTION3D_PALETTE[style];
-  const sourceKey = useMemo(() => JSON.stringify({ cut, pxPerMeter, levels, slabs, grids, style }), [cut, pxPerMeter, levels, slabs, grids, style]);
+  const sourceKey = useMemo(() => JSON.stringify({ cut, pxPerMeter, levels, slabs, grids, style, stairs }), [cut, pxPerMeter, levels, slabs, grids, style, stairs]);
   const data = useMemo(() => {
     const frame = section3dFrame(cut.p1, cut.p2, pxPerMeter);
     if (!frame) return null;
@@ -82,20 +86,39 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
       if (!prisms.length) return;
       ceilingParts.set(groupKey, { key: groupKey, prisms, bases: [floor.base], faces: sectionCutFaces(prisms, frame) });
     });
-    const allParts = [...parts, ...ceilingParts.values()];
-    // Siluet potong per salinan lantai: masif (lantai/plat/balok/dinding/kolom), kaca, kusen/daun.
+    // Tangga: masif dari level asal ke level tujuan, tiap salinan lantai tipikal.
+    const stairParts = new Map<string, { key: string; prisms: Detail3dPrism[]; bases: number[]; faces: ReturnType<typeof sectionCutFaces> }>();
+    for (const stair of stairs) {
+      const target = floors.find((f) => f.levelId === stair.toLevelId);
+      for (const floor of floors.filter((f) => f.levelId === stair.levelId)) {
+        const heightM = floor.copies > 1 ? floor.height : target ? target.base - floor.base : 0;
+        if (!(heightM > 0.1)) continue;
+        const groupKey = `${stair.id}__tangga__${heightM.toFixed(4)}`;
+        const existing = stairParts.get(groupKey);
+        if (existing) { existing.bases.push(floor.base); continue; }
+        const prisms = clipPrismsToSection(section3dStairs(stair.surfaces, heightM, pxPerMeter), frame);
+        if (!prisms.length) continue;
+        stairParts.set(groupKey, { key: groupKey, prisms, bases: [floor.base], faces: sectionCutFaces(prisms, frame) });
+      }
+    }
+    const allParts = [...parts, ...ceilingParts.values(), ...stairParts.values()];
+    // Siluet potong: kaca & kusen/daun per salinan lantai; masif (lantai/plat/balok/dinding/
+    // kolom/plafon/tangga) digabung satu siluet agar tangga menyatu dengan plat seperti poché.
+    type Face = ReturnType<typeof sectionCutFaces>[number];
+    const lift = (f: Face, base: number) => ({ ...f, bottom: f.bottom + base, top: f.top + base,
+      ...(f.b0 !== undefined ? { b0: f.b0 + base } : {}), ...(f.b1 !== undefined ? { b1: f.b1 + base } : {}) });
     const groups = allParts.flatMap((part) => part.bases.map((base) => ({
       key: `${part.key}@${base}`,
-      solid: mergeCutFaces(part.faces.filter((f) => SOLID.includes(f.kind)).map((f) => ({ ...f, bottom: f.bottom + base, top: f.top + base }))),
-      glass: mergeCutFaces(part.faces.filter((f) => f.kind === "glass").map((f) => ({ ...f, bottom: f.bottom + base, top: f.top + base }))),
-      frame: mergeCutFaces(part.faces.filter((f) => f.kind === "frame" || f.kind === "door").map((f) => ({ ...f, bottom: f.bottom + base, top: f.top + base }))),
+      glass: mergeCutFaces(part.faces.filter((f) => f.kind === "glass").map((f) => lift(f, base))),
+      frame: mergeCutFaces(part.faces.filter((f) => f.kind === "frame" || f.kind === "door").map((f) => lift(f, base))),
     })));
+    const solid = mergeCutFaces(allParts.flatMap((part) => part.bases.flatMap((base) => part.faces.filter((f) => SOLID.includes(f.kind)).map((f) => lift(f, base)))));
     const labelS = new Map<string, number>();
     for (const part of parts) {
       const s = part.faces.length ? Math.max(...part.faces.map((f) => f.s1)) : frame.length;
       labelS.set(part.key, s);
     }
-    return { frame, floors: floors.filter((f) => labelS.has(f.levelId)), parts: allParts, groups, labelS };
+    return { frame, floors: floors.filter((f) => labelS.has(f.levelId)), parts: allParts, groups, solid, labelS };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey]);
 
@@ -161,8 +184,8 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
           {data.groups.map((group) => <g key={group.key} data-section3d-cut={group.key}>
             <path d={toPath(group.glass)} fill="#bfe0ee" fillOpacity={0.85} stroke={palette.edge} strokeWidth={0.8} fillRule="evenodd" />
             <path d={toPath(group.frame)} fill={palette.edge} stroke={palette.edge} strokeWidth={0.6} fillRule="evenodd" />
-            <path d={toPath(group.solid)} fill={palette.cut} stroke={palette.cut === "#ffffff" ? "#1a1a1a" : "none"} strokeWidth={palette.cut === "#ffffff" ? 1 : 0} strokeLinejoin="miter" fillRule="evenodd" />
           </g>)}
+          <path data-section3d-cut="solid" d={toPath(data.solid)} fill={palette.cut} stroke={palette.cut === "#ffffff" ? "#1a1a1a" : "none"} strokeWidth={palette.cut === "#ffffff" ? 1 : 0} strokeLinejoin="miter" fillRule="evenodd" />
           {floorLabels.map(({ floor, x, y }) => <g key={floor.key} data-section3d-level={floor.key}>
             <line x1={x} y1={y} x2={x - 34} y2={y} stroke={palette.edge} strokeWidth={1.2} />
             <path d={`M ${x - 34} ${y} l -6 -7 h 12 z`} fill={palette.edge} />

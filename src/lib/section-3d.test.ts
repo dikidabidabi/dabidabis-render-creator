@@ -107,3 +107,35 @@ test("plafon potongan 3D: papan 5 mm di +2,8 m, rangka hollow 2×4 @40 cm dan 4�
   // Tanpa plat di atas → tanpa plafon.
   assert.equal(section3dCeilings(rooms, [], ppm, 4).length, 0);
 });
+
+test("tangga terpotong memanjang: satu siluet masif bergerigi di atas, pelat miring 15 cm di bawah", async () => {
+  const { section3dStairs, SECTION3D_STAIR_SLAB_M } = await import("./section-3d");
+  const { stairPlanGeometry } = await import("./stairs");
+  // Tangga lurus 4 anak tangga, 100 px/m: panjang 1,2 m (injakan 30 cm), lebar 1 m, naik 0,8 m (tanjakan 20 cm).
+  const stair = { id: "s", levelId: "a", toLevelId: "b", kind: "lurus" as const, a: { x: 0, y: 0 }, b: { x: 120, y: 0 }, widthM: 1, stepCount: 4, landing: false, offsetM: 0, innerRadiusM: 0.45, rotationDeg: 0, createdAt: 0 };
+  const prisms = section3dStairs(stairPlanGeometry(stair, 100).sectionSurfaces, 0.8, 100);
+  const frame = section3dFrame({ x: -100, y: 0 }, { x: 300, y: 0 }, 100)!;
+  const faces = sectionCutFaces(clipPrismsToSection(prisms, frame), frame).sort((p, q) => p.s0 - q.s0);
+  assert.equal(faces.length, 4);
+  const slope = Math.hypot(1, 0.2 / 0.3) * SECTION3D_STAIR_SLAB_M;
+  const last = faces[3]!;
+  assert.ok(Math.abs(last.top - 0.8) < 1e-6);
+  assert.ok(Math.abs(last.b1! - (0.8 - slope)) < 1e-6);       // ujung atas: pelat tepat 15 cm tegak lurus
+  assert.ok(Math.abs(last.b0! - (0.6 - slope)) < 1e-6);       // dasar miring naik 20 cm per injakan
+  assert.ok(Math.abs(faces[0]!.b0! - 0) < 1e-6);              // tidak menembus di bawah muka lantai
+  const merged = mergeCutFaces(faces);
+  assert.equal(merged.length, 1);                              // menyatu satu bidang potong
+});
+
+test("tangga terpotong melintang: bidang potong selebar tangga pada anak tangga yang dilewati", async () => {
+  const { section3dStairs } = await import("./section-3d");
+  const { stairPlanGeometry } = await import("./stairs");
+  const stair = { id: "s", levelId: "a", toLevelId: "b", kind: "lurus" as const, a: { x: 0, y: 0 }, b: { x: 120, y: 0 }, widthM: 1, stepCount: 4, landing: false, offsetM: 0, innerRadiusM: 0.45, rotationDeg: 0, createdAt: 0 };
+  const prisms = section3dStairs(stairPlanGeometry(stair, 100).sectionSurfaces, 0.8, 100);
+  // Garis potong melintang di tengah anak tangga ke-2 (x = 0,45 m).
+  const frame = section3dFrame({ x: 45, y: -100 }, { x: 45, y: 100 }, 100)!;
+  const faces = sectionCutFaces(clipPrismsToSection(prisms, frame), frame);
+  assert.equal(faces.length, 1);
+  assert.ok(Math.abs(faces[0]!.s1 - faces[0]!.s0 - 1) < 1e-6);
+  assert.ok(Math.abs(faces[0]!.top - 0.4) < 1e-6);
+});

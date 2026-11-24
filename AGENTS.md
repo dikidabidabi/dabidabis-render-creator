@@ -23,11 +23,11 @@
 - Symbols, legend and spec wall areas share roomWallSpans to merge same-level lined perimeter only; roomWallSurfacePoint anchors symbol tips using resolved wall half-thickness so they touch the room-facing surface.
 - Spec refs/areas live in spec-outline, shared by slides and RKS export (MHTML .doc for embedded images); fragments keep full level area; pagination measures room text.
 - RKS narratives: editor JSON (rks-content) on a material or its pasal; one pasal per group; hanging indents via CSS classes (inline text-indent gets dropped).
-- Schedule PDFs: window.print, A4 landscape, fit-width; S-curve labels pair with SVG rows.
+- Schedule PDFs: window.print, A4 landscape, fit-width.
 - Costs allocate residual budgets recursively; charts share leaf weights. Account-scoped templates use letter paths; apply whole root groups atomically with numeric WBS and local UUID links. Preserve matching task IDs to protect external dependencies; reject missing links/cycles. Library uses an unnested route.
 - Picked curves render as wall bands feeding practical columns.
 - Total bubble slide: one cluster/level; red links join same-kind circulation on next level.
 - Rincian per Level: full-width, unscaled, paged as Outline Spec.
 - Volumetrik: row per physical floor, subtotals last.
 - Detail 3D (windowVerticalRange per type) feeds all 3D views; panels redraw bare slide bodies in aspect slots (PSD too).
-- section-room-legend numbers rooms for Potongan Prinsip and 3D alike.
+- section-room-legend numbers rooms for both sections; Potongan 3D stairs use sloped-soffit prisms.

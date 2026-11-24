@@ -5341,15 +5341,19 @@ function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3
       input: detail3dInputForSketch(sketch as unknown as Parameters<typeof detail3dInputForSketch>[0], lv.id, ppm),
     }));
     const slabs = (sketch.floors ?? []).map((f) => ({ levelId: f.levelId, outer: f.outer, ...(f.holes ? { holes: f.holes } : {}), thicknessMm: f.thicknessMm }));
+    const stairs = (sketch.stairs ?? []).map((stair) => ({
+      id: stair.id, levelId: stair.levelId, toLevelId: stair.toLevelId,
+      surfaces: stairPlanGeometry(stair, ppm).sectionSurfaces.map((sf) => ({ polygon: sf.polygon, elevationRatio: sf.elevationRatio, kind: sf.kind })),
+    }));
     return {
-      ppm, levels, slabs,
+      ppm, levels, slabs, stairs,
       grids: collectGrids(sketch.structuralGrid, sketch.structuralGridExtras),
       style: majorityArchitecturalStyle(sketch.detailAreas ?? []),
     };
   }, [sketch]);
   const roomLegend = useMemo(() => cut.showLegend === true ? section3dRoomLegend(sketch, cut) : undefined, [sketch, cut]);
   const frame = useSlideFrame();
-  return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} {...(roomLegend ? { roomLegend } : {})} />;
+  return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} stairs={props.stairs} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} {...(roomLegend ? { roomLegend } : {})} />;
 }
 
 /** Legenda ruang Potongan 3D: irisan & penomoran sama dengan Potongan Prinsip Skematik. */

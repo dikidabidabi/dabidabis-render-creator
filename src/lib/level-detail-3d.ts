@@ -18,7 +18,7 @@ type P = { x: number; y: number };
 type Ring = P[];
 type MultiPolygon = Ring[][];
 
-export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column" | "ceiling" | "ceilingFrame";
+export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column" | "ceiling" | "ceilingFrame" | "stair";
 
 export type Detail3dPrism = {
   kind: Detail3dKind;
@@ -27,7 +27,19 @@ export type Detail3dPrism = {
   bottom: number;
   top: number;
   color?: string;
+  /** Dasar miring (pelat tangga): tinggi dasar di titik p = max(min, h0 + grad · ((p − origin) · dir)), meter. */
+  soffit?: Detail3dSoffit;
 };
+
+export type Detail3dSoffit = { origin: P; dir: P; h0: number; grad: number; min: number };
+
+/** Tinggi dasar prisma di titik denah p (memperhitungkan dasar miring tangga). */
+export function detail3dBottomAt(prism: Pick<Detail3dPrism, "bottom" | "top" | "soffit">, p: P): number {
+  const s = prism.soffit;
+  if (!s) return prism.bottom;
+  const h = s.h0 + s.grad * ((p.x - s.origin.x) * s.dir.x + (p.y - s.origin.y) * s.dir.y);
+  return Math.min(prism.top - 0.01, Math.max(s.min, prism.bottom, h));
+}
 
 export type Detail3dLine = { a: P; b: P; kind?: "straight" | "arc" | "bezier"; bulge?: number; c1?: P; c2?: P; levelId?: string };
 

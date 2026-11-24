@@ -1,7 +1,7 @@
 // Mesh Three.js bersama untuk kotak Detail 3D (Model 3D) dan slide aksonometri.
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { Detail3dKind, Detail3dPrism } from "@/lib/level-detail-3d";
+import { detail3dBottomAt, type Detail3dKind, type Detail3dPrism } from "@/lib/level-detail-3d";
 
 /** Semua jenis dinding (bata, beton, konsep) sama-sama putih di Detail 3D. */
 export const DETAIL3D_WALL_COLOR = "#ffffff";
@@ -20,6 +20,8 @@ export const DETAIL3D_KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color
   ceiling: { color: "#f7f5f0", edges: DETAIL3D_WALL_EDGE },
   /** Rangka hollow aluminium plafon (khusus Potongan 3D). */
   ceilingFrame: { color: "#9ea4ab", edges: "#5d636a" },
+  /** Tangga beton (khusus Potongan 3D). */
+  stair: { color: "#d9d6cf", edges: "#4b4f55" },
 };
 
 export function detail3dStyle(kind: Detail3dKind, color?: string) {
@@ -39,6 +41,16 @@ export function detail3dPrismGeometry(prism: Detail3dPrism, cx: number, cy: numb
   geo.scale(1, -1, 1);
   geo.translate(0, prism.bottom, 0);
   geo.clearGroups();
+  if (prism.soffit) {
+    // Dasar miring: turunkan/naikkan titik dasar mengikuti pelat tangga.
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - prism.bottom) > 1e-6) continue;
+      pos.setY(i, detail3dBottomAt(prism, { x: pos.getX(i) + cx, y: pos.getZ(i) + cy }));
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
   return geo;
 }
 
