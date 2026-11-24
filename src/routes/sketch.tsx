@@ -416,6 +416,8 @@ type SectionCut = {
   showFunctionSlide?: boolean;
   /** Slide Potongan 3D dari garis potong ini (bawaan nonaktif). */
   show3dSlide?: boolean;
+  /** Legenda ruang bernomor pada slide Potongan 3D (bawaan nonaktif). */
+  showLegend?: boolean;
   updatedAt?: number;
 };
 
@@ -1095,6 +1097,7 @@ function normalizeSketch(s: any): Sketch {
           label: typeof c.label === "string" && c.label.trim() ? c.label : "A-A",
           showFunctionSlide: c.showFunctionSlide === true,
           show3dSlide: c.show3dSlide === true,
+          showLegend: c.showLegend === true,
           updatedAt: Number.isFinite(Number(c.updatedAt)) ? Number(c.updatedAt) : Date.now(),
         };
       };
@@ -11665,7 +11668,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const label = nextSectionLabel(existing);
       const next: SectionCut[] = [
         ...existing,
-        { p1: a, p2: b, label, showFunctionSlide: false, show3dSlide: false, updatedAt: Date.now() },
+        { p1: a, p2: b, label, showFunctionSlide: false, show3dSlide: false, showLegend: false, updatedAt: Date.now() },
       ];
       onChange({ sectionCuts: next, sectionCut: undefined });
       toast.success(`Garis Potong ${label} tersimpan · slide potongan otomatis dibuat`, { duration: 2500 });
@@ -15259,6 +15262,20 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         className="h-3.5 w-3.5 accent-foreground"
                       />
                       Potongan 3D
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-muted-foreground" title="Tampilkan legenda ruang bernomor pada slide Potongan 3D">
+                      <input
+                        type="checkbox"
+                        checked={c.showLegend === true}
+                        onChange={(event) => {
+                          const next = (sketch.sectionCuts ?? []).map((cut, index) => index === i
+                            ? { ...cut, showLegend: event.target.checked, updatedAt: Date.now() }
+                            : cut);
+                          onChange({ sectionCuts: next, sectionCut: undefined });
+                        }}
+                        className="h-3.5 w-3.5 accent-foreground"
+                      />
+                      Legenda
                     </label>
                     <Button
                       variant="ghost"

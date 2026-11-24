@@ -10,6 +10,7 @@ import {
 } from "@/lib/section-3d";
 import type { StructuralGrid } from "@/lib/structural-grid";
 import { renderSection3d, type Section3dRender } from "@/components/section3d-renderer";
+import { sectionLegendMetrics } from "@/lib/section-room-legend";
 
 const cache = new Map<string, Section3dRender>();
 const STYLE_NAME: Record<ArchitecturalStyleId, string> = {
@@ -18,6 +19,14 @@ const STYLE_NAME: Record<ArchitecturalStyleId, string> = {
 const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling", "ceilingFrame"];
 
 export type Section3dLevel = { id: string; name: string; mdpl: number; typicalCount?: number; typicalHeight?: number; input: Detail3dInput };
+
+/** Legenda ruang (ceklis "Legenda" pada garis potong): penomoran = Potongan Prinsip Skematik. */
+export type Section3dRoomLegend = {
+  rooms: Array<{ key: string; number: number; name: string; color: string; areaM2: number }>;
+  /** Nomor pada bidang potong: s = jarak (m) dari ujung awal garis potong. */
+  marks: Array<{ levelId: string; number: number; s: number }>;
+};
+const NUMBER_INK = "#1d1d1b";
 
 export type Section3dSlideProps = {
   label: string;
@@ -31,6 +40,7 @@ export type Section3dSlideProps = {
   slideHeight: number;
   /** Di dalam kotak Panel Arsitektur: tanpa judul, keterangan ringkas di bawah. */
   bare?: boolean;
+  roomLegend?: Section3dRoomLegend;
 };
 
 type Section3dPalette = (typeof SECTION3D_PALETTE)[keyof typeof SECTION3D_PALETTE];
@@ -43,7 +53,7 @@ const SECTION3D_LEGEND = (palette: Section3dPalette) => [
   { fill: "#a8743f", stroke: palette.edge, text: "Pintu", short: "Pintu" },
 ];
 
-export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, style, slideWidth, slideHeight, bare = false }: Section3dSlideProps) {
+export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, style, slideWidth, slideHeight, bare = false, roomLegend }: Section3dSlideProps) {
   const palette = SECTION3D_PALETTE[style];
   const sourceKey = useMemo(() => JSON.stringify({ cut, pxPerMeter, levels, slabs, grids, style }), [cut, pxPerMeter, levels, slabs, grids, style]);
   const data = useMemo(() => {
@@ -89,10 +99,14 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey]);
 
-  const legendRowH = bare ? Math.max(34, Math.round(slideHeight * 0.07)) : 0;
+  const legendRooms = roomLegend?.rooms ?? [];
+  const roomMetrics = sectionLegendMetrics(legendRooms.length);
+  const asideW = roomLegend ? Math.max(slideWidth * 0.19, roomMetrics.width + 36) : slideWidth * 0.19;
+  const compactRoomRows = roomLegend && legendRooms.length ? Math.ceil(legendRooms.length / Math.max(1, Math.floor((slideWidth * 0.94) / 170))) : 0;
+  const legendRowH = bare ? Math.min(Math.round(slideHeight * 0.35), Math.max(34, Math.round(slideHeight * 0.07)) + compactRoomRows * 18) : 0;
   const viewLeft = Math.round(slideWidth * (bare ? 0.07 : 0.02));
   const viewTop = Math.round(slideHeight * (bare ? 0.02 : 0.13));
-  const viewW = Math.round(slideWidth * (bare ? 0.91 : 0.76));
+  const viewW = Math.round(bare ? slideWidth * 0.91 : roomLegend ? slideWidth * 0.95 - asideW : slideWidth * 0.76);
   const viewH = Math.round(bare ? slideHeight * 0.96 - legendRowH : slideHeight * 0.84);
   const cacheKey = `${sourceKey}|${viewW}x${viewH}`;
   const [render, setRender] = useState<Section3dRender | null>(() => cache.get(cacheKey) ?? null);
@@ -123,12 +137,21 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
       return `${i ? "L" : "M"}${q.x.toFixed(1)} ${q.y.toFixed(1)}`;
     }).join(" ") + " Z").join(" ")).join(" ");
   };
+  const fmtArea = (n: number) => n.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const elevation = (m: number) => { const mm = Math.round(m * 1000); return `${mm >= 0 ? "+" : ""}${mm.toLocaleString("id-ID")}`; };
   const floorLabels = render && data ? data.floors.map((floor) => {
     const s = (data.labelS.get(floor.levelId) ?? data.frame.length) + 0.6;
     const q = render.project(data.frame.a.x + data.frame.u.x * s, data.frame.a.y + data.frame.u.y * s, floor.base);
     return { floor, ...q };
   }) : [];
+
+  // Nomor ruang di bidang potong, setengah tinggi lantai (maks. 1,5 m) tiap salinan lantai.
+  const roomMarks = render && data && roomLegend ? roomLegend.marks.flatMap((mark) => data.floors
+    .filter((floor) => floor.levelId === mark.levelId)
+    .map((floor) => {
+      const q = render.project(data.frame.a.x + data.frame.u.x * mark.s, data.frame.a.y + data.frame.u.y * mark.s, floor.base + Math.min(1.5, floor.height / 2));
+      return { key: `${mark.levelId}-${mark.number}-${mark.s.toFixed(3)}-${floor.key}`, number: mark.number, ...q };
+    })) : [];
 
   return (
     <div data-architectural-style={style} data-section3d-slide="true" style={{ position: "relative", width: "100%", height: "100%", background: "var(--architectural-background-gradient)", overflow: "hidden" }}>
@@ -147,6 +170,12 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
             <text x={x - 46} y={y + 9} textAnchor="end" fontFamily="Manrope, sans-serif" fontSize={11} fill="var(--architectural-caption-ink, #283b3a)">{elevation(floor.base)}</text>
           </g>)}
         </svg>}
+        {roomMarks.map((mark) => <div key={mark.key} data-section3d-room-number={mark.number} style={{
+          position: "absolute", left: mark.x, top: mark.y, transform: "translate(-50%, -50%)",
+          minWidth: 15, height: 15, padding: "0 3px", borderRadius: 7.5, background: "#ffffff", border: `1px solid ${NUMBER_INK}`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: "Sora, sans-serif", fontSize: 7.5, fontWeight: 800, color: NUMBER_INK, boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+        }}>{mark.number}</div>)}
         {!render && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 40, textAlign: "center", fontFamily: "Manrope, sans-serif", fontSize: 18, color: "var(--architectural-caption-ink, #555555)" }}>
           {!data || data.parts.length === 0 ? "Garis potong belum melewati lantai, dinding, atau ruang. Geser garis potong di halaman Sketsa." : failed ? "Potongan 3D tidak dapat ditampilkan di perangkat ini." : "Menyiapkan potongan 3D…"}
         </div>}
@@ -154,13 +183,16 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
       {bare ? (
         <div data-section3d-legend="compact" style={{ position: "absolute", left: slideWidth * 0.03, right: slideWidth * 0.03, bottom: 0, height: legendRowH, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 18px", fontFamily: "Manrope, sans-serif", fontSize: 13, color: "var(--architectural-caption-ink, #283b3a)" }}>
           {SECTION3D_LEGEND(palette).map((item) => <span key={item.text} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><span style={{ width: 18, height: 11, background: item.fill, border: `1.5px solid ${item.stroke}` }} />{item.short}</span>)}
+          {legendRooms.map((r) => <span key={r.key} data-section3d-legend-room={r.number} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+            <b style={{ color: r.color, fontVariantNumeric: "tabular-nums" }}>{r.number}.</b>{r.name} : {fmtArea(r.areaM2)} m²
+          </span>)}
         </div>
       ) : <>
       <div style={{ position: "absolute", left: 52, top: 36, background: "var(--architectural-caption-surface)", color: "var(--architectural-caption-ink)", borderLeft: `8px solid ${palette.cut === "#ffffff" ? palette.edge : palette.cut}`, padding: "14px 22px" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 28, fontWeight: 800 }}>POTONGAN 3D {label}</div>
         <div style={{ fontFamily: "Manrope, sans-serif", fontSize: 16, marginTop: 4 }}>Perspektif potongan dari Detail 3D semua lantai</div>
       </div>
-      <aside aria-label={`Legenda Potongan 3D ${label}`} data-section3d-legend="true" style={{ position: "absolute", right: "2%", top: "13%", width: slideWidth * 0.19, background: "var(--architectural-caption-surface)", color: "var(--architectural-caption-ink)", padding: "16px 18px", fontFamily: "Manrope, sans-serif" }}>
+      <aside aria-label={`Legenda Potongan 3D ${label}`} data-section3d-legend="true" style={{ position: "absolute", right: "2%", top: "13%", width: asideW, maxHeight: slideHeight * 0.84, display: "flex", flexDirection: "column", overflow: "hidden", boxSizing: "border-box", background: "var(--architectural-caption-surface)", color: "var(--architectural-caption-ink)", padding: "16px 18px", fontFamily: "Manrope, sans-serif" }}>
         <div style={{ fontFamily: "Sora, sans-serif", fontSize: 18, fontWeight: 800, marginBottom: 10 }}>Keterangan</div>
         {SECTION3D_LEGEND(palette).map((item) => <div key={item.text} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, padding: "4px 0" }}>
           <span style={{ width: 22, height: 14, flex: "0 0 22px", background: item.fill, border: `1.5px solid ${item.stroke}` }} />{item.text}
@@ -171,6 +203,19 @@ export function Section3dSlide({ label, cut, pxPerMeter, levels, slabs, grids, s
           Bayangan matahari 45°.<br />
           Style: {STYLE_NAME[style]} (mayoritas detail arsitektural).
         </div>
+        {roomLegend && <div data-section3d-room-legend="true" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: "1 1 auto", marginTop: 14 }}>
+          <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.7, fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>Legenda Ruang</div>
+          {legendRooms.length === 0 ? (
+            <div style={{ fontSize: 13, opacity: 0.6 }}>Tidak ada ruang teriris pada garis potong ini.</div>
+          ) : (
+            <ol style={{ listStyle: "none", margin: 0, padding: 0, columnCount: roomMetrics.cols, columnGap: 10, fontSize: roomMetrics.fontSize, lineHeight: 1.3, flex: "1 1 auto", minHeight: 0 }}>
+              {legendRooms.map((r) => <li key={r.key} data-section3d-legend-room={r.number} style={{ display: "flex", gap: 5, breakInside: "avoid", marginBottom: roomMetrics.marginBottom }}>
+                <span style={{ flexShrink: 0, minWidth: 16, fontWeight: 700, color: r.color, fontVariantNumeric: "tabular-nums" }}>{r.number}.</span>
+                <span style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{r.name} : {fmtArea(r.areaM2)} m²</span>
+              </li>)}
+            </ol>
+          )}
+        </div>}
       </aside>
       </>}
     </div>

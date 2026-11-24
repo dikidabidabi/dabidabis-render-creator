@@ -76,7 +76,8 @@ import { practicalColumnNodes } from "@/lib/practical-columns";
 import { detail3dInputForSketch } from "@/lib/level-detail-3d";
 import { LevelDetail3dSlide } from "@/components/level-detail-3d-slide";
 import { DetailAxonometricSlide } from "@/components/detail-axonometric-slide";
-import { Section3dSlide } from "@/components/section3d-slide";
+import { Section3dSlide, type Section3dRoomLegend } from "@/components/section3d-slide";
+import { groupSectionLegendRooms, sectionLegendMetrics } from "@/lib/section-room-legend";
 import { TampakSlide } from "@/components/tampak-slide";
 import {
   DEFAULT_PANEL_SETTINGS, PANEL_COLORS, PANEL_KEYS, PANEL_TYPE, TAMPAK_DIRS, TAMPAK_LABEL, fitPanelFontSize, normalizeCompetitionPanels,
@@ -177,7 +178,7 @@ type Layer = {
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number; detail3d?: boolean };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
-type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; show3dSlide?: boolean; updatedAt?: number };
+type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; show3dSlide?: boolean; showLegend?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   rotation?: number;
@@ -3382,46 +3383,10 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
     }
   }
 
-  // Build legend: kelompokkan berdasar NAMA, lalu pecah lagi jika
-  // selisih luas antar item > 2 m². Setiap kelompok menampilkan rata-rata
-  // luas (bukan akumulasi).
-  const nameKey = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-  const AREA_TOL = 2; // m²
-  type LR = {
-    key: string; number: number; name: string; color: string;
-    areas: number[]; areaM2: number; levelName: string; layerIds: string[];
-  };
-  const legendByName = new Map<string, LR[]>();
-  const legendRooms: LR[] = [];
-  const sortedBoxesForLegend = [...boxes].sort((a, b) => a.baseM - b.baseM);
-  for (const b of sortedBoxesForLegend) {
-    for (const sl of b.slices) {
-      const nk = nameKey(sl.name);
-      const buckets = legendByName.get(nk) ?? [];
-      // cari bucket dengan rata-rata luas dalam toleransi
-      let bucket = buckets.find((bk) => Math.abs(bk.areaM2 - sl.areaM2) <= AREA_TOL);
-      if (!bucket) {
-        bucket = {
-          key: `${nk}#${buckets.length + 1}`,
-          number: legendRooms.length + 1,
-          name: sl.name,
-          color: sl.color,
-          areas: [],
-          areaM2: 0,
-          levelName: b.name,
-          layerIds: [],
-        };
-        buckets.push(bucket);
-        legendByName.set(nk, buckets);
-        legendRooms.push(bucket);
-      }
-      bucket.areas.push(sl.areaM2);
-      bucket.areaM2 = bucket.areas.reduce((a, x) => a + x, 0) / bucket.areas.length;
-      bucket.layerIds.push(sl.layerId);
-    }
-  }
-  const numberByLayerId = new Map<string, number>();
-  for (const r of legendRooms) for (const id of r.layerIds) numberByLayerId.set(id, r.number);
+  // Legenda: dikelompokkan per nama & luas (aturan bersama dengan Potongan 3D).
+  const { rooms: legendRooms, numberByLayerId } = groupSectionLegendRooms(
+    [...boxes].sort((a, b) => a.baseM - b.baseM).map((b) => ({ name: b.name, slices: b.slices })),
+  );
 
   const minMdpl = boxes.length ? Math.min(...boxes.map((b) => b.baseM)) : 0;
   const maxMdpl = boxes.length ? Math.max(...boxes.map((b) => b.topM)) : Math.max(3, TYPICAL_H);
@@ -4703,10 +4668,7 @@ function SectionBody({ slide }: { slide: Extract<Slide, { kind: "section" }> }) 
         {/* Legenda ruang potongan */}
         {(() => {
           const n = legendRooms.length;
-          const cols = n > 60 ? 4 : n > 36 ? 3 : n > 16 ? 2 : 1;
-          const width = cols === 4 ? 460 : cols === 3 ? 380 : cols === 2 ? 320 : 240;
-          const fs = n > 80 ? 8 : n > 60 ? 9 : n > 40 ? 10 : n > 24 ? 11 : 12;
-          const mb = n > 60 ? 2 : n > 30 ? 3 : 4;
+          const { cols, width, fontSize: fs, marginBottom: mb } = sectionLegendMetrics(n);
           return (
         <div style={{ width, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, borderLeft: "1px solid #e5e5e5", paddingLeft: 14 }}>
           <div style={{ fontSize: 12, letterSpacing: "0.2em", textTransform: "uppercase", color: "#666", fontWeight: 600, marginBottom: 10, flexShrink: 0 }}>
@@ -5385,8 +5347,37 @@ function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3
       style: majorityArchitecturalStyle(sketch.detailAreas ?? []),
     };
   }, [sketch]);
+  const roomLegend = useMemo(() => cut.showLegend === true ? section3dRoomLegend(sketch, cut) : undefined, [sketch, cut]);
   const frame = useSlideFrame();
-  return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} />;
+  return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} {...(roomLegend ? { roomLegend } : {})} />;
+}
+
+/** Legenda ruang Potongan 3D: irisan & penomoran sama dengan Potongan Prinsip Skematik. */
+function section3dRoomLegend(sketch: Sketch, cut: SectionCut): Section3dRoomLegend {
+  const cutLen = Math.hypot(cut.p2.x - cut.p1.x, cut.p2.y - cut.p1.y);
+  const ppm = 1 / sketchMetersPerSketchPx(sketch.scale);
+  const lenM = cutLen / ppm;
+  const lvls = [...(sketch.levels ?? [])].sort((a, b) => a.mdpl - b.mdpl);
+  const marks: Section3dRoomLegend["marks"] = [];
+  const levels = lvls.map((lv) => {
+    const slices: Array<{ layerId: string; name: string; color: string; areaM2: number; s0: number; s1: number }> = [];
+    for (const layer of sketch.layers ?? []) {
+      if (layer.levelId !== lv.id || isLahanSec(layer.name) || isVoidSec(layer.name)) continue;
+      for (const [t0, t1] of cutPolygonIntervals(cut.p1, cut.p2, layer.points)) {
+        slices.push({
+          layerId: layer.id, name: layer.name, areaM2: layer.areaM2 || 0, s0: t0 * lenM, s1: t1 * lenM,
+          color: roomFillOverride(layer.name, "0.55") ?? ((colorForRoomName(layer.name) ?? layer.color)?.replace("ALPHA", "0.55") ?? "rgba(232,93,58,0.5)"),
+        });
+      }
+    }
+    return { id: lv.id, name: lv.name, slices };
+  });
+  const { rooms, numberByLayerId } = groupSectionLegendRooms(levels);
+  for (const lv of levels) for (const sl of lv.slices) {
+    const number = numberByLayerId.get(sl.layerId);
+    if (number != null) marks.push({ levelId: lv.id, number, s: (sl.s0 + sl.s1) / 2 });
+  }
+  return { rooms: rooms.map((r) => ({ key: r.key, number: r.number, name: r.name, color: r.color, areaM2: r.areaM2 })), marks };
 }
 
 // ---------- Panel Arsitektur ----------
