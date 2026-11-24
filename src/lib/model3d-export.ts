@@ -87,7 +87,8 @@ export function disposeGroup(group: THREE.Group) {
 
 export function exportGroupAsObj(group: THREE.Group): string {
   const exporter = new OBJExporter();
-  return exporter.parse(group);
+  // 3ds Max/SketchUp memisahkan objek OBJ berdasarkan "g", bukan hanya "o".
+  return exporter.parse(group).replace(/^o (.+)$/gm, (_m, n: string) => `o ${n}\ng ${n}\nusemtl ${n}`);
 }
 
 // ----------------- GLB EXPORTER -----------------
