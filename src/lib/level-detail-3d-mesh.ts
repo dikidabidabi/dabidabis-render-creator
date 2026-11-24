@@ -18,6 +18,8 @@ export const DETAIL3D_KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color
   slab: { color: "#a3a7ad", edges: "#4b4f55" },
   column: { color: "#8f8c86", edges: "#262420" },
   ceiling: { color: "#f7f5f0", edges: DETAIL3D_WALL_EDGE },
+  /** Rangka hollow aluminium plafon (khusus Potongan 3D). */
+  ceilingFrame: { color: "#9ea4ab", edges: "#5d636a" },
 };
 
 export function detail3dStyle(kind: Detail3dKind, color?: string) {

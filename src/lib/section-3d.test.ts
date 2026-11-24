@@ -70,7 +70,7 @@ test("style potongan 3D mengikuti mayoritas detail arsitektural, bawaan Tosca", 
   ]), "bata");
 });
 
-test("plafon potongan 3D: dasar 2,8 m, tebal 50 cm, hanya di bawah plat atas, tanpa lift/shaft/tangga", async () => {
+test("plafon potongan 3D: papan 5 mm di +2,8 m, rangka hollow 2×4 @40 cm dan 4×4 @120 cm bersilangan, hanya di bawah plat atas, tanpa lift/shaft/tangga", async () => {
   const { section3dCeilings } = await import("./section-3d");
   const sq = (x0: number, y0: number, x1: number, y1: number) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
   const ppm = 100;
@@ -82,11 +82,28 @@ test("plafon potongan 3D: dasar 2,8 m, tebal 50 cm, hanya di bawah plat atas, ta
   ];
   // Plat atas hanya menutup separuh kantor (x 0–5 m) dan seluruh area inti.
   const slabsAbove = [{ outer: sq(0, 0, 500, 600), thicknessMm: 150 }, { outer: sq(1000, 0, 1200, 600), thicknessMm: 150 }];
-  const ceilings = section3dCeilings(rooms, slabsAbove, ppm, 4);
-  assert.equal(ceilings.length, 1);
-  assert.equal(ceilings[0]!.kind, "ceiling");
-  assert.deepEqual([ceilings[0]!.bottom, ceilings[0]!.top], [2.8, 3.3]);
-  assert.ok(Math.abs(area(ceilings[0]!.outer) - 30) < 1e-6); // 5 m × 6 m yang tertutup plat
+  const parts = section3dCeilings(rooms, slabsAbove, ppm, 4);
+  const r = (v: number) => Math.round(v * 1e6) / 1e6;
+  const board = parts.filter((p) => p.kind === "ceiling");
+  assert.equal(board.length, 1);
+  assert.deepEqual([r(board[0]!.bottom), r(board[0]!.top)], [2.8, 2.805]);
+  assert.ok(Math.abs(area(board[0]!.outer) - 30) < 1e-6); // 5 m × 6 m yang tertutup plat
+  const frames = parts.filter((p) => p.kind === "ceilingFrame");
+  const furring = frames.filter((p) => r(p.bottom) === 2.805);
+  const runner = frames.filter((p) => r(p.bottom) === 2.825);
+  assert.equal(furring.length + runner.length, frames.length);
+  for (const p of furring) assert.equal(r(p.top), 2.825); // tinggi 2 cm
+  for (const p of runner) assert.equal(r(p.top), 2.865); // tinggi 4 cm
+  // 2×4 sejajar sisi panjang ruang (sumbu x), @40 cm melintang 6 m → 15 batang, lebar 4 cm × 5 m.
+  assert.equal(furring.length, 15);
+  const ys = furring.map((p) => r((Math.min(...p.outer.map((q) => q.y)) + Math.max(...p.outer.map((q) => q.y))) / 2)).sort((a, b) => a - b);
+  assert.ok(Math.abs(ys[1]! - ys[0]! - 0.4) < 1e-6);
+  for (const p of furring) assert.ok(Math.abs(area(p.outer) - 0.04 * 5) < 1e-6);
+  // 4×4 tegak lurus (sumbu y), @120 cm sepanjang 5 m → 4 batang, lebar 4 cm × 6 m.
+  assert.equal(runner.length, 4);
+  const xs = runner.map((p) => r((Math.min(...p.outer.map((q) => q.x)) + Math.max(...p.outer.map((q) => q.x))) / 2)).sort((a, b) => a - b);
+  assert.ok(Math.abs(xs[1]! - xs[0]! - 1.2) < 1e-6);
+  for (const p of runner) assert.ok(Math.abs(area(p.outer) - 0.04 * 6) < 1e-6);
   // Tanpa plat di atas → tanpa plafon.
   assert.equal(section3dCeilings(rooms, [], ppm, 4).length, 0);
 });

@@ -15,7 +15,7 @@ const cache = new Map<string, Section3dRender>();
 const STYLE_NAME: Record<ArchitecturalStyleId, string> = {
   tosca: "Tosca", brown: "Coklat", blue: "Biru", bata: "Bata", mono: "Monokrom", lightorange: "Oranye Terang", monobiru: "Mono Biru",
 };
-const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling"];
+const SOLID: Detail3dKind[] = ["floor", "slab", "wall", "concrete", "concept", "column", "railing", "ceiling", "ceilingFrame"];
 
 export type Section3dLevel = { id: string; name: string; mdpl: number; typicalCount?: number; typicalHeight?: number; input: Detail3dInput };
 
@@ -37,7 +37,8 @@ type Section3dPalette = (typeof SECTION3D_PALETTE)[keyof typeof SECTION3D_PALETT
 const SECTION3D_LEGEND = (palette: Section3dPalette) => [
   { fill: palette.cut, stroke: palette.edge, text: "Bidang potong (lantai, plat, balok, plafon, dinding, kolom)", short: "Bidang potong" },
   { fill: palette.wall, stroke: palette.edge, text: "Dinding tampak", short: "Dinding" },
-  { fill: "#f7f5f0", stroke: palette.edge, text: "Plafon (+2.800, tebal 50 cm)", short: "Plafon" },
+  { fill: "#f7f5f0", stroke: palette.edge, text: "Plafon (+2.800, tebal 5 mm)", short: "Plafon" },
+  { fill: "#c8ccd0", stroke: palette.edge, text: "Rangka hollow aluminium 2×4 cm @40 cm, 4×4 cm @120 cm (bersilangan)", short: "Rangka plafon" },
   { fill: palette.floor, stroke: palette.edge, text: "Lantai", short: "Lantai" },
   { fill: "#bfe0ee", stroke: palette.edge, text: "Kaca / jendela", short: "Kaca" },
   { fill: "#a8743f", stroke: palette.edge, text: "Pintu", short: "Pintu" },
