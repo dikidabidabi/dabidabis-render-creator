@@ -130,6 +130,7 @@ import { MasterplanClusterDialog } from "@/components/masterplan-cluster-dialog"
 import { loadPlan as loadMpPlan, savePlan as saveMpPlan, blockPolygon as mpBlockPolygon, FUNCTION_META as MP_FN_META } from "@/lib/masterplan";
 import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
+import { buildSectionDxf } from "@/lib/section-dxf";
 import { CompetitionPanelTool } from "@/components/competition-panel-tool";
 import { normalizeCompetitionPanels, type CompetitionPanelSettings } from "@/lib/competition-panels";
 import { drawOsmTiles, nominatimSearch, worldToGeo, type Geo, DEFAULT_GEO } from "@/lib/geo";
@@ -15277,6 +15278,24 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                       />
                       Legenda
                     </label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[10px]"
+                      title={`Unduh potongan ${c.label || sectionLabelFor(i)} sebagai .dxf`}
+                      onClick={() => {
+                        try {
+                          const label = c.label || sectionLabelFor(i);
+                          const dxf = buildSectionDxf(sketch as any, { p1: c.p1, p2: c.p2, label }, pxPerMeter);
+                          const safe = `${sketch.title || "Potongan"}_Potongan_${label}`.replace(/[^\w\-]+/g, "_");
+                          downloadDxf(`${safe}.dxf`, dxf);
+                          toast.success(`DXF potongan ${label} terunduh`);
+                        } catch (err) {
+                          console.error(err);
+                          toast.error("Gagal membuat DXF potongan");
+                        }
+                      }}
+                    >.dxf</Button>
                     <Button
                       variant="ghost"
                       size="sm"

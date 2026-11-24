@@ -82,6 +82,7 @@ type MultiPolygon = Ring[][];
 /** Notasi arsir: SOLID = isian penuh, WALL = pasangan garis 45° dinding bata, CONCRETE = bintik beton. */
 export type DxfHatchKind = "SOLID" | "WALL" | "CONCRETE";
 
+export type DxfPrim = Prim;
 type Prim = (
   | { t: "poly"; layer: string; pts: P[]; closed: boolean; ltype?: string }
   | { t: "line"; layer: string; a: P; b: P; ltype?: string }
@@ -125,6 +126,12 @@ export const DXF_LAYERS: Array<{ name: string; color: number; ltype?: string }> 
   { name: "PARKING-LOT", color: 5 },
   { name: "PARKING-AREA", color: 8 },
   { name: "PARKING-PATH", color: 1 },
+  { name: "SECTION-CUT", color: 7 },
+  { name: "SECTION-CUT-HATCH", color: 9 },
+  { name: "SECTION-BEYOND", color: 8 },
+  { name: "SECTION-OPENING", color: 4 },
+  { name: "SECTION-LEVEL", color: 1, ltype: "GRIDCENTER" },
+  { name: "SECTION-TEXT", color: 7 },
 ];
 
 // ---------- Geometri bantu ----------
@@ -811,8 +818,11 @@ function primPoints(prim: Prim): P[] {
 }
 
 export function buildDxf(input: DxfExportInput): string {
-  const prims = buildPlanPrimitives(input);
-  const ppm = input.pxPerMeter;
+  return buildDxfFromPrims(buildPlanPrimitives(input), input.pxPerMeter);
+}
+
+/** Tulis DXF dari primitive (koordinat kanvas: Y turun, `ppm` unit per meter). */
+export function buildDxfFromPrims(prims: Prim[], ppm: number): string {
   const w = new DxfWriter();
 
   // Kelompokkan primitive per block (urutan kemunculan dipertahankan).
