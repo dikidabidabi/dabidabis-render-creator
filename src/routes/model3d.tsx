@@ -132,7 +132,7 @@ type VertexSelection = {
 
 import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
 import { LevelDetail3dBox } from "@/components/level-detail-3d";
-import { detail3dInputForSketch, type Detail3dLine } from "@/lib/level-detail-3d";
+import { buildFullDetail3d, detail3dInputForSketch, type Detail3dLine } from "@/lib/level-detail-3d";
 import type { EdgeMaterial } from "@/lib/edge-segments";
 
 const STORAGE_KEY = SKETCH_STORAGE_KEY;
@@ -2159,6 +2159,26 @@ function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (pa
   );
 }
 
+// Kotak "Detail 3D full": semua lantai digabung menjadi satu bangunan utuh.
+function FullDetail3d({ sketch, onChange }: { sketch: Sketch; onChange: (patch: Partial<Sketch>) => void }) {
+  const model = useMemo(() => buildFullDetail3d(sketch, 1 / metersPerPx(sketch.scale)), [sketch]);
+  if (!(sketch.levels ?? []).length) return null;
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">Detail 3D full</div>
+      <LevelDetail3dBox
+        levelName="Semua lantai"
+        title="Detail 3D full — Semua lantai"
+        model={model}
+        onWindowTypeChange={(windowId, heightType) => onChange({
+          windows: (sketch.windows ?? []).map((window) =>
+            window && typeof window === "object" && (window as { id?: unknown }).id === windowId ? { ...(window as object), heightType } : window),
+        })}
+      />
+    </div>
+  );
+}
+
 function Model3DPage() {
   const [sketches, setSketches] = useState<Sketch[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -2272,6 +2292,7 @@ function Model3DPage() {
                     onChange={(patch) => updateSketch(s.id, patch)}
                   />
                   <LevelDetail3dList sketch={s} onChange={(patch) => updateSketch(s.id, patch)} />
+                  <FullDetail3d sketch={s} onChange={(patch) => updateSketch(s.id, patch)} />
                 </div>
               )}
             </div>

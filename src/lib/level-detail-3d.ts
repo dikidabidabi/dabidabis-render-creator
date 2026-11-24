@@ -548,3 +548,42 @@ export function roomLabelPoint(ring: Ring): P {
   }
   return best?.p ?? c;
 }
+
+/**
+ * Detail 3D full: semua level (termasuk salinan tipikal) ditumpuk pada
+ * elevasi sebenarnya menjadi satu bangunan utuh. Elevasi relatif ke level terendah.
+ */
+export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number): Detail3dModel {
+  const levels = [...(sketch.levels ?? [])].map((lv) => ({ ...lv, mdpl: Number(lv.mdpl) || 0 })).sort((a, b) => a.mdpl - b.mdpl);
+  const prisms: Detail3dPrism[] = [];
+  const windows: Detail3dModel["windows"] = [];
+  const counts = { walls: 0, doors: 0, windows: 0, rooms: 0, columns: 0 };
+  let bounds: Detail3dModel["bounds"] = null;
+  let shift = 0;
+  let topM = 0;
+  const base0 = levels[0]?.mdpl ?? 0;
+  for (const lv of levels) {
+    const height = Number(lv.typicalHeight) > 0 ? Number(lv.typicalHeight) : TYPICAL_FLOOR_H;
+    const copies = Math.max(1, Math.round(Number(lv.typicalCount) || 1));
+    const base = lv.mdpl + shift - base0;
+    shift += (copies - 1) * height;
+    const model = buildLevelDetail3d(detail3dInputForSketch(sketch, lv.id, pxPerMeter));
+    if (!model.prisms.length) continue;
+    for (let c = 0; c < copies; c++) {
+      const dz = base + c * height;
+      for (const p of model.prisms) {
+        prisms.push({ ...p, bottom: p.bottom + dz, top: p.top + dz, ...(p.soffit ? { soffit: { ...p.soffit, h0: p.soffit.h0 + dz, min: p.soffit.min + dz } } : {}) });
+      }
+      if (c === 0) for (const w of model.windows) windows.push({ ...w, sill: w.sill + dz, head: w.head + dz });
+      counts.walls += model.counts.walls; counts.doors += model.counts.doors; counts.windows += model.counts.windows;
+      counts.rooms += model.counts.rooms; counts.columns += model.counts.columns;
+      topM = Math.max(topM, dz + model.wallHeight);
+    }
+    const b = model.bounds;
+    if (b) bounds = bounds
+      ? { minX: Math.min(bounds.minX, b.minX), minY: Math.min(bounds.minY, b.minY), maxX: Math.max(bounds.maxX, b.maxX), maxY: Math.max(bounds.maxY, b.maxY) }
+      : { ...b };
+  }
+  const oh = openingHeights(DEFAULT_TOP_LEVEL_H);
+  return { prisms, wallHeight: topM, ...oh, counts, windows, bounds };
+}

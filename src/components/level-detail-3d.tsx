@@ -9,23 +9,30 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { WINDOW_HEIGHT_TYPES, windowHeightLabel, type WindowHeightType } from "@/lib/windows";
 import { cn } from "@/lib/utils";
-import { buildLevelDetail3d, type Detail3dInput } from "@/lib/level-detail-3d";
+import { buildLevelDetail3d, type Detail3dInput, type Detail3dModel } from "@/lib/level-detail-3d";
 import { detail3dMergedMeshes, detail3dStyle } from "@/lib/level-detail-3d-mesh";
 
 export type LevelDetail3dBoxProps = {
   levelName: string;
-  input: Detail3dInput;
+  input?: Detail3dInput;
+  /** Model jadi (mis. Detail 3D full); menggantikan input. */
+  model?: Detail3dModel;
+  title?: string;
   /** Mengganti tipe jendela tersimpan; tanpa ini tombol Edit disembunyikan. */
   onWindowTypeChange?: (windowId: string, type: WindowHeightType) => void;
 };
 
-export function LevelDetail3dBox({ levelName, input, onWindowTypeChange }: LevelDetail3dBoxProps) {
+export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange }: LevelDetail3dBoxProps) {
   // Halaman Model 3D memuat ulang sketsa berkala; bangun ulang hanya bila isinya berubah.
   const stableRef = useRef<{ key: string; input: Detail3dInput } | null>(null);
-  const inputKey = JSON.stringify(input);
-  if (!stableRef.current || stableRef.current.key !== inputKey) stableRef.current = { key: inputKey, input };
-  const stableInput = stableRef.current.input;
-  const model = useMemo(() => buildLevelDetail3d(stableInput), [stableInput]);
+  const stableModelRef = useRef<{ key: string; model: Detail3dModel } | null>(null);
+  const inputKey = prebuilt ? "" : JSON.stringify(input);
+  if (!prebuilt && input && (!stableRef.current || stableRef.current.key !== inputKey)) stableRef.current = { key: inputKey, input };
+  const stableInput = stableRef.current?.input;
+  const built = useMemo(() => (stableInput ? buildLevelDetail3d(stableInput) : null), [stableInput]);
+  const modelKey = prebuilt ? JSON.stringify(prebuilt.prisms.length) + JSON.stringify(prebuilt.bounds) + JSON.stringify(prebuilt.windows) + prebuilt.prisms.reduce((a, p) => a + p.top + p.outer.length, 0) : "";
+  if (prebuilt && (!stableModelRef.current || stableModelRef.current.key !== modelKey)) stableModelRef.current = { key: modelKey, model: prebuilt };
+  const model = (prebuilt ? stableModelRef.current!.model : built) ?? buildLevelDetail3d(input!);
   const [fullscreen, setFullscreen] = useState(false);
   const [viewKey, setViewKey] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -51,9 +58,9 @@ export function LevelDetail3dBox({ levelName, input, onWindowTypeChange }: Level
         <div className="flex min-w-0 items-center gap-2">
           <Box className="h-3.5 w-3.5 shrink-0 text-primary" />
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">Detail 3D — {levelName}</div>
+            <div className="truncate text-sm font-medium">{title ?? `Detail 3D — ${levelName}`}</div>
             <div className="truncate text-[11px] text-muted-foreground">
-              Tinggi dinding {fmt(model.wallHeight)} m · {model.counts.walls} dinding · {model.counts.columns} kolom · {model.counts.doors} pintu · {model.counts.windows} jendela
+              {prebuilt ? "Tinggi bangunan" : "Tinggi dinding"} {fmt(model.wallHeight)} m · {model.counts.walls} dinding · {model.counts.columns} kolom · {model.counts.doors} pintu · {model.counts.windows} jendela
             </div>
           </div>
         </div>
