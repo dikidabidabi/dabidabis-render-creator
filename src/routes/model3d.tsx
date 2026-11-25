@@ -132,6 +132,7 @@ type VertexSelection = {
 
 import { buildRoofMeshPositions, type Roof } from "@/lib/roofs";
 import { LevelDetail3dBox } from "@/components/level-detail-3d";
+import { detail3dCeilings } from "@/lib/detail3d-ceiling";
 import { clipPrismsToSection, section3dFrame, sectionCoords } from "@/lib/section-3d";
 import { buildFullDetail3d, detail3dInputForSketch, type Detail3dLine } from "@/lib/level-detail-3d";
 import type { EdgeMaterial } from "@/lib/edge-segments";
@@ -2163,7 +2164,8 @@ function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (pa
 // Kotak "Detail 3D full": semua lantai digabung menjadi satu bangunan utuh.
 function FullDetail3d({ sketch, onChange }: { sketch: Sketch; onChange: (patch: Partial<Sketch>) => void }) {
   const pxPerMeter = 1 / metersPerPx(sketch.scale);
-  const fullModel = useMemo(() => buildFullDetail3d(sketch, pxPerMeter), [sketch, pxPerMeter]);
+  const [showCeiling, setShowCeiling] = useState(false);
+  const fullModel = useMemo(() => buildFullDetail3d(sketch, pxPerMeter, showCeiling ? { extra: (input) => detail3dCeilings(input) } : {}), [sketch, pxPerMeter, showCeiling]);
   type Cut = { p1: { x: number; y: number }; p2: { x: number; y: number }; label?: string };
   const cuts = ((sketch as unknown as { sectionCuts?: Cut[] }).sectionCuts ?? []).filter((c) => c && c.p1 && c.p2);
   const cutLabel = (c: Cut, i: number) => { const l = c.label?.trim() || String.fromCharCode(65 + (i % 26)); return `Potongan ${l}-${l}`; };
@@ -2201,6 +2203,8 @@ function FullDetail3d({ sketch, onChange }: { sketch: Sketch; onChange: (patch: 
         levelName="Semua lantai"
         title={activeCut ? `Detail 3D full — ${cutLabel(activeCut, cutIndex)}` : "Detail 3D full — Semua lantai"}
         model={model}
+        showCeiling={showCeiling}
+        onShowCeilingChange={setShowCeiling}
         onWindowTypeChange={(windowId, heightType) => onChange({
           windows: (sketch.windows ?? []).map((window) =>
             window && typeof window === "object" && (window as { id?: unknown }).id === windowId ? { ...(window as object), heightType } : window),

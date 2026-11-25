@@ -11,6 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { WINDOW_HEIGHT_TYPES, windowHeightLabel, type WindowHeightType } from "@/lib/windows";
 import { cn } from "@/lib/utils";
 import { buildLevelDetail3d, type Detail3dInput, type Detail3dModel } from "@/lib/level-detail-3d";
+import { detail3dCeilings } from "@/lib/detail3d-ceiling";
+import { Checkbox } from "@/components/ui/checkbox";
 import { detail3dMergedMeshes, detail3dStyle, type Detail3dMesh } from "@/lib/level-detail-3d-mesh";
 import { disposeGroup, exportGroupAsGlb, exportGroupAsObj, triggerDownload } from "@/lib/model3d-export";
 
@@ -73,6 +75,8 @@ function detail3dExportGroup(meshes: Detail3dMesh[], name: string): THREE.Group 
   return group;
 }
 
+const DETAIL3D_CLEAN_FLOOR = "#e9e6e0";
+
 export type LevelDetail3dBoxProps = {
   levelName: string;
   input?: Detail3dInput;
@@ -81,19 +85,35 @@ export type LevelDetail3dBoxProps = {
   title?: string;
   /** Mengganti tipe jendela tersimpan; tanpa ini tombol Edit disembunyikan. */
   onWindowTypeChange?: (windowId: string, type: WindowHeightType) => void;
+  /** Ceklis plafon terkendali (mis. Detail 3D full membangun ulang modelnya). */
+  showCeiling?: boolean;
+  onShowCeilingChange?: (value: boolean) => void;
 };
 
-export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange }: LevelDetail3dBoxProps) {
+export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange, showCeiling: ceilingProp, onShowCeilingChange }: LevelDetail3dBoxProps) {
+  const [ceilingLocal, setCeilingLocal] = useState(false);
+  const showCeiling = ceilingProp ?? ceilingLocal;
+  const setShowCeiling = (v: boolean) => (onShowCeilingChange ? onShowCeilingChange(v) : setCeilingLocal(v));
+  const [floorColor, setFloorColor] = useState(false);
   // Halaman Model 3D memuat ulang sketsa berkala; bangun ulang hanya bila isinya berubah.
   const stableRef = useRef<{ key: string; input: Detail3dInput } | null>(null);
   const stableModelRef = useRef<{ key: string; model: Detail3dModel } | null>(null);
   const inputKey = prebuilt ? "" : JSON.stringify(input);
   if (!prebuilt && input && (!stableRef.current || stableRef.current.key !== inputKey)) stableRef.current = { key: inputKey, input };
   const stableInput = stableRef.current?.input;
-  const built = useMemo(() => (stableInput ? buildLevelDetail3d(stableInput) : null), [stableInput]);
+  const built = useMemo(() => {
+    if (!stableInput) return null;
+    const m = buildLevelDetail3d(stableInput);
+    return showCeiling ? { ...m, prisms: [...m.prisms, ...detail3dCeilings(stableInput)] } : m;
+  }, [stableInput, showCeiling]);
   const modelKey = prebuilt ? JSON.stringify(prebuilt.prisms.length) + JSON.stringify(prebuilt.bounds) + JSON.stringify(prebuilt.windows) + prebuilt.prisms.reduce((a, p) => a + p.top + p.outer.length, 0) : "";
   if (prebuilt && (!stableModelRef.current || stableModelRef.current.key !== modelKey)) stableModelRef.current = { key: modelKey, model: prebuilt };
-  const model = (prebuilt ? stableModelRef.current!.model : built) ?? buildLevelDetail3d(input!);
+  const rawModel = (prebuilt ? stableModelRef.current!.model : built) ?? buildLevelDetail3d(input!);
+  // Warna lantai mati: lantai bersih tanpa warna ruang.
+  const model = useMemo(
+    () => (floorColor ? rawModel : { ...rawModel, prisms: rawModel.prisms.map((p) => (p.kind === "floor" ? { ...p, color: DETAIL3D_CLEAN_FLOOR } : p)) }),
+    [rawModel, floorColor],
+  );
   const [fullscreen, setFullscreen] = useState(false);
   const [viewKey, setViewKey] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -209,6 +229,12 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <label className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
+            <Checkbox checked={showCeiling} onCheckedChange={(v) => setShowCeiling(v === true)} aria-label="Plafon" />Plafon
+          </label>
+          <label className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
+            <Checkbox checked={floorColor} onCheckedChange={(v) => setFloorColor(v === true)} aria-label="Warna lantai" />Warna lantai
+          </label>
           {onWindowTypeChange && (
             <Button
               type="button"

@@ -594,7 +594,7 @@ export function roomLabelPoint(ring: Ring): P {
  * Detail 3D full: semua level (termasuk salinan tipikal) ditumpuk pada
  * elevasi sebenarnya menjadi satu bangunan utuh. Elevasi relatif ke level terendah.
  */
-export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number): Detail3dModel {
+export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number, opts: { extra?: (input: Detail3dInput, model: Detail3dModel) => Detail3dPrism[] } = {}): Detail3dModel {
   const levels = [...(sketch.levels ?? [])].map((lv) => ({ ...lv, mdpl: Number(lv.mdpl) || 0 })).sort((a, b) => a.mdpl - b.mdpl);
   const prisms: Detail3dPrism[] = [];
   const windows: Detail3dModel["windows"] = [];
@@ -608,8 +608,10 @@ export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number
     const copies = Math.max(1, Math.round(Number(lv.typicalCount) || 1));
     const base = lv.mdpl + shift - base0;
     shift += (copies - 1) * height;
-    const model = buildLevelDetail3d(detail3dInputForSketch(sketch, lv.id, pxPerMeter));
-    if (!model.prisms.length) continue;
+    const levelInput = detail3dInputForSketch(sketch, lv.id, pxPerMeter);
+    const built = buildLevelDetail3d(levelInput);
+    if (!built.prisms.length) continue;
+    const model = opts.extra ? { ...built, prisms: [...built.prisms, ...opts.extra(levelInput, built)] } : built;
     for (let c = 0; c < copies; c++) {
       const dz = base + c * height;
       for (const p of model.prisms) {
