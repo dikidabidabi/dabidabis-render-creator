@@ -1,11 +1,11 @@
 // Kotak "Detail 3D" untuk satu level: lantai, dinding sesuai tebal material,
 // pintu, dan jendela. Tinggi dinding mengikuti tinggi level.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { AppWindow, Box, Check, Download, Maximize2, Minimize2, Pencil, RotateCcw } from "lucide-react";
+import { AppWindow, Box, Camera, Check, Download, Image as ImageIcon, Maximize2, Minimize2, Pencil, RotateCcw, Trash2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { WINDOW_HEIGHT_TYPES, windowHeightLabel, type WindowHeightType } from "@/lib/windows";
@@ -13,6 +13,23 @@ import { cn } from "@/lib/utils";
 import { buildLevelDetail3d, type Detail3dInput, type Detail3dModel } from "@/lib/level-detail-3d";
 import { detail3dMergedMeshes, detail3dStyle, type Detail3dMesh } from "@/lib/level-detail-3d-mesh";
 import { disposeGroup, exportGroupAsGlb, exportGroupAsObj, triggerDownload } from "@/lib/model3d-export";
+
+type R3fHandle = { gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera; controls: unknown };
+function R3fBridge({ handleRef }: { handleRef: React.MutableRefObject<R3fHandle | null> }) {
+  const { gl, scene, camera, controls } = useThree();
+  handleRef.current = { gl, scene, camera, controls };
+  return null;
+}
+type CamPreset = "iso" | "top" | "south" | "north" | "west" | "east";
+const CAM_PRESETS: { value: CamPreset; label: string }[] = [
+  { value: "iso", label: "Perspektif (aksonometri)" },
+  { value: "top", label: "Atas (denah)" },
+  { value: "south", label: "Depan" },
+  { value: "north", label: "Belakang" },
+  { value: "west", label: "Kiri" },
+  { value: "east", label: "Kanan" },
+];
+type Shot = { id: string; dataUrl: string; ts: number };
 
 const EXPORT_CATEGORIES: { name: string; kinds: Detail3dMesh["kind"][] }[] = [
   { name: "Lantai", kinds: ["floor", "slab"] },
@@ -101,6 +118,76 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
     }
   };
   const camDist = span * 1.15 + model.wallHeight;
+  const r3f = useRef<R3fHandle | null>(null);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const targetY = model.wallHeight * 0.35;
+  const setCamera = (preset: CamPreset) => {
+    const h = r3f.current;
+    if (!h) return;
+    const d = camDist * 1.3;
+    const pos: Record<CamPreset, [number, number, number]> = {
+      iso: [camDist * 0.7, camDist * 1.1, camDist * 0.9],
+      top: [0, d * 1.2, 0.001],
+      south: [0, targetY, d],
+      north: [0, targetY, -d],
+      west: [-d, targetY, 0],
+      east: [d, targetY, 0],
+    };
+    h.camera.position.set(...pos[preset]);
+    h.camera.lookAt(0, targetY, 0);
+    const c = h.controls as { target?: THREE.Vector3; update?: () => void } | null;
+    c?.target?.set(0, targetY, 0);
+    c?.update?.();
+  };
+  const capture = (targetW?: number): string | null => {
+    const h = r3f.current;
+    if (!h) return null;
+    const { gl, scene, camera } = h;
+    const prev = new THREE.Vector2();
+    gl.getSize(prev);
+    const prevPR = gl.getPixelRatio();
+    const cam = camera as THREE.PerspectiveCamera;
+    const prevAspect = cam.aspect;
+    try {
+      if (targetW) {
+        const aspect = prev.x > 0 && prev.y > 0 ? prev.x / prev.y : 16 / 9;
+        const targetH = Math.max(1, Math.round(targetW / aspect));
+        gl.setPixelRatio(1);
+        gl.setSize(targetW, targetH, false);
+        cam.aspect = targetW / targetH;
+        cam.updateProjectionMatrix();
+      }
+      gl.render(scene, camera);
+      return gl.domElement.toDataURL("image/jpeg", 0.92);
+    } catch (e) {
+      console.error(e);
+      return null;
+    } finally {
+      if (targetW) {
+        gl.setPixelRatio(prevPR);
+        gl.setSize(prev.x, prev.y, false);
+        cam.aspect = prevAspect;
+        cam.updateProjectionMatrix();
+        gl.render(scene, camera);
+      }
+    }
+  };
+  const downloadUrl = (url: string, name: string) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  const takeShot = () => {
+    const url = capture();
+    if (url) setShots((s) => [{ id: `s_${Date.now()}`, dataUrl: url, ts: Date.now() }, ...s].slice(0, 12));
+  };
+  const take2K = () => {
+    const url = capture(2560);
+    if (url) downloadUrl(url, `${fileBase}_2K_${Date.now()}.jpg`);
+  };
   const hasWalls = model.counts.walls > 0;
   const fmt = (n: number) => n.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (
@@ -137,6 +224,26 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
+              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={meshes.length === 0} aria-label="Kamera" title="Kamera (arah pandang)">
+                <Video className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="text-xs">Kamera</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {CAM_PRESETS.map((c) => (
+                <DropdownMenuItem key={c.value} onSelect={() => setCamera(c.value)}>{c.label}</DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={meshes.length === 0} onClick={takeShot} aria-label="Screenshot" title="Screenshot">
+            <Camera className="h-3.5 w-3.5" />
+          </Button>
+          <Button type="button" size="sm" variant="ghost" className="h-7 px-1.5 text-xs" disabled={meshes.length === 0} onClick={take2K} aria-label="Unduh gambar 2K" title="Unduh gambar 2K (2560 px)">
+            <ImageIcon className="mr-1 h-3.5 w-3.5" />2K
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={meshes.length === 0 || exporting} aria-label="Unduh model 3D" title="Unduh model 3D (.obj / .glb)">
                 <Download className="h-3.5 w-3.5" />
               </Button>
@@ -162,7 +269,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
             Level ini belum punya ruang atau dinding bermaterial. Beri material dinding lewat Pick Material di halaman Sketsa.
           </div>
         ) : (
-          <Canvas key={viewKey} shadows dpr={[1, 2]} camera={{ position: [camDist * 0.7, camDist * 1.1, camDist * 0.9], fov: 40, near: 0.05, far: camDist * 20 }}>
+          <Canvas key={viewKey} shadows dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }} camera={{ position: [camDist * 0.7, camDist * 1.1, camDist * 0.9], fov: 40, near: 0.05, far: camDist * 20 }}>
             <color attach="background" args={["#f4f1ec"]} />
             <ambientLight intensity={0.55} />
             <hemisphereLight args={["#ffffff", "#c9c2b8", 0.7]} />
@@ -227,6 +334,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
               </Html>
             ))}
             <OrbitControls makeDefault target={[0, model.wallHeight * 0.35, 0]} enableDamping />
+            <R3fBridge handleRef={r3f} />
           </Canvas>
         )}
         {editing && (
@@ -240,6 +348,23 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
           </div>
         )}
       </div>
+      {shots.length > 0 && (
+        <div className="border-t border-border px-3 py-2">
+          <div className="mb-1.5 text-[11px] text-muted-foreground">Screenshot · {shots.length}</div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {shots.map((s) => (
+              <div key={s.id} className="group relative shrink-0">
+                <button type="button" onClick={() => downloadUrl(s.dataUrl, `${fileBase}_${s.ts}.jpg`)} title="Unduh screenshot" className="block overflow-hidden rounded border border-border">
+                  <img src={s.dataUrl} alt="Screenshot Detail 3D" className="h-16 w-auto" />
+                </button>
+                <button type="button" onClick={() => setShots((all) => all.filter((x) => x.id !== s.id))} aria-label="Hapus screenshot" className="absolute right-0.5 top-0.5 rounded bg-background/90 p-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
