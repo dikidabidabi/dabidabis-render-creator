@@ -9245,15 +9245,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         setGridDrag({ kind: "move", startWorld: rawWorld, startOrigin: { ...grid.origin } });
         return;
       }
-      // klik di luar → set origin ke titik klik (snap bila paralel dgn mm grid)
-      const snapped = gridsParallel
-        ? (() => {
-            const local = rotateAround(rawWorld, mmPivot, -mmGridRotRad);
-            const sl = { x: Math.round(local.x / MINOR_PX) * MINOR_PX, y: Math.round(local.y / MINOR_PX) * MINOR_PX };
-            return rotateAround(sl, mmPivot, mmGridRotRad);
-          })()
-        : rawWorld;
-      onChangeGridLinked(moveGridLinked(grid, snapped));
+      // Sentuhan di luar area grid tidak memindahkan grid; geser hanya lewat tekan-tahan-drag di dalam grid.
       return;
     }
     if (tool === "atap") {
