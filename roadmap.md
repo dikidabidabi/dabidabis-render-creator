@@ -1,9 +1,9 @@
 # Roadmap
 
-- [ ] Alat Clading: box tersimpan sebagai item 3D terpisah, denah hanya level penempatan.
-- [ ] Selubung 2 cm dan hollow 4×4 cm silang @50 cm; penyatuan otomatis dengan nama volume terbesar.
-- [ ] Edit Clading di Detail 3D: gizmo horizontal/vertikal dan extrude bidang; tampil pada potongan.
-- [ ] Uji geometri, penyimpanan, gambar sketsa, dan penyuntingan 3D.
+- [x] Alat Clading: box tersimpan sebagai item 3D terpisah, denah hanya level penempatan.
+- [x] Selubung 2 cm dan hollow 4×4 cm silang @50 cm; penyatuan otomatis dengan nama volume terbesar.
+- [x] Edit Clading di Detail 3D: gizmo horizontal/vertikal dan extrude bidang; tampil pada potongan.
+- [x] Uji geometri penyatuan/selubung/extrude/potongan (alur layar belum dicoba di browser).
 
 - [x] Tambahkan material Parapet: denah putih tanpa hatch, tebal 15 cm dan tinggi 1,2 m di Detail 3D/Potongan 3D.
 - [x] Tampilkan tangga sketsa di semua Detail 3D; 30 tes lulus dan alur Sketsa → Model 3D → Presentasi diuji dengan akun uji.

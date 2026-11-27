@@ -31,3 +31,4 @@
 - Volumetrik: row per physical floor, subtotals last.
 - Detail 3D (windowVerticalRange per type) feeds all 3D views; panels redraw bare slide bodies in aspect slots (PSD too).
 - section-room-legend shares numbering; detail3d-stairs shares sloped-soffit stairs across 3D views; parapets are low walls.
+- Clading lives in sketch.clading as level-relative boxes outside room layers; clading.ts derives skin/hollow frame prisms inside buildLevelDetail3d so Detail 3D, sections and exports share it.

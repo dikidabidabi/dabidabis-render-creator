@@ -132,6 +132,8 @@ import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { buildSectionDxf } from "@/lib/section-dxf";
 import { CompetitionPanelTool } from "@/components/competition-panel-tool";
+import { CladingTool } from "@/components/clading-tool";
+import { mergeClading, normalizeClading, type Clading } from "@/lib/clading";
 import { normalizeCompetitionPanels, type CompetitionPanelSettings } from "@/lib/competition-panels";
 import { drawOsmTiles, nominatimSearch, worldToGeo, type Geo, DEFAULT_GEO } from "@/lib/geo";
 import { takePendingTenderExec } from "@/lib/tender-exec";
@@ -515,6 +517,8 @@ type Sketch = {
   generalMaterials?: GeneralMaterialSelections;
   /** Alat Panel Arsitektur: layout, konten, teks dan ceklis tampil di Presentasi. */
   competitionPanels?: CompetitionPanelSettings;
+  /** Clading: item 3D tersendiri (bukan layer ruang), tampil di denah level penempatan. */
+  clading?: Clading[];
 };
 
 type ImageReference = {
@@ -1215,6 +1219,7 @@ function normalizeSketch(s: any): Sketch {
       return out;
     })(),
     roofs: normalizeRoofs(s?.roofs, new Set(levels.map((l) => l.id)), fallback),
+    clading: normalizeClading(s?.clading).filter((item) => levels.some((level) => level.id === item.levelId)),
     stairs: normalizeStairs(s?.stairs, new Set(levels.map((l) => l.id))),
     imageReferences: (() => {
       if (!Array.isArray(s?.imageReferences)) return [];
@@ -2736,10 +2741,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         windows: (sketch.windows ?? []).filter((window) => window.levelId !== lvlId),
         imageReferences: (sketch.imageReferences ?? []).filter((ref) => ref.levelId !== lvlId),
         detailAreas: (sketch.detailAreas ?? []).filter((area) => area.levelId !== lvlId),
+        clading: (sketch.clading ?? []).filter((item) => item.levelId !== lvlId),
       });
       toast.success("Level dihapus");
     },
-    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.doors, sketch.windows, sketch.imageReferences, sketch.detailAreas],
+    [levels, lines, layers, activeLvlId, onChange, sketch.roofs, sketch.stairs, sketch.doors, sketch.windows, sketch.imageReferences, sketch.detailAreas, sketch.clading],
   );
 
   const duplicateLevel = useCallback(
@@ -2845,7 +2851,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [pinDrag, setPinDrag] = useState<Point | null>(null);
   const hasGeoPin = !!sketch.geo && Number.isFinite(Number(sketch.geo.lat)) && Number.isFinite(Number(sketch.geo.lon));
 
-  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "window" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan" | "panelSayembara">("line");
+  const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "window" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan" | "panelSayembara" | "clading">("line");
+  const [cladingHeightInput, setCladingHeightInput] = useState("3");
+  const [cladingOffsetInput, setCladingOffsetInput] = useState("0");
   // ===== Image Reference (JPG) =====
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -5184,7 +5192,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.setLineDash([6 / s, 4 / s]);
       }
       ctx.beginPath();
-      const isRectPreview = tool === "rect" || tool === "pendetailan" || isFloorRect;
+      const isRectPreview = tool === "rect" || tool === "pendetailan" || tool === "clading" || isFloorRect;
       if (isRectPreview) {
         // Persegi mengikuti rotasi grid milimeter block: bangun di frame lokal
         // (un-rotate kedua sudut diagonal), snap ke MINOR_PX di lokal, lalu
@@ -6419,6 +6427,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
 
     // ===== Atap (pelana / limasan): footprint + bubungan & jurai =====
+    {
+      const cladingList = (sketch.clading ?? []).filter((item) => item.levelId === activeLvlId);
+      if (cladingList.length > 0) {
+        ctx.save();
+        ctx.translate(view.tx, view.ty);
+        ctx.rotate(view.r);
+        ctx.scale(view.s, view.s);
+        for (const item of cladingList) {
+          ctx.beginPath();
+          for (const b of item.boxes) ctx.rect(b.min.x, b.min.y, b.max.x - b.min.x, b.max.y - b.min.y);
+          ctx.fillStyle = "rgba(201,183,158,0.45)";
+          ctx.fill("nonzero");
+          ctx.strokeStyle = "rgba(91,74,56,0.95)";
+          ctx.lineWidth = 1.5 / view.s;
+          ctx.stroke();
+          const first = item.boxes[0];
+          if (first) {
+            ctx.fillStyle = "rgba(91,74,56,1)";
+            ctx.font = `600 ${12 / view.s}px Manrope, sans-serif`;
+            ctx.fillText(item.name, first.min.x + 4 / view.s, first.min.y + 14 / view.s);
+          }
+        }
+        ctx.restore();
+      }
+    }
     {
       // Atap hanya tampil pada level tempat atap tersebut digambar.
       const roofList = (sketch.roofs ?? []).filter((roof) => !activeLvlId || roof.levelId === activeLvlId);
@@ -9782,7 +9815,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
     if (
-      tool === "line" || tool === "rect" || tool === "pendetailan" || tool === "section" || tool === "separasi" ||
+      tool === "line" || tool === "rect" || tool === "pendetailan" || tool === "clading" || tool === "section" || tool === "separasi" ||
       (tool === "parking" && parkingSubTool === "draw") ||
       (tool === "aksis" && aksisSub === "garis") ||
       (tool === "jalan" && jalanSub === "garis")
@@ -11582,6 +11615,21 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       return;
     }
 
+    if (curTool === "clading") {
+      if (!activeLvlId) return;
+      const snapL = (v: number) => Math.round(v / MINOR_PX) * MINOR_PX;
+      const height = Math.max(0.12, Number(cladingHeightInput) || 3);
+      const base = Number(cladingOffsetInput) || 0;
+      const box = { min: { x: snapL(Math.min(a.x, b.x)), y: snapL(Math.min(a.y, b.y)), z: base }, max: { x: snapL(Math.max(a.x, b.x)), y: snapL(Math.max(a.y, b.y)), z: base + height } };
+      if (box.max.x - box.min.x < pxPerMeter * 0.12 || box.max.y - box.min.y < pxPerMeter * 0.12) { toast.error("Clading minimal 12 cm agar selubung dan rangka muat"); return; }
+      const all = sketch.clading ?? [];
+      const item: Clading = { id: `CLD${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: `Clading ${all.length + 1}`, levelId: activeLvlId, boxes: [box] };
+      const merged = mergeClading([...all, item], pxPerMeter);
+      onChange({ clading: merged });
+      toast.success(merged.length <= all.length ? "Clading menyatu dengan clading di dekatnya" : `${item.name} dibuat sebagai item 3D`);
+      return;
+    }
+
     if (curTool === "pendetailan") {
       const rectangle = createDetailRectangle(a, b, mmGridRotation, MINOR_PX);
       if (!activeLvlId || !rectangle) return;
@@ -12519,6 +12567,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           >
             <Crop className="mr-1.5 h-4 w-4" /> Pendetailan
           </Button>
+          <Button
+            variant={tool === "clading" ? "default" : "outline"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setDrawing(null); setTool("clading"); }}
+            className={cn(tool === "clading" && "bg-gradient-primary shadow-primary")}
+            title="Tarik kotak clading: selubung 2 cm dan rangka hollow 4×4 cm @50 cm"
+          >
+            <BoxIcon className="mr-1.5 h-4 w-4" /> Clading
+          </Button>
 
           <Button
             variant={tool === "parking" && parkingKind === "mobil" ? "default" : "outline"}
@@ -12632,6 +12689,14 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                   onChange={(e) => onChange({ imageReferences: (sketch.imageReferences ?? []).map((ref) => ref.id === selected.id ? { ...ref, opacity: Number(e.target.value) / 100 } : ref) })} />
               </div>;
             })()}
+          </div>
+        )}
+        {tool === "clading" && (
+          <div className="space-y-2 rounded-lg border border-border/60 bg-card/60 p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Clading</div>
+            <p className="text-[11px] text-muted-foreground">Tarik kotak pada denah. Clading berdekatan otomatis menyatu; sunting bentuknya di kotak Detail 3D level ini.</p>
+            <CladingTool items={(sketch.clading ?? []).filter((item) => item.levelId === activeLvlId)} height={cladingHeightInput} offset={cladingOffsetInput} onHeight={setCladingHeightInput} onOffset={setCladingOffsetInput}
+              onChange={(items) => onChange({ clading: [...(sketch.clading ?? []).filter((item) => item.levelId !== activeLvlId), ...items] })} />
           </div>
         )}
         {tool === "pendetailan" && (
@@ -15960,7 +16025,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             onPointerLeave={() => setHover(null)}
             className={cn(
               "block touch-none select-none",
-              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "window" || tool === "pick" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+              tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "clading" || tool === "window" || tool === "pick" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
             )}
           />
           <div className="pointer-events-none absolute bottom-4 right-4 rounded-md bg-background/85 p-1.5 shadow-soft backdrop-blur">
@@ -16065,6 +16130,15 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             title="Trim / Extend (tap garis dekat ujung)"
           >
             <Crop className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={tool === "clading" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { cancelPendingCurve(); setDrawing(null); setTool("clading"); }}
+            className={cn(tool === "clading" && "bg-gradient-primary shadow-primary")}
+            title="Clading (tarik kotak)"
+          >
+            <BoxIcon className="h-4 w-4" />
           </Button>
           <Button
             variant={tool === "offset" ? "default" : "ghost"}
@@ -16354,7 +16428,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               onPointerLeave={() => setHover(null)}
               className={cn(
                 "block touch-none select-none",
-                tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "pick" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
+                tool === "line" || tool === "rect" || tool === "polyline" || tool === "section" || tool === "separasi" || tool === "circle" || tool === "parking" || tool === "pendetailan" || tool === "clading" || tool === "pick" ? "cursor-crosshair" : tool === "edit" ? "cursor-move" : "cursor-pointer",
               )}
             />
             <div className="pointer-events-none absolute left-3 top-3 rounded-md bg-background/80 px-2.5 py-1 shadow-soft backdrop-blur">
