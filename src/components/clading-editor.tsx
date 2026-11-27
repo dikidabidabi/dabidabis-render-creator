@@ -65,7 +65,7 @@ export function CladingEditor({ items, state, setState, onChange, ppm, elevation
       const position: [number, number, number] = [(b.max.x + b.min.x) / 2 / ppm - cx, (b.max.z + b.min.z) / 2 - elevation, (b.max.y + b.min.y) / 2 / ppm - cy];
       const idx = face.axis === "x" ? 0 : face.axis === "z" ? 1 : 2;
       position[idx] += size[idx] * face.sign / 2; size[idx] = 0.004;
-      return <mesh key={`${item.id}:${index}`} position={position} onPointerDown={(e) => selectFace(e, item, face)}><boxGeometry args={size} /><meshBasicMaterial transparent opacity={item.id === state.id ? 0.12 : 0} color="var(--clading-selected)" depthWrite={false} /></mesh>;
+      return <mesh key={`${item.id}:${index}`} position={position} onPointerDown={(e) => selectFace(e, item, face)}><boxGeometry args={size} /><meshBasicMaterial transparent opacity={item.id === state.id ? 0.12 : 0} color="#d9643a" depthWrite={false} /></mesh>;
     })}
     {selected && (state.mode === "move" || f) && <TransformControls key={`${selected.id}:${JSON.stringify(start)}:${state.mode}:${state.plane}`} mode="translate" translationSnap={0.05}
       showX={state.mode === "extrude" ? f?.axis === "x" : state.plane === "horizontal"}

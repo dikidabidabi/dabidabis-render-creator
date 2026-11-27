@@ -120,6 +120,7 @@ type Sketch = {
   edgeAttrs?: Record<string, EdgeMaterial>;
   doors?: unknown[];
   windows?: unknown[];
+  clading?: Clading[];
 };
 type StoreShape = { sketches: Sketch[]; openId: string | null };
 type VertexSelection = {
@@ -136,6 +137,7 @@ import { detail3dCeilings } from "@/lib/detail3d-ceiling";
 import { clipPrismsToSection, section3dFrame, sectionCoords } from "@/lib/section-3d";
 import { buildFullDetail3d, detail3dInputForSketch, type Detail3dLine } from "@/lib/level-detail-3d";
 import type { EdgeMaterial } from "@/lib/edge-segments";
+import { mergeClading, type Clading } from "@/lib/clading";
 
 const STORAGE_KEY = SKETCH_STORAGE_KEY;
 const MINOR_PX = 8;
@@ -2150,6 +2152,10 @@ function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (pa
             key={item.id}
             levelName={item.name}
             input={item.input}
+            onCladingChange={(items) => {
+              const others = (sketch.clading ?? []).filter((c) => c.levelId !== item.id);
+              onChange({ clading: [...others, ...mergeClading(items, 1 / metersPerPx(sketch.scale))] });
+            }}
             onWindowTypeChange={(windowId, heightType) => onChange({
               windows: (sketch.windows ?? []).map((window) =>
                 window && typeof window === "object" && (window as { id?: unknown }).id === windowId ? { ...(window as object), heightType } : window),

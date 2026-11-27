@@ -26,7 +26,7 @@ export function mergeClading(items: Clading[], ppm: number): Clading[] {
     again = false;
     for (let i = 0; i < result.length && !again; i++) for (let j = i + 1; j < result.length; j++) {
       const a = result[i], b = result[j];
-      if (!a || !b) continue;
+      if (!a || !b || a.levelId !== b.levelId) continue;
       const touching = a.boxes.some((u) => b.boxes.some((v) => axes.every((axis) => {
         const gap = CLADING_JOIN_M * (axis === "z" ? 1 : ppm);
         return u.min[axis] <= v.max[axis] + gap && v.min[axis] <= u.max[axis] + gap;

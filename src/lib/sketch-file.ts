@@ -295,6 +295,7 @@ const ENTITY_ARRAYS = [
   "roofs",
   "imageReferences",
   "detailAreas",
+  "clading",
 ] as const;
 
 export type MergeOptions = {

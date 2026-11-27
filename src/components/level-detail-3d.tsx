@@ -15,6 +15,8 @@ import { detail3dCeilings } from "@/lib/detail3d-ceiling";
 import { Checkbox } from "@/components/ui/checkbox";
 import { detail3dMergedMeshes, detail3dStyle, type Detail3dMesh } from "@/lib/level-detail-3d-mesh";
 import { disposeGroup, exportGroupAsGlb, exportGroupAsObj, triggerDownload } from "@/lib/model3d-export";
+import { CladingEditPanel, CladingEditor, initialCladingEdit, type CladingEditState } from "@/components/clading-editor";
+import type { Clading } from "@/lib/clading";
 
 type R3fHandle = { gl: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera; controls: unknown };
 function R3fBridge({ handleRef }: { handleRef: React.MutableRefObject<R3fHandle | null> }) {
@@ -45,6 +47,8 @@ const EXPORT_CATEGORIES: { name: string; kinds: Detail3dMesh["kind"][] }[] = [
   { name: "Railing", kinds: ["railing"] },
   { name: "Plafon", kinds: ["ceiling"] },
   { name: "Rangka_Plafon", kinds: ["ceilingFrame"] },
+  { name: "Clading", kinds: ["clading"] },
+  { name: "Rangka_Clading", kinds: ["cladingFrame"] },
 ];
 
 /** Susun Detail 3D menjadi satu objek per elemen (Lantai, Dinding, Pintu, Kaca, Kusen, ...) agar material mudah diganti di 3ds Max. */
@@ -88,9 +92,14 @@ export type LevelDetail3dBoxProps = {
   /** Ceklis plafon terkendali (mis. Detail 3D full membangun ulang modelnya). */
   showCeiling?: boolean;
   onShowCeilingChange?: (value: boolean) => void;
+  /** Clading level ini dapat disunting langsung di kotak 3D. */
+  onCladingChange?: (items: Clading[]) => void;
 };
 
-export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange, showCeiling: ceilingProp, onShowCeilingChange }: LevelDetail3dBoxProps) {
+export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange, showCeiling: ceilingProp, onShowCeilingChange, onCladingChange }: LevelDetail3dBoxProps) {
+  const [cladingEdit, setCladingEdit] = useState<CladingEditState>(initialCladingEdit);
+  const cladingItems = input?.clading ?? [];
+  const canEditClading = !!onCladingChange && cladingItems.length > 0;
   const [ceilingLocal, setCeilingLocal] = useState(false);
   const showCeiling = ceilingProp ?? ceilingLocal;
   const setShowCeiling = (v: boolean) => (onShowCeilingChange ? onShowCeilingChange(v) : setCeilingLocal(v));
@@ -106,7 +115,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
     const m = buildLevelDetail3d(stableInput);
     return showCeiling ? { ...m, prisms: [...m.prisms, ...detail3dCeilings(stableInput)] } : m;
   }, [stableInput, showCeiling]);
-  const modelKey = prebuilt ? JSON.stringify(prebuilt.prisms.length) + JSON.stringify(prebuilt.bounds) + JSON.stringify(prebuilt.windows) + prebuilt.prisms.reduce((a, p) => a + p.top + p.outer.length, 0) : "";
+  const modelKey = prebuilt ? JSON.stringify(prebuilt.prisms.length) + JSON.stringify(prebuilt.bounds) + JSON.stringify(prebuilt.windows) + prebuilt.prisms.reduce((a, p) => a + p.top + p.bottom + p.outer.length + (p.outer[0]?.x ?? 0) + (p.outer[0]?.y ?? 0), 0) : "";
   if (prebuilt && (!stableModelRef.current || stableModelRef.current.key !== modelKey)) stableModelRef.current = { key: modelKey, model: prebuilt };
   const rawModel = (prebuilt ? stableModelRef.current!.model : built) ?? buildLevelDetail3d(input!);
   // Warna lantai mati: lantai bersih tanpa warna ruang.
@@ -289,6 +298,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
           </Button>
         </div>
       </div>
+      {canEditClading && onCladingChange && <CladingEditPanel items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} ppm={input!.pxPerMeter} />}
       <div className={cn("relative bg-muted/30", fullscreen ? "min-h-0 flex-1" : "h-[420px]")}>
         {model.prisms.length === 0 ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
@@ -359,6 +369,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
                 </DropdownMenu>
               </Html>
             ))}
+            {canEditClading && onCladingChange && <CladingEditor items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} ppm={input!.pxPerMeter} elevation={0} cx={cx} cy={cy} />}
             <OrbitControls makeDefault target={[0, model.wallHeight * 0.35, 0]} enableDamping />
             <R3fBridge handleRef={r3f} />
           </Canvas>

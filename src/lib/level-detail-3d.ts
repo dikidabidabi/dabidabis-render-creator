@@ -16,12 +16,13 @@ import { solidColorForRoomName } from "@/lib/room-color";
 
 import { section3dStairs, type Section3dStairSurface } from "./detail3d-stairs";
 import { normalizeStairs, stairPlanGeometry } from "./stairs";
+import { cladingPrisms, normalizeClading, type Clading } from "./clading";
 
 type P = { x: number; y: number };
 type Ring = P[];
 type MultiPolygon = Ring[][];
 
-export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column" | "ceiling" | "ceilingFrame" | "stair" | "parapet";
+export type Detail3dKind = "floor" | "slab" | "wall" | "concrete" | "concept" | "glass" | "railing" | "frame" | "door" | "column" | "ceiling" | "ceilingFrame" | "stair" | "parapet" | "clading" | "cladingFrame";
 
 export type Detail3dPrism = {
   kind: Detail3dKind;
@@ -63,6 +64,8 @@ export type Detail3dInput = {
   stairs?: Array<{ surfaces: Section3dStairSurface[]; heightM: number }>;
   /** Tapak lantai level di atasnya (px): dinding di bawahnya berhenti 5 cm di bawah muka lantai. */
   upperFootprint?: Ring[][];
+  /** Clading item 3D tersendiri pada level ini; z relatif muka lantai level. */
+  clading?: Clading[];
 };
 
 export type Detail3dModel = {
@@ -404,6 +407,7 @@ export function buildLevelDetail3d(input: Detail3dInput, opts: { capUnderUpper?:
   for (const stair of input.stairs ?? []) {
     prisms.push(...section3dStairs(stair.surfaces, stair.heightM, ppm));
   }
+  prisms.push(...cladingPrisms(input.clading ?? [], ppm, 0));
   let bounds: Detail3dModel["bounds"] = null;
   for (const prism of prisms) {
     for (const p of prism.outer) {
@@ -460,6 +464,7 @@ type Detail3dSketchLike = {
   windows?: unknown[];
   structuralGrid?: StructuralGrid;
   structuralGridExtras?: StructuralGrid[];
+  clading?: unknown[];
 };
 
 export function detail3dRoomColor(room: { name: string; color?: string }): string {
@@ -513,6 +518,7 @@ export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: stri
     windows: windows.filter((w) => w.levelId === levelId).map((w) => ({ ...w, id: rawWindowIds.has(w.id) ? w.id : "" })),
     wallHeight: levelWallHeight(levels, levelId),
     upperFootprint: upperFootprintFor(sketch, levelId, elevations),
+    clading: normalizeClading(sketch.clading).filter((item) => item.levelId === levelId),
   };
 }
 
@@ -615,6 +621,8 @@ export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number
     for (let c = 0; c < copies; c++) {
       const dz = base + c * height;
       for (const p of model.prisms) {
+        // Clading hanya ada pada level penempatannya, tidak ikut salinan tipikal.
+        if (c > 0 && (p.kind === "clading" || p.kind === "cladingFrame")) continue;
         prisms.push({ ...p, bottom: p.bottom + dz, top: p.top + dz, ...(p.soffit ? { soffit: { ...p.soffit, h0: p.soffit.h0 + dz, min: p.soffit.min + dz } } : {}) });
       }
       if (c === 0) for (const w of model.windows) windows.push({ ...w, sill: w.sill + dz, head: w.head + dz });

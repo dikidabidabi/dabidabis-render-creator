@@ -23,6 +23,8 @@ export const DETAIL3D_KIND_STYLE: Record<Exclude<Detail3dKind, "floor">, { color
   ceilingFrame: { color: "#9ea4ab", edges: "#5d636a" },
   /** Tangga beton bersama Detail 3D dan Potongan 3D. */
   stair: { color: "#d9d6cf", edges: "#4b4f55" },
+  clading: { color: "#c9b79e", edges: "#5b4a38" },
+  cladingFrame: { color: "#9ea4ab" },
 };
 
 export function detail3dStyle(kind: Detail3dKind, color?: string) {
