@@ -45,6 +45,9 @@
 
 :root {
   --radius: 0.5rem;
+  --clading-selection: #e12d37;
+  --clading-plan-fill: #c9b79e;
+  --clading-plan-ink: #5b4a38;
   --architectural-background-light: color-mix(in srgb, #d5e9e7 80%, white);
   --architectural-background-deep: color-mix(in srgb, #bedbd8 80%, white);
   --architectural-background-radial-light: color-mix(in srgb, var(--architectural-background-light) 12.25%, white);
@@ -137,6 +140,16 @@
   --schedule-link-ss: #16834b;
   --schedule-link-ff: #b07808;
   --schedule-link-sf: #c43f70;
+}
+
+.clading-selection-swatch { color: var(--clading-selection); }
+.clading-marquee {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  z-index: 30;
+  border: 1px dashed var(--clading-selection);
+  background: color-mix(in srgb, var(--clading-selection) 12%, transparent);
 }
 
 @layer base {

@@ -1,5 +1,10 @@
 # Roadmap
 
+- [ ] Clading: seleksi segmen merah transparan dan marquee multi-segmen pada satu sisi.
+- [ ] Clading: edit titik X/Y, tambah/hapus titik dan bentuk poligon pada Sketsa.
+- [ ] Clading: tarik gizmo untuk ekstrusi langsung dengan snap ukuran milimeter block.
+- [ ] Uji geometri, penyimpanan, dan pengeditan pada tampilan sebenarnya.
+
 - [x] Alat Clading: box tersimpan sebagai item 3D terpisah, denah hanya level penempatan.
 - [x] Selubung 2 cm dan hollow 4×4 cm silang @50 cm; penyatuan otomatis dengan nama volume terbesar.
 - [x] Edit Clading di Detail 3D: gizmo horizontal/vertikal dan extrude bidang; tampil pada potongan.

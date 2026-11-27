@@ -132,8 +132,8 @@ import polygonClipping from "polygon-clipping";
 import { buildDxf, downloadDxf } from "@/lib/dxf-export";
 import { buildSectionDxf } from "@/lib/section-dxf";
 import { CompetitionPanelTool } from "@/components/competition-panel-tool";
-import { CladingTool } from "@/components/clading-tool";
-import { mergeClading, normalizeClading, type Clading } from "@/lib/clading";
+import { CladingTool, type CladingPlanMode, type CladingPointSelection } from "@/components/clading-tool";
+import { addCladingPoint, boxOutline, editCladingPoint, mergeClading, normalizeClading, type Clading } from "@/lib/clading";
 import { normalizeCompetitionPanels, type CompetitionPanelSettings } from "@/lib/competition-panels";
 import { drawOsmTiles, nominatimSearch, worldToGeo, type Geo, DEFAULT_GEO } from "@/lib/geo";
 import { takePendingTenderExec } from "@/lib/tender-exec";
@@ -2854,6 +2854,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [tool, setTool] = useState<"line" | "rect" | "polyline" | "erase" | "edit" | "section" | "separasi" | "grid" | "pick" | "door" | "window" | "circle" | "trim" | "offset" | "floor" | "atap" | "tangga" | "move" | "mirror" | "parking" | "ramp" | "aksis" | "jalan" | "iluanalisa" | "imageReference" | "pendetailan" | "panelSayembara" | "clading">("line");
   const [cladingHeightInput, setCladingHeightInput] = useState("3");
   const [cladingOffsetInput, setCladingOffsetInput] = useState("0");
+  const [cladingPlanMode, setCladingPlanMode] = useState<CladingPlanMode>("draw");
+  const [cladingPointSelection, setCladingPointSelection] = useState<CladingPointSelection | null>(null);
+  const [cladingPointDrag, setCladingPointDrag] = useState<CladingPointSelection | null>(null);
   // ===== Image Reference (JPG) =====
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -6434,20 +6437,37 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ctx.translate(view.tx, view.ty);
         ctx.rotate(view.r);
         ctx.scale(view.s, view.s);
+        const cladingTokens = getComputedStyle(canvas);
         for (const item of cladingList) {
           ctx.beginPath();
-          for (const b of item.boxes) ctx.rect(b.min.x, b.min.y, b.max.x - b.min.x, b.max.y - b.min.y);
-          ctx.fillStyle = "rgba(201,183,158,0.45)";
+          for (const b of item.boxes) {
+            const points = boxOutline(b), first = points[0];
+            if (!first) continue;
+            ctx.moveTo(first.x, first.y);
+            for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+            ctx.closePath();
+          }
+          ctx.fillStyle = cladingTokens.getPropertyValue("--clading-plan-fill").trim();
+          ctx.globalAlpha = 0.45;
           ctx.fill("nonzero");
-          ctx.strokeStyle = "rgba(91,74,56,0.95)";
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = cladingTokens.getPropertyValue("--clading-plan-ink").trim();
           ctx.lineWidth = 1.5 / view.s;
           ctx.stroke();
           const first = item.boxes[0];
           if (first) {
-            ctx.fillStyle = "rgba(91,74,56,1)";
+            ctx.fillStyle = cladingTokens.getPropertyValue("--clading-plan-ink").trim();
             ctx.font = `600 ${12 / view.s}px Manrope, sans-serif`;
             ctx.fillText(item.name, first.min.x + 4 / view.s, first.min.y + 14 / view.s);
           }
+          if (tool === "clading" && cladingPlanMode !== "draw") item.boxes.forEach((box, boxIndex) => {
+            boxOutline(box).forEach((point, index) => {
+              const selected = cladingPointSelection?.id === item.id && cladingPointSelection.boxIndex === boxIndex && cladingPointSelection.index === index;
+              ctx.beginPath(); ctx.arc(point.x, point.y, (selected ? 6 : 4.5) / view.s, 0, Math.PI * 2);
+              ctx.fillStyle = cladingTokens.getPropertyValue(selected ? "--clading-selection" : "--detail-opening-fill").trim();
+              ctx.fill(); ctx.stroke();
+            });
+          });
         }
         ctx.restore();
       }
@@ -7740,7 +7760,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, colMarquee, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, mmPivot, hasMmPivot, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, sketch.clading, cladingPlanMode, cladingPointSelection, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, colMarquee, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, mmPivot, hasMmPivot, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -8552,6 +8572,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
     }
 
     // Geser pin map — prioritas paling atas saat mode aktif.
+    if (tool === "clading" && cladingPlanMode !== "draw") {
+      const raw = getWorldPosRaw(e), tolerance = 14 / view.s;
+      let hit: CladingPointSelection | null = null, best = tolerance;
+      for (const item of (sketch.clading ?? []).filter(c => c.levelId === activeLvlId)) item.boxes.forEach((box, boxIndex) => {
+        const points = boxOutline(box);
+        points.forEach((point, index) => {
+          const candidate = cladingPlanMode === "add" ? projectOnSegment(raw, point, points[(index + 1) % points.length] ?? point) : point;
+          const distance = Math.hypot(raw.x - candidate.x, raw.y - candidate.y);
+          if (distance <= best) { best = distance; hit = { id: item.id, boxIndex, index }; }
+        });
+      });
+      if (!hit) { setCladingPointSelection(null); return; }
+      const target = hit as CladingPointSelection;
+      const item = (sketch.clading ?? []).find(c => c.id === target.id);
+      if (!item) return;
+      setCladingPointSelection(target);
+      if (cladingPlanMode === "move") { pushHistory(); setCladingPointDrag(target); return; }
+      const next = cladingPlanMode === "delete" ? editCladingPoint(item, target.boxIndex, target.index, null) : addCladingPoint(item, target.boxIndex, target.index, snapPointToMillimeterGrid(raw, true));
+      if (next === item) { toast.error("Bentuk clading harus memiliki minimal 3 titik dan tidak boleh berpotongan sendiri"); return; }
+      pushHistory(); onChange({ clading: (sketch.clading ?? []).map(c => c.id === item.id ? next : c) });
+      setCladingPointSelection(cladingPlanMode === "delete" ? null : { ...target, index: target.index + 1 });
+      return;
+    }
     if (pinMoveMode && hasGeoPin) {
       setPinDrag(getWorldPosRaw(e));
       return;
@@ -10572,6 +10615,11 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (cladingPointDrag && pointersRef.current.size < 2) {
+      const point = snapPointToMillimeterGrid(getWorldPosRaw(e), true);
+      onChange({ clading: (sketch.clading ?? []).map(item => item.id === cladingPointDrag.id ? editCladingPoint(item, cladingPointDrag.boxIndex, cladingPointDrag.index, point) : item) });
+      return;
+    }
     if (gestureRef.current && pointersRef.current.size >= 2) {
       pointersRef.current.set(e.pointerId, getScreenPos(e));
       updateGesture();
@@ -11082,6 +11130,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
+    if (cladingPointDrag) { setCladingPointDrag(null); endPointer(e); return; }
     if (tool === "tangga" && stairKind === "bebas" && stairSub === "gambar") { endPointer(e); return; }
     if (doorEndpointDrag || windowEndpointDrag) {
       setDoorEndpointDrag(null);
@@ -12694,9 +12743,9 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         {tool === "clading" && (
           <div className="space-y-2 rounded-lg border border-border/60 bg-card/60 p-3">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Clading</div>
-            <p className="text-[11px] text-muted-foreground">Tarik kotak pada denah. Clading berdekatan otomatis menyatu; sunting bentuknya di kotak Detail 3D level ini.</p>
             <CladingTool items={(sketch.clading ?? []).filter((item) => item.levelId === activeLvlId)} height={cladingHeightInput} offset={cladingOffsetInput} onHeight={setCladingHeightInput} onOffset={setCladingOffsetInput}
-              onChange={(items) => onChange({ clading: [...(sketch.clading ?? []).filter((item) => item.levelId !== activeLvlId), ...items] })} />
+              mode={cladingPlanMode} onMode={setCladingPlanMode} selection={cladingPointSelection} onSelection={setCladingPointSelection} ppm={pxPerMeter}
+              onChange={(items) => { pushHistory(); onChange({ clading: [...(sketch.clading ?? []).filter((item) => item.levelId !== activeLvlId), ...items] }); }} />
           </div>
         )}
         {tool === "pendetailan" && (

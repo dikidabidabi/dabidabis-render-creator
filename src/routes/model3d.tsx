@@ -2152,6 +2152,7 @@ function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (pa
             key={item.id}
             levelName={item.name}
             input={item.input}
+            cladingSnapStep={MINOR_PX * metersPerPx(sketch.scale)}
             onCladingChange={(items) => {
               const others = (sketch.clading ?? []).filter((c) => c.levelId !== item.id);
               onChange({ clading: [...others, ...mergeClading(items, 1 / metersPerPx(sketch.scale))] });

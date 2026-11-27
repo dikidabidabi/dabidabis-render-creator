@@ -94,11 +94,15 @@ export type LevelDetail3dBoxProps = {
   onShowCeilingChange?: (value: boolean) => void;
   /** Clading level ini dapat disunting langsung di kotak 3D. */
   onCladingChange?: (items: Clading[]) => void;
+  cladingSnapStep?: number;
 };
 
-export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange, showCeiling: ceilingProp, onShowCeilingChange, onCladingChange }: LevelDetail3dBoxProps) {
+export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange, showCeiling: ceilingProp, onShowCeilingChange, onCladingChange, cladingSnapStep }: LevelDetail3dBoxProps) {
   const [cladingEdit, setCladingEdit] = useState<CladingEditState>(initialCladingEdit);
+  const [cladingPreview, setCladingPreview] = useState<Clading[] | null>(null);
   const cladingItems = input?.clading ?? [];
+  const cladingPpm = input?.pxPerMeter ?? 80;
+  const snapStep = cladingSnapStep ?? 8 / cladingPpm;
   const canEditClading = !!onCladingChange && cladingItems.length > 0;
   const [ceilingLocal, setCeilingLocal] = useState(false);
   const showCeiling = ceilingProp ?? ceilingLocal;
@@ -118,16 +122,17 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
   const modelKey = prebuilt ? JSON.stringify(prebuilt.prisms.length) + JSON.stringify(prebuilt.bounds) + JSON.stringify(prebuilt.windows) + prebuilt.prisms.reduce((a, p) => a + p.top + p.bottom + p.outer.length + (p.outer[0]?.x ?? 0) + (p.outer[0]?.y ?? 0), 0) : "";
   if (prebuilt && (!stableModelRef.current || stableModelRef.current.key !== modelKey)) stableModelRef.current = { key: modelKey, model: prebuilt };
   const rawModel = (prebuilt ? stableModelRef.current!.model : built) ?? buildLevelDetail3d(input!);
+  const previewModel = useMemo(() => cladingPreview && stableInput ? buildLevelDetail3d({ ...stableInput, clading: cladingPreview }) : rawModel, [cladingPreview, stableInput, rawModel]);
   // Warna lantai mati: lantai bersih tanpa warna ruang.
   const model = useMemo(
-    () => (floorColor ? rawModel : { ...rawModel, prisms: rawModel.prisms.map((p) => (p.kind === "floor" ? { ...p, color: DETAIL3D_CLEAN_FLOOR } : p)) }),
-    [rawModel, floorColor],
+    () => (floorColor ? previewModel : { ...previewModel, prisms: previewModel.prisms.map((p) => (p.kind === "floor" ? { ...p, color: DETAIL3D_CLEAN_FLOOR } : p)) }),
+    [previewModel, floorColor],
   );
   const [fullscreen, setFullscreen] = useState(false);
   const [viewKey, setViewKey] = useState(0);
   const [editing, setEditing] = useState(false);
   const editableWindows = onWindowTypeChange ? model.windows.filter((window) => window.id) : [];
-  const b = model.bounds;
+  const b = rawModel.bounds;
   const cx = b ? (b.minX + b.maxX) / 2 : 0;
   const cy = b ? (b.minY + b.maxY) / 2 : 0;
   const span = b ? Math.max(4, b.maxX - b.minX, b.maxY - b.minY) : 10;
@@ -298,7 +303,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
           </Button>
         </div>
       </div>
-      {canEditClading && onCladingChange && <CladingEditPanel items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} ppm={input!.pxPerMeter} />}
+      {canEditClading && onCladingChange && <CladingEditPanel items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} ppm={cladingPpm} snapStep={snapStep} />}
       <div className={cn("relative bg-muted/30", fullscreen ? "min-h-0 flex-1" : "h-[420px]")}>
         {model.prisms.length === 0 ? (
           <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted-foreground">
@@ -369,7 +374,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
                 </DropdownMenu>
               </Html>
             ))}
-            {canEditClading && onCladingChange && <CladingEditor items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} ppm={input!.pxPerMeter} elevation={0} cx={cx} cy={cy} />}
+            {canEditClading && onCladingChange && <CladingEditor items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} onPreview={setCladingPreview} ppm={cladingPpm} snapStep={snapStep} elevation={0} cx={cx} cy={cy} />}
             <OrbitControls makeDefault target={[0, model.wallHeight * 0.35, 0]} enableDamping />
             <R3fBridge handleRef={r3f} />
           </Canvas>
