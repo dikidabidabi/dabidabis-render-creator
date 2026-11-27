@@ -182,7 +182,9 @@ import {
   MATERIAL_COLORS,
   MATERIAL_LABELS,
 } from "@/lib/edge-segments";
-import { type Door, type DoorType, foldingDoorSegments, genDoorId, normalizeDoors } from "@/lib/doors";
+import { type Door, type DoorType, type DoorStyle, foldingDoorSegments, genDoorId, normalizeDoors } from "@/lib/doors";
+import { DoorStylePicker } from "@/components/door-style-picker";
+import { normalizeCeilingHeight } from "@/lib/room-ceiling";
 import { type Window, type WindowHeightType, genWindowId, normalizeWindows, windowDividerFractions, windowHeightLabel, windowHeightType, windowLengthCm, DYNAMIC_WINDOW_INITIAL_CM } from "@/lib/windows";
 import { DynamicWindowSettings } from "@/components/dynamic-window-settings";
 import { WindowHeightTypePicker } from "@/components/window-height-type-picker";
@@ -318,6 +320,7 @@ type Layer = {
   /** Asal masterplan (untuk sinkronisasi dua arah). */
   refSourceLayerId?: string;
   functionZoneId?: string;
+  ceilingHeightM?: number | null;
 };
 
 type Level = {
@@ -1049,7 +1052,7 @@ function normalizeSketch(s: any): Sketch {
     const isRef = (base as any).isReferenceRoom === true;
     const refSrc = typeof (base as any).refSourceLayerId === "string" ? (base as any).refSourceLayerId : undefined;
     const functionZoneId = typeof (base as any).functionZoneId === "string" ? (base as any).functionZoneId : undefined;
-    return { ...base, coefficient: coef, floors, ...(isRef ? { isReferenceRoom: true } : {}), ...(refSrc ? { refSourceLayerId: refSrc } : {}), ...(functionZoneId ? { functionZoneId } : {}) };
+    return { ...base, ...(base.ceilingHeightM !== undefined ? { ceilingHeightM: normalizeCeilingHeight(base.ceilingHeightM) } : {}), coefficient: coef, floors, ...(isRef ? { isReferenceRoom: true } : {}), ...(refSrc ? { refSourceLayerId: refSrc } : {}), ...(functionZoneId ? { functionZoneId } : {}) };
   });
   ({ levels, layers } = bindLahanLayersToMdplZero(levels, layers));
   return {
@@ -3168,6 +3171,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   // Door tool — parameter & live draft (3-langkah gesture single drag).
   const [doorLeaves, setDoorLeaves] = useState<1 | 2>(1);
   const [doorType, setDoorType] = useState<DoorType>("swing");
+  const [doorStyleChoice, setDoorStyleChoice] = useState<DoorStyle>("standard");
   const [doorSlideDirection, setDoorSlideDirection] = useState<"left" | "right">("left");
   const [doorFoldingSideMode, setDoorFoldingSideMode] = useState<"one" | "two">("one");
   const [doorFoldingSide, setDoorFoldingSide] = useState<"left" | "right">("left");
@@ -11441,6 +11445,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
         ny: d.ny,
         leaves: doorLeaves,
         type: doorType,
+        style: doorStyleChoice,
         slideDirection: doorSlideDirection,
         foldingSideMode: doorFoldingSideMode,
         foldingSide: doorFoldingSide,
@@ -14131,6 +14136,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               };
               return <div className="space-y-2 border-t border-border/60 pt-2">
                 <div className="flex items-center justify-between"><span className="text-[11px] font-medium">Pintu terpilih</span><span className="text-[10px] text-muted-foreground">{selected.widthCm} cm</span></div>
+                <DoorStylePicker value={selected.style} onChange={style => { pushHistory(); onChange({ doors: (sketch.doors ?? []).map(door => door.id === selected.id ? { ...door, style } : door) }); }} />
                 <Slider min={70} max={selected.type === "folding" ? 800 : 200} step={1} value={[selected.widthCm]} onPointerDown={() => pushHistory()} onValueChange={([value]) => resize(value)} />
                 <div className="grid grid-cols-3 gap-1.5">
                   <Button size="sm" variant={selected.type !== "sliding" && selected.type !== "folding" ? "default" : "outline"} onClick={() => changeType("swing")} className="h-7 text-xs">Swing</Button>
@@ -14155,6 +14161,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
               </div>;
             })()}
             {!doorEditMode && <>
+            <DoorStylePicker value={doorStyleChoice} onChange={setDoorStyleChoice} />
             <div className="grid grid-cols-3 gap-1.5">
               <Button type="button" size="sm" variant={doorType === "swing" ? "default" : "outline"} onClick={() => { setDoorType("swing"); setDoorWidthCm((width) => Math.min(width, 200)); }} className="h-8 text-xs">Swing</Button>
               <Button type="button" size="sm" variant={doorType === "sliding" ? "default" : "outline"} onClick={() => { setDoorType("sliding"); setDoorWidthCm((width) => Math.min(width, 200)); }} className="h-8 text-xs">Geser</Button>

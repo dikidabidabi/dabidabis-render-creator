@@ -6,7 +6,7 @@ import { section3dCeilings } from "@/lib/section-3d";
 export function detail3dCeilings(input: Detail3dInput): Detail3dPrism[] {
   const above = (input.upperFootprint ?? [])
     .filter((poly) => poly[0] && poly[0].length >= 3)
-    .map((poly) => ({ outer: poly[0]!, holes: poly.slice(1), thicknessMm: 150 }));
+    .map((poly) => ({ outer: poly[0] ?? [], holes: poly.slice(1), thicknessMm: input.upperSlabThicknessMm ?? 150 }));
   if (!above.length) return [];
   return section3dCeilings(input.rooms, above, input.pxPerMeter, Math.max(0.1, Number(input.wallHeight) || 4));
 }

@@ -92,6 +92,7 @@ type Layer = {
   levelId?: string;
   coefficient?: number;
   hidden?: boolean;
+  ceilingHeightM?: number | null;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number; detail3d?: boolean };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; label?: string };
@@ -2162,6 +2163,8 @@ function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (pa
               windows: (sketch.windows ?? []).map((window) =>
                 window && typeof window === "object" && (window as { id?: unknown }).id === windowId ? { ...(window as object), heightType } : window),
             })}
+            onDoorStyleChange={(doorId, style) => onChange({ doors: (sketch.doors ?? []).map(door => door && typeof door === "object" && (door as { id?: unknown }).id === doorId ? { ...(door as object), style } : door) })}
+            onRoomCeilingChange={(roomId, ceilingHeightM) => onChange({ layers: sketch.layers.map(room => room.id === roomId ? { ...room, ceilingHeightM } : room) })}
           />
         ))}
       </div>
@@ -2187,6 +2190,8 @@ function FullDetail3d({ sketch, onChange }: { sketch: Sketch; onChange: (patch: 
       ...fullModel,
       prisms: clipPrismsToSection(fullModel.prisms, frame),
       windows: fullModel.windows.filter((w) => sectionCoords(frame, w.center).d >= 0),
+      doors: fullModel.doors.filter(door => sectionCoords(frame, door.center).d >= 0),
+      rooms: fullModel.rooms.filter(room => sectionCoords(frame, room.center).d >= 0),
     };
   }, [fullModel, activeCut, pxPerMeter]);
   if (!(sketch.levels ?? []).length) return null;
@@ -2217,6 +2222,8 @@ function FullDetail3d({ sketch, onChange }: { sketch: Sketch; onChange: (patch: 
           windows: (sketch.windows ?? []).map((window) =>
             window && typeof window === "object" && (window as { id?: unknown }).id === windowId ? { ...(window as object), heightType } : window),
         })}
+        onDoorStyleChange={(doorId, style) => onChange({ doors: (sketch.doors ?? []).map(door => door && typeof door === "object" && (door as { id?: unknown }).id === doorId ? { ...(door as object), style } : door) })}
+        onRoomCeilingChange={(roomId, ceilingHeightM) => onChange({ layers: sketch.layers.map(room => room.id === roomId ? { ...room, ceilingHeightM } : room) })}
       />
     </div>
   );

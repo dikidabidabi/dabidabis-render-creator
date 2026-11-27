@@ -4,7 +4,8 @@
 // tinggi relatif terhadap lantai level (0 = muka lantai).
 
 import polygonClipping from "polygon-clipping";
-import { foldingDoorSegments, type Door } from "@/lib/doors";
+import { foldingDoorSegments, doorStyle, type Door, type DoorStyle } from "@/lib/doors";
+import { ceilingBottom, type CeilingHeight } from "@/lib/room-ceiling";
 import { WINDOW_DOOR_HEAD_M, WINDOW_STANDARD_SILL_M, windowFramePolygons, windowHeightType, windowPlanGeometry, windowVerticalRange, type Window, type WindowHeightType } from "@/lib/windows";
 import { computeStraightSegments, edgeMaterialForSegment, type EdgeMaterial } from "@/lib/edge-segments";
 import { curveWallBand, sampleCurveLine } from "@/lib/curve-wall";
@@ -53,17 +54,18 @@ export type Detail3dInput = {
   /** Seluruh garis sketsa (semua level) agar identitas segmen material sama dengan slide. */
   lines: Detail3dLine[];
   edgeAttrs?: Record<string, EdgeMaterial>;
-  rooms: Array<{ id?: string; name: string; points: P[]; color: string; areaM2?: number }>;
+  rooms: Array<{ id?: string; name: string; points: P[]; color: string; areaM2?: number; ceilingHeightM?: CeilingHeight }>;
   /** Tapak kolom struktur (px) pada level ini, lihat detail3dColumnRings. */
   columns?: Ring[];
   slabs?: Array<{ outer: P[]; holes?: P[][]; thicknessMm: number }>;
-  doors: Array<Pick<Door, "a" | "b" | "nx" | "ny" | "leaves" | "type" | "slideDirection" | "foldingSideMode" | "foldingSide" | "foldingLeafCount" | "widthCm">>;
+  doors: Array<Pick<Door, "a" | "b" | "nx" | "ny" | "leaves" | "type" | "style" | "slideDirection" | "foldingSideMode" | "foldingSide" | "foldingLeafCount" | "widthCm"> & { id?: string }>;
   windows: Window[];
   /** Tinggi dinding (m) = tinggi level. */
   wallHeight: number;
   stairs?: Array<{ surfaces: Section3dStairSurface[]; heightM: number }>;
   /** Tapak lantai level di atasnya (px): dinding di bawahnya berhenti 5 cm di bawah muka lantai. */
   upperFootprint?: Ring[][];
+  upperSlabThicknessMm?: number;
   /** Clading item 3D tersendiri pada level ini; z relatif muka lantai level. */
   clading?: Clading[];
 };
@@ -77,6 +79,8 @@ export type Detail3dModel = {
   counts: { walls: number; doors: number; windows: number; rooms: number; columns: number };
   /** Titik tengah tiap jendela (m) untuk tombol edit tipe di kotak Detail 3D. */
   windows: Array<{ id: string; type: WindowHeightType; center: P; sill: number; head: number }>;
+  doors: Array<{ id: string; style: DoorStyle; center: P; head: number }>;
+  rooms: Array<{ id: string; name: string; ceilingHeightM?: CeilingHeight; center: P; height: number }>;
   bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
 };
 
@@ -251,13 +255,28 @@ export function buildLevelDetail3d(input: Detail3dInput, opts: { capUnderUpper?:
     const geometry = windowPlanGeometry({ a, b }, ppm, wallCandidates);
     return geometry ? geometry.halfDepth * 2 : 0.15 * ppm;
   };
-  const doorCuts = union(input.doors.map((door) => rectAlong(door.a, door.b, depthAt(door.a, door.b) * 0.7)));
-  const windowRange = (window: Window) => windowVerticalRange(window.heightType, wallHeight, doorHeight);
-  // Potongan dinding per tipe jendela agar ambang/bata atas mengikuti tipe masing-masing.
-  const windowCutsByType = (["full", "standard", "wall"] as const).map((type) => {
-    const list = input.windows.filter((window) => windowHeightType(window.heightType) === type);
-    const range = windowVerticalRange(type, wallHeight, doorHeight);
-    return { range, cuts: difference(union(list.map((window) => rectAlong(window.a, window.b, depthAt(window.a, window.b) * 0.7))), doorCuts) };
+  // Resolve the room on either face of an opening; the lower ceiling bounds shared openings.
+  const ceilingAt = (a: P, b: P) => {
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+    const adjacent = input.rooms.filter(room => [-0.25, 0, 0.25].some(offset => pointInRing({ x: mid.x + nx * offset * ppm, y: mid.y + ny * offset * ppm }, room.points)));
+    const slabThickness = (input.upperSlabThicknessMm ?? 150) / 1000;
+    const heights = adjacent.map(room => ceilingBottom(room.ceilingHeightM === undefined && /lift|shaft|tangga/i.test(room.name) ? null : room.ceilingHeightM, wallHeight, slabThickness)).filter((height): height is number => height !== null);
+    return heights.length ? Math.min(...heights) : adjacent.length ? null : ceilingBottom(undefined, wallHeight, slabThickness);
+  };
+  const doorRange = (door: Detail3dInput["doors"][number]) => {
+    const style = doorStyle(door.style);
+    const head = style === "window-wall" ? wallHeight : style === "floor-to-ceiling" ? ceilingAt(door.a, door.b) ?? wallHeight : doorHeight;
+    return { head, leafHead: Math.min(doorHeight, head) };
+  };
+  const doorEntries = input.doors.map(door => ({ door, range: doorRange(door), cuts: union([rectAlong(door.a, door.b, depthAt(door.a, door.b) * 0.7)]) }));
+  const doorCuts = unionPolygons(doorEntries.flatMap(entry => entry.cuts));
+  const windowRange = (window: Window) => windowVerticalRange(window.heightType, wallHeight, doorHeight, ceilingAt(window.a, window.b));
+  // Each opening has its own room-dependent head, including the wall above the ceiling.
+  const windowCutsByType = input.windows.map((window) => {
+    const range = windowRange(window);
+    return { range, cuts: difference(union([rectAlong(window.a, window.b, depthAt(window.a, window.b) * 0.7)]), doorCuts) };
   });
   const windowCuts = unionPolygons(windowCutsByType.flatMap((entry) => entry.cuts));
   const openingCuts = unionPolygons([...doorCuts, ...windowCuts]);
@@ -285,7 +304,7 @@ export function buildLevelDetail3d(input: Detail3dInput, opts: { capUnderUpper?:
     const shape = shapes[cls];
     if (!shape.length) continue;
     push(cls, difference(shape, openingCuts), 0, wallHeight);
-    push(cls, intersection(shape, doorCuts), doorHeight, wallHeight);
+    for (const entry of doorEntries) push(cls, intersection(shape, entry.cuts), entry.range.head, wallHeight);
     for (const { range, cuts } of windowCutsByType) {
       if (!cuts.length) continue;
       const underWindow = intersection(shape, cuts);
@@ -299,18 +318,25 @@ export function buildLevelDetail3d(input: Detail3dInput, opts: { capUnderUpper?:
   // ---- Pintu: kusen + daun (mengikuti notasi denah) ----
   const jamb = 0.05 * ppm;
   const leafT = 0.04 * ppm;
+  const doorMarks: Detail3dModel["doors"] = [];
   for (const door of input.doors) {
     const { a, b } = door;
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     if (!(len > 1e-6)) continue;
+    const { head: openingHead, leafHead } = doorRange(door);
+    const style = doorStyle(door.style);
     const dx = (b.x - a.x) / len, dy = (b.y - a.y) / len;
     const px = -dy, py = dx;
     const depth = depthAt(a, b);
     const at = (t: number) => ({ x: a.x + dx * t, y: a.y + dy * t });
-    push("frame", [[rectAlong(a, at(Math.min(jamb, len / 2)), depth / 2)]], 0, doorHeight);
-    push("frame", [[rectAlong(at(Math.max(len - jamb, len / 2)), b, depth / 2)]], 0, doorHeight);
-    push("frame", [[rectAlong(a, b, depth / 2)]], doorHeight - 0.05, doorHeight);
-    const leafTop = doorHeight - 0.05, leafBottom = 0.01;
+    push("frame", [[rectAlong(a, at(Math.min(jamb, len / 2)), depth / 2)]], 0, openingHead);
+    push("frame", [[rectAlong(at(Math.max(len - jamb, len / 2)), b, depth / 2)]], 0, openingHead);
+    push("frame", [[rectAlong(a, b, depth / 2)]], leafHead - 0.05, leafHead);
+    if (openingHead > leafHead + 0.0001) {
+      push("glass", [[rectAlong(a, b, 0.006 * ppm)]], leafHead, openingHead);
+      push("frame", [[rectAlong(a, b, depth / 2)]], openingHead - 0.05, openingHead);
+    }
+    const leafTop = leafHead - 0.05, leafBottom = 0.01;
     const widthPx = len;
     const leaves: Array<[P, P]> = [];
     if (door.type === "folding") {
@@ -336,7 +362,8 @@ export function buildLevelDetail3d(input: Detail3dInput, opts: { capUnderUpper?:
     } else {
       leaves.push([a, { x: a.x + door.nx * widthPx, y: a.y + door.ny * widthPx }]);
     }
-    for (const [from, to] of leaves) push("door", [[rectAlong(from, to, leafT / 2)]], leafBottom, leafTop);
+    for (const [from, to] of leaves) push(style === "standard" ? "door" : "glass", [[rectAlong(from, to, (style === "standard" ? leafT : 0.012 * ppm) / 2)]], leafBottom, leafTop);
+    doorMarks.push({ id: door.id ?? "", style, center: { x: (a.x + b.x) / 2 / ppm, y: (a.y + b.y) / 2 / ppm }, head: leafHead });
   }
 
   // ---- Jendela: kaca + kusen ----
@@ -426,6 +453,8 @@ export function buildLevelDetail3d(input: Detail3dInput, opts: { capUnderUpper?:
     headHeight,
     counts: { walls: wallCount, doors: input.doors.length, windows: input.windows.length, rooms: roomCount, columns: (input.columns ?? []).filter((ring) => ring.length >= 3).length },
     windows: windowMarks,
+    doors: doorMarks,
+    rooms: input.rooms.filter(room => room.id && room.points.length >= 3 && !room.name.toLowerCase().startsWith("lahan") && room.name.toLowerCase() !== "void").map(room => ({ id: room.id ?? "", name: room.name, ...(room.ceilingHeightM !== undefined ? { ceilingHeightM: room.ceilingHeightM } : {}), center: roomLabelPoint(room.points.map(p => ({ x: p.x / ppm, y: p.y / ppm }))), height: ceilingBottom(room.ceilingHeightM, wallHeight) ?? wallHeight })),
     bounds,
   };
 }
@@ -456,7 +485,7 @@ export function detail3dColumnRings(
 type Detail3dSketchLike = {
   lines?: Detail3dLine[];
   edgeAttrs?: Record<string, EdgeMaterial>;
-  layers?: Array<{ id?: string; name: string; points: P[]; color?: string; levelId?: string; hidden?: boolean; areaM2?: number }>;
+  layers?: Array<{ id?: string; name: string; points: P[]; color?: string; levelId?: string; hidden?: boolean; areaM2?: number; ceilingHeightM?: CeilingHeight }>;
   levels?: Array<{ id: string; mdpl: number; typicalCount?: number; typicalHeight?: number }>;
   floors?: Array<{ levelId: string; outer: P[]; holes?: P[][]; thicknessMm: number }>;
   stairs?: unknown[];
@@ -501,6 +530,10 @@ export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: stri
       const heightM = from.copies > 1 ? from.height : to.base - from.base;
       return heightM > 0.1 ? [{ surfaces: stairPlanGeometry(stair, pxPerMeter).sectionSurfaces, heightM }] : [];
     });
+  const currentIndex = elevations.findIndex(level => level.id === levelId);
+  const currentLevel = elevations[currentIndex];
+  const aboveLevelId = currentLevel && currentLevel.copies > 1 ? levelId : elevations[currentIndex + 1]?.id;
+  const upperSlabThicknessMm = Math.max(150, ...(sketch.floors ?? []).filter(floor => floor.levelId === aboveLevelId).map(floor => Number(floor.thicknessMm) || 150));
   return {
     pxPerMeter,
     levelId,
@@ -509,15 +542,16 @@ export function detail3dInputForSketch(sketch: Detail3dSketchLike, levelId: stri
     edgeAttrs: sketch.edgeAttrs ?? {},
     rooms: (sketch.layers ?? [])
       .filter((ly) => ly.levelId === levelId && !ly.hidden)
-      .map((ly) => ({ ...(ly.id ? { id: ly.id } : {}), name: ly.name, points: ly.points, color: detail3dRoomColor(ly), ...(Number.isFinite(ly.areaM2) ? { areaM2: ly.areaM2 } : {}) })),
+      .map((ly) => ({ ...(ly.id ? { id: ly.id } : {}), name: ly.name, points: ly.points, color: detail3dRoomColor(ly), ...(Number.isFinite(ly.areaM2) ? { areaM2: ly.areaM2 } : {}), ...(ly.ceilingHeightM !== undefined ? { ceilingHeightM: ly.ceilingHeightM } : {}) })),
     slabs: (sketch.floors ?? []).filter((f) => f.levelId === levelId).map((f) => ({ outer: f.outer, ...(f.holes ? { holes: f.holes } : {}), thicknessMm: f.thicknessMm })),
     columns: detail3dColumnRings(collectGrids(sketch.structuralGrid, sketch.structuralGridExtras), levelId, levels, pxPerMeter),
     // Tanpa id acak dari normalisasi agar model tidak dibangun ulang tiap muat ulang.
-    doors: doors.filter((d) => d.levelId === levelId).map(({ id: _id, levelId: _lv, ...door }) => door),
+    doors: doors.filter((d) => d.levelId === levelId),
     // Id jendela tersimpan dipertahankan (untuk edit tipe di Detail 3D); id acak hasil normalisasi dikosongkan.
     windows: windows.filter((w) => w.levelId === levelId).map((w) => ({ ...w, id: rawWindowIds.has(w.id) ? w.id : "" })),
     wallHeight: levelWallHeight(levels, levelId),
     upperFootprint: upperFootprintFor(sketch, levelId, elevations),
+    upperSlabThicknessMm,
     clading: normalizeClading(sketch.clading).filter((item) => item.levelId === levelId),
   };
 }
@@ -604,6 +638,8 @@ export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number
   const levels = [...(sketch.levels ?? [])].map((lv) => ({ ...lv, mdpl: Number(lv.mdpl) || 0 })).sort((a, b) => a.mdpl - b.mdpl);
   const prisms: Detail3dPrism[] = [];
   const windows: Detail3dModel["windows"] = [];
+  const doors: Detail3dModel["doors"] = [];
+  const rooms: Detail3dModel["rooms"] = [];
   const counts = { walls: 0, doors: 0, windows: 0, rooms: 0, columns: 0 };
   let bounds: Detail3dModel["bounds"] = null;
   let shift = 0;
@@ -626,6 +662,10 @@ export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number
         prisms.push({ ...p, bottom: p.bottom + dz, top: p.top + dz, ...(p.soffit ? { soffit: { ...p.soffit, h0: p.soffit.h0 + dz, min: p.soffit.min + dz } } : {}) });
       }
       if (c === 0) for (const w of model.windows) windows.push({ ...w, sill: w.sill + dz, head: w.head + dz });
+      if (c === 0) {
+        for (const d of model.doors) doors.push({ ...d, head: d.head + dz });
+        for (const room of model.rooms) rooms.push({ ...room, height: room.height + dz });
+      }
       counts.walls += model.counts.walls; counts.doors += model.counts.doors; counts.windows += model.counts.windows;
       counts.rooms += model.counts.rooms; counts.columns += model.counts.columns;
       topM = Math.max(topM, dz + model.wallHeight);
@@ -636,5 +676,5 @@ export function buildFullDetail3d(sketch: Detail3dSketchLike, pxPerMeter: number
       : { ...b };
   }
   const oh = openingHeights(DEFAULT_TOP_LEVEL_H);
-  return { prisms, wallHeight: topM, ...oh, counts, windows, bounds };
+  return { prisms, wallHeight: topM, ...oh, counts, windows, doors, rooms, bounds };
 }

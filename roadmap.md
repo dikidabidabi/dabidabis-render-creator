@@ -1,5 +1,9 @@
 # Roadmap
 
+- [x] Jendela Floor to Ceiling dan empat tipe pintu di Sketsa/Detail 3D, geometri bersama Potongan 3D.
+- [x] Tinggi plafon per ruang bawaan 2,8 m, manual/tanpa plafon, fill handle per kolom dan level.
+- [x] Edit plafon per ruang di Detail 3D; 70 tes lulus. Alur layar: tinggi manual, fill handle, Tanpa plafon, edit pintu/jendela dan plafon di 3D, tersimpan setelah muat ulang. Pilihan Sketsa diperiksa pada komputer/ponsel.
+
 - [x] Clading: seleksi segmen merah transparan dan marquee multi-segmen pada satu sisi.
 - [x] Clading: edit titik X/Y, tambah/hapus titik dan bentuk poligon pada Sketsa.
 - [x] Clading: tarik gizmo untuk ekstrusi langsung dengan snap ukuran milimeter block.

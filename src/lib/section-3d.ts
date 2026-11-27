@@ -6,6 +6,7 @@
 // Semua satuan METER pada bidang denah (x, y sketsa) kecuali disebut px.
 
 import polygonClipping from "polygon-clipping";
+import { ceilingBottom, DEFAULT_CEILING_HEIGHT_M, type CeilingHeight } from "@/lib/room-ceiling";
 import { detail3dBottomAt, type Detail3dKind, type Detail3dPrism } from "@/lib/level-detail-3d";
 import { axisPositions, gridLocalToWorld, type StructuralGrid } from "@/lib/structural-grid";
 
@@ -16,7 +17,7 @@ export const SECTION3D_BEAM_WIDTH_M = 0.4;
 export const SECTION3D_PERIMETER_BEAM_WIDTH_M = 0.2;
 export const SECTION3D_BEAM_HEIGHT_M = 0.7;
 /** Plafon khusus Potongan 3D: papan plafon dasar 2,8 m dari muka lantai, tebal 5 mm. */
-export const SECTION3D_CEILING_HEIGHT_M = 2.8;
+export const SECTION3D_CEILING_HEIGHT_M = DEFAULT_CEILING_HEIGHT_M;
 export const SECTION3D_CEILING_THICKNESS_M = 0.005;
 /** Rangka hollow aluminium di atas papan: 2×4 cm (tinggi 2, lebar 4) @40 cm,
  *  di atasnya 4×4 cm @120 cm berlawanan arah. */
@@ -202,7 +203,7 @@ export function ceilingFramePositions(min: number, max: number, spacing: number)
  * Bila tinggi lantai kurang, seluruh susunan diturunkan agar tetap di bawah plat atas.
  */
 export function section3dCeilings(
-  rooms: Array<{ name: string; points: P[] }>,
+  rooms: Array<{ name: string; points: P[]; ceilingHeightM?: CeilingHeight }>,
   slabsAbove: Array<{ outer: P[]; holes?: P[][]; thicknessMm: number }>,
   pxPerMeter: number,
   floorHeight: number,
@@ -212,12 +213,6 @@ export function section3dCeilings(
   const above = slabsAbove.filter((slab) => slab.outer.length >= 3);
   if (!above.length) return [];
   const thickAbove = Math.max(...above.map((slab) => Math.max(0.01, (Number(slab.thicknessMm) || 150) / 1000)));
-  const stack = SECTION3D_CEILING_THICKNESS_M + SECTION3D_CEILING_FURRING.height + SECTION3D_CEILING_RUNNER.height;
-  const bottom = Math.min(SECTION3D_CEILING_HEIGHT_M, floorHeight - thickAbove - stack);
-  if (!(bottom > 0.5)) return [];
-  const boardTop = bottom + SECTION3D_CEILING_THICKNESS_M;
-  const furringTop = boardTop + SECTION3D_CEILING_FURRING.height;
-  const runnerTop = furringTop + SECTION3D_CEILING_RUNNER.height;
   const slabGeoms = above.map((slab) => [ringToGeom(toM(slab.outer)), ...(slab.holes ?? []).filter((h) => h.length >= 3).map((h) => ringToGeom(toM(h)))]);
   const cover = safe(() => polygonClipping.union(slabGeoms[0] as any, ...(slabGeoms.slice(1) as any[])) as Geom);
   if (!cover || !cover.length) return [];
@@ -231,7 +226,12 @@ export function section3dCeilings(
   };
   for (const room of rooms) {
     const name = room.name.trim().toLowerCase();
-    if (room.points.length < 3 || name.startsWith("lahan") || name === "void" || NO_CEILING_ROOM.test(name)) continue;
+    if (room.points.length < 3 || name.startsWith("lahan") || name === "void" || (room.ceilingHeightM === undefined && NO_CEILING_ROOM.test(name))) continue;
+    const bottom = ceilingBottom(room.ceilingHeightM, floorHeight, thickAbove);
+    if (bottom === null) continue;
+    const boardTop = bottom + SECTION3D_CEILING_THICKNESS_M;
+    const furringTop = boardTop + SECTION3D_CEILING_FURRING.height;
+    const runnerTop = furringTop + SECTION3D_CEILING_RUNNER.height;
     const roomM = toM(room.points);
     const covered = safe(() => polygonClipping.intersection([ringToGeom(roomM)] as any, cover as any) as Geom);
     if (!covered || !covered.length) continue;

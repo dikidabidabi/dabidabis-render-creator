@@ -11,6 +11,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { TabulasiNavigation } from "@/components/tabulasi-navigation";
 import { loadMaterialLibrary, loadRksPasals, normalizeGeneralMaterialSelections, ROOM_MATERIAL_KINDS, type FacadeDirection, type GeneralMaterialSelections, type LibraryMaterial, type MaterialKind, type RoomMaterialKind, type RoomMaterials } from "@/lib/material-library";
 import { patchStoredSketch } from "@/lib/sketch-store";
+import { CeilingHeightPicker } from "@/components/ceiling-height-picker";
+import { fillRoomCeiling, normalizeCeilingHeight, type CeilingHeight } from "@/lib/room-ceiling";
 import { buildRksMhtml } from "@/lib/rks-document";
 import { collectSpecMaterialRefs } from "@/lib/spec-outline";
 import { toast } from "sonner";
@@ -59,6 +61,7 @@ type Layer = {
   isReferenceRoom?: boolean;
   functionZoneId?: string;
   roomMaterials?: RoomMaterials;
+  ceilingHeightM?: CeilingHeight;
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number };
 type Line = { a: Point; b: Point; kind?: "straight" | "arc" | "bezier"; bulge?: number; c1?: Point; c2?: Point; levelId?: string };
@@ -858,7 +861,9 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
   const [zones, setZones] = useState<FunctionZone[]>(() => normalizeFunctionZones(sketch.functionZones));
   const [assignments, setAssignments] = useState<Record<string, string>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
   const [roomMaterials, setRoomMaterials] = useState<Record<string, RoomMaterials>>(() => Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
-  const [fillDrag, setFillDrag] = useState<{ levelId: string; kind: RoomMaterialKind; sourceIndex: number; targetIndex: number; materialId: string } | null>(null);
+  const [ceilings, setCeilings] = useState<Record<string, CeilingHeight>>(() => Object.fromEntries((sketch.layers ?? []).map(layer => [layer.id, normalizeCeilingHeight(layer.ceilingHeightM)])));
+  type FillDrag = { levelId: string; kind: RoomMaterialKind | "ceiling-height"; sourceIndex: number; targetIndex: number; materialId: string };
+  const [fillDrag, setFillDrag] = useState<FillDrag | null>(null);
   const materialSave = useRef<Promise<unknown>>(Promise.resolve());
   const [sendToOutline, setSendToOutline] = useState(sketch.showSpecOutlineSlide === true);
   const [generalMaterials, setGeneralMaterials] = useState(() => normalizeGeneralMaterialSelections(sketch.generalMaterials));
@@ -870,6 +875,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
     setZones(normalizeFunctionZones(sketch.functionZones));
     setAssignments(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.functionZoneId ?? ""])));
     setRoomMaterials(Object.fromEntries((sketch.layers ?? []).map((layer) => [layer.id, layer.roomMaterials ?? {}])));
+    setCeilings(Object.fromEntries((sketch.layers ?? []).map(layer => [layer.id, normalizeCeilingHeight(layer.ceilingHeightM)])));
     setSendToOutline(sketch.showSpecOutlineSlide === true);
     setGeneralMaterials(normalizeGeneralMaterialSelections(sketch.generalMaterials));
   }, [sketch.id, sketch.updatedAt]);
@@ -916,28 +922,39 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
         : layer) : stored.layers,
     })));
   };
-  const applyFill = (drag: { levelId: string; kind: RoomMaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
+  const assignCeiling = (roomId: string, value: CeilingHeight) => {
+    setCeilings(current => ({ ...current, [roomId]: value }));
+    materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, stored => ({ ...stored, layers: Array.isArray(stored.layers) ? stored.layers.map((layer: any) => layer.id === roomId ? { ...layer, ceilingHeightM: value } : layer) : stored.layers })));
+  };
+  const applyFill = (drag: FillDrag) => {
     const levelItems = ruang.filter((layer) => layer.levelId === drag.levelId);
     const first = Math.min(drag.sourceIndex, drag.targetIndex);
     const last = Math.max(drag.sourceIndex, drag.targetIndex);
     const roomIds = levelItems.slice(first, last + 1).map((layer) => layer.id);
     setFillDrag(null);
     if (roomIds.length < 2) return;
+    if (drag.kind === "ceiling-height") {
+      const value = drag.materialId === "__none__" ? null : normalizeCeilingHeight(Number(drag.materialId));
+      setCeilings(current => ({ ...current, ...Object.fromEntries(roomIds.map(id => [id, value])) }));
+      materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, stored => ({ ...stored, layers: Array.isArray(stored.layers) ? fillRoomCeiling(stored.layers, drag.levelId, levelItems.map(layer => layer.id), drag.sourceIndex, drag.targetIndex, value) : stored.layers })));
+      return;
+    }
+    const kind = drag.kind;
     setRoomMaterials((current) => {
       const next = { ...current };
       roomIds.forEach((roomId) => {
-        next[roomId] = { ...next[roomId], [drag.kind]: drag.materialId };
+        next[roomId] = { ...next[roomId], [kind]: drag.materialId };
       });
       return next;
     });
     materialSave.current = materialSave.current.catch(() => {}).then(() => patchStoredSketch(sketch.id, (stored) => ({
       ...stored,
       layers: Array.isArray(stored.layers) ? stored.layers.map((layer: any) => roomIds.includes(String(layer.id))
-        ? { ...layer, roomMaterials: { ...layer.roomMaterials, [drag.kind]: drag.materialId } }
+        ? { ...layer, roomMaterials: { ...layer.roomMaterials, [kind]: drag.materialId } }
         : layer) : stored.layers,
     })));
   };
-  const beginFill = (event: React.PointerEvent<HTMLSpanElement>, initial: { levelId: string; kind: RoomMaterialKind; sourceIndex: number; targetIndex: number; materialId: string }) => {
+  const beginFill = (event: React.PointerEvent<HTMLSpanElement>, initial: FillDrag) => {
     fillCleanup.current?.();
     let current = initial;
     const previousUserSelect = document.body.style.userSelect;
@@ -1025,7 +1042,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
               <table className="w-full min-w-[1020px] text-xs">
                 <thead className="sticky top-0 z-20 bg-background text-muted-foreground shadow-sm">
                   <tr className="border-b border-border/60 bg-muted/20">
-                    <th colSpan={5} className="px-2 py-1 text-left font-medium">Rincian Ruang</th>
+                    <th colSpan={6} className="px-2 py-1 text-left font-medium">Rincian Ruang</th>
                     <th colSpan={ROOM_MATERIAL_KINDS.length} className="border-l border-border/60 px-2 py-1 font-medium">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span>Material</span>
@@ -1048,6 +1065,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                     <th className="px-2 py-1 text-right font-normal">Koef.</th>
                     <th className="px-2 py-1 text-right font-normal">Luas</th>
                     <th className="px-2 py-1 text-right font-normal">Efektif</th>
+                    <th className="min-w-36 px-2 py-1 text-left font-normal">Tinggi plafon</th>
                     {ROOM_MATERIAL_KINDS.map((kind) => <th key={kind} className="min-w-40 px-2 py-1 text-left font-normal capitalize">{kind}</th>)}
                   </tr>
                 </thead>
@@ -1069,6 +1087,9 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{coef}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2)}</td>
                         <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(r.areaM2 * coef)}</td>
+                        <td data-fill-level={lv.id} data-fill-kind="ceiling-height" data-fill-index={rowIndex} className={cn("min-w-36 px-2 py-1", fillDrag?.levelId === lv.id && fillDrag.kind === "ceiling-height" && rowIndex >= Math.min(fillDrag.sourceIndex, fillDrag.targetIndex) && rowIndex <= Math.max(fillDrag.sourceIndex, fillDrag.targetIndex) && "bg-primary/10")}>
+                          <CeilingHeightPicker value={ceilings[r.id]} label={`Tinggi plafon ${r.name}`} onChange={value => assignCeiling(r.id, value)} onFillStart={event => beginFill(event, { levelId: lv.id, kind: "ceiling-height", sourceIndex: rowIndex, targetIndex: rowIndex, materialId: ceilings[r.id] === null ? "__none__" : String(ceilings[r.id] ?? 2.8) })} />
+                        </td>
                         {ROOM_MATERIAL_KINDS.map((kind) => {
                           const dragFirst = fillDrag ? Math.min(fillDrag.sourceIndex, fillDrag.targetIndex) : -1;
                           const dragLast = fillDrag ? Math.max(fillDrag.sourceIndex, fillDrag.targetIndex) : -1;
@@ -1098,7 +1119,7 @@ function LevelDetailSection({ sketch, materials }: { sketch: Sketch; materials: 
                     <td className="px-2 py-1" colSpan={3}>Total</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalAsli)}</td>
                     <td className="px-2 py-1 text-right font-mono tabular-nums">{fmt(totalEfektif)}</td>
-                    <td colSpan={ROOM_MATERIAL_KINDS.length} />
+                    <td colSpan={ROOM_MATERIAL_KINDS.length + 1} />
                   </tr>
                 </tbody>
               </table>

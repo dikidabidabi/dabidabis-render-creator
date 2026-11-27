@@ -4,6 +4,16 @@
 export type DoorPoint = { x: number; y: number };
 
 export type DoorType = "swing" | "sliding" | "folding";
+export type DoorStyle = "standard" | "glass" | "window-wall" | "floor-to-ceiling";
+export const DOOR_STYLES: { value: DoorStyle; label: string }[] = [
+  { value: "standard", label: "Pintu Standar" },
+  { value: "glass", label: "Pintu Kaca" },
+  { value: "window-wall", label: "Pintu Window Wall" },
+  { value: "floor-to-ceiling", label: "Pintu Kaca Floor to Ceiling" },
+];
+export function doorStyle(value: unknown): DoorStyle {
+  return value === "glass" || value === "window-wall" || value === "floor-to-ceiling" ? value : "standard";
+}
 export type FoldingSideMode = "one" | "two";
 export type FoldingSide = "left" | "right";
 
@@ -21,6 +31,7 @@ export type Door = {
   leaves: 1 | 2;
   /** Jenis gerak daun pintu. Data lama tanpa nilai ini dibaca sebagai swing. */
   type?: DoorType;
+  style?: DoorStyle;
   /** Arah pergeseran daun jika type = sliding, relatif dari A menuju B. */
   slideDirection?: "left" | "right";
   /** Susunan pintu lipat dari satu sisi atau terbagi dari dua sisi. */
@@ -120,6 +131,7 @@ export function normalizeDoor(raw: any): Door | null {
     ny: ny / nlen,
     leaves,
     type,
+    style: doorStyle(raw.style),
     slideDirection,
     foldingSideMode,
     foldingSide,

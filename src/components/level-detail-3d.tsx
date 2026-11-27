@@ -5,7 +5,11 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { Edges, Html, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { AppWindow, Box, Camera, Check, Download, Image as ImageIcon, Maximize2, Minimize2, Pencil, RotateCcw, Trash2, Video } from "lucide-react";
+import { AppWindow, DoorOpen, Box, Camera, Check, Download, Image as ImageIcon, Maximize2, Minimize2, Pencil, RotateCcw, Trash2, Video } from "lucide-react";
+import { DoorStylePicker } from "@/components/door-style-picker";
+import { DOOR_STYLES, type DoorStyle } from "@/lib/doors";
+import { CeilingHeightPicker } from "@/components/ceiling-height-picker";
+import type { CeilingHeight } from "@/lib/room-ceiling";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { WINDOW_HEIGHT_TYPES, windowHeightLabel, type WindowHeightType } from "@/lib/windows";
@@ -89,6 +93,8 @@ export type LevelDetail3dBoxProps = {
   title?: string;
   /** Mengganti tipe jendela tersimpan; tanpa ini tombol Edit disembunyikan. */
   onWindowTypeChange?: (windowId: string, type: WindowHeightType) => void;
+  onDoorStyleChange?: (doorId: string, style: DoorStyle) => void;
+  onRoomCeilingChange?: (roomId: string, height: CeilingHeight) => void;
   /** Ceklis plafon terkendali (mis. Detail 3D full membangun ulang modelnya). */
   showCeiling?: boolean;
   onShowCeilingChange?: (value: boolean) => void;
@@ -97,7 +103,7 @@ export type LevelDetail3dBoxProps = {
   cladingSnapStep?: number;
 };
 
-export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange, showCeiling: ceilingProp, onShowCeilingChange, onCladingChange, cladingSnapStep }: LevelDetail3dBoxProps) {
+export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onWindowTypeChange, onDoorStyleChange, onRoomCeilingChange, showCeiling: ceilingProp, onShowCeilingChange, onCladingChange, cladingSnapStep }: LevelDetail3dBoxProps) {
   const [cladingEdit, setCladingEdit] = useState<CladingEditState>(initialCladingEdit);
   const [cladingPreview, setCladingPreview] = useState<Clading[] | null>(null);
   const cladingItems = input?.clading ?? [];
@@ -119,9 +125,9 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
     const m = buildLevelDetail3d(stableInput);
     return showCeiling ? { ...m, prisms: [...m.prisms, ...detail3dCeilings(stableInput)] } : m;
   }, [stableInput, showCeiling]);
-  const modelKey = prebuilt ? JSON.stringify(prebuilt.prisms.length) + JSON.stringify(prebuilt.bounds) + JSON.stringify(prebuilt.windows) + prebuilt.prisms.reduce((a, p) => a + p.top + p.bottom + p.outer.length + (p.outer[0]?.x ?? 0) + (p.outer[0]?.y ?? 0), 0) : "";
+  const modelKey = prebuilt ? JSON.stringify(prebuilt.prisms.length) + JSON.stringify(prebuilt.bounds) + JSON.stringify(prebuilt.windows) + JSON.stringify(prebuilt.doors) + JSON.stringify(prebuilt.rooms) + prebuilt.prisms.reduce((a, p) => a + p.top + p.bottom + p.outer.length + (p.outer[0]?.x ?? 0) + (p.outer[0]?.y ?? 0), 0) : "";
   if (prebuilt && (!stableModelRef.current || stableModelRef.current.key !== modelKey)) stableModelRef.current = { key: modelKey, model: prebuilt };
-  const rawModel = (prebuilt ? stableModelRef.current!.model : built) ?? buildLevelDetail3d(input!);
+  const rawModel = (prebuilt ? stableModelRef.current?.model : built) ?? buildLevelDetail3d(input ?? { pxPerMeter: 80, levelId: "", lines: [], rooms: [], doors: [], windows: [], wallHeight: 4 });
   const previewModel = useMemo(() => cladingPreview && stableInput ? buildLevelDetail3d({ ...stableInput, clading: cladingPreview }) : rawModel, [cladingPreview, stableInput, rawModel]);
   // Warna lantai mati: lantai bersih tanpa warna ruang.
   const model = useMemo(
@@ -132,6 +138,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
   const [viewKey, setViewKey] = useState(0);
   const [editing, setEditing] = useState(false);
   const editableWindows = onWindowTypeChange ? model.windows.filter((window) => window.id) : [];
+  const editableDoors = onDoorStyleChange ? model.doors.filter(door => door.id) : [];
   const b = rawModel.bounds;
   const cx = b ? (b.minX + b.maxX) / 2 : 0;
   const cy = b ? (b.minY + b.maxY) / 2 : 0;
@@ -232,7 +239,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
       )}
       aria-label={`Detail 3D ${levelName}`}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Box className="h-3.5 w-3.5 shrink-0 text-primary" />
           <div className="min-w-0">
@@ -242,14 +249,14 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <label className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
             <Checkbox checked={showCeiling} onCheckedChange={(v) => setShowCeiling(v === true)} aria-label="Plafon" />Plafon
           </label>
           <label className="flex items-center gap-1 px-1 text-[11px] text-muted-foreground">
             <Checkbox checked={floorColor} onCheckedChange={(v) => setFloorColor(v === true)} aria-label="Warna lantai" />Warna lantai
           </label>
-          {onWindowTypeChange && (
+          {(onWindowTypeChange || onDoorStyleChange || onRoomCeilingChange) && (
             <Button
               type="button"
               size="sm"
@@ -257,7 +264,7 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
               className="h-7 px-2 text-xs"
               onClick={() => setEditing((value) => !value)}
               aria-pressed={editing}
-              title="Edit tipe jendela"
+              title="Edit pintu, jendela dan plafon"
             >
               <Pencil className="mr-1 h-3.5 w-3.5" />Edit
             </Button>
@@ -303,6 +310,10 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
           </Button>
         </div>
       </div>
+      {editing && onRoomCeilingChange && <div className="grid max-h-44 grid-cols-1 gap-2 overflow-y-auto border-b border-border px-3 py-2 sm:grid-cols-2">
+        {model.rooms.map(room => <div key={room.id} className="flex min-w-0 items-center gap-2"><span className="min-w-0 flex-1 truncate text-xs" title={room.name}>{room.name}</span><div className="w-36 shrink-0"><CeilingHeightPicker value={room.ceilingHeightM} label={`Tinggi plafon ${room.name}`} onChange={height => onRoomCeilingChange(room.id, height)} /></div></div>)}
+      </div>}
+      {editing && onDoorStyleChange && editableDoors.length > 0 && <div className="grid max-h-40 grid-cols-1 gap-2 overflow-y-auto border-b border-border px-3 py-2 sm:grid-cols-2">{editableDoors.map((door, index) => <div key={door.id} className="flex min-w-0 items-center gap-2"><span className="shrink-0 text-xs">Pintu {index + 1}</span><div className="min-w-0 flex-1"><DoorStylePicker value={door.style} label={`Tipe pintu ${index + 1}`} onChange={style => onDoorStyleChange(door.id, style)} /></div></div>)}</div>}
       {canEditClading && onCladingChange && <CladingEditPanel items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} ppm={cladingPpm} snapStep={snapStep} />}
       <div className={cn("relative bg-muted/30", fullscreen ? "min-h-0 flex-1" : "h-[420px]")}>
         {model.prisms.length === 0 ? (
@@ -349,14 +360,14 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
               >
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button
+                    <Button
                       type="button"
                       className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-md transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label={`Ubah tipe jendela (${windowHeightLabel(window.type)})`}
                       title={windowHeightLabel(window.type)}
                     >
                       <AppWindow className="h-3.5 w-3.5" />
-                    </button>
+                    </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-60">
                     <DropdownMenuLabel className="text-xs">Tipe jendela</DropdownMenuLabel>
@@ -374,15 +385,15 @@ export function LevelDetail3dBox({ levelName, input, model: prebuilt, title, onW
                 </DropdownMenu>
               </Html>
             ))}
+            {editing && editableDoors.map((door, index) => <Html key={door.id} position={[door.center.x - cx, door.head / 2, door.center.y - cy]} center zIndexRange={[40, 0]}>
+              <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="h-7 w-7 rounded-full border-2 border-background shadow-md" aria-label={`Ubah tipe pintu ${index + 1}`} title={`Pintu ${index + 1}`}><DoorOpen className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="center"><DropdownMenuLabel>Tipe pintu {index + 1}</DropdownMenuLabel><DropdownMenuSeparator />{DOOR_STYLES.map(option => <DropdownMenuItem key={option.value} onSelect={() => onDoorStyleChange?.(door.id, option.value)}><Check className={cn("h-3.5 w-3.5", door.style !== option.value && "opacity-0")} />{option.label}</DropdownMenuItem>)}</DropdownMenuContent>
+              </DropdownMenu>
+            </Html>)}
             {canEditClading && onCladingChange && <CladingEditor items={cladingItems} state={cladingEdit} setState={setCladingEdit} onChange={onCladingChange} onPreview={setCladingPreview} ppm={cladingPpm} snapStep={snapStep} elevation={0} cx={cx} cy={cy} />}
             <OrbitControls makeDefault target={[0, model.wallHeight * 0.35, 0]} enableDamping />
             <R3fBridge handleRef={r3f} />
           </Canvas>
-        )}
-        {editing && (
-          <div className="pointer-events-none absolute inset-x-3 top-3 rounded-md bg-background/85 px-3 py-1.5 text-center text-[11px] text-muted-foreground">
-            {editableWindows.length ? "Tekan tombol pada jendela untuk memilih tipe jendela." : "Belum ada jendela di level ini."}
-          </div>
         )}
         {!hasWalls && model.prisms.length > 0 && (
           <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-md bg-background/85 px-3 py-1.5 text-center text-[11px] text-muted-foreground">

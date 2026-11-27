@@ -8,7 +8,7 @@ export function WindowHeightTypePicker({ value, onChange }: { value: WindowHeigh
   return (
     <div className="space-y-1.5">
       <Label className="text-[11px] text-muted-foreground">Tipe jendela</Label>
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-2 gap-1">
         {WINDOW_HEIGHT_TYPES.map((item) => (
           <Button
             key={item.value}
