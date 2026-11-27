@@ -138,6 +138,7 @@ import { clipPrismsToSection, section3dFrame, sectionCoords } from "@/lib/sectio
 import { buildFullDetail3d, detail3dInputForSketch, type Detail3dLine } from "@/lib/level-detail-3d";
 import type { EdgeMaterial } from "@/lib/edge-segments";
 import { mergeClading, type Clading } from "@/lib/clading";
+import { syncCladingInstances } from "@/lib/clading-ops";
 
 const STORAGE_KEY = SKETCH_STORAGE_KEY;
 const MINOR_PX = 8;
@@ -2155,7 +2156,7 @@ function LevelDetail3dList({ sketch, onChange }: { sketch: Sketch; onChange: (pa
             cladingSnapStep={MINOR_PX * metersPerPx(sketch.scale)}
             onCladingChange={(items) => {
               const others = (sketch.clading ?? []).filter((c) => c.levelId !== item.id);
-              onChange({ clading: [...others, ...mergeClading(items, 1 / metersPerPx(sketch.scale))] });
+              onChange({ clading: syncCladingInstances(sketch.clading ?? [], [...others, ...mergeClading(items, 1 / metersPerPx(sketch.scale))]) });
             }}
             onWindowTypeChange={(windowId, heightType) => onChange({
               windows: (sketch.windows ?? []).map((window) =>

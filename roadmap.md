@@ -29,3 +29,4 @@
 - [x] Panel Sayembara: konten disusun ulang sesuai layout (bukan salinan slide), kotak sesuai bentuk gambar, layout otomatis sesuai konten.
 - [x] Unduh PDF per slide A1/A2 resolusi tinggi di Presentasi
 - [x] Potongan 3D: tangga terpotong tampil sesuai arah potong; potongan memanjang masif bergerigi dengan pelat miring.
+- [x] Clading: marquee titik, copy/instance/paste antar level, geser XYZ, potongan di denah detail.

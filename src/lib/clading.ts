@@ -19,7 +19,14 @@ export type CladingBox = {
   points?: CladingPoint[];
 };
 /** x/y in sketch pixels, z relative to the owning level, in meters. */
-export type Clading = { id: string; name: string; levelId: string; boxes: CladingBox[] };
+export type Clading = {
+  id: string;
+  name: string;
+  levelId: string;
+  boxes: CladingBox[];
+  /** Shared by linked instances; edits to one shape propagate to the others. */
+  linkId?: string;
+};
 export type CladingFace = {
   box: CladingBox;
   axis: "x" | "y" | "z";
@@ -50,6 +57,7 @@ export function normalizeClading(value: unknown): Clading[] {
             name: typeof c.name === "string" ? c.name : "Clading",
             levelId: c.levelId,
             boxes,
+            ...(typeof c.linkId === "string" && c.linkId ? { linkId: c.linkId } : {}),
           },
         ]
       : [];

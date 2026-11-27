@@ -58,6 +58,7 @@ export function CladingEditPanel({
   snapStep: number;
 }) {
   const selected = items.find((c) => c.id === state.id);
+  const [offset, setOffset] = useState({ x: "0", y: "0", z: "0" });
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-xs">
       <Box className="h-4 w-4 text-primary" />
@@ -98,6 +99,7 @@ export function CladingEditPanel({
         </Button>
       </div>
       {state.mode === "move" ? (
+        <>
         <Select
           value={state.plane}
           onValueChange={(plane) =>
@@ -112,6 +114,38 @@ export function CladingEditPanel({
             <SelectItem value="vertical">Vertikal</SelectItem>
           </SelectContent>
         </Select>
+        {(["x", "y", "z"] as const).map((axis) => (
+          <Input
+            key={axis}
+            aria-label={`Geser clading 3D ${axis.toUpperCase()}`}
+            title={`Δ${axis.toUpperCase()} (mm)`}
+            placeholder={`Δ${axis.toUpperCase()}`}
+            type="number"
+            className="h-8 w-20"
+            value={offset[axis]}
+            onChange={(e) => setOffset({ ...offset, [axis]: e.target.value })}
+          />
+        ))}
+        <span>mm</span>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!selected}
+          onClick={() => {
+            if (!selected) return;
+            const next = moveClading(
+              selected,
+              (Number(offset.x) / 1000) * ppm,
+              (Number(offset.y) / 1000) * ppm,
+              Number(offset.z) / 1000,
+            );
+            onChange(items.map((c) => (c.id === selected.id ? next : c)));
+            setOffset({ x: "0", y: "0", z: "0" });
+          }}
+        >
+          Geser XYZ
+        </Button>
+        </>
       ) : (
         <>
           <Label className="flex items-center gap-1.5">

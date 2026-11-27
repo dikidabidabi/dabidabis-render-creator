@@ -91,6 +91,8 @@ import { architecturalShadowProfile } from "@/lib/architectural-shadow";
 import { type Floor, FLOOR_THICKNESS_MM } from "@/lib/floors";
 import { type Ramp, tessellateReference, offsetPolyline, polylineLength, pointAtArcLength, computeBordesArcs } from "@/lib/ramps";
 import { type Stair, stairPlanGeometry } from "@/lib/stairs";
+import { normalizeClading, type Clading } from "@/lib/clading";
+import { cladingPlanCut } from "@/lib/clading-ops";
 import { buildBubbleGraph, type RoomNode, type RoomLink } from "@/lib/adjacency";
 import { buildVerticalLinks, VERTICAL_LINK_RADIUS_M } from "@/lib/vertical-circulation";
 import { FUNCTION_META as MP_FUNCTION_META, totalsByFunction as mpTotalsByFunction, blockGFA as mpBlockGFA } from "@/lib/masterplan";
@@ -207,6 +209,7 @@ type Sketch = {
   ramps?: Ramp[];
   stairs?: Stair[];
   roofs?: Roof[];
+  clading?: Clading[];
   detailAreas?: DetailArea[];
   mmGridRotation?: number;
   linkedMasterplan?: { rootLayerId: string };
@@ -6091,6 +6094,7 @@ function OrientedDetailBody({ slide, sourceSketch, rotation }: { slide: DetailSl
           pxPerM={pxPerM}
           sw={sw}
         />
+        <DetailCladingCut items={normalizeClading(sketch.clading).filter((item) => item.levelId === level.id)} pxPerM={pxPerM} sw={sw} />
         </g>
         <MaterialEdges
           lines={lines}
@@ -8668,6 +8672,19 @@ function DetailVoidNotation({
       })}
     </g>
   );
+}
+
+/** Clading cut at the 1 m plan plane: shell and hollow frame filled, uncut parts as outline. */
+function DetailCladingCut({ items, pxPerM, sw }: { items: Clading[]; pxPerM: number; sw: number }) {
+  if (!items.length) return null;
+  const cut = cladingPlanCut(items, pxPerM);
+  const d = (rings: { x: number; y: number }[][]) => rings.map((r) => `M ${r.map((p) => `${p.x} ${p.y}`).join(" L ")} Z`).join(" ");
+  return <g data-detail-clading="true">
+    {cut.below.length > 0 && <path d={d(cut.below)} fill="none" stroke="var(--clading-plan-ink)" strokeWidth={sw * 0.0003} />}
+    {cut.above.length > 0 && <path d={d(cut.above)} fill="none" stroke="var(--clading-plan-ink)" strokeWidth={sw * 0.0003} strokeDasharray={`${sw * 0.003} ${sw * 0.002}`} />}
+    {cut.skin.length > 0 && <path data-clading-skin="true" d={d(cut.skin)} fill="var(--clading-plan-fill)" stroke="var(--clading-plan-ink)" strokeWidth={sw * 0.0004} />}
+    {cut.frame.length > 0 && <path data-clading-frame="true" d={d(cut.frame)} fill="var(--clading-plan-ink)" stroke="var(--clading-plan-ink)" strokeWidth={sw * 0.0002} />}
+  </g>;
 }
 
 function DetailStairNotation({

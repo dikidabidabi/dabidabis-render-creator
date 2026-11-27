@@ -134,6 +134,7 @@ import { buildSectionDxf } from "@/lib/section-dxf";
 import { CompetitionPanelTool } from "@/components/competition-panel-tool";
 import { CladingTool, type CladingPlanMode, type CladingPointSelection } from "@/components/clading-tool";
 import { addCladingPoint, boxOutline, editCladingPoint, mergeClading, normalizeClading, type Clading } from "@/lib/clading";
+import { moveCladingPoints, pasteClading, syncCladingInstances, type CladingClipboard } from "@/lib/clading-ops";
 import { normalizeCompetitionPanels, type CompetitionPanelSettings } from "@/lib/competition-panels";
 import { drawOsmTiles, nominatimSearch, worldToGeo, type Geo, DEFAULT_GEO } from "@/lib/geo";
 import { takePendingTenderExec } from "@/lib/tender-exec";
@@ -2855,8 +2856,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
   const [cladingHeightInput, setCladingHeightInput] = useState("3");
   const [cladingOffsetInput, setCladingOffsetInput] = useState("0");
   const [cladingPlanMode, setCladingPlanMode] = useState<CladingPlanMode>("draw");
-  const [cladingPointSelection, setCladingPointSelection] = useState<CladingPointSelection | null>(null);
-  const [cladingPointDrag, setCladingPointDrag] = useState<CladingPointSelection | null>(null);
+  const [cladingPointSelection, setCladingPointSelection] = useState<CladingPointSelection[]>([]);
+  const [cladingPointDrag, setCladingPointDrag] = useState<{ start: Point; anchor: Point; base: Clading[]; sel: CladingPointSelection[] } | null>(null);
+  const [cladingMarquee, setCladingMarquee] = useState<{ start: Point; cur: Point; additive: boolean } | null>(null);
+  const [cladingActiveId, setCladingActiveId] = useState<string | null>(null);
+  const [cladingClipboard, setCladingClipboard] = useState<CladingClipboard | null>(null);
+  const commitClading = (next: Clading[]) => onChange({ clading: syncCladingInstances(sketch.clading ?? [], next) });
   // ===== Image Reference (JPG) =====
   const imageReferenceInputRef = useRef<HTMLInputElement>(null);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -6452,22 +6457,31 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           ctx.fill("nonzero");
           ctx.globalAlpha = 1;
           ctx.strokeStyle = cladingTokens.getPropertyValue("--clading-plan-ink").trim();
-          ctx.lineWidth = 1.5 / view.s;
+          ctx.lineWidth = (item.id === cladingActiveId && tool === "clading" ? 3 : 1.5) / view.s;
           ctx.stroke();
           const first = item.boxes[0];
           if (first) {
             ctx.fillStyle = cladingTokens.getPropertyValue("--clading-plan-ink").trim();
             ctx.font = `600 ${12 / view.s}px Manrope, sans-serif`;
-            ctx.fillText(item.name, first.min.x + 4 / view.s, first.min.y + 14 / view.s);
+            ctx.fillText(item.linkId ? `${item.name} ⛓` : item.name, first.min.x + 4 / view.s, first.min.y + 14 / view.s);
           }
           if (tool === "clading" && cladingPlanMode !== "draw") item.boxes.forEach((box, boxIndex) => {
             boxOutline(box).forEach((point, index) => {
-              const selected = cladingPointSelection?.id === item.id && cladingPointSelection.boxIndex === boxIndex && cladingPointSelection.index === index;
+              const selected = cladingPointSelection.some((sel) => sel.id === item.id && sel.boxIndex === boxIndex && sel.index === index);
               ctx.beginPath(); ctx.arc(point.x, point.y, (selected ? 6 : 4.5) / view.s, 0, Math.PI * 2);
               ctx.fillStyle = cladingTokens.getPropertyValue(selected ? "--clading-selection" : "--detail-opening-fill").trim();
               ctx.fill(); ctx.stroke();
             });
           });
+        }
+        if (cladingMarquee) {
+          const m = cladingMarquee;
+          ctx.setLineDash([6 / view.s, 4 / view.s]);
+          ctx.lineWidth = 1.2 / view.s;
+          ctx.strokeStyle = "rgba(0,212,255,0.95)";
+          ctx.fillStyle = "rgba(0,212,255,0.12)";
+          ctx.beginPath(); ctx.rect(Math.min(m.start.x, m.cur.x), Math.min(m.start.y, m.cur.y), Math.abs(m.cur.x - m.start.x), Math.abs(m.cur.y - m.start.y)); ctx.fill(); ctx.stroke();
+          ctx.setLineDash([]);
         }
         ctx.restore();
       }
@@ -7760,7 +7774,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       drawAxisPath([drawing.a, drawing.b], "rgba(63,63,70,0.55)", [], Math.max(2, wpx));
       drawAxisPath([drawing.a, drawing.b], "rgba(250,250,250,0.9)", [6, 6], 1.0);
     }
-  }, [size, lines, drawing, hover, layers, tool, sketch.clading, cladingPlanMode, cladingPointSelection, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, colMarquee, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, mmPivot, hasMmPivot, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
+  }, [size, lines, drawing, hover, layers, tool, sketch.clading, cladingPlanMode, cladingPointSelection, cladingMarquee, cladingActiveId, lineKind, pendingCurve, polyDraft, pxPerMeter, isLineLocked, view, editHover, addPointPreview, levels, activeLvlId, editMode, sketch.geo, sketch.sectionCuts, sketch.edgeAttrs, sketch.doors, sketch.windows, sketch.circles, sketch.floors, sketch.parkingAreas, sketch.ramps, sketch.stairs, sketch.imageReferences, sketch.axes, sketch.roads, sketch.illustrations, sketch.illustrationLayer, iluDraft, iluKind, iluColor, iluText, iluStrokeArrowDashed, iluStrokeArrow, iluStrokeCircleDashed, iluCircleFillAlpha, iluZoneHatch, iluNodeSize, iluSub, aksisDraft, aksisSub, jalanDraft, jalanSub, jalanWidthM, jalanOffsetEnabled, parkingStallsActive, parkingDiffableInfo, parkingDraft, parkingSubTool, floorDraft, floorMode, floorEditSub, floorVertexDrag, floorVoidDraft, doorDraft, doorLeaves, doorType, doorSlideDirection, doorFoldingSideMode, doorFoldingSide, doorFoldingLeafCount, doorWidthCm, doorEditMode, selectedDoorId, windowDraft, windowLeaves, windowWidthCm, windowKind, windowDividerSpacingCm, windowEndToleranceCm, windowEditMode, selectedWindowId, tileTick, imageTick, onTileLoad, grid, clipDraft, colMarquee, gridEditMode, primaryGrid, gridExtras, editGridIdx, circleDraft, mmGridRotRad, mmPivot, hasMmPivot, structGridRotRad, moveSel, moveMarquee, pickMarquee, pickMaterial, selectedEditVertices, selectedFloorEditVertices, editVertexMarquee, floorVertexMarquee, sectionSub, sectionEndpointDrag, rampDraft, rampSub, rampSelectedId, pinMoveMode, pinDrag, sketch.roofs, roofSub, roofSelectedId, roofKind, stairKind, stairSub, stairSelectedId, stairWidthM, stairSteps, stairLanding, stairOffsetM, stairInnerRadiusM, stairRotationDeg, freeStairDraft, stairOffsetSide, imageReferenceSelectedId, imageReferenceSub, imageCalibrationPoints]);
 
 
   const getScreenPos = (e: React.PointerEvent): Point => {
@@ -8583,16 +8597,29 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
           if (distance <= best) { best = distance; hit = { id: item.id, boxIndex, index }; }
         });
       });
-      if (!hit) { setCladingPointSelection(null); return; }
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+      if (!hit) {
+        if (cladingPlanMode === "move") setCladingMarquee({ start: raw, cur: raw, additive });
+        else setCladingPointSelection([]);
+        return;
+      }
       const target = hit as CladingPointSelection;
       const item = (sketch.clading ?? []).find(c => c.id === target.id);
       if (!item) return;
-      setCladingPointSelection(target);
-      if (cladingPlanMode === "move") { pushHistory(); setCladingPointDrag(target); return; }
+      setCladingActiveId(item.id);
+      const same = (a: CladingPointSelection) => a.id === target.id && a.boxIndex === target.boxIndex && a.index === target.index;
+      if (cladingPlanMode === "move") {
+        if (additive) { setCladingPointSelection(prev => prev.some(same) ? prev.filter(p => !same(p)) : [...prev, target]); return; }
+        const sel = cladingPointSelection.some(same) ? cladingPointSelection : [target];
+        setCladingPointSelection(sel);
+        const anchor = boxOutline(item.boxes[target.boxIndex]!)[target.index]!;
+        pushHistory(); setCladingPointDrag({ start: raw, anchor, base: sketch.clading ?? [], sel }); return;
+      }
+      setCladingPointSelection([target]);
       const next = cladingPlanMode === "delete" ? editCladingPoint(item, target.boxIndex, target.index, null) : addCladingPoint(item, target.boxIndex, target.index, snapPointToMillimeterGrid(raw, true));
       if (next === item) { toast.error("Bentuk clading harus memiliki minimal 3 titik dan tidak boleh berpotongan sendiri"); return; }
-      pushHistory(); onChange({ clading: (sketch.clading ?? []).map(c => c.id === item.id ? next : c) });
-      setCladingPointSelection(cladingPlanMode === "delete" ? null : { ...target, index: target.index + 1 });
+      pushHistory(); commitClading((sketch.clading ?? []).map(c => c.id === item.id ? next : c));
+      setCladingPointSelection(cladingPlanMode === "delete" ? [] : [{ ...target, index: target.index + 1 }]);
       return;
     }
     if (pinMoveMode && hasGeoPin) {
@@ -10616,10 +10643,12 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (cladingPointDrag && pointersRef.current.size < 2) {
-      const point = snapPointToMillimeterGrid(getWorldPosRaw(e), true);
-      onChange({ clading: (sketch.clading ?? []).map(item => item.id === cladingPointDrag.id ? editCladingPoint(item, cladingPointDrag.boxIndex, cladingPointDrag.index, point) : item) });
+      const raw = getWorldPosRaw(e), d = cladingPointDrag;
+      const target = snapPointToMillimeterGrid({ x: d.anchor.x + raw.x - d.start.x, y: d.anchor.y + raw.y - d.start.y }, true);
+      onChange({ clading: syncCladingInstances(d.base, moveCladingPoints(d.base, d.sel, target.x - d.anchor.x, target.y - d.anchor.y)) });
       return;
     }
+    if (cladingMarquee) { setCladingMarquee({ ...cladingMarquee, cur: getWorldPosRaw(e) }); return; }
     if (gestureRef.current && pointersRef.current.size >= 2) {
       pointersRef.current.set(e.pointerId, getScreenPos(e));
       updateGesture();
@@ -11131,6 +11160,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
 
   const onPointerUp = (e: React.PointerEvent) => {
     if (cladingPointDrag) { setCladingPointDrag(null); endPointer(e); return; }
+    if (cladingMarquee) {
+      const m = cladingMarquee;
+      setCladingMarquee(null);
+      const x0 = Math.min(m.start.x, m.cur.x), x1 = Math.max(m.start.x, m.cur.x), y0 = Math.min(m.start.y, m.cur.y), y1 = Math.max(m.start.y, m.cur.y);
+      if (Math.hypot(m.cur.x - m.start.x, m.cur.y - m.start.y) * view.s <= 4) { if (!m.additive) setCladingPointSelection([]); endPointer(e); return; }
+      const picked: CladingPointSelection[] = [];
+      for (const item of (sketch.clading ?? []).filter(c => c.levelId === activeLvlId)) item.boxes.forEach((box, boxIndex) => boxOutline(box).forEach((p, index) => {
+        if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) picked.push({ id: item.id, boxIndex, index });
+      }));
+      setCladingPointSelection(prev => m.additive ? [...prev, ...picked.filter(p => !prev.some(q => q.id === p.id && q.boxIndex === p.boxIndex && q.index === p.index))] : picked);
+      if (picked[0]) setCladingActiveId(picked[0].id);
+      endPointer(e); return;
+    }
     if (tool === "tangga" && stairKind === "bebas" && stairSub === "gambar") { endPointer(e); return; }
     if (doorEndpointDrag || windowEndpointDrag) {
       setDoorEndpointDrag(null);
@@ -12745,7 +12787,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Clading</div>
             <CladingTool items={(sketch.clading ?? []).filter((item) => item.levelId === activeLvlId)} height={cladingHeightInput} offset={cladingOffsetInput} onHeight={setCladingHeightInput} onOffset={setCladingOffsetInput}
               mode={cladingPlanMode} onMode={setCladingPlanMode} selection={cladingPointSelection} onSelection={setCladingPointSelection} ppm={pxPerMeter}
-              onChange={(items) => { pushHistory(); onChange({ clading: [...(sketch.clading ?? []).filter((item) => item.levelId !== activeLvlId), ...items] }); }} />
+              activeId={cladingActiveId} onActive={setCladingActiveId}
+              onCopy={(item, linked) => { setCladingClipboard({ items: [item], linked }); toast.success(linked ? `${item.name} disalin sebagai instance` : `${item.name} disalin`); }}
+              pasteLabel={cladingClipboard ? `Clipboard: ${cladingClipboard.items.map((c) => c.name).join(", ")} (${cladingClipboard.linked ? "instance terhubung" : "copy lepas"}) → tempel ke level aktif` : "Copy atau Instance clading, lalu pindah level dan Paste"}
+              onPaste={cladingClipboard && activeLvlId ? () => {
+                const all = sketch.clading ?? [];
+                const sources = cladingClipboard.items.map((c) => all.find((x) => x.id === c.id) ?? c);
+                const next = pasteClading(all, { ...cladingClipboard, items: sources }, activeLvlId, pxPerMeter, () => `CLD${Date.now()}_${Math.random().toString(36).slice(2, 6)}`);
+                pushHistory(); onChange({ clading: next });
+                const pasted = next[next.length - 1];
+                if (pasted) setCladingActiveId(pasted.id);
+                toast.success(cladingClipboard.linked ? "Instance clading ditempel" : "Salinan clading ditempel");
+              } : null}
+              onChange={(items) => { pushHistory(); commitClading([...(sketch.clading ?? []).filter((item) => item.levelId !== activeLvlId), ...items]); }} />
           </div>
         )}
         {tool === "pendetailan" && (
