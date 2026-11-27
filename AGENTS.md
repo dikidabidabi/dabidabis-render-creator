@@ -31,4 +31,4 @@
 - Volumetrik: row per physical floor, subtotals last.
 - Detail 3D (windowVerticalRange per type) feeds all 3D views; panels redraw bare slide bodies in aspect slots (PSD too).
 - section-room-legend shares numbering; detail3d-stairs shares sloped-soffit stairs across 3D views; parapets are low walls.
-- Clading lives in sketch.clading as level-relative boxes outside room layers; clading.ts derives skin/hollow frame prisms inside buildLevelDetail3d so Detail 3D, sections and exports share it.
+- Clading lives in sketch.clading as level-relative prisms with optional plan points outside room layers; clading-solid computes exposed polygon union faces and clading-prisms derives shared shell/hollow geometry, so point edits stay consistent across Detail 3D, sections and exports. Preserve legacy boxes; reject invalid/self-intersecting footprints and fewer than three points. Segment selection stays coplanar; gizmo preview is transient and commits on release, with snap equal to 8 sketch pixels converted through the selected scale.

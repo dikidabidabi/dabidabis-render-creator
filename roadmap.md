@@ -1,9 +1,9 @@
 # Roadmap
 
-- [ ] Clading: seleksi segmen merah transparan dan marquee multi-segmen pada satu sisi.
-- [ ] Clading: edit titik X/Y, tambah/hapus titik dan bentuk poligon pada Sketsa.
-- [ ] Clading: tarik gizmo untuk ekstrusi langsung dengan snap ukuran milimeter block.
-- [ ] Uji geometri, penyimpanan, dan pengeditan pada tampilan sebenarnya.
+- [x] Clading: seleksi segmen merah transparan dan marquee multi-segmen pada satu sisi.
+- [x] Clading: edit titik X/Y, tambah/hapus titik dan bentuk poligon pada Sketsa.
+- [x] Clading: tarik gizmo untuk ekstrusi langsung dengan snap ukuran milimeter block.
+- [x] 44 tes lulus; akun uji: geser titik, hapus menjadi segitiga, seleksi merah, marquee empat segmen, tarik ekstrusi dan muat ulang tersimpan. Stylus fisik belum diuji.
 
 - [x] Alat Clading: box tersimpan sebagai item 3D terpisah, denah hanya level penempatan.
 - [x] Selubung 2 cm dan hollow 4×4 cm silang @50 cm; penyatuan otomatis dengan nama volume terbesar.
