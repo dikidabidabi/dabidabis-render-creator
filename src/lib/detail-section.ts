@@ -8,6 +8,15 @@ export type DetailSectionCut = { p1: Point; p2: Point; label?: string; showDetai
 export type DetailSectionSketch = Omit<Parameters<typeof detail3dInputForSketch>[0], "levels"> & { levels?: Array<{ id: string; name?: string; mdpl: number; typicalCount?: number; typicalHeight?: number }> };
 export const detailSectionEnabled = (cut: DetailSectionCut) => cut.showDetailSlide === true;
 
+/** Ground-floor datum, independent of the site's absolute elevation. */
+export function detailSectionFloorDatum(floors: Array<{ name: string; base: number }>) {
+  const ground = floors.find(floor => /lantai\s*dasar|ground/i.test(floor.name));
+  return ground?.base ?? [...floors].sort((a, b) => Math.abs(a.base) - Math.abs(b.base))[0]?.base ?? 0;
+}
+
+export const detailSectionElevation = (height: number, datum: number) => Math.round((height - datum) * 1000) / 1000;
+export const formatSectionElevation = (height: number) => `${height < 0 ? "−" : "+"}${Math.abs(height).toFixed(3)}`;
+
 /** Intersect the section with grid axes in the grid's rotated local frame. */
 export function detailSectionGridHits(grids: StructuralGrid[], cut: DetailSectionCut, ppm: number) {
   const length = Math.hypot(cut.p2.x - cut.p1.x, cut.p2.y - cut.p1.y) / ppm;
@@ -33,13 +42,24 @@ export function buildDetailSection(sketch: DetailSectionSketch, cut: DetailSecti
   if (!frame) return null;
   const levels = (sketch.levels ?? []).map(lv => ({ ...lv, name: lv.name ?? lv.id }));
   const floors = section3dFloors(levels);
+  const datum = detailSectionFloorDatum(floors);
   const grids = collectGrids(sketch.structuralGrid, sketch.structuralGridExtras);
   const slabs = sketch.floors ?? [];
   const prisms: Detail3dPrism[] = [];
   const ceilingDimensions: Array<{ s: number; base: number; head: number }> = [];
+  const rooms: Array<{ key: string; name: string; s0: number; s1: number; base: number; ffl: number }> = [];
   floors.forEach((floor, index) => {
     const input = detail3dInputForSketch(sketch, floor.levelId, ppm);
     const next = floors[index + 1];
+    for (const [roomIndex, room] of input.rooms.entries()) {
+      if (room.points.length < 3 || /^(lahan|void)/i.test(room.name)) continue;
+      const roomPrism: Detail3dPrism = { kind: "floor", outer: room.points.map(p => ({ x: p.x / ppm, y: p.y / ppm })), holes: [], bottom: 0, top: 0.01 };
+      for (const [partIndex, face] of sectionCutFaces(clipPrismsToSection([roomPrism], frame), frame).entries()) {
+        const s0 = Math.max(0, face.s0), s1 = Math.min(frame.length, face.s1);
+        if (s1 - s0 < 0.1) continue;
+        rooms.push({ key: `${floor.key}-${roomIndex}-${partIndex}`, name: room.name, s0, s1, base: floor.base, ffl: detailSectionElevation(floor.base, datum) });
+      }
+    }
     const ceilings = next ? section3dCeilings(input.rooms, slabs.filter(s => s.levelId === next.levelId), ppm, next.base - floor.base) : [];
     const parts = [...buildLevelDetail3d(input, { capUnderUpper: true }).prisms, ...section3dBeams(slabs.filter(s => s.levelId === floor.levelId), grids, ppm), ...ceilings];
     for (const face of sectionCutFaces(clipPrismsToSection(ceilings.filter(p => p.kind === "ceiling"), frame), frame)) {
@@ -62,7 +82,7 @@ export function buildDetailSection(sketch: DetailSectionSketch, cut: DetailSecti
   const points = [...visibleLines.flatMap(line => [line.a, line.b]), ...groups.flatMap(group => group.polygons.flatMap(poly => poly.flat()))];
   const minS = points.length ? Math.min(...points.map(p => p.s)) : 0, maxS = points.length ? Math.max(...points.map(p => p.s)) : frame.length;
   const minH = points.length ? Math.min(...points.map(p => p.h)) : 0, maxH = points.length ? Math.max(...points.map(p => p.h)) : 3;
-  return { groups, beyond, visibleLines, floors, ceilingDimensions, grids: detailSectionGridHits(grids, cut, ppm).filter(hit => hit.s >= minS - 0.01 && hit.s <= maxS + 0.01), minS, maxS, minH, maxH };
+  return { groups, beyond, visibleLines, floors, rooms, datum, ceilingDimensions, grids: detailSectionGridHits(grids, cut, ppm).filter(hit => hit.s >= minS - 0.01 && hit.s <= maxS + 0.01), minS, maxS, minH, maxH };
 }
 
 export function detailSectionHatch(kind: Detail3dKind): "wall" | "concrete" | null {

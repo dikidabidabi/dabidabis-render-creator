@@ -1,5 +1,7 @@
 # Roadmap
 
+- [ ] Detail potongan: penanda AFF plafon, nama ruang dan FFL relatif lantai dasar sesuai referensi; uji angka dan tampilan.
+
 - [x] Detail potongan memenuhi slide seperti Detail denah; proyeksi hanya garis yang terlihat, tanpa garis di balik dinding.
 - [x] Uji penghalangan penuh/sebagian, bukaan, arah pandang, dan tampilan slide terisi pada komputer/ponsel; penyimpanan semula dipulihkan sesudah pemeriksaan.
 

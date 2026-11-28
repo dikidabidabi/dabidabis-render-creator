@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildDetailSection, detailSectionEnabled, detailSectionGridHits, detailSectionHatch, type DetailSectionSketch } from "./detail-section";
+import { buildDetailSection, detailSectionEnabled, detailSectionGridHits, detailSectionHatch, detailSectionElevation, detailSectionFloorDatum, type DetailSectionSketch } from "./detail-section";
 import { DEFAULT_GRID, gridLocalToWorld } from "./structural-grid";
 import { edgeMaterialKey } from "./edge-segments";
 
@@ -53,4 +53,18 @@ test("hatch dinding berbeda dari beton, clading tidak memakai hatch beton", () =
   assert.equal(detailSectionHatch("concrete"), "concrete");
   assert.equal(detailSectionHatch("column"), "concrete");
   assert.equal(detailSectionHatch("clading"), null);
+});
+test("AFF mengukur tinggi plafon dari muka lantai ruang, bukan datum bangunan", () => {
+  assert.equal(detailSectionElevation(12.3, 9.5), 2.8);
+  assert.equal(detailSectionElevation(8.5, 9.5), -1);
+});
+test("FFL lantai dasar nol, lantai atas positif dan basemen negatif", () => {
+  const datum = detailSectionFloorDatum([{ name: "Basemen", base: 96.5 }, { name: "Lantai Dasar", base: 100 }, { name: "Lantai 2", base: 109.5 }]);
+  assert.equal(datum, 100);
+  assert.deepEqual([96.5, 100, 109.5].map(base => detailSectionElevation(base, datum)), [-3.5, 0, 9.5]);
+});
+test("ruang terpotong mendapat posisi nama dan FFL; ruang di luar potongan tidak diberi label", () => {
+  const result = buildDetailSection({ ...sketch, layers: [...(sketch.layers ?? []), { id: "outside", name: "Ruang luar", levelId: "a", points: square.map(p => ({ x: p.x, y: p.y + 500 })) }] }, cut, 100);
+  assert.ok(result);
+  assert.deepEqual(result.rooms.map(room => ({ name: room.name, ffl: room.ffl, s0: room.s0, s1: room.s1 })), [{ name: "Kantor", ffl: 0, s0: 1, s1: 6 }]);
 });
