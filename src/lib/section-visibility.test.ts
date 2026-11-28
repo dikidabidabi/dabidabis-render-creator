@@ -28,3 +28,9 @@ test("benda di depan dinding tetap terlihat", () => {
 test("garis proyeksi identik digabung dan tidak ditumpuk", () => {
   assert.deepEqual(sectionVisibleLines([wall, wall], frame), sectionVisibleLines([wall], frame));
 });
+test("membalik arah pandang mengubah dinding yang menghalangi", () => {
+  const reversed = section3dFrame({ x: 10, y: 4 }, { x: 0, y: 4 }, 1);
+  assert.ok(reversed);
+  const rear = box("clading", 2, 8, 2, 2.2, 0.5, 2.5);
+  assert.ok(sectionVisibleLines([wall, rear], reversed).some(l => l.a.s === 2 && l.b.s === 8 && l.a.h === 2.5 && l.b.h === 2.5));
+});
