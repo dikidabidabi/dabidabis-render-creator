@@ -4,7 +4,7 @@ import { axisPositions, collectGrids, gridWorldToLocal, xAxisLabelAt, yAxisLabel
 
 type Point = { x: number; y: number };
 export type DetailSectionCut = { p1: Point; p2: Point; label?: string; showDetailSlide?: boolean };
-export type DetailSectionSketch = Parameters<typeof detail3dInputForSketch>[0] & { levels?: Array<{ id: string; name?: string; mdpl: number; typicalCount?: number; typicalHeight?: number }> };
+export type DetailSectionSketch = Omit<Parameters<typeof detail3dInputForSketch>[0], "levels"> & { levels?: Array<{ id: string; name?: string; mdpl: number; typicalCount?: number; typicalHeight?: number }> };
 export const detailSectionEnabled = (cut: DetailSectionCut) => cut.showDetailSlide === true;
 
 /** Intersect the section with grid axes in the grid's rotated local frame. */

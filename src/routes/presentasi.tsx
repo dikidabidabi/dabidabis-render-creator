@@ -2219,6 +2219,7 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
       case "bubble":
       case "bubble-total": return "Diagram Hubungan Ruang";
       case "section": return "Potongan Prinsip";
+      case "detail-section": return "Detail potongan";
       case "section3d": return "Potongan 3D";
       case "matahari":
       case "shadow-seasonal":

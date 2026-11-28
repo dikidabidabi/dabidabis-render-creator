@@ -43,6 +43,11 @@
   --color-surface-elevated: var(--surface-elevated);
 }
 
+.detail-section-drawing {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
 :root {
   --radius: 0.5rem;
   --clading-selection: #e12d37;

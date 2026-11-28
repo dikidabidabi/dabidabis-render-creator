@@ -1107,6 +1107,7 @@ function normalizeSketch(s: any): Sketch {
           label: typeof c.label === "string" && c.label.trim() ? c.label : "A-A",
           showFunctionSlide: c.showFunctionSlide === true,
           show3dSlide: c.show3dSlide === true,
+          showDetailSlide: c.showDetailSlide === true,
           showLegend: c.showLegend === true,
           updatedAt: Number.isFinite(Number(c.updatedAt)) ? Number(c.updatedAt) : Date.now(),
         };
@@ -11806,7 +11807,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
       const label = nextSectionLabel(existing);
       const next: SectionCut[] = [
         ...existing,
-        { p1: a, p2: b, label, showFunctionSlide: false, show3dSlide: false, showLegend: false, updatedAt: Date.now() },
+        { p1: a, p2: b, label, showFunctionSlide: false, show3dSlide: false, showDetailSlide: false, showLegend: false, updatedAt: Date.now() },
       ];
       onChange({ sectionCuts: next, sectionCut: undefined });
       toast.success(`Garis Potong ${label} tersimpan · slide potongan otomatis dibuat`, { duration: 2500 });
@@ -15395,7 +15396,7 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                 {(sketch.sectionCuts ?? []).map((c, i) => (
                   <div
                     key={`${c.label}-${i}`}
-                    className="flex items-center justify-between gap-1.5 rounded border border-border/60 bg-surface/40 px-2 py-1"
+                    className="flex flex-wrap items-center justify-between gap-1.5 rounded border border-border/60 bg-surface/40 px-2 py-1"
                   >
                     <Button
                       variant={sectionSub === "geser" && selectedSectionLabel === (c.label || sectionLabelFor(i)) ? "secondary" : "ghost"}
