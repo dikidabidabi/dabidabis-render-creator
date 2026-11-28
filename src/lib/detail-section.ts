@@ -1,6 +1,7 @@
 import { buildLevelDetail3d, detail3dInputForSketch, type Detail3dKind, type Detail3dPrism } from "./level-detail-3d";
 import { clipPrismsToSection, mergeCutFaces, section3dBeams, section3dCeilings, section3dFloors, section3dFrame, sectionCoords, sectionCutFaces } from "./section-3d";
 import { axisPositions, collectGrids, gridWorldToLocal, xAxisLabelAt, yAxisLabelAt, type StructuralGrid } from "./structural-grid";
+import { sectionVisibleLines } from "./section-visibility";
 
 type Point = { x: number; y: number };
 export type DetailSectionCut = { p1: Point; p2: Point; label?: string; showDetailSlide?: boolean };
@@ -57,9 +58,11 @@ export function buildDetailSection(sketch: DetailSectionSketch, cut: DetailSecti
     const ss = p.outer.map(q => sectionCoords(frame, q).s);
     return { kind: p.kind, s0: Math.min(...ss), s1: Math.max(...ss), bottom: p.bottom, top: p.top };
   });
-  const minS = Math.min(0, ...beyond.map(p => p.s0)), maxS = Math.max(frame.length, ...beyond.map(p => p.s1));
-  const minH = Math.min(0, ...beyond.map(p => p.bottom)), maxH = Math.max(3, ...beyond.map(p => p.top));
-  return { groups, beyond, floors, ceilingDimensions, grids: detailSectionGridHits(grids, cut, ppm), minS, maxS, minH, maxH };
+  const visibleLines = sectionVisibleLines(clipped, frame);
+  const points = [...visibleLines.flatMap(line => [line.a, line.b]), ...groups.flatMap(group => group.polygons.flatMap(poly => poly.flat()))];
+  const minS = points.length ? Math.min(...points.map(p => p.s)) : 0, maxS = points.length ? Math.max(...points.map(p => p.s)) : frame.length;
+  const minH = points.length ? Math.min(...points.map(p => p.h)) : 0, maxH = points.length ? Math.max(...points.map(p => p.h)) : 3;
+  return { groups, beyond, visibleLines, floors, ceilingDimensions, grids: detailSectionGridHits(grids, cut, ppm).filter(hit => hit.s >= minS - 0.01 && hit.s <= maxS + 0.01), minS, maxS, minH, maxH };
 }
 
 export function detailSectionHatch(kind: Detail3dKind): "wall" | "concrete" | null {

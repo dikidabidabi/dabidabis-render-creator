@@ -2630,7 +2630,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
   const theme = useSlideTheme(slide?.id);
   const bare = React.useContext(SlideBareCtx);
   if (!slide) return null;
-  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail3d" || slide.kind === "detail-axo" || slide.kind === "section3d" || slide.kind === "tampak" || slide.kind === "competition-panel";
+  const isSpecial = slide.kind === "title" || slide.kind === "closing" || slide.kind === "konsep" || slide.kind === "perspektif" || slide.kind === "detail" || slide.kind === "detail-section" || slide.kind === "detail3d" || slide.kind === "detail-axo" || slide.kind === "section3d" || slide.kind === "tampak" || slide.kind === "competition-panel";
   const body = (
     <>
       {slide.kind === "title" && <TitleBody slide={slide} />}
@@ -2644,7 +2644,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "bubble-total" && <BubbleTotalBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
-      {slide.kind === "detail-section" && <DetailSectionSlide sketch={slide.sketch} cut={slide.cut} ppm={1 / sketchMetersPerSketchPx(slide.sketch.scale)} />}
+      {slide.kind === "detail-section" && <DetailSectionBody slide={slide} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
       {slide.kind === "perspektif" && <PerspektifBody slide={slide} />}
@@ -5366,6 +5366,11 @@ function Section3dSlideBody({ slide }: { slide: Extract<Slide, { kind: "section3
   const roomLegend = useMemo(() => cut.showLegend === true ? section3dRoomLegend(sketch, cut) : undefined, [sketch, cut]);
   const frame = useSlideFrame();
   return <Section3dSlide label={label} cut={{ p1: cut.p1, p2: cut.p2 }} pxPerMeter={props.ppm} levels={props.levels} slabs={props.slabs} grids={props.grids} style={props.style} stairs={props.stairs} slideWidth={frame.w} slideHeight={frame.h} bare={frame.bare} {...(roomLegend ? { roomLegend } : {})} />;
+}
+
+function DetailSectionBody({ slide }: { slide: Extract<Slide, { kind: "detail-section" }> }) {
+  const frame = useSlideFrame();
+  return <DetailSectionSlide sketch={slide.sketch} cut={slide.cut} ppm={1 / sketchMetersPerSketchPx(slide.sketch.scale)} width={frame.w} height={frame.h} />;
 }
 
 /** Legenda ruang Potongan 3D: irisan & penomoran sama dengan Potongan Prinsip Skematik. */

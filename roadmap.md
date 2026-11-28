@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Detail potongan memenuhi slide seperti Detail denah; proyeksi hanya garis yang terlihat, tanpa garis di balik dinding.
+- [ ] Uji penghalangan penuh/sebagian, bukaan, arah pandang, dan tampilan slide terisi.
+
 - [x] Ceklis Detail potongan per garis potong, bawaan nonaktif; slide detail otomatis dan pilihan tersimpan setelah muat ulang.
 - [x] Potongan detail: grid vertikal dan dimensi, plafon/balok/clading, dimensi tinggi lantai/plafon dan hatch material; 39 tes lulus, alur Sketsa → Presentasi diperiksa dengan akun uji pada komputer/ponsel.
 
