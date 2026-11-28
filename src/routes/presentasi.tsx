@@ -77,6 +77,8 @@ import { detail3dInputForSketch } from "@/lib/level-detail-3d";
 import { LevelDetail3dSlide } from "@/components/level-detail-3d-slide";
 import { DetailAxonometricSlide } from "@/components/detail-axonometric-slide";
 import { Section3dSlide, type Section3dRoomLegend } from "@/components/section3d-slide";
+import { DetailSectionSlide } from "@/components/detail-section-slide";
+import { detailSectionEnabled } from "@/lib/detail-section";
 import { groupSectionLegendRooms, sectionLegendMetrics } from "@/lib/section-room-legend";
 import { TampakSlide } from "@/components/tampak-slide";
 import {
@@ -180,7 +182,7 @@ type Layer = {
 };
 type Level = { id: string; name: string; mdpl: number; opacity: number; typicalCount?: number; typicalHeight?: number; detail3d?: boolean };
 type Geo = { lat: number; lon: number; locked: boolean; mapOpacity: number; mapRotation?: number; label?: string };
-type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; show3dSlide?: boolean; showLegend?: boolean; updatedAt?: number };
+type SectionCut = { p1: Point; p2: Point; label?: string; showFunctionSlide?: boolean; show3dSlide?: boolean; showDetailSlide?: boolean; showLegend?: boolean; updatedAt?: number };
 type DetailArea = {
   id: string; levelId: string; a: Point; b: Point; number: number;
   rotation?: number;
@@ -1813,6 +1815,7 @@ type Slide =
   | { kind: "bubble"; id: string; title: string; sketch: Sketch; level: Level; bounds: Bounds }
   | { kind: "bubble-total"; id: string; title: string; sketch: Sketch; levels: Level[]; displayNames: Record<string, string> }
   | { kind: "section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
+  | { kind: "detail-section"; id: string; title: string; sketch: Sketch; cut: SectionCut }
   | { kind: "section3d"; id: string; title: string; sketch: Sketch; cut: SectionCut; label: string }
   | { kind: "site"; id: string; title: string; sketch: Sketch; bounds: Bounds; view: SiteView }
   | { kind: "konsep"; id: string; title: string; sketch: Sketch; narasi: NarasiItem; index: number; total: number }
@@ -2061,6 +2064,9 @@ function buildSlides(sk: Sketch, narasi: NarasiItem[] = [], perspektif: Perspekt
         cut: c,
       });
       // Potongan 3D: hanya bila ceklis "Potongan 3D" pada garis potong aktif.
+      if (detailSectionEnabled(c)) {
+        out.push({ kind: "detail-section", id: `detail-section-${i}-${lbl}`, title: `Detail potongan ${lbl}`, sketch: sk, cut: c });
+      }
       if (c.show3dSlide === true) {
         out.push({ kind: "section3d", id: `section3d-${i}-${lbl}`, title: `Potongan 3D ${lbl}`, sketch: sk, cut: c, label: lbl });
       }
@@ -2637,6 +2643,7 @@ function SlideContent({ slide }: { slide?: Slide }) {
       {slide.kind === "bubble" && <BubbleBody slide={slide} />}
       {slide.kind === "bubble-total" && <BubbleTotalBody slide={slide} />}
       {slide.kind === "section" && <SectionBody slide={slide} />}
+      {slide.kind === "detail-section" && <DetailSectionSlide sketch={slide.sketch} cut={slide.cut} ppm={1 / sketchMetersPerSketchPx(slide.sketch.scale)} />}
       {slide.kind === "site" && <SiteAnalysisBody slide={slide} />}
       {slide.kind === "konsep" && <KonsepBody slide={slide} />}
       {slide.kind === "perspektif" && <PerspektifBody slide={slide} />}
@@ -2726,6 +2733,7 @@ function SlideHeader({ slide, theme = getTheme(DEFAULT_THEME_ID) }: { slide: Sli
     : slide.kind === "bubble" ? "Diagram · Hubungan Ruang"
     : slide.kind === "bubble-total" ? "Diagram · Hubungan Ruang · Semua Lantai"
     : slide.kind === "section" ? "Sketsa · Potongan Prinsip"
+    : slide.kind === "detail-section" ? "Sketsa · Detail potongan"
     : slide.kind === "section3d" ? "Sketsa · Potongan 3D"
     : slide.kind === "site" ? (
         slide.view === "lokasi" ? "Analisa · Lokasi"

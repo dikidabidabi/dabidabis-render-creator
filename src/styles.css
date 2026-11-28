@@ -65,6 +65,7 @@
   --detail-opening-ink: #0a0a0a;
   --detail-dimension-ink: #111111;
   --detail-opening-fill: #ffffff;
+  --detail-concrete-fill: #f4f3ef;
   --architectural-door-ink: var(--detail-opening-ink);
   --architectural-grid-ink: #555555;
   --architectural-bevel-dark: oklch(0.59 0.014 180);

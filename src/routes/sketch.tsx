@@ -423,6 +423,7 @@ type SectionCut = {
   showFunctionSlide?: boolean;
   /** Slide Potongan 3D dari garis potong ini (bawaan nonaktif). */
   show3dSlide?: boolean;
+  showDetailSlide?: boolean;
   /** Legenda ruang bernomor pada slide Potongan 3D (bawaan nonaktif). */
   showLegend?: boolean;
   updatedAt?: number;
@@ -15430,6 +15431,19 @@ function SketchEditor({ sketch, onChange, fullscreen, onExitFullscreen, mode = "
                         className="h-3.5 w-3.5 accent-foreground"
                       />
                       Potongan 3D
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <Checkbox
+                        checked={c.showDetailSlide === true}
+                        onCheckedChange={(checked) => {
+                          const next = (sketch.sectionCuts ?? []).map((cut, index) => index === i
+                            ? { ...cut, showDetailSlide: checked === true, updatedAt: Date.now() }
+                            : cut);
+                          onChange({ sectionCuts: next, sectionCut: undefined });
+                        }}
+                        className="h-3.5 w-3.5"
+                      />
+                      Detail potongan
                     </label>
                     <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-muted-foreground" title="Tampilkan legenda ruang bernomor pada slide Potongan 3D">
                       <input

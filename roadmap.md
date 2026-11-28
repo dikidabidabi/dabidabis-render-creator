@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Ceklis Detail potongan per garis potong, bawaan nonaktif; slide detail otomatis.
+- [ ] Potongan detail: grid vertikal dan dimensi, plafon/balok/clading, dimensi tinggi lantai/plafon dan hatch material; uji geometri dan alur layar.
+
 - [x] Jendela Floor to Ceiling dan empat tipe pintu di Sketsa/Detail 3D, geometri bersama Potongan 3D.
 - [x] Tinggi plafon per ruang bawaan 2,8 m, manual/tanpa plafon, fill handle per kolom dan level.
 - [x] Edit plafon per ruang di Detail 3D; 70 tes lulus. Alur layar: tinggi manual, fill handle, Tanpa plafon, edit pintu/jendela dan plafon di 3D, tersimpan setelah muat ulang. Pilihan Sketsa diperiksa pada komputer/ponsel.
